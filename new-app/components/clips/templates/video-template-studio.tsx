@@ -1,10 +1,10 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react'
-import { useRouter } from 'next/navigation'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
-import { TemplateMusicChoicePanel } from '@/components/clips/templates/template-music-choice-panel'
+import { useRouter } from 'next/navigation'
+import { VideoTemplateStudioExportSheet } from '@/components/clips/templates/video-template-studio-export-sheet'
+import { VideoTemplateStudioShell } from '@/components/clips/templates/video-template-studio-shell'
 import { uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -118,6 +118,17 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const future = useRef<StudioDraft[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const musicAudioRef = useRef<HTMLAudioElement | null>(null)
+  const prepareLock = useRef(false)
+  const recentUploads = useRef<TemplateAsset[]>([])
+  const [rightTab, setRightTab] = useState<'text' | 'music' | 'style'>('text')
+  const [exportOpen, setExportOpen] = useState(false)
+  const [exportResolution, setExportResolution] = useState<'720p' | '1080p'>('720p')
+  const [exportAspect, setExportAspect] = useState<ExportAspect>((release.family.aspects[0] ?? '9:16') as ExportAspect)
+  const [previewPreparing, setPreviewPreparing] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [mobileStep, setMobileStep] = useState<'pick' | 'studio'>('pick')
+  const [mobilePick, setMobilePick] = useState<TemplateAsset[]>([])
+  const [librarySelection, setLibrarySelection] = useState<TemplateAsset[]>([])
   const setCurrentProject = (value: Project | null) => { projectRef.current = value; setProject(value) }
   const setCurrentDraft = (value: StudioDraft | null) => { draftRef.current = value; setDraft(value) }
   const commitDraft = (value: StudioDraft) => {
@@ -251,7 +262,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     if (saveLock.current) { await saveLock.current; if (dirtyRef.current) return saveNow(); return }
     const value = draftRef.current, state = projectRef.current
     if (!dirtyRef.current || !state || !value || state.status === 'QUEUED') return
-    if (state.status !== 'DRAFT' && (state.status !== 'READY' || !clip)) return
+    if (state.status !== 'DRAFT' && state.status !== 'READY') return
     const snapshot = value
     const action = (async () => {
       const url = '/api/clips/video-templates/drafts/' + encodeURIComponent(state.id)
@@ -271,7 +282,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         setDirty(false)
         setNotice('Saved in your workspace')
       }
-      if (state.status === 'READY' && projectRef.current) await refreshClip(projectRef.current)
+      if (state.status === 'READY' && projectRef.current && clip) await refreshClip(projectRef.current)
     })()
     saveLock.current = action
     try { await action } finally { saveLock.current = null }
@@ -283,6 +294,33 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     }, 700)
     return () => window.clearTimeout(timer)
   }, [draft, dirty, project?.id, project?.status, saveNow])
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)')
+    const sync = () => setIsMobile(mq.matches)
+    sync()
+    mq.addEventListener('change', sync)
+    return () => mq.removeEventListener('change', sync)
+  }, [])
+  useEffect(() => {
+    const value = draftRef.current
+    const state = projectRef.current
+    if (!value || !state || state.status !== 'DRAFT' || busy || prepareLock.current) return
+    const prog = fillProgress(release.family, value)
+    const musicOk = !release.musicRequired || Boolean(value.music && value.templateMusic && value.musicRightsConfirmed)
+    if (prog.filled !== prog.total || !musicOk) return
+    const timer = window.setTimeout(() => {
+      if (prepareLock.current || projectRef.current?.status !== 'DRAFT') return
+      prepareLock.current = true
+      setPreviewPreparing(true)
+      void publish()
+        .catch(e => setError(readable(e, 'Could not prepare preview')))
+        .finally(() => {
+          prepareLock.current = false
+          setPreviewPreparing(false)
+        })
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [draft, project?.status, project?.id, busy, release.family, release.musicRequired])
   useEffect(() => {
     if (!render || (render.status !== 'QUEUED' && render.status !== 'RENDERING')) return
     const timer = window.setInterval(() => {
@@ -313,7 +351,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         return metadata.asset
       })
       setSelectedUploads(prev => [...prev, ...withMeta])
-      setNotice(withMeta.length + ' files uploaded. Place them in the numbered slots.')
+      recentUploads.current = [...withMeta, ...recentUploads.current].slice(0, 80)
+      setLibrarySelection(prev => [...prev, ...withMeta])
+      setNotice(withMeta.length + ' files uploaded')
     } catch (e) { setError(readable(e, 'Upload failed — retry or choose a different file')) }
     finally { setBusy(false);setUploadStatus(null) }
   }
@@ -333,15 +373,20 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       focalX: 50, focalY: 50, remedy: 'replace',
     }
     commitDraft({ ...draft, slots: { ...draft.slots, [id]: fill } })
-    setNotice('Slot ' + slot.ordinal + ' updated without changing adjacent slots.')
+  setNotice('Slot ' + slot.ordinal + ' updated without changing adjacent slots.')
+    if (projectRef.current?.status === 'READY') {
+      window.setTimeout(() => { void saveNow() }, 0)
+    }
   }
-  const autoFill = () => {
+  const autoFill = (source?: TemplateAsset[]) => {
     if (!draft) return
-    const { draft: updated, used, rejected } = assignSelectionInOrder(draft, release.family,
-      selectedUploads.filter(item => item.kind !== 'audio'))
+    const queue = (source ?? (selectedUploads.length ? selectedUploads : librarySelection.length
+      ? librarySelection : recentUploads.current)).filter(item => item.kind !== 'audio')
+    const { draft: updated, used, rejected } = assignSelectionInOrder(draft, release.family, queue)
     if (used) commitDraft(updated)
     setSelectedUploads(rejected)
-    setNotice(used + ' slots filled in selection order' + (rejected.length ? '; ' + rejected.length + ' files not assigned' : ''))
+    setLibrarySelection(rejected)
+    setNotice(used + ' slots filled' + (rejected.length ? '; ' + rejected.length + ' files not assigned' : ''))
   }
   const patchFill = (id: string, changes: Partial<StudioSlotFill>) => {
     if (!draft?.slots[id]) return
@@ -398,7 +443,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       if (dirtyRef.current) throw new Error('Save must finish before export')
       const result = await request<{ renderId: string; status: string; downloadUrl?: string | null }>(
         '/api/clips/clips/' + encodeURIComponent(state.clipId) + '/export', 'POST', {
-          resolution: '720p', aspect: release.family.aspects[0], format: 'mp4',
+          resolution: exportResolution,
+          aspect: exportAspect,
+          format: 'mp4',
         })
       const job = await request<RenderJob>('/api/clips/renders/' + encodeURIComponent(result.renderId))
       setRender(job)
@@ -447,7 +494,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     const config = musicConfig
     if (!audio || !config || !musicMedia?.url) return
     const startMs = config.startMs ?? 0
-    const endMs = config.endMs ?? clip?.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30
+    const endMs = config.endMs ?? clip?.edits.trim?.out ?? release.family.totalFrames * 1000 / 30
     if (outputMs < startMs || outputMs >= endMs) {
       if (!audio.paused) audio.pause()
       return
@@ -473,6 +520,11 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const ready = project?.status === 'READY' && Boolean(clip && project.clipId)
   const musicReady = !release.musicRequired || Boolean(draft?.music && draft?.templateMusic && draft.musicRightsConfirmed)
   const canPublish = progress.filled === progress.total && musicReady && project?.status === 'DRAFT' && !busy
+  const slotsRemaining = Math.max(0, progress.total - progress.filled)
+  const exportHint = slotsRemaining
+    ? 'Fill ' + slotsRemaining + ' more slot' + (slotsRemaining === 1 ? '' : 's') + ' to export'
+    : project?.status !== 'READY' ? 'Preview is preparing…' : null
+  const saveStatus = dirty ? 'Saving…' : notice || 'All changes saved'
   const previewAspect = (release.family.aspects[0] ?? '9:16') as ExportAspect
   const previewFrameMaxH = 640
   const { aw: previewAw, ah: previewAh } = aspectRatioParts(previewAspect)
@@ -482,329 +534,108 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     width: '100%' as const,
     maxWidth: Math.round(previewFrameMaxH * (previewAw / previewAh)),
   }
+  const toggleMobilePick = (asset: TemplateAsset) => {
+    setMobilePick(prev => prev.some(a => a.id === asset.id)
+      ? prev.filter(a => a.id !== asset.id)
+      : [...prev, asset])
+  }
+  const mobileNext = () => {
+    autoFill(mobilePick)
+    setMobileStep('studio')
+  }
+  const toggleLibrarySelect = (asset: TemplateAsset) => {
+    setLibrarySelection(prev => prev.some(a => a.id === asset.id)
+      ? prev.filter(a => a.id !== asset.id)
+      : [...prev, asset])
+  }
+  const refreshMediaPage = (page: number) => {
+    void refreshMedia(page, mediaSearch, mediaKind).catch(e => setError(readable(e)))
+  }
   return (
-    <div className="mx-auto max-w-[1560px] space-y-5 px-4 py-6 sm:px-6" data-testid="video-template-studio">
-      <nav className="text-xs text-muted-foreground" aria-label="Breadcrumb">
-        <Link className="hover:underline" href="/app/clips/video-templates">Video templates</Link>
-        <span aria-hidden="true"> / </span>{release.title}
-      </nav>
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
-            <span>{release.category} · {release.family.aspects.join(', ')}</span>
-            <span className={release.certificationStatus === 'certified'
-              ? 'rounded-full border border-emerald-500/40 px-2 py-0.5 text-emerald-600'
-              : 'rounded-full border border-amber-500/40 px-2 py-0.5 text-amber-600'}>{release.certificationStatus === 'certified' ? 'Certified' : 'Preview'}</span>
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{release.title}</h1>
-          <p className="max-w-2xl text-sm text-muted-foreground">{release.description}</p>
-          <p className="text-xs text-muted-foreground">{release.family.totalFrames / 30}s · {release.family.slots.length} media slots · {release.family.texts.length} text fields</p>
-          <p className="text-xs text-muted-foreground">Music and demo rights: {release.rights}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={buttonClass} disabled={!history.current.length || busy} onClick={undo} aria-label="Undo template change">Undo</button>
-          <button type="button" className={buttonClass} disabled={!future.current.length || busy} onClick={redo} aria-label="Redo template change">Redo</button>
-          <button type="button" className={buttonClass} disabled={!dirty || busy} onClick={() => void saveNow().catch(e => setError(readable(e)))}>Save</button>
-          <span className="self-center text-xs text-muted-foreground" role="status">{notice || (project ? 'Workspace draft' : 'Creating project draft…')}</span>
-        </div>
-      </header>
-      {error && <div role="alert" className="rounded-xl border border-destructive/50 p-3 text-sm text-destructive">
-        {error}
-        <button type="button" className="ml-3 underline" onClick={() => setError('')}>Dismiss</button>
-      </div>}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(330px,0.8fr)]">
-        <section className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold">Template preview</h2>
-              <span className="text-xs text-muted-foreground">{ready ? 'Shared editor/worker frame mapping' : 'Source review'}</span>
-            </div>
-            {ready && clip ? <>
-              <div
-                className="relative mx-auto overflow-hidden rounded-xl bg-black"
-                style={previewFrameStyle}
-                data-testid="video-template-preview-frame"
-              >
-                <PreviewStage clipId={project?.clipId} edits={clip.edits} videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
-                  posterUrl={clip.mediaUrls.poster} media={clip.media} cropTrack={clip.crop.track}
-                  words={[]} videoRef={videoRef} sourceUrls={sourceUrls}
-                  onTick={tick => {
-                    syncMusicPreview(tick.outputMs, videoRef.current?.paused === false)
-                    const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
-                      lastClockRounded.current = frame; setClockMs(tick.outputMs)
-                    }
-                  }} />
-              </div>
-              {musicMedia?.url && musicConfig ? <audio
-                ref={musicAudioRef}
-                src={musicMedia.url}
-                preload="auto"
-                aria-label="Template soundtrack preview"
-                onLoadedMetadata={() => syncMusicPreview(clockMs, videoRef.current?.paused === false)}
-                className="hidden"
-              /> : null}
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button type="button" className={buttonClass} onClick={() => {
-                  void videoRef.current?.play()
-                  syncMusicPreview(clockMs, true)
-                }}>Play</button>
-                <button type="button" className={buttonClass} onClick={() => {
-                  videoRef.current?.pause()
-                  syncMusicPreview(clockMs, false)
-                }}>Pause</button>
-                <input aria-label="Seek template preview" type="range" className="min-w-36 flex-1" min={0}
-                  max={(clip.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30)}
-                  value={Math.min(clockMs, clip.edits.clipEndMs ?? release.family.totalFrames * 1000 / 30)}
-                  onChange={e => {
-                    const nextMs = Number(e.target.value)
-                    if (videoRef.current) videoRef.current.currentTime = nextMs / 1000
-                    syncMusicPreview(nextMs, videoRef.current?.paused === false)
-                  }} />
-                <span className="text-xs tabular-nums">{(clockMs / 1000).toFixed(1)}s</span>
-              </div>
-            </> : <>
-              <div className="relative mx-auto flex aspect-[9/16] max-h-[460px] w-full max-w-sm items-center justify-center overflow-hidden rounded-xl bg-black">
-                {activeStillUrl ? (activeMedia!.asset.kind === 'image'
-                  ? <img src={activeStillUrl} alt={activeMedia!.label} className="h-full w-full object-contain"
-                      style={{ objectPosition: (activeFill?.focalX ?? 50) + '% ' + (activeFill?.focalY ?? 50) + '%' }} />
-                  : <video key={activeMedia!.asset.id} src={activeStillUrl} controls playsInline muted
-                      className="h-full w-full object-contain" preload="metadata" />)
-                  : <div className="p-6 text-center text-sm text-white/70">
-                      {project?.status === 'QUEUED' ? 'Preparing the exact-frame preview…' :
-                        'Select a slot to inspect its photo or video. The full composed preview is prepared after filling the slots.'}
-                    </div>}
-              </div>
-              <p className="mt-3 text-xs text-muted-foreground">
-                Source review is not the final render. After selecting all slots, Prepare preview creates a new project and uses the established ClipEditsV2 preview/export path.
-              </p>
-            </>}
-          </div>
-          <section className="space-y-3 rounded-2xl border bg-card p-4" aria-label="Template slots">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">Fill numbered slots</h2>
-              <span role="status" className="text-xs tabular-nums">{progress.filled} of {progress.total} filled</span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-              <div className="h-full bg-primary transition-all" style={{ width: (progress.total ? 100 * progress.filled / progress.total : 0) + '%' }} />
-            </div>
-            <div className="grid max-h-[430px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2" role="group" aria-label="Select a template slot">
-              {release.family.slots.map(slot => {
-                const fill = draft?.slots[slot.id]
-                return <button key={slot.id} type="button" aria-pressed={selectedSlot === slot.id}
-                  className={'flex items-center gap-3 rounded-xl border p-3 text-left text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary ' +
-                    (selectedSlot === slot.id ? 'border-primary bg-primary/10' : 'border-border')}
-                  onClick={() => { setSelectedSlot(slot.id); setSelectedAudio(false) }}>
-                  <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted font-semibold tabular-nums">{slot.ordinal}</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate font-medium">{fill ? 'Filled · ' + fill.asset.id : slot.role}</span>
-                    <span className="block text-xs text-muted-foreground">{slot.media} · {(slot.durationFrames / 30).toFixed(1)}s</span></span>
-                  <span className={'size-2 rounded-full ' + (fill ? 'bg-emerald-500' : 'bg-muted-foreground/40')} aria-label={fill ? 'Filled' : 'Empty'} />
-                </button>
-              })}
-            </div>
-          </section>
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
-            <h2 className="text-sm font-semibold">Text and appearance</h2>
-            {release.family.texts.map(text => <label key={text.id} className="block space-y-1 text-xs font-medium">
-              {text.id} · maximum {text.maxChars} characters
-              <input className={inputClass} maxLength={text.maxChars}
-                value={draft?.texts[text.id] ?? text.defaultText}
-                onChange={e => draft && commitDraft({ ...draft, texts: { ...draft.texts, [text.id]: e.target.value } })} />
-            </label>)}
-            <label className="flex flex-wrap items-center gap-3 text-xs font-medium">Brand accent
-              <input aria-label="Brand accent color" type="color" value={draft?.brandColor ?? '#ffffff'}
-                onChange={e => draft && commitDraft({ ...draft, brandColor: e.target.value })} />
-              <span className="text-muted-foreground">Updates authored text and graphic colors</span>
-            </label>
-            <h3 className="pt-2 text-sm font-semibold">Music</h3>
-            <p className="text-xs text-muted-foreground">{release.design.musicPolicy === 'none'
-              ? 'This template has no music track.' : 'Choose a workspace-owned audio recording. Keep timing preserves the authored beat-cut schedule.'}</p>
-            {release.design.musicPolicy !== 'none' && <>
-              <button type="button" className={buttonClass} onClick={() => { setSelectedAudio(true);setMediaKind('audio');void refreshMedia(1,'','audio') }}>Choose approved music</button>
-              {draft?.music && <button type="button" className={buttonClass}
-                onClick={() => commitDraft({ ...draft, music: undefined, templateMusic: undefined,
-                  musicTiming: 'keep', musicRightsConfirmed: false })}>Remove music ({draft.music.id})</button>}
-              {draft?.templateMusic && <p className="text-xs text-muted-foreground">
-                Verified SHA-256 {draft.templateMusic.rights.sha256.slice(0, 12)}… ·
-                {' '}{draft.templateMusic.schedule.beats.length} pinned beats ·
-                {' '}{draft.templateMusic.choice === 're-sync' ? 'Approved re-sync' : 'Keep cut timing'}
-              </p>}
-              {pendingMusic && draft && <TemplateMusicChoicePanel
-                key={pendingMusic.asset.id}
-                family={release.family}
-                musicUploadId={pendingMusic.asset.id}
-                previewUrl={pendingMusic.url ?? undefined}
-                originalSchedule={draft.templateMusic?.schedule}
-                onCancel={() => setPendingMusic(null)}
-                onAccept={decision => {
-                  commitDraft({ ...draft, music: pendingMusic.asset, templateMusic: decision,
-                    musicRightsConfirmed: true,
-                    musicTiming: decision.choice === 're-sync' ? 'resync' : 'keep' })
-                  setPendingMusic(null)
-                  setSelectedAudio(false)
-                }}
-              />}
-              <p className="text-xs text-muted-foreground">
-                {release.defaultMusic
-                  ? 'This Preview template starts with an original first-party beat bed whose pulses align to every authored cut. You can remove it and verify your own replacement track.'
-                  : 'Select an uploaded song and verify the exact file hash and music rights before saving. Replacement can keep cut timing or use an approved pinned beat re-sync.'}
-              </p>
-            </>}
-          </section>
-        </section>
-        <aside className="space-y-4">
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
-            <h2 className="text-sm font-semibold">{selectedAudio ? 'Select music' : 'Media for slot ' + (activeSlot?.ordinal ?? 1)}</h2>
-            {activeSlot && !selectedAudio && <>
-              <p className="text-xs text-muted-foreground">Accepts {activeSlot.media} · {(activeSlot.durationFrames / 30).toFixed(1)} seconds · Source audio: {activeSlot.sourceAudio}</p>
-              {activeFill && <>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="space-y-1 text-xs">Fit
-                    <select className={inputClass} value={activeFill.fit}
-                      onChange={e => patchFill(activeSlot.id, { fit: e.target.value as 'cover' | 'contain' })}>
-                      <option value="cover">Cover</option><option value="contain">Contain</option>
-                    </select>
-                  </label>
-                  {activeFill.asset.kind === 'video' && <label className="space-y-1 text-xs">Trim start (seconds)
-                    <input type="number" className={inputClass} min={0} step={1 / 30}
-                      value={(activeFill.sourceInFrame / 30).toFixed(2)}
-                      onChange={e => patchFill(activeSlot.id, { sourceInFrame: Math.max(0, Math.round(Number(e.target.value) * 30)) })} />
-                  </label>}
-                </div>
-                <label className="block space-y-1 text-xs">Focal point X · {activeFill.focalX}%
-                  <input type="range" min={0} max={100} value={activeFill.focalX} className="w-full"
-                    onChange={e => patchFill(activeSlot.id, { focalX: Number(e.target.value) })} />
-                </label>
-                <label className="block space-y-1 text-xs">Focal point Y · {activeFill.focalY}%
-                  <input type="range" min={0} max={100} value={activeFill.focalY} className="w-full"
-                    onChange={e => patchFill(activeSlot.id, { focalY: Number(e.target.value) })} />
-                </label>
-                {activeFill.asset.kind === 'video' && <>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input type="checkbox" checked={activeFill.muteSourceAudio}
-                      onChange={e => patchFill(activeSlot.id, { muteSourceAudio: e.target.checked })} />
-                    Mute source clip audio
-                  </label>
-                  {activeSlot.playback ? <p className="text-xs text-muted-foreground">
-                    Variable-speed and freeze-frame slots need source footage that supports the authored playback.
-                    Loop and extra hold remedies are unavailable for these slots.
-                  </p> : <label className="block space-y-1 text-xs">If this clip is too short
-                    <select className={inputClass} value={activeFill.remedy}
-                      onChange={e => patchFill(activeSlot.id, { remedy: e.target.value as StudioSlotFill['remedy'] })}>
-                      <option value="replace">Choose another video</option>
-                      <option value="loop">Loop full source (visible hard cuts)</option>
-                      <option value="hold">Hold the final frame</option>
-                    </select>
-                  </label>}
-                  {!activeSlot.playback && activeFill.remedy === 'hold' && <button type="button" className={buttonClass} disabled={busy}
-                    onClick={() => void createHold(activeSlot.id)}>
-                    {activeFill.holdAsset ? 'Recapture last frame' : 'Capture and upload last frame'}
-                  </button>}
-                </>}
-                <button type="button" className={buttonClass}
-                  onClick={() => { const next = { ...draft!.slots };delete next[activeSlot.id];commitDraft({ ...draft!, slots: next }) }}>
-                  Clear selected slot
-                </button>
-              </>}
-            </>}
-          </section>
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
-            <h2 className="text-sm font-semibold">Upload or choose workspace media</h2>
-            <label className="block cursor-pointer rounded-xl border border-dashed border-primary/40 p-4 text-center text-sm hover:bg-primary/5">
-              Select photos, clips or music
-              <input className="sr-only" type="file" accept="image/*,video/*,audio/*" multiple
-                disabled={busy} onChange={e => { const chosen = Array.from(e.target.files ?? []);e.target.value = '';void uploadFiles(chosen) }} />
-            </label>
-            {uploadStatus && <div role="status" className="text-xs text-muted-foreground">
-              {uploadStatus.filename}: {uploadStatus.percent}% · {uploadStatus.state}
-            </div>}
-            <div className="grid grid-cols-[1fr_auto] gap-2">
-              <label className="sr-only" htmlFor="video-template-media-search">Search media</label>
-              <input id="video-template-media-search" className={inputClass} placeholder="Search uploaded files"
-                value={mediaSearch} onChange={e => setMediaSearch(e.target.value)} />
-              <button type="button" className={buttonClass} onClick={() => void refreshMedia(1,mediaSearch,mediaKind).catch(e => setError(readable(e)))}>Search</button>
-            </div>
-            <label className="sr-only" htmlFor="video-template-media-kind">Media type</label>
-            <select id="video-template-media-kind" className={inputClass} value={mediaKind}
-              onChange={e => { const value=e.target.value as typeof mediaKind;setMediaKind(value);void refreshMedia(1,mediaSearch,value) }}>
-              <option value="all">All workspace files</option><option value="video">Video</option>
-              <option value="image">Photos</option><option value="audio">Audio</option>
-            </select>
-            <ul className="max-h-[330px] space-y-2 overflow-y-auto" aria-label="Workspace media">
-              {media.items.map(item => <li key={item.asset.id} className="flex items-center justify-between gap-2 rounded-lg border p-2 text-xs">
-                <span className="min-w-0 flex-1"><span className="block truncate font-medium">{item.label}</span>
-                  <span className="text-muted-foreground">{item.asset.kind} · {item.durationMs ? (item.durationMs / 1000).toFixed(1) + 's' : 'still'}{!item.available ? ' · unavailable' : ''}</span>
-                </span>
-                <button type="button" className={buttonClass} disabled={!item.available || busy}
-                  aria-label={'Use ' + item.label} onClick={() => {
-                    if (item.asset.kind === 'audio' || selectedAudio) {
-                      if (item.asset.kind !== 'audio') { setError('Select an audio file');return }
-                      if (release.design.musicPolicy === 'none') {
-                        setError('This template does not allow music'); return
-                      }
-                      setPendingMusic(item)
-                      setSelectedAudio(false)
-                    } else fillSlot(selectedSlot, item.asset)
-                  }}>Use</button>
-                <button type="button" className={buttonClass} disabled={!item.available || busy}
-                  aria-label={'Add ' + item.label + ' to selection'}
-                  onClick={() => setSelectedUploads(prev => [...prev, item.asset])}>Queue</button>
-              </li>)}
-            </ul>
-            <div className="flex items-center justify-between text-xs">
-              <button type="button" className={buttonClass} disabled={media.page === 1}
-                onClick={() => void refreshMedia(media.page - 1,mediaSearch,mediaKind)}>Previous</button>
-              <span>Page {media.page} of {media.pages} · {media.total} files</span>
-              <button type="button" className={buttonClass} disabled={media.page >= media.pages}
-                onClick={() => void refreshMedia(media.page + 1,mediaSearch,mediaKind)}>Next</button>
-            </div>
-            {selectedUploads.length > 0 && <div className="space-y-2">
-              <h3 className="text-xs font-semibold">Ordered selection ({selectedUploads.length})</h3>
-              <ol className="max-h-36 space-y-1 overflow-y-auto">
-                {selectedUploads.map((item, index) => <li key={index} className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-2 py-1 text-xs">
-                  <span className="truncate">{index + 1}. {item.id}</span>
-                  <div className="flex gap-1">
-                    <button type="button" className={buttonClass} aria-label={'Move selected file ' + (index+1) + ' up'} disabled={!index}
-                      onClick={() => setSelectedUploads(a => moveSelection(a,index,index-1))}>↑</button>
-                    <button type="button" className={buttonClass} aria-label={'Move selected file ' + (index+1) + ' down'} disabled={index === selectedUploads.length-1}
-                      onClick={() => setSelectedUploads(a => moveSelection(a,index,index+1))}>↓</button>
-                    <button type="button" className={buttonClass} aria-label={'Remove selected file ' + (index+1)}
-                      onClick={() => setSelectedUploads(a => a.filter((_,i)=>i!==index))}>×</button>
-                  </div>
-                </li>)}
-              </ol>
-              <button type="button" className={primaryClass} disabled={!draft || busy} onClick={autoFill}>
-                Autofill empty slots in this order
-              </button>
-            </div>}
-          </section>
-          <section className="space-y-3 rounded-2xl border bg-card p-4">
-            <h2 className="text-sm font-semibold">Project and export</h2>
-            <p className="text-xs text-muted-foreground">A template always creates a separate project. Existing clip timelines are never replaced.</p>
-            <p className="text-xs">Project status: <strong>{project?.status ?? 'Creating draft'}</strong></p>
-            {project?.status === 'DRAFT' && <>
-              <button type="button" className={primaryClass}
-                disabled={!canPublish || dirty && busy} onClick={() => void publish()}>Prepare full preview and project</button>
-              {!musicReady ? <p className="text-xs text-amber-600">Preparing or verifying the required template soundtrack…</p> : null}
-            </>}
-            {ready && <button type="button" className={primaryClass} disabled={busy}
-              onClick={() => void doExport()}>Save and export video · 720p</button>}
-            {render && <div className="space-y-2 rounded-xl border p-3" role="status">
-              <p className="text-xs font-medium">Render {render.status}{render.progress != null ? ' · ' + render.progress + '%' : ''}</p>
-              {render.phase && <p className="text-xs text-muted-foreground">{render.phase}</p>}
-              {render.error && <p className="text-xs text-destructive">{render.error}</p>}
-              {render.downloadUrl && render.status === 'READY' && <a className={primaryClass} href={render.downloadUrl} download={render.filename ?? undefined}>Download video</a>}
-              {render.status === 'QUEUED' && <button type="button" className={buttonClass} disabled={busy}
-                onClick={() => void cancelQueuedRender()}>Cancel queued render</button>}
-              {render.status === 'RENDERING' && <p className="text-xs text-muted-foreground">This render is already running and cannot be safely canceled.</p>}
-              {render.status === 'FAILED' && render.error !== 'Canceled before render started' && <button type="button" className={buttonClass} disabled={busy}
-                onClick={() => void retryRender()}>Retry failed render</button>}
-            </div>}
-            {project && project.status !== 'READY' && <button type="button" className={buttonClass} disabled={busy}
-              onClick={() => void cancelProject()}>{project.status === 'DRAFT' ? 'Discard draft' : 'Cancel preparation'}</button>}
-            {ready && <p className="text-xs text-muted-foreground">Edit and export are template-owned here. No new Compact or Timeline integration is added.</p>}
-          </section>
-        </aside>
-      </div>
+    <div className="min-h-[100dvh] bg-background">
+      {error ? (
+        <p className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-center text-sm text-destructive" role="alert">
+          {error}
+          <button type="button" className="ml-2 underline" onClick={() => setError('')}>Dismiss</button>
+        </p>
+      ) : null}
+      <VideoTemplateStudioShell
+        release={release}
+        project={project}
+        draft={draft}
+        progress={progress}
+        ready={ready}
+        previewPreparing={previewPreparing}
+        saveStatus={saveStatus}
+        exportHint={exportHint}
+        busy={busy}
+        dirty={dirty}
+        historyLength={history.current.length}
+        futureLength={future.current.length}
+        canExport={ready}
+        slotsRemaining={slotsRemaining}
+        isMobile={isMobile}
+        mobileStep={mobileStep}
+        onMobileStep={setMobileStep}
+        mobilePick={mobilePick}
+        onToggleMobilePick={toggleMobilePick}
+        onMobileNext={mobileNext}
+        undo={undo}
+        redo={redo}
+        onExportOpen={() => setExportOpen(true)}
+        rightTab={rightTab}
+        onRightTab={setRightTab}
+        mediaSearch={mediaSearch}
+        onMediaSearch={setMediaSearch}
+        mediaKind={mediaKind}
+        onMediaKind={kind => { setMediaKind(kind); void refreshMedia(1, mediaSearch, kind) }}
+        onBrowseMusic={() => { setSelectedAudio(true); setMediaKind('audio'); void refreshMedia(1, mediaSearch, 'audio') }}
+        media={media}
+        onRefreshMedia={refreshMediaPage}
+        librarySelection={librarySelection}
+        onToggleLibrarySelect={toggleLibrarySelect}
+        onUpload={files => void uploadFiles(files)}
+        uploadStatus={uploadStatus}
+        selectedSlot={selectedSlot}
+        onSelectSlot={id => { setSelectedSlot(id); setSelectedAudio(false) }}
+        knownMedia={knownMedia}
+        onAssignAsset={fillSlot}
+        onBatchFill={() => autoFill()}
+        onCommitDraft={commitDraft}
+        patchFill={patchFill}
+        onCreateHold={id => void createHold(id)}
+        activeSlot={activeSlot}
+        activeFill={activeFill}
+        clip={clip}
+        previewFrameStyle={previewFrameStyle}
+        videoRef={videoRef}
+        musicAudioRef={musicAudioRef}
+        sourceUrls={sourceUrls}
+        clockMs={clockMs}
+        onClockMs={ms => { if (Math.floor(ms / 100) !== lastClockRounded.current) { lastClockRounded.current = Math.floor(ms / 100); setClockMs(ms) } }}
+        syncMusicPreview={syncMusicPreview}
+        releaseFamilySlots={release.family.slots}
+        pendingMusic={pendingMusic}
+        onPendingMusic={setPendingMusic}
+        musicMedia={musicMedia}
+        musicConfig={musicConfig}
+      />
+      <VideoTemplateStudioExportSheet
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+        aspects={release.family.aspects}
+        aspect={exportAspect}
+        onAspectChange={setExportAspect}
+        resolution={exportResolution}
+        onResolutionChange={setExportResolution}
+        busy={busy}
+        canExport={ready}
+        hint={exportHint}
+        onStartExport={() => void doExport()}
+        render={render}
+        onCancelQueued={() => void cancelQueuedRender()}
+        onRetry={() => void retryRender()}
+      />
     </div>
   )
 }

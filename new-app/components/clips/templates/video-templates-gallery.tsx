@@ -6,6 +6,9 @@ import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/re
 import { filterVideoTemplates } from '@/lib/clips/real-video-templates/gallery'
 import { SubmitCommunityTemplateDialog, type CommunitySubmitTemplate } from '@/components/clips/templates/submit-community-template-dialog'
 import { ReportCommunityTemplateDialog } from '@/components/clips/templates/report-community-template-dialog'
+import { AnimatedTemplateCardPreview, RenderedTemplateCardPreview } from '@/components/clips/templates/video-templates-gallery-previews'
+import { VideoTemplateGalleryDetailDialog } from '@/components/clips/templates/video-template-gallery-detail-dialog'
+import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
 
 type Scope = 'first-party' | 'community' | 'mine'
 type UserTemplateListItem = {
@@ -25,110 +28,6 @@ type DraftTemplateProject = {id:string;title:string;releaseId:string;status:stri
 const COMMUNITY_CATEGORIES = ['gaming','podcast','social','business','education','lifestyle','other'] as const
 const MAX_PAGE_SIZE = 24
 const STORAGE_KEY = 'transovo.videoTemplates.favorites.v1'
-function AnimatedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO_TEMPLATES)[number] }) {
-  const [active,setActive]=useState(0)
-  const slots=item.family.slots
-  const slot=slots[active] ?? slots[0]
-  const accent=item.previewStyle?.accent ?? '#FACC15'
-  const foreground=item.previewStyle?.foreground ?? '#FFFFFF'
-  const closing=active===slots.length-1
-  const text=closing ? item.family.texts[1] : item.family.texts[0]
-  useEffect(()=>{
-    if(slots.length<2)return
-    const ms=Math.max(650,Math.min(1300,Math.round((slot?.durationFrames??30)*15)))
-    const timer=window.setTimeout(()=>setActive(index=>(index+1)%slots.length),ms)
-    return()=>window.clearTimeout(timer)
-  },[active,item.id,slot?.durationFrames,slots.length])
-  const shift=(active%3-1)*5
-  return <div className="relative aspect-video overflow-hidden bg-neutral-950" aria-label={'Animated preview '+item.title}>
-    <div className="absolute inset-0 opacity-90" style={{background:
-      'radial-gradient(circle at 18% 20%,'+accent+'30,transparent 34%),linear-gradient(135deg,#09090b,#18181b 58%,#020617)'}} />
-    <div className="absolute left-1/2 top-1/2 aspect-[9/16] h-[90%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-white/15 bg-black shadow-2xl">
-      <div className="absolute -inset-3 transition-all duration-500 ease-out"
-        style={{
-          background:'linear-gradient('+(125+active*31)+'deg,'+accent+'66 0%,#111827 42%,#020617 100%)',
-          transform:'translate3d('+shift+'%,0,0) scale('+(1.03+active*.008)+')',
-        }} />
-      <div className="absolute inset-0 opacity-70" style={{background:
-        'linear-gradient(to bottom,transparent 35%,rgba(0,0,0,.18) 58%,rgba(0,0,0,.78) 100%)'}} />
-      <div className="absolute left-3 top-3 rounded-full border border-white/20 bg-black/35 px-2 py-1 text-[9px] font-semibold text-white/85">
-        {String(active+1).padStart(2,'0')} / {String(slots.length).padStart(2,'0')}
-      </div>
-      <div className="absolute inset-x-4 transition-all duration-500"
-        style={{top:(text?.y??24)+'%',transform:'translateY(-50%)'}}>
-        <div className="text-center font-semibold leading-[.94] tracking-tight drop-shadow-lg"
-          style={{color:foreground,fontFamily:text?.font??item.previewStyle?.headingFont,
-            fontSize:Math.max(15,Math.min(28,(text?.size??60)/2.5))}}>
-          {text?.defaultText ?? item.title}
-        </div>
-      </div>
-      <div className="absolute h-2.5 rounded-full opacity-90 transition-all duration-500"
-        style={{left:(12+active*3%40)+'%',bottom:'17%',width:(28+(active%3)*11)+'%',background:accent}} />
-      <div className="absolute inset-x-3 bottom-4 flex gap-1">
-        {slots.map((itemSlot,index)=><span key={itemSlot.id}
-          className={'h-1 rounded-full transition-opacity '+(index===active?'bg-white':'bg-white/25')}
-          style={{flexGrow:itemSlot.durationFrames}} />)}
-      </div>
-    </div>
-    <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-amber-300/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-200">
-      {item.certificationStatus === 'certified' ? 'Certified' : 'Preview'}
-    </span>
-  </div>
-}
-function RenderedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO_TEMPLATES)[number] }) {
-  const media=item.previewMedia
-  const [frame,setFrame]=useState(0)
-  const [playing,setPlaying]=useState(false)
-  const [failed,setFailed]=useState(false)
-  const [reducedMotion,setReducedMotion]=useState(false)
-
-  useEffect(()=>{
-    const query=window.matchMedia('(prefers-reduced-motion: reduce)')
-    const sync=()=>setReducedMotion(query.matches)
-    sync()
-    query.addEventListener('change',sync)
-    return()=>query.removeEventListener('change',sync)
-  },[])
-  useEffect(()=>{
-    if(!media)return
-    setFailed(false)
-    const image=new window.Image()
-    image.onerror=()=>setFailed(true)
-    image.src=media.spritePath
-    return()=>{image.onerror=null}
-  },[media])
-  useEffect(()=>{
-    if(!playing||reducedMotion||failed||!media)return
-    const slot=item.family.slots[frame%Math.max(1,item.family.slots.length)]
-    const ms=Math.max(420,Math.min(900,Math.round((slot?.durationFrames??45)*10)))
-    const timer=window.setTimeout(()=>setFrame(value=>(value+1)%media.frames),ms)
-    return()=>window.clearTimeout(timer)
-  },[failed,frame,item.family.slots,media,playing,reducedMotion])
-
-  if(!media||failed)return <AnimatedTemplateCardPreview item={item}/>
-  const position=media.columns<=1?0:(frame*100)/(media.columns-1)
-  const seconds=(item.family.totalFrames/item.family.fps).toFixed(1).replace(/\.0$/,'')
-  return <div className="group relative aspect-video overflow-hidden bg-black"
-    aria-label={'Rendered preview '+item.title}
-    onMouseEnter={()=>setPlaying(true)} onMouseLeave={()=>{setPlaying(false);setFrame(0)}}>
-    <div className="absolute inset-0 bg-cover bg-center" style={{
-      backgroundImage:'url("'+media.spritePath+'")',
-      backgroundSize:(media.columns*100)+'% 100%',
-      backgroundPosition:position+'% 50%',
-      backgroundRepeat:'no-repeat',
-    }}/>
-    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15"/>
-    <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-black/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-100">
-      {item.certificationStatus==='certified'?'Certified':'Preview'}
-    </span>
-    <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium text-white">
-      {seconds}s · {item.family.slots.length} clips
-    </span>
-    {!reducedMotion?<span className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium text-white/90">
-      {playing?'Previewing':'Hover preview'}
-    </span>:null}
-  </div>
-}
 
 export function VideoTemplatesGallery() {
   const [scope, setScope] = useState<Scope>('first-party')
@@ -155,6 +54,7 @@ export function VideoTemplatesGallery() {
   const [submitTemplate, setSubmitTemplate] = useState<CommunitySubmitTemplate | null>(null)
   const [reportTemplate, setReportTemplate] = useState<{id:string;title:string}|null>(null)
   const [communityNotice, setCommunityNotice] = useState<string | null>(null)
+  const [detailTemplate, setDetailTemplate] = useState<VideoTemplateRelease | null>(null)
 
   useEffect(() => {
     if (scope !== 'mine') return
@@ -286,7 +186,9 @@ export function VideoTemplatesGallery() {
           {groups.map(group => <section key={group.id} className="space-y-3" aria-label={group.title + ' variants'}>
             <h2 className="text-lg font-semibold">{group.title} <span className="ml-2 text-xs font-normal text-muted-foreground">{group.items.length} on this page</span></h2>
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {group.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
+          {group.items.map(item => <article key={item.id} className="group overflow-hidden rounded-2xl border bg-card shadow-sm" data-testid="video-template-card">
+            <button type="button" className="block w-full text-left" onClick={() => setDetailTemplate(item as VideoTemplateRelease)}
+              aria-label={'Open details for ' + item.title}>
             {item.certificationStatus === 'certified' && item.demoPath
               ? <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
                   src={item.demoPath} onMouseEnter={event => {
@@ -298,8 +200,9 @@ export function VideoTemplatesGallery() {
                   }} className="aspect-video w-full bg-black object-cover"
                   aria-label={`Preview ${item.title}`} />
               : item.previewMedia
-                ? <RenderedTemplateCardPreview item={item} />
-                : <AnimatedTemplateCardPreview item={item} />}
+                ? <RenderedTemplateCardPreview item={item as VideoTemplateRelease} />
+                : <AnimatedTemplateCardPreview item={item as VideoTemplateRelease} />}
+            </button>
             <div className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-semibold">{item.title}</h2>
@@ -307,13 +210,17 @@ export function VideoTemplatesGallery() {
                   aria-label={favorites.includes(item.id) ? 'Remove favorite' : 'Add favorite'}
                   onClick={() => toggleFavorite(item.id)} className="rounded-md border px-2 py-1 text-xs">{favorites.includes(item.id) ? 'Saved' : 'Save'}</button>
               </div>
-              <p className="text-xs text-muted-foreground">{item.family.aspects.join(', ')} · {item.family.slots.length} slots · {item.family.totalFrames / 30}s</p>
+              <div className="flex flex-wrap gap-1">
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{item.category}</span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">{item.family.aspects[0]}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{item.family.slots.length} slots · {(item.family.totalFrames / item.family.fps).toFixed(1).replace(/\.0$/, '')}s</p>
               <p className="text-xs text-muted-foreground">
                 {item.family.slots.filter(slot => slot.media === 'video').length} video · {' '}
                 {item.family.slots.filter(slot => slot.media === 'image').length} photos · {' '}
                 {item.family.slots.filter(slot => slot.media === 'either').length} flexible
               </p>
-              <p className="text-sm">{item.description}</p>
+              <p className="line-clamp-2 text-sm text-muted-foreground">{item.description}</p>
               <details className="rounded-lg border border-border/70 p-2 text-xs">
                 <summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                   Exact slot lengths and editable fields
@@ -342,7 +249,8 @@ export function VideoTemplatesGallery() {
               {item.certificationStatus === 'certified' && item.demoPath ? <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
                 className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button> : null}
               <Link href={'/app/clips/video-templates/' + encodeURIComponent(item.id)}
-                className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">
+                className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground"
+                aria-label="Use template">
                 Use template
               </Link>
             </div>
@@ -560,6 +468,7 @@ export function VideoTemplatesGallery() {
       <ReportCommunityTemplateDialog publicationId={reportTemplate?.id??null} title={reportTemplate?.title??''}
         onClose={()=>setReportTemplate(null)}
         onReported={()=>{setCommunityNotice('Report submitted for moderator review.');setReportTemplate(null)}} />
+      <VideoTemplateGalleryDetailDialog item={detailTemplate} onClose={() => setDetailTemplate(null)} />
     </main>
   )
 }
