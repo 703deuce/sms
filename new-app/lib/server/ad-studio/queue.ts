@@ -72,6 +72,21 @@ export async function advanceAdStudioGeneration(
     }
     const planned = plan.scenes.find(s => s.index === scene.index)
     if (!planned?.modelId || !planned.prompt) throw new Error('Ad Studio generated scene lacks a model/prompt.')
+    const primaryProductRef = input.imageAssetIds[0]
+    const mustUseProductRef = Boolean(primaryProductRef)
+      && (run.mode === 'image_to_ad' || run.mode === 'image_ad_to_commercial'
+        || planned.role === 'solution' || planned.role === 'cta')
+    if (mustUseProductRef && planned.referenceAssetId !== primaryProductRef) {
+      console.warn('[ad-studio:b3] child_product_reference_missing', {
+        runId, index: scene.index, role: planned.role, hasPrimaryReference: Boolean(primaryProductRef),
+      })
+      throw new Error('Ad Studio product scene is missing its primary product reference.')
+    }
+    console.info('[ad-studio:b3] child_reference_verified', {
+      runId, index: scene.index, role: planned.role,
+      mode: planned.referenceAssetId ? 'image_to_video' : 'text_to_video',
+      hasProductReference: Boolean(planned.referenceAssetId),
+    })
     const window = adGenerationWindow(planned.modelId, scene.durationSec)
     const jobId = adSceneJobId(runId, scene.id)
     const claimed = await db.adStudioScene.updateMany({
