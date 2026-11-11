@@ -181,16 +181,20 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
   if(next.runId){
     const run=await prisma.aiProducerAgentRun.findFirst({
       where:{id:next.runId,workspaceId:p.workspaceId},
-      select:{status:true,resultProjectId:true,resultClipId:true,producerNotes:true,error:true},
+      select:{status:true,resultProjectId:true,resultClipId:true,outputProjectIds:true,producerNotes:true,error:true},
     })
     if(run&&['ready','done','failed','canceled','capped'].includes(run.status)){
       if(['ready','done'].includes(run.status)){
         const ids=publishedBatchClipIds(run)
         // Never trust producer notes alone: enforce this workspace, the
         // published output project, and live clip rows before exposing links.
-        const published=run.resultProjectId&&ids.length
+        const outputProjects=[...new Set([
+          run.resultProjectId,
+          ...(Array.isArray(run.outputProjectIds)?run.outputProjectIds:[]),
+        ].filter((id):id is string=>typeof id==='string'&&id.length>0))]
+        const published=outputProjects.length&&ids.length
           ?await prisma.clip.findMany({where:{
-              id:{in:ids},projectId:run.resultProjectId,
+              id:{in:ids},projectId:{in:outputProjects},
               workspaceId:p.workspaceId,deletedAt:null,
             },select:{id:true,projectId:true}}):[]
         const seen=new Set(next.completed.map(item=>item.clipId))
