@@ -39,6 +39,12 @@ describe('Twitch/Kick bounded specialist-agent clips',()=>{
       expect(windows[i]![1]-windows[i]![0]).toBeGreaterThanOrEqual(60_000)
     }
   })
+  it('preserves pre-upgrade running batch boundaries with explicit legacy policy',()=>{
+    expect(streamerAgentWindows(0,MAX_AGENT_SOURCE_WINDOW_MS+14_000,true,0,'legacy'))
+      .toEqual([[0,MAX_AGENT_SOURCE_WINDOW_MS]])
+    expect(streamerAgentWindows(0,MAX_AGENT_SOURCE_WINDOW_MS+14_000,true,0,'fold'))
+      .toHaveLength(2)
+  })
   it('rejects invalid or out of bounds source windows',()=>{
     expect(()=>streamerAgentWindows(0,10_000,true)).toThrow()
     expect(()=>streamerAgentWindows(0,60_000,false,4)).toThrow()
