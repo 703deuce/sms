@@ -95,9 +95,10 @@ beforeEach(() => {
     if (url === '/api/clips/video-templates/drafts/proj_fixture' && method === 'GET')
       return ok({ ...backend.project, draft: backend.draft })
     if (url === '/api/clips/video-templates/drafts/proj_fixture' && method === 'PATCH') {
-      if (body.expectedVersion !== backend.project?.version) return Response.json({ error: 'Conflict' }, { status: 409 })
+      const project = backend.project
+      if (!project || body.expectedVersion !== project.version) return Response.json({ error: 'Conflict' }, { status: 409 })
       backend.draft = body.draft
-      backend.project = { ...backend.project, draft: body.draft, version: backend.project.version + 1 }
+      backend.project = { ...project, draft: body.draft, version: project.version + 1 }
       return ok(backend.project)
     }
     if (url === '/api/clips/video-templates/drafts/proj_fixture/publish' && method === 'POST') {
@@ -109,14 +110,15 @@ beforeEach(() => {
     if (url === '/api/clips/projects/proj_fixture/library' && method === 'GET')
       return ok({ items: media.map(item => ({ refId: item.asset.id, url: item.url })) })
     if (url === '/api/clips/video-templates/drafts/proj_fixture/studio' && method === 'PATCH') {
-      if (body.expectedVersion !== backend.project?.version ||
-          body.expectedEditsSaveVersion !== backend.project.editsSaveVersion)
+      const project = backend.project
+      if (!project || body.expectedVersion !== project.version ||
+          body.expectedEditsSaveVersion !== project.editsSaveVersion)
         return Response.json({ error: 'Conflict' }, { status: 409 })
       backend.studioCalls++
       backend.draft = body.draft
-      backend.project = { ...backend.project, draft: body.draft,
-        version: backend.project.version + 1,
-        editsSaveVersion: backend.project.editsSaveVersion + 1 }
+      backend.project = { ...project, draft: body.draft,
+        version: project.version + 1,
+        editsSaveVersion: project.editsSaveVersion + 1 }
       return ok({ version: backend.project.version,
         editsSaveVersion: backend.project.editsSaveVersion })
     }
@@ -165,7 +167,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     fireEvent.change(screen.getByLabelText(/headline.*maximum 100 characters/), {
       target: { value: 'An edited headline' },
     })
-    fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/ }))
     await waitFor(() => expect(backend.draft?.texts.headline).toBe('An edited headline'))
     await waitFor(() => expect(screen.getByTestId('template-native-preview').textContent)
       .toBe('An edited headline'))
@@ -182,7 +184,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
       .getAllByRole('button')
     fireEvent.click(reloadedSlots[1]!)
     fireEvent.click(screen.getByRole('button', { name: 'Use Photo C' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Save', exact: true }))
+    fireEvent.click(screen.getByRole('button', { name: /^Save$/ }))
     await waitFor(() => expect(backend.draft?.slots.second.asset.id).toBe('photo_c'))
     expect(backend.draft?.slots.first.asset.id).toBe('photo_a')
     expect(backend.studioCalls).toBeGreaterThanOrEqual(2)
