@@ -65,7 +65,7 @@ function variantsFor(runId: string, count = 3): AdImageVariant[] {
   return Array.from({ length: count }, (_, index) => ({
     id: `variant_${runId}_${index}`,
     index,
-    headline: ['Make it easier', 'Built to stand out', 'Your next favorite'][index]!,
+    headline: ['Make it easier', 'Built to stand out', 'Your next favorite', 'Designed to convert', 'Make the product the hero'][index] ?? `Ad direction ${index + 1}`,
     cta: 'Shop now',
     modelId: 'mock-image-model',
     studioJobId: `studio_${runId}_${index}`,
@@ -149,7 +149,7 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
 
   const config: AdStudioConfig = {
     version: 1,
-    aspects: ['9:16', '16:9', '1:1'],
+    aspects: ['9:16', '16:9', '1:1', '3:4'],
     durationsSec: [15, 30],
     modes: ['storyline', 'image_to_ad', 'image_ad_to_commercial'],
     costs: {
