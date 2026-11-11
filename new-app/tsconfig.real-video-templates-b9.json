@@ -7,7 +7,8 @@
   "files": [
     "./lib/clips/real-video-templates/batch9-phase-b.ts",
     "./scripts/batch9-phase-b.ts",
-    "./tests/clips/real-video-template-batch9-phase-b.test.ts"
+    "./tests/clips/real-video-template-batch9-phase-b.test.ts",
+    "./scripts/batch9-phase-b-contract.ts"
   ],
   "include": []
 }
