@@ -236,7 +236,8 @@ export function applyTimelineLaneState(edits: ClipEditsV2): ClipEditsV2 {
   if (audio) {
     let a = audio
     if (lanes.music?.muted && a.music) a = { ...a, music: null }
-    if (lanes.sfx?.muted && a.sfx.length) a = { ...a, sfx: a.sfx.filter((x) => !onDef('audio', x.generationId)) }
+    if (lanes.sfx?.muted && a.sfx.length) a = { ...a, sfx: a.sfx.filter((x) => x.voiceover === true || !onDef('audio', x.generationId)) }
+    if (lanes.voice?.muted && a.sfx.some((x) => x.voiceover === true)) a = { ...a, sfx: a.sfx.filter((x) => x.voiceover !== true) }
     if (lanes.voice?.muted && a.studioSound) a = { ...a, studioSound: null }
     if (a !== audio) next = { ...next, audio: a }
   }
@@ -386,9 +387,24 @@ export function buildTimelineItems(input: {
     })
   })
   // G1b3: J / L cuts — Voice pieces follow video-lane splits; sound may lead/lag picture at each boundary.
+  // Ad Studio TTS is a detached audio cue; show that real clip in Voice instead of the silent canvas audio.
+  const voiceoverCue = edits.audio?.sfx.find((cue) => cue.voiceover === true)
   const offs = splitOffsets(tb.segs, edits.splitEdits, previewEdits.trim.in, previewEdits.trim.out)
   const real = new Set(realCutIndices(tb))
-  vsegs.forEach((vs, vi) => {
+  if (voiceoverCue) {
+    const media = input.sfxDurationsMs?.[voiceoverCue.generationId]
+    const available = media != null ? Math.max(0, media - (voiceoverCue.inMs ?? 0)) : SFX_DEFAULT_MS
+    const len = Math.max(100, Math.round(voiceoverCue.durMs ?? available))
+    lanes.voice.push({
+      lane: 'voice',
+      id: voiceoverCue.generationId,
+      startMs: voiceoverCue.atMs,
+      endMs: Math.min(dur, voiceoverCue.atMs + len),
+      inMs: voiceoverCue.inMs ?? 0,
+      label: 'Voiceover',
+      caps: NO_CAPS,
+    })
+  } else vsegs.forEach((vs, vi) => {
     // F2: find by OUTPUT occurrence, not the first matching source span.
     // A repeated segment has identical source times but a different output slot.
     const ki = tb.segs.findIndex(([a, b], k) =>
@@ -448,6 +464,7 @@ export function buildTimelineItems(input: {
   }
 
   for (const s of edits.audio?.sfx ?? []) {
+    if (s.voiceover === true) continue
     // G1b3: a detached clip sound plays [inMs, inMs + durMs] of its media.
     const media = input.sfxDurationsMs?.[s.generationId]
     const full = media != null ? media - (s.inMs ?? 0) : SFX_DEFAULT_MS
