@@ -76,3 +76,20 @@ def test_actual_worker_text_and_motion_ass_burn(tmp_path, width, height):
     ass = tmp_path / "text-motion.ass"
     ass.write_text(result, encoding="utf-8")
     render_frame(ass, tmp_path / "text-motion.png", width, height)
+
+
+@pytest.mark.parametrize("width,height", RATIOS)
+def test_long_mixed_script_caption_and_emoji_fallback_export(tmp_path, width, height):
+    # The real caption builder requests an intl font where appropriate; libass
+    # then resolves remaining glyphs through the pinned Noto/DejaVu fontconfig
+    # fallback chain. No screenshot-only shortcut is used.
+    tokens = ("Café Привет مرحبا नमस्ते สวัสดี 日本語 🙂 " * 4).split()
+    words = [{"i": i, "w": token, "s": i * 0.02, "e": (i + 1) * 0.02}
+             for i, token in enumerate(tokens)]
+    ass = tmp_path / "unicode.ass"
+    build_ass(words, {"presetId": "bold_pop", "font": "Space Grotesk",
+                      "wordsPerLine": 4, "marginVPct": 15}, ass,
+              play_w=width, play_h=height)
+    text = ass.read_text(encoding="utf-8")
+    assert "Dialogue:" in text
+    render_frame(ass, tmp_path / "unicode.png", width, height)
