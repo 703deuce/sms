@@ -1,5 +1,6 @@
 import { describe,expect,it } from 'vitest'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
+import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
   auditB8Evidence,scoreB8Review,shardB8Jobs,locallyApprovedB8Releases,
   type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
@@ -85,6 +86,16 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     e.scores.transition=5
     e.checks.actualWorkerRender=false
     expect(auditB8Evidence(c,e)).toContain('unverified_render_quality_or_rights')
+  })
+  it('flags Unicode/RTL glyph fallback and moving-background contrast without claiming rendered QA',()=>{
+    const candidate=candidates.find(c=>c.id==='f01_bold')!
+    const checks=lintB8Legibility(candidate)
+    expect(checks.some(c=>c.code==='unicode_fallback_required')).toBe(true)
+    expect(checks.some(c=>c.code==='rendered_contrast_needed')).toBe(true)
+    expect(checks.every(c=>c.severity==='block'||c.severity==='review')).toBe(true)
+    const altered={...candidate,family:{...candidate.family,texts:candidate.family.texts.map(
+      (text,i)=>i===0?{...text,defaultText:'A'.repeat(70)}:text)}}
+    expect(lintB8Legibility(altered).some(c=>c.code==='default_overflow')).toBe(true)
   })
   it('invalidates cache keys on fixture or renderer revisions; limits sharding',()=>{
     const fixture={hashes:[hash],rendererRevision:'worker-v1'}
