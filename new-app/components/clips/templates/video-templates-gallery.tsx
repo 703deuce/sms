@@ -108,8 +108,10 @@ export function VideoTemplatesGallery() {
               <p className="text-xs text-muted-foreground">{item.rights}</p>
               <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
                 className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button>
-              <Link className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-medium text-primary-foreground"
-                href={`/app/clips/video-templates/${encodeURIComponent(item.id)}`}>Use template</Link>
+              <button type="button" disabled title="The standalone slot picker and render workflow are not released yet"
+                className="block w-full cursor-not-allowed rounded-lg border px-4 py-2 text-center text-sm text-muted-foreground opacity-70">
+                Slot editor in development
+              </button>
             </div>
           </article>)}
         </div> : <div className="rounded-2xl border border-dashed p-10 text-center">
