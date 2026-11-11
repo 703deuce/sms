@@ -436,7 +436,7 @@ export function DriveHome({
               <SelectItem value="ready">Ready</SelectItem>
               <SelectItem value="processing">Processing</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
-              <SelectItem value="draft">Drafts (including empty recordings)</SelectItem>
+              <SelectItem value="draft">Drafts</SelectItem>
             </SelectContent>
           </Select>
           <Button type="button" variant="outline" size="sm" onClick={onSearch}>Search</Button>
