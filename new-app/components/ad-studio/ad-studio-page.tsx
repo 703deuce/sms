@@ -981,7 +981,19 @@ function BriefForm({
           <div className="rounded-md border border-border bg-background px-3 py-2 text-sm"><span className="font-medium">Length</span><span className="ml-2 text-muted-foreground">15s</span></div>
         )}
         <label className="text-sm font-medium">Aspect
-          <select data-testid="ad-studio-aspect" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.aspect} onChange={(e) => onChange({ ...input, aspect: e.target.value as AdAspect })}>
+          <select
+            data-testid="ad-studio-aspect"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.aspect}
+            onChange={(e) => {
+              const aspect = e.target.value as AdAspect
+              onChange({
+                ...input,
+                aspect,
+                ...(input.commercialModelId === 'seedance-2.0-mini' && aspect !== '1:1' ? { commercialModelId: 'wan-3.0' } : {}),
+              })
+            }}
+          >
             {aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect}</option>)}
           </select>
         </label>
