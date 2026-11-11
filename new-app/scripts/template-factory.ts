@@ -75,7 +75,14 @@ async function verifiedFixtures():Promise<FixtureManifest>{
   }
   return fixture
 }
-async function verifiedEvidence():Promise<B8Evidence[]> {
+type MeasuredRenderQA={
+  id:string;definitionHash:string;previewSha256:string;renderSha256:string
+  expectedFrames:number;previewFrames:number;renderFrames:number
+  previewHasAudio:boolean;renderHasAudio:boolean
+  durationMatch:boolean;audioStreamParity:boolean
+  blackSampleFrames:number[];frameSampleParity:boolean;sampledFrameCount:number
+}
+async function verifiedEvidence(requireMeasuredQA=true):Promise<B8Evidence[]> {
   const evidence=existsSync(evidencePath)?readJSON<B8Evidence[]>(evidencePath):[]
   if(!Array.isArray(evidence))throw new Error('Evidence file must be an array')
   const out:B8Evidence[]=[]
@@ -85,8 +92,29 @@ async function verifiedEvidence():Promise<B8Evidence[]> {
     const okay=Boolean(values && await verifyPublic(values.previewMp4,values.previewSha256) &&
       await verifyPublic(values.renderMp4,values.renderSha256) &&
       await verifyPublic(values.poster,values.posterSha256))
+    const candidate=index.get(e.id)!
+    const sidecar=join(directory,'media-qa',e.id+'.json')
+    let measurement:MeasuredRenderQA|null=null
+    if(requireMeasuredQA&&okay&&existsSync(sidecar)){
+      try{measurement=readJSON<MeasuredRenderQA>(sidecar)}catch{measurement=null}
+    }
+    const matched=Boolean(okay&&measurement&&measurement.id===candidate.id&&
+      measurement.definitionHash===candidate.definitionHash&&
+      measurement.previewSha256===values.previewSha256&&
+      measurement.renderSha256===values.renderSha256&&
+      measurement.expectedFrames===candidate.family.totalFrames&&
+      measurement.sampledFrameCount>=2*candidate.family.slots.length)
+    const valid=Boolean(matched&&measurement&&measurement.durationMatch&&
+      measurement.audioStreamParity&&measurement.blackSampleFrames.length===0&&
+      measurement.frameSampleParity)
     out.push({...e,checks:{...e.checks,
-      actualWorkerRender:Boolean(okay && e.checks?.actualWorkerRender===true)}})
+      durationMatch:requireMeasuredQA?valid:Boolean(e.checks?.durationMatch),
+      audioParity:requireMeasuredQA?valid:Boolean(e.checks?.audioParity),
+      firstLastNotBlack:requireMeasuredQA?valid:Boolean(e.checks?.firstLastNotBlack),
+      boundariesNotBlack:requireMeasuredQA?valid:Boolean(e.checks?.boundariesNotBlack),
+      sampledFrameParity:requireMeasuredQA?valid:Boolean(e.checks?.sampledFrameParity),
+      actualWorkerRender:Boolean(okay&&e.checks?.actualWorkerRender===true&&
+        (!requireMeasuredQA||valid))}})
   }
   return out
 }
@@ -160,7 +188,9 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   const durationMatch=Math.abs(pp.durationFrames-expected)<=1&&
     Math.abs(pr.durationFrames-expected)<=1
   const audioStreamParity=pp.hasAudio===pr.hasAudio
-  const data={id:candidate.id,expectedFrames:expected,previewFrames:pp.durationFrames,
+  const data={id:candidate.id,definitionHash:candidate.definitionHash,
+    previewSha256:output.previewSha256,renderSha256:output.renderSha256,
+    expectedFrames:expected,previewFrames:pp.durationFrames,
     renderFrames:pr.durationFrames,previewHasAudio:pp.hasAudio,renderHasAudio:pr.hasAudio,
     durationMatch,audioStreamParity,blackSampleFrames:black,frameSampleParity:parity,
     sampledFrameCount:actual.length,maxSampleDifference:Math.max(...actual.map(x=>x.difference)),
@@ -221,7 +251,7 @@ async function execute(){
     console.log('Wrote compiler/worker preview request '+dest+' (NOT an MP4).')
   }else if(command==='qa-media'){
     const c=requiredCandidate()
-    const evidence=await verifiedEvidence()
+    const evidence=await verifiedEvidence(false)
     const e=evidence.find(item=>item.id===c.id)
     if(!e)throw new Error('Real render and preview evidence are required')
     const report=await qaMedia(c,e)
