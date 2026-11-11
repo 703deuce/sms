@@ -118,9 +118,10 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
       {loading?<p className="py-8 text-sm text-muted-foreground">Reading the latest saved edit…</p>:null}
       {error?<p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>:null}
       {inspection?<div className="space-y-5">
-        <div className="space-y-1">
-          <Label>Save destination</Label>
-          <select className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={versionTarget}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <Label>Save destination</Label>
+            <select className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={versionTarget}
             onChange={e=>{
               const id=e.target.value
               setVersionTarget(id)
@@ -131,9 +132,17 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
             <option value="">New private template</option>
             {existingTemplates.map(t=><option key={t.id} value={t.id}>{t.title} · revision {t.currentRevision}</option>)}
           </select>
-          <p className="text-xs text-muted-foreground">{versionTarget
-            ? 'Creates a new revision. Existing projects stay pinned to the revision they used.'
-            : 'Creates a separate private template; the current project remains unchanged.'}</p>
+            <p className="text-xs text-muted-foreground">{versionTarget
+              ? 'Creates a new revision. Existing projects stay pinned to the revision they used.'
+              : 'Creates a separate private template; the current project remains unchanged.'}</p>
+          </div>
+          <div className="space-y-1">
+            <Label>Visibility</Label>
+            <select aria-label="Template visibility" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value="private" disabled>
+              <option value="private">Private · My templates</option>
+            </select>
+            <p className="text-xs text-muted-foreground">Public visibility is never granted here. Community publication is a separate opt-in review action after the private template is saved.</p>
+          </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Label className="space-y-1">Template title
