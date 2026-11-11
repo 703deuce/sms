@@ -20,6 +20,8 @@ export function SoloRecordClient() {
   const [prepareError, setPrepareError] = useState<string | null>(null)
   const [prepareAttempt, setPrepareAttempt] = useState(0)
   const [importing, setImporting] = useState(false)
+  const [teleprompterOpen, setTeleprompterOpen] = useState(false)
+  const [teleprompterText, setTeleprompterText] = useState('')
   const [recoverySessions, setRecoverySessions] = useState<string[]>([])
 
   const onImportComplete = useCallback(
@@ -155,7 +157,7 @@ export function SoloRecordClient() {
       <EditorRecorderBar
         armed={recorder.armed}
         onDisarm={() => router.push('/app/clips')}
-        onTeleprompter={() => undefined}
+        onTeleprompter={() => setTeleprompterOpen((open) => !open)}
         recording={recorder.recording}
         countdown={recorder.countdown}
         recSeconds={recorder.recSeconds}
@@ -173,6 +175,16 @@ export function SoloRecordClient() {
         recordLabel="Start recording"
       />
 
+      {teleprompterOpen ? (
+        <section className="mx-auto mt-3 w-full max-w-[960px] rounded-xl border border-border bg-card p-3" aria-label="Teleprompter" data-testid="solo-teleprompter">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Teleprompter notes</h2>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setTeleprompterOpen(false)}>Close teleprompter</Button>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">Prepare your script without camera or microphone permission. Notes stay on this page and are not included in the recording.</p>
+          <textarea aria-label="Teleprompter script" className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" value={teleprompterText} onChange={(event) => setTeleprompterText(event.target.value)} placeholder="Enter what you want to say…" />
+        </section>
+      ) : null}
       <div className="mx-auto flex w-full max-w-[960px] flex-1 flex-col items-center gap-4 p-6">
         <div className="flex aspect-video w-full max-w-[960px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground">
           Camera / screen preview
