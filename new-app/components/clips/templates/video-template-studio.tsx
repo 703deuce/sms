@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
 import { uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
@@ -21,7 +21,7 @@ type ClipDetail = {
   edits: ClipEditsV2
   mediaUrls: { source: string | null; proxy: string | null; preview: string | null; poster: string | null }
   media: EditorMedia | null
-  crop: { track: React.ComponentProps<typeof PreviewStage>['cropTrack'] }
+  crop: { track: ComponentProps<typeof PreviewStage>['cropTrack'] }
 }
 type RenderJob = { id: string; status: string; progress: number | null; phase: string | null;
   error: string | null; downloadUrl: string | null; filename: string | null }
@@ -107,7 +107,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const versionRef = useRef(0)
   const editsVersionRef = useRef(0)
   const saveLock = useRef<Promise<void> | null>(null)
-  const starting = useRef(false)
+  const initKey = useRef<string | null>(null)
   const history = useRef<StudioDraft[]>([])
   const future = useRef<StudioDraft[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -164,14 +164,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     let live = true
     void refreshMedia().catch(e => live && setError(readable(e, 'Could not load workspace media')))
     const start = async () => {
-      if (starting.current) return
-      starting.current = true
       try {
         let saved: Project
         if (initialProjectId) {
           saved = await request<Project>('/api/clips/video-templates/drafts/' + encodeURIComponent(initialProjectId))
         } else {
-          const key = 'draft_' + crypto.randomUUID().replaceAll('-', '')
+          const key = initKey.current ?? ('draft_' + crypto.randomUUID().replaceAll('-', ''))
+          initKey.current = key
           saved = await request<Project>('/api/clips/video-templates/drafts', 'POST',
             { releaseId: release.id, idempotencyKey: key })
         }
@@ -331,6 +330,14 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       setRender(job)
     } catch (e) { setError(readable(e, 'Export could not start')) }
     finally { setBusy(false) }
+  }
+  const cancelQueuedRender = async () => {
+    if (!render || render.status !== 'QUEUED') return
+    setBusy(true);setError('')
+    try {
+      await request<{ canceled: boolean }>('/api/clips/renders/' + encodeURIComponent(render.id) + '/cancel', 'POST')
+      setRender({ ...render, status: 'FAILED', error: 'Canceled before render started' })
+    } catch (e) { setError(readable(e)) } finally { setBusy(false) }
   }
   const retryRender = async () => {
     if (!render) return
@@ -604,7 +611,10 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
               {render.phase && <p className="text-xs text-muted-foreground">{render.phase}</p>}
               {render.error && <p className="text-xs text-destructive">{render.error}</p>}
               {render.downloadUrl && render.status === 'READY' && <a className={primaryClass} href={render.downloadUrl} download={render.filename ?? undefined}>Download video</a>}
-              {render.status === 'FAILED' && <button type="button" className={buttonClass} disabled={busy}
+              {render.status === 'QUEUED' && <button type="button" className={buttonClass} disabled={busy}
+                onClick={() => void cancelQueuedRender()}>Cancel queued render</button>}
+              {render.status === 'RENDERING' && <p className="text-xs text-muted-foreground">This render is already running and cannot be safely canceled.</p>}
+              {render.status === 'FAILED' && render.error !== 'Canceled before render started' && <button type="button" className={buttonClass} disabled={busy}
                 onClick={() => void retryRender()}>Retry failed render</button>}
             </div>}
             {project && project.status !== 'READY' && <button type="button" className={buttonClass} disabled={busy}
