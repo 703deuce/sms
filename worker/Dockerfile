@@ -35,10 +35,26 @@ RUN set -eux; \
     test -s /usr/share/fonts/truetype/poppins/Poppins-ExtraBold.ttf; \
     mkdir -p /usr/share/fonts/truetype/t6; \
     cp /app/v3/fonts/t6/*.ttf /usr/share/fonts/truetype/t6/; \
+    test -s /app/v3/fonts/t6/Rubik.ttf; \
+    test -s /app/v3/fonts/t6/Gabarito.ttf; \
+    test -s /app/v3/fonts/t6/FiraSansCondensed-Bold.ttf; \
+    test -s /app/v3/fonts/t6/DMSerifDisplay-Regular.ttf; \
+    test -s /app/v3/fonts/t6/PlayfairDisplay.ttf; \
+    test -s /app/v3/fonts/t6/Caveat.ttf; \
+    test -s /app/v3/fonts/t6/SpaceGrotesk.ttf; \
+    test -s /app/v3/fonts/t6/SpaceMono-Regular.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     fc-match -f '%{file}\n' 'Montserrat Black' | grep -q Montserrat-Black.ttf; \
     fc-match -f '%{file}\n' 'Poppins ExtraBold' | grep -q Poppins-ExtraBold.ttf; \
+    fc-match -f '%{file}\n' 'Rubik' | grep -Fq 'Rubik.ttf'; \
+    fc-match -f '%{file}\n' 'Gabarito' | grep -Fq 'Gabarito.ttf'; \
+    fc-match -f '%{file}\n' 'Fira Sans Condensed' | grep -Fq 'FiraSansCondensed-Bold.ttf'; \
+    fc-match -f '%{file}\n' 'DM Serif Display' | grep -Fq 'DMSerifDisplay-Regular.ttf'; \
+    fc-match -f '%{file}\n' 'Playfair Display' | grep -Fq 'PlayfairDisplay.ttf'; \
+    fc-match -f '%{file}\n' 'Caveat' | grep -Fq 'Caveat.ttf'; \
+    fc-match -f '%{file}\n' 'Space Grotesk' | grep -Fq 'SpaceGrotesk.ttf'; \
+    fc-match -f '%{file}\n' 'Space Mono' | grep -Fq 'SpaceMono-Regular.ttf'; \
     fc-match -f '%{file}\n' 'DejaVu Sans:bold' | grep -q DejaVuSans-Bold.ttf; \
     test -s /app/v3/fonts/Montserrat-Black.ttf; \
     test -s /app/v3/fonts/t6/Bangers.ttf; \
