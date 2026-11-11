@@ -98,7 +98,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     const approvedFirstPartyMusic = kind === 'audio' && provenance === 'first-party' &&
       release.defaultMusic != null &&
       rawAsset.license.id === 'batch9a_first_party' &&
-      rawAsset.license.reference === release.defaultMusic.revision
+      (rawAsset.license.reference === release.defaultMusic.revision ||
+       rawAsset.license.reference === 'batch9a-audio-v1')
     if (!userOwned && !approvedFirstPartyMusic) return false
     if (kind !== 'image' && (typeof rawAsset.durationFrames !== 'number' ||
         !Number.isSafeInteger(rawAsset.durationFrames) ||
