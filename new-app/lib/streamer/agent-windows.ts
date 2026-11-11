@@ -12,10 +12,18 @@ export function streamerAgentWindows(sourceStartMs:number,sourceDurationMs:numbe
   if(!Number.isSafeInteger(start)||start>=sourceEnd)
     throw Error('stream_agent_window_start_outside_source')
   const windows:Array<[number,number]>=[]
-  for(let at=start;at<sourceEnd;at+=MAX_AGENT_SOURCE_WINDOW_MS){
-    const end=Math.min(sourceEnd,at+MAX_AGENT_SOURCE_WINDOW_MS)
-    if(end-at>=15_000)windows.push([at,end])
+  // Full-source batches must not silently discard short tails. Keep every
+  // window at least 60 seconds when possible by borrowing from its preceding
+  // window, rather than creating a tiny model window or losing source time.
+  // A source of 15–59 seconds remains one valid window.
+  for(let at=start;at<sourceEnd;){
+    let end=Math.min(sourceEnd,at+MAX_AGENT_SOURCE_WINDOW_MS)
+    if(all&&end<sourceEnd&&sourceEnd-end<60_000){
+      end=sourceEnd-60_000
+    }
+    windows.push([at,end])
     if(!all)break
+    at=end
   }
   if(!windows.length)throw Error('stream_agent_no_valid_windows')
   return windows
