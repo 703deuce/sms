@@ -36,6 +36,8 @@ export type StudioCreateJobInput = {
   durationSec?: number
   resolution?: string
   referenceAssetId?: string
+  /** Ordered image references for models that support a multi-image input. First remains the primary reference. */
+  referenceAssetIds?: string[]
   startFrameAssetId?: string
   endFrameAssetId?: string
   sourceVideoAssetId?: string
