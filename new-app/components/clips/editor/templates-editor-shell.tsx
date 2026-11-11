@@ -58,7 +58,7 @@ type CaptionDraft = {
   activeStyle?: 'color' | 'highlight' | 'fill'
   highlightColor?: string
 }
-type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'templates' | 'generate' | 'full-video' | 'export' | 'layout-script' | 'layout-timeline'
+type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'full-video' | 'export' | 'layout-script' | 'layout-timeline'
 type BulkResult = { updated: number; skipped: number; errors: number }
 type CaptionView = 'choose' | 'edit'
 type CustomizerSection = 'layout' | 'subtitle' | 'headline' | 'background' | 'logo' | 'outro'
@@ -1232,10 +1232,10 @@ export function TemplatesEditorShell(props: Props) {
           title={props.initialTitle}
           current="templates"
           saveState={saveState}
-          statusText={saveState === 'saved' ? (hasDraftChange ? 'Saved edit · preview not applied' : 'Saved') : saveState === 'error' ? 'Save failed' : 'Saving…'}
+          statusText={fullVideoMode.progress ?? (saveState === 'saved' ? (hasDraftChange ? 'Saved edit · preview not applied' : 'Saved') : saveState === 'error' ? 'Save failed' : 'Saving…')}
           canUndo={canUndo}
           canRedo={canRedo}
-          disabled={handoffBusy}
+          disabled={handoffBusy || fullVideoMode.loading}
           onBack={() => requestHandoff('project')}
           onUndo={() => {
             clearPreviewForHistory()
