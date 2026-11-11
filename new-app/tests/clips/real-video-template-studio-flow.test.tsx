@@ -264,7 +264,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     const hash='c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482'
     const audio = {
       asset:{id:'generated_audio',kind:'audio',durationFrames:480,license},
-      label:'Batch 9A pulse bed',durationMs:16000,width:null,height:null,
+      label:'Batch 9A groove bed',durationMs:16000,width:null,height:null,
       url:'/batch9a-groove.wav',available:true,
     }
     release.design.musicPolicy='licensed-only'
