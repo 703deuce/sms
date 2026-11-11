@@ -59,7 +59,6 @@ export type ResyncPreview = {
 }
 const HASH = /^[a-f0-9]{64}$/i
 const validFrame = (n: number) => Number.isInteger(n) && n >= 0
-const assert = (ok: unknown, message: string): asserts ok => { if (!ok) throw new Error(message) }
 
 export function assertAudioLicense(record: AudioLicenseRecord, forTemplateExport = true): void {
   if (!record || !record.assetId || !record.origin || !record.author || !record.license ||
