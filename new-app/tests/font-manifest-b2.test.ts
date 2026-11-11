@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { resolve } from 'node:path'
 import { CLIP_FONT_MANIFEST, CLIP_FONT_MANIFEST_VERSION, findClipFont, waitForClipFont } from '@/lib/clips/font-manifest'
 import { CLIP_FONT_FILES } from '@/lib/clips/render-plan/preview-scripts'
 import { TEXT_FONTS } from '@/lib/clips/editor/text-items'
@@ -14,6 +17,11 @@ describe('versioned pinned font inventory', () => {
       expect(row.browserGitBlobSha1).toMatch(/^[0-9a-f]{40}$/)
       expect(row.assFamily.length).toBeGreaterThan(1)
       expect(findClipFont(row.id)).toEqual(row)
+      const browser = readFileSync(resolve(process.cwd(), 'public', row.browserFile.replace(/^\\/fonts\\/clip\\//, 'fonts/clip/')))
+      const worker = readFileSync(resolve(process.cwd(), '..', row.workerFile))
+      expect(Buffer.compare(browser, worker), row.id + ': worker/browser bytes').toBe(0)
+      expect(createHash('sha1').update('blob ' + browser.length + String.fromCharCode(0)).update(browser).digest('hex'))
+        .toBe(row.browserGitBlobSha1)
     }
   })
   it('keeps the existing preview JASSUB and editable ASS text-family mapping', () => {
