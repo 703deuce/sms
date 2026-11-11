@@ -77,7 +77,9 @@ export async function advanceAdImageVariants(
     }
     const active = await svc.store.countActive(workspaceId, run.userId)
     if (active >= svc.concurrencyLimit) { console.info('[ad-studio:b3] image_wait_capacity', { runId, active }); break }
-    const jobId = idFor('stjob_adv_', runId + ':' + variant.id)
+    const rawPlan = run.plan as unknown as { _imageRetryKeys?: Record<string,string> }
+    const retryKey = rawPlan?._imageRetryKeys?.[variant.id] ?? 'initial'
+    const jobId = idFor('stjob_adv_', runId + ':' + variant.id + ':' + retryKey)
     const claimed = await db.adStudioImageVariant.updateMany({
       where: { id: variant.id, runId, status: 'planned', studioJobId: null }, data: { studioJobId: jobId },
     })
