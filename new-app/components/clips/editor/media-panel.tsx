@@ -409,14 +409,34 @@ export function MediaPanel({
             </Button>
           </div>
           {segSource?.mediaType === 'video' ? (
-            <div className="flex items-center gap-1" role="group" aria-label="Sound in this segment">
-              <Label className="w-12 text-[11px]">Sound</Label>
-              {(['main', 'source', 'mix'] as const).map((m) => (
-                <Button key={m} size="xs" variant={segmentAudio(seg, segSource) === m ? 'default' : 'outline'} onClick={() => patchSeg({ audio: m })} data-testid={`media-seg-audio-${m}`}>
-                  {AUDIO_LABEL[m]}
-                </Button>
-              ))}
-            </div>
+            <>
+              <div className="flex items-center gap-1" role="group" aria-label="Sound in this segment">
+                <Label className="w-12 text-[11px]">Sound</Label>
+                {(['main', 'source', 'mix'] as const).map((m) => (
+                  <Button key={m} size="xs" variant={segmentAudio(seg, segSource) === m ? 'default' : 'outline'} onClick={() => patchSeg({ audio: m })} data-testid={`media-seg-audio-${m}`}>
+                    {AUDIO_LABEL[m]}
+                  </Button>
+                ))}
+              </div>
+              <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                <span className="w-12">Speed</span>
+                <Input
+                  type="number"
+                  min={0.25}
+                  max={4}
+                  step={0.05}
+                  value={seg.speed ?? 1}
+                  className="h-7 w-24 px-2 text-xs"
+                  data-testid="media-seg-speed"
+                  onChange={(event) => {
+                    const value = Number(event.currentTarget.value)
+                    if (!Number.isFinite(value) || value < 0.25 || value > 4) return
+                    patchSeg({ speed: value })
+                  }}
+                />
+                <span>×</span>
+              </label>
+            </>
           ) : null}
           <div className="flex items-center gap-1" role="group" aria-label="Framing">
             <Label className="w-12 text-[11px]">Frame</Label>
@@ -512,7 +532,7 @@ export function MediaPanel({
             </Button>
             <Button size="xs" variant="outline" disabled={playheadSourceMs >= seg.endMs - 100 || playheadSourceMs <= seg.startMs} onClick={() => {
               const shift = Math.round(playheadSourceMs) - seg.startMs
-              patchSeg({ startMs: Math.round(playheadSourceMs), ...(seg.inMs !== undefined ? { inMs: seg.inMs + shift } : {}) })
+              patchSeg({ startMs: Math.round(playheadSourceMs), ...(seg.inMs !== undefined ? { inMs: seg.inMs + Math.round(shift * (seg.speed ?? 1)) } : {}) })
             }}>
               Start at playhead
             </Button>
