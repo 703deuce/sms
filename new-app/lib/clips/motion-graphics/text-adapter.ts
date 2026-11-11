@@ -42,7 +42,7 @@ function animation(g: MotionGraphic): TextAnim | undefined {
   if (outro) value.out = outro
   return Object.keys(value).length ? value : undefined
 }
-const MOTION_RENDER_FONTS = new Set(TEXT_FONTS.map(face => face.id).filter(id => findClipFont(id)))
+const MOTION_RENDER_FONTS = new Set<string>(TEXT_FONTS.map(face => face.id).filter(id => findClipFont(id)))
 /** Reject unshipped families rather than silently exporting Montserrat in their place. */
 function motionFont(g: MotionGraphic): TextItem['style']['font'] {
   if (!MOTION_RENDER_FONTS.has(g.style.fontFamily)) throw new Error('motion_font_unavailable:' + g.style.fontFamily)
