@@ -2,9 +2,9 @@ import type { TemplateDesignV1, TemplateFamilyV1 } from './sequence-contract'
 import { validateTemplateDesign, validateTemplateFamily } from './sequence-contract'
 
 /**
- * This manifest contains ONLY reviewed and render-tested first-party releases.
+ * First-party release manifest. Preview releases are usable before certification;
+ * Certified releases additionally require reviewed, render-tested demo media.
  * Do not generate release records from a family × treatment Cartesian product.
- * Community and private templates are separate, workspace-scoped sources.
  */
 export type VideoTemplateRelease = {
   id: string
@@ -14,6 +14,13 @@ export type VideoTemplateRelease = {
   /** Certified releases use real reviewed demo media; Preview releases may use authored animated cards instead. */
   demoPath?: string
   demoPosterPath?: string
+  /** Lightweight real-media card preview: one horizontal row of rendered frames. */
+  previewMedia?: {
+    spritePath: string
+    frames: number
+    columns: number
+    sha256: string
+  }
   family: TemplateFamilyV1
   design: TemplateDesignV1
   rights: string
@@ -80,6 +87,15 @@ export function validateVideoTemplateRelease(input: VideoTemplateRelease): Video
       ((input.demoPath && !localMediaPath.test(input.demoPath)) ||
        (input.demoPosterPath && !localMediaPath.test(input.demoPosterPath))))
     throw new Error('Preview media paths must remain local')
+  if (input.previewMedia) {
+    const media = input.previewMedia
+    if (!localMediaPath.test(media.spritePath) || !/\.webp$/i.test(media.spritePath))
+      throw new Error('Preview sprite must be a local WebP asset')
+    if (!Number.isSafeInteger(media.frames) || media.frames < 2 || media.frames > 12 ||
+        !Number.isSafeInteger(media.columns) || media.columns < media.frames || media.columns > 12 ||
+        !/^[a-f0-9]{64}$/i.test(media.sha256))
+      throw new Error('Invalid preview sprite definition')
+  }
   if (!input.rights.trim()) throw new Error('Music and demo rights must be described')
   const family = validateTemplateFamily(input.family)
   const design = validateTemplateDesign(input.design, family)
