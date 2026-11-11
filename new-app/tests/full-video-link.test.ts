@@ -107,6 +107,32 @@ describe('resolveFullVideoLink fast-path', () => {
     })
   })
 
+  it('resolves an already-full source project to its real full clip without creating another project', async () => {
+    sourceQuery.mockResolvedValue([{
+      ...existingSource,
+      sourceProjectId: 'proj_full_self',
+      sourceSettings: { fullVideo: true },
+      sourceMs: 0,
+      endMs: 60_000,
+      existingProjectId: 'proj_full_self',
+      existingClipId: 'clip_full_root',
+    }])
+    const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
+    const link = await resolveFullVideoLink('ws', 'clip_full_root')
+
+    expect(link).toMatchObject({
+      projectId: 'proj_full_self',
+      clipId: 'clip_full_root',
+      sourceMs: 0,
+    })
+    expect(link && 'url' in link ? link.url : '').toContain('/app/video-editor/proj_full_self/edit/clip_full_root')
+    expect(createProject).not.toHaveBeenCalled()
+
+    const sql = (sourceQuery.mock.calls[0]?.[0] as TemplateStringsArray).join('?')
+    expect(sql).toContain("fp.settings->>'fullVideo' = 'true'")
+    expect(sql).toContain('fp."workspaceId"')
+  })
+
   it('reuses an existing project and clip without creating either one', async () => {
     const { resolveFullVideoLink } = await import('@/lib/server/clips/full-video-link')
     const first = await resolveFullVideoLink('ws', 'clip_a')

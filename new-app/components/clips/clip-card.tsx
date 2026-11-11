@@ -466,7 +466,7 @@ export function ClipCard({
               <DropdownMenuItem data-testid="clip-card-templates-editor" onClick={() => {
                 console.info('[editor:templates-mode] card-entry', { projectId, clipId: clip.id })
                 router.push(routes.templateMode(projectId, clip.id, isStreamer ? { from: 'studio' } : undefined))
-              }}>Templates</DropdownMenuItem>
+              }}>Layouts</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-rename" onClick={() => void renameCard()}>Rename</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-duplicate" onClick={() => void duplicateCard()}>Duplicate</DropdownMenuItem>
               {projectHasUpload ? <DropdownMenuItem data-testid="clip-card-copy-moment" onClick={() => void copyMomentLink()}>Copy moment link</DropdownMenuItem> : null}

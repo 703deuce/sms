@@ -3,7 +3,7 @@ import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { EditorPageSkeleton } from '@/components/clips/editor/editor-page-skeleton'
 import { EditorPayloadSection } from './editor-payload-section'
 
-export const metadata = { title: 'Templates editor' }
+export const metadata = { title: 'Layouts editor' }
 
 export default async function TemplatesEditorPage({
   params,

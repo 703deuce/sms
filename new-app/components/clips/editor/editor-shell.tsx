@@ -63,6 +63,7 @@ import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
 import { OpenInFullVideoButton } from '@/components/clips/editor/open-in-full-video-button'
+import { useFullVideoModeHandoff } from '@/components/clips/editor/full-video-mode-handoff'
 import { HighlightsListPanel } from '@/components/clips/editor/highlights-list-panel'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { LayoutPanel } from '@/components/clips/editor/layout-panel'
@@ -594,6 +595,7 @@ export function EditorShell({
         ? (aiMeta as { __editorSaveSeq: number }).__editorSaveSeq
         : 0,
   })
+  const fullVideoMode = useFullVideoModeHandoff(clipId, flushSave)
   // TC2: an audition (a slider's live preview, e.g. Color > HSL) can outlive its commit when the
   // slider reports one more value after release; it then masked Undo / Redo in the preview (Undo
   // reverted the edit, the preview kept the slider look until Color > Reset cleared it). Undo /
@@ -2674,7 +2676,7 @@ export function EditorShell({
       ) : null}
       {panelMounted('templates') ? (
         <div className={on('templates') ? undefined : 'hidden'} aria-hidden={!on('templates')} data-testid="editor-panel-templates">
-          <EditorPanelErrorBoundary label="Templates">
+          <EditorPanelErrorBoundary label="Layouts">
           <TemplatesPanel
             edits={edits}
             onEdits={setEdits}
@@ -3663,7 +3665,7 @@ export function EditorShell({
           items: [
             { id: 'media', label: 'Media library', onSelect: () => openToolPanel('media') },
             { id: 'broll', label: 'B-roll', onSelect: () => openToolPanel('broll') },
-            { id: 'templates', label: 'Templates', onSelect: () => openToolPanel('templates') },
+            { id: 'templates', label: 'Layouts', onSelect: () => openToolPanel('templates') },
             { id: 'brand', label: 'Brand kit', onSelect: () => openToolPanel('brand') },
           ],
         },
@@ -3753,9 +3755,11 @@ export function EditorShell({
               <EditorModeSwitcher
                 current="clip"
                 producerOpen={producerOpen}
+                disabled={fullVideoMode.loading}
                 onSelect={(mode) => {
                   console.info('[editor:compact-gaps] mode-selected', { projectId, clipId, mode })
                   if (mode === 'clip') return
+                  if (mode === 'full-video') { void fullVideoMode.open(); return }
                   if (mode === 'producer') { void toggleProducerRail(); return }
                   if (mode === 'story' || mode === 'templates') { void openEditorMode(mode); return }
                   if (mode === 'generate') void openGenerateMode()
