@@ -26,7 +26,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "assFamily": "Anton",
     "cssWeight": 400,
     "browserFile": "/fonts/clip/Anton-Regular.ttf",
-    "workerFile": "worker/v3/fonts/Anton-Regular.ttf",
+    "workerFile": "worker/prototype/v3/fonts/Anton-Regular.ttf",
     "browserGitBlobSha1": "4d65707db9d8663ccfa99cd28cd3a4e0025be178",
     "metricsKey": "Anton",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
@@ -38,7 +38,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "assFamily": "Montserrat Black",
     "cssWeight": 900,
     "browserFile": "/fonts/clip/Montserrat-Black.ttf",
-    "workerFile": "worker/v3/fonts/Montserrat-Black.ttf",
+    "workerFile": "worker/prototype/v3/fonts/Montserrat-Black.ttf",
     "browserGitBlobSha1": "b4359a040f6ccf3f87a2ae3bf7312e4f2baf3a95",
     "metricsKey": "Montserrat Black",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
@@ -50,7 +50,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "assFamily": "Poppins ExtraBold",
     "cssWeight": 800,
     "browserFile": "/fonts/clip/Poppins-ExtraBold.ttf",
-    "workerFile": "worker/v3/fonts/Poppins-ExtraBold.ttf",
+    "workerFile": "worker/prototype/v3/fonts/Poppins-ExtraBold.ttf",
     "browserGitBlobSha1": "df7093608a7eb6173529ce9eeeb4d46e3a8290e5",
     "metricsKey": "Poppins ExtraBold",
     "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
@@ -141,18 +141,6 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "licenseStatus": "existing_repository_asset_provenance_unverified",
     "fallback": "DejaVu Sans"
   },
-  {
-    "id": "DejaVu Sans",
-    "assFamily": "DejaVu Sans",
-    "cssWeight": 700,
-    "browserFile": "/fonts/clip/DejaVuSans-Bold.ttf",
-    "workerFile": "worker/v3/fonts/t6/DejaVuSans-Bold.ttf",
-    "browserGitBlobSha1": "2cef1aaf19de8ea2cad1a8d81d7eb6347ad7be43",
-    "metricsKey": "DejaVu Sans",
-    "sourceRevision": "db37033638feb92369c8eaec615ae7e8710163c7",
-    "licenseStatus": "existing_repository_asset_provenance_unverified",
-    "fallback": "DejaVu Sans"
-  }
 ] as const
 
 export function findClipFont(id: string): ClipFontManifestRow | undefined {
