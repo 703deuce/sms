@@ -2962,6 +2962,23 @@ export function Timeline({
           pointerEvents: interactive && !dimmed ? 'auto' : 'none',
           ...(off ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.45) 0 4px, transparent 4px 8px)' } : {}),
         }}
+        // HG06: stacked same-time overlays remain keyboard-reachable even when pointer hit-testing
+        // lands on the visually topmost item. Focus order is independent of paint order.
+        tabIndex={item.lane === 'video' || dimmed ? undefined : 0}
+        onKeyDown={(e) => {
+          if (item.lane === 'video' || dimmed) return
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            e.stopPropagation()
+            setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
+          } else if (e.key === 'F10' && e.shiftKey) {
+            e.preventDefault()
+            e.stopPropagation()
+            setSelected([{ lane: item.lane, id: item.id }])
+            const rect = e.currentTarget.getBoundingClientRect()
+            setCtxMenu({ x: rect.left + Math.min(30, rect.width / 2), y: rect.top + Math.min(20, rect.height / 2), hitSrcMs: cutSrcForJl() })
+          }
+        }}
         data-testid={host ? 'timeline-compound' : `timeline-item-${item.lane}`}
         data-lane={item.lane}
         data-item-id={item.id}
