@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils'
 import { Page, PageHeader } from '../app/page-primitives'
 
 type Screen = 'home' | 'brief' | 'run' | 'history'
-type SelectableMode = Exclude<AdMode, 'image_ad_to_commercial'>
+type SelectableMode = AdMode
 type UiError = { code: string; message: string }
 
 type Props = {
@@ -22,7 +22,7 @@ type Props = {
 
 const FALLBACK_CONFIG: AdStudioConfig = {
   version: 1,
-  aspects: ['9:16', '16:9', '1:1'],
+  aspects: ['9:16', '16:9', '1:1', '3:4'],
   durationsSec: [15, 30],
   modes: ['storyline', 'image_to_ad', 'image_ad_to_commercial'],
   costs: {},
@@ -36,6 +36,11 @@ const DEFAULT_INPUT: AdProductInput = {
   imageAssetIds: [],
   voiceId: DEFAULT_T2V_VOICE.voiceId,
   voiceoverEnabled: true,
+  headline: '',
+  subHeadline: '',
+  cta: '',
+  brandColors: { primary: '#111111', secondary: '#FFFFFF' },
+  commercialModelId: 'wan-3.0',
 }
 
 const ACTIVE_STATUSES = new Set(['planning', 'confirming', 'generating', 'stitching'])
@@ -237,7 +242,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
 
   useEffect(() => {
     let cancelled = false
-    if (!run || run.status !== 'done') {
+    if (!run || run.status !== 'done' || run.mode === 'image_to_ad') {
       setFinalMedia(null)
       setFinalMediaLoading(false)
       return () => { cancelled = true }
@@ -266,7 +271,12 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
   function openMode(next: SelectableMode) {
     console.log('[ad-studio:ui] load', { step: 'mode', mode: next })
     setMode(next)
-    setInput({ ...DEFAULT_INPUT, imageAssetIds: [] })
+    setInput({
+      ...DEFAULT_INPUT,
+      imageAssetIds: [],
+      durationSec: 15,
+      voiceoverEnabled: next === 'storyline',
+    })
     setProductImage(null)
     setLogoImage(null)
     setRun(null)
@@ -284,8 +294,14 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
       showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Add at least one selling point for a storyline ad.'))
       return
     }
-    if (mode === 'image_to_ad' && !productImage) {
-      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Choose a product image before creating an image-to-ad plan.'))
+    if ((mode === 'image_to_ad' || mode === 'image_ad_to_commercial') && !productImage) {
+      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', mode === 'image_to_ad'
+        ? 'Choose a product image before creating a photo-ad plan.'
+        : 'Choose a finished ad still to animate.'))
+      return
+    }
+    if (mode === 'image_to_ad' && (!input.headline?.trim() || !input.subHeadline?.trim() || !input.cta?.trim())) {
+      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Headline, sub-headline, and CTA are required for photo ads.'))
       return
     }
 
@@ -320,14 +336,18 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         ...(input.brandNotes?.trim() ? { brandNotes: input.brandNotes.trim() } : { brandNotes: undefined }),
       }
       const created = await liveClient.createRun({ mode, input: normalized, idempotencyKey: createKey })
+      const next = mode === 'image_ad_to_commercial' && created.status === 'plan_ready'
+        ? await liveClient.confirm(created.id, confirmKey)
+        : created
       console.log('[ad-studio:ui] submit', {
         step: 'complete',
-        runId: created.id,
-        status: created.status,
-        imageAds: created.imageAds?.length ?? 0,
+        runId: next.id,
+        status: next.status,
+        imageAds: next.imageAds?.length ?? 0,
+        directCommercial: mode === 'image_ad_to_commercial',
       })
-      setInput(created.input)
-      setRun(created)
+      setInput(next.input)
+      setRun(next)
       setScreen('run')
       void refreshHistory().catch(showError)
     } catch (err) {
@@ -490,7 +510,8 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         variantId: variant.id,
         idempotencyKey: newIdempotencyKey(),
         voiceId: run.input.voiceId,
-        voiceoverEnabled: run.input.voiceoverEnabled,
+        voiceoverEnabled: false,
+        modelId: run.input.commercialModelId ?? 'wan-3.0',
       })
       console.log('[ad-studio:ui] commercial', {
         step: 'complete',
