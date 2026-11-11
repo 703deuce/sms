@@ -2676,7 +2676,7 @@ export function EditorShell({
       ) : null}
       {panelMounted('templates') ? (
         <div className={on('templates') ? undefined : 'hidden'} aria-hidden={!on('templates')} data-testid="editor-panel-templates">
-          <EditorPanelErrorBoundary label="Templates">
+          <EditorPanelErrorBoundary label="Layouts">
           <TemplatesPanel
             edits={edits}
             onEdits={setEdits}
