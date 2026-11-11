@@ -2,6 +2,7 @@ import type {
   TemplateAsset, TemplateChoices, TemplateFamilyV1, TemplateSlot,
 } from './sequence-contract'
 import { validateTemplateFamily } from './sequence-contract'
+import { compileTemplatePlayback, playbackSourceBounds } from './slot-playback'
 
 /** A persisted assignment, never a blob URL or an unregistered local File. */
 export type StudioSlotFill = {
@@ -58,7 +59,8 @@ export function assignSelectionInOrder(
     while (index < family.slots.length && slots[family.slots[index]!.id]) index++
     const slot = family.slots[index]
     if (!slot) { rejected.push(asset); continue }
-    if (asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind)) {
+    if (asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind) ||
+        (slot.playback && asset.kind !== 'video')) {
       rejected.push(asset); continue
     }
     slots[slot.id] = { ...defaultFill(asset), fit: slot.fit,
@@ -101,9 +103,22 @@ function withOverrides(slot: TemplateSlot, fill: StudioSlotFill): TemplateSlot {
 }
 function fitParts(slot: TemplateSlot, fill: StudioSlotFill): Array<{ slot: TemplateSlot; asset: TemplateAsset }> {
   const asset = fill.asset
-  if (asset.kind === 'image') return [{ slot, asset }]
+  if (asset.kind === 'image') {
+    if (slot.playback) throw new Error(`Slot ${slot.ordinal}: authored playback requires a video clip`)
+    return [{ slot, asset }]
+  }
   const available = asset.durationFrames
   if (!available || !valid(available)) throw new Error(`Slot ${slot.ordinal}: unknown video duration; reupload or choose another`)
+  if (slot.playback) {
+    const plan = compileTemplatePlayback(slot.playback, slot.durationFrames)
+    const inFrame = slot.sourceInFrame ?? 0
+    const head = slot.handles?.headFrames ?? 0
+    const tail = slot.handles?.tailFrames ?? 0
+    const bounds = playbackSourceBounds(plan, inFrame)
+    if (inFrame >= head && bounds.minFrame >= 0 && bounds.maxFrame + tail < available)
+      return [{ slot, asset }]
+    throw new Error(`Slot ${slot.ordinal}: this variable-speed or hold sequence needs a longer source; loop/hold substitution cannot safely rewrite the authored playback`)
+  }
   const rate = slot.speed ?? 1
   const tail = slot.handles?.tailFrames ?? 0
   const head = slot.handles?.headFrames ?? 0
