@@ -78,6 +78,10 @@ vi.mock('@/lib/server/clips/real-video-template-instances', () => ({
   TemplateInstanceNotFound: class TemplateInstanceNotFound extends Error {},
   TemplateInstanceConflict: class TemplateInstanceConflict extends Error {},
   publishTemplateProject: publish,
+  loadAndValidateAssets: vi.fn(async () => new Map()),
+}))
+vi.mock('@/lib/server/clips/video-template-default-music', () => ({
+  attachDefaultMusicToDraft: vi.fn(async (_ws: string, draft: unknown) => draft),
 }))
 vi.mock('@/lib/clips/real-video-templates/releases', () => ({
   FIRST_PARTY_VIDEO_TEMPLATES: [{
@@ -158,7 +162,7 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
   it('rejects unsupported music re-sync and unapproved audio without persisting a draft', async () => {
     const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
     await expect(saveVideoTemplateDraft('ws_one',project.id,0,
-      { ...project.draft, musicTiming: 'resync' })).rejects.toThrow('Invalid template draft')
+      { ...project.draft, musicTiming: 'resync' })).rejects.toThrow('Music re-sync needs an approved song')
     await expect(saveVideoTemplateDraft('ws_one',project.id,0,
       { ...project.draft, music: { id: 'audio_1', kind: 'audio',
         durationFrames: 300, license: { provenance: 'user-owned' } } }))
@@ -174,7 +178,7 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
     expect(() => validDraft('one_reviewed', { ...filled, slots: {
       first: { ...filled.slots.first, focalY: -1 } } })).toThrow('Invalid slot fill')
     expect(() => validDraft('one_reviewed', { ...filled, slots: {
-      first: { ...filled.slots.first, sourceInFrame: 10 } } })).toThrow('Invalid slot fill')
+      first: { ...filled.slots.first, fit: 'stretch' } } })).toThrow('Invalid slot fill')
     expect(() => validDraft('one_reviewed', { ...filled, slots: {
       first: { ...filled.slots.first, asset: { ...photo, kind: 'audio' } } } })).toThrow('Invalid slot fill')
     expect(() => validDraft('one_reviewed', { ...filled, slots: {
@@ -193,7 +197,16 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
       const unconfirmed = { ...project.draft, music: track }
       expect(() => validDraft('one_reviewed', unconfirmed)).toThrow('Confirm ownership')
       expect(() => validDraft('one_reviewed',
-        { ...unconfirmed, musicRightsConfirmed: true })).not.toThrow()
+        { ...unconfirmed, musicRightsConfirmed: true, templateMusic: {
+          v: 1, choice: 'keep-timing', acceptLoop: false,
+          rights: { assetId: 'owned_audio', origin: 'uploaded-soundtrack', author: 'Creator',
+            license: 'user-upload', revision: 'ack:workspace_upload', sha256: 'a'.repeat(64),
+            commercialUse: true, exportAllowed: true, redistributionAllowed: false,
+            verifiedDurationFrames: 300, verifiedAt: 'workspace_upload' },
+          schedule: { v: 1, mode: 'beat-time', musicAssetId: 'owned_audio', sha256: 'a'.repeat(64),
+            bpm: 120, confidence: 'manual', offsetFrames: 0, durationFrames: 300, beats: [0], phrases: [],
+            protectedAnchors: [] },
+        } })).not.toThrow()
     } finally {
       ;(release.design as any).musicPolicy = policy
     }

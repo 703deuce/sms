@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { jsonError } from '@/lib/server/api-error'
 import { getPrisma } from '@/lib/server/db'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
-import { getClipStorage } from '@/lib/storage'
+import { createReadableSignedUrl } from '@/lib/storage'
 import type { TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 
 /** Workspace-scoped uploads only. No stock URLs or media belonging to another workspace. */
@@ -46,11 +46,12 @@ export async function GET(req: Request) {
       }
       let url: string | null = null
       try {
-        url = await getClipStorage(row.storageDriver).createSignedDownloadUrl(row.key, 3600)
+        url = await createReadableSignedUrl(row.key, 3600)
       } catch { /* unsigned/unavailable assets remain unselectable */ }
+      const stillUrl = kind === 'image' ? url : null
       return {
-        asset, label: row.filename, bytes: Number(row.bytes), width: row.width,
-        height: row.height, durationMs: row.durationMs, url,
+        asset, label: row.filename, bytes: Number(row.bytes), mime: row.mime, width: row.width,
+        height: row.height, durationMs: row.durationMs, url, stillUrl,
         available: Boolean(url && (kind === 'image' || frames)),
       }
     }))

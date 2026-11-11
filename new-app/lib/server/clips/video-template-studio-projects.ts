@@ -11,6 +11,7 @@ import { defaultClipSettings } from '@/lib/clips/settings'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import { materializeStudioDraft, newStudioDraft, type StudioDraft } from '@/lib/clips/real-video-templates/slot-workflow'
+import { attachDefaultMusicToDraft } from '@/lib/server/clips/video-template-default-music'
 import { publishTemplateProject, loadAndValidateAssets, TemplateInstanceConflict, TemplateInstanceNotFound } from '@/lib/server/clips/real-video-template-instances'
 
 const KEY = /^[A-Za-z0-9_-]{8,120}$/
@@ -107,6 +108,10 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     return true
   }
   for (const [id, fill] of Object.entries(raw.slots)) {
+    if (object(fill) && object(fill.asset) && fill.asset.kind === 'image') {
+      fill.sourceInFrame = 0
+      if (fill.remedy !== 'replace') fill.remedy = 'replace'
+    }
     const slot = allowedSlots.get(id)
     if (!slot || !object(fill) ||
         !['cover','contain'].includes(String(fill.fit)) ||
@@ -162,7 +167,10 @@ export async function createVideoTemplateDraft(workspaceId: string, releaseId: s
     if (current.draft.releaseId !== releaseId || current.draft.draftId !== key) throw new TemplateInstanceConflict()
     return current
   }
-  const initial = newStudioDraft(releaseId, key)
+  let initial = newStudioDraft(releaseId, key)
+  if (release.musicRequired && release.defaultMusic) {
+    initial = await attachDefaultMusicToDraft(workspaceId, initial)
+  }
   try {
     await getPrisma().clipProject.create({
       data: { id, workspaceId, title: release.title, sourceKind: 'video_template_draft',
@@ -180,6 +188,22 @@ export async function createVideoTemplateDraft(workspaceId: string, releaseId: s
   }
   return { id, status: 'DRAFT', version: 0, draft: initial, clipId: null }
 }
+
+export async function provisionVideoTemplateDefaultMusic(
+  workspaceId: string,
+  projectId: string,
+): Promise<DraftRecord> {
+  const current = await getVideoTemplateDraft(workspaceId, projectId)
+  if (!current) throw new TemplateInstanceNotFound()
+  if (current.status !== 'DRAFT') throw new TemplateInstanceConflict()
+  if (current.draft.music) return current
+  const release = releaseFor(current.draft.releaseId)
+  if (!release?.musicRequired || !release.defaultMusic) return current
+  const withMusic = await attachDefaultMusicToDraft(workspaceId, current.draft)
+  if (!withMusic.music) return current
+  return saveVideoTemplateDraft(workspaceId, projectId, current.version, withMusic)
+}
+
 export async function getVideoTemplateDraft(workspaceId: string, projectId: string): Promise<DraftRecord | null> {
   if (!/^[A-Za-z0-9_-]{1,120}$/.test(projectId)) return null
   const row = await getPrisma().clipProject.findFirst({

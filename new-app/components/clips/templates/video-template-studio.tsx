@@ -14,8 +14,8 @@ import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelec
   newStudioDraft, type StudioDraft, type StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
 
 type Project = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null; editsSaveVersion?: number }
-type MediaItem = { asset: TemplateAsset; label: string; durationMs: number | null;
-  width: number | null; height: number | null; url: string | null; available: boolean }
+type MediaItem = { asset: TemplateAsset; label: string; mime?: string; durationMs: number | null;
+  width: number | null; height: number | null; url: string | null; stillUrl?: string | null; available: boolean }
 type MediaPage = { items: MediaItem[]; page: number; pages: number; total: number }
 type ClipDetail = {
   clip: { editsSaveVersion: number }
@@ -30,32 +30,6 @@ const inputClass = 'h-10 w-full rounded-xl border border-border bg-background px
 const buttonClass = 'rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const primaryClass = 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 
-function batch9aPulseFile(music: NonNullable<VideoTemplateRelease['defaultMusic']>): File {
-  if (music.generator !== 'batch9a-groove-v2') throw new Error('Unsupported first-party soundtrack generator')
-  const sr=24000,n=Math.round(sr*music.durationFrames/30),buffer=new ArrayBuffer(44+n*2),v=new DataView(buffer)
-  const ascii=(o:number,x:string)=>{for(let i=0;i<x.length;i++)v.setUint8(o+i,x.charCodeAt(i))}
-  ascii(0,'RIFF');v.setUint32(4,36+n*2,true);ascii(8,'WAVE');ascii(12,'fmt ')
-  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,sr,true)
-  v.setUint32(28,sr*2,true);v.setUint16(32,2,true);v.setUint16(34,16,true);ascii(36,'data');v.setUint32(40,n*2,true)
-  const beat=9600,sub=2400,bar=beat*4,bass=[436,367,327,490] as const,pad=[218,183,164,245] as const
-  const tri=(i:number,p:number)=>{const x=i%p,h=p>>1;return x<h?-32768+Math.floor(65535*x/h):32767-Math.floor(65535*(x-h)/(p-h))}
-  const noise=(i:number)=>{let x=Math.imul((i^0x9e37)>>>0,1103515245)>>>0;x^=x>>>11;return (x&65535)-32768}
-  const sc=(x:number,g:number)=>Math.trunc(x*g/32768)
-  for(let i=0;i<n;i++){
-    const bp=i%beat,sp=i%sub,bi=Math.floor(i/beat)%4,ch=Math.floor(i/bar)%4
-    let m=sc(tri(i,bass[ch]!),6000)+sc(tri(i,pad[ch]!),900)
-    if(bp<2100)m+=sc(tri(bp,120+Math.floor(bp/25)),12000-Math.floor(bp*12000/2100))
-    if((bi===1||bi===3)&&bp<1500)m+=sc(noise(i),5000-Math.floor(bp*5000/1500))
-    if(sp<420)m+=sc(noise(i*7+3),2200-Math.floor(sp*1800/420))
-    v.setInt16(44+i*2,Math.max(-29000,Math.min(29000,m)),true)
-  }
-  return new File([buffer],music.id+'.wav',{type:'audio/wav'})
-}
-async function sha256Hex(file:File){
-  if(!globalThis.crypto?.subtle) throw new Error('Secure browser hashing is required for first-party music')
-  const digest=await globalThis.crypto.subtle.digest('SHA-256',await file.arrayBuffer())
-  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')
-}
 function readable(error: unknown, fallback = 'Something went wrong') {
   return error instanceof Error ? error.message : fallback
 }
@@ -143,7 +117,6 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const future = useRef<StudioDraft[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const musicAudioRef = useRef<HTMLAudioElement | null>(null)
-  const defaultMusicInit = useRef<string | null>(null)
   const setCurrentProject = (value: Project | null) => { projectRef.current = value; setProject(value) }
   const setCurrentDraft = (value: StudioDraft | null) => { draftRef.current = value; setDraft(value) }
   const commitDraft = (value: StudioDraft) => {
@@ -241,62 +214,26 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     return () => { live = false }
   }, [initialProjectId, release.id, refreshMedia, loadSelectedMedia, refreshClip, router])
   useEffect(() => {
-    const music=release.defaultMusic
-    const state=projectRef.current
-    const current=draftRef.current
-    if(!music || !state || state.status!=='DRAFT' || !current || current.music) return
-    const key=state.id+':'+music.id
-    if(defaultMusicInit.current===key) return
-    defaultMusicInit.current=key
-    let canceled=false
-    void (async()=>{
-      try{
+    if (!release.musicRequired || !release.defaultMusic || !project || project.status !== 'DRAFT') return
+    if (draft?.music && draft.templateMusic) return
+    let canceled = false
+    void (async () => {
+      try {
         setNotice('Preparing first-party soundtrack…')
-        const file=batch9aPulseFile(music)
-        const digest=await sha256Hex(file)
-        if(digest!==music.sha256) throw new Error('First-party soundtrack integrity check failed')
-        const uploaded=await uploadClipFile(file,setUploadStatus,{kind:'media'})
-        let item:MediaItem|undefined
-        for(let attempt=0;attempt<15&&!item?.available;attempt++){
-          const selected=await loadSelectedMedia([uploaded.uploadId])
-          item=selected.get(uploaded.uploadId)
-          if(!item?.available) await new Promise(resolve=>window.setTimeout(resolve,350))
-        }
-        if(canceled) return
-        if(!item?.available) throw new Error('First-party soundtrack is still processing; choose music manually or retry')
-        const latest=draftRef.current
-        if(!latest || latest.music) return
-        const asset:TemplateAsset={
-          id:uploaded.uploadId,kind:'audio',durationFrames:music.durationFrames,
-          license:{id:'batch9a_first_party',provenance:'first-party',reference:music.revision},
-        }
-        const beats=Array.from({length:Math.floor((music.durationFrames-1)/music.beatEveryFrames)+1},
-          (_,index)=>index*music.beatEveryFrames)
-        setCurrentDraft({...latest,music:asset,templateMusic:{
-          v:1,choice:'keep-timing',acceptLoop:false,
-          rights:{
-            assetId:uploaded.uploadId,origin:'first-party-generated',author:music.author,
-            license:music.license,revision:music.revision,sha256:music.sha256,
-            commercialUse:true,exportAllowed:true,redistributionAllowed:true,
-            verifiedDurationFrames:music.durationFrames,verifiedAt:music.revision,
-          },
-          schedule:{
-            v:1,mode:'beat-time',musicAssetId:uploaded.uploadId,sha256:music.sha256,
-            bpm:music.bpm,confidence:'manual',offsetFrames:0,durationFrames:music.durationFrames,
-            beats,phrases:[],protectedAnchors:[],
-          },
-        },musicRightsConfirmed:true,musicTiming:'keep'})
-        dirtyRef.current=true
-        setDirty(true)
+        const updated = await request<Project>(
+          '/api/clips/video-templates/drafts/' + encodeURIComponent(project.id) + '/default-music', 'POST')
+        if (canceled) return
+        versionRef.current = updated.version
+        setCurrentProject(updated)
+        setCurrentDraft(updated.draft)
+        if (updated.draft.music) await loadSelectedMedia([updated.draft.music.id])
         setNotice('First-party beat-synced soundtrack ready')
-      }catch(e){
-        if(!canceled){defaultMusicInit.current=null;setError(readable(e,'Could not prepare first-party soundtrack'))}
-      }finally{
-        if(!canceled)setUploadStatus(null)
+      } catch (e) {
+        if (!canceled) setError(readable(e, 'Could not prepare first-party soundtrack'))
       }
     })()
-    return()=>{canceled=true}
-  }, [project?.id, project?.status, release.defaultMusic, loadSelectedMedia])
+    return () => { canceled = true }
+  }, [project?.id, project?.status, release.musicRequired, release.defaultMusic, draft?.music, draft?.templateMusic, loadSelectedMedia])
   useEffect(() => {
     if (!project || project.status === 'DRAFT' || project.status === 'READY' || project.status === 'CANCELED') return
     const timer = window.setInterval(() => {
@@ -387,9 +324,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       setError('The selected file does not match the required slot media type')
       return
     }
-    const fill: StudioSlotFill = { asset, sourceInFrame: slot.handles?.headFrames ?? 0,
-      fit: slot.fit, muteSourceAudio: slot.sourceAudio === 'mute',
-      focalX: 50, focalY: 50, remedy: 'replace' }
+    const fill: StudioSlotFill = {
+      asset,
+      sourceInFrame: asset.kind === 'video' ? (slot.handles?.headFrames ?? 0) : 0,
+      fit: slot.fit,
+      muteSourceAudio: slot.sourceAudio === 'mute',
+      focalX: 50, focalY: 50, remedy: 'replace',
+    }
     commitDraft({ ...draft, slots: { ...draft.slots, [id]: fill } })
     setNotice('Slot ' + slot.ordinal + ' updated without changing adjacent slots.')
   }
@@ -495,6 +436,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const activeSlot = release.family.slots.find(s => s.id === selectedSlot)
   const activeFill = activeSlot && draft?.slots[activeSlot.id]
   const activeMedia = activeFill ? knownMedia[activeFill.asset.id] : undefined
+  const activeStillUrl = activeMedia?.asset.kind === 'image'
+    ? (activeMedia.stillUrl ?? activeMedia.url)
+    : activeMedia?.url
   const musicMedia = draft?.music ? knownMedia[draft.music.id] : undefined
   const musicConfig = clip?.edits.audio?.music ?? null
   const syncMusicPreview = (outputMs: number, play: boolean) => {
@@ -604,10 +548,10 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
               </div>
             </> : <>
               <div className="relative mx-auto flex aspect-[9/16] max-h-[460px] w-full max-w-sm items-center justify-center overflow-hidden rounded-xl bg-black">
-                {activeMedia?.url ? (activeMedia.asset.kind === 'image'
-                  ? <img src={activeMedia.url} alt={activeMedia.label} className="h-full w-full object-cover"
+                {activeStillUrl ? (activeMedia!.asset.kind === 'image'
+                  ? <img src={activeStillUrl} alt={activeMedia!.label} className="h-full w-full object-contain"
                       style={{ objectPosition: (activeFill?.focalX ?? 50) + '% ' + (activeFill?.focalY ?? 50) + '%' }} />
-                  : <video key={activeMedia.asset.id} src={activeMedia.url} controls playsInline muted
+                  : <video key={activeMedia!.asset.id} src={activeStillUrl} controls playsInline muted
                       className="h-full w-full object-contain" preload="metadata" />)
                   : <div className="p-6 text-center text-sm text-white/70">
                       {project?.status === 'QUEUED' ? 'Preparing the exact-frame preview…' :

@@ -46,6 +46,12 @@ vi.mock('@/lib/clips/real-video-templates/releases', () => ({
 vi.mock('@/lib/clips/upload', () => ({
   uploadClipFile: vi.fn(async () => { throw new Error('Uploads are not needed in this library-media fixture') }),
 }))
+const provisionedMusic = {
+  id: 'tpl_audio_fixture',
+  kind: 'audio' as const,
+  durationFrames: 480,
+  license: { id: 'batch9a_first_party', provenance: 'first-party' as const, reference: 'batch9a-audio-v1' },
+}
 vi.mock('@/components/clips/editor/preview-stage', () => ({
   PreviewStage: ({ edits }: { edits: { textItems?: Array<{ text?: string }> } }) =>
     <div data-testid="template-native-preview">{edits.textItems?.[0]?.text ?? ''}</div>,
@@ -55,6 +61,7 @@ import { VideoTemplateStudio } from '@/components/clips/templates/video-template
 import { uploadClipFile } from '@/lib/clips/upload'
 
 const license = { id: 'owned', provenance: 'user-owned', reference: 'workspace_upload' }
+const BATCH9A_HASH = '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
 const media = [
   { asset: { id: 'photo_a', kind: 'image', license }, label: 'Photo A', durationMs: null,
     width: 800, height: 1200, url: '/photo-a.png', available: true },
@@ -99,6 +106,47 @@ beforeEach(() => {
     }
     if (url === '/api/clips/video-templates/drafts/proj_fixture' && method === 'GET')
       return ok({ ...backend.project, draft: backend.draft })
+    if (url === '/api/clips/video-templates/drafts/proj_fixture/default-music' && method === 'POST') {
+      backend.draft = {
+        ...(backend.draft ?? {}),
+        music: provisionedMusic,
+        templateMusic: {
+          v: 1,
+          choice: 'keep-timing',
+          acceptLoop: false,
+          rights: {
+            assetId: provisionedMusic.id,
+            origin: 'first-party-generated',
+            author: 'Transovo AI',
+            license: 'Transovo first-party original template music',
+            revision: 'batch9a-audio-v1',
+            sha256: BATCH9A_HASH,
+            commercialUse: true,
+            exportAllowed: true,
+            redistributionAllowed: true,
+            verifiedDurationFrames: 480,
+            verifiedAt: 'batch9a-audio-v1',
+          },
+          schedule: {
+            v: 1,
+            mode: 'beat-time',
+            musicAssetId: provisionedMusic.id,
+            sha256: BATCH9A_HASH,
+            bpm: 150,
+            confidence: 'manual',
+            offsetFrames: 0,
+            durationFrames: 480,
+            beats: [0, 3, 6, 9],
+            phrases: [],
+            protectedAnchors: [],
+          },
+        },
+        musicRightsConfirmed: true,
+        musicTiming: 'keep',
+      }
+      backend.project = { ...backend.project!, draft: backend.draft, version: (backend.project?.version ?? 0) + 1 }
+      return ok(backend.project)
+    }
     if (url === '/api/clips/video-templates/drafts/proj_fixture' && method === 'PATCH') {
       const project = backend.project
       if (!project || body.expectedVersion !== project.version) return Response.json({ error: 'Conflict' }, { status: 409 })
@@ -229,16 +277,19 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     release.reviewed=false
     release.previewRenderVerified=false
     media.push(audio as any)
-    vi.mocked(uploadClipFile).mockResolvedValue({uploadId:'generated_audio'} as any)
-    const digest=Uint8Array.from(hash.match(/../g)!.map((byte:string)=>parseInt(byte,16))).buffer
-    vi.stubGlobal('crypto',{
-      randomUUID:()=> '11111111-2222-4333-8444-555555555555',
-      subtle:{digest:vi.fn(async()=>digest)},
-    })
+    media.push({
+      asset: provisionedMusic,
+      label: 'Batch 9A pulse bed',
+      durationMs: 16000,
+      width: null,
+      height: null,
+      url: '/batch9a-pulse.wav',
+      available: true,
+    } as any)
     try {
       render(<VideoTemplateStudio release={release as VideoTemplateRelease} />)
       await screen.findByText('First-party beat-synced soundtrack ready')
-      expect(uploadClipFile).toHaveBeenCalled()
+      expect(uploadClipFile).not.toHaveBeenCalled()
       await screen.findByRole('button',{name:'Use Photo A'})
       fireEvent.click(screen.getByRole('button',{name:'Use Photo A'}))
       const slots=within(screen.getByRole('group',{name:'Select a template slot'})).getAllByRole('button')
