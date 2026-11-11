@@ -283,17 +283,19 @@ export function ScriptViewCompactTimeline({
                       />
                     ))}
                   </button>
-                  {chip.startMs > 0 ? (
-                    <>
-                      <span
-                        className="pointer-events-none absolute top-0 z-[5] h-[44px] w-px bg-white/80"
-                        style={{ left }}
-                        data-testid="script-compact-slot-cut"
-                        data-src-ms={chip.srcStartMs}
-                      />
-                      {(() => {
-                        const tr = compactTransitions.find((row) => Math.abs(row.srcMs - chip.srcStartMs) <= 17)
-                        return tr ? (
+                  {chip.startMs > 0 ? (() => {
+                    const cutMs = (previewEdits.videoSplits ?? []).find((ms) => Math.abs(ms - chip.srcStartMs) <= 1)
+                    if (cutMs == null) return null
+                    const tr = compactTransitions.find((row) => Math.abs(row.srcMs - cutMs) <= 17)
+                    return (
+                      <>
+                        <span
+                          className="pointer-events-none absolute top-0 z-[5] h-[44px] w-px bg-white/80"
+                          style={{ left }}
+                          data-testid="script-compact-slot-cut"
+                          data-src-ms={cutMs}
+                        />
+                        {tr ? (
                           <button
                             type="button"
                             className="absolute top-[15px] z-[7] size-3 -translate-x-1/2 rounded-full border border-white bg-primary"
@@ -308,10 +310,10 @@ export function ScriptViewCompactTimeline({
                               onOpenTransition?.(tr.srcMs)
                             }}
                           />
-                        ) : null
-                      })()}
-                    </>
-                  ) : null}
+                        ) : null}
+                      </>
+                    )
+                  })() : null}
                 </div>
               )
             })}
