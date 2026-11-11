@@ -4,18 +4,11 @@
  * preview and ASS/FFmpeg export consume the same text instead of independently
  * wrapping it.
  */
+import { textWidthPx } from '@/lib/clips/caption-fit'
+
 export type MotionTextFormat = '9:16' | '16:9' | '1:1'
 
 const REF_H = 1920
-const FONT_WIDTH_FACTOR: Record<string, number> = {
-  Montserrat: 1,
-  Anton: 0.86,
-  Poppins: 0.98,
-  Bangers: 0.95,
-  'Bebas Neue': 0.78,
-  'Archivo Black': 1.06,
-  'Luckiest Guy': 1.04,
-}
 
 export type MotionTextFit = {
   fits: boolean
@@ -34,18 +27,8 @@ export function motionReferenceWidth(format: MotionTextFormat): number {
   return REF_H
 }
 
-function glyphWidthEm(ch: string): number {
-  if (/\s/u.test(ch)) return 0.34
-  if (/[ilI1|!.,'’":;]/u.test(ch)) return 0.3
-  if (/[MW@#%&QG]/u.test(ch)) return 0.9
-  if (/[A-Z0-9]/u.test(ch)) return 0.66
-  if (/[-_+()\[\]{}\/\\\\]/u.test(ch)) return 0.48
-  return 0.58
-}
-
 export function estimateMotionTextLineWidth(text: string, size: number, fontFamily: string): number {
-  const factor = FONT_WIDTH_FACTOR[fontFamily] ?? 1
-  return Array.from(text).reduce((sum, ch) => sum + glyphWidthEm(ch) * size * factor, 0)
+  return textWidthPx(text, fontFamily, size)
 }
 
 function wrapParagraph(paragraph: string, size: number, maxWidth: number, fontFamily: string): string[] {
