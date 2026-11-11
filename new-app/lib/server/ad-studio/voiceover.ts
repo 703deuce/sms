@@ -72,7 +72,7 @@ export async function ensureAdVoiceover(
 
     // Do not silently truncate narration. The final timeline itself remains the hard
     // requested duration; a short VO is covered by the CTA hold.
-    if (durationMs > plannedDurationMs + 300) throw new Error('Voiceover exceeds the planned commercial duration')
+    if (durationMs > plannedDurationMs) throw new Error('Voiceover exceeds the planned commercial duration')
     const words = wordsFromAlignment(generated.alignment, { offsetS: 0, sceneSlot: 0, spk: 0 })
     const storageKey = `ws/${workspaceId}/ad-studio/${runId}/voiceover.mp3`
     const storage = getClipStorage()
