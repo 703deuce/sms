@@ -4,12 +4,14 @@ import { createHash } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { compileTemplate, validateTemplateDesign, validateTemplateFamily, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
+import { validateTemplateDesign, validateTemplateFamily, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplateWithMusic, planTemplateMusic } from '@/lib/clips/real-video-templates/music-sequence'
+import { assertAudioLicense } from '@/lib/clips/real-video-templates/music-timing'
 import { defaultClipSettings } from '@/lib/clips/settings'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import { materializeStudioDraft, newStudioDraft, type StudioDraft } from '@/lib/clips/real-video-templates/slot-workflow'
-import { publishTemplateProject, TemplateInstanceConflict, TemplateInstanceNotFound } from '@/lib/server/clips/real-video-template-instances'
+import { publishTemplateProject, loadAndValidateAssets, TemplateInstanceConflict, TemplateInstanceNotFound } from '@/lib/server/clips/real-video-template-instances'
 
 const KEY = /^[A-Za-z0-9_-]{8,120}$/
 type DraftRecord = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null }
@@ -80,7 +82,7 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
       typeof raw.draftId !== 'string' || !KEY.test(raw.draftId) ||
       !object(raw.slots) || Object.keys(raw.slots).length > 120 ||
       !object(raw.texts) || Object.keys(raw.texts).length > 60 ||
-      raw.musicTiming !== 'keep' ||
+      (raw.musicTiming !== 'keep' && raw.musicTiming !== 'resync') ||
       (raw.brandColor != null && (typeof raw.brandColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(raw.brandColor))))
     throw new Error('Invalid template draft')
   const release = releaseFor(releaseId)
@@ -121,6 +123,20 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     throw new Error('Template music is unavailable or unapproved')
   if (raw.music !== undefined && raw.musicRightsConfirmed !== true)
     throw new Error('Confirm ownership or licensed use of the selected music before saving')
+  if (!raw.music && raw.templateMusic) throw new Error('Music authorization without selected audio')
+  if (raw.music) {
+    if (!object(raw.templateMusic) || !object(raw.templateMusic.rights) ||
+        !object(raw.templateMusic.schedule))
+      throw new Error('Verify the exact song and pin its beat map before saving')
+    const decision = raw.templateMusic as unknown as NonNullable<StudioDraft['templateMusic']>
+    assertAudioLicense(decision.rights)
+    if (!object(raw.music) || decision.rights.assetId !== raw.music.id ||
+        decision.schedule.musicAssetId !== raw.music.id ||
+        decision.schedule.sha256 !== decision.rights.sha256 ||
+        (raw.musicTiming === 'resync') !== (decision.choice === 're-sync'))
+      throw new Error('Selected music and pinned rights/timing do not agree')
+    planTemplateMusic(release.family, decision, raw.texts as Record<string, string>)
+  } else if (raw.musicTiming !== 'keep') throw new Error('Music re-sync needs an approved song')
   for (const [id, text] of Object.entries(raw.texts)) {
     const max = allowedTexts.get(id)
     if (!max || typeof text !== 'string' || !text.trim() || Array.from(text).length > max)
@@ -222,7 +238,8 @@ export async function publishVideoTemplateDraft(workspaceId: string, projectId: 
   await assertDraftAssets(workspaceId, approvedDraft)
   const publish = await publishTemplateProject(
     workspaceId, record.draft.draftId, family, release.design,
-    { media: choices.media, texts: choices.texts, music: choices.music },
+    { media: choices.media, texts: choices.texts, music: choices.music,
+      ...(approvedDraft.templateMusic ? { templateMusic: approvedDraft.templateMusic } : {}) },
     release.title,
   )
   return publish
@@ -254,8 +271,7 @@ export async function savePublishedStudioDraft(
   if (!state || !state.clipId) throw new TemplateInstanceNotFound()
   if (state.status !== 'READY') throw new TemplateInstanceConflict()
   const draft = validDraft(state.draft.releaseId, raw)
-  if (draft.draftId !== state.draft.draftId || draft.musicTiming === 'resync')
-    throw new Error('Music re-sync requires an approved beat map; choose Keep timing until analysis is available')
+  if (draft.draftId !== state.draft.draftId) throw new TemplateInstanceConflict()
   if (state.version !== expectedVersion) {
     if (state.version === expectedVersion + 1 && equivalentDraft(state.draft, draft)) {
       const clip = await getPrisma().clip.findFirst({
@@ -294,9 +310,16 @@ export async function savePublishedStudioDraft(
           templateMeta.studioEditsSaveVersion !== expectedEditsSaveVersion)
         throw new TemplateInstanceConflict()
       const materialized = materializeStudioDraft(family, draft, String(templateMeta.instanceId))
+      const musicPlan = draft.templateMusic
+        ? planTemplateMusic(materialized.family, draft.templateMusic, materialized.choices.texts) : null
+      if (musicPlan && musicPlan.durationFrames !== family.totalFrames)
+        throw new Error('Re-sync changes the carrier duration; create a new template project instead')
       const durationMs = Math.round(family.totalFrames * 1000 / 30)
-      const compiled = compileTemplate(materialized.family, design, materialized.choices,
+      const choices = { ...materialized.choices,
+        ...(draft.templateMusic ? { templateMusic: draft.templateMusic } : {}) }
+      const compiled = compileTemplateWithMusic(materialized.family, design, choices,
         { durationFrames: family.totalFrames, edits: defaultEdits({ clipStartMs: 0, clipEndMs: durationMs }) })
+      await loadAndValidateAssets(tx, workspaceId, musicPlan?.family ?? materialized.family, design, choices)
       // Retain every unknown/legacy field; only the studio-authoritative lanes are changed.
       const old = clip.edits as unknown as ClipEditsV2
       const next: ClipEditsV2 = {
@@ -338,7 +361,8 @@ export async function savePublishedStudioDraft(
       }
       templateMeta.snapshot = { family: materialized.family, design }
       templateMeta.authoringState = { media: materialized.choices.media, texts: materialized.choices.texts,
-        ...(materialized.choices.music ? { music: materialized.choices.music } : {}) }
+        ...(materialized.choices.music ? { music: materialized.choices.music } : {}),
+        ...(draft.templateMusic ? { templateMusic: draft.templateMusic } : {}) }
       templateMeta.authoringVersion = Number(templateMeta.authoringVersion ?? 0) + 1
       templateMeta.slotToItemIds = compiled.slotToItemIds
       templateMeta.studioEditsSaveVersion = expectedEditsSaveVersion + 1

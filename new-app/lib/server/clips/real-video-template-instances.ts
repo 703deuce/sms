@@ -97,7 +97,7 @@ function mimeMatches(kind: TemplateAsset['kind'], mime: string): boolean {
       ? mime.startsWith('video/')
       : mime.startsWith('audio/')
 }
-async function loadAndValidateAssets(
+export async function loadAndValidateAssets(
   tx: Prisma.TransactionClient,
   workspaceId: string,
   family: TemplateFamilyV1,

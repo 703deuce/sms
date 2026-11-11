@@ -3,6 +3,7 @@ import type {
 } from './sequence-contract'
 import { validateTemplateFamily } from './sequence-contract'
 import { compileTemplatePlayback, playbackSourceBounds } from './slot-playback'
+import type { TemplateMusicDecisionV1 } from './music-sequence'
 
 /** A persisted assignment, never a blob URL or an unregistered local File. */
 export type StudioSlotFill = {
@@ -24,6 +25,7 @@ export type StudioDraft = {
   slots: Record<string, StudioSlotFill>
   texts: Record<string, string>
   music?: TemplateAsset
+  templateMusic?: TemplateMusicDecisionV1
   /** Explicit user declaration about commercial/export rights to the selected track. */
   musicRightsConfirmed?: boolean
   musicTiming: 'keep' | 'resync'
