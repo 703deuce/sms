@@ -36,6 +36,7 @@ import { clipsFetch, requestClipReframe } from '@/lib/clips-api'
 import { routes } from '@/lib/routes'
 import type { EditorModeSwitcherMode } from '@/components/clips/editor/editor-mode-switcher'
 import { StandaloneEditorChrome, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
+import { useFullVideoModeHandoff } from '@/components/clips/editor/full-video-mode-handoff'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 type Props = Parameters<typeof EditorClipShell>[0]
@@ -142,6 +143,7 @@ export function StoryBlocksEditorShell(props: Props) {
       editorSaveSeq: typeof (props.aiMeta as { __editorSaveSeq?: number } | null)?.__editorSaveSeq === 'number'
         ? (props.aiMeta as { __editorSaveSeq: number }).__editorSaveSeq : 0,
     })
+  const fullVideoMode = useFullVideoModeHandoff(clipId, flushSave)
   const { words, wordsLoading, reloadWords } = useEditorWords(clipId, baseWords, bounds, edits.trim)
   useEffect(() => { syncWordsForCuts(words) }, [words, syncWordsForCuts])
   useEffect(() => {
@@ -305,6 +307,10 @@ export function StoryBlocksEditorShell(props: Props) {
   }
   const openOther = async (target: EditorModeSwitcherMode | 'transcript' | 'captions') => {
     console.log('[editor:story-mode] handoff-start', { projectId, clipId, target })
+    if (target === 'full-video') {
+      await fullVideoMode.open()
+      return
+    }
     try { await flushSave() } catch {
       reportError('handoff', new Error('Save edits before changing editors'))
       return
