@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ClipCard } from '@/components/clips/clip-card'
 
-const patch = vi.fn(async () => ({ data: { hidden: true } }))
+const patch = vi.fn(async (..._args: unknown[]) => ({ data: { hidden: true } }))
 const hidden = vi.fn()
 const toast = vi.hoisted(() => ({
   loading: vi.fn(() => 'feedback-toast'),
