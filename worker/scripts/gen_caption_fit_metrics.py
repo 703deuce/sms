@@ -31,6 +31,14 @@ FONTS = {
     "Luckiest Guy": T6 / "LuckiestGuy.ttf",
     "Archivo Black": T6 / "ArchivoBlack.ttf",
     "Oswald": T6 / "Oswald.ttf",
+    "Rubik": T6 / "Rubik.ttf",
+    "Gabarito": T6 / "Gabarito.ttf",
+    "Fira Sans Condensed": T6 / "FiraSansCondensed-Bold.ttf",
+    "DM Serif Display": T6 / "DMSerifDisplay-Regular.ttf",
+    "Playfair Display": T6 / "PlayfairDisplay.ttf",
+    "Caveat": T6 / "Caveat.ttf",
+    "Space Grotesk": T6 / "SpaceGrotesk.ttf",
+    "Space Mono": T6 / "SpaceMono-Regular.ttf",
 }
 MAX_CP = 0x250  # Latin + Latin-1 + Latin Extended-A/B; anything else uses defaultAdv
 OUTS = [
