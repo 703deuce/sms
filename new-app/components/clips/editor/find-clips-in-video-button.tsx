@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { Loader2, MoreHorizontal, Sparkles } from 'lucide-react'
@@ -39,17 +39,33 @@ export function FindClipsInVideoButton({
   highlightsOnly?: boolean
 }) {
   const router = useRouter()
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const busyRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<{ credits: number | null; mode: 'highlights' | 'project' } | null>(null)
 
+  useEffect(() => { busyRef.current = busy }, [busy])
+
   useEffect(() => {
     if (!confirm) return
+    const priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    dialogRef.current?.querySelector<HTMLButtonElement>('[data-testid="find-clips-start"]')?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setConfirm(null)
+      if (e.key === 'Escape' && !busyRef.current) {
+        e.preventDefault()
+        e.stopPropagation()
+        setConfirm(null)
+      }
+      if (e.key !== 'Tab') return
+      const buttons = Array.from(dialogRef.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])
+      if (!buttons.length) return
+      const first = buttons[0], last = buttons[buttons.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [confirm])
+    window.addEventListener('keydown', onKey, true)
+    return () => { window.removeEventListener('keydown', onKey, true); priorFocus?.focus() }
+  }, [Boolean(confirm)])
 
   const ask = async (mode: 'highlights' | 'project') => {
     if (busy) return
@@ -134,16 +150,17 @@ export function FindClipsInVideoButton({
       </div>
       {confirm && typeof document !== 'undefined' ? createPortal(
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/50 p-4"
           onMouseDown={(e) => {
             if (e.target === e.currentTarget && !busy) setConfirm(null)
           }}
         >
           <div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="find-clips-dialog-title"
-            className="w-full max-w-md rounded-t-xl border border-border bg-background p-4 shadow-lg sm:rounded-xl"
+            className="relative z-10 my-auto w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-border bg-background p-4 shadow-lg"
             data-testid="find-clips-dialog"
           >
             <div className="flex items-start gap-3">

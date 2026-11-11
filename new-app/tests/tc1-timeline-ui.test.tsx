@@ -158,6 +158,37 @@ describe('TC1 timeline UI', () => {
     expect(onOpenExport).toHaveBeenCalledTimes(1)
   })
 
+  it('HG03 narrow toolbar keeps Split, Fit and More reachable without hiding controls', () => {
+    const t = setup()
+    const toolbar = t.getByTestId('timeline-toolbar')
+    expect(toolbar.className).toContain('overflow-x-auto')
+    expect(t.getByTestId('timeline-split')).toBeTruthy()
+    expect(t.getByTestId('timeline-zoom-fit')).toBeTruthy()
+    expect(t.getByTestId('timeline-more-menu')).toBeTruthy()
+    // Real dimensions/hit targets are verified separately in browser, not simulated by happy-dom.
+  })
+
+  it('HG04 Ctrl+R opens speed controls for the main clip and ignores text-field focus', () => {
+    const t = setup()
+    const field = document.createElement('input')
+    document.body.appendChild(field)
+    field.focus()
+    fireEvent.keyDown(field, { key: 'r', ctrlKey: true })
+    expect(t.queryByTestId('timeline-speed-slot')).toBeNull()
+    field.remove()
+    t.key({ key: 'r', ctrlKey: true })
+    const chip = t.getByTestId('timeline-speed-chip')
+    expect(chip.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('HG05 Ctrl+D without an eligible selection does not create footage', () => {
+    const t = setup()
+    const key = new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true, cancelable: true })
+    act(() => void window.dispatchEvent(key))
+    expect(key.defaultPrevented).toBe(true)
+    expect(t.onCommitEdits).not.toHaveBeenCalled()
+  })
+
   it('preview speed buttons drive the shared store', () => {
     const t = setup()
     fireEvent.click(t.getByTestId('timeline-preview-rate-0.5'))

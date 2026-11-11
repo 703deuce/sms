@@ -112,7 +112,7 @@ vi.mock('@/lib/clips/video-playback', () => ({
 }))
 
 vi.mock('sonner', () => ({
-  toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn() },
+  toast: { loading: vi.fn(), success: vi.fn(), error: vi.fn(), message: vi.fn() },
 }))
 
 const bounds = { clipStartMs: 0, clipEndMs: 60000, trimMinMs: 0, trimMaxMs: 120000 }

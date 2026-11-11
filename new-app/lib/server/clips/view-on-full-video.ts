@@ -12,7 +12,8 @@ export async function resolveViewOnFullVideoUrl(
   foundProjectCreatedAt?: Date,
 ): Promise<string | null> {
   const parsed = clipProjectSettingsSchema.safeParse(projectSettings)
-  let fvId = parsed.success ? parsed.data.fromFullVideoProjectId : null
+  const alreadyFull = parsed.success && parsed.data.fullVideo === true
+  let fvId = alreadyFull ? foundProjectId : parsed.success ? parsed.data.fromFullVideoProjectId : null
   const prisma = getPrisma()
   if (fvId) {
     const linked = await prisma.clipProject.findFirst({

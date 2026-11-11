@@ -87,6 +87,30 @@ describe('FV4b takes menus', () => {
   })
 })
 
+describe('HG06 same-time overlay accessibility', () => {
+  afterEach(() => cleanup())
+
+  it('lets keyboard users select each overlapping overlay individually and open its menu', () => {
+    const e = edits({
+      broll: [
+        { id: 'front', source: 'stock', assetId: 'asset_front', startMs: 5000, endMs: 8000 },
+        { id: 'behind', source: 'stock', assetId: 'asset_behind', startMs: 5000, endMs: 8000 },
+      ],
+    })
+    const t = setup(e)
+    const rows = t.getAllByTestId('timeline-item-broll')
+    expect(rows).toHaveLength(2)
+    for (const row of rows) expect(row.getAttribute('tabindex')).toBe('0')
+    fireEvent.keyDown(t.broll('behind'), { key: 'Enter' })
+    expect(t.broll('behind').getAttribute('data-selected')).toBe('true')
+    fireEvent.keyDown(t.broll('front'), { key: 'Enter' })
+    expect(t.broll('front').getAttribute('data-selected')).toBe('true')
+    expect(t.broll('behind').getAttribute('data-selected')).toBeNull()
+    fireEvent.keyDown(t.broll('behind'), { key: 'F10', shiftKey: true })
+    expect(t.broll('behind').getAttribute('data-selected')).toBe('true')
+  })
+})
+
 describe('FV4b track motion entry points', () => {
   afterEach(() => cleanup())
 
