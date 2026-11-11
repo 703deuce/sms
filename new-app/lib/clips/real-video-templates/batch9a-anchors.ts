@@ -40,7 +40,8 @@ export const BATCH9A_DEFAULT_MUSIC = {
   revision: 'batch9a-audio-v2',
 }
 
-function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe): TemplateFamilyV1 {
+function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe, direction: Direction): TemplateFamilyV1 {
+  const [,headline,closing,,transition,motionScale,motionShift,headlineSize]=direction
   let at = 0
   const slots: TemplateFamilyV1['slots'] = seed.frames.map((durationFrames,index) => {
     const slot: TemplateFamilyV1['slots'][number] = {
@@ -53,19 +54,25 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
       fit: 'cover',
       sourceAudio: 'mute',
       handles: { headFrames: 6, tailFrames: 6 },
-      transition: index === 0 ? 'cut' : { type: recipe.transition, durationFrames: 6 },
+      transition: index === 0 ? 'cut' : {
+        type: index === seed.frames.length - 1 ? 'crossfade' : transition,
+        durationFrames: index === seed.frames.length - 1 ? 8 : 5,
+      },
       motion: {
-        from: { x: 0, scale: 100 },
-        to: { x: index % 2 ? -4 : 4, scale: seed.category === 'depth' ? 108 : 103 },
+        from: { x: index % 2 ? motionShift : -motionShift, scale: 100 },
+        to: { x: index % 2 ? -motionShift : motionShift, scale: motionScale },
         ease: 'inOut',
       },
+      fx: seed.category === 'food' ? { contrast: 3, saturation: 9 } :
+        seed.category === 'fitness' ? { contrast: 8, saturation: 5 } :
+        seed.category === 'product' ? { contrast: 6, saturation: 6 } : { contrast: 3, saturation: 3 },
     }
     at += durationFrames
     return slot
   })
   const totalFrames = at
-  const titleFrames = Math.min(totalFrames,150)
-  const outroFrames = Math.min(totalFrames,120)
+  const titleFrames = Math.min(totalFrames,Math.max(66,Math.round(seed.frames[0]! * 1.5)))
+  const outroFrames = Math.min(totalFrames,Math.max(72,seed.frames[seed.frames.length-1]!))
   const secondaryY = recipe.y > 59 ? recipe.y - 13 : recipe.y + 13
   // The pulse bed exposes an audible subdivision every 3 frames. All F01-F10
   // authored shot lengths are multiples of 3, so every cut lands on a pulse.
@@ -75,9 +82,9 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
   return validateTemplateFamily({
     schemaVersion:1,
     familyId:seed.id,
-    revision:1,
+    revision:2,
     title:seed.title,
-    tags:[seed.category,'batch9a_anchor','first_party_preview'],
+    tags:[seed.category,'batch9a_anchor','first_party_preview',direction[0]],
     aspects:['9:16'],
     fps:30,
     totalFrames,
@@ -89,13 +96,13 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
     ],
     texts:[
       {
-        id:'headline',defaultText:'Your story',maxChars:70,startFrame:0,durationFrames:titleFrames,
-        x:recipe.x,y:recipe.y,font:recipe.headingFont,size:recipe.x < 40 || recipe.x > 60 ? 60 : 74,
+        id:'headline',defaultText:headline,maxChars:40,startFrame:0,durationFrames:titleFrames,
+        x:recipe.x,y:recipe.y,font:recipe.headingFont,size:headlineSize,
         color:recipe.foreground,
         anim:{in:{type:recipe.enter,unit:'block',durMs:360},out:{type:'fade',unit:'block',durMs:260}},
       },
       {
-        id:'closing_line',defaultText:'Make it yours',maxChars:65,
+        id:'closing_line',defaultText:closing,maxChars:44,
         startFrame:totalFrames-outroFrames,durationFrames:outroFrames,
         x:recipe.x,y:secondaryY,font:recipe.supportFont,size:44,color:recipe.foreground,
         anim:{in:{type:'fade',unit:'block',durMs:440},out:{type:'fade',unit:'block',durMs:260}},
@@ -103,7 +110,8 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
     ],
     graphics:[{
       id:'accent_shape',type:recipe.graphic,startFrame:0,durationFrames:Math.min(totalFrames,120),
-      x:recipe.gx,y:recipe.gy,w:110,h:40,color:recipe.accent,
+      x:recipe.gx,y:recipe.gy,w:['circle','star','heart','triangle'].includes(recipe.graphic)?44:124,
+      h:['circle','star','heart','triangle'].includes(recipe.graphic)?44:16,color:recipe.accent,
       anim:{in:{type:'slide_up',unit:'block',durMs:420},loop:{type:'pulse',periodMs:1800}},
     }],
   })
@@ -111,16 +119,17 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
 
 export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
   FACTORY_FAMILY_SEEDS.slice(0,10).map(seed => {
-    const family=authorAnchorFamily(seed,bold)
+    const {direction,recipe}=directionFor(seed)
+    const family=authorAnchorFamily(seed,recipe,direction)
     const design=validateTemplateDesign({
-      schemaVersion:1,designId:seed.id+'_bold',revision:1,stylePackId:'bold',
-      familyId:seed.id,familyRevision:1,musicPolicy:'licensed-only',
+      schemaVersion:1,designId:seed.id+'_bold',revision:2,stylePackId:'batch9a_'+recipe.id,
+      familyId:seed.id,familyRevision:2,musicPolicy:'licensed-only',
     },family)
     return {
       id:design.designId,
       title:seed.title,
       category:seed.category,
-      description:'Batch 9A first-party anchor: beat-synced cuts, authored transitions, animated text and graphics, with a first-party pulse-bed soundtrack.',
+      description:direction[3],
       family,design,
       rights:'Preview release. Slot media remains user-owned; default soundtrack is an original Transovo first-party procedural composition copied into the workspace for preview/export.',
       requiredCapabilities:['clip_edits_v2','source_transforms','text_layers','music_track',
@@ -133,8 +142,8 @@ export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
       musicRequired:true,
       defaultMusic:BATCH9A_DEFAULT_MUSIC,
       previewStyle:{
-        foreground:bold.foreground,accent:bold.accent,headingFont:bold.headingFont,
-        supportFont:bold.supportFont,graphic:bold.graphic,enter:bold.enter,
+        foreground:recipe.foreground,accent:recipe.accent,headingFont:recipe.headingFont,
+        supportFont:recipe.supportFont,graphic:recipe.graphic,enter:recipe.enter,
       },
     }
   })
