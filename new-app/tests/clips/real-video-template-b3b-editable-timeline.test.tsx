@@ -190,6 +190,12 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
       sourceSegments: patchSourceSegment(next.sourceSegments, second, { fx: { contrast: 22, saturation: -7 } }, next.sources),
     }
 
+    next = {
+      ...next,
+      captions: { ...next.captions, enabled: true },
+      captionLines: [{ id: 'caption_all', startMs: 0, endMs: 3000, text: 'CAPTION THROUGH EVERY SLOT' }],
+    }
+
     const beforeReload = snapshotEditableTimelineStructure(next)
     const reloaded = normalizeEdits(JSON.parse(JSON.stringify(next)), {
       clipStartMs: 0, clipEndMs: 3000, trimMinMs: 0, trimMaxMs: 3000,
@@ -201,12 +207,27 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     expect(reloaded.transitions?.find((t) => t.srcMs === 1033)?.type).toBe('wipe_left')
     expect(reloaded.textItems?.find((item) => item.id === text.id)).toMatchObject({ text: 'Edited after publish' })
     expect(reloaded.audio?.music).toMatchObject({ generationId: 'replacement_music', volume: 0 })
+    expect(reloaded.captionLines).toEqual([{ id: 'caption_all', startMs: 0, endMs: 3000, text: 'CAPTION THROUGH EVERY SLOT' }])
 
     // Undo/redo uses the ordinary edit snapshots; stable item/layer ids survive both directions.
     const undo = initial
     const redo = reloaded
     expect(undo.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
     expect(redo.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
+  })
+})
+
+describe('Batch 3B professional timing gate', () => {
+  it('rejects off-beat and under-specified semantic first-party timing', async () => {
+    const { validateTemplateEditorialTiming } = await import('@/lib/clips/real-video-templates/sequence-contract')
+    const beat = structuredClone(buildEditableTimelineProofCases()[1]!.family)
+    beat.slots[1] = { ...beat.slots[1]!, startFrame: 31 }
+    expect(() => validateTemplateEditorialTiming(beat)).toThrow(/not on an authored beat\/phrase accent/)
+
+    const semantic = structuredClone(buildEditableTimelineProofCases()[0]!.family)
+    semantic.timingMode = 'semantic'
+    semantic.phraseAnchors = []
+    expect(() => validateTemplateEditorialTiming(semantic)).toThrow(/requires phrase anchors/)
   })
 })
 
