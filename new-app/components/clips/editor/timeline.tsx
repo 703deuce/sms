@@ -3046,17 +3046,24 @@ export function Timeline({
             pxPerMs={pxPerMs}
           />
         ) : null}
-        {!host && item.lane === 'voice' ? (
-          <TimelineWaveform
-            peaks={voicePeaks}
-            mediaFromMs={(item.srcInMs ?? 0) - mediaOffsetMs}
-            mediaToMs={(item.srcOutMs ?? 0) - mediaOffsetMs}
-            widthPx={w}
-            visLeftPx={wavWin ? wavWin[0] - left : undefined}
-            visRightPx={wavWin ? wavWin[1] - left : undefined}
-            className="absolute inset-0 size-full text-emerald-400/90"
-          />
-        ) : null}
+        {!host && item.lane === 'voice' ? (() => {
+          const narration = edits.audio?.sfx.find((cue) => cue.voiceover === true && cue.generationId === item.id)
+          const peaks = narration ? sfxPeaks?.[item.id] : voicePeaks
+          if (!peaks) return null
+          const fromMs = narration ? narration.inMs ?? 0 : (item.srcInMs ?? 0) - mediaOffsetMs
+          const toMs = narration ? fromMs + (item.endMs - item.startMs) : (item.srcOutMs ?? 0) - mediaOffsetMs
+          return (
+            <TimelineWaveform
+              peaks={peaks}
+              mediaFromMs={fromMs}
+              mediaToMs={toMs}
+              widthPx={w}
+              visLeftPx={wavWin ? wavWin[0] - left : undefined}
+              visRightPx={wavWin ? wavWin[1] - left : undefined}
+              className="absolute inset-0 size-full text-emerald-400/90"
+            />
+          )
+        })() : null}
         {!host && item.lane === 'music' ? (
           <TimelineWaveform
             peaks={musicPeaks}

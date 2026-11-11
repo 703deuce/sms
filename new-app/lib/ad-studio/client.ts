@@ -1,4 +1,4 @@
-import type { AdAspect, AdDuration, AdMode, AdProductInput, AdStudioRun } from './types'
+import type { AdAspect, AdCommercialModelId, AdDuration, AdMode, AdProductInput, AdStudioRun } from './types'
 import { sanitizeAdStudioMessage } from './format'
 
 export type AdStudioConfig = {
@@ -68,10 +68,11 @@ export type AdStudioClient = {
   continueRun: (runId: string) => Promise<AdStudioRun>
   retryRender: (runId: string, idempotencyKey: string) => Promise<AdStudioRun>
   retryVoiceover: (runId: string, idempotencyKey: string) => Promise<AdStudioRun>
+  regenerateStill: (runId: string, variantId: string, idempotencyKey: string) => Promise<AdStudioRun>
   getFinalRender: (runId: string, download?: boolean) => Promise<AdStudioFinalRender>
   createCommercial: (
     runId: string,
-    body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean },
+    body: { variantId: string; idempotencyKey: string; voiceId?: string; voiceoverEnabled?: boolean; modelId?: AdCommercialModelId },
   ) => Promise<CommercialEnvelope>
   uploadImage: (file: File) => Promise<string>
 }
@@ -150,6 +151,18 @@ export function createAdStudioClient(): AdStudioClient {
         headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
         body: JSON.stringify({ idempotencyKey }),
       })
+      return result.run
+    },
+
+    async regenerateStill(runId, variantId, idempotencyKey) {
+      const result = await jsonRequest<RunEnvelope>(
+        `/api/ad-studio/runs/${encodeURIComponent(runId)}/image-variants/${encodeURIComponent(variantId)}/regenerate`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey },
+          body: JSON.stringify({ idempotencyKey }),
+        },
+      )
       return result.run
     },
 

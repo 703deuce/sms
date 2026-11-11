@@ -61,11 +61,11 @@ function planFor(mode: AdMode, input: AdProductInput): AdPlan {
   }
 }
 
-function variantsFor(runId: string): AdImageVariant[] {
-  return [0, 1, 2].map((index) => ({
+function variantsFor(runId: string, count = 3): AdImageVariant[] {
+  return Array.from({ length: count }, (_, index) => ({
     id: `variant_${runId}_${index}`,
     index,
-    headline: ['Make it easier', 'Built to stand out', 'Your next favorite'][index]!,
+    headline: ['Make it easier', 'Built to stand out', 'Your next favorite', 'Designed to convert', 'Make the product the hero'][index] ?? `Ad direction ${index + 1}`,
     cta: 'Shop now',
     modelId: 'mock-image-model',
     studioJobId: `studio_${runId}_${index}`,
@@ -126,6 +126,9 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       return save(run, { status: 'plan_ready', plan, creditEstimate: plan.creditEstimate })
     }
     if (run.status === 'generating') {
+      if (run.mode === 'image_to_ad') {
+        return save(run, { status: 'done', imageAds: variantsFor(run.id, 5), completedAt: nowIso() })
+      }
       return save(run, { status: 'stitching', imageAds: variantsFor(run.id) })
     }
     if (run.status === 'stitching') {
@@ -146,7 +149,7 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
 
   const config: AdStudioConfig = {
     version: 1,
-    aspects: ['9:16', '16:9', '1:1'],
+    aspects: ['9:16', '16:9', '1:1', '3:4'],
     durationsSec: [15, 30],
     modes: ['storyline', 'image_to_ad', 'image_ad_to_commercial'],
     costs: {
@@ -216,7 +219,7 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       if (run.status !== 'plan_ready') throw new AdStudioHttpError(409, 'PLAN_NOT_READY', 'Wait for the plan.')
       confirmKeys.set(runId, key)
       ticks.set(runId, 0)
-      return save(run, { status: 'generating', imageAds: variantsFor(run.id) })
+      return save(run, { status: 'generating', imageAds: variantsFor(run.id, run.mode === 'image_to_ad' ? 5 : 3) })
     },
 
     async cancel(runId) {
@@ -259,6 +262,21 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       retryVoiceoverKeys.set(runId, key)
       ticks.set(runId, 0)
       return save(run, { status: 'stitching', error: null, canRetryVoiceover: false, completedAt: null })
+    },
+
+    async regenerateStill(runId, variantId) {
+      const run = runs.get(runId)
+      if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
+      const variants = run.imageAds ?? []
+      if (!variants.some((item) => item.id === variantId)) {
+        throw new AdStudioHttpError(404, 'INVALID_PARAMS', 'Image-ad variant was not found.')
+      }
+      ticks.set(runId, 0)
+      return save(run, {
+        status: 'generating',
+        imageAds: variants.map((item) => item.id === variantId ? { ...item, status: 'planned' as const, qc: null } : item),
+        completedAt: null,
+      })
     },
 
     async getFinalRender(runId) {

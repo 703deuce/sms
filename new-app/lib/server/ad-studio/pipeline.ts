@@ -1,10 +1,10 @@
 import 'server-only'
 import { getPrisma } from '@/lib/server/db'
 import type { AdProductInput } from '@/lib/ad-studio/types'
-import { ensureAdImageVariants, advanceAdImageVariants, listAdImageVariants } from './image-variants'
+import { ensureAdImageVariants, advanceAdImageVariants, listAdImageVariants, reviewReadyPhotoAds } from './image-variants'
 import { advanceAdStudioGeneration } from './queue'
 import { ensureAdVoiceover } from './voiceover'
-import { ensureAdDestinationProject, ensureAdEditorClip, advanceAdRender } from './destination'
+import { ensureAdDestinationProject, ensureAdEditorClip, advanceAdRender, materializeDirectAdCommercial } from './destination'
 
 export const getAdStudioImages = listAdImageVariants
 
@@ -16,6 +16,30 @@ export async function advanceAdStudioRun(workspaceId: string, runId: string): Pr
   console.info('[ad-studio:b3] run_tick_begin', { runId, status: run.status, projectId: run.projectId, clipId: run.clipId })
   try {
     if (run.status === 'generating') {
+      if (run.mode === 'image_to_ad') {
+        await ensureAdImageVariants(runId, run.input as unknown as AdProductInput)
+        const images = await advanceAdImageVariants(workspaceId, runId)
+        if (images === 'failed') return
+        await reviewReadyPhotoAds(workspaceId, runId)
+        console.info('[ad-studio:r5] photo_generation_progress', { runId, imagesState: images })
+        if (images !== 'ready') return
+        await db.adStudioRun.updateMany({
+          where: { id: runId, workspaceId, status: 'generating' },
+          data: { status: 'done', completedAt: new Date(), errorCode: null, errorMessage: null },
+        })
+        console.info('[ad-studio:r5] photo_run_done', { runId })
+        return
+      }
+
+      if (run.mode === 'image_ad_to_commercial') {
+        const video = await advanceAdStudioGeneration(workspaceId, runId)
+        if (video.state === 'failed') return
+        console.info('[ad-studio:r5] direct_generation_progress', { runId, videoState: video.state, submitted: video.submitted })
+        if (video.state !== 'ready_for_stitch') return
+        await materializeDirectAdCommercial(workspaceId, runId)
+        return
+      }
+
       await ensureAdImageVariants(runId, run.input as unknown as AdProductInput)
       const video = await advanceAdStudioGeneration(workspaceId, runId)
       if (video.state === 'failed') return

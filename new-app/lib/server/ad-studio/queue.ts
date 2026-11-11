@@ -111,6 +111,7 @@ export async function advanceAdStudioGeneration(
           modelId: planned.modelId, mode: planned.referenceAssetId ? 'image_to_video' : 'text_to_video',
           prompt: planned.prompt, aspect: input.aspect,
           durationSec: window.generationDurationSec,
+          ...(run.mode === 'image_ad_to_commercial' ? { nativeAudio: true } : {}),
           ...(planned.referenceAssetId ? { referenceAssetId: planned.referenceAssetId } : {}),
         },
       })

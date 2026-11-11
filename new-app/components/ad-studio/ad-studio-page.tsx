@@ -11,7 +11,7 @@ import { cn } from '../../lib/utils'
 import { Page, PageHeader } from '../app/page-primitives'
 
 type Screen = 'home' | 'brief' | 'run' | 'history'
-type SelectableMode = Exclude<AdMode, 'image_ad_to_commercial'>
+type SelectableMode = AdMode
 type UiError = { code: string; message: string }
 
 type Props = {
@@ -22,7 +22,7 @@ type Props = {
 
 const FALLBACK_CONFIG: AdStudioConfig = {
   version: 1,
-  aspects: ['9:16', '16:9', '1:1'],
+  aspects: ['9:16', '16:9', '1:1', '3:4'],
   durationsSec: [15, 30],
   modes: ['storyline', 'image_to_ad', 'image_ad_to_commercial'],
   costs: {},
@@ -36,6 +36,11 @@ const DEFAULT_INPUT: AdProductInput = {
   imageAssetIds: [],
   voiceId: DEFAULT_T2V_VOICE.voiceId,
   voiceoverEnabled: true,
+  headline: '',
+  subHeadline: '',
+  cta: '',
+  brandColors: { primary: '#111111', secondary: '#FFFFFF' },
+  commercialModelId: 'wan-3.0',
 }
 
 const ACTIVE_STATUSES = new Set(['planning', 'confirming', 'generating', 'stitching'])
@@ -237,7 +242,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
 
   useEffect(() => {
     let cancelled = false
-    if (!run || run.status !== 'done') {
+    if (!run || run.status !== 'done' || run.mode === 'image_to_ad') {
       setFinalMedia(null)
       setFinalMediaLoading(false)
       return () => { cancelled = true }
@@ -261,12 +266,17 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         if (!cancelled) setFinalMediaLoading(false)
       })
     return () => { cancelled = true }
-  }, [liveClient, run?.id, run?.status])
+  }, [liveClient, run?.id, run?.mode, run?.status])
 
   function openMode(next: SelectableMode) {
     console.log('[ad-studio:ui] load', { step: 'mode', mode: next })
     setMode(next)
-    setInput({ ...DEFAULT_INPUT, imageAssetIds: [] })
+    setInput({
+      ...DEFAULT_INPUT,
+      imageAssetIds: [],
+      durationSec: 15,
+      voiceoverEnabled: next === 'storyline',
+    })
     setProductImage(null)
     setLogoImage(null)
     setRun(null)
@@ -284,8 +294,14 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
       showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Add at least one selling point for a storyline ad.'))
       return
     }
-    if (mode === 'image_to_ad' && !productImage) {
-      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Choose a product image before creating an image-to-ad plan.'))
+    if ((mode === 'image_to_ad' || mode === 'image_ad_to_commercial') && !productImage) {
+      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', mode === 'image_to_ad'
+        ? 'Choose a product image before creating a photo-ad plan.'
+        : 'Choose a finished ad still to animate.'))
+      return
+    }
+    if (mode === 'image_to_ad' && (!input.headline?.trim() || !input.subHeadline?.trim() || !input.cta?.trim())) {
+      showError(new AdStudioHttpError(400, 'INVALID_PARAMS', 'Headline, sub-headline, and CTA are required for photo ads.'))
       return
     }
 
@@ -320,14 +336,18 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         ...(input.brandNotes?.trim() ? { brandNotes: input.brandNotes.trim() } : { brandNotes: undefined }),
       }
       const created = await liveClient.createRun({ mode, input: normalized, idempotencyKey: createKey })
+      const next = mode === 'image_ad_to_commercial' && created.status === 'plan_ready'
+        ? await liveClient.confirm(created.id, confirmKey)
+        : created
       console.log('[ad-studio:ui] submit', {
         step: 'complete',
-        runId: created.id,
-        status: created.status,
-        imageAds: created.imageAds?.length ?? 0,
+        runId: next.id,
+        status: next.status,
+        imageAds: next.imageAds?.length ?? 0,
+        directCommercial: mode === 'image_ad_to_commercial',
       })
-      setInput(created.input)
-      setRun(created)
+      setInput(next.input)
+      setRun(next)
       setScreen('run')
       void refreshHistory().catch(showError)
     } catch (err) {
@@ -490,7 +510,8 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         variantId: variant.id,
         idempotencyKey: newIdempotencyKey(),
         voiceId: run.input.voiceId,
-        voiceoverEnabled: run.input.voiceoverEnabled,
+        voiceoverEnabled: false,
+        modelId: run.input.commercialModelId ?? 'wan-3.0',
       })
       console.log('[ad-studio:ui] commercial', {
         step: 'complete',
@@ -503,6 +524,22 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
       setConfirmKey(newIdempotencyKey())
       setScreen('run')
       void refreshHistory().catch(showError)
+    } catch (err) {
+      showError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function regenerateStill(variant: AdImageVariant) {
+    if (!run || busy || run.mode !== 'image_to_ad') return
+    setBusy(true)
+    setError(null)
+    console.log('[ad-studio:ui] still_regenerate', { step: 'begin', runId: run.id, variantId: variant.id })
+    try {
+      const next = await liveClient.regenerateStill(run.id, variant.id, newIdempotencyKey())
+      console.log('[ad-studio:ui] still_regenerate', { step: 'complete', runId: next.id, status: next.status, variantId: variant.id })
+      setRun(next)
     } catch (err) {
       showError(err)
     } finally {
@@ -534,7 +571,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
           icon={Megaphone}
           iconTone="brand"
           title="Ad Studio"
-          description="Turn a product brief or product image into a planned, reviewable ad, then finish the result in the existing editor."
+          description="Create five finished photo ads from a real product image, then animate the strongest creative into a native-audio 15s commercial. Storyline remains available for stitched multi-scene ads."
         />
 
         <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
@@ -544,7 +581,8 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
           >
             <p className="w-full px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Create</p>
             <NavButton active={screen !== 'history' && mode === 'storyline'} onClick={() => openMode('storyline')} icon={Sparkles} label="Storyline" testId="ad-studio-nav-storyline" />
-            <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Image to ad" testId="ad-studio-nav-image-to-ad" />
+            <NavButton active={screen !== 'history' && mode === 'image_to_ad'} onClick={() => openMode('image_to_ad')} icon={ImageIcon} label="Photo ads → video" testId="ad-studio-nav-image-to-ad" />
+            <NavButton active={screen !== 'history' && mode === 'image_ad_to_commercial'} onClick={() => openMode('image_ad_to_commercial')} icon={Clapperboard} label="Animate ad still" testId="ad-studio-nav-animate-still" />
             <NavButton active={screen === 'history'} onClick={() => { setScreen('history'); void refreshHistory().catch(showError) }} icon={Clapperboard} label="History" testId="ad-studio-nav-history" />
           </nav>
 
@@ -644,6 +682,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 downloadBusy={downloadBusy}
                 onDownload={() => void downloadFinalRender()}
                 onCommercial={(variant) => void makeCommercial(variant)}
+                onRegenerateStill={(variant) => void regenerateStill(variant)}
               />
             ) : null}
             {screen === 'history' ? <HistoryPanel runs={history} busy={busy} loading={historyLoading} unavailable={Boolean(historyError)} onOpen={(id) => void openHistoryRun(id)} /> : null}
@@ -724,7 +763,7 @@ function ModeHome({
         </ol>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <button
           type="button"
           data-testid="ad-studio-mode-storyline"
@@ -747,9 +786,20 @@ function ModeHome({
           <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
             <ImageIcon className="size-5" aria-hidden />
           </span>
-          <p className="mt-5 text-base font-semibold">Image to ad</p>
-          <p className="mt-1 text-sm leading-5 text-muted-foreground">Upload a real product photo, generate three static ad directions, then carry the selected creative into a 15 or 30 second commercial.</p>
-          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Start with an image <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+          <p className="mt-5 text-base font-semibold">Photo ads → 15s video</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Generate five 2K finished ad stills from your real product photo, pick a winner, then animate it as one native-audio 15s commercial.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Create five ads <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+        </button>
+        <button
+          type="button"
+          data-testid="ad-studio-mode-animate-still"
+          className="group flex min-h-44 flex-col rounded-xl border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-px hover:border-foreground/20 hover:bg-muted/20 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          onClick={() => onSelect('image_ad_to_commercial')}
+        >
+          <span className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary"><Clapperboard className="size-5" aria-hidden /></span>
+          <p className="mt-5 text-base font-semibold">Animate finished ad</p>
+          <p className="mt-1 text-sm leading-5 text-muted-foreground">Already have a finished ad still? Upload it and go straight to a single 15s Wan 3.0 or Seedance 2.5 native-audio video.</p>
+          <span className="mt-auto flex items-center gap-1 pt-5 text-sm font-medium text-primary">Animate still <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
         </button>
       </div>
 
@@ -827,10 +877,14 @@ function BriefForm({
   onSubmit: () => void
 }) {
   const sellingPointReady = input.sellingPoints.some((point) => point.trim().length > 0)
+  const photoCopyReady = Boolean(input.headline?.trim() && input.subHeadline?.trim() && input.cta?.trim() && input.brandColors?.primary)
+  const needsImage = mode === 'image_to_ad' || mode === 'image_ad_to_commercial'
   const canSubmit = input.name.trim().length > 0
     && (mode !== 'storyline' || sellingPointReady)
-    && (mode !== 'image_to_ad' || Boolean(productImage))
+    && (mode !== 'image_to_ad' || (sellingPointReady && photoCopyReady))
+    && (!needsImage || Boolean(productImage))
     && !busy
+  const aspects = mode === 'storyline' ? config.aspects.filter((aspect) => aspect !== '3:4') : config.aspects
 
   return (
     <form
@@ -842,88 +896,154 @@ function BriefForm({
       }}
     >
       <div>
-        <h1 className="text-xl font-semibold">{mode === 'storyline' ? 'Storyline brief' : 'Image-to-ad brief'}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Add the source details for this ad. You will review the generated plan before any confirmed generation starts.</p>
+        <h1 className="text-xl font-semibold">
+          {mode === 'storyline' ? 'Storyline brief' : mode === 'image_to_ad' ? 'Create 5 photo ads' : 'Animate a finished ad still'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {mode === 'storyline'
+            ? 'Build the existing stitched multi-scene commercial from a product brief.'
+            : mode === 'image_to_ad'
+              ? 'Your product photo is the source of truth. Review the five concepts before any paid still generation starts.'
+              : 'One uploaded finished still becomes one native-audio 15s commercial. No TTS or stitched-scene pass is used.'}
+        </p>
       </div>
 
       <label className="text-sm font-medium">
-        Product name
+        {mode === 'image_ad_to_commercial' ? 'Ad / product name' : 'Product name'}
         <input data-testid="ad-studio-product-name" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.name} onChange={(e) => onChange({ ...input, name: e.target.value })} required />
       </label>
 
-      <label className="text-sm font-medium">
-        Selling points
-        <textarea
-          data-testid="ad-studio-selling-points"
-          className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={input.sellingPoints.join('\n')}
-          onChange={(e) => onChange({ ...input, sellingPoints: e.target.value.split('\n') })}
-          placeholder="One selling point per line"
-        />
-      </label>
+      {mode !== 'image_ad_to_commercial' ? (
+        <label className="text-sm font-medium">
+          {mode === 'image_to_ad' ? 'Product / offer info' : 'Selling points'}
+          <textarea
+            data-testid="ad-studio-selling-points"
+            className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.sellingPoints.join('\n')}
+            onChange={(e) => onChange({ ...input, sellingPoints: e.target.value.split('\n') })}
+            placeholder={mode === 'image_to_ad' ? 'Product truth and offer details — one point per line' : 'One selling point per line'}
+          />
+        </label>
+      ) : null}
+
+      {mode === 'image_to_ad' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Headline
+              <input data-testid="ad-studio-headline" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.headline ?? ''} onChange={(e) => onChange({ ...input, headline: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Sub-headline
+              <input data-testid="ad-studio-subheadline" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.subHeadline ?? ''} onChange={(e) => onChange({ ...input, subHeadline: e.target.value })} />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium">CTA
+              <input data-testid="ad-studio-cta" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.cta ?? ''} onChange={(e) => onChange({ ...input, cta: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Primary color
+              <input data-testid="ad-studio-primary-color" type="color" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2" value={input.brandColors?.primary ?? '#111111'} onChange={(e) => onChange({ ...input, brandColors: { primary: e.target.value, secondary: input.brandColors?.secondary } })} />
+            </label>
+            <label className="text-sm font-medium">Secondary color
+              <input data-testid="ad-studio-secondary-color" type="color" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2" value={input.brandColors?.secondary ?? '#FFFFFF'} onChange={(e) => onChange({ ...input, brandColors: { primary: input.brandColors?.primary ?? '#111111', secondary: e.target.value } })} />
+            </label>
+          </div>
+        </>
+      ) : null}
+
+      {mode === 'storyline' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Product URL <span className="font-normal text-muted-foreground">(optional)</span>
+              <input data-testid="ad-studio-url" type="url" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.url ?? ''} onChange={(e) => onChange({ ...input, url: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Audience <span className="font-normal text-muted-foreground">(optional)</span>
+              <input data-testid="ad-studio-audience" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.audience ?? ''} onChange={(e) => onChange({ ...input, audience: e.target.value })} />
+            </label>
+          </div>
+          <label className="text-sm font-medium">Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
+            <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
+          </label>
+        </>
+      ) : mode === 'image_to_ad' ? (
+        <label className="text-sm font-medium">Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
+          <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
+        </label>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Product URL <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-url" type="url" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.url ?? ''} onChange={(e) => onChange({ ...input, url: e.target.value })} />
-        </label>
-        <label className="text-sm font-medium">
-          Audience <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-audience" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.audience ?? ''} onChange={(e) => onChange({ ...input, audience: e.target.value })} />
+        {mode === 'storyline' ? (
+          <label className="text-sm font-medium">Length
+            <select data-testid="ad-studio-duration" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.durationSec} onChange={(e) => onChange({ ...input, durationSec: Number(e.target.value) as AdDuration })}>
+              {config.durationsSec.map((duration) => <option key={duration} value={duration}>{duration}s</option>)}
+            </select>
+          </label>
+        ) : (
+          <div className="rounded-md border border-border bg-background px-3 py-2 text-sm"><span className="font-medium">Length</span><span className="ml-2 text-muted-foreground">15s</span></div>
+        )}
+        <label className="text-sm font-medium">Aspect
+          <select
+            data-testid="ad-studio-aspect"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.aspect}
+            onChange={(e) => {
+              const aspect = e.target.value as AdAspect
+              onChange({
+                ...input,
+                aspect,
+                ...(input.commercialModelId === 'seedance-2.0-mini' && aspect !== '1:1' ? { commercialModelId: 'wan-3.0' } : {}),
+              })
+            }}
+          >
+            {aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect}</option>)}
+          </select>
         </label>
       </div>
 
-      <label className="text-sm font-medium">
-        Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
-        <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
-      </label>
-
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm font-medium">
-          Length
-          <select data-testid="ad-studio-duration" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.durationSec} onChange={(e) => onChange({ ...input, durationSec: Number(e.target.value) as AdDuration })}>
-            {config.durationsSec.map((duration) => <option key={duration} value={duration}>{duration}s</option>)}
-          </select>
-        </label>
-        <label className="text-sm font-medium">
-          Aspect
-          <select data-testid="ad-studio-aspect" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.aspect} onChange={(e) => onChange({ ...input, aspect: e.target.value as AdAspect })}>
-            {config.aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect}</option>)}
-          </select>
-        </label>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Product image {mode === 'image_to_ad' ? <span className="text-destructive">(required)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
+          {mode === 'image_ad_to_commercial' ? 'Finished ad still' : 'Product image'} {needsImage ? <span className="text-destructive">(required)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
           <input data-testid="ad-studio-product-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onProductImage(e.target.files?.[0] ?? null)} />
         </label>
-        <label className="text-sm font-medium">
-          Logo <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-logo-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onLogoImage(e.target.files?.[0] ?? null)} />
-        </label>
+        {mode !== 'image_ad_to_commercial' ? (
+          <label className="text-sm font-medium">Logo <span className="font-normal text-muted-foreground">(optional)</span>
+            <input data-testid="ad-studio-logo-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onLogoImage(e.target.files?.[0] ?? null)} />
+          </label>
+        ) : null}
       </div>
 
-      <div className="rounded-lg border border-border bg-background/50 p-4">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            data-testid="ad-studio-voiceover-enabled"
-            type="checkbox"
-            checked={input.voiceoverEnabled !== false}
-            onChange={(e) => onChange({ ...input, voiceoverEnabled: e.target.checked })}
-          />
-          Voiceover
+      {mode !== 'storyline' ? (
+        <label className="text-sm font-medium">15s animation model
+          <select
+            data-testid="ad-studio-commercial-model"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.commercialModelId ?? 'wan-3.0'}
+            onChange={(e) => onChange({ ...input, commercialModelId: e.target.value as NonNullable<AdProductInput['commercialModelId']> })}
+          >
+            <option value="wan-3.0">Wan 3.0 · default · native audio</option>
+            <option value="seedance-2.5">Seedance 2.5 · dialogue / lip-sync · native audio</option>
+            {input.aspect === '1:1' ? <option value="seedance-2.0-mini">Seedance 2.0 Mini · 480p test · native audio</option> : null}
+          </select>
         </label>
-        <label className="mt-3 block text-sm font-medium">
-          Voice
-          <input data-testid="ad-studio-voice-id" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.voiceId ?? DEFAULT_T2V_VOICE.voiceId} onChange={(e) => onChange({ ...input, voiceId: e.target.value })} />
-          <span className="mt-1 block text-xs font-normal text-muted-foreground">Default: {DEFAULT_T2V_VOICE.voiceName}</span>
-        </label>
-      </div>
+      ) : null}
 
-      <p className="text-sm text-muted-foreground" data-testid="ad-studio-credit-estimate">Credits are shown on the generated plan.</p>
+      {mode === 'storyline' ? (
+        <div className="rounded-lg border border-border bg-background/50 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input data-testid="ad-studio-voiceover-enabled" type="checkbox" checked={input.voiceoverEnabled !== false} onChange={(e) => onChange({ ...input, voiceoverEnabled: e.target.checked })} />
+            Voiceover
+          </label>
+          <label className="mt-3 block text-sm font-medium">Voice
+            <input data-testid="ad-studio-voice-id" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.voiceId ?? DEFAULT_T2V_VOICE.voiceId} onChange={(e) => onChange({ ...input, voiceId: e.target.value })} />
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Default: {DEFAULT_T2V_VOICE.voiceName}</span>
+          </label>
+        </div>
+      ) : null}
+
+      <p className="text-sm text-muted-foreground" data-testid="ad-studio-credit-estimate">
+        {mode === 'storyline' ? 'Credits are shown on the generated plan.' : 'Credits TBD'}
+      </p>
       <button type="submit" data-testid="ad-studio-plan-cta" disabled={!canSubmit} className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-        {busy ? 'Planning…' : 'Get plan'}
+        {busy ? (mode === 'image_ad_to_commercial' ? 'Starting commercial…' : 'Planning…') : mode === 'image_ad_to_commercial' ? 'Animate → 15s commercial' : 'Get plan'}
       </button>
     </form>
   )
@@ -949,6 +1069,7 @@ function RunPanel({
   downloadBusy,
   onDownload,
   onCommercial,
+  onRegenerateStill,
 }: {
   run: AdStudioRun
   busy: boolean
@@ -963,10 +1084,11 @@ function RunPanel({
   downloadBusy: boolean
   onDownload: () => void
   onCommercial: (variant: AdImageVariant) => void
+  onRegenerateStill: (variant: AdImageVariant) => void
 }) {
   const plan = run.plan
   const credits = formatCredits(run.creditEstimate ?? plan?.creditEstimate)
-  const imageAds = (run.imageAds ?? []).slice(0, 3)
+  const imageAds = (run.imageAds ?? []).slice(0, 5)
   const canContinue = run.status === 'failed'
     && run.error?.code === 'KIE_ERROR'
     && !imageAds.some((variant) => variant.status === 'failed')
@@ -981,7 +1103,7 @@ function RunPanel({
       <div data-testid="ad-studio-failed" className="mx-auto w-full max-w-3xl rounded-xl border border-destructive/30 bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Generation failed</h1>
         <p className="mt-2 text-sm text-destructive">{run.error?.code ?? 'FAILED'}: {sanitizeAdStudioMessage(run.error?.message ?? 'Ad Studio could not complete this run.')}</p>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         {canContinue ? (
           <button type="button" data-testid="ad-studio-continue" className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground" disabled={busy} onClick={onContinue}>
             Continue without failed video scene
@@ -1012,6 +1134,30 @@ function RunPanel({
       <div data-testid="ad-studio-cancelled" className="mx-auto w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
         <h1 className="text-xl font-semibold">Run cancelled</h1>
         <p className="mt-1 text-sm text-muted-foreground">Start a new Storyline or Image to ad run from the left.</p>
+      </div>
+    )
+  }
+
+  if (run.status === 'done' && run.mode === 'image_to_ad') {
+    return (
+      <div data-testid="ad-studio-photo-ads-ready" className="mx-auto w-full max-w-5xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <h1 className="text-xl font-semibold">5 photo ads ready</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick any finished still to download or animate into one native-audio 15s commercial · Credits TBD
+        </p>
+        {plan?.photoAds ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Art director: {plan.photoAds.conceptModel} · style references loaded: {plan.photoAds.styleReferenceCount}
+          </p>
+        ) : null}
+        <ImageAdVariants
+          variants={imageAds}
+          busy={busy}
+          aspect={run.input.aspect}
+          mode={run.mode}
+          onCommercial={onCommercial}
+          onRegenerate={onRegenerateStill}
+        />
       </div>
     )
   }
@@ -1049,7 +1195,7 @@ function RunPanel({
           </button>
           <p className="mt-2 text-xs text-muted-foreground">Use the compact editor for a quick pass or open the full editor for the complete timeline.</p>
         </div>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         <div className="mt-5 flex flex-wrap gap-3">
           {run.compactEditorUrl ? (
             <Link href={run.compactEditorUrl} data-testid="ad-studio-open-compact-editor" className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">
@@ -1072,11 +1218,15 @@ function RunPanel({
         <h1 className="text-xl font-semibold">{statusLabel(run.status)}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{credits}</p>
         <p className="mt-3 text-sm text-muted-foreground">
-          {run.status === 'stitching'
-            ? 'Image ads are ready. Voiceover and final stitching are finishing now.'
-            : 'Generating image-ad variants and video scenes from the approved plan.'}
+          {run.mode === 'image_to_ad'
+            ? 'Generating five 2K finished stills. QC flags issues but never regenerates automatically.'
+            : run.mode === 'image_ad_to_commercial'
+              ? 'Animating the selected still as one native-audio 15s commercial.'
+              : run.status === 'stitching'
+                ? 'Image ads are ready. Voiceover and final stitching are finishing now.'
+                : 'Generating image-ad variants and video scenes from the approved plan.'}
         </p>
-        <ImageAdVariants variants={imageAds} busy={busy} onCommercial={onCommercial} />
+        <ImageAdVariants variants={imageAds} busy={busy} aspect={run.input.aspect} mode={run.mode} onCommercial={onCommercial} onRegenerate={onRegenerateStill} />
         <button type="button" data-testid="ad-studio-cancel" className="mt-4 rounded-md border border-border px-3 py-2 text-sm" onClick={onCancel} disabled={busy}>Cancel</button>
       </div>
     )
@@ -1095,6 +1245,19 @@ function RunPanel({
             <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">Solution</dt><dd className="mt-1">{plan.script.solution}</dd></div>
             <div className="rounded-lg border border-border bg-background/50 p-3"><dt className="text-xs font-medium text-muted-foreground">CTA</dt><dd className="mt-1">{plan.script.cta}</dd></div>
           </dl>
+          {plan.photoAds?.concepts?.length ? (
+            <div className="mt-5" data-testid="ad-studio-photo-concepts">
+              <h2 className="text-sm font-semibold">Five legacy art directions</h2>
+              <ol className="mt-2 grid gap-2 sm:grid-cols-2">
+                {plan.photoAds.concepts.map((concept, index) => (
+                  <li key={index} className="rounded-lg border border-border bg-background/50 p-3 text-sm">
+                    <p className="font-medium">{index + 1}. {concept.style}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">{concept.layoutNotes}</p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ) : null}
           <ul className="mt-4 space-y-2" data-testid="ad-studio-scenes">
             {plan.scenes.map((scene) => (
               <li key={scene.index} data-testid={`ad-studio-scene-${scene.index}`} data-source={scene.source} className="rounded-lg border border-border bg-background/50 px-3 py-3 text-sm">
@@ -1127,42 +1290,70 @@ function RunPanel({
 function ImageAdVariants({
   variants,
   busy,
+  aspect,
+  mode,
   onCommercial,
+  onRegenerate,
 }: {
   variants: AdImageVariant[]
   busy: boolean
+  aspect: AdAspect
+  mode: AdMode
   onCommercial: (variant: AdImageVariant) => void
+  onRegenerate: (variant: AdImageVariant) => void
 }) {
   if (!variants.length) return null
   return (
     <section className="mt-6" aria-labelledby="ad-image-variants-heading">
-      <h2 id="ad-image-variants-heading" className="text-sm font-semibold">Image ad variants</h2>
-      <div className="mt-3 grid gap-3 md:grid-cols-3">
-        {variants.map((variant) => (
-          <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-background/50 shadow-sm" data-testid="ad-studio-image-variant">
-            {variant.downloadUrl ? (
-              <img src={variant.downloadUrl} alt={`Generated image ad ${variant.index + 1}`} className="aspect-square w-full object-cover" />
-            ) : (
-              <div className="flex aspect-square items-center justify-center bg-muted text-xs text-muted-foreground">
-                {variant.status === 'ready' ? 'Image ready' : statusLabel(variant.status)}
-              </div>
-            )}
-            <div className="p-3">
-              <p className="text-sm font-medium">{variant.headline}</p>
-              <p className="mt-1 text-xs text-muted-foreground">{variant.cta}</p>
+      <h2 id="ad-image-variants-heading" className="text-sm font-semibold">
+        {mode === 'image_to_ad' ? 'Finished photo ads' : 'Image ad variants'}
+      </h2>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {variants.map((variant) => {
+          const flagged = variant.qc && variant.qc.decision !== 'pass'
+          return (
+            <article key={variant.id} className="overflow-hidden rounded-xl border border-border bg-background/50 shadow-sm" data-testid="ad-studio-image-variant">
               {variant.downloadUrl ? (
-                <a href={variant.downloadUrl} download data-testid="ad-studio-download-image" className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted">
-                  Download image
-                </a>
-              ) : null}
-              {variant.status === 'ready' ? (
-                <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onCommercial(variant)}>
-                  Make commercial from image ad
-                </button>
-              ) : null}
-            </div>
-          </article>
-        ))}
+                <img
+                  src={variant.downloadUrl}
+                  alt={`Generated image ad ${variant.index + 1}`}
+                  className="w-full bg-muted object-contain"
+                  style={{ aspectRatio: aspect.replace(':', ' / ') }}
+                />
+              ) : (
+                <div className="flex min-h-48 items-center justify-center bg-muted text-xs text-muted-foreground">
+                  {variant.status === 'ready' ? 'Image ready' : statusLabel(variant.status)}
+                </div>
+              )}
+              <div className="p-3">
+                <p className="text-sm font-medium">{variant.headline}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{variant.cta}</p>
+                {variant.qc ? (
+                  <div className={cn('mt-2 rounded-md border px-2 py-2 text-xs', flagged ? 'border-warning/40 bg-warning/10' : 'border-border bg-muted/30')} data-testid="ad-studio-still-qc">
+                    <p className="font-medium">QC {variant.qc.decision} · {variant.qc.weightedScore.toFixed(2)}/10</p>
+                    <p className="mt-1 text-muted-foreground">{variant.qc.reason}</p>
+                    {variant.qc.issues.length ? <p className="mt-1 text-muted-foreground">{variant.qc.issues.join(' · ')}</p> : null}
+                  </div>
+                ) : null}
+                {variant.downloadUrl ? (
+                  <a href={variant.downloadUrl} download data-testid="ad-studio-download-image" className="mt-3 inline-flex w-full items-center justify-center rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted">
+                    Download still
+                  </a>
+                ) : null}
+                {mode === 'image_to_ad' && (variant.status === 'ready' || variant.status === 'failed') ? (
+                  <button type="button" data-testid="ad-studio-regenerate-still" disabled={busy} className="mt-2 w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50" onClick={() => onRegenerate(variant)}>
+                    {busy ? 'Regenerating…' : 'Regenerate this still'}
+                  </button>
+                ) : null}
+                {variant.status === 'ready' ? (
+                  <button type="button" data-testid="ad-studio-make-commercial" disabled={busy} className="mt-2 w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50" onClick={() => onCommercial(variant)}>
+                    {mode === 'image_to_ad' ? 'Animate → 15s commercial' : 'Make commercial from image ad'}
+                  </button>
+                ) : null}
+              </div>
+            </article>
+          )
+        })}
       </div>
     </section>
   )

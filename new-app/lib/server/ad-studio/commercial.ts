@@ -1,19 +1,20 @@
 import 'server-only'
 import { z } from 'zod'
 import { getPrisma } from '@/lib/server/db'
-import { createAdRun } from '@/lib/server/ad-studio/service'
+import { confirmAdRun, createAdRun } from '@/lib/server/ad-studio/service'
 import { createDefaultStudioService } from '@/lib/studio/runtime'
 import { getStudioJobForOutput } from '@/lib/studio/jobs'
 import { adCommercialReferenceId } from '@/lib/ad-studio/commercial'
 import { adKeySchema } from '@/lib/ad-studio/validate'
 import { adInvalid } from '@/lib/ad-studio/errors'
-import type { AdProductInput } from '@/lib/ad-studio/types'
+import type { AdCommercialModelId, AdProductInput } from '@/lib/ad-studio/types'
 
 const commercialBody = z.object({
   variantId: z.string().trim().min(1).max(160),
   idempotencyKey: adKeySchema,
   voiceId: z.string().trim().min(1).max(160).optional(),
   voiceoverEnabled: z.boolean().optional(),
+  modelId: z.enum(['wan-3.0','seedance-2.5','seedance-2.0-mini','veo-3.1-lite']).optional(),
 }).strict()
 
 /** Turn an already-completed KIE image ad into a new plan-confirm commercial. */
@@ -38,7 +39,10 @@ export async function createCommercialFromImageAd(workspaceId: string, sourceRun
     create: { id: referenceAssetId, workspaceId, userId: parent.userId,
       storageKey: job.outputStorageKey, storageDriver: job.outputStorageDriver,
       contentType: job.outputContentType, kind: 'image' },
-    update: {},
+    update: {
+      storageKey: job.outputStorageKey, storageDriver: job.outputStorageDriver,
+      contentType: job.outputContentType,
+    },
   })
   console.info('[ad-studio:b3] commercial_reference_registered', {
     sourceRunId, variantId: variant.id, studioJobId: job.id, assetId: referenceAssetId,
@@ -47,12 +51,23 @@ export async function createCommercialFromImageAd(workspaceId: string, sourceRun
   // Keep the chosen image ad first for image-to-video while preserving original photos
   // as editor media sources. The brief validator allows at most 15 image assets.
   const originalPhotos = source.imageAssetIds.filter(id => id !== referenceAssetId).slice(0, 14)
-  const input: AdProductInput = { ...source, imageAssetIds: [referenceAssetId, ...originalPhotos],
-    imageVariantId: variant.id, voiceoverEnabled: parsed.data.voiceoverEnabled ?? false,
-    ...(parsed.data.voiceId ? { voiceId: parsed.data.voiceId } : {}) }
-  const result = await createAdRun(workspaceId, parent.userId, {
+  const modelId: AdCommercialModelId = parsed.data.modelId ?? 'wan-3.0'
+  const input: AdProductInput = {
+    ...source,
+    imageAssetIds: [referenceAssetId, ...originalPhotos],
+    imageVariantId: variant.id,
+    durationSec: 15,
+    commercialModelId: modelId,
+    voiceoverEnabled: false,
+  }
+  const created = await createAdRun(workspaceId, parent.userId, {
     mode: 'image_ad_to_commercial', input, idempotencyKey: parsed.data.idempotencyKey,
   })
-  console.info('[ad-studio:b3] commercial_plan_complete', { sourceRunId, runId: result.run.id, status: result.run.status })
-  return result
+  const run = created.run.status === 'plan_ready'
+    ? await confirmAdRun(workspaceId, created.run.id, parsed.data.idempotencyKey)
+    : created.run
+  console.info('[ad-studio:r5] commercial_started', {
+    sourceRunId, runId: run.id, status: run.status, modelId, nativeAudio: true,
+  })
+  return { run, created: created.created }
 }

@@ -1,4 +1,4 @@
-export const EXPORT_ASPECT_PRESETS = ['9:16', '4:5', '1:1', '16:9', '4:3', '21:9'] as const
+export const EXPORT_ASPECT_PRESETS = ['9:16', '4:5', '3:4', '1:1', '16:9', '4:3', '21:9'] as const
 export type PresetAspect = (typeof EXPORT_ASPECT_PRESETS)[number]
 export type CustomAspect = `custom:${number}x${number}`
 export type ExportAspect = PresetAspect | CustomAspect
@@ -24,6 +24,7 @@ export const CLIP_RENDER_PIPELINE_REV = `t48-${CLIP_AUDIO_RENDER_REV}-${clipsWor
 const PRESET_PARTS: Record<PresetAspect, [number, number]> = {
   '9:16': [9, 16],
   '4:5': [4, 5],
+  '3:4': [3, 4],
   '1:1': [1, 1],
   '16:9': [16, 9],
   '4:3': [4, 3],

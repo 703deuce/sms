@@ -18,7 +18,7 @@ export type AdTimelineScene = {
   uploadId?: string
 }
 
-const sceneTextStyle = (aspect: '9:16' | '16:9' | '1:1'): TextItem['style'] => ({
+const sceneTextStyle = (aspect: '9:16' | '16:9' | '1:1' | '3:4'): TextItem['style'] => ({
   font: 'Poppins',
   size: aspect === '9:16' ? 84 : 76,
   color: '#FFFFFF',
@@ -29,7 +29,7 @@ const sceneTextStyle = (aspect: '9:16' | '16:9' | '1:1'): TextItem['style'] => (
   box: { color: '#000000', opacity: 42, pad: 16 },
 })
 
-function sceneTextItem(scene: AdTimelineScene, endMs: number, aspect: '9:16' | '16:9' | '1:1'): TextItem | null {
+function sceneTextItem(scene: AdTimelineScene, endMs: number, aspect: '9:16' | '16:9' | '1:1' | '3:4'): TextItem | null {
   const text = scene.onScreenText?.trim()
   if (!text || endMs - scene.startMs < 300) return null
   return {
@@ -50,7 +50,7 @@ function sceneTextItem(scene: AdTimelineScene, endMs: number, aspect: '9:16' | '
 
 export function buildAdTimelineEdits(input: {
   durationMs: number
-  aspect: '9:16' | '16:9' | '1:1'
+  aspect: '9:16' | '16:9' | '1:1' | '3:4'
   productName: string
   scenes: AdTimelineScene[]
   productPhotos: Array<{ uploadId: string; label: string }>
@@ -193,6 +193,7 @@ export function buildAdTimelineEdits(input: {
         durMs: Math.min(input.durationMs, input.voice.durationMs),
         volume: 1,
         kind: 'audio',
+        voiceover: true,
       }] : [],
     },
   }

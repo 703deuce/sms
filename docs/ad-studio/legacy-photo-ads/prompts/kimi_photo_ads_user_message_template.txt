@@ -1,0 +1,53 @@
+Generate exactly ${count} detailed ad image prompts for this product.
+
+DIVERSITY REQUIREMENT (non-negotiable):
+Use the 14 core agency concept types only. Each of the ${count} prompts must use a DIFFERENT one of these 14 – no two prompts may share the same concept type:
+1. Hero packshot | 2. Lifestyle in-use | 3. Before/after | 4. Flatlay | 5. Detail/macro | 6. Editorial | 7. Social proof | 8. Offer/promotional | 9. UGC/authentic | 10. Ingredient/origin | 11. Comparison | 12. Conceptual/metaphor | 13. Typographic | 14. Problem/pain point
+Category and product determine which of the 14 fit best; pick ${count} distinct concept types for this batch so the set is genuinely diverse. Style reference images show execution variation (lighting, composition, setting) – the CONCEPT for each prompt must still be one of the 14 above. No two prompts same (concept mechanic + hero action).
+
+Product info:
+${req.productInfo}
+
+Headline (include this EXACT text in every prompt so it appears in the image):
+${req.headline}
+
+Sub-headline (include this EXACT text in every prompt):
+${req.subHeadline || "none"}
+
+${ctaInstructionText}
+
+Brand colors - use by role (primary for CTA buttons and accents; NOT as the default background unless tech/SaaS category):
+Primary: ${req.brandColors.primary}
+Secondary: ${req.brandColors.secondary ?? "none"}
+
+Platform: ${req.platform ?? "generic"}
+Output format: ${outputSpecForSize(req.size)}
+
+${productImageRule}
+${logoRule}
+${referenceDataUrls.length > 0 ? `Style reference images attached (${referenceDataUrls.length} image(s)). Study them carefully and let them drive layout language, composition choices, stylistic direction, and category-adjacent execution patterns. Use user copy + product truth for message and fidelity, and use these references as the primary creative direction signal.` : "No style reference images attached."}
+${noveltyMemoryText ? `\n\n${noveltyMemoryText}` : ""}
+
+Allowed style tags (use a varied mix across the batch, no tag more than twice):
+${KIMI_PHOTO_STYLE_TAGS.join(", ")}
+
+CRITICAL REQUIREMENTS:
+1. DIVERSITY: Each prompt = a different ad concept (see DIVERSITY REQUIREMENT above). Not just different background or angle.
+2. Reason from product truth + user copy + references; follow universal layout, typography, hierarchy, and lighting craft in your system instructions—without collapsing every product into the same vertical template.
+3. EXECUTION STANDARDS (apply in every prompt): (1) One tension element suited to this product—not the same trope every time. (2) One hero element — everything else supports it. (3) Optional believable micro-detail only when it helps; skip clichéd "messy desk / half-eaten food" defaults. (4) Clear visual hierarchy — specify eye path: entry → support → CTA. (5) Color intention — every color has a role (brand / emotion / contrast).
+4. Background supports the idea and product truth—not a default brand-color flood. Brand color = CTA and accents unless the concept is intentionally bold/graphic.
+5. No background color family repeats more than twice across the ${count} prompts.
+6. For wearable products (clothing, jewelry, shoes, watches): shown on a real person in at least ${wearableMinCount}/${count} prompts (~60%).
+7. Each prompt must be materially different in layout, background, lighting, framing – AND in the core creative concept.
+8. End every prompt with the style reference anchor sentence.
+9. Do not hardcode styles by index; choose styles organically from product truth + references.
+10. Camera/capture terms (fps, frame-rate, shutter-speed) are allowed for model guidance when useful.
+${textFieldInstruction}
+12. Include 1-2 prompts in a clean minimal light-background style (white/off-white/soft neutral) when on-brief, not repetitive.
+13. Keep each prompt compact-but-complete: target 300-375 words while retaining professional controls (hierarchy, layout blueprint, typography spec, lighting logic, eye flow, negatives, CTA geometry, text-safe zone, and camera metadata depth), and follow the compact universal skeleton from your system instructions.
+14. Use natural full-sentence writing, not keyword-bag formatting.
+15. Avoid repeated identical closers across all prompts; keep campaign consistency without copy-paste endings.
+16. For mirror/reflection or multi-person scenes, include a short reasoning cue for geometry/anatomy consistency.
+
+Return JSON array only. No markdown, no commentary.
+
