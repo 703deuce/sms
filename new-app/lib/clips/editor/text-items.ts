@@ -11,6 +11,7 @@
  *
  * No React imports, so lib/clips/edits.ts can use it.
  */
+import { B2B_CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest-b2b.generated'
 import { normAnim, normLayerAnim, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { CATALOG_TEMPLATES } from '@/lib/clips/editor/text-templates-catalog'
@@ -103,6 +104,7 @@ export const TEXT_FONTS = [
   { id: 'Lato', label: 'Lato Black', ass: 'Lato Black', weight: 900 },
   { id: 'Oswald', label: 'Oswald', ass: 'Oswald', weight: 400 },
   { id: 'Space Mono', label: 'Space Mono', ass: 'Space Mono', weight: 400 },
+  ...B2B_CLIP_FONT_MANIFEST.map((f) => ({ id: f.id, label: f.id, ass: f.assFamily, weight: f.cssWeight })),
 ] as const
 export type BuiltinFontId = (typeof TEXT_FONTS)[number]['id']
 /** G3b: `user:<id>` = an uploaded workspace font (clip_fonts). */

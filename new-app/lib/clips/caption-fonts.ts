@@ -1,3 +1,4 @@
+import { B2B_CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest-b2b.generated'
 import { cssFallbackStack } from '@/lib/clips/font-fallbacks'
 import metrics from '@/lib/clips/caption-font-metrics.json'
 
@@ -14,6 +15,8 @@ export function captionFontStack(font: string, resolveUser?: UserFontResolver): 
     return captionFontStack('Poppins')
   }
   if (font.startsWith('user:')) return captionFontStack('Poppins')
+  const pinned = B2B_CLIP_FONT_MANIFEST.find((row) => row.id === font || row.assFamily === font)
+  if (pinned) return `"${pinned.assFamily.replace(/"/g, '')}", sans-serif`
   if (font === 'Poppins') return `var(--font-poppins), ${cssFallbackStack('Poppins')}`
   if (font === 'Anton') return `var(--font-clip-anton), ${cssFallbackStack('Anton')}`
   if (font === 'Montserrat Black' || font === 'Montserrat')
@@ -31,6 +34,8 @@ export function captionFontStack(font: string, resolveUser?: UserFontResolver): 
 }
 
 export function captionFontWeight(font: string, presetWeight: number): number {
+  const pinned = B2B_CLIP_FONT_MANIFEST.find((row) => row.id === font || row.assFamily === font)
+  if (pinned) return pinned.cssWeight
   if (font === 'Poppins') return 800
   return presetWeight
 }

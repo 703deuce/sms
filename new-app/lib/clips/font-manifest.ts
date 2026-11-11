@@ -1,3 +1,5 @@
+import { B2B_CLIP_FONT_MANIFEST } from './font-manifest-b2b.generated'
+
 /**
  * Version 1: checked-in clip font inventory. Git blob SHA-1 is an integrity
  * identifier for the browser binary, NOT a SHA-256 digest of worker bytes.
@@ -434,6 +436,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     "licenseFile": "/fonts/clip/licenses/notoemoji-OFL.txt",
     "licenseNoticeRevision": "5bb28733cec313b63fbd415b574b5ae35c8aa8b8"
   }
+  ...B2B_CLIP_FONT_MANIFEST,
 ] as const
 
 export function findClipFont(id: string): ClipFontManifestRow | undefined {

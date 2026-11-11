@@ -7,6 +7,7 @@
  * and the preview break a chunk at the same words. Metrics: caption-fit-metrics.json (byte-identical
  * to worker/clips_worker/caption_font_metrics.json; worker/scripts/gen_caption_fit_metrics.py).
  */
+import { B2B_CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest-b2b.generated'
 import METRICS from '@/lib/clips/caption-fit-metrics.json'
 import type { ExportAspect } from '@/lib/clips/export-aspect'
 import { exportPixelSize } from '@/lib/clips/export-aspect'
@@ -54,6 +55,7 @@ const ASS_FONT_ALIASES: Record<string, string> = {
   'Noto Sans Thai': 'Noto Sans Thai',
   'Noto Sans JP': 'Noto Sans JP',
   'Noto Emoji': 'Noto Emoji',
+  ...Object.fromEntries(B2B_CLIP_FONT_MANIFEST.map((row) => [row.id, row.assFamily])),
 }
 
 export function roundHalfUp(x: number): number {

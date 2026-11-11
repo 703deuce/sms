@@ -597,3 +597,10 @@ def apply_text_items(video: Path, out: Path, edits: dict, *, play_w: int, play_h
     subprocess.check_call(cmd)
     print(f"[clipper:text_items] n={len(items)} fx={len(fx_items)}", flush=True)
     return out
+
+
+# Batch 2B: same canonical ASS names as browser preview.
+import json as _b2b_json
+from pathlib import Path as _b2b_Path
+_b2b_rows = _b2b_json.loads(_b2b_Path(__file__).with_name("font_library_b2b.json").read_text())
+TEXT_FONTS.update({r["id"]: r["assFamily"] for r in _b2b_rows})

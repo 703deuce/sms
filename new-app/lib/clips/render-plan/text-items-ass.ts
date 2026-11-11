@@ -6,6 +6,7 @@
  * worker/tests/fixtures/render_plan). Font names are the canonical libass family names
  * (EP1: "Montserrat Black" / "Poppins ExtraBold"; fontconfig resolves either, libass-wasm only these).
  */
+import { B2B_CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest-b2b.generated'
 import { textWidthPx } from '@/lib/clips/caption-fit'
 import { hasMotionPy, layerTransformAtPy, MOTION_FPS, normalizeKeyframes } from '@/lib/clips/render-plan/motion'
 import { fitDurations, frameAnim, normAnim, splitUnits, unitState, type UnitAnim } from '@/lib/clips/render-plan/text-anim'
@@ -38,6 +39,7 @@ export const TEXT_FONTS: Record<string, string> = {
   Lato: 'Lato Black',
   Oswald: 'Oswald',
   'Space Mono': 'Space Mono',
+  ...Object.fromEntries(B2B_CLIP_FONT_MANIFEST.map((f) => [f.id, f.assFamily])),
 }
 const REF_H = 1920
 const AN: Record<string, number> = { left: 4, center: 5, right: 6 }

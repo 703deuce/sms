@@ -1,3 +1,4 @@
+import { B2B_CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest-b2b.generated'
 import { Archivo_Black, Bangers, Bebas_Neue, Inter, Lato, Luckiest_Guy, Oswald } from 'next/font/google'
 
 /**
@@ -35,6 +36,7 @@ export const CLIP_EDITOR_CAPTION_FONT_FAMILIES = [
   'Caveat',
   'Space Grotesk',
   'Space Mono',
+  ...B2B_CLIP_FONT_MANIFEST.map((row) => row.id),
 ] as const
 
 /** Class names that define every `--font-clip-*` display-font variable (put on the editor root). */

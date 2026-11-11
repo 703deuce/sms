@@ -702,3 +702,11 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         )
 
     ass_path.write_text(header + "\n".join(events) + "\n")
+
+
+# Batch 2B: same pinned OFL inventory used by the browser picker.
+import json as _b2b_json
+from pathlib import Path as _b2b_Path
+_b2b_rows = _b2b_json.loads(_b2b_Path(__file__).with_name("font_library_b2b.json").read_text())
+_ASS_FONT_FILES.update({r["assFamily"]: _T6_FONTS / r["local"] for r in _b2b_rows})
+_ASS_FONT_ALIASES.update({r["id"]: r["assFamily"] for r in _b2b_rows})

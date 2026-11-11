@@ -1,0 +1,398 @@
+[
+  {
+    "id": "Abril Fatface",
+    "assFamily": "Abril Fatface",
+    "local": "B2B-abrilfatface.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Alfa Slab One",
+    "assFamily": "Alfa Slab One",
+    "local": "B2B-alfaslabone.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Allura",
+    "assFamily": "Allura",
+    "local": "B2B-allura.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Amatic SC",
+    "assFamily": "Amatic SC",
+    "local": "B2B-amaticsc.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Assistant",
+    "assFamily": "Assistant",
+    "local": "B2B-assistant.ttf",
+    "weight": 200
+  },
+  {
+    "id": "Baloo 2",
+    "assFamily": "Baloo 2",
+    "local": "B2B-baloo2.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Barlow Condensed",
+    "assFamily": "Barlow Condensed",
+    "local": "B2B-barlowcondensed.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Black Ops One",
+    "assFamily": "Black Ops One",
+    "local": "B2B-blackopsone.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Bodoni Moda",
+    "assFamily": "Bodoni Moda",
+    "local": "B2B-bodonimoda.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Bungee",
+    "assFamily": "Bungee",
+    "local": "B2B-bungee.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Cinzel",
+    "assFamily": "Cinzel",
+    "local": "B2B-cinzel.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Comfortaa",
+    "assFamily": "Comfortaa",
+    "local": "B2B-comfortaa.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Cormorant Garamond",
+    "assFamily": "Cormorant Garamond",
+    "local": "B2B-cormorantgaramond.ttf",
+    "weight": 300
+  },
+  {
+    "id": "Dancing Script",
+    "assFamily": "Dancing Script",
+    "local": "B2B-dancingscript.ttf",
+    "weight": 400
+  },
+  {
+    "id": "DM Sans",
+    "assFamily": "DM Sans",
+    "local": "B2B-dmsans.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Dosis",
+    "assFamily": "Dosis",
+    "local": "B2B-dosis.ttf",
+    "weight": 200
+  },
+  {
+    "id": "Fira Code",
+    "assFamily": "Fira Code",
+    "local": "B2B-firacode.ttf",
+    "weight": 300
+  },
+  {
+    "id": "Fjalla One",
+    "assFamily": "Fjalla One",
+    "local": "B2B-fjallaone.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Fraunces",
+    "assFamily": "Fraunces",
+    "local": "B2B-fraunces.ttf",
+    "weight": 900
+  },
+  {
+    "id": "Fredoka",
+    "assFamily": "Fredoka",
+    "local": "B2B-fredoka.ttf",
+    "weight": 300
+  },
+  {
+    "id": "Great Vibes",
+    "assFamily": "Great Vibes",
+    "local": "B2B-greatvibes.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Handlee",
+    "assFamily": "Handlee",
+    "local": "B2B-handlee.ttf",
+    "weight": 400
+  },
+  {
+    "id": "IBM Plex Mono",
+    "assFamily": "IBM Plex Mono",
+    "local": "B2B-ibmplexmono.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Inconsolata",
+    "assFamily": "Inconsolata",
+    "local": "B2B-inconsolata.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Indie Flower",
+    "assFamily": "Indie Flower",
+    "local": "B2B-indieflower.ttf",
+    "weight": 400
+  },
+  {
+    "id": "JetBrains Mono",
+    "assFamily": "JetBrains Mono",
+    "local": "B2B-jetbrainsmono.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Kalam",
+    "assFamily": "Kalam",
+    "local": "B2B-kalam.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Kaushan Script",
+    "assFamily": "Kaushan Script",
+    "local": "B2B-kaushanscript.ttf",
+    "weight": 400
+  },
+  {
+    "id": "League Gothic",
+    "assFamily": "League Gothic",
+    "local": "B2B-leaguegothic.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Libre Baskerville",
+    "assFamily": "Libre Baskerville",
+    "local": "B2B-librebaskerville.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Lobster",
+    "assFamily": "Lobster",
+    "local": "B2B-lobster.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Lora",
+    "assFamily": "Lora",
+    "local": "B2B-lora.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Manrope",
+    "assFamily": "Manrope",
+    "local": "B2B-manrope.ttf",
+    "weight": 200
+  },
+  {
+    "id": "Merriweather",
+    "assFamily": "Merriweather",
+    "local": "B2B-merriweather.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Monoton",
+    "assFamily": "Monoton",
+    "local": "B2B-monoton.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Nunito Sans",
+    "assFamily": "Nunito Sans",
+    "local": "B2B-nunitosans.ttf",
+    "weight": 200
+  },
+  {
+    "id": "Open Sans",
+    "assFamily": "Open Sans",
+    "local": "B2B-opensans.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Pacifico",
+    "assFamily": "Pacifico",
+    "local": "B2B-pacifico.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Patrick Hand",
+    "assFamily": "Patrick Hand",
+    "local": "B2B-patrickhand.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Permanent Marker",
+    "assFamily": "Permanent Marker",
+    "local": "B2B-permanentmarker.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Press Start 2P",
+    "assFamily": "Press Start 2P",
+    "local": "B2B-pressstart2p.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Quicksand",
+    "assFamily": "Quicksand",
+    "local": "B2B-quicksand.ttf",
+    "weight": 300
+  },
+  {
+    "id": "Rajdhani",
+    "assFamily": "Rajdhani",
+    "local": "B2B-rajdhani.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Righteous",
+    "assFamily": "Righteous",
+    "local": "B2B-righteous.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Roboto",
+    "assFamily": "Roboto",
+    "local": "B2B-roboto.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Roboto Condensed",
+    "assFamily": "Roboto Condensed",
+    "local": "B2B-robotocondensed.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Roboto Mono",
+    "assFamily": "Roboto Mono",
+    "local": "B2B-robotomono.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rock Salt",
+    "assFamily": "Rock Salt",
+    "local": "B2B-rocksalt.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Dirt",
+    "assFamily": "Rubik Dirt",
+    "local": "B2B-rubikdirt.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Glitch",
+    "assFamily": "Rubik Glitch",
+    "local": "B2B-rubikglitch.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Glitch Pop",
+    "assFamily": "Rubik Glitch Pop",
+    "local": "B2B-rubikglitchpop.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Moonrocks",
+    "assFamily": "Rubik Moonrocks",
+    "local": "B2B-rubikmoonrocks.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Puddles",
+    "assFamily": "Rubik Puddles",
+    "local": "B2B-rubikpuddles.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Spray Paint",
+    "assFamily": "Rubik Spray Paint",
+    "local": "B2B-rubikspraypaint.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Vinyl",
+    "assFamily": "Rubik Vinyl",
+    "local": "B2B-rubikvinyl.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Rubik Wet Paint",
+    "assFamily": "Rubik Wet Paint",
+    "local": "B2B-rubikwetpaint.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Russo One",
+    "assFamily": "Russo One",
+    "local": "B2B-russoone.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Sacramento",
+    "assFamily": "Sacramento",
+    "local": "B2B-sacramento.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Saira Condensed",
+    "assFamily": "Saira Condensed",
+    "local": "B2B-sairacondensed.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Satisfy",
+    "assFamily": "Satisfy",
+    "local": "B2B-satisfy.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Share Tech Mono",
+    "assFamily": "Share Tech Mono",
+    "local": "B2B-sharetechmono.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Source Code Pro",
+    "assFamily": "Source Code Pro",
+    "local": "B2B-sourcecodepro.ttf",
+    "weight": 200
+  },
+  {
+    "id": "Special Elite",
+    "assFamily": "Special Elite",
+    "local": "B2B-specialelite.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Teko",
+    "assFamily": "Teko",
+    "local": "B2B-teko.ttf",
+    "weight": 300
+  },
+  {
+    "id": "Varela Round",
+    "assFamily": "Varela Round",
+    "local": "B2B-varelaround.ttf",
+    "weight": 400
+  },
+  {
+    "id": "Work Sans",
+    "assFamily": "Work Sans",
+    "local": "B2B-worksans.ttf",
+    "weight": 400
+  }
+]
