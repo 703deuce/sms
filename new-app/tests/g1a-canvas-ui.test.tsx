@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 // The imported editor components transitively evaluate their font declarations at module scope.
 // Keep the production font selection untouched; only provide stable variables to this DOM test.
 vi.mock('next/font/google', () => new Proxy({}, {
-  get: (_target, key) => key === '__esModule' ? true : () => ({
+  get: (_target, key) => key === '__esModule' ? true : typeof key !== 'string' || key === 'then' ? undefined : () => ({
     className: 'test-font', variable: '--test-font', style: { fontFamily: 'Test font' },
   }),
 }))
