@@ -1,3 +1,4 @@
+// @vitest-environment happy-dom
 import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
@@ -35,8 +36,8 @@ describe('Batch 7 photo composite preview parity', () => {
     const b = screen.getByTestId('preview-layout-pane-1-video')
     expect(a.tagName).toBe('IMG')
     expect(b.tagName).toBe('IMG')
-    expect(a).toHaveAttribute('src', '/photo-a.png')
-    expect(b).toHaveAttribute('src', '/photo-b.png')
-    expect(a).toHaveAttribute('data-layout-image', '1')
+    expect(a.getAttribute('src')).toBe('/photo-a.png')
+    expect(b.getAttribute('src')).toBe('/photo-b.png')
+    expect(a.getAttribute('data-layout-image')).toBe('1')
   })
 })
