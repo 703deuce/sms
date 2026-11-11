@@ -41,10 +41,14 @@ function animation(g: MotionGraphic): TextAnim | undefined {
   if (outro) value.out = outro
   return Object.keys(value).length ? value : undefined
 }
+const MOTION_RENDER_FONTS = new Set(['Montserrat', 'Anton', 'Poppins', 'Bangers', 'Bebas Neue', 'Archivo Black', 'Luckiest Guy'])
+/** Reject unshipped families rather than silently exporting Montserrat in their place. */
+function motionFont(g: MotionGraphic): TextItem['style']['font'] {
+  if (!MOTION_RENDER_FONTS.has(g.style.fontFamily)) throw new Error('motion_font_unavailable:' + g.style.fontFamily)
+  return g.style.fontFamily as TextItem['style']['font']
+}
 function asText(g: MotionGraphic, format: MotionPlan['format']): TextItem {
-  // Only fonts shipped in BOTH the browser and CPU worker can be used here.
-  const permitted = new Set(['Montserrat', 'Anton', 'Poppins', 'Bangers', 'Bebas Neue', 'Archivo Black', 'Luckiest Guy'])
-  const font = permitted.has(g.style.fontFamily) ? g.style.fontFamily as TextItem['style']['font'] : 'Montserrat'
+  const font = motionFont(g)
   const align = g.templateId === 'lower_third' ? 'left' : 'center'
   const boxed = g.templateId === 'lower_third' || g.templateId === 'callout'
   const fit = fitMotionTextToBox({
@@ -107,7 +111,7 @@ export function addTextBackedMotionPlan(
   try {
     const groups = plan.graphics.map(g => ({ graphic: g,
       items: g.templateId === 'diagram' || g.templateId === 'bar_chart'
-        ? expandedShapeGraphic(g, plan.format) : [asText(g, plan.format)] }))
+        ? expandedShapeGraphic(g, plan.format, motionFont(g)) : [asText(g, plan.format)] }))
     generated = groups.flatMap(group => group.items)
     generatedKeyframes = groups.flatMap(group =>
       motionKeyframeTracks(group.graphic, group.items.map(item => item.id)))
