@@ -9,6 +9,7 @@ import { uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
+import { aspectCss, aspectRatioParts, type ExportAspect } from '@/lib/clips/export-aspect'
 import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
 import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelection,
   newStudioDraft, type StudioDraft, type StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
@@ -472,6 +473,15 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const ready = project?.status === 'READY' && Boolean(clip && project.clipId)
   const musicReady = !release.musicRequired || Boolean(draft?.music && draft?.templateMusic && draft.musicRightsConfirmed)
   const canPublish = progress.filled === progress.total && musicReady && project?.status === 'DRAFT' && !busy
+  const previewAspect = (release.family.aspects[0] ?? '9:16') as ExportAspect
+  const previewFrameMaxH = 640
+  const { aw: previewAw, ah: previewAh } = aspectRatioParts(previewAspect)
+  const previewFrameStyle = {
+    aspectRatio: aspectCss(previewAspect),
+    maxHeight: previewFrameMaxH,
+    width: '100%' as const,
+    maxWidth: Math.round(previewFrameMaxH * (previewAw / previewAh)),
+  }
   return (
     <div className="mx-auto max-w-[1560px] space-y-5 px-4 py-6 sm:px-6" data-testid="video-template-studio">
       <nav className="text-xs text-muted-foreground" aria-label="Breadcrumb">
@@ -510,15 +520,21 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
               <span className="text-xs text-muted-foreground">{ready ? 'Shared editor/worker frame mapping' : 'Source review'}</span>
             </div>
             {ready && clip ? <>
-              <PreviewStage clipId={project?.clipId} edits={clip.edits} videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
-                posterUrl={clip.mediaUrls.poster} media={clip.media} cropTrack={clip.crop.track}
-                words={[]} videoRef={videoRef} sourceUrls={sourceUrls}
-                onTick={tick => {
-                  syncMusicPreview(tick.outputMs, videoRef.current?.paused === false)
-                  const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
-                    lastClockRounded.current = frame; setClockMs(tick.outputMs)
-                  }
-                }} />
+              <div
+                className="relative mx-auto overflow-hidden rounded-xl bg-black"
+                style={previewFrameStyle}
+                data-testid="video-template-preview-frame"
+              >
+                <PreviewStage clipId={project?.clipId} edits={clip.edits} videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
+                  posterUrl={clip.mediaUrls.poster} media={clip.media} cropTrack={clip.crop.track}
+                  words={[]} videoRef={videoRef} sourceUrls={sourceUrls}
+                  onTick={tick => {
+                    syncMusicPreview(tick.outputMs, videoRef.current?.paused === false)
+                    const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
+                      lastClockRounded.current = frame; setClockMs(tick.outputMs)
+                    }
+                  }} />
+              </div>
               {musicMedia?.url && musicConfig ? <audio
                 ref={musicAudioRef}
                 src={musicMedia.url}

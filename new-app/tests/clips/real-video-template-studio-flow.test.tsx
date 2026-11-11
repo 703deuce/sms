@@ -213,6 +213,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     expect(screen.getByText('2 of 2 filled')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Prepare full preview and project' }))
     expect(await screen.findByTestId('template-native-preview')).toBeTruthy()
+    expect(screen.getByTestId('video-template-preview-frame')).toBeTruthy()
     expect(backend.project?.id).toBe('proj_fixture')
     expect(backend.draft?.slots.first.asset.id).toBe('photo_a')
     expect(backend.draft?.slots.second.asset.id).toBe('photo_b')
