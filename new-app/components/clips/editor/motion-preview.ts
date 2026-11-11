@@ -195,9 +195,13 @@ export function syncClone(
         if (Math.abs(media.currentTime - sf.mediaTimeSec) > (playing ? 0.12 : 0.02)) {
           try { media.currentTime = sf.mediaTimeSec } catch { /* metadata not ready */ }
         }
-        media.playbackRate = rate * sf.rateMultiplier
-        if (playing && media.paused) void media.play().catch(() => {})
-        if (!playing && !media.paused) media.pause()
+        if (sf.rateMultiplier > 0) {
+          media.playbackRate = rate * sf.rateMultiplier
+          if (playing && media.paused) void media.play().catch(() => {})
+          if (!playing && !media.paused) media.pause()
+        } else if (!media.paused) {
+          media.pause()
+        }
       }
     })
   }

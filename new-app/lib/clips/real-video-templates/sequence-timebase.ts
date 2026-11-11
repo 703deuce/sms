@@ -1,3 +1,4 @@
+import { normalizeSourceSegmentPlayback, sourcePlaybackSample } from '@/lib/clips/editor/sources'
 import type { TemplateSequenceItem, TemplateSequenceV1 } from './sequence-contract'
 
 /**
@@ -29,6 +30,11 @@ function assertValidSequence(sequence: TemplateSequenceV1) {
       item.outputStartFrame !== cursor || item.outputEndFrame <= cursor ||
       !Number.isFinite(item.speed ?? 1) || (item.speed ?? 1) < 0.25 || (item.speed ?? 1) > 4)
       throw new Error('sequence has a gap, overlap or invalid media in-point')
+    if (item.playback) {
+      const normalized = normalizeSourceSegmentPlayback(item.playback)
+      if (!normalized || normalized.outputFrames !== item.outputEndFrame - item.outputStartFrame || item.speed != null)
+        throw new Error('sequence has invalid slot-local playback')
+    }
     cursor = item.outputEndFrame
   }
   if (cursor !== sequence.totalFrames) throw new Error('sequence does not cover full duration')
@@ -40,7 +46,10 @@ export function outputToSequenceFrame(sequence: TemplateSequenceV1, outputFrame:
   const local = outputFrame - item.outputStartFrame
   return {
     itemId: item.id, slotId: item.slotId, sourceId: item.assetId,
-    outputFrame, itemLocalFrame: local, mediaFrame: item.mediaInFrame + local * (item.speed ?? 1),
+    outputFrame, itemLocalFrame: local,
+    mediaFrame: item.mediaInFrame + (item.playback
+      ? sourcePlaybackSample(item.playback, local).mediaOffsetFrame
+      : local * (item.speed ?? 1)),
   }
 }
 export function itemLocalToSequenceFrame(sequence: TemplateSequenceV1, itemId: string, itemFrame: number): SequenceFrameLocation {
@@ -57,6 +66,14 @@ export function sourceToSequenceFrames(sequence: TemplateSequenceV1, assetId: st
   const out: SequenceFrameLocation[] = []
   for (const item of sequence.items) {
     if (item.assetId !== assetId) continue
+    if (item.playback) {
+      for (let local = 0; local < item.outputEndFrame - item.outputStartFrame; local++) {
+        const candidate = item.mediaInFrame + sourcePlaybackSample(item.playback, local).mediaOffsetFrame
+        if (Math.abs(candidate - mediaFrame) <= 1e-7)
+          out.push(itemLocalToSequenceFrame(sequence, item.id, local))
+      }
+      continue
+    }
     const local = (mediaFrame - item.mediaInFrame) / (item.speed ?? 1)
     const rounded = Math.round(local)
     if (rounded < 0 || rounded >= item.outputEndFrame - item.outputStartFrame || Math.abs(local - rounded) > 1e-7) continue

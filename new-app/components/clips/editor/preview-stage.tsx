@@ -104,7 +104,7 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
-import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
+import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentPlaybackRate, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -808,10 +808,15 @@ export function PreviewStage({
             if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
             const muted = segmentAudio(sseg, s) === 'main' || voiceOutputMutedRef.current
             if (el.muted !== muted) el.muted = muted
-            const sourceRate = (v?.playbackRate ?? rate) * (sseg.speed ?? 1)
-            if (el.playbackRate !== sourceRate) el.playbackRate = sourceRate
-            if (v && !v.paused && el.paused) void el.play().catch(() => {})
-            if (v && v.paused && !el.paused) el.pause()
+            const localRate = sourceSegmentPlaybackRate(sseg, s, src)
+            if (localRate > 0) {
+              const sourceRate = (v?.playbackRate ?? rate) * localRate
+              if (el.playbackRate !== sourceRate) el.playbackRate = sourceRate
+              if (v && !v.paused && el.paused) void el.play().catch(() => {})
+              if (v && v.paused && !el.paused) el.pause()
+            } else if (!el.paused) {
+              el.pause()
+            }
           } else {
             if (!el.paused) el.pause()
             if (!el.muted) el.muted = true
@@ -1064,7 +1069,7 @@ export function PreviewStage({
               transform: transform.transform,
               clipPath: transform.clipPath,
               filter: sourceSegmentFxCss(seg.fx),
-              rateMultiplier: seg.speed ?? 1,
+              rateMultiplier: sourceSegmentPlaybackRate(seg, source, targetSrcMs),
             }
           },
           exportW: (() => {

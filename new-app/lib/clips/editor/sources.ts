@@ -56,6 +56,22 @@ export type SourceSegmentTransform = {
   cropB?: number
 }
 
+export const SOURCE_PLAYBACK_FPS = 30
+export type SourcePlaybackPiece =
+  | { kind: 'play'; frames: number; rate: number }
+  | { kind: 'hold'; frames: number }
+export type SourceSegmentPlayback = {
+  v: 1
+  fps: 30
+  outputFrames: number
+  pieces: SourcePlaybackPiece[]
+}
+export type SourcePlaybackSample = {
+  mediaOffsetFrame: number
+  rate: number
+  held: boolean
+}
+
 export type ClipMediaSource = {
   /** Stable id inside the clip (= refId; one entry per media). */
   id: string
@@ -82,6 +98,8 @@ export type SourceSegment = {
   fit?: SourceFit
   /** B3 fixed-duration source playback rate; output span stays unchanged. */
   speed?: number
+  /** B6 opt-in item-local 30fps rate/hold plan. Output time never moves. */
+  playback?: SourceSegmentPlayback
   /** B3 template-slot transform; also editable on ordinary source segments. */
   transform?: SourceSegmentTransform
   /** B3 small, worker-mirrored per-slot look. */
@@ -183,6 +201,69 @@ function safeId(v: unknown): string {
   return /^[A-Za-z0-9_:.~-]{1,120}$/.test(s) ? s : ''
 }
 
+export function normalizeSourceSegmentPlayback(raw: unknown): SourceSegmentPlayback | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  if (o.v !== 1 || o.fps !== SOURCE_PLAYBACK_FPS || !Number.isSafeInteger(o.outputFrames) || Number(o.outputFrames) < 1 || !Array.isArray(o.pieces) || !o.pieces.length)
+    return undefined
+  const pieces: SourcePlaybackPiece[] = []
+  let total = 0
+  for (const value of o.pieces) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const p = value as Record<string, unknown>
+    if (!Number.isSafeInteger(p.frames) || Number(p.frames) < 1) return undefined
+    const frames = Number(p.frames)
+    if (p.kind === 'hold') {
+      pieces.push({ kind: 'hold', frames })
+    } else if (p.kind === 'play') {
+      const rate = Number(p.rate)
+      if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) return undefined
+      pieces.push({ kind: 'play', frames, rate: Math.round(rate * 1000) / 1000 })
+    } else {
+      return undefined
+    }
+    total += frames
+  }
+  if (total !== Number(o.outputFrames)) return undefined
+  return { v: 1, fps: SOURCE_PLAYBACK_FPS, outputFrames: total, pieces }
+}
+
+/**
+ * B6 output/item-local frame -> source-frame offset. Negative/overflow frames are deliberate
+ * transition-handle samples: endpoint play rates extrapolate, while endpoint holds remain frozen.
+ */
+export function sourcePlaybackSample(playback: SourceSegmentPlayback, localFrame: number): SourcePlaybackSample {
+  if (!Number.isFinite(localFrame) || !playback.pieces.length) throw new RangeError('source playback: invalid frame')
+  const first = playback.pieces[0]!
+  if (localFrame < 0) {
+    const rate = first.kind === 'play' ? first.rate : 0
+    return { mediaOffsetFrame: rate ? localFrame * rate : 0, rate, held: rate === 0 }
+  }
+  let output = 0
+  let source = 0
+  let lastSample = 0
+  for (const piece of playback.pieces) {
+    if (localFrame < output + piece.frames) {
+      if (piece.kind === 'hold') return { mediaOffsetFrame: lastSample, rate: 0, held: true }
+      return { mediaOffsetFrame: source + (localFrame - output) * piece.rate, rate: piece.rate, held: false }
+    }
+    if (piece.kind === 'play') {
+      lastSample = source + (piece.frames - 1) * piece.rate
+      source += piece.frames * piece.rate
+    }
+    output += piece.frames
+  }
+  const last = playback.pieces[playback.pieces.length - 1]!
+  const rate = last.kind === 'play' ? last.rate : 0
+  return {
+    mediaOffsetFrame: rate
+      ? lastSample + (localFrame - (playback.outputFrames - 1)) * rate
+      : lastSample,
+    rate,
+    held: rate === 0,
+  }
+}
+
 export function normalizeMediaSources(raw: unknown, youtubeLongForm = false): ClipMediaSource[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const out: ClipMediaSource[] = []
@@ -250,8 +331,9 @@ export function normalizeSourceSegments(
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
     const layout = normalizeSegmentLayout(o.layout, sources, src.id)
+    const playback = src.mediaType === 'video' ? normalizeSourceSegmentPlayback(o.playback) : undefined
     const rawSpeed = finite(o.speed)
-    const speed = rawSpeed != null && src.mediaType === 'video' && Math.abs(rawSpeed - 1) >= 0.0001
+    const speed = !playback && rawSpeed != null && src.mediaType === 'video' && Math.abs(rawSpeed - 1) >= 0.0001
       ? Math.round(clamp(rawSpeed, 0.25, 4) * 1000) / 1000
       : undefined
     const transform = normalizeSourceSegmentTransform(o.transform)
@@ -267,6 +349,7 @@ export function normalizeSourceSegments(
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
       ...(speed ? { speed } : {}),
+      ...(playback ? { playback } : {}),
       ...(transform ? { transform } : {}),
       ...(fx ? { fx } : {}),
       ...(layout ? { layout } : {}),
@@ -323,14 +406,25 @@ export function sourceSegmentAt(segs: readonly SourceSegment[] | undefined, srcM
 }
 
 export function isSynced(seg: SourceSegment, source: ClipMediaSource | undefined): boolean {
-  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined && seg.speed === undefined)
+  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined && seg.speed === undefined && seg.playback === undefined)
 }
 
 /** Media ms of `source` shown at main source ms `srcMs` inside `seg`. */
 export function segmentMediaMs(seg: SourceSegment, source: ClipMediaSource | undefined, srcMs: number): number {
   if (!source || source.mediaType === 'image') return 0
   if (isSynced(seg, source)) return Math.max(0, srcMs + (source.syncMs ?? 0))
+  if (seg.playback) {
+    const localFrame = (srcMs - seg.startMs) * SOURCE_PLAYBACK_FPS / 1000
+    const sample = sourcePlaybackSample(seg.playback, localFrame)
+    return Math.max(0, (seg.inMs ?? 0) + sample.mediaOffsetFrame * 1000 / SOURCE_PLAYBACK_FPS)
+  }
   return Math.max(0, (seg.inMs ?? 0) + (srcMs - seg.startMs) * (seg.speed ?? 1))
+}
+
+export function sourceSegmentPlaybackRate(seg: SourceSegment, source: ClipMediaSource | undefined, srcMs: number): number {
+  if (!source || source.mediaType !== 'video') return 1
+  if (!seg.playback) return seg.speed ?? 1
+  return sourcePlaybackSample(seg.playback, (srcMs - seg.startMs) * SOURCE_PLAYBACK_FPS / 1000).rate
 }
 
 export function segmentAudio(seg: SourceSegment, source: ClipMediaSource | undefined): SourceAudio {

@@ -1,51 +1,178 @@
 import { describe, expect, it } from 'vitest'
-import { sampleTemplatePlayback, sampleTemplateTransition, validateTemplatePlayback } from '@/lib/clips/real-video-templates/slot-playback'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
+import {
+  TEMPLATE_TRANSITION_TYPES,
+  TEMPLATE_UNAVAILABLE_TRANSITION_TYPES,
+  compileTemplatePrototype,
+  type TemplateAsset,
+  type TemplateChoices,
+} from '@/lib/clips/real-video-templates/sequence-contract'
+import {
+  compileTemplatePlayback,
+  playbackRequiredHandleFrames,
+  sampleTemplatePlayback,
+} from '@/lib/clips/real-video-templates/slot-playback'
+import { outputToSequenceFrame, sourceToSequenceFrames } from '@/lib/clips/real-video-templates/sequence-timebase'
+import { segmentMediaMs, sourceSegmentPlaybackRate } from '@/lib/clips/editor/sources'
 
-describe('Batch 6 opt-in slot-local timing contract', () => {
-  const slot = {
-    outputFrames: 15,
-    sourceInFrame: 30,
-    sourceDurationFrames: 100,
-    headFrames: 5,
-    tailFrames: 5,
-    pieces: [
-      { kind: 'play' as const, frames: 5, rate: 0.5 },
-      { kind: 'hold' as const, frames: 3 },
-      { kind: 'play' as const, frames: 7, rate: 2 },
-    ],
-  }
+const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 180): TemplateAsset => ({
+  id,
+  kind,
+  ...(kind === 'image' ? {} : { durationFrames: frames }),
+  license: { id: 'license_1', provenance: 'user-owned', reference: 'library_1' },
+})
+const carrier = {
+  durationFrames: 30,
+  edits: {
+    v: 2,
+    trim: { in: 0, out: 1000 },
+    cutRanges: [],
+    wordFixes: {},
+    captions: {},
+    layout: { mode: 'full_frame', shotOverrides: [] },
+  } as ClipEditsV2,
+}
+const design = {
+  schemaVersion: 1,
+  designId: 'design_b6',
+  revision: 1,
+  stylePackId: 'style_b6',
+  familyId: 'family_b6',
+  familyRevision: 1,
+  musicPolicy: 'licensed-only',
+}
+const family = {
+  schemaVersion: 1,
+  familyId: 'family_b6',
+  revision: 1,
+  title: 'B6 playback proof',
+  tags: ['beat'],
+  aspects: ['9:16'],
+  fps: 30,
+  totalFrames: 30,
+  slots: [
+    {
+      id: 'shot_1',
+      ordinal: 1,
+      role: 'hero',
+      media: 'video',
+      startFrame: 0,
+      durationFrames: 15,
+      sourceInFrame: 24,
+      handles: { headFrames: 8, tailFrames: 8 },
+      fit: 'cover',
+      sourceAudio: 'source',
+      playback: {
+        pieces: [
+          { kind: 'play', frames: 5, rate: 0.5 },
+          { kind: 'hold', frames: 3 },
+          { kind: 'curve', frames: 7, curve: 'ramp_up' },
+        ],
+      },
+      transition: 'cut',
+      transform: { scale: 112, x: 4 },
+      fx: { contrast: 8 },
+    },
+    {
+      id: 'shot_2',
+      ordinal: 2,
+      role: 'closing',
+      media: 'video',
+      startFrame: 15,
+      durationFrames: 15,
+      sourceInFrame: 20,
+      handles: { headFrames: 8, tailFrames: 0 },
+      fit: 'contain',
+      sourceAudio: 'mute',
+      transition: { type: 'crossfade', durationFrames: 6 },
+    },
+  ],
+  texts: [{
+    id: 'headline',
+    defaultText: 'Output clock stays put',
+    maxChars: 80,
+    startFrame: 0,
+    durationFrames: 30,
+    x: 50,
+    y: 20,
+    font: 'Montserrat',
+    size: 58,
+    color: '#FFFFFF',
+  }],
+  graphics: [{
+    id: 'bar',
+    type: 'rect',
+    startFrame: 0,
+    durationFrames: 30,
+    x: 50,
+    y: 80,
+    w: 50,
+    h: 4,
+    color: '#FFFFFF',
+  }],
+  beatAnchors: [0, 15],
+}
+const choices: TemplateChoices = {
+  instanceId: 'instance_b6',
+  media: {
+    shot_1: asset('video_a', 'video'),
+    shot_2: asset('video_b', 'video'),
+  },
+  music: asset('music_b6', 'audio', 240),
+}
 
-  it('keeps output duration fixed as source slows, freezes, and accelerates', () => {
-    validateTemplatePlayback(slot)
-    expect(sampleTemplatePlayback(slot, 0)).toEqual({ outputLocalFrame: 0, mediaFrame: 30, held: false })
-    expect(sampleTemplatePlayback(slot, 4).mediaFrame).toBe(32)
-    expect(sampleTemplatePlayback(slot, 5)).toEqual({ outputLocalFrame: 5, mediaFrame: 32, held: true })
-    expect(sampleTemplatePlayback(slot, 7).mediaFrame).toBe(32)
-    expect(sampleTemplatePlayback(slot, 8).mediaFrame).toBe(32.5)
-    expect(sampleTemplatePlayback(slot, 14).mediaFrame).toBe(44.5)
+describe('real-video template B6 slot-local playback', () => {
+  it('expands a speed curve + freeze into one exact output-frame plan', () => {
+    const plan = compileTemplatePlayback(family.slots[0].playback, 15)
+    expect(plan.outputFrames).toBe(15)
+    expect(plan.pieces.reduce((n, p) => n + p.frames, 0)).toBe(15)
+    expect(sampleTemplatePlayback(plan, 24, 5).mediaFrame).toBe(sampleTemplatePlayback(plan, 24, 7).mediaFrame)
+    expect(sampleTemplatePlayback(plan, 24, 5).held).toBe(true)
+    expect(playbackRequiredHandleFrames(plan, 'tail', 3)).toBeGreaterThan(0)
   })
 
-  it('refuses implicit source extrapolation and missing frames', () => {
-    expect(() => validateTemplatePlayback({ ...slot, outputFrames: 16 })).toThrow('fill output')
-    expect(() => validateTemplatePlayback({ ...slot, sourceDurationFrames: 44 })).toThrow('source too short')
-    expect(() => sampleTemplatePlayback(slot, 15)).toThrow(RangeError)
-    expect(() => validateTemplatePlayback({ ...slot, pieces: [{ kind: 'hold' as const, frames: 15 }], sourceInFrame: 0, headFrames: 5 })).toThrow('head handle')
+  it('compiles the plan into ClipEditsV2 without moving text/graphics/music', () => {
+    const result = compileTemplatePrototype(family, design, choices, carrier)
+    const first = result.edits.sourceSegments?.[0]
+    expect(first?.playback?.outputFrames).toBe(15)
+    expect(first?.speed).toBeUndefined()
+    expect(first?.transform).toEqual({ scale: 112, x: 4 })
+    expect(first?.fx).toEqual({ contrast: 8 })
+    expect(result.edits.transitions).toEqual([{ srcMs: 500, type: 'crossfade', durMs: 200 }])
+    expect(result.edits.textItems?.[0]).toMatchObject({ startMs: 0, endMs: 1000 })
+    expect(result.edits.textItems?.[1]).toMatchObject({ startMs: 0, endMs: 1000 })
+    expect(result.edits.audio?.music).toMatchObject({ startMs: 0, endMs: 1000, loop: true })
+    expect(result.sequence.items[0]?.playback?.outputFrames).toBe(15)
+
+    const heldA = outputToSequenceFrame(result.sequence, 5).mediaFrame
+    const heldB = outputToSequenceFrame(result.sequence, 7).mediaFrame
+    expect(heldA).toBe(heldB)
+    const repeated = sourceToSequenceFrames(result.sequence, 'video_a', heldA)
+    expect(repeated.map((x) => x.outputFrame)).toEqual([4, 5, 6, 7])
+    expect(segmentMediaMs(first!, result.edits.sources?.[0], 200)).toBeGreaterThanOrEqual(0)
+    expect(sourceSegmentPlaybackRate(first!, result.edits.sources?.[0], 200)).toBe(0)
   })
 
-  it('returns real A/B source frames in centered transitions without shortening authored shots', () => {
-    const left = { outputFrames: 15, sourceInFrame: 20, sourceDurationFrames: 80,
-      pieces: [{ kind: 'play' as const, frames: 15, rate: 1 }], tailFrames: 5 }
-    const right = { outputFrames: 15, sourceInFrame: 20, sourceDurationFrames: 80,
-      pieces: [{ kind: 'play' as const, frames: 15, rate: 1 }], headFrames: 5 }
-    expect(sampleTemplateTransition(left, right, 0, 6)).toEqual({ outgoingFrame: 32, incomingFrame: 17, mix: 1 / 12 })
-    expect(sampleTemplateTransition(left, right, 5, 6)).toEqual({ outgoingFrame: 37, incomingFrame: 22, mix: 11 / 12 })
-    expect(left.outputFrames + right.outputFrames).toBe(30)
-    expect(() => sampleTemplateTransition(left, { ...right, sourceInFrame: 0, headFrames: 0 }, 0, 6)).toThrow('source handles')
+  it('keeps shader variants explicit and rejects unproven catalog variants', () => {
+    expect(TEMPLATE_TRANSITION_TYPES).toEqual(expect.arrayContaining(['crossfade','dip_white','zoom_blur','whip_pan','glitch']))
+    expect(TEMPLATE_UNAVAILABLE_TRANSITION_TYPES).toEqual(expect.arrayContaining(['dip_black','zoom_in','blur']))
   })
 
-  it('allows half-second shots and repeated source references in any order', () => {
-    const a = { outputFrames: 15, sourceInFrame: 10, sourceDurationFrames: 30, pieces: [{ kind: 'play' as const, frames: 15, rate: 1 }] }
-    const b = { ...a, sourceInFrame: 2 }
-    expect([b, a, b].map(s => sampleTemplatePlayback(s, 14).mediaFrame)).toEqual([16, 24, 16])
+  it('fails fast instead of truncating insufficient source media', () => {
+    const short: TemplateChoices = {
+      ...choices,
+      media: { ...choices.media, shot_1: asset('short_a', 'video', 30) },
+    }
+    expect(() => compileTemplatePrototype(family, design, short, carrier)).toThrow(/video too short/)
+  })
+
+  it('does not allow playback plans on photo assignments', () => {
+    const photoFamily = structuredClone(family)
+    photoFamily.slots[0].media = 'either'
+    const photoChoices: TemplateChoices = {
+      ...choices,
+      media: { ...choices.media, shot_1: asset('photo_a', 'image') },
+    }
+    expect(() => compileTemplatePrototype(photoFamily, design, photoChoices, carrier)).toThrow(/playback speed requires video media/)
   })
 })

@@ -1,138 +1,147 @@
 /**
- * Standalone template slot-local playback sampler. This is an opt-in planning primitive:
- * no legacy ClipEditsV2 field or renderer is changed by importing it.
- *
- * Time domains: output/item are integer frames at 30fps; media is a real-valued source
- * frame. A hold samples the last advancing frame, while output time (music/text) continues.
- * A curve changes SOURCE progress only; it never moves cuts or output-clock overlays.
+ * B6 template slot-local playback. The authored slot duration is immutable; this module only maps
+ * output/item-local 30fps frames to source frames. Holds freeze picture/source audio while text,
+ * graphics, transitions and music stay on the output clock.
  */
+import { CURVE_PIECES, SPEED_CURVE_IDS, curveSpeedAt, type SpeedCurveId } from '@/lib/clips/editor/speed-curves'
+import { clampSpeed } from '@/lib/clips/editor/speed'
+import {
+  SOURCE_PLAYBACK_FPS,
+  normalizeSourceSegmentPlayback,
+  sourcePlaybackSample,
+  type SourceSegmentPlayback,
+} from '@/lib/clips/editor/sources'
+
 export type TemplatePlaybackPiece =
   | { kind: 'play'; frames: number; rate: number }
   | { kind: 'hold'; frames: number }
+  | { kind: 'curve'; frames: number; curve: SpeedCurveId }
 
-export type TemplateSlotPlayback = {
-  outputFrames: number
-  sourceInFrame: number
-  sourceDurationFrames: number
-  pieces: readonly TemplatePlaybackPiece[]
-  headFrames?: number
-  tailFrames?: number
+export type TemplateSlotPlaybackSpec = {
+  pieces: TemplatePlaybackPiece[]
 }
 
-export type TemplatePlaybackSample = {
-  outputLocalFrame: number
-  mediaFrame: number
-  held: boolean
+const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+const posInt = (v: unknown) => Number.isSafeInteger(v) && Number(v) > 0
+const exact = (o: Record<string, unknown>, allowed: readonly string[], context: string) => {
+  for (const k of Object.keys(o)) if (!allowed.includes(k)) throw new Error(context + ': unsupported field ' + k)
 }
 
-const validInt = (n: number) => Number.isSafeInteger(n) && n >= 0
-
-/** A complete output-frame plan; no silent truncation, extrapolation or appending. */
-export function validateTemplatePlayback(slot: TemplateSlotPlayback): void {
-  if (!validInt(slot.outputFrames) || slot.outputFrames < 1 ||
-      !validInt(slot.sourceInFrame) ||
-      !validInt(slot.sourceDurationFrames) || slot.sourceDurationFrames < 1 ||
-      !validInt(slot.headFrames ?? 0) || !validInt(slot.tailFrames ?? 0) ||
-      !Array.isArray(slot.pieces) || !slot.pieces.length)
-    throw new Error('template playback: invalid duration, handle or piece')
-  let output = 0
-  let source = slot.sourceInFrame
-  if (source < (slot.headFrames ?? 0))
-    throw new Error('template playback: missing head handle')
-  for (const piece of slot.pieces) {
-    if (!validInt(piece.frames) || piece.frames < 1)
-      throw new Error('template playback: piece must contain full output frames')
-    if (piece.kind === 'play') {
-      if (!Number.isFinite(piece.rate) || piece.rate < 0.25 || piece.rate > 4)
-        throw new Error('template playback: rate must be 0.25..4')
-      // The last sampled frame, not the exclusive end of the next sample.
-      const last = source + (piece.frames - 1) * piece.rate
-      if (last >= slot.sourceDurationFrames)
-        throw new Error('template playback: source too short')
-      source += piece.frames * piece.rate
-    } else if (piece.kind !== 'hold') {
-      throw new Error('template playback: unsupported piece')
+export function validateTemplatePlaybackSpec(raw: unknown, outputFrames: number): TemplateSlotPlaybackSpec {
+  if (!object(raw)) throw new Error('slot.playback: expected object')
+  exact(raw, ['pieces'], 'slot.playback')
+  if (!Array.isArray(raw.pieces) || !raw.pieces.length) throw new Error('slot.playback: pieces required')
+  const pieces: TemplatePlaybackPiece[] = []
+  let total = 0
+  for (const value of raw.pieces) {
+    if (!object(value) || !posInt(value.frames)) throw new Error('slot.playback: invalid piece')
+    const frames = Number(value.frames)
+    if (value.kind === 'hold') {
+      exact(value, ['kind','frames'], 'slot.playback.hold')
+      pieces.push({ kind: 'hold', frames })
+    } else if (value.kind === 'play') {
+      exact(value, ['kind','frames','rate'], 'slot.playback.play')
+      const rate = Number(value.rate)
+      if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) throw new Error('slot.playback: rate must be 0.25..4')
+      const rounded = Math.round(rate * 1000) / 1000
+      if (Math.abs(rate - rounded) > 1e-9) throw new Error('slot.playback: rate precision is 3 decimals')
+      pieces.push({ kind: 'play', frames, rate: rounded })
+    } else if (value.kind === 'curve') {
+      exact(value, ['kind','frames','curve'], 'slot.playback.curve')
+      if (!(SPEED_CURVE_IDS as readonly unknown[]).includes(value.curve))
+        throw new Error('slot.playback: unsupported curve')
+      pieces.push({ kind: 'curve', frames, curve: value.curve as SpeedCurveId })
+    } else {
+      throw new Error('slot.playback: unsupported piece')
     }
-    output += piece.frames
-    if (output > slot.outputFrames) throw new Error('template playback: pieces exceed slot')
+    total += frames
   }
-  if (output !== slot.outputFrames) throw new Error('template playback: pieces must fill output')
-  const finalSample = sampleTemplatePlaybackUnchecked(slot, output - 1).mediaFrame
-  if (finalSample + (slot.tailFrames ?? 0) >= slot.sourceDurationFrames)
-    throw new Error('template playback: missing tail handle')
+  if (total !== outputFrames) throw new Error('slot.playback: pieces must fill slot output exactly')
+  return { pieces }
 }
 
-/** Source frame to sample for an output-local frame, including a deliberate freeze. */
-function sampleTemplatePlaybackUnchecked(slot: TemplateSlotPlayback, localFrame: number): TemplatePlaybackSample {
-  let output = 0
-  let source = slot.sourceInFrame
-  let lastSample = source
-  for (const piece of slot.pieces) {
-    if (localFrame < output + piece.frames) {
-      if (piece.kind === 'hold')
-        return { outputLocalFrame: localFrame, mediaFrame: lastSample, held: true }
-      return { outputLocalFrame: localFrame, mediaFrame: source + (localFrame - output) * piece.rate, held: false }
+function pushPiece(out: SourceSegmentPlayback['pieces'], piece: SourceSegmentPlayback['pieces'][number]) {
+  const prev = out[out.length - 1]
+  if (piece.kind === 'hold' && prev?.kind === 'hold') {
+    prev.frames += piece.frames
+    return
+  }
+  if (piece.kind === 'play' && prev?.kind === 'play' && prev.rate === piece.rate) {
+    prev.frames += piece.frames
+    return
+  }
+  out.push({ ...piece })
+}
+
+export function compileTemplatePlayback(raw: unknown, outputFrames: number): SourceSegmentPlayback {
+  const spec = validateTemplatePlaybackSpec(raw, outputFrames)
+  const pieces: SourceSegmentPlayback['pieces'] = []
+  for (const piece of spec.pieces) {
+    if (piece.kind === 'hold') {
+      pushPiece(pieces, { kind: 'hold', frames: piece.frames })
+      continue
     }
     if (piece.kind === 'play') {
-      lastSample = source + (piece.frames - 1) * piece.rate
-      source += piece.frames * piece.rate
+      pushPiece(pieces, { kind: 'play', frames: piece.frames, rate: piece.rate })
+      continue
     }
-    output += piece.frames
+    const n = Math.max(1, Math.min(CURVE_PIECES, piece.frames))
+    for (let i = 0; i < n; i++) {
+      const a = Math.round(piece.frames * i / n)
+      const b = Math.round(piece.frames * (i + 1) / n)
+      if (b <= a) continue
+      const rate = clampSpeed(Math.round(curveSpeedAt(piece.curve, (i + 0.5) / n) * 20) / 20)
+      pushPiece(pieces, { kind: 'play', frames: b - a, rate })
+    }
   }
-  throw new RangeError('template playback: frame outside slot')
+  const plan = normalizeSourceSegmentPlayback({ v: 1, fps: SOURCE_PLAYBACK_FPS, outputFrames, pieces })
+  if (!plan) throw new Error('slot.playback: failed canonical expansion')
+  return plan
 }
 
-export function sampleTemplatePlayback(slot: TemplateSlotPlayback, localFrame: number): TemplatePlaybackSample {
-  validateTemplatePlayback(slot)
-  if (!validInt(localFrame) || localFrame >= slot.outputFrames)
-    throw new RangeError('template playback: frame outside slot')
-  return sampleTemplatePlaybackUnchecked(slot, localFrame)
+export function sampleTemplatePlayback(playback: SourceSegmentPlayback, sourceInFrame: number, localFrame: number) {
+  const sample = sourcePlaybackSample(playback, localFrame)
+  return {
+    outputLocalFrame: localFrame,
+    mediaFrame: sourceInFrame + sample.mediaOffsetFrame,
+    rate: sample.rate,
+    held: sample.held,
+  }
 }
 
-/**
- * A centered cross-source transition does not consume the authored timeline.
- * Both A/B samples are returned in the same OUTPUT frame; caller blends them.
- * The caller must validate and render the actual cross-source frames, not a
- * post-composite insert, and must not duplicate source audio.
- */
-export function sampleTemplateTransition(
-  outgoing: TemplateSlotPlayback,
-  incoming: TemplateSlotPlayback,
-  incomingLocalFrame: number,
-  durationFrames: number,
-): { outgoingFrame: number; incomingFrame: number; mix: number } {
-  validateTemplatePlayback(outgoing)
-  validateTemplatePlayback(incoming)
-  if (!validInt(durationFrames) || durationFrames < 2 ||
-      !validInt(incomingLocalFrame) || incomingLocalFrame >= durationFrames)
-    throw new RangeError('template transition: invalid window/frame')
-  const left = Math.floor(durationFrames / 2)
-  const right = durationFrames - left
-  if (left > outgoing.outputFrames || right > incoming.outputFrames)
-    throw new Error('template transition: window exceeds adjacent shots')
-  // During the outgoing half, B needs a head handle; during incoming half, A needs a tail.
-  // A handle's source sample uses the endpoint rate (hold = stationary).
-  const outEnd = sampleTemplatePlaybackUnchecked(outgoing, outgoing.outputFrames - 1).mediaFrame
-  const inStart = sampleTemplatePlaybackUnchecked(incoming, 0).mediaFrame
-  const outLastRate = lastPlaybackRate(outgoing)
-  const inFirstRate = firstPlaybackRate(incoming)
-  const outFrame = incomingLocalFrame < left
-    ? sampleTemplatePlaybackUnchecked(outgoing, outgoing.outputFrames - left + incomingLocalFrame).mediaFrame
-    : outEnd + (incomingLocalFrame - left + 1) * outLastRate
-  const inFrame = incomingLocalFrame < left
-    ? inStart - (left - incomingLocalFrame) * inFirstRate
-    : sampleTemplatePlaybackUnchecked(incoming, incomingLocalFrame - left).mediaFrame
-  if (outFrame < 0 || outFrame >= outgoing.sourceDurationFrames ||
-      inFrame < 0 || inFrame >= incoming.sourceDurationFrames)
-    throw new Error('template transition: source handles unavailable')
-  return { outgoingFrame: outFrame, incomingFrame: inFrame, mix: (incomingLocalFrame + 0.5) / durationFrames }
+export function playbackSourceBounds(
+  playback: SourceSegmentPlayback,
+  sourceInFrame: number,
+  fromLocalFrame = 0,
+  toLocalFrame = playback.outputFrames - 1,
+): { minFrame: number; maxFrame: number } {
+  if (!Number.isInteger(fromLocalFrame) || !Number.isInteger(toLocalFrame) || toLocalFrame < fromLocalFrame)
+    throw new RangeError('slot.playback: invalid bounds')
+  let minFrame = Infinity
+  let maxFrame = -Infinity
+  for (let frame = fromLocalFrame; frame <= toLocalFrame; frame++) {
+    const media = sampleTemplatePlayback(playback, sourceInFrame, frame).mediaFrame
+    minFrame = Math.min(minFrame, media)
+    maxFrame = Math.max(maxFrame, media)
+  }
+  return { minFrame, maxFrame }
 }
 
-function firstPlaybackRate(slot: TemplateSlotPlayback): number {
-  const first = slot.pieces[0]!
-  return first.kind === 'play' ? first.rate : 0
-}
-function lastPlaybackRate(slot: TemplateSlotPlayback): number {
-  const last = slot.pieces[slot.pieces.length - 1]!
-  return last.kind === 'play' ? last.rate : 0
+export function playbackRequiredHandleFrames(
+  playback: SourceSegmentPlayback,
+  side: 'head' | 'tail',
+  outputHandleFrames: number,
+): number {
+  if (!Number.isInteger(outputHandleFrames) || outputHandleFrames < 0)
+    throw new RangeError('slot.playback: invalid transition handle')
+  if (!outputHandleFrames) return 0
+  if (side === 'head') {
+    const atCut = sourcePlaybackSample(playback, 0).mediaOffsetFrame
+    const edge = sourcePlaybackSample(playback, -outputHandleFrames).mediaOffsetFrame
+    return Math.ceil(Math.max(0, atCut - edge))
+  }
+  const end = playback.outputFrames - 1
+  const atCut = sourcePlaybackSample(playback, end).mediaOffsetFrame
+  const edge = sourcePlaybackSample(playback, end + outputHandleFrames).mediaOffsetFrame
+  return Math.ceil(Math.max(0, edge - atCut))
 }
