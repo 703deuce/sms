@@ -19,6 +19,22 @@ export function VideoTemplatesGallery() {
   const [favorites, setFavorites] = useState<string[]>([])
   const [onlyFavorites, setOnlyFavorites] = useState(false)
   const [sound, setSound] = useState<string | null>(null)
+  const [mine, setMine] = useState<Array<{
+    id: string; title: string; releaseId: string; status: string; updatedAt: string
+  }>>([])
+  const [mineError, setMineError] = useState<string | null>(null)
+  useEffect(() => {
+    if (scope !== 'mine') return
+    let live = true
+    fetch('/api/clips/video-templates/drafts', { cache: 'no-store' })
+      .then(async response => {
+        const body = await response.json() as { data?: { items: typeof mine }; error?: string }
+        if (!response.ok || !body.data) throw new Error(body.error ?? 'Could not load template projects')
+        if (live) { setMine(body.data.items); setMineError(null) }
+      })
+      .catch(error => { if (live) setMineError(error instanceof Error ? error.message : 'Load failed') })
+    return () => { live = false }
+  }, [scope])
   useEffect(() => {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
@@ -152,9 +168,27 @@ export function VideoTemplatesGallery() {
           <span className="text-sm">Page {result.page} of {result.pages}</span>
           <button type="button" disabled={result.page === result.pages} onClick={() => setPage(p => Math.min(result.pages, p + 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
         </nav>}
-      </> : <section role="tabpanel" className="rounded-2xl border border-dashed p-10 text-center">
-        <h2 className="font-semibold">{scope === 'community' ? 'Community gallery is not published yet' : 'Private template library is not available yet'}</h2>
-        <p className="mt-2 text-sm text-muted-foreground">No public sharing or private templates are implied until their workspace-safe workflows are implemented.</p>
+      </> : scope === 'mine' ? <section role="tabpanel" aria-label="My template projects" className="space-y-3">
+        {mineError && <p role="alert" className="rounded-xl border p-4 text-sm text-destructive">{mineError}</p>}
+        {mine.length === 0 && !mineError && <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+          No private video-template drafts or projects yet.
+        </p>}
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {mine.map(item => {
+            const available = FIRST_PARTY_VIDEO_TEMPLATES.some(release => release.id === item.releaseId)
+            return <article key={item.id} className="space-y-2 rounded-xl border bg-card p-4">
+              <h2 className="font-semibold">{item.title}</h2>
+              <p className="text-xs text-muted-foreground">{item.status} · Updated {new Date(item.updatedAt).toLocaleString()}</p>
+              {available
+                ? <Link href={'/app/clips/video-templates/' + encodeURIComponent(item.releaseId) + '?draft=' + encodeURIComponent(item.id)}
+                    className="inline-block rounded-xl border px-4 py-2 text-sm">Resume private project</Link>
+                : <p className="text-xs text-muted-foreground">The original template release is unavailable. Your project has not been deleted.</p>}
+            </article>
+          })}
+        </div>
+      </section> : <section role="tabpanel" className="rounded-2xl border border-dashed p-10 text-center">
+        <h2 className="font-semibold">Community gallery is not published yet</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Community submissions require opt-in moderation before public listing. Your private drafts are never shared automatically.</p>
       </section>}
     </main>
   )
