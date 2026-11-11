@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset, type TemplateFamilyV1, type TemplateSlot } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSequenceFrame, itemLocalToSequenceFrame, sourceToSequenceFrames, frameToMs } from '@/lib/clips/real-video-templates/sequence-timebase'
 
-const slot = (n: number, frames = 30) => ({
+const slot = (n: number, frames = 30): TemplateSlot => ({
   id: `shot_${n}`, ordinal: n, role: 'hero', media: 'either',
   startFrame: (n - 1) * frames, durationFrames: frames, fit: 'cover',
   sourceAudio: 'mute', transition: 'cut',
 })
-const family = (count: number) => ({
+const family = (count: number): TemplateFamilyV1 => ({
   schemaVersion: 1, familyId: 'family_a', revision: 2, title: 'Sequence proof',
   tags: ['story'], aspects: ['9:16'], fps: 30, totalFrames: count * 30,
   slots: Array.from({ length: count }, (_, i) => slot(i + 1)),
