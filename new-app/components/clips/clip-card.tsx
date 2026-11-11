@@ -179,7 +179,7 @@ export function ClipCard({
         method: 'PATCH',
         body: JSON.stringify({ hidden: true, disliked: true }),
       })
-      toast.success('Clip hidden — finding a replacement…', { id: tid })
+      toast.success('Feedback saved — clip hidden', { id: tid })
       onHidden(clip.id)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not hide clip', { id: tid })
