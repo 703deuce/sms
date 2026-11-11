@@ -5,7 +5,7 @@
  * real render: only actual existing worker MP4/PNG plus verified QA can release.
  */
 import { createHash } from 'node:crypto'
-import { createReadStream, existsSync, mkdirSync, readFileSync, renameSync,
+import { createReadStream, existsSync, mkdirSync, readFileSync, readdirSync, renameSync,
   rmSync, openSync, closeSync, writeFileSync } from 'node:fs'
 import { resolve, dirname, join, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
@@ -425,10 +425,12 @@ function mergeMachineEvidence(next:B8Evidence){
 async function runRemoteWorkerJob(
   c:B8Candidate,fixtures:FixtureManifest,job:B8QueueJobState,remote:B8RemoteConfig,
 ){
+  const started=performance.now()
   const requestPath=preparePreviewRequest(c,fixtures,job.cacheKey)
   const request=readJSON<PreparedB8WorkerRequest>(requestPath)
   if(request.cacheKey!==job.cacheKey||request.definitionHash!==job.definitionHash)
     throw new Error('Prepared worker request is stale')
+  const publishStarted=performance.now()
   const published=await b8ApiJson<RemotePublished>(remote,'/api/clips/video-templates/publish',{
     method:'POST',body:JSON.stringify({
       idempotencyKey:'b8qa_'+job.cacheKey.slice(0,32),title:'B8 QA '+c.id,
@@ -436,7 +438,9 @@ async function runRemoteWorkerJob(
       choices:request.authoring.choices,
     }),
   })
+  const publishMs=Math.round(performance.now()-publishStarted)
   const timeoutMs=remoteTimeoutMs(),pollMs=remotePollMs()
+  const previewStarted=performance.now()
   await b8Poll<RemoteProjectStatus>({
     read:()=>b8ApiJson(remote,'/api/clips/projects/'+encodeURIComponent(published.data.projectId)+'/status'),
     done:value=>value.data.status==='READY',
@@ -444,6 +448,7 @@ async function runRemoteWorkerJob(
       ? value.data.error||value.data.status:null,
     timeoutMs,pollMs,label:'template carrier/preview '+c.id,
   })
+  const previewReadyMs=Math.round(performance.now()-previewStarted)
   const detail=await b8ApiJson<RemoteClipDetail>(
     remote,'/api/clips/clips/'+encodeURIComponent(published.data.clipId))
   if(!detail.data.mediaUrls.preview)throw new Error('Worker finished without a real preview MP4')
@@ -460,6 +465,7 @@ async function runRemoteWorkerJob(
   const root='/templates/b8-qa/'+c.id
   const previewUrl=root+'/preview.mp4',renderUrl=root+'/render.mp4',posterUrl=root+'/poster.png'
   await b8Download(remote,detail.data.mediaUrls.preview,fileInPublic(previewUrl))
+  const exportStarted=performance.now()
   const exportResult=await b8ApiJson<RemoteExport>(
     remote,'/api/clips/clips/'+encodeURIComponent(published.data.clipId)+'/export',{
       method:'POST',body:JSON.stringify({resolution:'720p',aspect:request.authoring.family.aspects[0],
@@ -477,6 +483,8 @@ async function runRemoteWorkerJob(
     ready={...ready,...polled.data}
   }
   if(!ready.downloadUrl)throw new Error('Worker export completed without a download URL')
+  const exportReadyMs=Math.round(performance.now()-exportStarted)
+  const downloadQaStarted=performance.now()
   const renderFile=fileInPublic(renderUrl)
   await b8Download(remote,ready.downloadUrl,renderFile)
   extractPoster(renderFile,fileInPublic(posterUrl),request.renderTiming.totalFrames)
@@ -497,8 +505,11 @@ async function runRemoteWorkerJob(
     qa.firstLastNotBlack&&qa.boundariesNotBlack&&qa.fullFrameParity&&qa.noExcessFlashing)}
   const merged=mergeMachineEvidence(evidence)
   const evidenceFile=join(directory,'render-evidence',c.id+'.json')
+  const downloadAndQaMs=Math.round(performance.now()-downloadQaStarted)
+  const totalMs=Math.round(performance.now()-started)
   save(evidenceFile,{v:1,cacheKey:job.cacheKey,projectId:published.data.projectId,
     clipId:published.data.clipId,renderId:exportResult.data.renderId,evidence:merged,
+    timings:{publishMs,previewReadyMs,exportReadyMs,downloadAndQaMs,totalMs},
     note:'Actual worker media + machine QA. Human review fields remain false/empty until inspected.'})
   return evidenceFile
 }
@@ -752,15 +763,41 @@ async function execute(){
     }else console.log(JSON.stringify({defined:report.defined,previewed:report.previewed,
       autoRenderPass:report.autoRenderPass,editorReviewed:report.editorReviewed,
       released:report.released,community:report.community},null,2))
+  }else if(command==='benchmark-real'){
+    const root=join(directory,'render-evidence')
+    const rows=existsSync(root)?readdirSync(root).filter(name=>name.endsWith('.json')).flatMap(name=>{
+      try{
+        const row=readJSON<{timings?:{publishMs:number;previewReadyMs:number;exportReadyMs:number;
+          downloadAndQaMs:number;totalMs:number}}>(join(root,name))
+        return row.timings?[row.timings]:[]
+      }catch{return []}
+    }):[]
+    if(!rows.length)throw new Error('No actual worker timing evidence exists yet')
+    const percentile=(values:number[],p:number)=>{
+      const sorted=[...values].sort((a,b)=>a-b)
+      return sorted[Math.min(sorted.length-1,Math.max(0,Math.ceil(sorted.length*p)-1))]!
+    }
+    const metric=(key:keyof (typeof rows)[number])=>{
+      const values=rows.map(row=>row[key])
+      return {minMs:Math.min(...values),p50Ms:percentile(values,.5),
+        p95Ms:percentile(values,.95),maxMs:Math.max(...values),
+        meanMs:Math.round(values.reduce((a,b)=>a+b,0)/values.length)}
+    }
+    const report={kind:'actual_worker_runs',samples:rows.length,
+      publish:metric('publishMs'),previewWorker:metric('previewReadyMs'),
+      exportWorker:metric('exportReadyMs'),downloadAndFullFrameQA:metric('downloadAndQaMs'),
+      total:metric('totalMs')}
+    save(join(directory,'benchmark-real.json'),report)
+    console.log(JSON.stringify(report,null,2))
   }else if(command==='benchmark'){
     const start=performance.now()
     for(const c of candidates)proveB8Structure(c)
     const ms=Math.round(performance.now()-start)
     save(join(directory,'benchmark.json'),{kind:'compiler_only',candidates:candidates.length,ms,
-      warning:'Actual FFmpeg incremental rerender benchmark requires worker output and fixtures.'})
+      warning:'Use benchmark-real after render-queue for measured worker timings.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | render-queue (--all | --shard N) [--limit N] --base-url <app> | qa-media <id> | qa-all | claim/cancel/fail/retry/resume/complete <id> | quality-report | contact-sheet | release-manifest | benchmark')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | render-queue (--all | --shard N) [--limit N] --base-url <app> | qa-media <id> | qa-all | claim/cancel/fail/retry/resume/complete <id> | quality-report | contact-sheet | release-manifest | benchmark | benchmark-real')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})

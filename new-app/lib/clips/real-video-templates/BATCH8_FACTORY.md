@@ -182,8 +182,10 @@ real-render or reference-review requirements.
 - Unicode glyph shaping, moving-background text readability, semantic beat
   quality and reference-quality scoring still require real rendered inspection;
   the static lint cannot truthfully certify those from source data alone.
-- Incremental worker-render performance benchmarks require actual worker runs
-  and cannot be fabricated by the repository-only factory.
+- Actual worker performance numbers cannot exist before worker runs. Once
+  `render-queue` has produced real evidence, `benchmark-real` aggregates
+  measured publish, preview-worker, export-worker, download/full-frame-QA and
+  end-to-end timings (min/p50/p95/max/mean) from those runs.
 - Releasing through the public user-template flow requires its Batch 15
   sanitization/moderation contract and must never bypass review.
 - Compact/full Timeline integration stays deferred per the 12:27 PM
@@ -246,3 +248,10 @@ full-frame/audio QA, and writes a machine evidence record. Successful jobs move
 to `rendered`, not `done`; human glyph/readability/reference/rights/quality
 review is still required before `complete`/release. The local runner caps
 parallel worker leases at two and keeps the existing three-attempt limit.
+
+## Real worker benchmark
+
+Every `render-queue` evidence record now stores measured stage durations for
+publish, carrier/preview readiness, the forced export worker, download plus
+full-frame/audio QA, and total elapsed time. `benchmark-real` aggregates only
+those actual records; it never substitutes compiler timing for render timing.
