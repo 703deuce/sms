@@ -3755,6 +3755,7 @@ export function EditorShell({
               <EditorModeSwitcher
                 current="clip"
                 producerOpen={producerOpen}
+                disabled={fullVideoMode.loading}
                 onSelect={(mode) => {
                   console.info('[editor:compact-gaps] mode-selected', { projectId, clipId, mode })
                   if (mode === 'clip') return
