@@ -94,3 +94,6 @@ describe('Batch 5 editor surface', () => {
     expect(action.querySelector('span')?.className).not.toContain('sr-only')
   })
 })
+
+// Batch 3: include the new pure compiler contract regression in the existing editor CI gate.
+import './clips/real-video-templates-b3.test'
