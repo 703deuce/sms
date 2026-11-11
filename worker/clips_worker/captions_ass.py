@@ -57,6 +57,8 @@ _ASS_FONT_FILES: dict[str, Path] = {
     "Noto Sans Devanagari": _INTL_FONTS / "NotoSansDevanagari-Regular.ttf",
     "Noto Sans Thai": _INTL_FONTS / "NotoSansThai-Regular.ttf",
     "Noto Sans CJK JP": _INTL_FONTS / "NotoSansCJK.ttc",
+    "Noto Sans JP": _T6_FONTS / "NotoSansJP.ttf",
+    "Noto Emoji": _T6_FONTS / "NotoEmoji.ttf",
 }
 _ASS_FONT_ALIASES: dict[str, str] = {
     "Poppins": "Poppins ExtraBold",
