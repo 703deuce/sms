@@ -98,6 +98,12 @@ export function createSupabaseStorageDriver(): ClipStorageDriver {
       const text = await data.text()
       return JSON.parse(text) as T
     },
+    async getObjectBytes(objectKey: string): Promise<Buffer> {
+      const { supabase, bucket } = client()
+      const { data, error } = await supabase.storage.from(bucket).download(objectKey)
+      if (error || !data) throw new Error(error?.message || 'download failed')
+      return Buffer.from(await data.arrayBuffer())
+    },
     async createSignedDownloadUrl(
       objectKey: string,
       expiresInSec: number,

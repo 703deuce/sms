@@ -23,6 +23,7 @@ describe('finalizeAssembledUploadToStorageKey', () => {
       putStream: vi.fn(),
       getJson: vi.fn(),
       createSignedDownloadUrl: vi.fn(),
+      getObjectBytes: vi.fn(),
       getObjectSizeBytes: vi.fn().mockResolvedValue(1024),
     }
 
@@ -44,6 +45,7 @@ describe('finalizeAssembledUploadToStorageKey', () => {
       putStream: vi.fn(),
       getJson: vi.fn(),
       createSignedDownloadUrl: vi.fn(),
+      getObjectBytes: vi.fn(),
       getObjectSizeBytes: vi.fn(),
     }
     await expect(

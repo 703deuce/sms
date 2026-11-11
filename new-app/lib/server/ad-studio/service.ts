@@ -14,6 +14,7 @@ import { advanceAdStudioRun, getAdStudioImages } from '@/lib/server/ad-studio/pi
 import { advanceAdRender, ensureAdEditorClip } from '@/lib/server/ad-studio/destination'
 import { ensureAdVoiceover } from '@/lib/server/ad-studio/voiceover'
 import { generatePhotoAdConcepts } from '@/lib/server/ad-studio/photo-ads'
+import { safeAdStudioLogMessage } from '@/lib/server/ad-studio/log-safe'
 import { getStudioModel } from '@/lib/studio/models'
 import type { AdImageVariant } from '@/lib/ad-studio/types'
 
@@ -243,7 +244,8 @@ async function performPlanning(row: Existing): Promise<AdStudioRun> {
     console.info('[ad-studio:planning] complete', { runId: row.id, status: result.status })
     return toView(result)
   } catch (err) {
-    console.error('[ad-studio:planning] failed', { runId: row.id, kind: err instanceof Error ? err.name : typeof err })
+    const log = safeAdStudioLogMessage(err)
+    console.error('[ad-studio:planning] failed', { runId: row.id, kind: log.name, message: log.message })
     const failure = err instanceof AdStudioError ? err : adSafeFailure(err, 'STOCK_ERROR')
     const updated = await prisma().adStudioRun.updateMany({
       where: { id: row.id, workspaceId: row.workspaceId, status: 'planning' },
