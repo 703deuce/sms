@@ -136,8 +136,14 @@ async function execute(){
       media[slot.id]={id:source.id,kind:source.kind,license:source.license,
         ...(source.durationFrames?{durationFrames:source.durationFrames}:{})}
     })
+    // Video sources must begin after authored incoming source handles; images can hold
+    // without advancing media time. Never render a clip at 0 with missing handles.
+    const sampledFamily={...c.family,slots:c.family.slots.map(slot=>({
+      ...slot,...(media[slot.id]?.kind==='video'
+        ? {sourceInFrame:slot.handles?.headFrames??0} : {}),
+    }))}
     const duration=templateFrameToMs(c.family.totalFrames)
-    const edits=compileTemplate(c.family,c.design,{instanceId:'b8_qa_'+c.familyId,media},
+    const edits=compileTemplate(sampledFamily,c.design,{instanceId:'b8_qa_'+c.familyId,media},
       {durationFrames:c.family.totalFrames,edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
     const dest=join(directory,'preview-requests',c.id+'.json')
     save(dest,{v:1,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
@@ -156,6 +162,7 @@ async function execute(){
       diskGiBPerJob:8,maxAttempts:3,checkpoint:'jobs.json',shardCount})
     console.log('Queued '+jobs.length+' deterministic cached jobs for existing worker adapter.')
   }else if(['claim','cancel','fail','retry','resume','complete'].includes(command)){
+    const completedEvidence=command==='complete'?await verifiedEvidence():[]
     withQueueLock(()=>{
       const jobs=loadQueue(),id=args[1],job=id?jobs.find(j=>j.id===id):undefined
       if(command!=='resume'&&!job)throw new Error('Job ID is required')
@@ -167,7 +174,8 @@ async function execute(){
              jobs.filter(j=>j.runStatus==='running').length>=2)throw new Error('Job lease unavailable')
           job.runStatus='running';job.attempts++
         }else if(command==='cancel'){
-          if(job.runStatus==='done')throw new Error('Cannot cancel completed QA')
+          if(job.runStatus==='running'||job.runStatus==='done')
+            throw new Error('Already-running work needs worker-coordinated cancellation')
           job.runStatus='canceled'
         }else if(command==='fail'){
           if(job.runStatus!=='running')throw new Error('Job is not claimed')
@@ -176,7 +184,12 @@ async function execute(){
           if(job.runStatus!=='failed'||job.attempts>=3)throw new Error('Retry limit reached')
           job.runStatus='queued';delete job.error
         }else if(command==='complete'){
-          throw new Error('Complete requires verified render evidence; use quality-report and release-manifest, not a manual success toggle')
+          if(job.runStatus!=='running')throw new Error('Job must be claimed to finish')
+          const e=completedEvidence.find(row=>row.id===job.id)
+          const candidate=index.get(job.id)
+          if(!candidate||!e||auditB8Evidence(candidate,e).length)
+            throw new Error('Job cannot be completed without actual hashed worker output and passing review evidence')
+          job.runStatus='done';delete job.error
         }
       }
       save(join(directory,'jobs.json'),jobs)
