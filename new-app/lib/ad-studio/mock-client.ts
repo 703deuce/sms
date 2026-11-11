@@ -80,6 +80,7 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
   const createKeys = new Map<string, string>()
   const confirmKeys = new Map<string, string>()
   const retryRenderKeys = new Map<string, string>()
+  const retryVoiceoverKeys = new Map<string, string>()
   const ticks = new Map<string, number>()
   let seq = 0
   let assetSeq = 0
@@ -245,6 +246,19 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       retryRenderKeys.set(runId, key)
       ticks.set(runId, 0)
       return save(run, { status: 'stitching', error: null, canRetryRender: false, completedAt: null })
+    },
+
+    async retryVoiceover(runId, key) {
+      const run = runs.get(runId)
+      if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
+      const prior = retryVoiceoverKeys.get(runId)
+      if (prior === key && (run.status === 'stitching' || run.status === 'done')) return copy(run)
+      if (run.status !== 'failed' || run.canRetryVoiceover !== true) {
+        throw new AdStudioHttpError(409, 'INVALID_PARAMS', 'Only an eligible voiceover failure can be retried.')
+      }
+      retryVoiceoverKeys.set(runId, key)
+      ticks.set(runId, 0)
+      return save(run, { status: 'stitching', error: null, canRetryVoiceover: false, completedAt: null })
     },
 
     async getFinalRender(runId) {
