@@ -27,8 +27,8 @@ describe('versioned pinned font inventory', () => {
   it('keeps the existing preview JASSUB and editable ASS text-family mapping', () => {
     for (const font of TEXT_FONTS) {
       expect(findClipFont(font.id)).toBeTruthy()
-      expect(ASS_TEXT_FONTS[font.id]).toBe(font.ass)
       const row = findClipFont(font.id)!
+      expect(ASS_TEXT_FONTS[font.id]).toBe(row.assFamily)
       expect(CLIP_FONT_FILES[row.assFamily.toLowerCase()] ?? CLIP_FONT_FILES[font.id.toLowerCase()])
         .toBe(row.browserFile.split('/').at(-1))
     }
