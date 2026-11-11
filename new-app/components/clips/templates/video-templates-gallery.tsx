@@ -4,12 +4,16 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import { filterVideoTemplates } from '@/lib/clips/real-video-templates/gallery'
+import { SubmitCommunityTemplateDialog, type CommunitySubmitTemplate } from '@/components/clips/templates/submit-community-template-dialog'
 
 type Scope = 'first-party' | 'community' | 'mine'
 type UserTemplateListItem = {
   id:string;title:string;description:string;currentRevision:number;updatedAt:string
-  revisions:Array<{revision:number;definition:{slots?:Array<{id:string;ordinal:number;media:string;minDurationMs:number}>;
-    textFields?:Array<unknown>;previewRange?:{startMs:number;endMs:number};snapshot?:{aspect?:string}}>}>
+  revisions:Array<{revision:number;definition:{slots?:Array<{id:string;ordinal:number;label?:string;media:string;minDurationMs:number;target?:{kind:string}}>;
+    textFields?:Array<{id:string;label?:string;exampleText?:string}>;previewRange?:{startMs:number;endMs:number};snapshot?:{aspect?:string;clipStartMs?:number;clipEndMs?:number}};
+    assetManifest?:{decorative?:Array<{key:string;kind:string}>;musicPolicy?:'keep'|'replace'|'mute'}}>
+  publications?:Array<{id:string;state:string;revisionId:string;revision:{revision:number};createdAt:string;
+    submittedAt:string|null;publishedAt:string|null;rejectedAt:string|null;hiddenAt:string|null;withdrawnAt:string|null}>
 }
 type CommunityTemplateListItem = {
   id:string;title:string;description:string;creatorName:string;category:string;tags:string[];
@@ -41,6 +45,7 @@ export function VideoTemplatesGallery() {
   const [communityPages, setCommunityPages] = useState(1)
   const [communityTotal, setCommunityTotal] = useState(0)
   const [communityError, setCommunityError] = useState<string | null>(null)
+  const [submitTemplate, setSubmitTemplate] = useState<CommunitySubmitTemplate | null>(null)
 
   useEffect(() => {
     if (scope !== 'mine') return
@@ -268,6 +273,45 @@ export function VideoTemplatesGallery() {
               <div className="flex flex-wrap gap-2">
                 <Link href={'/app/clips/user-templates/'+encodeURIComponent(item.id)}
                   className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Use template</Link>
+                {(() => {
+                  const currentPublished=item.publications?.find(p=>p.state==='published'&&p.revision.revision===item.currentRevision)
+                  const pending=item.publications?.find(p=>p.state==='submitted')
+                  const published=item.publications?.find(p=>p.state==='published')
+                  if(pending)return <span className="rounded-lg border px-3 py-2 text-xs">Revision {pending.revision.revision} pending review</span>
+                  if(currentPublished)return <span className="rounded-lg border border-emerald-500/40 px-3 py-2 text-xs">Published</span>
+                  return <button type="button" className="rounded-lg border px-3 py-2 text-xs"
+                    onClick={() => {
+                      const latest=item.revisions[0]
+                      if(!latest)return
+                      setSubmitTemplate({
+                        id:item.id,title:item.title,description:item.description,currentRevision:item.currentRevision,
+                        revisions:[{
+                          revision:latest.revision,
+                          definition:{
+                            slots:(latest.definition.slots??[]).map(x=>({
+                              id:x.id,ordinal:x.ordinal,label:x.label??('Slot '+x.ordinal),media:x.media,
+                              target:x.target??{kind:'unknown'},
+                            })),
+                            textFields:(latest.definition.textFields??[]).map(x=>({
+                              id:x.id,label:x.label??x.id,exampleText:x.exampleText??'',
+                            })),
+                            previewRange:latest.definition.previewRange??{startMs:0,endMs:1},
+                            snapshot:{
+                              aspect:latest.definition.snapshot?.aspect??'9:16',
+                              clipStartMs:latest.definition.snapshot?.clipStartMs??0,
+                              clipEndMs:latest.definition.snapshot?.clipEndMs??1,
+                            },
+                          },
+                          assetManifest:{
+                            decorative:latest.assetManifest?.decorative??[],
+                            musicPolicy:latest.assetManifest?.musicPolicy??'mute',
+                          },
+                        }],
+                      })
+                    }}>
+                    {published?'Submit revision '+item.currentRevision:'Submit to Community'}
+                  </button>
+                })()}
                 <button type="button" className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
                   void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id)+'/duplicate',{method:'POST'})
                     .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Duplicate failed')}setMineRefresh(x=>x+1)})
@@ -280,6 +324,14 @@ export function VideoTemplatesGallery() {
                     .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Rename failed')}setMineRefresh(x=>x+1)})
                     .catch(e=>setMineError(e instanceof Error?e.message:'Rename failed'))
                 }}>Rename</button>
+                {item.publications?.find(p=>p.state==='submitted'||p.state==='published') ? <button type="button"
+                  className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
+                    const pub=item.publications?.find(p=>p.state==='submitted'||p.state==='published')
+                    if(!pub||!window.confirm('Withdraw this publication from future community discovery? Existing private copies are not deleted.'))return
+                    void fetch('/api/clips/video-templates/community/'+encodeURIComponent(pub.id)+'/withdraw',{method:'POST'})
+                      .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Withdraw failed')}setMineRefresh(x=>x+1)})
+                      .catch(e=>setMineError(e instanceof Error?e.message:'Withdraw failed'))
+                  }}>Withdraw public version</button> : null}
                 <button type="button" className="rounded-lg border px-3 py-2 text-xs text-destructive" onClick={() => {
                   if(!window.confirm('Remove this template from My templates? Existing projects are not deleted.'))return
                   void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id),{method:'DELETE'})
@@ -370,6 +422,8 @@ export function VideoTemplatesGallery() {
           <button type="button" disabled={page===communityPages} onClick={()=>setPage(p=>Math.min(communityPages,p+1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
         </nav>:null}
       </section>}
+      <SubmitCommunityTemplateDialog template={submitTemplate} onClose={()=>setSubmitTemplate(null)}
+        onSubmitted={()=>{setMineRefresh(x=>x+1);setSubmitTemplate(null)}} />
     </main>
   )
 }
