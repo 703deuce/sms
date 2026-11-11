@@ -95,8 +95,4 @@ describe('Batch 5 editor surface', () => {
   })
 })
 
-// Batch 3: include the new pure compiler contract regression in the existing editor CI gate.
-import './clips/real-video-templates-b3.test'
 
-// Batch 3: source-slot clips stay selectable in Compact/full Timeline without geometry changes.
-import './clips/real-video-template-editor.test'
