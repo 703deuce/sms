@@ -11,7 +11,7 @@ import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 
 export type StreamerShortMode='clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
 type FinishedClip={projectId:string;clipId:string;startMin:number}
-type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number}
+type AgentRunProgress={runId:string;status:string;stage:string;elapsedSec:number;etaSec:number|null}
 type RememberedAgentRun={runId:string;startMs:number;endMs:number}
 type AgentRunListRow={
   id:string;status:string;sourceSnapshot?:unknown;createdAt?:string|null
@@ -258,7 +258,10 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         ?Math.max(0,Math.floor((Date.now()-Date.parse(run.createdAt))/1000))
         :i*3
       const stage=agentStageLabel(run.phase,lastStep?.tool)
-      const etaSec=Math.max(0,estimateAgentTotalSec(endMs-startMs)-elapsedSec)
+      const remaining=estimateAgentTotalSec(endMs-startMs)-elapsedSec
+      // This is a heuristic, not a worker deadline. Once exceeded, give an
+      // unknown ETA rather than promising zero while model work continues.
+      const etaSec=remaining>0?remaining:null
       const nextProgress={runId,status:run.status,stage,elapsedSec,etaSec}
       setAgentProgress(nextProgress)
       const bucket=Math.floor(elapsedSec/30)
@@ -411,7 +414,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
     {!ready?<p className="mt-2 text-xs">Finish processing the source before generating agent clips.</p>:null}
     {running?<p className="mt-2 text-xs" role="status">
       {agentProgress
-        ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ETA ~${formatAgentTime(agentProgress.etaSec)}`
+        ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ${agentProgress.etaSec===null?'ETA unavailable (taking longer than estimated)':`ETA ~${formatAgentTime(agentProgress.etaSec)}`}`
         : status}
     </p>:null}
     {completed.length?<div className="mt-3 flex flex-wrap gap-2">
