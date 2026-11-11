@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, AudioLines, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clapperboard, FileText, GripVertical, ImageIcon, Layers3, LayoutGrid, Loader2, Palette, Pencil, Plus, RefreshCw, Scissors, Search, Sparkles, Trash2 } from 'lucide-react'
+import { ArrowLeft, AudioLines, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clapperboard, FileText, GripVertical, ImageIcon, Layers3, LayoutGrid, Loader2, Palette, Pencil, Plus, Scissors, Search, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
