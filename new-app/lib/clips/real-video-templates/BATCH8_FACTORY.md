@@ -226,3 +226,23 @@ if the grid is too sparse, a shot would fall below nine frames, a transition
 would become unsafe, the soundtrack is too short, or any interior cut/final
 boundary fails to land on a pinned music beat. This runtime factory retiming
 does not modify the Batch 9A anchor source files.
+
+## Existing-worker execution automation
+
+The factory can now drive the existing authenticated app/worker path instead
+of stopping at JSON handoff. After `jobs`, run `render-queue --shard N` or
+`render-queue --all`. Configure the app origin with `--base-url` or
+`B8_QA_BASE_URL`, and provide authentication only through the environment:
+`B8_QA_COOKIE` or `B8_QA_AUTHORIZATION`. Credentials are never accepted as
+CLI arguments or written to manifests/logs.
+
+For each queued design the runner: publishes a new idempotent template QA
+project through the existing video-template publish API, waits for the real
+preseeded carrier/preview worker, re-fetches the persisted ClipEditsV2 and
+re-runs the native-edit audit, downloads the actual preview, forces a distinct
+30-fps MP4 export through the existing render worker, downloads that render,
+extracts a poster from the real render, hashes all three outputs, runs the
+full-frame/audio QA, and writes a machine evidence record. Successful jobs move
+to `rendered`, not `done`; human glyph/readability/reference/rights/quality
+review is still required before `complete`/release. The local runner caps
+parallel worker leases at two and keeps the existing three-attempt limit.

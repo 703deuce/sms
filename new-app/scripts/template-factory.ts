@@ -16,11 +16,15 @@ import { generateB8Candidates, proveB8Structure, reportB8Quality,
   locallyApprovedB8Releases, shardB8Jobs, auditB8EditableOutput, auditB8Evidence,
   B8_ENGINE_REVISION, reconcileB8Queue,
   type B8Candidate, type B8Evidence, type B8QueueJobState } from '../lib/clips/real-video-templates/b8-factory'
-import { templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
+import { templateFrameToMs, type TemplateAsset, type TemplateDesignV1,
+  type TemplateFamilyV1 } from '../lib/clips/real-video-templates/sequence-contract'
 import { compileTemplateWithMusic, type TemplateMusicDecisionV1 } from '../lib/clips/real-video-templates/music-sequence'
 import { assertAudioLicense } from '../lib/clips/real-video-templates/music-timing'
 import { syncB8FamilyToMusic } from '../lib/clips/real-video-templates/b8-music-sync'
-import { defaultEdits } from '../lib/clips/edits'
+import { defaultEdits, type ClipEditsV2 } from '../lib/clips/edits'
+import {
+  b8ApiJson,b8Download,b8Poll,b8RemoteConfig,type B8RemoteConfig,
+} from './template-factory-worker'
 import {
   B8_RENDER_QA_REVISION, summarizeB8AudioEnvelopeQA, summarizeB8FrameQA,
 } from '../lib/clips/real-video-templates/b8-render-qa'
@@ -330,6 +334,175 @@ function pinnedHashes(fixtures:FixtureManifest):string[] {
       createHash('sha256').update(JSON.stringify(fixtures.soundtrack.decision)).digest('hex')]:[])]
 }
 
+type PreparedB8WorkerRequest={
+  v:1;cacheKey:string;designId:string;definitionHash:string
+  footage:Fixture[]
+  renderTiming:{v:1;totalFrames:number;boundaries:number[];musicScheduleSha256:string}
+  authoring:{
+    family:TemplateFamilyV1
+    design:TemplateDesignV1
+    choices:{media:Record<string,TemplateAsset>;music:TemplateAsset;templateMusic:TemplateMusicDecisionV1}
+  }
+  edits:ClipEditsV2
+}
+type RemotePublished={data:{instanceId:string;projectId:string;clipId:string}}
+type RemoteProjectStatus={data:{status:string;error?:string|null;primaryClipId?:string|null}}
+type RemoteClipDetail={data:{edits:ClipEditsV2;mediaUrls:{preview?:string|null}}}
+type RemoteExport={data:{renderId:string;status:string;downloadUrl?:string|null}}
+type RemoteRender={data:{status:string;downloadUrl?:string|null;error?:string|null}}
+
+function extractPoster(renderFile:string,posterFile:string,totalFrames:number){
+  mkdirSync(dirname(posterFile),{recursive:true})
+  const at=Math.max(0,Math.floor(totalFrames/2)/30)
+  const output=spawnSync('ffmpeg',['-nostdin','-y','-v','error','-ss',at.toFixed(3),
+    '-i',renderFile,'-frames:v','1','-vf','scale=480:-2:flags=lanczos',posterFile],{
+      encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
+    })
+  if(output.status!==0||!existsSync(posterFile))
+    throw new Error('FFmpeg could not extract a poster from actual worker output')
+}
+function remoteBaseUrl(){
+  return argument('--base-url',process.env.B8_QA_BASE_URL??'')
+}
+function remoteTimeoutMs(){
+  const seconds=Number(argument('--timeout-sec','1800'))
+  if(!Number.isFinite(seconds)||seconds<30||seconds>21600)
+    throw new Error('--timeout-sec must be between 30 and 21600')
+  return Math.round(seconds*1000)
+}
+function remotePollMs(){
+  const ms=Number(argument('--poll-ms','3000'))
+  if(!Number.isFinite(ms)||ms<500||ms>30000)
+    throw new Error('--poll-ms must be between 500 and 30000')
+  return Math.round(ms)
+}
+function machineEvidenceBase(
+  c:B8Candidate,request:PreparedB8WorkerRequest,fixtures:FixtureManifest,
+  outputs:B8Evidence['outputs'],
+):B8Evidence{
+  return {
+    id:c.id,reference:{url:'',accessDate:'',mediaKind:'photo_video'},
+    fixtures:{
+      images:request.footage.filter(row=>row.kind==='image').map(row=>row.id),
+      videos:request.footage.filter(row=>row.kind==='video').map(row=>row.id),
+      licenseHashes:[...new Set([...request.footage.map(row=>row.sha256),
+        ...(fixtures.soundtrack?[fixtures.soundtrack.sha256]:[])])],
+    },
+    outputs,renderTiming:request.renderTiming,
+    checks:{
+      fullFrameStructure:true,durationMatch:false,audioParity:false,beatAligned:true,
+      firstLastNotBlack:false,boundariesNotBlack:false,sampledFrameParity:false,
+      glyphsPresent:false,contrastReadable:false,safeZones:false,layerRetention:true,
+      rightsCleared:false,noExcessFlashing:false,actualWorkerRender:true,
+    },
+    reviewer:'',reviewDate:'',
+    scores:{pacing:0,beatSemantic:0,transition:0,typography:0,motion:0,color:0},
+  }
+}
+function mergeMachineEvidence(next:B8Evidence){
+  const existing=existsSync(evidencePath)?readJSON<B8Evidence[]>(evidencePath):[]
+  if(!Array.isArray(existing))throw new Error('Evidence file must be an array')
+  const previous=existing.find(row=>row.id===next.id)
+  const sameRender=Boolean(previous&&
+    previous.outputs?.previewSha256===next.outputs.previewSha256&&
+    previous.outputs?.renderSha256===next.outputs.renderSha256)
+  const humanChecks=sameRender&&previous?{
+    glyphsPresent:Boolean(previous.checks?.glyphsPresent),
+    contrastReadable:Boolean(previous.checks?.contrastReadable),
+    safeZones:Boolean(previous.checks?.safeZones),
+    rightsCleared:Boolean(previous.checks?.rightsCleared),
+  }:{glyphsPresent:false,contrastReadable:false,safeZones:false,rightsCleared:false}
+  const merged:B8Evidence={...next,checks:{...next.checks,...humanChecks},
+    ...(sameRender&&previous?.reference?.url?{reference:previous.reference}:{}),
+    ...(sameRender&&previous?.reviewer?{reviewer:previous.reviewer,reviewDate:previous.reviewDate,
+      scores:previous.scores}:{}),
+    ...(sameRender&&previous?.independentReviewer?{independentReviewer:previous.independentReviewer}:{}),
+    ...(sameRender&&previous?.flagged!=null?{flagged:previous.flagged}:{})}
+  save(evidencePath,[...existing.filter(row=>row.id!==next.id),merged]
+    .sort((a,b)=>a.id.localeCompare(b.id)))
+  return merged
+}
+async function runRemoteWorkerJob(
+  c:B8Candidate,fixtures:FixtureManifest,job:B8QueueJobState,remote:B8RemoteConfig,
+){
+  const requestPath=preparePreviewRequest(c,fixtures,job.cacheKey)
+  const request=readJSON<PreparedB8WorkerRequest>(requestPath)
+  if(request.cacheKey!==job.cacheKey||request.definitionHash!==job.definitionHash)
+    throw new Error('Prepared worker request is stale')
+  const published=await b8ApiJson<RemotePublished>(remote,'/api/clips/video-templates/publish',{
+    method:'POST',body:JSON.stringify({
+      idempotencyKey:'b8qa_'+job.cacheKey.slice(0,32),title:'B8 QA '+c.id,
+      family:request.authoring.family,design:request.authoring.design,
+      choices:request.authoring.choices,
+    }),
+  })
+  const timeoutMs=remoteTimeoutMs(),pollMs=remotePollMs()
+  await b8Poll<RemoteProjectStatus>({
+    read:()=>b8ApiJson(remote,'/api/clips/projects/'+encodeURIComponent(published.data.projectId)+'/status'),
+    done:value=>value.data.status==='READY',
+    failed:value=>['FAILED','CANCELED'].includes(value.data.status)
+      ? value.data.error||value.data.status:null,
+    timeoutMs,pollMs,label:'template carrier/preview '+c.id,
+  })
+  const detail=await b8ApiJson<RemoteClipDetail>(
+    remote,'/api/clips/clips/'+encodeURIComponent(published.data.clipId))
+  if(!detail.data.mediaUrls.preview)throw new Error('Worker finished without a real preview MP4')
+  const expected=compileTemplateWithMusic(request.authoring.family,request.authoring.design,{
+    instanceId:published.data.instanceId,...request.authoring.choices,
+  },{durationFrames:request.renderTiming.totalFrames,
+    edits:defaultEdits({clipStartMs:0,clipEndMs:templateFrameToMs(request.renderTiming.totalFrames)})})
+  const persistedAudit=auditB8EditableOutput({...c,family:request.authoring.family},
+    {...expected,edits:detail.data.edits},{
+      requireMusic:true,expectedMusicAssetId:request.authoring.choices.music.id,
+    })
+  if(persistedAudit.length)
+    throw new Error('Server persisted a non-editable template result: '+persistedAudit.join(','))
+  const root='/templates/b8-qa/'+c.id
+  const previewUrl=root+'/preview.mp4',renderUrl=root+'/render.mp4',posterUrl=root+'/poster.png'
+  await b8Download(remote,detail.data.mediaUrls.preview,fileInPublic(previewUrl))
+  const exportResult=await b8ApiJson<RemoteExport>(
+    remote,'/api/clips/clips/'+encodeURIComponent(published.data.clipId)+'/export',{
+      method:'POST',body:JSON.stringify({resolution:'720p',aspect:request.authoring.family.aspects[0],
+        watermark:false,format:'mp4',codec:'h264',quality:'standard',fps:30,
+        edits:detail.data.edits}),
+    })
+  let ready=exportResult.data
+  if(ready.status!=='READY'||!ready.downloadUrl){
+    const polled=await b8Poll<RemoteRender>({
+      read:()=>b8ApiJson(remote,'/api/clips/renders/'+encodeURIComponent(exportResult.data.renderId)),
+      done:value=>value.data.status==='READY'&&Boolean(value.data.downloadUrl),
+      failed:value=>value.data.status==='FAILED'?value.data.error||'render failed':null,
+      timeoutMs,pollMs,label:'template export '+c.id,
+    })
+    ready={...ready,...polled.data}
+  }
+  if(!ready.downloadUrl)throw new Error('Worker export completed without a download URL')
+  const renderFile=fileInPublic(renderUrl)
+  await b8Download(remote,ready.downloadUrl,renderFile)
+  extractPoster(renderFile,fileInPublic(posterUrl),request.renderTiming.totalFrames)
+  const outputs:B8Evidence['outputs']={
+    previewMp4:previewUrl,renderMp4:renderUrl,poster:posterUrl,
+    previewSha256:await shaFile(fileInPublic(previewUrl)),
+    renderSha256:await shaFile(renderFile),
+    posterSha256:await shaFile(fileInPublic(posterUrl)),
+  }
+  let evidence=machineEvidenceBase(c,request,fixtures,outputs)
+  const qa=await qaMedia(c,evidence)
+  evidence={...evidence,checks:{...evidence.checks,
+    durationMatch:qa.durationMatch,
+    audioParity:qa.audioStreamParity&&qa.audioContentParity,
+    firstLastNotBlack:qa.firstLastNotBlack,boundariesNotBlack:qa.boundariesNotBlack,
+    sampledFrameParity:qa.fullFrameParity,noExcessFlashing:qa.noExcessFlashing,
+  },flagged:!(qa.durationMatch&&qa.audioStreamParity&&qa.audioContentParity&&
+    qa.firstLastNotBlack&&qa.boundariesNotBlack&&qa.fullFrameParity&&qa.noExcessFlashing)}
+  const merged=mergeMachineEvidence(evidence)
+  const evidenceFile=join(directory,'render-evidence',c.id+'.json')
+  save(evidenceFile,{v:1,cacheKey:job.cacheKey,projectId:published.data.projectId,
+    clipId:published.data.clipId,renderId:exportResult.data.renderId,evidence:merged,
+    note:'Actual worker media + machine QA. Human review fields remain false/empty until inspected.'})
+  return evidenceFile
+}
+
 async function execute(){
   if(command==='author'){
     save(join(directory,'family-schedules.json'),{v:1,source:'provisional',families:FACTORY_FAMILY_SEEDS})
@@ -457,37 +630,94 @@ async function execute(){
       return merged
     })
     console.log('Reconciled '+jobs.length+' content-addressed jobs; '+
-      jobs.filter(j=>j.runStatus==='done').length+' completed and '+
+      jobs.filter(j=>j.runStatus==='done').length+' completed, '+
+      jobs.filter(j=>j.runStatus==='rendered').length+' rendered, and '+
       jobs.filter(j=>j.runStatus==='running').length+' active leases preserved.')
+  }else if(command==='render-queue'){
+    const fixtures=await verifiedFixtures()
+    if(!fixtures.soundtrack)throw new Error('Pinned licensed soundtrack required')
+    const remote=b8RemoteConfig(remoteBaseUrl())
+    const settings=readJSON<{shardCount:number;maxConcurrent:number}>(join(directory,'limits.json'))
+    const all=args.includes('--all'),hasShard=args.includes('--shard')
+    const shard=Number(argument('--shard','-1'))
+    if(all===hasShard||(hasShard&&(!Number.isInteger(shard)||shard<0||shard>=settings.shardCount)))
+      throw new Error('Choose exactly one of --all or --shard N')
+    const initial=loadQueue()
+    const available=initial.filter(job=>job.runStatus==='queued'&&(all||job.shard===shard))
+    const limit=Number(argument('--limit',String(available.length)))
+    if(!Number.isInteger(limit)||limit<1||limit>2000)throw new Error('--limit must be 1..2000')
+    const selected=available.slice(0,limit)
+    let cursor=0,rendered=0,failed=0
+    const concurrency=Math.min(2,Math.max(1,Number(settings.maxConcurrent)||2))
+    const worker=async()=>{
+      for(;;){
+        const job=selected[cursor++]
+        if(!job)return
+        const claimed=withQueueLock(()=>{
+          const jobs=loadQueue(),row=jobs.find(item=>item.id===job.id)
+          if(!row||row.runStatus!=='queued'||row.attempts>=3||
+             jobs.filter(item=>item.runStatus==='running').length>=concurrency)return false
+          row.runStatus='running';row.attempts++;row.claimedAt=new Date().toISOString()
+          delete row.error;delete row.renderEvidence;save(join(directory,'jobs.json'),jobs);return true
+        })
+        if(!claimed){failed++;continue}
+        try{
+          const c=index.get(job.id)
+          if(!c)throw new Error('Unknown Batch 8 candidate')
+          const evidenceFile=await runRemoteWorkerJob(c,fixtures,job,remote)
+          withQueueLock(()=>{
+            const jobs=loadQueue(),row=jobs.find(item=>item.id===job.id)
+            if(!row||row.runStatus!=='running')throw new Error('Render checkpoint changed during worker run')
+            row.runStatus='rendered';row.renderEvidence=evidenceFile;delete row.error
+            save(join(directory,'jobs.json'),jobs)
+          })
+          rendered++
+        }catch(error){
+          const message=(error instanceof Error?error.message:String(error)).slice(0,500)
+          withQueueLock(()=>{
+            const jobs=loadQueue(),row=jobs.find(item=>item.id===job.id)
+            if(row&&row.runStatus==='running'){row.runStatus='failed';row.error=message}
+            save(join(directory,'jobs.json'),jobs)
+          })
+          failed++
+        }
+      }
+    }
+    await Promise.all(Array.from({length:concurrency},()=>worker()))
+    console.log('Remote worker queue: '+rendered+' rendered/QA checkpointed, '+failed+' failed.')
+    if(failed)process.exitCode=1
   }else if(['claim','cancel','fail','retry','resume','complete'].includes(command)){
     const completedEvidence=command==='complete'?await verifiedEvidence():[]
     withQueueLock(()=>{
       const jobs=loadQueue(),id=args[1],job=id?jobs.find(j=>j.id===id):undefined
       if(command!=='resume'&&!job)throw new Error('Job ID is required')
       if(command==='resume'){
-        for(const j of jobs)if(j.runStatus==='failed'&&j.attempts<3){j.runStatus='queued';delete j.error}
+        for(const j of jobs)if(j.runStatus==='failed'&&j.attempts<3){
+          j.runStatus='queued';delete j.error;delete j.claimedAt;delete j.renderEvidence
+        }
       }else if(job){
         if(command==='claim'){
           if(job.runStatus!=='queued'||job.attempts>=3||
              jobs.filter(j=>j.runStatus==='running').length>=2)throw new Error('Job lease unavailable')
-          job.runStatus='running';job.attempts++
+          job.runStatus='running';job.attempts++;job.claimedAt=new Date().toISOString()
         }else if(command==='cancel'){
-          if(job.runStatus==='running'||job.runStatus==='done')
-            throw new Error('Already-running work needs worker-coordinated cancellation')
+          if(job.runStatus==='running'||job.runStatus==='rendered'||job.runStatus==='done')
+            throw new Error('Running/rendered work cannot be canceled without worker/evidence cleanup')
           job.runStatus='canceled'
         }else if(command==='fail'){
           if(job.runStatus!=='running')throw new Error('Job is not claimed')
           job.runStatus='failed';job.error='See worker log/checkpoint'
         }else if(command==='retry'){
           if(job.runStatus!=='failed'||job.attempts>=3)throw new Error('Retry limit reached')
-          job.runStatus='queued';delete job.error
+          job.runStatus='queued';delete job.error;delete job.claimedAt;delete job.renderEvidence
         }else if(command==='complete'){
-          if(job.runStatus!=='running')throw new Error('Job must be claimed to finish')
+          if(job.runStatus!=='running'&&job.runStatus!=='rendered')
+            throw new Error('Job needs a claimed/rendered checkpoint to finish')
           const e=completedEvidence.find(row=>row.id===job.id)
           const candidate=index.get(job.id)
           if(!candidate||!e||auditB8Evidence(candidate,e).length)
             throw new Error('Job cannot be completed without actual hashed worker output and passing review evidence')
-          job.runStatus='done';delete job.error
+          job.runStatus='done';delete job.error;delete job.claimedAt
         }
       }
       save(join(directory,'jobs.json'),jobs)
@@ -530,7 +760,7 @@ async function execute(){
       warning:'Actual FFmpeg incremental rerender benchmark requires worker output and fixtures.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | qa-media <id> | qa-all | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | render-queue (--all | --shard N) [--limit N] --base-url <app> | qa-media <id> | qa-all | claim/cancel/fail/retry/resume/complete <id> | quality-report | contact-sheet | release-manifest | benchmark')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})
