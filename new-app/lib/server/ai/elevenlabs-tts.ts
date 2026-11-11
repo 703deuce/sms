@@ -129,13 +129,14 @@ export async function ttsWithTimestamps(input: {
   modelUsed: T2vVoiceSettings['modelId']
   usage: { provider: 'elevenlabs'; model: string; units: number; unitType: 'characters'; costUsdMicros: number }
 }> {
-  const order = input.allowModelFallback === false
-    ? [input.voice.modelId]
-    : ttsModelAttemptOrder(input.voice.modelId)
+  const { allowModelFallback, ...request } = input
+  const order = allowModelFallback === false
+    ? [request.voice.modelId]
+    : ttsModelAttemptOrder(request.voice.modelId)
   let last: unknown
   for (const modelId of order) {
     try {
-      const out = await ttsWithTimestampsOnce({ ...input, voice: { ...input.voice, modelId } })
+      const out = await ttsWithTimestampsOnce({ ...request, voice: { ...request.voice, modelId } })
       return { ...out, modelUsed: modelId }
     } catch (err) {
       last = err
