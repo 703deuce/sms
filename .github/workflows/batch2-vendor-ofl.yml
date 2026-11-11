@@ -5,6 +5,10 @@ on:
     branches:
       - feat/real-video-templates-b2-font-runtime
 
+concurrency:
+  group: batch2-ofl-vendor-branch
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -22,11 +26,22 @@ jobs:
           node-version: '22'
       - name: Download eight pinned OFL font binaries and validate exact matching bytes
         run: node new-app/scripts/vendor-ofl-fonts.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate matching browser/worker metrics from the exact pinned TTF bytes
+        run: |
+          python -m pip install 'fonttools==4.60.2'
+          python worker/scripts/gen_caption_fit_metrics.py
+          python new-app/scripts/extend-ofl-caption-font-metrics.py
       - name: Verify licence copies match and stage only pinned font files
         run: |
           git add -- new-app/public/fonts/clip/*.ttf \
             new-app/public/fonts/clip/licenses/*.txt \
-            worker/v3/fonts/t6/*.ttf worker/v3/fonts/t6/licenses/*.txt
+            worker/v3/fonts/t6/*.ttf worker/v3/fonts/t6/licenses/*.txt \
+            new-app/lib/clips/caption-fit-metrics.json \
+            worker/clips_worker/caption_font_metrics.json \
+            new-app/lib/clips/caption-font-metrics.json
           git diff --cached --check
           if git diff --cached --quiet; then
             echo "Already pinned, no commit needed"
