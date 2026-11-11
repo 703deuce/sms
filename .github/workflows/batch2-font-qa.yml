@@ -1,0 +1,67 @@
+name: Batch 2 typography and pinned font QA
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - 'new-app/lib/clips/**'
+      - 'new-app/components/clips/**'
+      - 'new-app/public/fonts/clip/**'
+      - 'new-app/scripts/vendor-ofl-fonts.mjs'
+      - 'new-app/scripts/pinned-ofl-font-sources.json'
+      - 'new-app/tests/**'
+      - 'worker/v3/fonts/t6/**'
+      - 'worker/clips_worker/**'
+      - '.github/workflows/batch2-font-qa.yml'
+
+jobs:
+  font-and-typography-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: All Batch 2 and protected existing text/caption tests
+        run: |
+          pnpm exec vitest run \
+            tests/font-manifest-b2.test.ts \
+            tests/typography-treatments-b2.test.ts \
+            tests/typography-panel-b2.test.tsx \
+            tests/motion-graphics-text-adapter.test.ts \
+            tests/g1a-canvas-ui.test.tsx \
+            tests/preview-stage-e3.test.tsx \
+            tests/text-template-panel-add.test.tsx \
+            tests/caption-fonts-user.test.ts \
+            tests/caption-user-font.test.ts \
+            tests/caption-case.test.ts \
+            tests/caption-style-snapshot.test.ts \
+            tests/caption-overlay-preview.test.tsx \
+            tests/caption-line-max-chars.test.ts
+  new-app-tsc:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Full new-app TypeScript (no baseline filtering)
+        run: pnpm exec tsc --noEmit --pretty false
