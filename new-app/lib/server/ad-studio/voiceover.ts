@@ -62,12 +62,23 @@ export async function ensureAdVoiceover(
         runId, plannedDurationMs, targetVoiceMs, firstDurationMs: durationMs,
         firstSpeed: initialVoice.speed, retimedSpeed,
       })
-      generated = await ttsWithTimestamps({ text, voice: { ...initialVoice, speed: retimedSpeed } })
-      durationMs = durationMsFromAlignment(generated.alignment)
-      if (durationMs <= 0 || !generated.audio.length) throw new Error('Empty retimed voiceover')
-      console.info('[ad-studio:b3] voice_retime_complete', {
-        runId, plannedDurationMs, targetVoiceMs, actualDurationMs: durationMs, retimedSpeed,
-      })
+      try {
+        const retimed = await ttsWithTimestamps({ text, voice: { ...initialVoice, speed: retimedSpeed } })
+        const retimedDurationMs = durationMsFromAlignment(retimed.alignment)
+        if (retimedDurationMs > 0 && retimed.audio.length) {
+          generated = retimed
+          durationMs = retimedDurationMs
+          console.info('[ad-studio:b3] voice_retime_complete', {
+            runId, plannedDurationMs, targetVoiceMs, actualDurationMs: durationMs, retimedSpeed,
+          })
+        } else {
+          console.warn('[ad-studio:b3] voice_retime_empty_use_first', { runId })
+        }
+      } catch (err) {
+        console.warn('[ad-studio:b3] voice_retime_failed_use_first', {
+          runId, type: err instanceof Error ? err.name : typeof err,
+        })
+      }
     }
 
     // Do not silently truncate narration. The final timeline itself remains the hard
