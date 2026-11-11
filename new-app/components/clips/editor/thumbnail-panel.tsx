@@ -244,7 +244,7 @@ export function ThumbnailPanel({
                   Download
                 </Button>
               )}
-              <Button size="sm" variant={edits.thumbnailId === t.id || t.picked ? 'default' : 'secondary'} onClick={() => void setCover(t.id)}>
+              <Button size="sm" variant={edits.thumbnailId === t.id || t.picked ? 'default' : 'secondary'} disabled={!t.downloadUrl || t.status === 'FAILED'} title={!t.downloadUrl ? 'Cover image is not available to select yet' : undefined} onClick={() => void setCover(t.id)}>
                 Set as cover
               </Button>
             </div>
