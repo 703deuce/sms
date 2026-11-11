@@ -6,7 +6,7 @@ on:
       - feat/real-video-templates-b2-font-runtime
 
 concurrency:
-  group: batch2-ofl-vendor-branch
+  group: batch2-ofl-vendor-final
   cancel-in-progress: false
 
 permissions:
