@@ -1,5 +1,5 @@
 import {describe,expect,it} from 'vitest'
-import {publishedBatchClipIds} from '@/lib/streamer/agent-batch-contract'
+import {publishedBatchClipIds,streamerBatchStatusText} from '@/lib/streamer/agent-batch-contract'
 import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
 
 describe('streamer batch published-output contract',()=>{
@@ -14,6 +14,17 @@ describe('streamer batch published-output contract',()=>{
       selectedClipIds:['selected'],draftClipIds:['draft'],publishedClipCount:2,
     }})).toEqual([])
     expect(publishedBatchClipIds({resultClipId:'legacy'})).toEqual(['legacy'])
+  })
+  it('CL16: shows queued window and elapsed, never promises an ETA while busy',()=>{
+    const batch={status:'running',index:1,total:3,startedAt:'2026-11-11T00:00:00.000Z'}
+    expect(streamerBatchStatusText(batch,Date.parse('2026-11-11T00:02:04.000Z')))
+      .toContain('window 2/3 · elapsed 2m 04s · ETA unknown')
+    expect(streamerBatchStatusText({...batch,status:'canceled'},Date.parse('2026-11-11T00:02:04Z')))
+      .toContain('Batch canceled')
+    expect(streamerBatchStatusText({...batch,status:'done'},Date.parse('2026-11-11T00:02:04Z')))
+      .toContain('Batch complete')
+    expect(streamerBatchStatusText({...batch,startedAt:'invalid'},Date.now()))
+      .toContain('elapsed unknown')
   })
   it('keeps one contiguous timeline after folding a sub-minute full-VOD tail',()=>{
     const duration=MAX_AGENT_SOURCE_WINDOW_MS+15_000
