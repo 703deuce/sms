@@ -7,7 +7,7 @@ on:
 
 concurrency:
   group: batch2-ofl-vendor-branch
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -50,6 +50,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "chore(fonts): vendor eight pinned matching OFL font binary pairs"
+          git pull --rebase origin feat/real-video-templates-b2-font-runtime
           git push origin HEAD:feat/real-video-templates-b2-font-runtime
 
       - uses: pnpm/action-setup@v4
@@ -102,6 +103,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "test(fonts): record full Batch 2 runtime verification results"
+          git pull --rebase origin feat/real-video-templates-b2-font-runtime
           git push origin HEAD:feat/real-video-templates-b2-font-runtime
           if [[ $vite -ne 0 || $tsc -ne 0 || $worker -ne 0 ]]; then
             echo "Batch 2 runtime gate failed; see committed QA report" >&2
