@@ -4,7 +4,6 @@ import { normalizeMediaSources } from '@/lib/clips/editor/sources'
 import type { YoutubeVideoCut } from '@/lib/youtube-video/types'
 
 const MAX_INSERT_MS = 10 * 60_000
-const MAX_INSERTS = 50
 
 /** Preserve every approved source cut, including repeated portions of the
  * first upload, using the existing E5b video+audio append renderer. */
@@ -18,7 +17,7 @@ export function buildYoutubeStoryEditAssembly(
   const sources = normalizeMediaSources(uploads.map((upload, i) => ({
     id: `yt_source_${i}`, ref: 'upload', refId: upload.id, mediaType: 'video',
     label: upload.label, ...(upload.durationMs ? { durationMs: upload.durationMs } : {}),
-  })))
+  })), true)
   if (!sources || sources.length !== cuts.length) throw new Error('youtube_story_invalid_media_sources')
   const rawInserts: Array<{
     id: string; sourceId: string; atSrcMs: number; append: true;
@@ -41,11 +40,10 @@ export function buildYoutubeStoryEditAssembly(
         atSrcMs: first.endMs, append: true, inMs: start, durMs: end - start,
         audio: 'source', fit: 'contain',
       })
-      if (rawInserts.length > MAX_INSERTS) throw new Error('youtube_story_too_many_insert_segments')
       start = end
     }
   })
-  const inserts = normalizeInserts(rawInserts, sources)
+  const inserts = normalizeInserts(rawInserts, sources, true)
   if (rawInserts.length && inserts?.length !== rawInserts.length) {
     throw new Error('youtube_story_insert_normalization_mismatch')
   }
@@ -56,6 +54,7 @@ export function buildYoutubeStoryEditAssembly(
   }
   return {
     ...base,
+    youtubeLongFormAssembly: 1,
     trim: { in: first.startMs, out: first.endMs },
     cutRanges: [],
     aspectRatio: '16:9',
