@@ -4,19 +4,40 @@ import { validateTemplateDesign, validateTemplateFamily,
   type TemplateFamilyV1 } from './sequence-contract'
 import type { VideoTemplateRelease } from './gallery'
 
-const bold = FACTORY_TREATMENTS.find(recipe => recipe.id === 'bold')
-if (!bold) throw new Error('Batch 9A requires the authored bold treatment')
+type Direction = readonly [
+  recipeId:string, headline:string, closing:string, description:string,
+  transition:FactoryTreatmentRecipe['transition'], motionScale:number, motionShift:number, headlineSize:number
+]
+const DIRECTIONS: Readonly<Record<string,Direction>> = {
+  f01:['magazine','WAIT FOR IT','THE REVEAL','Editorial cold-open reveal with a fast hook and clean final landing.','whip_pan',108,5,76],
+  f02:['minimal','BEFORE','AFTER','Transformation-first comparison with restrained typography and a bright reveal beat.','dip_white',103,1,68],
+  f03:['tech','NEW DROP','DETAILS THAT HIT','Product-launch rhythm with crisp tech type and punchy zoom accents.','zoom_blur',110,4,64],
+  f04:['warm','A SMALL MOMENT','WORTH REMEMBERING','Personal mini-story with warmer typography and softer pacing.','crossfade',104,2,58],
+  f05:['cinema','ADD DEPTH','LAYER THE STORY','Cinematic depth stack with deliberate parallax and dimensional pushes.','push_left',112,6,68],
+  f06:['scrapbook','WEEKEND','ON REPEAT','Energetic lifestyle recap with scrapbook character and rhythmic wipes.','wipe_left',106,3,62],
+  f07:['party',"YOU'RE INVITED",'SAVE THE DATE','Celebratory invitation with a bright entrance and calmer information landing.','push_up',106,3,70],
+  f08:['luxury',"TONIGHT'S TABLE",'STAY FOR DESSERT','Premium food atmosphere edit with elegant type and restrained dissolves.','crossfade',105,2,62],
+  f09:['sport','DAY ONE','NOW','Athletic progress edit with hard hierarchy and whip-pan momentum.','whip_pan',109,4,72],
+  f10:['tutorial','STEP BY STEP','TRY THIS NEXT','Creator tutorial with legible instructional type and steady directional continuity.','push_left',103,2,62],
+}
+function directionFor(seed:FactoryFamilySeed): {direction:Direction;recipe:FactoryTreatmentRecipe} {
+  const direction=DIRECTIONS[seed.id]
+  if(!direction) throw new Error('Missing Batch 9A art direction: '+seed.id)
+  const recipe=FACTORY_TREATMENTS.find(item=>item.id===direction[0])
+  if(!recipe) throw new Error('Missing Batch 9A style recipe: '+direction[0])
+  return {direction,recipe}
+}
 
 export const BATCH9A_DEFAULT_MUSIC = {
-  id: 'batch9a_anchor_bed_v1',
-  generator: 'batch9a-pulse-v1' as const,
-  sha256: '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e',
+  id: 'batch9a_anchor_groove_v2',
+  generator: 'batch9a-groove-v2' as const,
+  sha256: 'c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482',
   durationFrames: 480,
   bpm: 150,
   beatEveryFrames: 3,
   author: 'Transovo AI',
   license: 'Transovo first-party original template music',
-  revision: 'batch9a-audio-v1',
+  revision: 'batch9a-audio-v2',
 }
 
 function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe): TemplateFamilyV1 {
