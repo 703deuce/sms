@@ -69,6 +69,7 @@ jobs:
             tests/clip-font-exact-readiness.test.ts \
             tests/caption-presets-b2b.test.ts \
             tests/b2b-caption-apply.test.ts \
+            tests/b2b-caption-ass-parity.test.ts \
             tests/premium-caption-styles-b2.test.ts \
             tests/typography-treatments-b2.test.ts \
             tests/typography-panel-b2.test.tsx \
