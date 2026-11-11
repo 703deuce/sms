@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { captionFontStack } from '@/lib/clips/caption-fonts'
 import { createTypographyTreatment, TYPOGRAPHY_TREATMENTS } from '@/lib/clips/editor/typography-treatments'
-import { waitForClipFont } from '@/lib/clips/font-manifest'
+import { findClipFont, waitForClipFont } from '@/lib/clips/font-manifest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { reconcileItemMotion } from '@/lib/clips/editor/keyframes'
 import {
@@ -286,6 +286,8 @@ export function TextPanel({
     setFontMsg(r.existing ? `${r.font.family} is already uploaded — selected it.` : `Uploaded ${r.font.family}.`)
     if (sel && !sel.kind) patchStyle({ font: `user:${r.font.id}`, fontFamily: r.font.family })
   }
+  const [textFontSearch, setTextFontSearch] = useState('')
+  const [textPreviewFonts, setTextPreviewFonts] = useState<Set<string>>(() => new Set())
   const fontItems: Record<string, string> = {
     ...Object.fromEntries(TEXT_FONTS.map((f) => [f.id, f.label])),
     ...Object.fromEntries(userFonts.fonts.map((f) => [`user:${f.id}`, f.family])),
@@ -498,6 +500,15 @@ export function TextPanel({
             <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label className="text-[11px] text-muted-foreground">Font</Label>
+                <input
+                  type="search"
+                  aria-label="Search text fonts"
+                  data-testid="text-font-search"
+                  placeholder="Search fonts…"
+                  className="h-7 w-full rounded border border-input bg-background px-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={textFontSearch}
+                  onChange={(event) => setTextFontSearch(event.target.value)}
+                />
                 <Select
                   items={fontItems}
                   value={sel.style.font}
@@ -524,12 +535,25 @@ export function TextPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEXT_FONTS.map((f) => (
-                      <SelectItem key={f.id} value={f.id} data-testid={`text-font-${f.id}`}>
-                        <span style={{ fontFamily: fontCss(f.id), fontWeight: f.weight }}>{f.label}</span>
+                    {TEXT_FONTS.filter((f) => f.label.toLowerCase().includes(textFontSearch.trim().toLowerCase())).map((f) => (
+                      <SelectItem
+                        key={f.id}
+                        value={f.id}
+                        data-testid={`text-font-${f.id}`}
+                        onPointerEnter={() => {
+                          if (!textPreviewFonts.has(f.id)) void waitForClipFont(f.id).then(() => setTextPreviewFonts(p => new Set(p).add(f.id))).catch(() => {})
+                        }}
+                        onFocus={() => {
+                          if (!textPreviewFonts.has(f.id)) void waitForClipFont(f.id).then(() => setTextPreviewFonts(p => new Set(p).add(f.id))).catch(() => {})
+                        }}
+                      >
+                        <span style={{
+                          fontFamily: textPreviewFonts.has(f.id) ? '"' + (findClipFont(f.id)?.assFamily ?? f.ass) + '"' : fontCss(f.id),
+                          fontWeight: findClipFont(f.id)?.cssWeight ?? f.weight,
+                        }}>{f.label}</span>
                       </SelectItem>
                     ))}
-                    {userFonts.fonts.map((f) => (
+                    {userFonts.fonts.filter((f) => f.family.toLowerCase().includes(textFontSearch.trim().toLowerCase())).map((f) => (
                       <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`text-font-user-${f.id}`}>
                         <span style={{ fontFamily: fontCss(`user:${f.id}`, f.family) }}>{f.family}</span>
                       </SelectItem>

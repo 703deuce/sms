@@ -5,7 +5,7 @@ import { Loader2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import { CaptionMiniPreview } from '@/components/clips/editor/caption-overlay'
 import { CLIP_EDITOR_CAPTION_FONT_FAMILIES } from '@/components/clips/editor/clip-editor-fonts'
-import { waitForClipFont } from '@/lib/clips/font-manifest'
+import { findClipFont, waitForClipFont } from '@/lib/clips/font-manifest'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -156,6 +156,7 @@ export function CaptionsPanel({
   const preset = resolveT6CaptionPreset(cap, t6CaptionPresetsEnabled())
   const captionFontValue = cap.font ?? preset.font ?? 'Poppins'
   const [previewFonts, setPreviewFonts] = useState<Set<string>>(() => new Set())
+  const [captionFontSearch, setCaptionFontSearch] = useState('')
   const captionFontItems: Record<string, string> = {
     ...CAPTION_FONT_LABELS,
     ...Object.fromEntries(userFonts.fonts.map((f) => [`user:${f.id}`, f.family])),
@@ -334,6 +335,14 @@ export function CaptionsPanel({
       )}
       <p className="text-xs text-muted-foreground">{CAPTION_OPT_IN_COPY}</p>
       <label className="text-xs font-medium text-muted-foreground">Font</label>
+      <Input
+        aria-label="Search caption fonts"
+        data-testid="caption-font-search"
+        placeholder="Search fonts…"
+        className="h-8"
+        value={captionFontSearch}
+        onChange={(event) => setCaptionFontSearch(event.target.value)}
+      />
       <Select
         items={captionFontItems}
         value={captionFontValue}
@@ -352,23 +361,27 @@ export function CaptionsPanel({
           <SelectValue>{captionFontDisplayLabel(captionFontValue, userFonts.fonts, CAPTION_FONT_LABELS)}</SelectValue>
         </SelectTrigger>
         <SelectContent>
-          {CAPTION_FONTS.map((f) => (
-            <SelectItem key={f} value={f}>
-              <span
-                style={previewFonts.has(f) ? { fontFamily: '"' + f.replace(/"/g, '') + '"' } : undefined}
-                onMouseEnter={() => {
-                  if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
-                }}
-                onFocus={() => {
-                  if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
-                }}
-              >{f}</span>
+          {CAPTION_FONTS.filter((f) => f.toLowerCase().includes(captionFontSearch.trim().toLowerCase())).map((f) => (
+            <SelectItem
+              key={f}
+              value={f}
+              onPointerEnter={() => {
+                if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
+              }}
+              onFocus={() => {
+                if (!previewFonts.has(f)) void waitForClipFont(f).then(() => setPreviewFonts(p => new Set(p).add(f))).catch(() => {})
+              }}
+            >
+              <span style={previewFonts.has(f) ? {
+                fontFamily: '"' + (findClipFont(f)?.assFamily ?? f).replace(/"/g, '') + '"',
+                fontWeight: findClipFont(f)?.cssWeight,
+              } : undefined}>{f}</span>
             </SelectItem>
           ))}
           {userFonts.fonts.length ? (
             <>
               <div className="px-2 py-1.5 text-[11px] font-semibold uppercase text-muted-foreground">Your fonts</div>
-              {userFonts.fonts.map((f) => (
+              {userFonts.fonts.filter((f) => f.family.toLowerCase().includes(captionFontSearch.trim().toLowerCase())).map((f) => (
                 <SelectItem key={f.id} value={`user:${f.id}`} data-testid={`caption-font-user-${f.id}`}>
                   {f.family}
                 </SelectItem>
