@@ -13,6 +13,8 @@ import { adCommercialReferenceId } from '@/lib/ad-studio/commercial'
 import { advanceAdStudioRun, getAdStudioImages } from '@/lib/server/ad-studio/pipeline'
 import { advanceAdRender, ensureAdEditorClip } from '@/lib/server/ad-studio/destination'
 import { ensureAdVoiceover } from '@/lib/server/ad-studio/voiceover'
+import { generatePhotoAdConcepts } from '@/lib/server/ad-studio/photo-ads'
+import { getStudioModel } from '@/lib/studio/models'
 import type { AdImageVariant } from '@/lib/ad-studio/types'
 
 const prisma = () => getPrisma()
@@ -136,7 +138,10 @@ async function validateAssets(workspaceId: string, input: AdProductInput): Promi
 
 /** The selected commercial reference must come from a completed image-ad in this workspace. */
 async function validateCommercialReference(workspaceId: string, input: AdProductInput): Promise<void> {
-  if (!input.imageVariantId) throw adInvalid('Choose a completed image ad.')
+  if (!input.imageVariantId) {
+    console.info('[ad-studio:r5] commercial_uploaded_still_valid', { workspaceId, assetIdPresent: Boolean(input.imageAssetIds[0]) })
+    return
+  }
   const variant = await prisma().adStudioImageVariant.findFirst({
     where: { id: input.imageVariantId, status: 'ready', run: { workspaceId } },
     select: { id: true, runId: true },
@@ -151,14 +156,66 @@ async function performPlanning(row: Existing): Promise<AdStudioRun> {
   try {
     const input = row.input as unknown as AdProductInput
     const mode = row.mode as AdMode
-    const script = await writeGroundedAdStoryline(input, mode)
-    const plan = await planAdScenes({
-      runId: row.id, mode, input, script,
-      search: async (query) => {
-        if (!query.trim()) { console.info('[ad-studio:stock] empty_query'); return [] }
-        return searchVideos(query, 1)
-      },
-    })
+    let plan: AdPlan
+    if (mode === 'image_to_ad') {
+      const photo = await generatePhotoAdConcepts(row.workspaceId, input)
+      plan = {
+        script: {
+          hook: input.headline || input.name,
+          problem: input.subHeadline || '',
+          solution: input.sellingPoints.join(' '),
+          cta: input.cta || '',
+          voiceover: '',
+          onScreenText: [input.headline || '', input.subHeadline || '', input.cta || ''].filter(Boolean),
+        },
+        imagery: { imageJobIds: [], preservedSourceAssetIds: [...input.imageAssetIds, ...(input.logoAssetId ? [input.logoAssetId] : [])] },
+        scenes: [],
+        creditEstimate: null,
+        modelStrategy: 'Legacy photo-ads foundation: Gemini art direction → five Nano Banana Pro 2K stills.',
+        voiceoverEnabled: false,
+        photoAds: {
+          conceptModel: photo.model,
+          styleReferenceCount: photo.styleReferenceCount,
+          concepts: photo.concepts,
+          qcByIndex: {},
+        },
+      }
+      console.info('[ad-studio:r5] photo_plan_ready', { runId: row.id, concepts: photo.concepts.length, model: photo.model })
+    } else if (mode === 'image_ad_to_commercial') {
+      const modelId = input.commercialModelId || 'wan-3.0'
+      const model = getStudioModel(modelId)
+      if (!model || !model.modes.includes('image_to_video') || !model.durationsSec.includes(15) || !model.aspects.includes(input.aspect)) {
+        throw adInvalid('The selected commercial model does not support this 15 second aspect.')
+      }
+      const basePrompt = 'Smooth, subtle motion. Professional broadcast ad aesthetic. Cinematic, Gentle movement that brings the scene to life.'
+      const textLock = ' Keep all existing on-screen text from the supplied finished ad still exactly as-is and static. Do not invent new text.'
+      const speechEnd = ' All spoken dialogue or narration in this video must be complete by 10 seconds. No speech or talking after 10 seconds; only visuals and silence until the end.'
+      const prompt = basePrompt + textLock + speechEnd
+      plan = {
+        script: { hook: '', problem: '', solution: '', cta: '', voiceover: '', onScreenText: [] },
+        imagery: { imageJobIds: [], preservedSourceAssetIds: [...input.imageAssetIds] },
+        scenes: [{
+          index: 0, role: 'other', durationSec: 15, source: 'generated',
+          reason: 'Animate the selected finished ad still as one native-audio 15s commercial.',
+          modelId, prompt, referenceAssetId: input.imageAssetIds[0],
+          startMs: 0, endMs: 15_000, generationDurationSec: 15, trimInMs: 0, trimOutMs: 15_000,
+        }],
+        creditEstimate: null,
+        modelStrategy: 'Single native-audio image-to-video job; no TTS or stitched scene render.',
+        voiceoverEnabled: false,
+        directCommercial: { modelId, prompt, nativeAudio: true },
+      }
+      console.info('[ad-studio:r5] direct_plan_ready', { runId: row.id, modelId, aspect: input.aspect })
+    } else {
+      const script = await writeGroundedAdStoryline(input, mode)
+      plan = await planAdScenes({
+        runId: row.id, mode, input, script,
+        search: async (query) => {
+          if (!query.trim()) { console.info('[ad-studio:stock] empty_query'); return [] }
+          return searchVideos(query, 1)
+        },
+      })
+    }
     console.info('[ad-studio:planning] plan_persist_begin', { runId: row.id, scenes: plan.scenes.length })
     // One atomic replacement of scene rows and the plan; only planning state is eligible.
     const result = await prisma().$transaction(async (tx) => {
