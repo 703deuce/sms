@@ -34,7 +34,7 @@ describe('LG08 existing clip-card thumbs-down feedback', () => {
       scores: { hook: 'A' },
     }
     render(<ClipCard clip={clip} projectId="proj_fixture" onHidden={hidden} />)
-    const more = screen.getByRole('button', { name: /more/i })
+    const more = screen.getByTestId('clip-card-more')
     fireEvent.click(more)
     fireEvent.click(await screen.findByText('Not for me'))
     await waitFor(() => expect(hidden).toHaveBeenCalledWith('clip_feedback'))
