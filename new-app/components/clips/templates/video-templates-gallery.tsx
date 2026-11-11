@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import { filterVideoTemplates } from '@/lib/clips/real-video-templates/gallery'
 import { SubmitCommunityTemplateDialog, type CommunitySubmitTemplate } from '@/components/clips/templates/submit-community-template-dialog'
+import { ReportCommunityTemplateDialog } from '@/components/clips/templates/report-community-template-dialog'
 
 type Scope = 'first-party' | 'community' | 'mine'
 type UserTemplateListItem = {
@@ -46,6 +47,8 @@ export function VideoTemplatesGallery() {
   const [communityTotal, setCommunityTotal] = useState(0)
   const [communityError, setCommunityError] = useState<string | null>(null)
   const [submitTemplate, setSubmitTemplate] = useState<CommunitySubmitTemplate | null>(null)
+  const [reportTemplate, setReportTemplate] = useState<{id:string;title:string}|null>(null)
+  const [communityNotice, setCommunityNotice] = useState<string | null>(null)
 
   useEffect(() => {
     if (scope !== 'mine') return
@@ -391,6 +394,7 @@ export function VideoTemplatesGallery() {
           </label>
         </section>
         {communityError?<p role="alert" className="rounded-xl border p-4 text-sm text-destructive">{communityError}</p>:null}
+        {communityNotice?<p role="status" className="rounded-xl border p-4 text-sm text-muted-foreground">{communityNotice}</p>:null}
         <p className="text-sm text-muted-foreground" role="status">{communityTotal} approved community template{communityTotal===1?'':'s'}</p>
         {!community.length&&!communityError?<div className="rounded-2xl border border-dashed p-10 text-center">
           <h2 className="font-semibold">No approved community templates match</h2>
@@ -411,8 +415,12 @@ export function VideoTemplatesGallery() {
               <p className="line-clamp-3 text-sm">{item.description}</p>
               {item.tags.length?<div className="flex flex-wrap gap-1">{item.tags.map(tag=><span key={tag} className="rounded-full border px-2 py-0.5 text-[10px]">{tag}</span>)}</div>:null}
               <p className="text-[11px] text-muted-foreground">{item.licenseTerms}</p>
-              <Link href={'/app/clips/community-templates/'+encodeURIComponent(item.id)}
-                className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">Preview & use template</Link>
+              <div className="flex gap-2">
+                <Link href={'/app/clips/community-templates/'+encodeURIComponent(item.id)}
+                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">Preview & use template</Link>
+                <button type="button" className="rounded-lg border px-3 py-2 text-xs"
+                  onClick={()=>setReportTemplate({id:item.id,title:item.title})}>Report</button>
+              </div>
             </div>
           </article>)}
         </div>
@@ -424,6 +432,9 @@ export function VideoTemplatesGallery() {
       </section>}
       <SubmitCommunityTemplateDialog template={submitTemplate} onClose={()=>setSubmitTemplate(null)}
         onSubmitted={()=>{setMineRefresh(x=>x+1);setSubmitTemplate(null)}} />
+      <ReportCommunityTemplateDialog publicationId={reportTemplate?.id??null} title={reportTemplate?.title??''}
+        onClose={()=>setReportTemplate(null)}
+        onReported={()=>{setCommunityNotice('Report submitted for moderator review.');setReportTemplate(null)}} />
     </main>
   )
 }
