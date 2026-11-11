@@ -111,9 +111,10 @@ describe('Batch 5 template music preview and shared renderer compiler',()=>{
       .toThrow(/hash/)
     const short={...decision(),schedule:{...makeSchedule(90),durationFrames:30}}
     expect(()=>planTemplateMusic(family(2),short)).toThrow(/duration/)
-    const tiny=rights
-    expect(()=>planTemplateMusic(family(2),{...decision(),rights:{...tiny,verifiedDurationFrames:30},
-      schedule:{...makeSchedule(90),durationFrames:30}})).toThrow(/short/)
+    expect(()=>planTemplateMusic(family(2),{...decision('keep-timing'),
+      rights:{...rights,verifiedDurationFrames:30},
+      schedule:{...makeSchedule(90),durationFrames:30,beats:[0,20]},
+    })).toThrow(/short/)
   })
   it('never treats unverified legacy stock catalog references as export-cleared',()=>{
     expect(TEMPLATE_STOCK_AUDIO_AUDIT_V1).toHaveLength(10)
