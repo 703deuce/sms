@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
@@ -13,7 +15,7 @@ import {
   sampleTemplatePlayback,
 } from '@/lib/clips/real-video-templates/slot-playback'
 import { outputToSequenceFrame, sourceToSequenceFrames } from '@/lib/clips/real-video-templates/sequence-timebase'
-import { normalizeSourceSegments, segmentMediaMs, sourceSegmentPlaybackRate } from '@/lib/clips/editor/sources'
+import { normalizeSourceSegments, segmentMediaMs, sourcePlaybackSample, sourceSegmentPlaybackRate, type SourceSegmentPlayback } from '@/lib/clips/editor/sources'
 
 const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 180): TemplateAsset => ({
   id,
@@ -189,5 +191,27 @@ describe('real-video template B6 slot-local playback', () => {
       media: { ...choices.media, shot_1: asset('photo_a', 'image') },
     }
     expect(() => compileTemplatePrototype(photoFamily, design, photoChoices, carrier)).toThrow(/playback speed requires video media/)
+  })
+})
+
+describe('B6 preview / worker golden source-frame coordinates', () => {
+  it('matches output-local frame, source-frame and held/rate values including transition handles', () => {
+    const fixture = JSON.parse(
+      readFileSync(join(process.cwd(), 'tests', 'fixtures', 'real-video-b6-frame-golden.json'), 'utf8'),
+    ) as {
+      sourceInFrame: number
+      playback: SourceSegmentPlayback
+      samples: Array<{ outputFrame: number; mediaFrame: number; rate: number; held: boolean }>
+    }
+    for (const expected of fixture.samples) {
+      const preview = sampleTemplatePlayback(fixture.playback, fixture.sourceInFrame, expected.outputFrame)
+      const shared = sourcePlaybackSample(fixture.playback, expected.outputFrame)
+      expect(preview.mediaFrame).toBeCloseTo(expected.mediaFrame, 8)
+      expect(preview.rate).toBe(expected.rate)
+      expect(preview.held).toBe(expected.held)
+      expect(fixture.sourceInFrame + shared.mediaOffsetFrame).toBeCloseTo(expected.mediaFrame, 8)
+      expect(shared.rate).toBe(expected.rate)
+      expect(shared.held).toBe(expected.held)
+    }
   })
 })

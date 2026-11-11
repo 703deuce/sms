@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from pathlib import Path
@@ -8,7 +9,7 @@ import pytest
 
 from clips_worker.ffmpeg_util import probe_video_nb_frames
 from clips_worker.media_sources import apply_full_render_sources
-from clips_worker.template_playback import render_playback_window
+from clips_worker.template_playback import render_playback_window, sample_source_playback
 
 FFMPEG = shutil.which("ffmpeg")
 FFPROBE = shutil.which("ffprobe")
@@ -212,3 +213,23 @@ def test_template_missing_assigned_media_fails_closed(tmp_path: Path) -> None:
     }
     with pytest.raises(RuntimeError, match="black carrier fallback"):
         apply_full_render_sources(carrier, edits, 0, 1000, tmp_path, {})
+
+
+def test_b6_worker_source_clock_matches_shared_browser_golden() -> None:
+    golden_path = Path(__file__).resolve().parents[2] / "new-app/tests/fixtures/real-video-b6-frame-golden.json"
+    golden = json.loads(golden_path.read_text())
+    for expected in golden["samples"]:
+        sampled = sample_source_playback(golden["playback"], expected["outputFrame"])
+        assert golden["sourceInFrame"] + sampled["mediaOffsetFrame"] == pytest.approx(expected["mediaFrame"], abs=1e-7)
+        assert sampled["rate"] == expected["rate"]
+        assert sampled["held"] == expected["held"]
+
+
+@pytest.mark.parametrize("transition", ["crossfade", "dip_white", "push_left", "wipe_left"])
+def test_b6_cross_source_safe_transitions_have_colored_first_last_frames(tmp_path: Path, transition: str) -> None:
+    out = _composite(tmp_path, transition)
+    assert probe_video_nb_frames(out) == 60
+    first, during, last = _pixel(out, 0.05), _pixel(out, 1.0), _pixel(out, 1.95)
+    assert first[0] > first[2] + 40, (transition, first)
+    assert last[2] > last[0] + 40, (transition, last)
+    assert max(during) > 30, (transition, during)

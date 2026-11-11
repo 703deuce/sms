@@ -1,0 +1,75 @@
+{
+  "fps": 30,
+  "sourceInFrame": 30,
+  "playback": {
+    "v": 1,
+    "fps": 30,
+    "outputFrames": 15,
+    "pieces": [
+      {
+        "kind": "play",
+        "frames": 5,
+        "rate": 0.5
+      },
+      {
+        "kind": "hold",
+        "frames": 3
+      },
+      {
+        "kind": "play",
+        "frames": 7,
+        "rate": 2
+      }
+    ]
+  },
+  "samples": [
+    {
+      "outputFrame": -2,
+      "mediaFrame": 29,
+      "rate": 0.5,
+      "held": false
+    },
+    {
+      "outputFrame": 0,
+      "mediaFrame": 30,
+      "rate": 0.5,
+      "held": false
+    },
+    {
+      "outputFrame": 4,
+      "mediaFrame": 32,
+      "rate": 0.5,
+      "held": false
+    },
+    {
+      "outputFrame": 5,
+      "mediaFrame": 32,
+      "rate": 0,
+      "held": true
+    },
+    {
+      "outputFrame": 7,
+      "mediaFrame": 32,
+      "rate": 0,
+      "held": true
+    },
+    {
+      "outputFrame": 8,
+      "mediaFrame": 32.5,
+      "rate": 2,
+      "held": false
+    },
+    {
+      "outputFrame": 14,
+      "mediaFrame": 44.5,
+      "rate": 2,
+      "held": false
+    },
+    {
+      "outputFrame": 15,
+      "mediaFrame": 46.5,
+      "rate": 2,
+      "held": false
+    }
+  ]
+}
