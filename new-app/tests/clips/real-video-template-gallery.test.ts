@@ -25,6 +25,15 @@ function fixture(id: string): VideoTemplateRelease {
       familyId: 'story', familyRevision: 1, musicPolicy: 'none' },
   }
 }
+const BATCH9A_WORKER_CONTRACT = JSON.parse(readFileSync(
+  resolve(process.cwd(),'tests/fixtures/batch9a-anchor-render-contract.json'),'utf8',
+)) as {
+  v:number
+  music:{generator:string;sha256:string;durationFrames:number}
+  anchors:Array<{id:string;familyId:string;totalFrames:number;slotFrames:number[];slotStarts:number[];
+    transitions:Array<{atFrame:number;type:string;durationFrames:number}>;headline:string;closing:string}>
+}
+
 describe('standalone real video gallery', () => {
   it('publishes only the 10 Batch 9A anchors as truthful Preview releases', () => {
     expect(validateVideoTemplateGallery(FIRST_PARTY_VIDEO_TEMPLATES)).toEqual(FIRST_PARTY_VIDEO_TEMPLATES)
@@ -43,6 +52,30 @@ describe('standalone real video gallery', () => {
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.spritePath)).size).toBe(10)
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.sha256)).size).toBe(10)
   })
+  it('matches the exact language-neutral worker contract for all ten anchors', () => {
+    expect(BATCH9A_WORKER_CONTRACT.v).toBe(1)
+    expect(BATCH9A_WORKER_CONTRACT.music).toEqual({
+      generator:BATCH9A_DEFAULT_MUSIC.generator,
+      sha256:BATCH9A_DEFAULT_MUSIC.sha256,
+      durationFrames:BATCH9A_DEFAULT_MUSIC.durationFrames,
+    })
+    expect(BATCH9A_WORKER_CONTRACT.anchors.map(row=>row.id))
+      .toEqual(FIRST_PARTY_VIDEO_TEMPLATES.map(release=>release.id))
+    for(const release of FIRST_PARTY_VIDEO_TEMPLATES){
+      const row=BATCH9A_WORKER_CONTRACT.anchors.find(value=>value.id===release.id)!
+      expect(row.familyId).toBe(release.family.familyId)
+      expect(row.totalFrames).toBe(release.family.totalFrames)
+      expect(row.slotFrames).toEqual(release.family.slots.map(slot=>slot.durationFrames))
+      expect(row.slotStarts).toEqual(release.family.slots.map(slot=>slot.startFrame))
+      expect(row.transitions).toEqual(release.family.slots.slice(1).map(slot=>{
+        if(slot.transition==='cut')throw new Error('Batch 9A worker contract requires authored transitions')
+        return {atFrame:slot.startFrame,type:slot.transition.type,durationFrames:slot.transition.durationFrames}
+      }))
+      expect(row.headline).toBe(release.family.texts[0]?.defaultText)
+      expect(row.closing).toBe(release.family.texts[1]?.defaultText)
+    }
+  })
+
   it('pins every committed real-media preview sprite to its manifest SHA-256', () => {
     for (const release of FIRST_PARTY_VIDEO_TEMPLATES) {
       const preview = release.previewMedia
