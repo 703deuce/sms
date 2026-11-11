@@ -26,7 +26,7 @@ export type FirstPartyLaunchTreatment = {
   origin: LaunchTreatmentOrigin
   status: LaunchTreatmentStatus
   treatmentKind: LaunchTreatmentKind
-  visibleDimensions: VisibleTemplateDimension[]
+  visibleDimensions: readonly VisibleTemplateDimension[]
 }
 
 export type FirstPartyLaunchCatalogSummary = {
