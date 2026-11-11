@@ -6,6 +6,7 @@ import {Sparkles,Loader2} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {aiProducerAgentPublicEnabled} from '@/lib/ai-producer-agent/flags'
 import {streamerAgentWindows,MAX_AGENT_SOURCE_WINDOW_MS} from '@/lib/streamer/agent-windows'
+import {streamerBatchStatusText} from '@/lib/streamer/agent-batch-contract'
 import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
 import { UnifiedClipRunNote } from '../clips/unified-clip-run-note'
 
@@ -112,6 +113,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
   const [batchId,setBatchId]=useState<string|null>(null)
   const [agentProgress,setAgentProgress]=useState<AgentRunProgress|null>(null)
   const [checkingRun,setCheckingRun]=useState(true)
+  const [batchLookupError,setBatchLookupError]=useState(false)
   const progressLogRef=useRef<{stage:string;bucket:number}|null>(null)
   useEffect(()=>()=>{canceled.current=true},[])
   // The entire-VOD batch is durable: project settings and worker jobs survive
@@ -124,20 +126,21 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
         const data=await requestJson('/api/streamer/agent-batches?projectId='+
           encodeURIComponent(projectId)) as null|{
           id:string;status:string;index:number;total:number
-          completed:FinishedClip[];errors:string[]
+          completed:FinishedClip[];errors:string[];startedAt?:string|null
         }
         if(stopped)return
+        setBatchLookupError(false)
         if(data?.id&&!manualRunning.current){
           setBatchId(data.id)
           setCompleted(data.completed??[])
           setErrors(data.errors??[])
-          setStatus(data.status==='running'?
-            `Batch window ${Math.min(data.total,data.index+1)}/${data.total}`:
-            data.status==='done'?'Complete':data.status)
+          setStatus(streamerBatchStatusText(data,Date.now()))
           setRunning(data.status==='running')
         }
       }catch{
-        // A transient status lookup failure cannot cancel queued worker jobs.
+        // An unreachable status endpoint is not a completed/empty batch.
+        // Preserve rendered clip links and let the next poll reconnect.
+        if(!stopped)setBatchLookupError(true)
       }
       if(!stopped)timer=setTimeout(poll,5000)
     }
@@ -416,6 +419,9 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
       {agentProgress
         ? `Agent run: ${agentProgress.status} · ${agentProgress.stage} · elapsed ${formatAgentTime(agentProgress.elapsedSec)} · ${agentProgress.etaSec===null?'ETA unavailable (taking longer than estimated)':`ETA ~${formatAgentTime(agentProgress.etaSec)}`}`
         : status}
+    </p>:null}
+    {batchLookupError&&batchId?<p role="status" className="mt-2 text-xs text-muted-foreground">
+      Batch status temporarily unavailable · reconnecting. Saved clips remain accessible; no new run started.
     </p>:null}
     {completed.length?<div className="mt-3 flex flex-wrap gap-2">
       {completed.map((clip,i)=>
