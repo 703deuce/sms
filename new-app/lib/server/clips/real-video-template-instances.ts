@@ -18,6 +18,7 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage } from '@/lib/storage'
 import { assertAudioLicense } from '@/lib/clips/real-video-templates/music-timing'
 import { compileTemplateWithMusic, planTemplateMusic, type TemplateMusicDecisionV1 } from '@/lib/clips/real-video-templates/music-sequence'
+import { BATCH9A_DEFAULT_MUSIC } from '@/lib/clips/real-video-templates/batch9a-anchors'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
 import { storageDriverName, uploadSourceKey } from '@/lib/storage'
@@ -157,11 +158,24 @@ export async function loadAndValidateAssets(
         authorization.schedule.sha256 !== authorization.rights.sha256 ||
         authorization.schedule.musicAssetId !== choices.music.id)
       throw new Error('Template music identity does not match its approved schedule')
-    // Do not trust supplied public-stock metadata. Only user-owned music with an explicit
-    // acknowledgment can use this route until cleared stock bytes are pinned in a manifest.
-    if (choices.music.license.provenance !== 'user-owned' ||
-        !/^(user-owned|user-upload)$/i.test(authorization.rights.license))
-      throw new Error('Stock music is not verified for template export; upload a rights-cleared song')
+    // Do not trust supplied public-stock metadata. User-owned uploads remain the normal route.
+    // Batch 9A has one deterministic first-party composition; accept it only when every
+    // immutable license/hash field matches the checked-in manifest.
+    const userOwned = choices.music.license.provenance === 'user-owned' &&
+      /^(user-owned|user-upload)$/i.test(authorization.rights.license)
+    const batch9aFirstParty = choices.music.license.provenance === 'first-party' &&
+      choices.music.license.id === 'batch9a_first_party' &&
+      choices.music.license.reference === BATCH9A_DEFAULT_MUSIC.revision &&
+      authorization.rights.origin === 'first-party-generated' &&
+      authorization.rights.author === BATCH9A_DEFAULT_MUSIC.author &&
+      authorization.rights.license === BATCH9A_DEFAULT_MUSIC.license &&
+      authorization.rights.revision === BATCH9A_DEFAULT_MUSIC.revision &&
+      authorization.rights.sha256.toLowerCase() === BATCH9A_DEFAULT_MUSIC.sha256 &&
+      authorization.rights.verifiedDurationFrames === BATCH9A_DEFAULT_MUSIC.durationFrames &&
+      authorization.rights.commercialUse === true &&
+      authorization.rights.exportAllowed === true
+    if (!userOwned && !batch9aFirstParty)
+      throw new Error('Stock or unpinned first-party music is not verified for template export')
     if (Math.abs((row.durationMs ?? 0) - Math.round(authorization.rights.verifiedDurationFrames * 1000 / 30)) > 34)
       throw new Error('Music duration has changed since its schedule was approved')
     if (!row.key || !row.bytes || row.bytes > BigInt(100 * 1024 * 1024))
