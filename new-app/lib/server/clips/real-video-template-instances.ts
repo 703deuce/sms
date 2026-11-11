@@ -50,8 +50,21 @@ function idsFor(workspaceId: string, idempotencyKey: string) {
     jobId: 'job_tpl_' + h,
   }
 }
+function stableJson(value: unknown): string {
+  const sort = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(sort)
+    if (v && typeof v === 'object') {
+      const out: Record<string, unknown> = {}
+      for (const key of Object.keys(v as Record<string, unknown>).sort())
+        out[key] = sort((v as Record<string, unknown>)[key])
+      return out
+    }
+    return v
+  }
+  return JSON.stringify(sort(value))
+}
 function definitionHash(snapshot: TemplateSnapshot): string {
-  return digest(JSON.stringify(snapshot))
+  return digest(stableJson(snapshot))
 }
 function parseTemplateMeta(raw: unknown): Record<string, unknown> | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -150,6 +163,7 @@ export async function publishTemplateProject(
   const ids = idsFor(workspaceId, idempotencyKey)
   const snapshot = { family, design }
   const defHash = definitionHash(snapshot)
+  const requestHash = digest(stableJson({ snapshot, choices: choicesRaw }))
   const durationMs = Math.round(family.totalFrames * 1000 / 30)
   const prisma = getPrisma()
 
@@ -166,7 +180,7 @@ export async function publishTemplateProject(
   })
   if (existing?.clips[0]) {
     const meta = parseTemplateMeta(existing.clips[0].aiMeta)
-    if (meta?.definitionHash !== defHash || meta?.instanceId !== ids.instanceId)
+    if (meta?.definitionHash !== defHash || meta?.requestHash !== requestHash || meta?.instanceId !== ids.instanceId)
       throw new TemplateInstanceConflict()
     return resultFromRows(ids.instanceId, existing, existing.clips[0])
   }
@@ -208,6 +222,7 @@ export async function publishTemplateProject(
           instanceId: ids.instanceId,
           idempotencyKey,
           definitionHash: defHash,
+          requestHash,
           snapshot,
           authoringState: structuredClone(choicesRaw),
           authoringVersion: 0,
@@ -313,7 +328,7 @@ export async function publishTemplateProject(
     })
     if (won?.clips[0]) {
       const meta = parseTemplateMeta(won.clips[0].aiMeta)
-      if (meta?.definitionHash === defHash && meta?.instanceId === ids.instanceId)
+      if (meta?.definitionHash === defHash && meta?.requestHash === requestHash && meta?.instanceId === ids.instanceId)
         return resultFromRows(ids.instanceId, won, won.clips[0])
     }
     throw error
