@@ -85,8 +85,8 @@ export async function ensureAdVoiceover(
     runId, textLength: text.length, customVoice: Boolean(input.voiceId || plan?.voiceId), maxTakes,
   })
 
-  let selected: VoiceTake
-  let selectedDurationMs: number
+  let selected: VoiceTake | null = null
+  let selectedDurationMs = 0
   const plannedDurationMs = input.durationSec * 1000
   const targetVoiceMs = adVoiceTargetMs(input.durationSec)
   const initialVoice = adVoiceSettings(input.voiceId ?? plan?.voiceId, { durationSec: input.durationSec, text })
@@ -158,6 +158,22 @@ export async function ensureAdVoiceover(
       data: { voiceoverStatus: 'failed', status: 'failed', errorCode: failure.code, errorMessage: failure.uiMessage },
     })
     console.warn('[ad-studio:b4] voice_failed_no_retry', { runId, code: failure.code, message: failure.message })
+    return { status: 'failed' }
+  }
+
+  if (!selected || selectedDurationMs <= 0) {
+    await db.adStudioRun.updateMany({
+      where: { id: runId, workspaceId, voiceoverStatus: 'generating' },
+      data: {
+        voiceoverStatus: 'failed',
+        status: 'failed',
+        errorCode: 'TTS_ERROR',
+        errorMessage: 'Voiceover provider returned no usable audio. Retry voiceover & render.',
+      },
+    })
+    console.warn('[ad-studio:b4] voice_failed_no_retry', {
+      runId, code: 'TTS_ERROR', message: 'No usable voiceover take was selected.',
+    })
     return { status: 'failed' }
   }
 
