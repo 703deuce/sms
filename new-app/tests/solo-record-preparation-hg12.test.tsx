@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { SoloRecordClient } from '@/components/recording/solo/solo-record-client'
 
 const recorder = vi.hoisted(() => ({
@@ -41,6 +41,37 @@ afterEach(() => {
 })
 
 describe('solo recorder preparation states (HG12)', () => {
+  it('aborts a pending prepare request after 20s and offers manual Retry', async () => {
+    vi.useFakeTimers()
+    try {
+      const fetchMock = vi.fn((_url: string, options: RequestInit) => new Promise((_, reject) => {
+        options.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+      render(<SoloRecordClient />)
+      expect(screen.getByText('Preparing recording workspace…')).toBeTruthy()
+      await act(async () => { await vi.advanceTimersByTimeAsync(20_010) })
+      expect(screen.getByRole('alert').textContent).toContain('timed out')
+      expect(screen.getByRole('button', { name: 'Retry preparation' })).toBeTruthy()
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('aborts in-flight preparation on navigation without arming the recorder', async () => {
+    let signal: AbortSignal | undefined
+    vi.stubGlobal('fetch', vi.fn((_url: string, options: RequestInit) => {
+      signal = options.signal as AbortSignal
+      return new Promise(() => {})
+    }))
+    const view = render(<SoloRecordClient />)
+    expect(signal?.aborted).toBe(false)
+    view.unmount()
+    expect(signal?.aborted).toBe(true)
+    expect(recorder.setArmed).not.toHaveBeenCalled()
+  })
+
   it('shows honest loading and gives an explicit retry on preparation failure', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: false, json: async () => ({ error: 'Preparation unavailable' }) })
