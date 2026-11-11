@@ -483,26 +483,22 @@ export function compileTemplate(
     })
   }
 
+  // B3B: slot motion is item-local on the real source-segment item, never on the opaque carrier.
   const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
-  if (family.slots.some((slot) => slot.motion)) {
-    const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
+  const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
+  for (const slot of family.slots) {
+    if (!slot.motion) continue
+    const itemId = slotToItemIds[slot.id]!
+    const localEndMs = templateFrameToMs(slot.durationFrames - 1)
     for (const prop of ['x','y','scale','rotation'] as const) {
-      const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = []
-      let used = false
-      for (const slot of family.slots) {
-        const startMs = templateFrameToMs(slot.startFrame)
-        const endMs = templateFrameToMs(slot.startFrame + slot.durationFrames - 1)
-        const from = slot.motion?.from?.[prop] ?? defaults[prop]
-        const to = slot.motion?.to?.[prop] ?? (slot.motion ? from : defaults[prop])
-        if (from !== defaults[prop] || to !== defaults[prop]) used = true
-        points.push({
-          tMs: startMs,
-          v: from,
-          ...(slot.motion?.ease ? { ease: slot.motion.ease } : {}),
-        })
-        if (endMs > startMs) points.push({ tMs: endMs, v: to })
-      }
-      if (used) motionKeyframes.push({ target: 'video', prop, points })
+      const from = slot.motion.from?.[prop] ?? defaults[prop]
+      const to = slot.motion.to?.[prop] ?? from
+      if (from === defaults[prop] && to === defaults[prop]) continue
+      const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = [
+        { tMs: 0, v: from, ...(slot.motion.ease ? { ease: slot.motion.ease } : {}) },
+      ]
+      if (localEndMs > 0) points.push({ tMs: localEndMs, v: to })
+      motionKeyframes.push({ target: `source:${itemId}`, prop, points })
     }
   }
 
