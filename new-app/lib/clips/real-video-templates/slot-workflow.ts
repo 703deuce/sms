@@ -88,10 +88,13 @@ function withOverrides(slot: TemplateSlot, fill: StudioSlotFill): TemplateSlot {
     ...slot,
     fit: fill.fit,
     ...(fill.asset.kind === 'image' ? { media: 'image' as const, sourceAudio: 'mute' as const } : {
-      media: 'video' as const, sourceAudio: fill.muteSourceAudio ? 'mute' as const : slot.sourceAudio,
+      media: 'video' as const, sourceAudio: fill.muteSourceAudio ? 'mute' as const : 'source' as const,
       sourceInFrame: fill.sourceInFrame,
     }),
-    transform: { ...(slot.transform ?? {}), x: shiftX, y: shiftY },
+    transform: { ...(slot.transform ?? {}),
+      ...(fill.focalX !== 50 ? { x: clamp((slot.transform?.x ?? 0) + shiftX, -100, 100) } : {}),
+      ...(fill.focalY !== 50 ? { y: clamp((slot.transform?.y ?? 0) + shiftY, -100, 100) } : {}),
+    },
   }
 }
 function fitParts(slot: TemplateSlot, fill: StudioSlotFill): Array<{ slot: TemplateSlot; asset: TemplateAsset }> {

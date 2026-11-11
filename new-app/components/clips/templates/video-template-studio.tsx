@@ -99,6 +99,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [sourceUrls, setSourceUrls] = useState<Record<string, string>>({})
   const [render, setRender] = useState<RenderJob | null>(null)
   const [clockMs, setClockMs] = useState(0)
+  const lastClockRounded = useRef(-1)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -199,7 +200,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     return () => window.clearInterval(timer)
   }, [project?.id, project?.status, refreshClip])
   const saveNow = useCallback(async (): Promise<void> => {
-    if (saveLock.current) { await saveLock.current; return }
+    if (saveLock.current) { await saveLock.current; if (dirtyRef.current) return saveNow(); return }
     const value = draftRef.current, state = projectRef.current
     if (!dirtyRef.current || !state || !value || state.status === 'QUEUED') return
     if (state.status !== 'DRAFT' && (state.status !== 'READY' || !clip)) return
@@ -315,6 +316,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     try {
       materializeStudioDraft(release.family, draft, 'preview_instance')
       await saveNow()
+      if (dirtyRef.current) throw new Error('Draft still has unsaved changes. Retry preparation after saving.')
       const result = await request<{ projectId: string; clipId: string; status: string }>(
         '/api/clips/video-templates/drafts/' + encodeURIComponent(project.id) + '/publish', 'POST')
       setCurrentProject({ ...project, status: result.status, clipId: result.clipId, draft, version: versionRef.current })
@@ -328,6 +330,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     setBusy(true);setError('')
     try {
       await saveNow()
+      if (dirtyRef.current) throw new Error('Save must finish before export')
       const result = await request<{ renderId: string; status: string; downloadUrl?: string | null }>(
         '/api/clips/clips/' + encodeURIComponent(state.clipId) + '/export', 'POST', {
           resolution: '720p', aspect: release.family.aspects[0], format: 'mp4',
@@ -407,7 +410,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
               <PreviewStage clipId={project?.clipId} edits={clip.edits} videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
                 posterUrl={clip.mediaUrls.poster} media={clip.media} cropTrack={clip.crop.track}
                 words={[]} videoRef={videoRef} sourceUrls={sourceUrls}
-                onTick={tick => setClockMs(tick.outputMs)} />
+                onTick={tick => { const frame = Math.floor(tick.outputMs / 100); if (frame !== lastClockRounded.current) {
+                    lastClockRounded.current = frame; setClockMs(tick.outputMs)
+                  } }} />
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button type="button" className={buttonClass} onClick={() => void videoRef.current?.play()}>Play</button>
                 <button type="button" className={buttonClass} onClick={() => videoRef.current?.pause()}>Pause</button>

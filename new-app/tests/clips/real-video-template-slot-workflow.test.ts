@@ -40,6 +40,19 @@ describe('Batch 4 standalone slot fulfillment', () => {
     expect(out.family.slots.map(s=>s.media)).toEqual(['video','image'])
     expect(out.choices.media[out.family.slots[1]!.id]?.id).toBe('still1')
   })
+
+  it('preserves authored source transforms and honors explicit source-audio unmute', () => {
+    const f=family(1)
+    f.slots[0] = { ...f.slots[0]!, transform: { x: 12, y: -9, scale: 130 },
+      sourceAudio: 'mute', media: 'video' }
+    let d=assignSelectionInOrder(newStudioDraft('release','draft_01234567'),f,[video('clip',180)]).draft
+    d={...d,slots:{s0:{...d.slots.s0!, muteSourceAudio:false}}}
+    const compiled=materializeStudioDraft(f,d,'instance1')
+    expect(compiled.family.slots[0]!.transform).toMatchObject({x:12,y:-9,scale:130})
+    expect(compiled.family.slots[0]!.sourceAudio).toBe('source')
+    d.slots.s0!.focalX=70
+    expect(materializeStudioDraft(f,d,'instance1').family.slots[0]!.transform?.x).toBe(2)
+  })
   it('rejects wrong media, overflow and invalid focal point', () => {
     const f=family(1)
     let d=assignSelectionInOrder(newStudioDraft('release','draft_01234567'),f,[image('pic')]).draft
