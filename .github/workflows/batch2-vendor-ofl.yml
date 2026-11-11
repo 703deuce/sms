@@ -51,3 +51,59 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "chore(fonts): vendor eight pinned matching OFL font binary pairs"
           git push origin HEAD:feat/real-video-templates-b2-font-runtime
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - name: Install isolated Batch 2 QA dependencies
+        run: |
+          cd new-app
+          pnpm install --frozen-lockfile
+          cd ..
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg fontconfig fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
+          python -m pip install 'pytest==8.4.2' 'pillow==11.3.0'
+          mkdir -p "$HOME/.local/share/fonts/transovo"
+          cp worker/prototype/v3/fonts/*.ttf worker/v3/fonts/t6/*.ttf "$HOME/.local/share/fonts/transovo/"
+          fc-cache -f
+      - name: Run exact full TypeScript, caption/Text Vitest and worker export tests
+        shell: bash
+        run: |
+          set +e
+          (cd new-app && pnpm exec vitest run \
+            tests/font-manifest-b2.test.ts tests/premium-caption-styles-b2.test.ts \
+            tests/typography-treatments-b2.test.ts tests/typography-panel-b2.test.tsx \
+            tests/motion-graphics-text-adapter.test.ts tests/g1a-canvas-ui.test.tsx \
+            tests/preview-stage-e3.test.tsx tests/text-template-panel-add.test.tsx \
+            tests/caption-fonts-user.test.ts tests/caption-user-font.test.ts \
+            tests/caption-case.test.ts tests/caption-style-snapshot.test.ts \
+            tests/caption-overlay-preview.test.tsx tests/caption-line-max-chars.test.ts) \
+            > /tmp/b2-vitest.log 2>&1
+          vite=$?
+          (cd new-app && pnpm exec tsc --noEmit --pretty false) > /tmp/b2-tsc.log 2>&1
+          tsc=$?
+          PYTHONPATH=worker python -m pytest -q \
+            worker/tests/test_ofl_font_parity.py worker/tests/test_ofl_render_samples.py \
+            > /tmp/b2-worker.log 2>&1
+          worker=$?
+          {
+            echo "Batch 2 full check on $(git rev-parse HEAD)"
+            echo "pnpm exec vitest run [14 new/existing font, Text and caption suites]: exit=$vite"
+            echo "pnpm exec tsc --noEmit --pretty false: exit=$tsc"
+            echo "PYTHONPATH=worker pytest [fontconfig, Unicode, captions/Text/motion FFmpeg samples]: exit=$worker"
+            for item in vitest tsc worker; do
+              echo "----- $item failure summary -----"
+              grep -E 'FAIL |error TS|FAILED |ERROR |AssertionError|Error:' /tmp/b2-$item.log | head -45 || true
+            done
+          } > new-app/tests/batch2-qa-results.txt
+          cat new-app/tests/batch2-qa-results.txt
+          git add -- new-app/tests/batch2-qa-results.txt
+          git diff --cached --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "test(fonts): record full Batch 2 runtime verification results"
+          git push origin HEAD:feat/real-video-templates-b2-font-runtime
+          if [[ $vite -ne 0 || $tsc -ne 0 || $worker -ne 0 ]]; then
+            echo "Batch 2 runtime gate failed; see committed QA report" >&2
+            exit 1
+          fi
