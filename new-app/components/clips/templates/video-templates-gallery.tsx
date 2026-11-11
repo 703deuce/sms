@@ -75,6 +75,61 @@ function AnimatedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO
     </span>
   </div>
 }
+function RenderedTemplateCardPreview({ item }: { item: (typeof FIRST_PARTY_VIDEO_TEMPLATES)[number] }) {
+  const media=item.previewMedia
+  const [frame,setFrame]=useState(0)
+  const [playing,setPlaying]=useState(false)
+  const [failed,setFailed]=useState(false)
+  const [reducedMotion,setReducedMotion]=useState(false)
+
+  useEffect(()=>{
+    const query=window.matchMedia('(prefers-reduced-motion: reduce)')
+    const sync=()=>setReducedMotion(query.matches)
+    sync()
+    query.addEventListener('change',sync)
+    return()=>query.removeEventListener('change',sync)
+  },[])
+  useEffect(()=>{
+    if(!media)return
+    setFailed(false)
+    const image=new window.Image()
+    image.onerror=()=>setFailed(true)
+    image.src=media.spritePath
+    return()=>{image.onerror=null}
+  },[media])
+  useEffect(()=>{
+    if(!playing||reducedMotion||failed||!media)return
+    const slot=item.family.slots[frame%Math.max(1,item.family.slots.length)]
+    const ms=Math.max(420,Math.min(900,Math.round((slot?.durationFrames??45)*10)))
+    const timer=window.setTimeout(()=>setFrame(value=>(value+1)%media.frames),ms)
+    return()=>window.clearTimeout(timer)
+  },[failed,frame,item.family.slots,media,playing,reducedMotion])
+
+  if(!media||failed)return <AnimatedTemplateCardPreview item={item}/>
+  const position=media.columns<=1?0:(frame*100)/(media.columns-1)
+  const seconds=(item.family.totalFrames/item.family.fps).toFixed(1).replace(/\.0$/,'')
+  return <div className="group relative aspect-video overflow-hidden bg-black"
+    aria-label={'Rendered preview '+item.title}
+    onMouseEnter={()=>setPlaying(true)} onMouseLeave={()=>{setPlaying(false);setFrame(0)}}>
+    <div className="absolute inset-0 bg-cover bg-center" style={{
+      backgroundImage:'url("'+media.spritePath+'")',
+      backgroundSize:(media.columns*100)+'% 100%',
+      backgroundPosition:position+'% 50%',
+      backgroundRepeat:'no-repeat',
+    }}/>
+    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15"/>
+    <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-black/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-100">
+      {item.certificationStatus==='certified'?'Certified':'Preview'}
+    </span>
+    <span className="absolute bottom-3 left-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium text-white">
+      {seconds}s · {item.family.slots.length} clips
+    </span>
+    {!reducedMotion?<span className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2 py-1 text-[10px] font-medium text-white/90">
+      {playing?'Previewing':'Hover preview'}
+    </span>:null}
+  </div>
+}
+
 export function VideoTemplatesGallery() {
   const [scope, setScope] = useState<Scope>('first-party')
   const [query, setQuery] = useState('')
@@ -242,7 +297,9 @@ export function VideoTemplatesGallery() {
                     try { event.currentTarget.currentTime = 0 } catch { /* not seekable yet */ }
                   }} className="aspect-video w-full bg-black object-cover"
                   aria-label={`Preview ${item.title}`} />
-              : <AnimatedTemplateCardPreview item={item} />}
+              : item.previewMedia
+                ? <RenderedTemplateCardPreview item={item} />
+                : <AnimatedTemplateCardPreview item={item} />}
             <div className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h2 className="font-semibold">{item.title}</h2>
