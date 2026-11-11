@@ -137,12 +137,14 @@ Do not falsely cancel a claimed/running worker job; that requires actual
 worker cancellation and acknowledgment. Completed jobs require verified
 render evidence and human scores, not a manually set flag.
 
-The current renderer queue is a **job manifest for an existing worker adapter**.
-It does not itself implement worker scheduling, FFmpeg render execution,
-per-frame image comparison, primitive-specific QA fan-out or automatic
-poster export. Those runtime capabilities require a worker with actual
-licensed input media and checked render output. Structural compilation
-counts do not satisfy real-render or reference-review requirements.
+The renderer queue is a **job manifest for the existing worker adapter**.
+It does not impersonate worker success or bypass the app's render jobs.
+Once actual preview/export MP4s are attached as evidence, `qa-media` and
+`qa-all` decode **every output frame at 30 fps** through FFmpeg, compare
+preview/export RGB frames, check first/last and every cut boundary for
+black frames, detect rapid flash reversals, verify audio streams and compare
+decoded soundtrack envelopes. Structural compilation counts never satisfy
+real-render or reference-review requirements.
 
 ## Add a new family or treatment
 
@@ -171,10 +173,15 @@ counts do not satisfy real-render or reference-review requirements.
 - Original signed F01–F50 family schedules are not present.
 - No 2,000 fully licensed sample video outputs, posters, CapCut/Canva
   review references or signed human scores exist.
-- Worker-driven low-res MP4 generation, frame-by-frame export parity,
-  black-frame/flash/Unicode legibility scripts, primitive fan-out gates,
-  stock-music byte/licensing audits and incremental FFmpeg benchmarks
-  remain to be completed with real assets.
+- Actual MP4 generation still runs through the existing app/worker and requires
+  registered licensed fixture uploads plus a live workspace; the factory now
+  prepares all 2,000 native edit requests and performs full-frame/audio QA on
+  returned media instead of claiming render success.
+- Unicode glyph shaping, moving-background text readability, semantic beat
+  quality and reference-quality scoring still require real rendered inspection;
+  the static lint cannot truthfully certify those from source data alone.
+- Incremental worker-render performance benchmarks require actual worker runs
+  and cannot be fabricated by the repository-only factory.
 - Releasing through the public user-template flow requires its Batch 15
   sanitization/moderation contract and must never bypass review.
 - Compact/full Timeline integration stays deferred per the 12:27 PM

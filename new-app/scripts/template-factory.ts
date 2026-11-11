@@ -20,6 +20,9 @@ import { templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-t
 import { compileTemplateWithMusic, type TemplateMusicDecisionV1 } from '../lib/clips/real-video-templates/music-sequence'
 import { assertAudioLicense } from '../lib/clips/real-video-templates/music-timing'
 import { defaultEdits } from '../lib/clips/edits'
+import {
+  B8_RENDER_QA_REVISION, summarizeB8AudioEnvelopeQA, summarizeB8FrameQA,
+} from '../lib/clips/real-video-templates/b8-render-qa'
 
 const args=process.argv.slice(2)
 const command=args[0] ?? 'help'
@@ -103,11 +106,16 @@ async function verifiedFixtures():Promise<FixtureManifest>{
   return fixture
 }
 type MeasuredRenderQA={
+  qaRevision:typeof B8_RENDER_QA_REVISION
   id:string;definitionHash:string;previewSha256:string;renderSha256:string
   expectedFrames:number;previewFrames:number;renderFrames:number
   previewHasAudio:boolean;renderHasAudio:boolean
-  durationMatch:boolean;audioStreamParity:boolean
-  blackSampleFrames:number[];frameSampleParity:boolean;sampledFrameCount:number
+  durationMatch:boolean;audioStreamParity:boolean;audioContentParity:boolean
+  audioEnvelopeDifference:number
+  blackFrames:number[];flashFrames:number[]
+  fullFrameParity:boolean;checkedFrameCount:number
+  firstLastNotBlack:boolean;boundariesNotBlack:boolean;noExcessFlashing:boolean
+  maxFrameDifference:number;p95FrameDifference:number
 }
 async function verifiedEvidence(requireMeasuredQA=true):Promise<B8Evidence[]> {
   const evidence=existsSync(evidencePath)?readJSON<B8Evidence[]>(evidencePath):[]
@@ -125,22 +133,25 @@ async function verifiedEvidence(requireMeasuredQA=true):Promise<B8Evidence[]> {
     if(requireMeasuredQA&&okay&&existsSync(sidecar)){
       try{measurement=readJSON<MeasuredRenderQA>(sidecar)}catch{measurement=null}
     }
-    const matched=Boolean(okay&&measurement&&measurement.id===candidate.id&&
+    const matched=Boolean(okay&&measurement&&
+      measurement.qaRevision===B8_RENDER_QA_REVISION&&measurement.id===candidate.id&&
       measurement.definitionHash===candidate.definitionHash&&
       measurement.previewSha256===values.previewSha256&&
       measurement.renderSha256===values.renderSha256&&
       measurement.expectedFrames===candidate.family.totalFrames&&
       measurement.previewHasAudio===true&&measurement.renderHasAudio===true&&
-      measurement.sampledFrameCount>=2*candidate.family.slots.length)
+      measurement.checkedFrameCount>=candidate.family.totalFrames-1)
     const valid=Boolean(matched&&measurement&&measurement.durationMatch&&
-      measurement.audioStreamParity&&measurement.blackSampleFrames.length===0&&
-      measurement.frameSampleParity)
+      measurement.audioStreamParity&&measurement.audioContentParity&&
+      measurement.firstLastNotBlack&&measurement.boundariesNotBlack&&
+      measurement.fullFrameParity&&measurement.noExcessFlashing)
     out.push({...e,checks:{...e.checks,
-      durationMatch:requireMeasuredQA?valid:Boolean(e.checks?.durationMatch),
-      audioParity:requireMeasuredQA?valid:Boolean(e.checks?.audioParity),
-      firstLastNotBlack:requireMeasuredQA?valid:Boolean(e.checks?.firstLastNotBlack),
-      boundariesNotBlack:requireMeasuredQA?valid:Boolean(e.checks?.boundariesNotBlack),
-      sampledFrameParity:requireMeasuredQA?valid:Boolean(e.checks?.sampledFrameParity),
+      durationMatch:requireMeasuredQA?Boolean(matched&&measurement?.durationMatch):Boolean(e.checks?.durationMatch),
+      audioParity:requireMeasuredQA?Boolean(matched&&measurement?.audioStreamParity&&measurement?.audioContentParity):Boolean(e.checks?.audioParity),
+      firstLastNotBlack:requireMeasuredQA?Boolean(matched&&measurement?.firstLastNotBlack):Boolean(e.checks?.firstLastNotBlack),
+      boundariesNotBlack:requireMeasuredQA?Boolean(matched&&measurement?.boundariesNotBlack):Boolean(e.checks?.boundariesNotBlack),
+      sampledFrameParity:requireMeasuredQA?Boolean(matched&&measurement?.fullFrameParity):Boolean(e.checks?.sampledFrameParity),
+      noExcessFlashing:requireMeasuredQA?Boolean(matched&&measurement?.noExcessFlashing):Boolean(e.checks?.noExcessFlashing),
       actualWorkerRender:Boolean(okay&&e.checks?.actualWorkerRender===true&&
         (!requireMeasuredQA||valid))}})
   }
@@ -175,22 +186,35 @@ function probe(file:string):{durationFrames:number;hasAudio:boolean;hasVideo:boo
     hasAudio:Boolean(data.streams?.some(stream=>stream.codec_type==='audio')),
     hasVideo:Boolean(data.streams?.some(stream=>stream.codec_type==='video'))}
 }
-function framePixels(file:string,atFrame:number,durationFrames:number):Buffer{
-  const ss=Math.max(0,Math.min((durationFrames-1)/30,atFrame/30))
-  const output=spawnSync('ffmpeg',['-nostdin','-v','error','-ss',ss.toFixed(6),
-    '-i',file,'-frames:v','1','-vf','scale=64:64:flags=lanczos,format=rgb24',
+const QA_WIDTH=48,QA_HEIGHT=48,QA_FRAME_BYTES=QA_WIDTH*QA_HEIGHT*3
+function decodeAllFrames(file:string):Buffer{
+  const output=spawnSync('ffmpeg',['-nostdin','-v','error','-i',file,
+    '-vf',`fps=30,scale=${QA_WIDTH}:${QA_HEIGHT}:flags=lanczos,format=rgb24`,
     '-f','rawvideo','-pix_fmt','rgb24','-'],{
-      encoding:null,timeout:30000,maxBuffer:65536,
+      encoding:null,timeout:120000,maxBuffer:128*1024*1024,
     })
-  if(output.status!==0||!Buffer.isBuffer(output.stdout)||output.stdout.length!==12288)
-    throw new Error('FFmpeg cannot decode a QA sample frame at '+atFrame)
+  if(output.status!==0||!Buffer.isBuffer(output.stdout)||!output.stdout.length||
+     output.stdout.length%QA_FRAME_BYTES)
+    throw new Error('FFmpeg cannot decode complete RGB frame stream')
   return output.stdout
 }
-const mean=(pixels:Buffer)=>pixels.reduce((a,b)=>a+b,0)/pixels.length
-const difference=(a:Buffer,b:Buffer)=>{
-  let sum=0
-  for(let i=0;i<a.length;i++)sum+=Math.abs(a[i]!-b[i]!)
-  return sum/a.length
+function audioEnvelope(file:string):number[]{
+  const output=spawnSync('ffmpeg',['-nostdin','-v','error','-i',file,
+    '-map','0:a:0','-vn','-ac','1','-ar','8000','-f','s16le','-'],{
+      encoding:null,timeout:120000,maxBuffer:128*1024*1024,
+    })
+  if(output.status!==0||!Buffer.isBuffer(output.stdout)||output.stdout.length<1600)
+    throw new Error('FFmpeg cannot decode the rendered soundtrack')
+  const pcm=output.stdout
+  const samples=Math.floor(pcm.length/2),window=800
+  const envelope:number[]=[]
+  for(let start=0;start<samples;start+=window){
+    const end=Math.min(samples,start+window)
+    let sum=0
+    for(let i=start;i<end;i++)sum+=Math.abs(pcm.readInt16LE(i*2))
+    envelope.push(sum/Math.max(1,end-start))
+  }
+  return envelope
 }
 async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   const output=evidence.outputs
@@ -202,32 +226,33 @@ async function qaMedia(candidate:B8Candidate,evidence:B8Evidence){
   const pp=probe(preview),pr=probe(rendered)
   const expected=candidate.family.totalFrames
   const boundaries=candidate.family.slots.slice(1).map(slot=>slot.startFrame)
-  const samples=[0,expected-1,...boundaries.flatMap(frame=>[frame-1,frame])]
-    .filter(frame=>frame>=0&&frame<expected)
-  const unique=[...new Set(samples)].sort((a,b)=>a-b)
-  const actual:Array<{frame:number;previewMean:number;renderMean:number;difference:number}>=[]
-  for(const frame of unique){
-    const a=framePixels(preview,frame,pp.durationFrames)
-    const b=framePixels(rendered,frame,pr.durationFrames)
-    actual.push({frame,previewMean:mean(a),renderMean:mean(b),difference:difference(a,b)})
-  }
-  const black=actual.filter(row=>row.renderMean<=7||row.previewMean<=7).map(row=>row.frame)
-  const parity=actual.every(row=>row.difference<=12)
-  const durationMatch=Math.abs(pp.durationFrames-expected)<=1&&
-    Math.abs(pr.durationFrames-expected)<=1
+  const frameQA=summarizeB8FrameQA({
+    previewRgb:decodeAllFrames(preview),renderRgb:decodeAllFrames(rendered),
+    width:QA_WIDTH,height:QA_HEIGHT,expectedFrames:expected,boundaryFrames:boundaries,
+  })
+  const audioQA=pp.hasAudio&&pr.hasAudio
+    ? summarizeB8AudioEnvelopeQA(audioEnvelope(preview),audioEnvelope(rendered))
+    : {previewWindows:0,renderWindows:0,envelopeDifference:Number.POSITIVE_INFINITY,contentParity:false}
   const audioStreamParity=pp.hasAudio&&pr.hasAudio
-  const data={id:candidate.id,definitionHash:candidate.definitionHash,
+  const data:MeasuredRenderQA={qaRevision:B8_RENDER_QA_REVISION,
+    id:candidate.id,definitionHash:candidate.definitionHash,
     previewSha256:output.previewSha256,renderSha256:output.renderSha256,
-    expectedFrames:expected,previewFrames:pp.durationFrames,
-    renderFrames:pr.durationFrames,previewHasAudio:pp.hasAudio,renderHasAudio:pr.hasAudio,
-    durationMatch,audioStreamParity,blackSampleFrames:black,frameSampleParity:parity,
-    sampledFrameCount:actual.length,maxSampleDifference:Math.max(...actual.map(x=>x.difference)),
-    samples:actual,
-    cautions:['RGB downsample parity is not full-resolution glyph/contrast validation',
-      'Check flashes at full frame rate, license rights, beat timestamps and full-motion typography manually',
-      'Sampling cannot prove all 30 fps frames or source-specific audio ducking parity'],
+    expectedFrames:expected,previewFrames:frameQA.previewFrames,
+    renderFrames:frameQA.renderFrames,previewHasAudio:pp.hasAudio,renderHasAudio:pr.hasAudio,
+    durationMatch:frameQA.durationMatch,audioStreamParity,audioContentParity:audioQA.contentParity,
+    audioEnvelopeDifference:audioQA.envelopeDifference,
+    blackFrames:frameQA.blackFrames,flashFrames:frameQA.flashFrames,
+    fullFrameParity:frameQA.fullFrameParity,checkedFrameCount:frameQA.checkedFrameCount,
+    firstLastNotBlack:frameQA.firstLastNotBlack,boundariesNotBlack:frameQA.boundariesNotBlack,
+    noExcessFlashing:frameQA.noExcessFlashing,
+    maxFrameDifference:frameQA.maxFrameDifference,p95FrameDifference:frameQA.p95FrameDifference,
   }
-  save(join(directory,'media-qa',candidate.id+'.json'),data)
+  const report={...data,audioWindows:{preview:audioQA.previewWindows,render:audioQA.renderWindows},
+    cautions:['All output frames are decoded at 30 fps and compared after RGB downsample',
+      'Full-resolution glyph shaping/contrast and semantic beat quality still require rendered review',
+      'Input soundtrack identity remains pinned by the fixture SHA-256 and Batch 5 schedule'],
+  }
+  save(join(directory,'media-qa',candidate.id+'.json'),report)
   return data
 }
 
@@ -365,10 +390,33 @@ async function execute(){
     if(!e)throw new Error('Real render and preview evidence are required')
     const report=await qaMedia(c,e)
     console.log(JSON.stringify({id:c.id,durationMatch:report.durationMatch,
-      audioStreamParity:report.audioStreamParity,blackFrames:report.blackSampleFrames,
-      sampledParity:report.frameSampleParity,samples:report.sampledFrameCount},null,2))
-    if(!report.durationMatch||!report.audioStreamParity||
-       report.blackSampleFrames.length||!report.frameSampleParity)process.exitCode=1
+      audioStreamParity:report.audioStreamParity,audioContentParity:report.audioContentParity,
+      blackFrames:report.blackFrames.length,flashFrames:report.flashFrames.length,
+      fullFrameParity:report.fullFrameParity,checkedFrames:report.checkedFrameCount},null,2))
+    if(!report.durationMatch||!report.audioStreamParity||!report.audioContentParity||
+       !report.firstLastNotBlack||!report.boundariesNotBlack||
+       !report.fullFrameParity||!report.noExcessFlashing)process.exitCode=1
+  }else if(command==='qa-all'){
+    const evidence=await verifiedEvidence(false)
+    let passed=0,failed=0
+    const results:Array<{id:string;ok:boolean;error?:string}>=[]
+    for(const e of evidence){
+      const c=index.get(e.id)
+      if(!c)continue
+      try{
+        const result=await qaMedia(c,e)
+        const ok=result.durationMatch&&result.audioStreamParity&&result.audioContentParity&&
+          result.firstLastNotBlack&&result.boundariesNotBlack&&result.fullFrameParity&&
+          result.noExcessFlashing
+        results.push({id:c.id,ok});if(ok)passed++;else failed++
+      }catch(error){
+        failed++;results.push({id:c.id,ok:false,error:error instanceof Error?error.message:String(error)})
+      }
+    }
+    save(join(directory,'media-qa','all.json'),{v:1,qaRevision:B8_RENDER_QA_REVISION,
+      candidatesWithEvidence:evidence.length,passed,failed,results})
+    console.log('Full-frame media QA: '+passed+' passed, '+failed+' failed.')
+    if(failed)process.exitCode=1
   }else if(command==='jobs'){
     const fixtures=await verifiedFixtures()
     const shardCount=Number(argument('--shards','16'))
@@ -457,7 +505,7 @@ async function execute(){
       warning:'Actual FFmpeg incremental rerender benchmark requires worker output and fixtures.'})
     console.log('Compiler-only '+candidates.length+' designs in '+ms+'ms')
   }else{
-    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | qa-media <id> | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
+    console.log('Commands: author | expand | validate --all | preview <id> --fixtures <file> | jobs --fixtures <file> [--shards N] | prepare-shard (--all | --shard N) [--limit N] | qa-media <id> | qa-all | claim/cancel/fail/retry/resume <id> | quality-report | contact-sheet | release-manifest | benchmark')
   }
 }
 void execute().catch(e=>{console.error(e instanceof Error?e.message:String(e));process.exitCode=1})

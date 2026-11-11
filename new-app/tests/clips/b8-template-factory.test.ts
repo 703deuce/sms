@@ -1,4 +1,5 @@
 import { describe,expect,it } from 'vitest'
+import { summarizeB8AudioEnvelopeQA,summarizeB8FrameQA } from '@/lib/clips/real-video-templates/b8-render-qa'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
@@ -148,6 +149,30 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     })).toEqual(expect.arrayContaining([
       'editable_cut_boundaries','animated_layer_loss','separate_music_track_missing',
     ]))
+  })
+  it('checks every decoded RGB frame, cut boundary, flash reversal and audio envelope',()=>{
+    const width=2,height=1,frameBytes=width*height*3
+    const frame=(v:number)=>Uint8Array.from(Array(frameBytes).fill(v))
+    const concat=(frames:Uint8Array[])=>{
+      const out=new Uint8Array(frames.length*frameBytes)
+      frames.forEach((f,i)=>out.set(f,i*frameBytes))
+      return out
+    }
+    const stable=concat([frame(30),frame(40),frame(50),frame(60)])
+    const close=concat([frame(31),frame(41),frame(51),frame(61)])
+    const good=summarizeB8FrameQA({previewRgb:stable,renderRgb:close,width,height,
+      expectedFrames:4,boundaryFrames:[2]})
+    expect(good.checkedFrameCount).toBe(4)
+    expect(good.fullFrameParity).toBe(true)
+    expect(good.blackFrames).toEqual([])
+    expect(good.noExcessFlashing).toBe(true)
+    const flashing=concat([frame(20),frame(220),frame(20),frame(30)])
+    const bad=summarizeB8FrameQA({previewRgb:flashing,renderRgb:flashing,width,height,
+      expectedFrames:4,boundaryFrames:[2]})
+    expect(bad.flashFrames).toEqual([1])
+    expect(bad.noExcessFlashing).toBe(false)
+    expect(summarizeB8AudioEnvelopeQA([2,5,10,5],[2.1,5.1,10.2,5.2]).contentParity).toBe(true)
+    expect(summarizeB8AudioEnvelopeQA([1,9,1,9],[9,1,9,1]).contentParity).toBe(false)
   })
   it('preserves running/done checkpoints on repeated queue generation without erasing work',()=>{
     const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)
