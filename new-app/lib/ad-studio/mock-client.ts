@@ -261,6 +261,21 @@ export function createMockAdStudioClient(options: { autoAdvance?: boolean } = {}
       return save(run, { status: 'stitching', error: null, canRetryVoiceover: false, completedAt: null })
     },
 
+    async regenerateStill(runId, variantId) {
+      const run = runs.get(runId)
+      if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
+      const variants = run.imageAds ?? []
+      if (!variants.some((item) => item.id === variantId)) {
+        throw new AdStudioHttpError(404, 'INVALID_PARAMS', 'Image-ad variant was not found.')
+      }
+      ticks.set(runId, 0)
+      return save(run, {
+        status: 'generating',
+        imageAds: variants.map((item) => item.id === variantId ? { ...item, status: 'planned' as const, qc: null } : item),
+        completedAt: null,
+      })
+    },
+
     async getFinalRender(runId) {
       const run = runs.get(runId)
       if (!run) throw new AdStudioHttpError(404, 'RUN_NOT_FOUND', 'Run not found.')
