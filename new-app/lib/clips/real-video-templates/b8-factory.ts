@@ -306,7 +306,7 @@ export function auditB8Evidence(c:B8Candidate,e:B8Evidence|undefined):string[] {
      timing.boundaries.length!==c.family.slots.length+1||timing.boundaries[0]!==0||
      timing.boundaries[timing.boundaries.length-1]!==timing.totalFrames||
      timing.boundaries.some((frame,i)=>!Number.isInteger(frame)||frame<0||
-       (i>0&&frame<=timing.boundaries[i-1]!)))
+       (i>0&&(frame<=timing.boundaries[i-1]!||frame-timing.boundaries[i-1]!<9))))
     issues.push('missing_pinned_render_timing')
   const out=e.outputs
   if(!out || !credibleLocal(out.previewMp4,/\.mp4$/i) ||

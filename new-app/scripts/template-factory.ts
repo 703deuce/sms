@@ -309,7 +309,8 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
       authoredStructuralProof:proveB8Structure(c),
       renderTiming:{v:1,totalFrames:sampledFamily.totalFrames,
         boundaries:beatSync.newBoundaries,
-        musicScheduleSha256:fixtures.soundtrack.decision.schedule.sha256},
+        musicScheduleSha256:createHash('sha256')
+          .update(JSON.stringify(fixtures.soundtrack.decision.schedule)).digest('hex')},
       beatSync:{oldBoundaries:beatSync.oldBoundaries,newBoundaries:beatSync.newBoundaries,
         movedBoundaries:beatSync.movedBoundaries,allCutsOnPinnedBeats:true},
       authoring:{family:sampledFamily,design:c.design,choices:{

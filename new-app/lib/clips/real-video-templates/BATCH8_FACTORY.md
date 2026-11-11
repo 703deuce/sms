@@ -203,19 +203,20 @@ the licensed soundtrack on its own audio track. It checks the current fixture,
 music-schedule and renderer hashes against `jobs.json` **before writing**
 requests. Only queued jobs are prepared; completed, canceled, running and
 failed jobs are not reclaimed. The prepared manifest is a worker handoff,
-not an MP4 renderer or automatic publication. Existing worker execution,
-real posters, glyph/flash QA and independent 9/10 reviews remain mandatory.
+not an MP4 renderer or automatic publication. `render-queue` is the separate
+command that invokes the existing worker. Human glyph/readability/reference,
+rights and independent 9/10 reviews remain mandatory.
 
 ## Audio and sampled color QA
 
 For Batch 8's full-motion previews, both the actual preview MP4 and the
 worker-rendered MP4 must contain audio; two silent files are not evidence of
-a correctly rendered separate soundtrack lane. The FFmpeg sampling probe now
-compares RGB frames (not grayscale) at the first/last frame and each cut
-boundary, and persists measured hashes/durations in the QA sidecar. It remains
-sampled evidence only: full-motion flash, fine glyphs, readable text on moving
-footage, specific music identity, and real visual parity still require actual
-inspection and the human release gates.
+a correctly rendered separate soundtrack lane. The FFmpeg QA pass decodes **every frame at 30 fps**, compares preview/export
+RGB frames, checks first/last and cut-boundary black frames, detects rapid
+flash reversals, and persists measured hashes/durations in the QA sidecar.
+It also compares decoded audio envelopes. Fine glyph shaping, text readability
+over moving footage, reference-quality judgment and rights approval still
+require actual human inspection; those are never inferred from compiler data.
 
 ## Beat-synced factory timing
 
@@ -255,3 +256,7 @@ Every `render-queue` evidence record now stores measured stage durations for
 publish, carrier/preview readiness, the forced export worker, download plus
 full-frame/audio QA, and total elapsed time. `benchmark-real` aggregates only
 those actual records; it never substitutes compiler timing for render timing.
+
+The render-timing evidence stores a SHA-256 of the exact pinned beat schedule,
+not merely the soundtrack file hash. Editing beat annotations therefore
+invalidates cached timing evidence even when the audio bytes are unchanged.
