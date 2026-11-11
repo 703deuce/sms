@@ -1,0 +1,38 @@
+name: Batch 2 - vendor verified OFL TTFs to PR branch
+
+on:
+  push:
+    branches:
+      - feat/real-video-templates-b2-font-runtime
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/real-video-templates-b2-font-runtime
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download eight pinned OFL font binaries and validate exact matching bytes
+        run: node new-app/scripts/vendor-ofl-fonts.mjs
+      - name: Verify licence copies match and stage only pinned font files
+        run: |
+          git add -- new-app/public/fonts/clip/*.ttf \
+            new-app/public/fonts/clip/licenses/*.txt \
+            worker/v3/fonts/t6/*.ttf worker/v3/fonts/t6/licenses/*.txt
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Already pinned, no commit needed"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore(fonts): vendor eight pinned matching OFL font binary pairs"
+          git push origin HEAD:feat/real-video-templates-b2-font-runtime
