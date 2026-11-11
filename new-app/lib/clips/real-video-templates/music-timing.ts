@@ -146,7 +146,14 @@ function verifiedSchedule(s: AuthoredMusicScheduleV1, license: AudioLicenseRecor
   assertAudioLicense(license)
   if (s.v !== 1 || s.musicAssetId !== license.assetId || s.sha256 !== license.sha256 ||
       s.durationFrames !== license.verifiedDurationFrames ||
-      !Number.isInteger(s.offsetFrames))
+      !['fixed-time','beat-time'].includes(s.mode) ||
+      !Number.isInteger(s.offsetFrames) || Math.abs(s.offsetFrames) >= s.durationFrames ||
+      (s.bpm !== null && (!Number.isFinite(s.bpm) || s.bpm <= 0 || s.bpm > 300)) ||
+      (s.confidence != null && !['high','uncertain','manual'].includes(s.confidence)) ||
+      !Array.isArray(s.beats) || s.beats.length > 4000 ||
+      !Array.isArray(s.phrases) || s.phrases.length > 500 ||
+      !Array.isArray(s.protectedAnchors) || s.protectedAnchors.length > 500 ||
+      (s.manualOverrides != null && (!Array.isArray(s.manualOverrides) || s.manualOverrides.length > 500)))
     throw new Error('Music was modified: re-analyze and explicitly approve the new asset')
   for (let i=0; i<s.beats.length; i++)
     if (!validFrame(s.beats[i]!) || s.beats[i]! >= s.durationFrames ||
