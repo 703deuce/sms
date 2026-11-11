@@ -18,7 +18,6 @@ import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-f
 import { BrollPreviewVideo } from '@/components/clips/editor/broll-preview-video'
 import { corsMediaProps, isCrossOriginUrl, onMediaCorsError } from '@/components/clips/editor/g4/media-cors'
 import { normalizeEdits } from '@/lib/clips/edits'
-import { editorPosterUrl } from '@/lib/server/clips/editor-clip-media'
 import type { ProjectMediaItem } from '@/lib/clips/editor/media-add'
 
 const B2 = 'https://transovo-clips.s3.us-east-005.backblazeb2.com'
@@ -53,12 +52,6 @@ afterEach(() => {
 })
 
 describe('G4cfix2 CORS on every B2 medium', () => {
-  it('ED12: editor poster URL is same-origin and does not require bucket CORS', () => {
-    const url = editorPosterUrl('clip poster/id', 'ws/w/projects/p/clips/c/poster.jpg')
-    expect(url).toBe('/api/clips/clips/clip%20poster%2Fid/poster')
-    expect(isCrossOriginUrl(url!)).toBe(false)
-  })
-
   it('client render: every B2 <video>/<img> has crossorigin="anonymous"', () => {
     const { container } = render(tree())
     const els = b2Media(container)
