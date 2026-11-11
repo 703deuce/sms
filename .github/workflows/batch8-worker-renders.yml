@@ -110,3 +110,47 @@ jobs:
           path: build/b8-worker-renders/shard-${{ matrix.shard }}
           compression-level: 1
           retention-days: 14
+
+  aggregate:
+    needs: render
+    if: always() && needs.render.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: b8-worker-renders-*
+          path: build/b8-worker-renders
+      - name: Require all 2,000 designs to pass
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root=Path("build/b8-worker-renders")
+          manifests=list(root.glob("*/manifest.json"))
+          if len(manifests)!=20:
+              raise SystemExit(f"expected 20 shard manifests, found {len(manifests)}")
+          rows=[]
+          expected=passed=failed=0
+          for path in manifests:
+              data=json.loads(path.read_text())
+              expected+=int(data["expected"])
+              passed+=int(data["passed"])
+              failed+=int(data["failed"])
+              rows.extend(data["results"])
+          ids=[row["id"] for row in rows]
+          if expected!=2000 or len(rows)!=2000 or len(set(ids))!=2000 or passed!=2000 or failed!=0:
+              raise SystemExit(
+                  f"Batch 8 certification incomplete: expected={expected} rows={len(rows)} "
+                  f"unique={len(set(ids))} passed={passed} failed={failed}"
+              )
+          summary={"v":1,"designs":2000,"passed":passed,"failed":failed,
+                   "shards":20,"allWorkerRendersPassed":True}
+          out=Path("build/b8-worker-summary.json")
+          out.write_text(json.dumps(summary,indent=2)+"\n")
+          print(json.dumps(summary))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b8-worker-summary
+          path: build/b8-worker-summary.json
+          retention-days: 30
