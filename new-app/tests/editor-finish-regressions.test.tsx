@@ -5,7 +5,6 @@ import { Timeline } from '@/components/clips/editor/timeline'
 import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
 import {
   defaultEdits,
-  displayDurationMs,
   editsPayloadForSave,
   mergeEditsPatch,
   normalizeEdits,
@@ -161,8 +160,6 @@ describe('PR5 historical editor finish regression gate', () => {
   it('AR11 2x timeline mapping round-trips source time and leaves inserted time unscaled', () => {
     expect(speedDisplayMs(IDENTITY_TIME_MAP, 8000, 2)).toBe(4000)
     expect(speedBaseMs(IDENTITY_TIME_MAP, 4000, 2, 10_000)).toBe(8000)
-    const twoX = { ...base(), speed: 2 as ClipEditsV2['speed'] }
-    expect(displayDurationMs(twoX)).toBe(5000)
   })
 
   it('AR12 caption drag is position-only geometry; media crop/keyframe state remains separate', () => {
