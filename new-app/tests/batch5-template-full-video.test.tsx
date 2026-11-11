@@ -94,5 +94,3 @@ describe('Batch 5 editor surface', () => {
     expect(action.querySelector('span')?.className).not.toContain('sr-only')
   })
 })
-
-
