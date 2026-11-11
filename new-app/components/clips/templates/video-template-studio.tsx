@@ -89,6 +89,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [draft, setDraft] = useState<StudioDraft | null>(null)
   const draftRef = useRef<StudioDraft | null>(null)
   const [media, setMedia] = useState<MediaPage>({ items: [], total: 0, page: 1, pages: 1 })
+  const [knownMedia, setKnownMedia] = useState<Record<string, MediaItem>>({})
   const [mediaSearch, setMediaSearch] = useState('')
   const [mediaKind, setMediaKind] = useState<'all' | 'video' | 'image' | 'audio'>('all')
   const [selectedSlot, setSelectedSlot] = useState(release.family.slots[0]?.id ?? '')
@@ -145,7 +146,24 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     if (kind !== 'all') params.set('kind', kind)
     const result = await request<MediaPage>('/api/clips/video-templates/media?' + params.toString())
     setMedia(result)
+    setKnownMedia(previous => ({ ...previous,
+      ...Object.fromEntries(result.items.map(item => [item.asset.id, item])) }))
     return result
+  }, [])
+  const loadSelectedMedia = useCallback(async (ids: string[]): Promise<Map<string, MediaItem>> => {
+    const selected = new Map<string, MediaItem>()
+    const distinct = [...new Set(ids)]
+    for (let index = 0; index < distinct.length; index += 50) {
+      const chunk = distinct.slice(index, index + 50)
+      if (!chunk.length) continue
+      const result = await request<MediaPage>(
+        '/api/clips/video-templates/media?ids=' + encodeURIComponent(chunk.join(',')))
+      for (const item of result.items) selected.set(item.asset.id, item)
+    }
+    if (selected.size) setKnownMedia(previous => ({
+      ...previous, ...Object.fromEntries(selected),
+    }))
+    return selected
   }, [])
   const refreshClip = useCallback(async (value: Project) => {
     if (!value.clipId || value.status !== 'READY') return
@@ -179,6 +197,10 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         versionRef.current = saved.version
         setCurrentProject(saved)
         setCurrentDraft(saved.draft)
+        const assignedAssets = Object.values(saved.draft.slots).flatMap(fill =>
+          [fill.asset, ...(fill.holdAsset ? [fill.holdAsset] : [])])
+        if (saved.draft.music) assignedAssets.push(saved.draft.music)
+        if (assignedAssets.length) await loadSelectedMedia(assignedAssets.map(asset => asset.id))
         if (!initialProjectId) router.replace(
           '/app/clips/video-templates/' + encodeURIComponent(release.id) + '?draft=' + encodeURIComponent(saved.id))
         if (saved.status === 'READY' && saved.clipId) await refreshClip(saved)
@@ -186,7 +208,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     }
     void start()
     return () => { live = false }
-  }, [initialProjectId, release.id, refreshMedia, refreshClip, router])
+  }, [initialProjectId, release.id, refreshMedia, loadSelectedMedia, refreshClip, router])
   useEffect(() => {
     if (!project || project.status === 'DRAFT' || project.status === 'READY' || project.status === 'CANCELED') return
     const timer = window.setInterval(() => {
@@ -256,8 +278,14 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         ids.push({ id: result.uploadId, kind,
           license: { id: 'user_owned', provenance: 'user-owned', reference: 'workspace_upload' } })
       }
-      const all = await refreshMedia(1, '', 'all')
-      const withMeta = ids.map(item => all.items.find(a => a.asset.id === item.id)?.asset ?? item)
+      await refreshMedia(1, '', 'all')
+      const uploaded = await loadSelectedMedia(ids.map(item => item.id))
+      const withMeta = ids.map(item => {
+        const metadata = uploaded.get(item.id)
+        if (!metadata?.available)
+          throw new Error('Uploaded media is processing or unavailable; refresh the library and retry')
+        return metadata.asset
+      })
       setSelectedUploads(prev => [...prev, ...withMeta])
       setNotice(withMeta.length + ' files uploaded. Place them in the numbered slots.')
     } catch (e) { setError(readable(e, 'Upload failed — retry or choose a different file')) }
@@ -290,7 +318,8 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   }
   const createHold = async (id: string) => {
     const fill = draft?.slots[id]
-    const source = media.items.find(x => x.asset.id === fill?.asset.id)
+    const source = fill ? (knownMedia[fill.asset.id] ??
+      (await loadSelectedMedia([fill.asset.id])).get(fill.asset.id)) : undefined
     if (!fill || !source?.url || !source.durationMs) { setError('Selected video must be accessible to capture a still'); return }
     setBusy(true);setError('')
     try {
@@ -371,7 +400,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const progress = draft ? fillProgress(release.family, draft) : { filled: 0, total: release.family.slots.length }
   const activeSlot = release.family.slots.find(s => s.id === selectedSlot)
   const activeFill = activeSlot && draft?.slots[activeSlot.id]
-  const activeMedia = media.items.find(m => m.asset.id === activeFill?.asset.id)
+  const activeMedia = activeFill ? knownMedia[activeFill.asset.id] : undefined
   const ready = project?.status === 'READY' && Boolean(clip && project.clipId)
   const canPublish = progress.filled === progress.total && project?.status === 'DRAFT' && !busy
   return (

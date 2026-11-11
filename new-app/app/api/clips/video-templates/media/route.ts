@@ -14,7 +14,14 @@ export async function GET(req: Request) {
     const q = (search.get('q') ?? '').trim().slice(0, 120)
     const kind = search.get('kind') ?? ''
     if (kind && !['video','image','audio'].includes(kind)) return NextResponse.json({ error: 'Invalid media filter' }, { status: 400 })
-    const where = { workspaceId, status: 'COMPLETE',
+    // Resolve selected uploads by ID even when they are beyond the current picker page.
+    // IDs are workspace-scoped; URLs and storage keys are never accepted as selectors.
+    const requestedIds = search.get('ids')
+    const ids = requestedIds === null ? null : [...new Set(requestedIds.split(','))]
+    if (ids && (!ids.length || ids.length > 60 || ids.some(id => !/^[A-Za-z0-9_-]{1,120}$/.test(id))))
+      return NextResponse.json({ error: 'Invalid media IDs' }, { status: 400 })
+    const where = ids ? { workspaceId, status: 'COMPLETE', id: { in: ids } } : {
+      workspaceId, status: 'COMPLETE',
       ...(q ? { filename: { contains: q, mode: 'insensitive' as const } } : {}),
       ...(kind ? { mime: { startsWith: kind + '/' } } : {
         OR: [{ mime: { startsWith: 'video/' } }, { mime: { startsWith: 'image/' } }, { mime: { startsWith: 'audio/' } }],
@@ -24,7 +31,7 @@ export async function GET(req: Request) {
     const [total, rows] = await Promise.all([
       prisma.clipUpload.count({ where }),
       prisma.clipUpload.findMany({ where, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-        take: 60, skip: (page - 1) * 60,
+        take: ids ? ids.length : 60, skip: ids ? 0 : (page - 1) * 60,
         select: { id: true, key: true, filename: true, mime: true, durationMs: true,
           bytes: true, width: true, height: true, storageDriver: true },
       }),
@@ -47,6 +54,7 @@ export async function GET(req: Request) {
         available: Boolean(url && (kind === 'image' || frames)),
       }
     }))
-    return NextResponse.json({ data: { items, total, page, pages: Math.max(1, Math.ceil(total / 60)) } })
+    return NextResponse.json({ data: { items, total, page: ids ? 1 : page,
+      pages: ids ? 1 : Math.max(1, Math.ceil(total / 60)) } })
   } catch (error) { return jsonError(error, 500) }
 }
