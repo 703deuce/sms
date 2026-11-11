@@ -298,6 +298,7 @@ export type ResolvedStudioCreate = {
   durationSec: number | null
   resolution: string | null
   referenceAssetId: string | null
+  referenceAssetIds: string[]
   startFrameAssetId: string | null
   endFrameAssetId: string | null
   sourceVideoAssetId: string | null
@@ -355,7 +356,10 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
     throw new StudioError('INVALID_PARAMS', `Resolution is not used by ${model.id}`)
   }
 
-  const referenceAssetId = input.referenceAssetId?.trim() || null
+  const referenceAssetIds = [...new Set((input.referenceAssetIds ?? []).map((value) => value.trim()).filter(Boolean))]
+  if (referenceAssetIds.length > 8) throw new StudioError('INVALID_PARAMS', 'At most 8 reference images are supported')
+  const referenceAssetId = input.referenceAssetId?.trim() || referenceAssetIds[0] || null
+  if (referenceAssetId && !referenceAssetIds.includes(referenceAssetId)) referenceAssetIds.unshift(referenceAssetId)
   const startFrameAssetId = input.startFrameAssetId?.trim() || null
   const endFrameAssetId = input.endFrameAssetId?.trim() || null
   const sourceVideoAssetId = input.sourceVideoAssetId?.trim() || null
@@ -399,6 +403,7 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
     durationSec,
     resolution,
     referenceAssetId,
+    referenceAssetIds,
     startFrameAssetId,
     endFrameAssetId,
     sourceVideoAssetId,
@@ -411,6 +416,7 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
 export type StudioAssetUrls = {
   sourceVideoUrl?: string
   referenceUrl?: string
+  referenceUrls?: string[]
   startFrameUrl?: string
   endFrameUrl?: string
 }
@@ -420,6 +426,7 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
   const startUrl = urls.startFrameUrl || urls.referenceUrl
   const endUrl = urls.endFrameUrl
   const referenceUrl = urls.referenceUrl
+  const referenceUrls = urls.referenceUrls?.length ? urls.referenceUrls : referenceUrl ? [referenceUrl] : []
 
   if (model.providerApi === 'veo') {
     const body: Record<string, unknown> = {
@@ -560,7 +567,7 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
       resolution: resolution || '1K',
       output_format: 'png',
     }
-    if (referenceUrl) input.image_input = [referenceUrl]
+    if (referenceUrls.length) input.image_input = referenceUrls.slice(0, 8)
     return { api: 'jobs', model: model.providerModel, input }
   }
 
