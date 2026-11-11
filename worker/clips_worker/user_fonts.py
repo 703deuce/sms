@@ -36,7 +36,15 @@ def used_font_ids(edits: dict) -> list[str]:
 def merged_fonts_dir(base: Path | None, extra: list[Path], dest: Path) -> Path:
     """Bundled fonts + user fonts in one directory (ass=…:fontsdir takes one)."""
     dest.mkdir(parents=True, exist_ok=True)
-    srcs = sorted(base.iterdir()) if base and base.is_dir() else []
+    # Include pinned T6/OFL faces alongside root legacy fonts in a single
+    # libass fontsdir. This must also work when a workspace font is uploaded;
+    # uploaded fonts are append-only and cannot silently hide shipped faces.
+    srcs = []
+    if base and base.is_dir():
+        srcs = sorted(base.iterdir())
+        t6 = base / "t6"
+        if t6.is_dir():
+            srcs.extend(sorted(t6.iterdir()))
     for f in [*srcs, *extra]:
         if not f.is_file():
             continue
