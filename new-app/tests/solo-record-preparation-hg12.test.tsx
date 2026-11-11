@@ -30,7 +30,7 @@ vi.mock('@/components/app/page-primitives', () => ({
   PageHeader: ({ title }: { title: string }) => <h1>{title}</h1>,
 }))
 vi.mock('@/components/recording/editor/editor-recorder-bar', () => ({
-  EditorRecorderBar: () => <div data-testid="recorder-controls">Recorder controls</div>,
+  EditorRecorderBar: ({ onTeleprompter }: { onTeleprompter: () => void }) => <div data-testid="recorder-controls">Recorder controls<button type="button" onClick={onTeleprompter}>Teleprompter</button></div>,
 }))
 vi.mock('@/components/recording/rooms/upload-card', () => ({ RoomsUploadCard: () => null }))
 
@@ -58,6 +58,23 @@ describe('solo recorder preparation states (HG12)', () => {
     await waitFor(() => expect(screen.getByTestId('recorder-controls')).toBeTruthy())
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(recorder.setArmed).toHaveBeenCalledWith(true)
+  })
+
+  it('allows opening and editing teleprompter notes without requesting media permission', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ data: { projectId: 'fixture_project', sessionId: 'fixture_session' } }),
+    }))
+    const getUserMedia = vi.fn().mockRejectedValue(new Error('Permission denied'))
+    vi.stubGlobal('navigator', Object.assign(Object.create(navigator), { mediaDevices: { getUserMedia } }))
+    render(<SoloRecordClient />)
+    await screen.findByTestId('recorder-controls')
+    fireEvent.click(screen.getByRole('button', { name: 'Teleprompter' }))
+    expect(screen.getByTestId('solo-teleprompter')).toBeTruthy()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Teleprompter script' }), { target: { value: 'Opening line' } })
+    expect((screen.getByRole('textbox', { name: 'Teleprompter script' }) as HTMLTextAreaElement).value).toBe('Opening line')
+    expect(getUserMedia).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Close teleprompter' }))
+    expect(screen.queryByTestId('solo-teleprompter')).toBeNull()
   })
 
   it('does not arm the recorder on an incomplete preparation response', async () => {
