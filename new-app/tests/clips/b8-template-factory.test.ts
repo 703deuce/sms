@@ -189,7 +189,8 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(result.edits.audio?.music).toMatchObject({uploadId:'music_fixture',loop:false,
       endMs:duration,fadeInMs:500,fadeOutMs:1000})
     expect(result.edits.inserts).toBeUndefined()
-    expect(auditB8EditableOutput(c,result,{
+    const syncedCandidate={...c,family}
+    expect(auditB8EditableOutput(syncedCandidate,result,{
       requireMusic:true,expectedMusicAssetId:'music_fixture',
     })).toEqual([])
     const broken={...result,edits:{...result.edits,
@@ -197,7 +198,7 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
       textItems:result.edits.textItems?.map((layer,i)=>i?layer:{...layer,anim:undefined}),
       audio:{...result.edits.audio,music:null,sfx:result.edits.audio?.sfx??[]},
     }}
-    expect(auditB8EditableOutput(c,broken,{
+    expect(auditB8EditableOutput(syncedCandidate,broken,{
       requireMusic:true,expectedMusicAssetId:'music_fixture',
     })).toEqual(expect.arrayContaining([
       'editable_cut_boundaries','animated_layer_loss','separate_music_track_missing',
