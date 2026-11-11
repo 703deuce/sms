@@ -3,6 +3,7 @@ import { existsSync,mkdirSync,readFileSync,writeFileSync } from 'node:fs'
 import { dirname,resolve } from 'node:path'
 import {
   BATCH9_PHASE_A_ANCHORS,batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,
+  batch9PhaseBIndependentReviewPlan,
   batch9PhaseBReleaseGate,batch9PhaseBReviewedReleases,
   batch9PhaseBStatus,eligibleBatch9PhaseBVariants,
 } from '../lib/clips/real-video-templates/batch9-phase-b'
@@ -27,6 +28,7 @@ writeFileSync(out,JSON.stringify({
   phaseAGate:phaseA,target:batch9PhaseBExpansionCandidates().length,
   reviewed:status.reviewed,eligible:eligible.length,
   releaseGate,releaseCount:releases.length,
+  independentReviewPlan:batch9PhaseBIndependentReviewPlan(),
   eligibleIds:eligible.map(row=>row.id),releases,blockers:status.blockers,
   note:'No variant is public/released by this command. Phase A anchors and each exact variant require real evidence.',
 },null,2)+'\n')

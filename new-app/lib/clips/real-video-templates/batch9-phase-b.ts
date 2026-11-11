@@ -137,3 +137,21 @@ export function batch9PhaseBWorkerIds():readonly string[]{
     throw new Error('Batch 9 Phase B worker IDs must be 390 unique variants')
   return ids
 }
+
+export function batch9PhaseBIndependentReviewPlan():readonly string[]{
+  const variants=batch9PhaseBExpansionCandidates()
+  const byTreatment=new Map<string,B8Candidate[]>()
+  for(const candidate of variants){
+    const rows=byTreatment.get(candidate.treatmentId)??[]
+    rows.push(candidate);byTreatment.set(candidate.treatmentId,rows)
+  }
+  const treatments=FACTORY_TREATMENTS.filter(row=>row.id!=='bold').map(row=>row.id)
+  const plan=treatments.map((treatment,index)=>{
+    const rows=byTreatment.get(treatment)??[]
+    if(rows.length!==10)throw new Error('Phase B treatment must exist in all ten families: '+treatment)
+    return rows[index%rows.length]!.id
+  })
+  if(plan.length!==39||new Set(plan).size!==39)
+    throw new Error('Phase B independent review plan must contain 39 unique variants')
+  return plan
+}
