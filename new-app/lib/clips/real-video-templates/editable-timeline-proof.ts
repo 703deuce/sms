@@ -90,18 +90,21 @@ export function expectedEditableTimelineStructure(
   choices: TemplateChoices,
   compiled: Pick<TemplateCompileResult, 'slotToItemIds'>,
 ): EditableTimelineStructure {
-  const mediaItems = family.slots.map((slot) => ({
-    id: compiled.slotToItemIds[slot.id]!,
-    slotId: slot.id,
-    startMs: templateFrameToMs(slot.startFrame),
-    endMs: templateFrameToMs(slot.startFrame + slot.durationFrames),
-    ...(slot.media === 'video' || slot.media === 'either'
-      ? { audio: slot.sourceAudio === 'source' ? 'source' as const : 'main' as const }
-      : {}),
-    ...(slot.speed != null ? { speed: slot.speed } : {}),
-    ...(slot.transform ? { transform: slot.transform } : {}),
-    ...(slot.fx ? { fx: slot.fx } : {}),
-  }))
+  const mediaItems = family.slots.map((slot) => {
+    const asset = choices.media[slot.id]
+    return {
+      id: compiled.slotToItemIds[slot.id]!,
+      slotId: slot.id,
+      startMs: templateFrameToMs(slot.startFrame),
+      endMs: templateFrameToMs(slot.startFrame + slot.durationFrames),
+      ...(asset?.kind === 'video'
+        ? { audio: slot.sourceAudio === 'source' ? 'source' as const : 'main' as const }
+        : {}),
+      ...(slot.speed != null ? { speed: slot.speed } : {}),
+      ...(slot.transform ? { transform: slot.transform } : {}),
+      ...(slot.fx ? { fx: slot.fx } : {}),
+    }
+  })
   const cuts: StructureCut[] = []
   const transitions: StructureTransition[] = []
   for (let i = 1; i < family.slots.length; i++) {
