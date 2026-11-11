@@ -4,7 +4,7 @@ ARG GIT_COMMIT=unknown
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libsm6 libxext6 libglib2.0-0 libegl1 libgl1 libgles2 libegl-mesa0 libgl1-mesa-dri curl build-essential \
-    fontconfig ca-certificates fonts-noto-color-emoji \
+    fontconfig ca-certificates \
     fonts-noto-core fonts-noto-cjk \
     && rm -rf /var/lib/apt/lists/*
 
@@ -28,6 +28,9 @@ COPY worker/v3/fonts/t6 /app/v3/fonts/t6
 # to new-app/public/fonts/clip (the editor preview's libass-wasm fonts). Was curl from GitHub master,
 # which could change the export without a commit. Bookworm has no fonts-montserrat apt package.
 # Pinned JP and emoji faces are shipped too; Debian Noto remains an international fallback.
+# Do NOT install fonts-noto-color-emoji: NotoColorEmoji.ttf wins the canonical
+# 'Noto Emoji' fc-match over the pinned monochrome NotoEmoji.ttf, breaking
+# the strict byte-parity check and changing libass output.
 RUN set -eux; \
     mkdir -p /usr/share/fonts/truetype/montserrat /usr/share/fonts/truetype/anton; \
     cp /app/v3/fonts/Montserrat-Black.ttf /usr/share/fonts/truetype/montserrat/Montserrat-Black.ttf; \

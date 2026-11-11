@@ -41,15 +41,13 @@ done
 download \
   "https://raw.githubusercontent.com/googlefonts/roboto-2/main/src/hinted/Roboto-Bold.ttf" \
   "$DEST/Roboto-Bold.ttf"
-download \
-  "https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf" \
-  "$DEST/PlayfairDisplay-wght.ttf"
+# Playfair Display is already pinned in $V3/t6/PlayfairDisplay.ttf.
+# Do not fetch the variable upstream version: it creates a competing family.
 download \
   "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf" \
   "$DEST/Oswald-wght.ttf"
 
 cp -f "$DEST/Roboto-Bold.ttf" "$V3/t6/Roboto-Bold.ttf"
-cp -f "$DEST/PlayfairDisplay-wght.ttf" "$V3/t6/PlayfairDisplay-wght.ttf"
 if [ -s "$DEST/Oswald-wght.ttf" ]; then
   cp -f "$DEST/Oswald-wght.ttf" "$V3/t6/Oswald.ttf"
 fi

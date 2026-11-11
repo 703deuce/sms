@@ -90,3 +90,60 @@ def test_fontconfig_resolves_canonical_names(family, file):
         pytest.skip("worker image only")
     out = subprocess.check_output(["fc-match", "-f", "%{file}", family], text=True)
     assert out.endswith(file), (family, out)
+
+
+# The Docker image must use the same 13 pinned ASS faces as the browser.
+# Run the real fontconfig resolution checks in the image, where all fonts exist.
+_PINNED_T6_FAMILIES = (
+    ("Rubik", "Rubik.ttf"),
+    ("Gabarito", "Gabarito.ttf"),
+    ("Fira Sans Condensed", "FiraSansCondensed-Bold.ttf"),
+    ("DM Serif Display", "DMSerifDisplay-Regular.ttf"),
+    ("Playfair Display", "PlayfairDisplay.ttf"),
+    ("Caveat", "Caveat.ttf"),
+    ("Space Grotesk", "SpaceGrotesk.ttf"),
+    ("Space Mono", "SpaceMono-Regular.ttf"),
+    ("Noto Sans Arabic", "NotoSansArabic.ttf"),
+    ("Noto Sans Devanagari", "NotoSansDevanagari.ttf"),
+    ("Noto Sans Thai", "NotoSansThai.ttf"),
+    ("Noto Sans JP", "NotoSansJP.ttf"),
+    ("Noto Emoji", "NotoEmoji.ttf"),
+)
+
+
+@pytest.mark.parametrize("family,filename", _PINNED_T6_FAMILIES)
+def test_image_fontconfig_uses_exact_pinned_t6_bytes(family, filename):
+    pinned = V3 / "fonts" / "t6" / filename
+    if not pinned.is_file():
+        pytest.skip("pinned T6 font not installed on this host (run worker image)")
+    if not shutil.which("fc-match"):
+        pytest.skip("fontconfig not installed")
+    selected = subprocess.check_output(["fc-match", "-f", "%{file}", family], text=True)
+    assert Path(selected).is_file(), (family, selected)
+    assert Path(selected).read_bytes() == pinned.read_bytes(), (
+        family, f"fontconfig selected {selected!r} rather than pinned {pinned}"
+    )
+
+
+def test_docker_font_install_does_not_install_conflicting_emoji_package():
+    source = _REPO / "worker" / "Dockerfile"
+    if not source.is_file():
+        pytest.skip("source checkout only; Dockerfile not copied into worker image")
+    dockerfile = source.read_text()
+    install_block = dockerfile.split("RUN apt-get update", 1)[1].split("&& rm -rf", 1)[0]
+    assert "fonts-noto-color-emoji" not in install_block
+    # Retain the strict image-build checks for every pinned ASS family.
+    for family, filename in _PINNED_T6_FAMILIES:
+        assert f"""cmp -s "$(fc-match -f '%{{file}}' '{family}')" "/app/v3/fonts/t6/{filename}" """ .strip() in dockerfile
+
+
+def test_brand_installer_does_not_download_duplicate_playfair():
+    source = _REPO / "worker" / "scripts" / "download-brand-google-fonts.sh"
+    if not source.is_file():
+        pytest.skip("source checkout only; installer not copied to this image path")
+    installer = source.read_text()
+    commands = "\n".join(
+        line for line in installer.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "PlayfairDisplay-wght.ttf" not in commands
+    assert "playfairdisplay/PlayfairDisplay" not in commands
