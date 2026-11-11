@@ -1,199 +1,391 @@
 import 'server-only'
 
-import { Prisma } from '@prisma/client'
-import { createId } from '@/lib/supabase/id'
-import { getPrisma } from '@/lib/server/db'
-import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { createHash } from 'node:crypto'
+import type { Prisma } from '@prisma/client'
+import { defaultEdits } from '@/lib/clips/edits'
+import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
 import {
-  validateTemplateFamily,
+  compileTemplate,
   validateTemplateDesign,
+  validateTemplateFamily,
   type TemplateAsset,
   type TemplateChoices,
-  type TemplateFamilyV1,
   type TemplateDesignV1,
+  type TemplateFamilyV1,
 } from '@/lib/clips/real-video-templates/sequence-contract'
+import { getPrisma } from '@/lib/server/db'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
+import { storageDriverName, uploadSourceKey } from '@/lib/storage'
 
-/**
- * Fail-closed, isolated B3 authoring store; NOT a project publishing path.
- * No public route calls these functions until preview/export parity exists.
- * ClipEditsV2 remains authoritative after editing; saving authoring never
- * generates or replaces a timeline, and no template job is enqueued here.
- */
-const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,120}$/
-const INSTANCE_ID = /^[A-Za-z0-9_-]{1,120}$/
-export class TemplateInstanceNotFound extends Error {
-  constructor() { super('Not found') }
-}
-export class TemplateInstanceConflict extends Error {
-  constructor() { super('Template authoring revision conflict') }
-}
-export class TemplateAssetUnavailable extends Error {
-  constructor() { super('Selected media is unavailable in this workspace') }
+const KEY_RE = /^[A-Za-z0-9_-]{8,120}$/
+const ID_RE = /^[A-Za-z0-9_-]{1,120}$/
+
+export class TemplateInstanceNotFound extends Error { constructor() { super('Not found') } }
+export class TemplateInstanceConflict extends Error { constructor() { super('Template instance conflict') } }
+export class TemplateAssetUnavailable extends Error { constructor() { super('Selected media is unavailable in this workspace') } }
+
+export type TemplateSnapshot = { family: TemplateFamilyV1; design: TemplateDesignV1 }
+export type TemplateAuthoringState = Omit<TemplateChoices, 'instanceId'>
+export type PublishedTemplateProject = {
+  instanceId: string
+  projectId: string
+  clipId: string
+  authoringVersion: number
+  editsSaveVersion: number
+  status: string
 }
 
-export type TemplateSnapshot = {
-  family: TemplateFamilyV1
-  design: TemplateDesignV1
+function digest(...parts: string[]): string {
+  return createHash('sha256').update(parts.map((p) => String(p.length) + ':' + p).join('|')).digest('hex')
 }
-
-export async function createTemplateAuthoringDraft(
-  workspaceId: string,
-  idempotencyKey: string,
-  familyRaw: unknown,
-  designRaw: unknown,
-) {
-  if (!workspaceId || !IDEMPOTENCY_KEY.test(idempotencyKey)) throw new Error('Invalid template creation key')
-  const family = validateTemplateFamily(familyRaw)
-  const design = validateTemplateDesign(designRaw, family)
-  const prisma = getPrisma()
-  const where = { workspaceId_idempotencyKey: { workspaceId, idempotencyKey } }
-  const existing = await prisma.clipVideoTemplateInstance.findUnique({ where })
-  if (existing) {
-    // A retry with the same key MUST return the original snapshot, not silently
-    // refresh the definition or re-create a project after catalog updates.
-    if (existing.familyId !== family.familyId || existing.familyRevision !== family.revision ||
-      existing.designId !== design.designId || existing.designRevision !== design.revision)
-      throw new TemplateInstanceConflict()
-    return existing
-  }
-  try {
-    return await prisma.clipVideoTemplateInstance.create({
-      data: {
-        id: createId('vti'),
-        workspaceId,
-        idempotencyKey,
-        familyId: family.familyId,
-        familyRevision: family.revision,
-        designId: design.designId,
-        designRevision: design.revision,
-        snapshot: toPrismaJson({ family, design }),
-        authoringState: toPrismaJson({ media: {}, texts: {} }),
-        status: 'DRAFT',
-      },
-    })
-  } catch (err) {
-    // Atomic unique index makes concurrent retries idempotent.
-    if (!(err instanceof Prisma.PrismaClientKnownRequestError) || err.code !== 'P2002') throw err
-    const winning = await prisma.clipVideoTemplateInstance.findUnique({ where })
-    if (!winning) throw err
-    if (winning.familyId !== family.familyId || winning.familyRevision !== family.revision ||
-      winning.designId !== design.designId || winning.designRevision !== design.revision)
-      throw new TemplateInstanceConflict()
-    return winning
+function idsFor(workspaceId: string, idempotencyKey: string) {
+  const h = digest('real-video-template-v1', workspaceId, idempotencyKey).slice(0, 32)
+  const uploadId = 'upl_tpl_' + h
+  return {
+    instanceId: 'vti_' + h,
+    uploadId,
+    projectId: 'proj_tpl_' + h,
+    clipId: 'clip_fv_' + uploadId,
+    jobId: 'job_tpl_' + h,
   }
 }
-
-function parseSnapshot(raw: unknown): TemplateSnapshot {
-  if (!raw || typeof raw !== 'object') throw new Error('Corrupt template snapshot')
-  const o = raw as Record<string, unknown>
-  const family = validateTemplateFamily(o.family)
-  const design = validateTemplateDesign(o.design, family)
-  return { family, design }
+function definitionHash(snapshot: TemplateSnapshot): string {
+  return digest(JSON.stringify(snapshot))
 }
-
-function imageOrVideo(kind: TemplateAsset['kind'], mime: string): boolean {
+function parseTemplateMeta(raw: unknown): Record<string, unknown> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const meta = (raw as Record<string, unknown>).videoTemplate
+  return meta && typeof meta === 'object' && !Array.isArray(meta) ? meta as Record<string, unknown> : null
+}
+function resultFromRows(
+  instanceId: string,
+  project: { id: string; status: string },
+  clip: { id: string; editsSaveVersion: number; aiMeta: unknown },
+): PublishedTemplateProject {
+  const meta = parseTemplateMeta(clip.aiMeta)
+  return {
+    instanceId,
+    projectId: project.id,
+    clipId: clip.id,
+    authoringVersion: Number(meta?.authoringVersion ?? 0),
+    editsSaveVersion: clip.editsSaveVersion,
+    status: project.status,
+  }
+}
+function mimeMatches(kind: TemplateAsset['kind'], mime: string): boolean {
   return kind === 'image'
     ? mime.startsWith('image/')
     : kind === 'video'
       ? mime.startsWith('video/')
       : mime.startsWith('audio/')
 }
-
-/** Server-validated workspace ownership. Never trust asserted license metadata as proof. */
-async function checkAssignedWorkspaceMedia(
-  workspaceId: string, snapshot: TemplateSnapshot, choices: TemplateChoices,
+async function loadAndValidateAssets(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  family: TemplateFamilyV1,
+  design: TemplateDesignV1,
+  choices: TemplateAuthoringState,
 ) {
   if (!choices || typeof choices !== 'object' || !choices.media ||
-    typeof choices.media !== 'object' || Array.isArray(choices.media))
+      typeof choices.media !== 'object' || Array.isArray(choices.media))
     throw new Error('Invalid template assignments')
-  for (const key of Object.keys(choices)) {
-    if (!['instanceId', 'media', 'texts', 'music'].includes(key)) throw new Error('Unsupported template assignment field')
-  }
-  if (choices.texts !== undefined && (!choices.texts || typeof choices.texts !== 'object' || Array.isArray(choices.texts)))
-    throw new Error('Invalid template text assignments')
-  for (const key of Object.keys(choices.texts ?? {})) {
-    const field = snapshot.family.texts.find(t => t.id === key)
-    const text = choices.texts?.[key]
-    if (!field || typeof text !== 'string' || !text.trim() || Array.from(text).length > field.maxChars)
-      throw new Error('Unknown or oversized text assignment')
-  }
-  const bySlot = new Map(snapshot.family.slots.map(s => [s.id, s]))
-  const chosen: Array<{ asset: TemplateAsset; minimumFrames: number }> = []
+  const slots = new Map(family.slots.map((s) => [s.id, s]))
+  if (Object.keys(choices.media).length !== family.slots.length)
+    throw new Error('Every template slot requires media')
+  const selected: Array<{ asset: TemplateAsset; minimumFrames: number }> = []
   for (const [slotId, asset] of Object.entries(choices.media)) {
-    const slot = bySlot.get(slotId)
-    if (!slot) throw new Error('Unknown media slot')
-    if (!asset || typeof asset !== 'object' || !INSTANCE_ID.test(asset.id))
-      throw new Error('Invalid media assignment')
-    if (slot.media !== 'either' && slot.media !== asset.kind) throw new Error('Invalid slot media type')
-    if (asset.kind !== 'image' && asset.kind !== 'video') throw new Error('Invalid slot media type')
-    if (!asset.license || asset.license.provenance !== 'user-owned')
+    const slot = slots.get(slotId)
+    if (!slot || !asset || typeof asset !== 'object' || !ID_RE.test(asset.id))
       throw new TemplateAssetUnavailable()
-    chosen.push({ asset, minimumFrames: (slot.sourceInFrame ?? 0) + slot.durationFrames })
+    if (slot.media !== 'either' && slot.media !== asset.kind) throw new TemplateAssetUnavailable()
+    if (asset.kind !== 'image' && asset.kind !== 'video') throw new TemplateAssetUnavailable()
+    const handles = slot.handles ?? { headFrames: 0, tailFrames: 0 }
+    selected.push({
+      asset,
+      minimumFrames: (slot.sourceInFrame ?? 0) + slot.durationFrames + handles.tailFrames,
+    })
   }
   if (choices.music) {
-    if (snapshot.design.musicPolicy !== 'licensed-only') throw new Error('Music not permitted')
-    if (choices.music.kind !== 'audio' || !choices.music.license || choices.music.license.provenance !== 'user-owned')
+    if (design.musicPolicy !== 'licensed-only' || choices.music.kind !== 'audio')
       throw new TemplateAssetUnavailable()
-    chosen.push({ asset: choices.music, minimumFrames: 1 })
+    selected.push({ asset: choices.music, minimumFrames: 1 })
   }
-  const ids = [...new Set(chosen.map(x => x.asset.id))]
-  if (!ids.length) return
-  const uploads = await getPrisma().clipUpload.findMany({
+  const ids = [...new Set(selected.map((x) => x.asset.id))]
+  const rows = await tx.clipUpload.findMany({
     where: { workspaceId, status: 'COMPLETE', id: { in: ids } },
-    select: { id: true, mime: true, durationMs: true },
+    select: { id: true, mime: true, durationMs: true, width: true, height: true },
   })
-  if (uploads.length !== ids.length) throw new TemplateAssetUnavailable()
-  const byId = new Map(uploads.map(x => [x.id, x]))
-  for (const { asset, minimumFrames } of chosen) {
+  if (rows.length !== ids.length) throw new TemplateAssetUnavailable()
+  const byId = new Map(rows.map((row) => [row.id, row]))
+  for (const { asset, minimumFrames } of selected) {
     const row = byId.get(asset.id)
-    if (!row || !imageOrVideo(asset.kind, row.mime)) throw new TemplateAssetUnavailable()
+    if (!row || !mimeMatches(asset.kind, row.mime)) throw new TemplateAssetUnavailable()
     if (asset.kind !== 'image') {
-      const availableFrames = asset.durationFrames
-      if (!row.durationMs || row.durationMs < Math.round(minimumFrames * 1000 / 30) ||
-        typeof availableFrames !== 'number' || !Number.isInteger(availableFrames) ||
-        availableFrames < minimumFrames ||
-        row.durationMs < Math.round(availableFrames * 1000 / 30))
+      const needMs = Math.ceil(minimumFrames * 1000 / 30)
+      if (!row.durationMs || row.durationMs < needMs ||
+          !asset.durationFrames || asset.durationFrames < minimumFrames)
         throw new TemplateAssetUnavailable()
     }
   }
+  return byId
 }
 
-/** Optimistic authoring CAS. Never touches edits/editsSaveVersion or re-generates a timeline. */
-export async function saveTemplateAuthoringDraft(
+/**
+ * Atomically publishes a NEW blank-carrier project + preseeded clip.
+ * The existing preseeded full-video worker creates only the neutral carrier and enriches this
+ * exact clip; source segments, text, music and transitions stay editable ClipEditsV2 data.
+ */
+export async function publishTemplateProject(
   workspaceId: string,
-  instanceId: string,
+  idempotencyKey: string,
+  familyRaw: unknown,
+  designRaw: unknown,
+  choicesRaw: TemplateAuthoringState,
+  title?: string,
+): Promise<PublishedTemplateProject> {
+  if (!workspaceId || !KEY_RE.test(idempotencyKey)) throw new Error('Invalid template creation key')
+  const family = validateTemplateFamily(familyRaw)
+  const design = validateTemplateDesign(designRaw, family)
+  const ids = idsFor(workspaceId, idempotencyKey)
+  const snapshot = { family, design }
+  const defHash = definitionHash(snapshot)
+  const durationMs = Math.round(family.totalFrames * 1000 / 30)
+  const prisma = getPrisma()
+
+  const existing = await prisma.clipProject.findFirst({
+    where: { id: ids.projectId, workspaceId, deletedAt: null },
+    select: {
+      id: true,
+      status: true,
+      clips: {
+        where: { id: ids.clipId, deletedAt: null },
+        select: { id: true, editsSaveVersion: true, aiMeta: true },
+      },
+    },
+  })
+  if (existing?.clips[0]) {
+    const meta = parseTemplateMeta(existing.clips[0].aiMeta)
+    if (meta?.definitionHash !== defHash || meta?.instanceId !== ids.instanceId)
+      throw new TemplateInstanceConflict()
+    return resultFromRows(ids.instanceId, existing, existing.clips[0])
+  }
+
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const assetRows = await loadAndValidateAssets(tx, workspaceId, family, design, choicesRaw)
+      const settings = clipProjectSettingsSchema.parse({
+        ...defaultClipSettings(),
+        byo: true,
+        fullVideo: true,
+        blank: true,
+        aspectRatio: family.aspects[0],
+        rangeStartMs: 0,
+        rangeEndMs: durationMs,
+      })
+      const base = defaultEdits({ clipStartMs: 0, clipEndMs: durationMs })
+      const compiled = compileTemplate(
+        family,
+        design,
+        { instanceId: ids.instanceId, ...choicesRaw },
+        {
+          durationFrames: family.totalFrames,
+          edits: {
+            ...base,
+            trim: { in: 0, out: durationMs },
+            layout: { ...base.layout, mode: 'full_frame' },
+            aspectRatio: family.aspects[0],
+            captions: { ...base.captions, enabled: false },
+          },
+        },
+      )
+      const aiMeta = {
+        byo: true,
+        fullVideo: true,
+        blank: true,
+        videoTemplate: {
+          v: 1,
+          instanceId: ids.instanceId,
+          idempotencyKey,
+          definitionHash: defHash,
+          snapshot,
+          authoringState: structuredClone(choicesRaw),
+          authoringVersion: 0,
+          slotToItemIds: compiled.slotToItemIds,
+        },
+      }
+
+      await tx.clipUpload.create({
+        data: {
+          id: ids.uploadId,
+          workspaceId,
+          key: uploadSourceKey(workspaceId, ids.uploadId, 'mp4'),
+          filename: 'Template carrier.mp4',
+          bytes: BigInt(0),
+          mime: 'video/mp4',
+          status: 'PENDING',
+          storageDriver: storageDriverName(),
+          kind: 'source',
+        },
+      })
+      const project = await tx.clipProject.create({
+        data: {
+          id: ids.projectId,
+          workspaceId,
+          title: title?.trim().slice(0, 200) || family.title,
+          uploadId: ids.uploadId,
+          settings: toPrismaJson(settings),
+          rangeStartMs: 0,
+          rangeEndMs: durationMs,
+          status: 'QUEUED',
+          stage: 'queued',
+          progress: 0,
+          transcriptWords: toPrismaJson([]),
+          sourceKind: 'upload',
+        },
+      })
+
+      const uniqueAssets = new Map<string, TemplateAsset>()
+      for (const asset of Object.values(choicesRaw.media)) uniqueAssets.set(asset.id, asset)
+      if (choicesRaw.music) uniqueAssets.set(choicesRaw.music.id, choicesRaw.music)
+      for (const asset of uniqueAssets.values()) {
+        const row = assetRows.get(asset.id)!
+        await tx.clipProjectMedia.create({
+          data: {
+            id: 'pm_tpl_' + digest(ids.projectId, asset.id).slice(0, 28),
+            projectId: ids.projectId,
+            workspaceId,
+            uploadId: asset.id,
+            mediaType: asset.kind,
+            label: asset.id,
+            durationMs: row.durationMs,
+            width: row.width,
+            height: row.height,
+          },
+        })
+      }
+
+      const clip = await tx.clip.create({
+        data: {
+          id: ids.clipId,
+          projectId: ids.projectId,
+          workspaceId,
+          title: project.title,
+          reason: 'video_template',
+          startMs: 0,
+          endMs: durationMs,
+          score: 0,
+          scores: toPrismaJson({}),
+          edits: toPrismaJson(compiled.edits),
+          editsSaveVersion: 0,
+          aiMeta: toPrismaJson(aiMeta),
+        },
+      })
+      await tx.clipJob.create({
+        data: {
+          id: ids.jobId,
+          projectId: ids.projectId,
+          clipId: ids.clipId,
+          type: 'PROCESS_PROJECT',
+          status: 'QUEUED',
+          maxAttempts: 3,
+          payload: toPrismaJson(buildProcessProjectJobPayload(settings, {
+            blankMs: durationMs,
+            templateCarrier: true,
+            templateCarrierFrames: family.totalFrames,
+            preseededFullVideo: true,
+          })),
+        },
+      })
+      return resultFromRows(ids.instanceId, project, clip)
+    }, { isolationLevel: 'Serializable' })
+  } catch (error) {
+    const won = await prisma.clipProject.findFirst({
+      where: { id: ids.projectId, workspaceId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        clips: {
+          where: { id: ids.clipId, deletedAt: null },
+          select: { id: true, editsSaveVersion: true, aiMeta: true },
+        },
+      },
+    })
+    if (won?.clips[0]) {
+      const meta = parseTemplateMeta(won.clips[0].aiMeta)
+      if (meta?.definitionHash === defHash && meta?.instanceId === ids.instanceId)
+        return resultFromRows(ids.instanceId, won, won.clips[0])
+    }
+    throw error
+  }
+}
+
+/** Save authoring choices only. Compact/Timeline edits remain authoritative and are never regenerated. */
+export async function saveTemplateAuthoringState(
+  workspaceId: string,
+  clipId: string,
   expectedVersion: number,
-  choices: TemplateChoices,
-) {
-  if (!workspaceId || !INSTANCE_ID.test(instanceId) || !Number.isInteger(expectedVersion) || expectedVersion < 0)
+  state: TemplateAuthoringState,
+): Promise<{ authoringVersion: number }> {
+  if (!workspaceId || !ID_RE.test(clipId) ||
+      !Number.isInteger(expectedVersion) || expectedVersion < 0)
     throw new TemplateInstanceNotFound()
   const prisma = getPrisma()
-  const row = await prisma.clipVideoTemplateInstance.findFirst({
-    where: { id: instanceId, workspaceId, status: 'DRAFT' },
-  })
-  if (!row) throw new TemplateInstanceNotFound()
-  if (choices.instanceId !== row.id) throw new Error('Instance ID mismatch')
-  const snapshot = parseSnapshot(row.snapshot)
-  await checkAssignedWorkspaceMedia(workspaceId, snapshot, choices)
-  const saved = await prisma.clipVideoTemplateInstance.updateMany({
-    where: { id: row.id, workspaceId, status: 'DRAFT', authoringVersion: expectedVersion },
-    data: { authoringState: toPrismaJson(choices), authoringVersion: { increment: 1 } },
-  })
-  if (saved.count !== 1) throw new TemplateInstanceConflict()
-  return prisma.clipVideoTemplateInstance.findFirstOrThrow({ where: { id: row.id, workspaceId } })
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const row = await tx.clip.findFirst({
+        where: { id: clipId, workspaceId, deletedAt: null },
+        select: { id: true, aiMeta: true },
+      })
+      if (!row) throw new TemplateInstanceNotFound()
+      const root = row.aiMeta && typeof row.aiMeta === 'object' && !Array.isArray(row.aiMeta)
+        ? structuredClone(row.aiMeta as Record<string, unknown>)
+        : {}
+      const meta = parseTemplateMeta(root)
+      if (!meta) throw new TemplateInstanceNotFound()
+      const version = Number(meta.authoringVersion ?? 0)
+      if (version !== expectedVersion) throw new TemplateInstanceConflict()
+      const snapshotRaw = meta.snapshot
+      if (!snapshotRaw || typeof snapshotRaw !== 'object' || Array.isArray(snapshotRaw))
+        throw new TemplateInstanceConflict()
+      const snap = snapshotRaw as Record<string, unknown>
+      const family = validateTemplateFamily(snap.family)
+      const design = validateTemplateDesign(snap.design, family)
+      await loadAndValidateAssets(tx, workspaceId, family, design, state)
+      meta.authoringState = structuredClone(state)
+      meta.authoringVersion = version + 1
+      root.videoTemplate = meta
+      await tx.clip.update({ where: { id: clipId }, data: { aiMeta: toPrismaJson(root) } })
+      return { authoringVersion: version + 1 }
+    }, { isolationLevel: 'Serializable' })
+  } catch (error) {
+    if (error instanceof TemplateInstanceNotFound || error instanceof TemplateInstanceConflict ||
+        error instanceof TemplateAssetUnavailable) throw error
+    const code = typeof error === 'object' && error ? String((error as { code?: unknown }).code ?? '') : ''
+    if (code === 'P2034') throw new TemplateInstanceConflict()
+    throw error
+  }
 }
 
-/** A canceled draft never schedules render work and cannot be resurrected by stale CAS. */
-export async function cancelTemplateAuthoringDraft(workspaceId: string, instanceId: string) {
-  if (!workspaceId || !INSTANCE_ID.test(instanceId)) throw new TemplateInstanceNotFound()
+/** Cancel pending carrier work without deleting user media or modifying the timeline. */
+export async function cancelTemplateProject(workspaceId: string, projectId: string): Promise<void> {
+  if (!workspaceId || !ID_RE.test(projectId)) throw new TemplateInstanceNotFound()
   const prisma = getPrisma()
-  const found = await prisma.clipVideoTemplateInstance.findFirst({ where: { id: instanceId, workspaceId } })
+  const found = await prisma.clipProject.findFirst({
+    where: { id: projectId, workspaceId, deletedAt: null },
+    select: { id: true, status: true },
+  })
   if (!found) throw new TemplateInstanceNotFound()
   if (found.status === 'CANCELED') return
-  if (found.status !== 'DRAFT') throw new TemplateInstanceConflict()
-  const changed = await prisma.clipVideoTemplateInstance.updateMany({
-    where: { id: instanceId, workspaceId, status: 'DRAFT' },
-    data: { status: 'CANCELED' },
-  })
-  if (changed.count !== 1) throw new TemplateInstanceConflict()
+  if (found.status === 'READY') throw new TemplateInstanceConflict()
+  await prisma.$transaction([
+    prisma.clipProject.update({
+      where: { id: projectId },
+      data: { status: 'CANCELED', stage: 'canceled', error: 'canceled' },
+    }),
+    prisma.clipJob.updateMany({
+      where: { projectId, status: 'QUEUED' },
+      data: { status: 'FAILED', error: 'canceled', finishedAt: new Date() },
+    }),
+  ])
 }
