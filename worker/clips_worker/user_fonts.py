@@ -43,6 +43,10 @@ def merged_fonts_dir(base: Path | None, extra: list[Path], dest: Path) -> Path:
     if base and base.is_dir():
         srcs = sorted(base.iterdir())
         t6 = base / "t6"
+        if not t6.is_dir():
+            # Source checkout has legacy core fonts under prototype/v3 and
+            # pinned display fonts under worker/v3, unlike the merged Docker path.
+            t6 = Path(__file__).resolve().parent.parent / "v3" / "fonts" / "t6"
         if t6.is_dir():
             srcs.extend(sorted(t6.iterdir()))
     for f in [*srcs, *extra]:
