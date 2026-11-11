@@ -34,6 +34,13 @@ export type SourceAudio = 'main' | 'source' | 'mix'
 export type SourceFit = 'cover' | 'contain'
 
 /** B3: per-slot framing; percentages are resolution independent and persist as ordinary edit data. */
+export type SourceSegmentFx = {
+  /** -100..100, 0 = identity. */
+  brightness?: number
+  contrast?: number
+  saturation?: number
+}
+
 export type SourceSegmentTransform = {
   /** Frame translation in percent of the output frame. */
   x?: number
@@ -75,6 +82,8 @@ export type SourceSegment = {
   fit?: SourceFit
   /** B3 template-slot transform; also editable on ordinary source segments. */
   transform?: SourceSegmentTransform
+  /** B3 small, worker-mirrored per-slot look. */
+  fx?: SourceSegmentFx
   /** Created by multicam auto-switch (regenerating replaces only these). */
   auto?: true
   /** Multi-angle composite (side-by-side / stack / PiP / 2×2 grid). Export: media_sources.build_sources_filtergraph. */
@@ -102,6 +111,27 @@ const AUDIO_MODES = new Set<SourceAudio>(['main', 'source', 'mix'])
 
 function clamp(n: number, lo: number, hi: number): number { return Math.min(hi, Math.max(lo, n)) }
 function finite(v: unknown): number | undefined { const n = Number(v); return Number.isFinite(n) ? n : undefined }
+export function normalizeSourceSegmentFx(raw: unknown): SourceSegmentFx | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  const out: SourceSegmentFx = {}
+  for (const key of ['brightness', 'contrast', 'saturation'] as const) {
+    const n = finite(o[key])
+    if (n != null && Math.abs(n) >= 0.001) out[key] = Math.round(clamp(n, -100, 100) * 100) / 100
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+export function sourceSegmentFxCss(raw: SourceSegmentFx | undefined): string {
+  const fx = normalizeSourceSegmentFx(raw)
+  if (!fx) return ''
+  const filters: string[] = []
+  if (fx.brightness) filters.push(`brightness(${1 + fx.brightness / 100})`)
+  if (fx.contrast) filters.push(`contrast(${1 + fx.contrast / 100})`)
+  if (fx.saturation) filters.push(`saturate(${1 + fx.saturation / 100})`)
+  return filters.join(' ')
+}
+
 export function normalizeSourceSegmentTransform(raw: unknown): SourceSegmentTransform | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const o = raw as Record<string, unknown>
@@ -219,6 +249,7 @@ export function normalizeSourceSegments(
     const inMs = int(o.inMs)
     const layout = normalizeSegmentLayout(o.layout, sources, src.id)
     const transform = normalizeSourceSegmentTransform(o.transform)
+    const fx = normalizeSourceSegmentFx(o.fx)
     out.push({
       id,
       sourceId: src.id,
@@ -230,6 +261,7 @@ export function normalizeSourceSegments(
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
       ...(transform ? { transform } : {}),
+      ...(fx ? { fx } : {}),
       ...(layout ? { layout } : {}),
     })
   }
@@ -346,7 +378,7 @@ export function removeSourceSegment(segs: readonly SourceSegment[] | undefined, 
 export function patchSourceSegment(
   segs: readonly SourceSegment[] | undefined,
   id: string,
-  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout' | 'transform'>>,
+  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout' | 'transform' | 'fx'>>,
   sources: readonly ClipMediaSource[] | undefined,
 ): SourceSegment[] | undefined {
   const cur = (segs ?? []).find((s) => s.id === id)
