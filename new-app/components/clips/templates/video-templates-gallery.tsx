@@ -138,7 +138,29 @@ export function VideoTemplatesGallery() {
                   onClick={() => toggleFavorite(item.id)} className="rounded-md border px-2 py-1 text-xs">{favorites.includes(item.id) ? 'Saved' : 'Save'}</button>
               </div>
               <p className="text-xs text-muted-foreground">{item.family.aspects.join(', ')} · {item.family.slots.length} slots · {item.family.totalFrames / 30}s</p>
+              <p className="text-xs text-muted-foreground">
+                {item.family.slots.filter(slot => slot.media === 'video').length} video · {' '}
+                {item.family.slots.filter(slot => slot.media === 'image').length} photos · {' '}
+                {item.family.slots.filter(slot => slot.media === 'either').length} flexible
+              </p>
               <p className="text-sm">{item.description}</p>
+              <details className="rounded-lg border border-border/70 p-2 text-xs">
+                <summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
+                  Exact slot lengths and editable fields
+                </summary>
+                <ol className="mt-2 space-y-1">
+                  {item.family.slots.map(slot => <li key={slot.id}>
+                    Slot {slot.ordinal}: {slot.media === 'either' ? 'photo or video' : slot.media} ·
+                    {' '}{(slot.durationFrames / item.family.fps).toFixed(2)}s output
+                  </li>)}
+                </ol>
+                <p className="mt-2 text-muted-foreground">
+                  Editable text: {item.family.texts.length
+                    ? item.family.texts.map(text => text.id).join(', ') : 'none'}
+                  {item.family.graphics?.length
+                    ? ' · Authored graphics: ' + item.family.graphics.length : ''}
+                </p>
+              </details>
               <p className="text-xs text-muted-foreground">Rights: {item.rights}</p>
               <p className="text-xs text-muted-foreground">
                 {item.design.musicPolicy === 'none' ? 'No music track' : 'Licensed or user-owned music only'}
