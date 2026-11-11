@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react'
 import { useRouter } from 'next/navigation'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
+import { TemplateMusicChoicePanel } from '@/components/clips/templates/template-music-choice-panel'
 import { uploadClipFile, type UploadProgress } from '@/lib/clips/upload'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
@@ -95,6 +96,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [selectedSlot, setSelectedSlot] = useState(release.family.slots[0]?.id ?? '')
   const [selectedUploads, setSelectedUploads] = useState<TemplateAsset[]>([])
   const [selectedAudio, setSelectedAudio] = useState(false)
+  const [pendingMusic, setPendingMusic] = useState<MediaItem | null>(null)
   const [uploadStatus, setUploadStatus] = useState<UploadProgress | null>(null)
   const [clip, setClip] = useState<ClipDetail | null>(null)
   const [sourceUrls, setSourceUrls] = useState<Record<string, string>>({})
@@ -515,18 +517,32 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
             {release.design.musicPolicy !== 'none' && <>
               <button type="button" className={buttonClass} onClick={() => { setSelectedAudio(true);setMediaKind('audio');void refreshMedia(1,'','audio') }}>Choose approved music</button>
               {draft?.music && <button type="button" className={buttonClass}
-                onClick={() => commitDraft({ ...draft, music: undefined, musicRightsConfirmed: false })}>Remove music ({draft.music.id})</button>}
-              <label className="flex items-start gap-2 text-xs">
-                <input type="checkbox" className="mt-0.5" checked={draft?.musicRightsConfirmed === true}
-                  onChange={e => draft && commitDraft({ ...draft, musicRightsConfirmed: e.target.checked })} />
-                I confirm I own or am licensed to use selected music for this video and its exports.
-              </label>
-              <label className="block space-y-1 text-xs">Music timing
-                <select className={inputClass} value="keep" disabled>
-                  <option value="keep">Keep existing cuts and timing</option>
-                </select>
-                <span className="text-muted-foreground">Re-sync requires a verified beat map and is not available yet.</span>
-              </label>
+                onClick={() => commitDraft({ ...draft, music: undefined, templateMusic: undefined,
+                  musicTiming: 'keep', musicRightsConfirmed: false })}>Remove music ({draft.music.id})</button>}
+              {draft?.templateMusic && <p className="text-xs text-muted-foreground">
+                Verified SHA-256 {draft.templateMusic.rights.sha256.slice(0, 12)}… ·
+                {' '}{draft.templateMusic.schedule.beats.length} pinned beats ·
+                {' '}{draft.templateMusic.choice === 're-sync' ? 'Approved re-sync' : 'Keep cut timing'}
+              </p>}
+              {pendingMusic && draft && <TemplateMusicChoicePanel
+                key={pendingMusic.asset.id}
+                family={release.family}
+                musicUploadId={pendingMusic.asset.id}
+                previewUrl={pendingMusic.url ?? undefined}
+                originalSchedule={draft.templateMusic?.schedule}
+                onCancel={() => setPendingMusic(null)}
+                onAccept={decision => {
+                  commitDraft({ ...draft, music: pendingMusic.asset, templateMusic: decision,
+                    musicRightsConfirmed: true,
+                    musicTiming: decision.choice === 're-sync' ? 'resync' : 'keep' })
+                  setPendingMusic(null)
+                  setSelectedAudio(false)
+                }}
+              />}
+              <p className="text-xs text-muted-foreground">
+                Select an uploaded song and verify the exact file hash and music rights before saving.
+                Replacement can keep cut timing or use an approved pinned beat re-sync.
+              </p>
             </>}
           </section>
         </section>
@@ -617,11 +633,11 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
                   aria-label={'Use ' + item.label} onClick={() => {
                     if (item.asset.kind === 'audio' || selectedAudio) {
                       if (item.asset.kind !== 'audio') { setError('Select an audio file');return }
-                      if (!draft?.musicRightsConfirmed) {
-                        setError('Confirm music ownership or licensing before choosing this track')
-                        return
+                      if (release.design.musicPolicy === 'none') {
+                        setError('This template does not allow music'); return
                       }
-                      if (release.design.musicPolicy !== 'none') commitDraft({ ...draft, music: item.asset })
+                      setPendingMusic(item)
+                      setSelectedAudio(false)
                     } else fillSlot(selectedSlot, item.asset)
                   }}>Use</button>
                 <button type="button" className={buttonClass} disabled={!item.available || busy}
