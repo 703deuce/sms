@@ -860,10 +860,14 @@ function BriefForm({
   onSubmit: () => void
 }) {
   const sellingPointReady = input.sellingPoints.some((point) => point.trim().length > 0)
+  const photoCopyReady = Boolean(input.headline?.trim() && input.subHeadline?.trim() && input.cta?.trim() && input.brandColors?.primary)
+  const needsImage = mode === 'image_to_ad' || mode === 'image_ad_to_commercial'
   const canSubmit = input.name.trim().length > 0
     && (mode !== 'storyline' || sellingPointReady)
-    && (mode !== 'image_to_ad' || Boolean(productImage))
+    && (mode !== 'image_to_ad' || (sellingPointReady && photoCopyReady))
+    && (!needsImage || Boolean(productImage))
     && !busy
+  const aspects = mode === 'storyline' ? config.aspects.filter((aspect) => aspect !== '3:4') : config.aspects
 
   return (
     <form
@@ -875,88 +879,142 @@ function BriefForm({
       }}
     >
       <div>
-        <h1 className="text-xl font-semibold">{mode === 'storyline' ? 'Storyline brief' : 'Image-to-ad brief'}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Add the source details for this ad. You will review the generated plan before any confirmed generation starts.</p>
+        <h1 className="text-xl font-semibold">
+          {mode === 'storyline' ? 'Storyline brief' : mode === 'image_to_ad' ? 'Create 5 photo ads' : 'Animate a finished ad still'}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {mode === 'storyline'
+            ? 'Build the existing stitched multi-scene commercial from a product brief.'
+            : mode === 'image_to_ad'
+              ? 'Your product photo is the source of truth. Review the five concepts before any paid still generation starts.'
+              : 'One uploaded finished still becomes one native-audio 15s commercial. No TTS or stitched-scene pass is used.'}
+        </p>
       </div>
 
       <label className="text-sm font-medium">
-        Product name
+        {mode === 'image_ad_to_commercial' ? 'Ad / product name' : 'Product name'}
         <input data-testid="ad-studio-product-name" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.name} onChange={(e) => onChange({ ...input, name: e.target.value })} required />
       </label>
 
-      <label className="text-sm font-medium">
-        Selling points
-        <textarea
-          data-testid="ad-studio-selling-points"
-          className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-          value={input.sellingPoints.join('\n')}
-          onChange={(e) => onChange({ ...input, sellingPoints: e.target.value.split('\n') })}
-          placeholder="One selling point per line"
-        />
-      </label>
+      {mode !== 'image_ad_to_commercial' ? (
+        <label className="text-sm font-medium">
+          {mode === 'image_to_ad' ? 'Product / offer info' : 'Selling points'}
+          <textarea
+            data-testid="ad-studio-selling-points"
+            className="mt-1 min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.sellingPoints.join('\n')}
+            onChange={(e) => onChange({ ...input, sellingPoints: e.target.value.split('\n') })}
+            placeholder={mode === 'image_to_ad' ? 'Product truth and offer details — one point per line' : 'One selling point per line'}
+          />
+        </label>
+      ) : null}
+
+      {mode === 'image_to_ad' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Headline
+              <input data-testid="ad-studio-headline" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.headline ?? ''} onChange={(e) => onChange({ ...input, headline: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Sub-headline
+              <input data-testid="ad-studio-subheadline" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.subHeadline ?? ''} onChange={(e) => onChange({ ...input, subHeadline: e.target.value })} />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="text-sm font-medium">CTA
+              <input data-testid="ad-studio-cta" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.cta ?? ''} onChange={(e) => onChange({ ...input, cta: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Primary color
+              <input data-testid="ad-studio-primary-color" type="color" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2" value={input.brandColors?.primary ?? '#111111'} onChange={(e) => onChange({ ...input, brandColors: { primary: e.target.value, secondary: input.brandColors?.secondary } })} />
+            </label>
+            <label className="text-sm font-medium">Secondary color
+              <input data-testid="ad-studio-secondary-color" type="color" className="mt-1 h-10 w-full rounded-md border border-input bg-background px-2" value={input.brandColors?.secondary ?? '#FFFFFF'} onChange={(e) => onChange({ ...input, brandColors: { primary: input.brandColors?.primary ?? '#111111', secondary: e.target.value } })} />
+            </label>
+          </div>
+        </>
+      ) : null}
+
+      {mode === 'storyline' ? (
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium">Product URL <span className="font-normal text-muted-foreground">(optional)</span>
+              <input data-testid="ad-studio-url" type="url" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.url ?? ''} onChange={(e) => onChange({ ...input, url: e.target.value })} />
+            </label>
+            <label className="text-sm font-medium">Audience <span className="font-normal text-muted-foreground">(optional)</span>
+              <input data-testid="ad-studio-audience" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.audience ?? ''} onChange={(e) => onChange({ ...input, audience: e.target.value })} />
+            </label>
+          </div>
+          <label className="text-sm font-medium">Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
+            <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
+          </label>
+        </>
+      ) : mode === 'image_to_ad' ? (
+        <label className="text-sm font-medium">Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
+          <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
+        </label>
+      ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Product URL <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-url" type="url" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.url ?? ''} onChange={(e) => onChange({ ...input, url: e.target.value })} />
-        </label>
-        <label className="text-sm font-medium">
-          Audience <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-audience" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.audience ?? ''} onChange={(e) => onChange({ ...input, audience: e.target.value })} />
-        </label>
-      </div>
-
-      <label className="text-sm font-medium">
-        Brand notes <span className="font-normal text-muted-foreground">(optional)</span>
-        <textarea data-testid="ad-studio-brand-notes" className="mt-1 min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.brandNotes ?? ''} onChange={(e) => onChange({ ...input, brandNotes: e.target.value })} />
-      </label>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-sm font-medium">
-          Length
-          <select data-testid="ad-studio-duration" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.durationSec} onChange={(e) => onChange({ ...input, durationSec: Number(e.target.value) as AdDuration })}>
-            {config.durationsSec.map((duration) => <option key={duration} value={duration}>{duration}s</option>)}
-          </select>
-        </label>
-        <label className="text-sm font-medium">
-          Aspect
+        {mode === 'storyline' ? (
+          <label className="text-sm font-medium">Length
+            <select data-testid="ad-studio-duration" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.durationSec} onChange={(e) => onChange({ ...input, durationSec: Number(e.target.value) as AdDuration })}>
+              {config.durationsSec.map((duration) => <option key={duration} value={duration}>{duration}s</option>)}
+            </select>
+          </label>
+        ) : (
+          <div className="rounded-md border border-border bg-background px-3 py-2 text-sm"><span className="font-medium">Length</span><span className="ml-2 text-muted-foreground">15s</span></div>
+        )}
+        <label className="text-sm font-medium">Aspect
           <select data-testid="ad-studio-aspect" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.aspect} onChange={(e) => onChange({ ...input, aspect: e.target.value as AdAspect })}>
-            {config.aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect}</option>)}
+            {aspects.map((aspect) => <option key={aspect} value={aspect}>{aspect}</option>)}
           </select>
         </label>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="text-sm font-medium">
-          Product image {mode === 'image_to_ad' ? <span className="text-destructive">(required)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
+          {mode === 'image_ad_to_commercial' ? 'Finished ad still' : 'Product image'} {needsImage ? <span className="text-destructive">(required)</span> : <span className="font-normal text-muted-foreground">(optional)</span>}
           <input data-testid="ad-studio-product-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onProductImage(e.target.files?.[0] ?? null)} />
         </label>
-        <label className="text-sm font-medium">
-          Logo <span className="font-normal text-muted-foreground">(optional)</span>
-          <input data-testid="ad-studio-logo-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onLogoImage(e.target.files?.[0] ?? null)} />
-        </label>
+        {mode !== 'image_ad_to_commercial' ? (
+          <label className="text-sm font-medium">Logo <span className="font-normal text-muted-foreground">(optional)</span>
+            <input data-testid="ad-studio-logo-image" type="file" accept="image/*" className="mt-1 block w-full text-sm" onChange={(e) => onLogoImage(e.target.files?.[0] ?? null)} />
+          </label>
+        ) : null}
       </div>
 
-      <div className="rounded-lg border border-border bg-background/50 p-4">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            data-testid="ad-studio-voiceover-enabled"
-            type="checkbox"
-            checked={input.voiceoverEnabled !== false}
-            onChange={(e) => onChange({ ...input, voiceoverEnabled: e.target.checked })}
-          />
-          Voiceover
+      {mode !== 'storyline' ? (
+        <label className="text-sm font-medium">15s animation model
+          <select
+            data-testid="ad-studio-commercial-model"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={input.commercialModelId ?? 'wan-3.0'}
+            onChange={(e) => onChange({ ...input, commercialModelId: e.target.value as NonNullable<AdProductInput['commercialModelId']> })}
+          >
+            <option value="wan-3.0">Wan 3.0 · default · native audio</option>
+            <option value="seedance-2.5">Seedance 2.5 · dialogue / lip-sync · native audio</option>
+            {input.aspect === '1:1' ? <option value="seedance-2.0-mini">Seedance 2.0 Mini · 480p test · native audio</option> : null}
+          </select>
         </label>
-        <label className="mt-3 block text-sm font-medium">
-          Voice
-          <input data-testid="ad-studio-voice-id" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.voiceId ?? DEFAULT_T2V_VOICE.voiceId} onChange={(e) => onChange({ ...input, voiceId: e.target.value })} />
-          <span className="mt-1 block text-xs font-normal text-muted-foreground">Default: {DEFAULT_T2V_VOICE.voiceName}</span>
-        </label>
-      </div>
+      ) : null}
 
-      <p className="text-sm text-muted-foreground" data-testid="ad-studio-credit-estimate">Credits are shown on the generated plan.</p>
+      {mode === 'storyline' ? (
+        <div className="rounded-lg border border-border bg-background/50 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input data-testid="ad-studio-voiceover-enabled" type="checkbox" checked={input.voiceoverEnabled !== false} onChange={(e) => onChange({ ...input, voiceoverEnabled: e.target.checked })} />
+            Voiceover
+          </label>
+          <label className="mt-3 block text-sm font-medium">Voice
+            <input data-testid="ad-studio-voice-id" className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={input.voiceId ?? DEFAULT_T2V_VOICE.voiceId} onChange={(e) => onChange({ ...input, voiceId: e.target.value })} />
+            <span className="mt-1 block text-xs font-normal text-muted-foreground">Default: {DEFAULT_T2V_VOICE.voiceName}</span>
+          </label>
+        </div>
+      ) : null}
+
+      <p className="text-sm text-muted-foreground" data-testid="ad-studio-credit-estimate">
+        {mode === 'storyline' ? 'Credits are shown on the generated plan.' : 'Credits TBD'}
+      </p>
       <button type="submit" data-testid="ad-studio-plan-cta" disabled={!canSubmit} className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-        {busy ? 'Planning…' : 'Get plan'}
+        {busy ? (mode === 'image_ad_to_commercial' ? 'Starting commercial…' : 'Planning…') : mode === 'image_ad_to_commercial' ? 'Animate → 15s commercial' : 'Get plan'}
       </button>
     </form>
   )
