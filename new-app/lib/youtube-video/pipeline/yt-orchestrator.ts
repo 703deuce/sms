@@ -16,7 +16,6 @@ import type {
 import type { YoutubeVideoOption } from '@/lib/youtube-video/types'
 
 const YT_WINDOW_MS=20*60_000
-const YT_MAX_RENDER_INSERTS=50
 
 function sourceKey(args:YtPlanArgs):string{
   return args.sources.map(s=>[s.sourceId,s.projectId,s.durationMs,s.words.length].join(':')).join('|')
@@ -74,8 +73,7 @@ function verifyFullSourceCuts(cuts:readonly YtSelectedCut[],args:YtPlanArgs):voi
   const sourceIndex=new Map(args.sources.map((s,i)=>[s.sourceId,i]))
   let lastSource=-1
   const endBySource=new Map<string,number>()
-  let inserts=0
-  for(const [i,c] of cuts.entries()){
+  for(const c of cuts){
     const index=sourceIndex.get(c.sourceId)
     if(index===undefined)throw Error('yt_unknown_cut_source')
     const source=args.sources[index]!
@@ -86,9 +84,7 @@ function verifyFullSourceCuts(cuts:readonly YtSelectedCut[],args:YtPlanArgs):voi
       throw Error('yt_cut_order_or_overlap')
     lastSource=index
     endBySource.set(c.sourceId,c.endMs)
-    if(i>0)inserts+=Math.ceil((c.endMs-c.startMs)/600_000)
   }
-  if(inserts>YT_MAX_RENDER_INSERTS)throw Error('yt_render_insert_limit')
 }
 
 /** Durable stage machine. Gemini is always a queued worker job; web requests

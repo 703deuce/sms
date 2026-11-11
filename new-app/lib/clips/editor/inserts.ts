@@ -66,7 +66,7 @@ function safeId(v: unknown): string {
 }
 
 /** Known video / image sources only, durations clamped. Array order is kept (ties play in order). */
-export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource[] | undefined): ClipInsert[] | undefined {
+export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource[] | undefined, youtubeLongForm = false): ClipInsert[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const byId = new Map((sources ?? []).map((s) => [s.id, s]))
   const out: ClipInsert[] = []
@@ -90,7 +90,7 @@ export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource
         durMs: Math.min(dur, INSERT_MAX_MS),
         audio: 'mute',
       })
-      if (out.length >= MAX_INSERTS) break
+      if (!youtubeLongForm && out.length >= MAX_INSERTS) break
       continue
     }
     const src = byId.get(safeId(o.sourceId))
@@ -110,7 +110,7 @@ export function normalizeInserts(raw: unknown, sources: readonly ClipMediaSource
       ...(o.audio === 'mute' || src.mediaType === 'image' ? { audio: 'mute' as const } : {}),
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
     })
-    if (out.length >= MAX_INSERTS) break
+    if (!youtubeLongForm && out.length >= MAX_INSERTS) break
   }
   return out.length ? out : undefined
 }

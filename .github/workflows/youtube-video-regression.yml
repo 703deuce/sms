@@ -49,6 +49,7 @@ jobs:
       - name: Run YouTube Video maker regression tests
         run: pnpm exec vitest run tests/youtube-video
       - name: Scoped Next.js TypeScript check for YouTube Video maker
+        if: ${{ always() }}
         run: |
           NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/youtube-video-tsc.txt 2>&1 || true
           if grep -E '^(lib/server/(youtube-video/|ai-captions/create-project|ai-producer-agent/create-output-project|clips/projects)|lib/youtube-video/|lib/youtube-video-ui/|components/youtube-video/|tests/youtube-video/|app/api/youtube-video/).*error TS' /tmp/youtube-video-tsc.txt; then
@@ -56,3 +57,11 @@ jobs:
             exit 1
           fi
           echo 'No scoped YouTube Video maker TypeScript errors'
+      - name: Verify worker YouTube and legacy insert parity
+        if: ${{ always() }}
+        run: |
+          python3 -m pip install pytest
+          PYTHONPATH=../worker python3 -m pytest -q ../worker/tests/test_youtube_long_form_limits.py
+      - name: Production Next.js build
+        if: ${{ always() }}
+        run: pnpm run build

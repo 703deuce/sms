@@ -25,7 +25,7 @@ export async function ytRunStoryFinisher(
     {outline,qaRevisionIssues:issues,candidateScenes,fullOriginalTranscript:ctx.words.map((w,i)=>[
       i,Math.round(w.s*1000),Math.round(w.e*1000),w.w,
     ])},
-    {keepIndices:{type:'array',minItems:1,maxItems:36,items:int},
+    {keepIndices:{type:'array',minItems:1,maxItems:cuts.length,items:int},
       genuineEnding:{type:'boolean'},endingEvidence:stringType()},
     ['keepIndices','genuineEnding','endingEvidence'])
   const finalWindow=ctx.windowCount==null||ctx.windowIndex==null||ctx.windowIndex===ctx.windowCount-1
@@ -168,8 +168,8 @@ export async function ytFinishWholeSourceStory(
     },
     {
       title:{type:'string'},premise:{type:'string'},
-      selectedIndices:{type:'array',minItems:1,maxItems:51,items:int},
-      chapterTitles:{type:'array',minItems:1,maxItems:51,items:{type:'string'}},
+      selectedIndices:{type:'array',minItems:1,maxItems:all.length,items:int},
+      chapterTitles:{type:'array',minItems:1,maxItems:all.length,items:{type:'string'}},
     },['title','premise','selectedIndices','chapterTitles'])
   if(typeof raw.title!=='string'||!raw.title.trim()||
     typeof raw.premise!=='string'||!raw.premise.trim()||
