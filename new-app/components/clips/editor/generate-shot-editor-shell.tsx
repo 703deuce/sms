@@ -3,18 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
-  ArrowLeft,
   Check,
-  Download,
   ImagePlus,
   Loader2,
   Pause,
   Play,
   Plus,
-  Redo2,
   RotateCcw,
   Sparkles,
-  Undo2,
   X,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -35,8 +31,8 @@ import { loadSourceWords } from '@/lib/clips/source-words'
 import { normalizeEditSpeed, orderedKeepSegments, type ClipEditsV2 } from '@/lib/clips/edits'
 import { replaceVideoRange, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { routes } from '@/lib/routes'
-import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
-import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
+import { StandaloneEditorChrome, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
+import { generatePreviewCandidates, clampGeneratePreviewSeek } from '@/lib/clips/editor/generate-preview-media'
 
 type EditorProps = Parameters<typeof EditorClipShell>[0]
 type Props = Pick<
@@ -207,6 +203,20 @@ export function GenerateShotEditorShell(props: Props) {
   const [playing, setPlaying] = useState(false)
   const [mediaFailure, setMediaFailure] = useState(false)
   const [mediaReady, setMediaReady] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
+  const [previewAttempt, setPreviewAttempt] = useState(0)
+  const previewCandidates = useMemo(() => generatePreviewCandidates({
+    authorizedSegment: source?.kind === 'segment' ? source : null,
+    authorizedSource: source?.kind === 'source' ? source : null,
+    urls: props.mediaUrls,
+    segmentStartMs: props.sourceSegStartMs,
+    segmentEndMs: props.sourceSegEndMs,
+    clipStartMs: props.bounds.clipStartMs,
+    clipEndMs: props.bounds.clipEndMs,
+  }), [source, props.mediaUrls, props.sourceSegStartMs, props.sourceSegEndMs, props.bounds.clipStartMs, props.bounds.clipEndMs])
+  const preview = previewCandidates[previewIndex] ?? null
+  const previewRef = useRef(preview)
+  previewRef.current = preview
   const [exportOpen, setExportOpen] = useState(false)
   const [navigating, setNavigating] = useState(false)
   const [models, setModels] = useState<StudioModel[]>([])
@@ -331,6 +341,37 @@ export function GenerateShotEditorShell(props: Props) {
       : activeSpend
         ? 'A source-video generation is already in progress.'
         : null)
+
+  // Playback-only fallback: provider authorization always uses `source`, never `preview`.
+  useEffect(() => {
+    setPreviewIndex(0)
+    setPreviewAttempt(0)
+    setMediaReady(false)
+    setMediaFailure(false)
+  }, [source?.url, props.mediaUrls.proxy, props.mediaUrls.preview])
+
+  useEffect(() => {
+    if (!source || !preview || mediaReady || mediaFailure) return
+    const timeout = window.setTimeout(() => {
+      setPreviewIndex((current) => {
+        if (current + 1 < previewCandidates.length) return current + 1
+        setMediaFailure(true)
+        return current
+      })
+    }, 12000)
+    return () => window.clearTimeout(timeout)
+  }, [source, preview, previewCandidates.length, previewIndex, previewAttempt, mediaReady, mediaFailure])
+
+  const failPreview = useCallback(() => {
+    setMediaReady(false)
+    setPlaying(false)
+    setPreviewIndex((current) => {
+      if (current + 1 < previewCandidates.length) return current + 1
+      setMediaFailure(true)
+      return current
+    })
+    console.warn('[editor:generate-mode] preview-fallback', { projectId, clipId, stage: previewIndex + 1 })
+  }, [previewCandidates.length, previewIndex, projectId, clipId])
 
   const mediaFrameMs = source ? Math.max(0, playheadMs - source.offsetMs) : 0
   const frameExtractor = useFilmstripFrames(source?.url)
@@ -525,7 +566,7 @@ export function GenerateShotEditorShell(props: Props) {
       const ms = Math.round(Math.max(minMs, Math.min(maxMs, requestedMs)))
       setPlayheadMs(ms)
       if (videoRef.current) {
-        videoRef.current.currentTime = Math.max(0, (ms - source.offsetMs) / 1000)
+        videoRef.current.currentTime = clampGeneratePreviewSeek(ms, previewRef.current, videoRef.current.duration)
       }
       console.info('[editor:generate-mode] seek', {
         projectId,
@@ -967,109 +1008,36 @@ export function GenerateShotEditorShell(props: Props) {
         className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground"
         data-testid="generate-shot-editor"
       >
-        <header className={editorToolbarRow + ' relative z-50'}>
-          <Button
-            size="sm"
-            variant="ghost"
-            aria-label="Back to clip editor"
-            disabled={navigating}
-            onClick={() => void navigate(editorHref, 'edit')}
-          >
-            <ArrowLeft className="size-4" />
-          </Button>
-          <div className="mr-2 min-w-0">
-            <p className="max-w-44 truncate text-[11px] text-muted-foreground">
-              {props.projectTitle}
-            </p>
-            <h1 className="max-w-64 truncate text-sm font-semibold">
-              Change this shot · {props.initialTitle}
-            </h1>
-          </div>
-          <span className="rounded-full border border-border px-2 py-0.5 text-[11px] font-medium">
-            Change this shot
-          </span>
-          <span className="text-xs text-muted-foreground" aria-live="polite">
-            {saveState === 'saved'
-              ? 'Saved'
-              : saveState === 'error'
-                ? 'Save failed'
-                : 'Saving…'}
-          </span>
-          {saveState === 'error' ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                void flushSave().catch(() => toast.error('Save retry failed'))
-              }
-            >
-              Retry save
-            </Button>
-          ) : null}
-          <div className="ml-auto flex flex-wrap items-center gap-1">
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!canUndo}
-              aria-label="Undo"
-              onClick={() => {
-                undo()
-                console.info('[editor:generate-mode] undo', { projectId, clipId })
-              }}
-            >
-              <Undo2 className="size-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={!canRedo}
-              aria-label="Redo"
-              onClick={() => {
-                redo()
-                console.info('[editor:generate-mode] redo', { projectId, clipId })
-              }}
-            >
-              <Redo2 className="size-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setExportOpen(true)
-                console.info('[editor:generate-mode] export-open', {
-                  projectId,
-                  clipId,
-                })
-              }}
-            >
-              <Download className="mr-1 size-4" />
-              Export
-            </Button>
-            <EditorModeSwitcher
-              current="generate"
-              disabled={navigating}
-              onSelect={(mode) => {
-                console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
-                if (mode === 'generate') return
-                const query = props.fromStudio ? { from: 'studio' } : undefined
-                if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
-                if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
-                if (mode === 'story') { void navigate(routes.story(projectId, clipId, query), 'story'); return }
-                if (mode === 'templates') void navigate(routes.templateMode(projectId, clipId, query), 'templates')
-              }}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={navigating}
-              onClick={() =>
-                void navigate(routes.studio(projectId, clipId), 'studio')
-              }
-            >
-              Studio
-            </Button>
-          </div>
-        </header>
+        <StandaloneEditorChrome
+          projectTitle={props.projectTitle}
+          title={'Change this shot · ' + props.initialTitle}
+          current="generate"
+          saveState={saveState}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          disabled={navigating}
+          contextSlot={<span className="hidden shrink-0 text-[11px] text-muted-foreground xl:inline">Change this shot</span>}
+          onBack={() => void navigate(editorHref, 'edit')}
+          onUndo={() => { undo(); console.info('[editor:generate-mode] undo', { projectId, clipId }) }}
+          onRedo={() => { redo(); console.info('[editor:generate-mode] redo', { projectId, clipId }) }}
+          onExport={() => { setExportOpen(true); console.info('[editor:generate-mode] export-open', { projectId, clipId }) }}
+          onRetrySave={() => { void flushSave().catch(() => toast.error('Save retry failed')) }}
+          onModeSelect={(mode) => {
+            console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
+            if (mode === 'generate') return
+            const query = props.fromStudio ? { from: 'studio' } : undefined
+            if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
+            if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
+            if (mode === 'story') { void navigate(routes.story(projectId, clipId, query), 'story'); return }
+            if (mode === 'templates') void navigate(routes.templateMode(projectId, clipId, query), 'templates')
+          }}
+          onLayoutSelect={(layout) => {
+            void finishStandaloneLayoutHandoff({
+              view: layout, projectId, clipId, flushSave,
+              navigate: (href) => window.location.assign(href),
+            }).catch(() => toast.error('Save edits before switching editors.'))
+          }}
+        />
 
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-1 overflow-y-auto bg-background p-1 lg:grid-cols-[240px_minmax(0,1fr)_280px] lg:overflow-hidden">
           <aside
@@ -1256,18 +1224,17 @@ export function GenerateShotEditorShell(props: Props) {
                 <div className="w-full max-w-4xl">
                   <video
                     ref={videoRef}
-                    src={source.url}
+                    key={previewIndex + ':' + previewAttempt}
+                    src={preview?.url}
                     poster={props.posterUrl || undefined}
                     preload="metadata"
                     controls
                     playsInline
                     className="mx-auto max-h-[48vh] w-full object-contain"
                     onLoadedMetadata={() => {
-                      setMediaReady(true)
                       if (videoRef.current) {
-                        videoRef.current.currentTime = Math.max(
-                          0,
-                          (playheadMs - source.offsetMs) / 1000,
+                        videoRef.current.currentTime = clampGeneratePreviewSeek(
+                          playheadMs, previewRef.current, videoRef.current.duration,
                         )
                       }
                       console.info('[editor:generate-mode] source-ready', {
@@ -1275,20 +1242,13 @@ export function GenerateShotEditorShell(props: Props) {
                         clipId,
                       })
                     }}
-                    onError={() => {
-                      setMediaFailure(true)
-                      console.error(
-                        '[editor:generate-mode] source-playback-failed',
-                        { projectId, clipId },
-                      )
-                    }}
+                    onCanPlay={() => { setMediaReady(true); setMediaFailure(false) }}
+                    onError={failPreview}
                     onTimeUpdate={(event) =>
-                      setPlayheadMs(
-                        Math.round(
-                          event.currentTarget.currentTime * 1000 +
-                            source.offsetMs,
-                        ),
-                      )
+                      setPlayheadMs(Math.max(minMs, Math.min(maxMs, Math.round(
+                        event.currentTarget.currentTime * 1000 +
+                          (previewRef.current?.offsetMs ?? source.offsetMs),
+                      ))))
                     }
                     onPlay={() => setPlaying(true)}
                     onPause={() => setPlaying(false)}
@@ -1299,13 +1259,16 @@ export function GenerateShotEditorShell(props: Props) {
                     </p>
                   ) : null}
                   {mediaFailure ? (
-                    <p
-                      role="alert"
-                      className="mt-2 text-center text-xs text-red-300"
-                    >
-                      The original video could not be loaded. No changes were
-                      made.
-                    </p>
+                    <div role="alert" className="mt-2 flex items-center justify-center gap-2 text-xs text-red-300">
+                      <span>Original preview unavailable. No changes were made.</span>
+                      <Button type="button" size="sm" variant="outline" onClick={() => {
+                        setPreviewIndex(0)
+                        setMediaReady(false)
+                        setMediaFailure(false)
+                        setPreviewAttempt((value) => value + 1)
+                        console.info('[editor:generate-mode] preview-retry', { projectId, clipId })
+                      }}>Retry preview</Button>
+                    </div>
                   ) : null}
                 </div>
               ) : view === 'result' && selectedJob ? (

@@ -3739,6 +3739,7 @@ export function EditorShell({
             void flushSave()
           }}
           onOpenProducer={() => void toggleProducerRail()}
+          showStandaloneProducerButton={false}
           producerOpen={producerOpen}
           producerStrip={producerStrip ? { changeCount: producerStrip.changeCount, onUndo: undo } : null}
           pendingPaidCount={producerPendingPaid}
@@ -3749,7 +3750,6 @@ export function EditorShell({
           layoutSlot={null}
           versionsSlot={
             <>
-              {compact && !fullVideo && !clipperStudio ? <Badge variant="outline" className="h-6 text-[11px] font-normal" data-testid="compact-editor-mode-label">Clip editor</Badge> : null}
               <EditorModeSwitcher
                 current="clip"
                 producerOpen={producerOpen}
@@ -3874,7 +3874,7 @@ export function EditorShell({
         targetGapSec={gapToolSettings.targetGapSec}
         onTargetGapSecChange={(n) => setGapToolSettings((s) => ({ ...s, targetGapSec: n }))}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className={cn('relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden', producerOpen && 'lg:flex-row lg:[&>div:first-child]:min-w-0 lg:[&>div:first-child]:flex-1')} data-testid="editor-assistant-workspace">
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
@@ -4232,22 +4232,15 @@ export function EditorShell({
           </>
           )}
         />
-      </div>
-      {producerOpen ? (
-        <button
-          type="button"
-          className="fixed inset-x-0 bottom-0 top-11 z-[65] bg-black/35 lg:hidden"
-          aria-label="Close AI Producer drawer"
-          onClick={() => { setProducerOpen(false); setAuditionEdits(null); console.info('[editor:chat-mode] drawer-closed', { projectId, clipId }) }}
-        />
-      ) : null}
-      <div
-        id="editor-chat-mode"
-        role="dialog"
-        aria-modal={producerOpen ? true : undefined}
-        aria-label="AI Producer"
-        className={producerOpen ? 'fixed bottom-0 right-0 top-11 z-[70] w-[min(380px,100vw)] overflow-hidden border-l border-border bg-card shadow-2xl lg:right-14' : 'hidden'}
-      >
+        <aside
+          id="editor-chat-mode"
+          role="complementary"
+          aria-label="AI Producer"
+          data-testid="editor-assistant-drawer"
+          className={producerOpen
+            ? 'absolute inset-0 z-30 min-h-0 overflow-hidden border-l border-border bg-card shadow-xl lg:relative lg:inset-auto lg:z-auto lg:h-full lg:w-[min(360px,32vw)] lg:shrink-0 lg:shadow-none'
+            : 'hidden'}
+        >
         <EditorChatRail
           open={producerOpen}
           clipTitle={title}
@@ -4277,6 +4270,7 @@ export function EditorShell({
           onRetrySave={flushSave}
           onPendingPaidChange={setProducerPendingPaid}
         />
+        </aside>
       </div>
       <Button
         type="button"
