@@ -46,6 +46,7 @@ export function mergeClipExportUserPrefs(raw: unknown): ClipExportUserPreference
     ...base,
     removeDeadAir: typeof o.removeDeadAir === 'boolean' ? o.removeDeadAir : base.removeDeadAir,
     alsoSrt: typeof o.alsoSrt === 'boolean' ? o.alsoSrt : base.alsoSrt,
+    alsoVtt: typeof o.alsoVtt === 'boolean' ? o.alsoVtt : base.alsoVtt,
     exportSfx: o.exportSfx === 'subtle' || o.exportSfx === 'meme' || o.exportSfx === 'off' ? o.exportSfx : base.exportSfx,
     headlineBarEnabled: typeof o.headlineBarEnabled === 'boolean' ? o.headlineBarEnabled : base.headlineBarEnabled,
     platformBadgeEnabled: typeof o.platformBadgeEnabled === 'boolean' ? o.platformBadgeEnabled : base.platformBadgeEnabled,
