@@ -203,24 +203,24 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
     const release = releases[0]!
     const previousPolicy = release.design.musicPolicy
     const previousDefaultMusic = release.defaultMusic
-    const hash = '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+    const hash = 'c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482'
     release.design.musicPolicy = 'licensed-only'
     release.defaultMusic = {
-      id:'batch9a_anchor_bed_v1',generator:'batch9a-pulse-v1',sha256:hash,
+      id:'batch9a_anchor_groove_v2',generator:'batch9a-groove-v2',sha256:hash,
       durationFrames:480,bpm:150,beatEveryFrames:3,author:'Transovo AI',
-      license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+      license:'Transovo first-party original template music',revision:'batch9a-audio-v2',
     }
     try {
       const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
       const music = {
         id:'generated_audio',kind:'audio' as const,durationFrames:480,
-        license:{id:'batch9a_first_party',provenance:'first-party' as const,reference:'batch9a-audio-v1'},
+        license:{id:'batch9a_first_party',provenance:'first-party' as const,reference:'batch9a-audio-v2'},
       }
       const rights = {
         assetId:'generated_audio',origin:'first-party-generated',author:'Transovo AI',
-        license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+        license:'Transovo first-party original template music',revision:'batch9a-audio-v2',
         sha256:hash,commercialUse:true,exportAllowed:true,redistributionAllowed:true,
-        verifiedDurationFrames:480,verifiedAt:'batch9a-audio-v1',
+        verifiedDurationFrames:480,verifiedAt:'batch9a-audio-v2',
       }
       const templateMusic = {
         v:1 as const,choice:'keep-timing' as const,acceptLoop:false,rights,
