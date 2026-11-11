@@ -6,6 +6,18 @@ import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/re
 import { filterVideoTemplates } from '@/lib/clips/real-video-templates/gallery'
 
 type Scope = 'first-party' | 'community' | 'mine'
+type UserTemplateListItem = {
+  id:string;title:string;description:string;currentRevision:number;updatedAt:string
+  revisions:Array<{revision:number;definition:{slots?:Array<{id:string;ordinal:number;media:string;minDurationMs:number}>;
+    textFields?:Array<unknown>;previewRange?:{startMs:number;endMs:number};snapshot?:{aspect?:string}}>}>
+}
+type CommunityTemplateListItem = {
+  id:string;title:string;description:string;creatorName:string;category:string;tags:string[];
+  aspect:string;clipCount:number;durationMs:number;licenseTerms:string;publishedAt:string|null;
+  publicPreview?:{range?:{startMs:number;endMs:number};slots?:Array<unknown>;text?:Array<unknown>}
+}
+type DraftTemplateProject = {id:string;title:string;releaseId:string;status:string;updatedAt:string}
+const COMMUNITY_CATEGORIES = ['gaming','podcast','social','business','education','lifestyle','other'] as const
 const MAX_PAGE_SIZE = 24
 const STORAGE_KEY = 'transovo.videoTemplates.favorites.v1'
 export function VideoTemplatesGallery() {
@@ -19,22 +31,58 @@ export function VideoTemplatesGallery() {
   const [favorites, setFavorites] = useState<string[]>([])
   const [onlyFavorites, setOnlyFavorites] = useState(false)
   const [sound, setSound] = useState<string | null>(null)
-  const [mine, setMine] = useState<Array<{
-    id: string; title: string; releaseId: string; status: string; updatedAt: string
-  }>>([])
+  const [drafts, setDrafts] = useState<DraftTemplateProject[]>([])
+  const [mine, setMine] = useState<UserTemplateListItem[]>([])
+  const [minePages, setMinePages] = useState(1)
+  const [mineTotal, setMineTotal] = useState(0)
   const [mineError, setMineError] = useState<string | null>(null)
+  const [mineRefresh, setMineRefresh] = useState(0)
+  const [community, setCommunity] = useState<CommunityTemplateListItem[]>([])
+  const [communityPages, setCommunityPages] = useState(1)
+  const [communityTotal, setCommunityTotal] = useState(0)
+  const [communityError, setCommunityError] = useState<string | null>(null)
+
   useEffect(() => {
     if (scope !== 'mine') return
     let live = true
-    fetch('/api/clips/video-templates/drafts', { cache: 'no-store' })
-      .then(async response => {
-        const body = await response.json() as { data?: { items: typeof mine }; error?: string }
+    const qs = new URLSearchParams({ page: String(page) })
+    if (query.trim()) qs.set('q', query.trim())
+    Promise.all([
+      fetch('/api/clips/user-templates?' + qs.toString(), { cache: 'no-store' }).then(async response => {
+        const body = await response.json() as { data?: { items:UserTemplateListItem[];pages:number;total:number }; error?: string }
+        if (!response.ok || !body.data) throw new Error(body.error ?? 'Could not load My templates')
+        return body.data
+      }),
+      fetch('/api/clips/video-templates/drafts', { cache: 'no-store' }).then(async response => {
+        const body = await response.json() as { data?: { items:DraftTemplateProject[] }; error?: string }
         if (!response.ok || !body.data) throw new Error(body.error ?? 'Could not load template projects')
-        if (live) { setMine(body.data.items); setMineError(null) }
-      })
-      .catch(error => { if (live) setMineError(error instanceof Error ? error.message : 'Load failed') })
+        return body.data.items
+      }),
+    ]).then(([saved, projectDrafts]) => {
+      if (!live) return
+      setMine(saved.items);setMinePages(saved.pages);setMineTotal(saved.total);setDrafts(projectDrafts);setMineError(null)
+    }).catch(error => { if (live) setMineError(error instanceof Error ? error.message : 'Load failed') })
     return () => { live = false }
-  }, [scope])
+  }, [scope, query, page, mineRefresh])
+
+  useEffect(() => {
+    if (scope !== 'community') return
+    let live = true
+    const qs = new URLSearchParams({ page: String(page) })
+    if (query.trim()) qs.set('q', query.trim())
+    if (category) qs.set('category', category)
+    if (aspect) qs.set('aspect', aspect)
+    if (slots) qs.set('minClips', slots)
+    if (duration) qs.set('maxDurationMs', String(Number(duration) * 1000))
+    fetch('/api/clips/video-templates/community?' + qs.toString(), { cache: 'no-store' })
+      .then(async response => {
+        const body = await response.json() as { data?: { items:CommunityTemplateListItem[];pages:number;total:number }; error?: string }
+        if (!response.ok || !body.data) throw new Error(body.error ?? 'Could not load community templates')
+        if (live) { setCommunity(body.data.items);setCommunityPages(body.data.pages);setCommunityTotal(body.data.total);setCommunityError(null) }
+      })
+      .catch(error => { if (live) setCommunityError(error instanceof Error ? error.message : 'Load failed') })
+    return () => { live = false }
+  }, [scope, query, category, aspect, slots, duration, page])
   useEffect(() => {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
@@ -190,27 +238,137 @@ export function VideoTemplatesGallery() {
           <span className="text-sm">Page {result.page} of {result.pages}</span>
           <button type="button" disabled={result.page === result.pages} onClick={() => setPage(p => Math.min(result.pages, p + 1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
         </nav>}
-      </> : scope === 'mine' ? <section role="tabpanel" aria-label="My template projects" className="space-y-3">
+      </> : scope === 'mine' ? <section role="tabpanel" aria-label="My templates" className="space-y-5">
+        <section className="rounded-2xl border bg-card p-4">
+          <label className="block max-w-md space-y-1 text-xs font-medium">Search My templates
+            <input type="search" value={query} onChange={e => changeFilters(setQuery, e.target.value)}
+              placeholder="Search saved templates" className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+          </label>
+        </section>
         {mineError && <p role="alert" className="rounded-xl border p-4 text-sm text-destructive">{mineError}</p>}
+        <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">Saved from your edits</h2>
+          <span className="text-xs text-muted-foreground">{mineTotal} private template{mineTotal===1?'':'s'}</span></div>
         {mine.length === 0 && !mineError && <p className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No private video-template drafts or projects yet.
+          No saved private templates match. Open any clip editor and choose Save as template.
         </p>}
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {mine.map(item => {
-            const available = FIRST_PARTY_VIDEO_TEMPLATES.some(release => release.id === item.releaseId)
-            return <article key={item.id} className="space-y-2 rounded-xl border bg-card p-4">
-              <h2 className="font-semibold">{item.title}</h2>
-              <p className="text-xs text-muted-foreground">{item.status} · Updated {new Date(item.updatedAt).toLocaleString()}</p>
-              {available
-                ? <Link href={'/app/clips/video-templates/' + encodeURIComponent(item.releaseId) + '?draft=' + encodeURIComponent(item.id)}
-                    className="inline-block rounded-xl border px-4 py-2 text-sm">Resume private project</Link>
-                : <p className="text-xs text-muted-foreground">The original template release is unavailable. Your project has not been deleted.</p>}
+            const def=item.revisions[0]?.definition
+            const slotCount=def?.slots?.length??0
+            return <article key={item.id} className="space-y-3 rounded-2xl border bg-card p-4">
+              <div><h3 className="font-semibold">{item.title}</h3>
+                <p className="text-xs text-muted-foreground">Revision {item.currentRevision} · {def?.snapshot?.aspect??'video'} · {slotCount} slot{slotCount===1?'':'s'} · Updated {new Date(item.updatedAt).toLocaleString()}</p></div>
+              {item.description?<p className="text-sm">{item.description}</p>:null}
+              <div className="flex h-12 overflow-hidden rounded-lg border bg-muted/20">
+                {(def?.slots??[]).map(slot=><span key={slot.id} className="grid min-w-12 flex-1 place-items-center border-r px-1 text-[10px] last:border-r-0">
+                  {slot.ordinal}. {slot.media}
+                </span>)}
+                {!slotCount?<span className="grid flex-1 place-items-center text-[10px] text-muted-foreground">Private fixed-media template</span>:null}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link href={'/app/clips/user-templates/'+encodeURIComponent(item.id)}
+                  className="rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Use template</Link>
+                <button type="button" className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
+                  void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id)+'/duplicate',{method:'POST'})
+                    .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Duplicate failed')}setMineRefresh(x=>x+1)})
+                    .catch(e=>setMineError(e instanceof Error?e.message:'Duplicate failed'))
+                }}>Duplicate</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-xs" onClick={() => {
+                  const next=window.prompt('Rename template',item.title)?.trim()
+                  if(!next||next===item.title)return
+                  void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id),{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({title:next})})
+                    .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Rename failed')}setMineRefresh(x=>x+1)})
+                    .catch(e=>setMineError(e instanceof Error?e.message:'Rename failed'))
+                }}>Rename</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-xs text-destructive" onClick={() => {
+                  if(!window.confirm('Remove this template from My templates? Existing projects are not deleted.'))return
+                  void fetch('/api/clips/user-templates/'+encodeURIComponent(item.id),{method:'DELETE'})
+                    .then(async r=>{if(!r.ok){const b=await r.json() as {error?:string};throw new Error(b.error??'Delete failed')}setMineRefresh(x=>x+1)})
+                    .catch(e=>setMineError(e instanceof Error?e.message:'Delete failed'))
+                }}>Remove</button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Private by default. Saving never publishes this definition or its source assets.</p>
             </article>
           })}
         </div>
-      </section> : <section role="tabpanel" className="rounded-2xl border border-dashed p-10 text-center">
-        <h2 className="font-semibold">Community gallery is not published yet</h2>
-        <p className="mt-2 text-sm text-muted-foreground">Community submissions require opt-in moderation before public listing. Your private drafts are never shared automatically.</p>
+        {minePages>1?<nav aria-label="My templates pages" className="flex items-center justify-center gap-3">
+          <button type="button" disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>
+          <span className="text-sm">Page {page} of {minePages}</span>
+          <button type="button" disabled={page===minePages} onClick={()=>setPage(p=>Math.min(minePages,p+1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
+        </nav>:null}
+        <details className="rounded-2xl border bg-card p-4">
+          <summary className="cursor-pointer font-semibold">Standalone first-party template projects ({drafts.length})</summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {drafts.map(item => {
+              const available=FIRST_PARTY_VIDEO_TEMPLATES.some(release=>release.id===item.releaseId)
+              return <article key={item.id} className="space-y-2 rounded-xl border p-3">
+                <h3 className="font-medium">{item.title}</h3>
+                <p className="text-xs text-muted-foreground">{item.status} · Updated {new Date(item.updatedAt).toLocaleString()}</p>
+                {available?<Link href={'/app/clips/video-templates/'+encodeURIComponent(item.releaseId)+'?draft='+encodeURIComponent(item.id)}
+                  className="inline-block rounded-lg border px-3 py-2 text-xs">Resume project</Link>:
+                  <p className="text-xs text-muted-foreground">Original release unavailable; project retained.</p>}
+              </article>
+            })}
+          </div>
+        </details>
+      </section> : <section role="tabpanel" aria-label="Community templates" className="space-y-5">
+        <section aria-label="Filter community templates" className="grid gap-3 rounded-2xl border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
+          <label className="space-y-1 text-xs font-medium">Search
+            <input type="search" value={query} onChange={e=>changeFilters(setQuery,e.target.value)} placeholder="Search community"
+              className="h-10 w-full rounded-lg border bg-background px-3 text-sm" />
+          </label>
+          <label className="space-y-1 text-xs font-medium">Category
+            <select value={category} onChange={e=>changeFilters(setCategory,e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">All categories</option>{COMMUNITY_CATEGORIES.map(x=><option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Aspect
+            <select value={aspect} onChange={e=>changeFilters(setAspect,e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">All aspects</option><option value="9:16">Vertical 9:16</option><option value="16:9">Wide 16:9</option><option value="1:1">Square 1:1</option><option value="4:5">Portrait 4:5</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Minimum clips
+            <select value={slots} onChange={e=>changeFilters(setSlots,e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">Any</option><option value="1">1+</option><option value="3">3+</option><option value="10">10+</option><option value="20">20+</option>
+            </select>
+          </label>
+          <label className="space-y-1 text-xs font-medium">Maximum length
+            <select value={duration} onChange={e=>changeFilters(setDuration,e.target.value)} className="h-10 w-full rounded-lg border bg-background px-3 text-sm">
+              <option value="">Any</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">60 seconds</option><option value="120">2 minutes</option>
+            </select>
+          </label>
+        </section>
+        {communityError?<p role="alert" className="rounded-xl border p-4 text-sm text-destructive">{communityError}</p>:null}
+        <p className="text-sm text-muted-foreground" role="status">{communityTotal} approved community template{communityTotal===1?'':'s'}</p>
+        {!community.length&&!communityError?<div className="rounded-2xl border border-dashed p-10 text-center">
+          <h2 className="font-semibold">No approved community templates match</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Private and pending submissions never appear here.</p>
+        </div>:null}
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {community.map(item=><article key={item.id} className="overflow-hidden rounded-2xl border bg-card">
+            <div className="grid aspect-video place-items-center bg-muted/30 p-4">
+              <div className="w-full max-w-xs space-y-2 text-center">
+                <div className="text-2xl font-semibold">{item.aspect}</div>
+                <div className="flex justify-center gap-1">{Array.from({length:Math.min(item.clipCount,12)},(_,i)=><span key={i} className="h-2 flex-1 rounded-full bg-foreground/20" />)}</div>
+                <div className="text-xs text-muted-foreground">{item.clipCount} editable clip{item.clipCount===1?'':'s'} · {(item.durationMs/1000).toFixed(1)}s</div>
+              </div>
+            </div>
+            <div className="space-y-2 p-4">
+              <h2 className="font-semibold">{item.title}</h2>
+              <p className="text-xs text-muted-foreground">By {item.creatorName} · {item.category}</p>
+              <p className="line-clamp-3 text-sm">{item.description}</p>
+              {item.tags.length?<div className="flex flex-wrap gap-1">{item.tags.map(tag=><span key={tag} className="rounded-full border px-2 py-0.5 text-[10px]">{tag}</span>)}</div>:null}
+              <p className="text-[11px] text-muted-foreground">{item.licenseTerms}</p>
+              <Link href={'/app/clips/community-templates/'+encodeURIComponent(item.id)}
+                className="block rounded-lg bg-primary px-4 py-2 text-center text-sm font-semibold text-primary-foreground">Preview & use template</Link>
+            </div>
+          </article>)}
+        </div>
+        {communityPages>1?<nav aria-label="Community template pages" className="flex items-center justify-center gap-3">
+          <button type="button" disabled={page===1} onClick={()=>setPage(p=>Math.max(1,p-1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Previous</button>
+          <span className="text-sm">Page {page} of {communityPages}</span>
+          <button type="button" disabled={page===communityPages} onClick={()=>setPage(p=>Math.min(communityPages,p+1))} className="rounded-lg border px-3 py-2 disabled:opacity-50">Next</button>
+        </nav>:null}
       </section>}
     </main>
   )
