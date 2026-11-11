@@ -1,4 +1,7 @@
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { moveSourceSegmentBoundary, patchSourceSegment, replaceSourceSegmentMedia, type ClipMediaSource } from '@/lib/clips/editor/sources'
+import { setCutTransition } from '@/lib/clips/editor/transitions'
+import { setPropertyAt } from '@/lib/clips/editor/keyframes'
 import {
   compileTemplate,
   type TemplateAsset,
@@ -7,7 +10,7 @@ import {
   type TemplateDesignV1,
   type TemplateFamilyV1,
 } from '@/lib/clips/real-video-templates/sequence-contract'
-import { proveEditableTimelineStructure, type EditableTimelineStructureProof } from '@/lib/clips/real-video-templates/editable-timeline-proof'
+import { proveEditableTimelineStructure, snapshotEditableTimelineStructure, type EditableTimelineStructureProof } from '@/lib/clips/real-video-templates/editable-timeline-proof'
 
 const license = (id: string) => ({ id: `lic_${id}`, provenance: 'user-owned' as const, reference: `library_${id}` })
 const image = (id: string): TemplateAsset => ({ id, kind: 'image', license: license(id) })
@@ -118,10 +121,67 @@ export function buildEditableTimelineProofCases(): EditableTimelineProofCase[] {
   ]
 }
 
+export function buildEditedReloadProofCase(): {
+  edits: ClipEditsV2
+  structure: ReturnType<typeof snapshotEditableTimelineStructure>
+  sourceSegmentIds: string[]
+} {
+  const c = buildEditableTimelineProofCases()[1]!
+  const ids = c.compiled.edits.sourceSegments!.map((seg) => seg.id)
+  const second = ids[1]!
+  const replacementSource: ClipMediaSource = {
+    id: 'replacement_source',
+    ref: 'upload',
+    refId: 'replacement_video',
+    mediaType: 'video',
+    durationMs: 10_000,
+  }
+
+  let edits = replaceSourceSegmentMedia(c.compiled.edits, second, replacementSource)
+  edits = moveSourceSegmentBoundary(edits, ids[0]!, ids[1]!, 1033)
+  edits = setCutTransition(edits, 1033, { type: 'wipe_left', durMs: 300 })
+
+  const text = edits.textItems!.find((item) => item.kind !== 'shape')!
+  edits = {
+    ...edits,
+    textItems: edits.textItems!.map((item) => item.id === text.id
+      ? { ...item, text: 'Edited after publish', anim: { in: { type: 'pop' as const, unit: 'block' as const, durMs: 200 } } }
+      : item),
+  }
+  edits = setPropertyAt(edits, `text:${text.id}`, 'x', 0, 7)
+  edits = {
+    ...edits,
+    audio: {
+      ...edits.audio!,
+      music: {
+        ...edits.audio!.music!,
+        generationId: 'replacement_music',
+        uploadId: 'replacement_music',
+        volume: 0,
+      },
+    },
+    sourceSegments: patchSourceSegment(
+      edits.sourceSegments,
+      second,
+      { fx: { contrast: 22, saturation: -7 } },
+      edits.sources,
+    ),
+    captions: { ...edits.captions, enabled: true },
+    captionLines: [{ id: 'caption_all', startMs: 0, endMs: 3000, text: 'CAPTION THROUGH EVERY SLOT' }],
+  }
+
+  const normalized = normalizeEdits(edits, {
+    clipStartMs: 0, clipEndMs: 3000, trimMinMs: 0, trimMaxMs: 3000,
+  })
+  return { edits: normalized, structure: snapshotEditableTimelineStructure(normalized), sourceSegmentIds: ids }
+}
+
 export function editableTimelineProofJson(): string {
+  const editedReload = buildEditedReloadProofCase()
   return JSON.stringify({
     schema: 'transovo.real-video-template.editable-timeline-proof.v1',
     generatedFrom: 'deterministic-fixtures',
     cases: buildEditableTimelineProofCases().map(({ id, proof }) => ({ id, ...proof })),
+    editedReload,
   }, null, 2)
 }
