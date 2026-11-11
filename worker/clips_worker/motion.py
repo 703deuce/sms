@@ -217,8 +217,13 @@ def _finite(v):
 
 def _valid_target(t) -> bool:
     return isinstance(t, str) and (t in ("video", "voice", "music", "text", "captions") or (t.startswith("broll:") and len(t) > 6)
-                                   or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4)
+                                   or is_source_target(t) or (t.startswith("text:") and len(t) > 5) or (t.startswith("sfx:") and len(t) > 4)
                                    or is_adjust_target(t))
+
+
+def is_source_target(t) -> bool:
+    """B3B real source-segment Video item; motion is local to the slot."""
+    return isinstance(t, str) and t.startswith("source:") and len(t) > 7
 
 
 def is_adjust_target(t) -> bool:
@@ -241,6 +246,8 @@ def props_for_target(target: str) -> tuple[str, ...]:
         return ("volume",)
     if is_adjust_target(target):
         return ()
+    if is_source_target(target):
+        return ("x", "y", "scale", "rotation")
     if is_media_layer_target(target):
         return ("x", "y", "scale", "rotation", "opacity") + CROP_PROPS
     return ("x", "y", "scale", "rotation", "opacity")
