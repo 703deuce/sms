@@ -508,6 +508,20 @@ describe('AI Studio v1 backend', () => {
     })
   })
 
+  it('uses a Seedance image-to-video reference as the actual first frame', () => {
+    const resolved = resolveStudioCreateInput({
+      modelId: 'seedance-2.0-mini',
+      mode: 'image_to_video',
+      prompt: 'keep the exact product',
+      referenceAssetId: 'asset_product_1',
+      durationSec: 4,
+      aspect: '1:1',
+    })
+    const req = buildKieCreateRequest(resolved, { referenceUrl: 'https://img.example.test/product.png' })
+    expect(req.input.first_frame_url).toBe('https://img.example.test/product.png')
+    expect(req.input.reference_image_urls).toBeUndefined()
+  })
+
   it('builds provider request shapes for every launch model', () => {
     const start = { startFrameUrl: 'https://img.example.test/start.png' }
     const shapes: Array<{
