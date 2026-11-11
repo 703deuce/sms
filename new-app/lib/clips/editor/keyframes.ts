@@ -105,12 +105,18 @@ export function textItemIdOf(target: KeyframeTarget): string | null {
   return target.startsWith('text:') ? target.slice(5) : null
 }
 
+/** B3B source-segment keyframe target. */
+export function sourceSegmentTarget(id: string): `source:${string}` {
+  return `source:${id}`
+}
+
 /** Output ms of the target's local time 0. */
 export function targetOriginMs(edits: ClipEditsV2, target: KeyframeTarget): number {
   const bid = brollIdOf(target)
   if (bid) return edits.broll?.find((b) => b.id === bid)?.startMs ?? 0
   const tid = textItemIdOf(target)
   if (tid) return edits.textItems?.find((t) => t.id === tid)?.startMs ?? 0
+  if (target.startsWith('source:')) return edits.sourceSegments?.find((s) => s.id === target.slice(7))?.startMs ?? 0
   if (target.startsWith('adjust:')) return edits.adjustLayers?.find((a) => a.id === target.slice(7))?.startMs ?? 0
   if (target === 'music') return edits.audio?.music?.startMs ?? 0
   if (target.startsWith('sfx:')) return edits.audio?.sfx?.find((s) => s.generationId === target.slice(4))?.atMs ?? 0
