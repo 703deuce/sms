@@ -41,7 +41,7 @@ export type TemplateSlot = {
   speed?: number
   /** Incoming edge. First slot must be cut. */
   transition: 'cut' | TemplateTransition
-  /** Output-clock animation compiled to ordinary target=video keyframes. */
+  /** Item-local animation compiled to ordinary source:<stable-slot-id> keyframes. */
   motion?: TemplateMotion
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
