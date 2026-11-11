@@ -20,12 +20,14 @@ import {
 } from '@/lib/clips/editor/timeline-zoom'
 import type { AudioPeaks } from '@/components/clips/editor/use-audio-peaks'
 import { TimelineWaveform } from '@/components/clips/editor/timeline/timeline-waveform'
-import { TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
+import { SourceSegmentFilmstrip, TimelineFilmstrip } from '@/components/clips/editor/timeline/timeline-filmstrip'
 import { useFilmstripFrames } from '@/components/clips/editor/timeline/use-filmstrip-frames'
 import type { EditorAssets } from '@/lib/clips/editor/editor-assets'
 import type { SourceWord } from '@/lib/clips/source-words'
 import { wordSourceMs } from '@/lib/clips/source-words'
 import { cn } from '@/lib/utils'
+import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
+import { segmentMediaMs, sourceById, sourceSegmentWindows } from '@/lib/clips/editor/sources'
 
 const THUMB_H = 44
 const WORD_H = 18
@@ -45,6 +47,9 @@ export function ScriptViewCompactTimeline({
   videoUrl,
   posterUrl,
   editorAssets,
+  sourceUrls,
+  selectedSourceSegmentId = null,
+  onSelectSourceSegment,
   onSeekOutput,
   className,
 }: {
@@ -59,6 +64,9 @@ export function ScriptViewCompactTimeline({
   videoUrl: string | null
   posterUrl?: string | null
   editorAssets?: EditorAssets | null
+  sourceUrls?: Record<string, string>
+  selectedSourceSegmentId?: string | null
+  onSelectSourceSegment?: (id: string) => void
   onSeekOutput: (ms: number) => void
   className?: string
 }) {
@@ -130,6 +138,17 @@ export function ScriptViewCompactTimeline({
   const filmstripSprite = editorAssets?.filmstrip ?? null
   const mediaFromMs = trimInMs - mediaOffsetMs
   const mediaToMs = trimOutMs - mediaOffsetMs
+
+  // B3/E5: source segments are the actual Video-lane slot clips. Draw them over the existing
+  // Compact filmstrip without changing its height/geometry; selection opens the same Media inspector.
+  const sourceChips = useMemo(() => {
+    const tb = timebaseFor(previewEdits)
+    return sourceSegmentWindows(tb, previewEdits.sourceSegments).map((w) => ({
+      ...w,
+      source: sourceById(previewEdits.sources, w.sourceId),
+      segment: previewEdits.sourceSegments?.find((seg) => seg.id === w.id),
+    })).filter((w) => Boolean(w.source && w.segment))
+  }, [previewEdits])
 
   const applyZoom = useCallback(
     (nextPxPerSec: number, anchorX?: number) => {
@@ -210,6 +229,43 @@ export function ScriptViewCompactTimeline({
                 stillUrl={posterUrl}
               />
             ) : null}
+            {sourceChips.map((chip) => {
+              const source = chip.source!
+              const segment = chip.segment!
+              const left = xs(chip.startMs)
+              const width = Math.max(2, xe(chip.endMs) - left)
+              return (
+                <div key={'compact-source-' + chip.id + ':' + chip.startMs}>
+                  <SourceSegmentFilmstrip
+                    url={sourceUrls?.[source.refId] ?? null}
+                    mediaType={source.mediaType}
+                    fromMs={segmentMediaMs(segment, source, chip.srcStartMs)}
+                    toMs={segmentMediaMs(segment, source, chip.srcEndMs)}
+                    leftPx={left}
+                    topPx={0}
+                    widthPx={width}
+                    heightPx={THUMB_H}
+                    pxPerMs={pxPerMs}
+                  />
+                  <button
+                    type="button"
+                    className={cn(
+                      'absolute top-0 z-[3] h-[44px] rounded-sm border bg-transparent',
+                      chip.id === selectedSourceSegmentId ? 'border-primary ring-1 ring-primary' : 'border-white/20',
+                    )}
+                    style={{ left, width }}
+                    data-testid="script-compact-source-segment"
+                    data-source-id={source.id}
+                    aria-label={'Select ' + (source.label ?? 'source clip')}
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onSelectSourceSegment?.(chip.id)
+                    }}
+                  />
+                </div>
+              )
+            })}
           </div>
           <div
             className="absolute left-0 overflow-hidden"
