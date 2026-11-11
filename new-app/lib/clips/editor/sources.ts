@@ -370,7 +370,7 @@ export function clearSourceRange(
         ...s,
         id: `${s.id}~${Math.round(toMs)}`.slice(0, 120),
         startMs: toMs,
-        ...(s.inMs !== undefined ? { inMs: s.inMs + shift } : {}),
+        ...(s.inMs !== undefined ? { inMs: s.inMs + Math.round(shift * (s.speed ?? 1)) } : {}),
       })
     }
   }
