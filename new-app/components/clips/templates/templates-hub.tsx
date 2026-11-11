@@ -150,6 +150,13 @@ export function TemplatesHub({
   return (
     <PageContainer>
       <PageHeader title="Templates" description="Layouts, captions, looks, brand starters, and AI video styles." />
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4" aria-label="Video templates">
+        <div>
+          <h2 className="text-sm font-semibold">Video templates</h2>
+          <p className="text-xs text-muted-foreground">Build a new video from a timed, reviewed template with photo and clip slots.</p>
+        </div>
+        <Link href="/app/clips/video-templates" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Browse video templates</Link>
+      </section>
 
       <div className="flex flex-wrap gap-2" role="tablist">
         {tabs.map((t) => (

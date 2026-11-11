@@ -215,6 +215,36 @@ jobs:
             tests/editor-initial-panel.test.ts \
             tests/ai-captions-workspace.test.tsx
 
+      - name: Batch 5 standalone music rights and render-compiler Vitest
+        run: |
+          pnpm exec vitest run \
+            tests/clips/real-video-template-b5-music.test.ts \
+            tests/clips/real-video-template-b5-compile.test.ts \
+            tests/clips/real-video-template-b5-ui.test.tsx \
+            tests/clips/real-video-templates-b3.test.ts \
+            tests/clips/real-video-template-instance.test.ts \
+            tests/g2-beats.test.ts \
+            tests/beat-autocut.test.ts \
+            tests/stock-audio-catalog.test.ts
+      - name: Batch 5 full TypeScript diagnostics versus current master
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/b5-head-tsc.txt 2>&1 || true
+          git fetch --no-tags origin master:refs/remotes/origin/master
+          git worktree add --detach /tmp/b5-current-master origin/master
+          ln -s "$GITHUB_WORKSPACE/new-app/node_modules" /tmp/b5-current-master/new-app/node_modules
+          (
+            cd /tmp/b5-current-master/new-app
+            NODE_OPTIONS=--max-old-space-size=8192 "$GITHUB_WORKSPACE/new-app/node_modules/.bin/tsc" -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/b5-master-tsc.txt 2>&1 || true
+          )
+          grep 'error TS' /tmp/b5-head-tsc.txt | sed -E 's/[(][0-9]+,[0-9]+[)]: error TS/: error TS/' | sort > /tmp/b5-head-errors.txt
+          grep 'error TS' /tmp/b5-master-tsc.txt | sed -E 's/[(][0-9]+,[0-9]+[)]: error TS/: error TS/' | sort > /tmp/b5-master-errors.txt
+          echo "Branch TypeScript diagnostics: $(wc -l < /tmp/b5-head-errors.txt)"
+          echo "Master TypeScript diagnostics: $(wc -l < /tmp/b5-master-errors.txt)"
+          if comm -13 /tmp/b5-master-errors.txt /tmp/b5-head-errors.txt | tee /tmp/b5-new-errors.txt | grep .; then
+            echo "New TypeScript diagnostics above master; Batch 5 cannot merge" >&2
+            exit 1
+          fi
+
   captions-worker-regression:
     runs-on: ubuntu-latest
     steps:
@@ -240,6 +270,7 @@ jobs:
             worker/tests/test_caption_ass_sentence_case.py \
             worker/tests/test_real_video_template_sequence.py \
             worker/tests/test_real_video_template_b6_playback.py \
+            worker/tests/test_real_video_template_b5_audio.py \
             worker/tests/test_media_sources_layouts.py
           bash .github/scripts/pytest-junit-guard.sh \
             /tmp/captions-worker-regression.xml captions-worker-regression
