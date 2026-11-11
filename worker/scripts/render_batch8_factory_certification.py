@@ -55,9 +55,25 @@ def frame_mean(path:Path,frame:int,total:int)->float:
         timeout=30)
     return sum(data)/max(1,len(data))
 
-def fixtures(root:Path,music_source:Path,preview_sprites:list[dict])->tuple[dict[str,Path],Path]:
+def git_blob_sha(path:Path)->str:
+    data=path.read_bytes()
+    header=f"blob {len(data)}\0".encode()
+    return hashlib.sha1(header+data).hexdigest()
+
+def fixtures(root:Path,music_source:Path,preview_sprites:list[dict],
+             real_video_fixture:dict)->tuple[dict[str,Path],Path]:
     media=root/"media"; media.mkdir(parents=True,exist_ok=True)
     paths:dict[str,Path]={}
+    rel_video=str(real_video_fixture.get("path") or "")
+    real_video=(ROOT/rel_video).resolve()
+    if not rel_video or ROOT not in real_video.parents or not real_video.is_file():
+        raise RuntimeError("missing checked-in real video fixture")
+    if git_blob_sha(real_video)!=real_video_fixture.get("gitBlobSha"):
+        raise RuntimeError("real video fixture Git blob SHA drift")
+    prepared_video=media/"real_video.mp4"
+    run(FFMPEG,"-y","-v","error","-stream_loop","-1","-i",str(real_video),"-t","8",
+        "-vf",f"fps=30,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},format=yuv420p",
+        "-an","-c:v","libx264","-preset","ultrafast","-crf","24",str(prepared_video))
     previews=ROOT/"new-app"/"public"/"clips"/"template-previews"
     if len(preview_sprites)!=10:
         raise RuntimeError("worker contract must pin exactly ten preview sprites")
@@ -71,11 +87,7 @@ def fixtures(root:Path,music_source:Path,preview_sprites:list[dict])->tuple[dict
             f"crop=iw/4:ih:0:0,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}",
             "-frames:v","1",str(image))
         paths[f"b8_image_{i}"]=image
-        video=media/f"video_{i}.mp4"
-        run(FFMPEG,"-y","-v","error","-loop","1","-i",str(image),"-t","8",
-            "-vf",f"zoompan=z='min(zoom+0.0007,1.08)':d=240:s={W}x{H}:fps=30,format=yuv420p",
-            "-an","-c:v","libx264","-preset","ultrafast","-crf","28",str(video))
-        paths[f"b8_video_{i}"]=video
+        paths[f"b8_video_{i}"]=prepared_video
     if not music_source.is_file() or music_source.stat().st_size<=44:
         raise RuntimeError("missing pinned certification soundtrack")
     music=media/"music.wav"
@@ -210,7 +222,8 @@ def main()->int:
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
     media,music=fixtures(out/"_fixtures",music_source,
-        contract.get("fixture",{}).get("previewSprites") or [])
+        contract.get("fixture",{}).get("previewSprites") or [],
+        contract.get("fixture",{}).get("realVideoFixture") or {})
     cache_dir=out/"_carrier_cache";cache_dir.mkdir(exist_ok=True)
     cache:dict[int,Path]={}
     results=[]

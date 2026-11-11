@@ -53,6 +53,11 @@ const previewSprites=[
   {file:'f09_bold.webp',sha256:'45c9052aa72c277a00590dd1c8ca1ee54835643e088cc88fa219ba8a2f3af264'},
   {file:'f10_bold.webp',sha256:'bde7dc5f35299e825341937fcc8861c49fa7b05bac54eade599994a63ec65de9'},
 ] as const
+const realVideoFixture={
+  path:'worker/assets/smoke_deploy.mp4',
+  gitBlobSha:'97f89c62a750a42bdfdf6d424db0658b9af1f9d9',
+  provenance:'checked-in production worker smoke asset',
+} as const
 
 const designs=generateB8Candidates().map(candidate=>{
   const beat=syncB8FamilyToMusic(candidate.family,schedule)
@@ -91,7 +96,8 @@ writeFileSync(musicPath,musicBytes)
 writeFileSync(out,JSON.stringify({
   v:1,engine:B8_ENGINE_REVISION,source:'batch8-canonical-v1',fps:30,
   fixture:{musicId,musicSha,musicFile:'b8-cert-music.wav',
-    mediaOrigin:'Batch 9A first-party preview sprites',previewSprites},
+    mediaOrigin:'Batch 9A first-party preview sprites + checked-in worker MP4',
+    previewSprites,realVideoFixture},
   designs,
 })+'\n')
 console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out+
