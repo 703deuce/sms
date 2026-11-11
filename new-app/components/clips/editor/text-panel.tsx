@@ -272,7 +272,11 @@ export function TextPanel({
         Add text at playhead
       </Button>
 
-      {!sel ? <p className="text-xs text-muted-foreground" data-testid="text-style-hint">Select a text item from “On this clip” or the timeline to open its Font and Color pickers below.</p> : null}
+      {!sel ? <p className="text-xs text-muted-foreground" data-testid="text-style-hint">Select a text item from “On this clip” or the timeline to open its Font and Color pickers below.</p> : (
+        <button type="button" className="text-xs font-medium text-primary underline-offset-2 hover:underline" data-testid="text-jump-to-styles" onClick={() => document.getElementById('text-selected-style-controls')?.scrollIntoView({ block: 'nearest' })}>
+          Selected text: jump to Font / Bold / Italic
+        </button>
+      )
       <section className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Styles</p>
         <div className="grid grid-cols-3 gap-2">
@@ -391,7 +395,7 @@ export function TextPanel({
       ) : null}
 
       {sel ? (
-        <section className="space-y-3 border-t pt-3" data-testid="text-inspector" data-kind={sel.kind ?? 'text'}>
+        <section id="text-selected-style-controls" className="space-y-3 border-t pt-3" data-testid="text-inspector" data-kind={sel.kind ?? 'text'}>
           {isShape ? (
             <p className="text-xs font-medium" data-testid="text-shape-title">{textItemLabel(sel)}</p>
           ) : (
