@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -62,12 +63,45 @@ import {
   readStorageImageBytes,
   tightenGeminiVisionParts,
 } from '@/lib/server/ad-studio/gemini-inline-image'
+import {
+  KIMI_PHOTO_ADS_SYSTEM_PROMPT_FILE,
+  LEGACY_GEMINI_PHOTO_ADS_SYSTEM_PROMPT_UNUSED,
+  LEGACY_KIMI_PHOTO_ADS_SYSTEM_PROMPT,
+} from '@/lib/server/ad-studio/legacy-photo-ad-prompts'
 import { generatePhotoAdConcepts } from '@/lib/server/ad-studio/photo-ads'
+import { geminiGenerateJson } from '@/lib/server/ai/gemini-flash-lite'
 
 describe('Ad Studio photo-ad inline images', () => {
+  const verbatimKimiSystemPrompt = readFileSync(KIMI_PHOTO_ADS_SYSTEM_PROMPT_FILE, 'utf8')
+
   beforeEach(() => {
     storage.primaryFails = false
     storage.getObjectBytes.mockClear()
+    vi.mocked(geminiGenerateJson).mockClear()
+  })
+
+  it('uses verbatim Kimi production system prompt (not alternate Gemini prompt) for concept planning', () => {
+    expect(LEGACY_KIMI_PHOTO_ADS_SYSTEM_PROMPT).toBe(verbatimKimiSystemPrompt)
+    expect(verbatimKimiSystemPrompt).toContain('TYPOGRAPHY MASTER SYSTEM')
+    expect(LEGACY_GEMINI_PHOTO_ADS_SYSTEM_PROMPT_UNUSED).not.toContain('TYPOGRAPHY MASTER SYSTEM')
+  })
+
+  it('passes verbatim Kimi system prompt as Gemini systemInstruction on concept step', async () => {
+    await generatePhotoAdConcepts('ws_test', {
+      name: 'Sneaker',
+      sellingPoints: ['Front zip'],
+      headline: 'ZIP IN',
+      subHeadline: 'Mid-top',
+      cta: 'SHOP',
+      aspect: '9:16',
+      durationSec: 15,
+      imageAssetIds: ['stast_test'],
+    })
+    const calls = vi.mocked(geminiGenerateJson).mock.calls
+    expect(calls.length).toBeGreaterThan(0)
+    const systemInstruction = calls[0]![0].systemInstruction
+    expect(systemInstruction).toBe(verbatimKimiSystemPrompt)
+    expect(systemInstruction).toContain('TYPOGRAPHY MASTER SYSTEM')
   })
 
   it('redacts signed URLs and secrets from planning log messages', () => {
