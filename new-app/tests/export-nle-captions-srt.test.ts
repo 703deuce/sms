@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildNleCaptionsSrt, warpSrtCuesToDisplayMs } from '@/lib/clips/export-nle-captions'
+import { buildNleCaptionsSrt, buildNleCaptionsVtt, warpSrtCuesToDisplayMs } from '@/lib/clips/export-nle-captions'
 import { buildSrtFromCaptionWords, displayPositionMs } from '@/lib/clips/edits'
 import { buildCaptionWords } from '@/lib/clips/caption-words'
 import { CLIP_5F19E510_BOUNDS, clip5f19e510Edits } from '@/tests/fixtures/clip-5f19e510-edits'
@@ -36,6 +36,35 @@ describe('NLE captions.srt output time', () => {
     expect(srt).toContain('00:00:01,000')
     expect(srt).toContain('00:00:13,800')
     expect(srt).not.toContain('00:00:00,400')
+  })
+
+  it('VTT uses the same saved word fixes, cuts, case, and speed-warped display clock', () => {
+    const edited = {
+      ...edits,
+      wordFixes: { ...edits.wordFixes, '0': 'Hello edited' },
+      captions: { ...edits.captions, case: 'upper' },
+    }
+    const srt = buildNleCaptionsSrt(words, edited, bounds)
+    const vtt = buildNleCaptionsVtt(words, edited, bounds)
+    expect(srt).toContain('HELLO EDITED')
+    expect(vtt).toContain('HELLO EDITED')
+    expect(vtt).not.toContain('Hi')
+    expect(vtt).toContain('00:00:01.000')
+    expect(vtt).toContain('00:00:13.800')
+    expect(vtt).toMatch(/^WEBVTT\n\n/)
+  })
+
+  it('VTT preserves manual caption line text and converts only timestamp separators', () => {
+    const edited = {
+      ...edits,
+      captionLines: [{ id: 'cl_custom', text: 'Exact saved caption', startMs: 400, endMs: 7800 }],
+    }
+    const srt = buildNleCaptionsSrt(words, edited, bounds)
+    const vtt = buildNleCaptionsVtt(words, edited, bounds)
+    expect(srt).toContain('Exact saved caption')
+    expect(vtt).toContain('Exact saved caption')
+    expect(vtt).toContain('00:00:01.000 --> 00:00:13.800')
+    expect(vtt).not.toContain('00:00:01,000')
   })
 
   it('warpSrtCuesToDisplayMs matches displayPositionMs on edit-ms SRT', () => {

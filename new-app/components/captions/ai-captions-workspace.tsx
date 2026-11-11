@@ -36,6 +36,7 @@ import {
 } from '../../lib/clips/ai-captions-contract'
 
 type Phase = 'idle' | 'uploading' | 'running' | 'ready' | 'failed'
+type PollConnection = 'connected' | 'reconnecting' | 'stalled'
 
 const steps = ['Upload', 'Prepare video', 'Transcribe', 'Generate captions', 'Edit & export'] as const
 
@@ -79,7 +80,9 @@ export function AiCaptionsWorkspace() {
   const [exportPending, setExportPending] = useState(false)
   const [historyVersion, setHistoryVersion] = useState(0)
   const startingRef = useRef(false)
-  const stopPoll = useRef(false)
+  const pollGenerationRef = useRef(0)
+  const [pollConnection, setPollConnection] = useState<PollConnection>('connected')
+  const [pollRetryNonce, setPollRetryNonce] = useState(0)
 
   useEffect(() => {
     console.info('[ai-captions:ui] styles_load_begin')
@@ -201,12 +204,25 @@ export function AiCaptionsWorkspace() {
 
   useEffect(() => {
     if (!run?.runId || phase !== 'running') return
-    stopPoll.current = false
+    const runId = run.runId
+    const generation = ++pollGenerationRef.current
+    const controller = new AbortController()
+    let canceled = false
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let consecutiveFailures = 0
+    const active = () => !canceled && generation === pollGenerationRef.current && !controller.signal.aborted
+    const schedule = () => {
+      if (!active()) return
+      timer = setTimeout(() => { void tick() }, 2000)
+    }
     const tick = async () => {
       try {
-        console.info('[ai-captions:ui] poll_request', { runId: run.runId })
-        const data = await getAiCaptionsRun(run.runId)
-        console.info('[ai-captions:ui] poll_result', { runId: run.runId, status: data.status, stage: data.stage, progress: data.progressPercent })
+        console.info('[ai-captions:ui] poll_request', { runId })
+        const data = await getAiCaptionsRun(runId, controller.signal)
+        if (!active()) return
+        consecutiveFailures = 0
+        setPollConnection('connected')
+        console.info('[ai-captions:ui] poll_result', { runId, status: data.status, stage: data.stage, progress: data.progressPercent })
         setRun(data)
         if (data.status === 'ready' && data.result) {
           setPhase('ready')
@@ -224,16 +240,26 @@ export function AiCaptionsWorkspace() {
         }
         if (!isCaptionsRunInProgress(data.status)) return
       } catch (err) {
-        console.warn('[ai-captions:ui] poll_retry', err)
-        // keep polling through transient status errors
+        if (!active()) return
+        consecutiveFailures += 1
+        console.warn('[ai-captions:ui] poll_retry', { runId, attempt: consecutiveFailures })
+        if (consecutiveFailures >= 3) {
+          setPollConnection('stalled')
+          return
+        }
+        setPollConnection('reconnecting')
       }
-      if (!stopPoll.current) setTimeout(tick, 2000)
+      schedule()
     }
+    setPollConnection('connected')
     void tick()
     return () => {
-      stopPoll.current = true
+      canceled = true
+      pollGenerationRef.current += 1
+      controller.abort()
+      if (timer) clearTimeout(timer)
     }
-  }, [phase, run?.runId])
+  }, [phase, run?.runId, pollRetryNonce])
 
   const status: AiCaptionsStatus = run?.status ?? 'queued'
   const credits = captionsCreditCount(run?.creditEstimate)
@@ -277,6 +303,26 @@ export function AiCaptionsWorkspace() {
           {run && status === 'exporting' ? (
             <span className="basis-full pl-7 text-xs" data-testid="ai-captions-export-timing">
               {exportTimingText(run)}
+            </span>
+          ) : null}
+          {pollConnection === 'reconnecting' ? (
+            <span className="basis-full pl-7 text-xs" data-testid="ai-captions-connection">Connection interrupted. Reconnecting…</span>
+          ) : null}
+          {pollConnection === 'stalled' ? (
+            <span className="basis-full pl-7 text-xs" data-testid="ai-captions-connection">
+              Status connection paused after repeated failures.{' '}
+              <button
+                type="button"
+                className="underline"
+                data-testid="ai-captions-retry-status"
+                onClick={() => {
+                  console.info('[ai-captions:ui] poll_retry_clicked', { runId: run?.runId })
+                  setPollConnection('reconnecting')
+                  setPollRetryNonce((n) => n + 1)
+                }}
+              >
+                Retry status
+              </button>
             </span>
           ) : null}
         </div>
