@@ -446,25 +446,6 @@ export function MediaPanel({
               </Button>
             ))}
           </div>
-          {segSource?.mediaType === 'video' ? (
-            <label className="block space-y-1 text-[10px] text-muted-foreground">
-              <span>Speed</span>
-              <Input
-                type="number"
-                min={0.25}
-                max={4}
-                step={0.05}
-                value={seg.speed ?? 1}
-                className="h-7 px-2 text-xs"
-                data-testid="media-seg-speed"
-                onChange={(event) => {
-                  const value = Number(event.currentTarget.value)
-                  if (!Number.isFinite(value)) return
-                  patchSeg({ speed: value })
-                }}
-              />
-            </label>
-          ) : null}
           <div className="space-y-1.5" data-testid="media-seg-transform-controls">
             <Label className="text-[11px]">Transform</Label>
             <div className="grid grid-cols-2 gap-1.5">
