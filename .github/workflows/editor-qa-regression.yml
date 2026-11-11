@@ -70,11 +70,11 @@ jobs:
       - name: Full new-app TypeScript diagnostic baseline (Batch 6)
         run: |
           # The repository has 456 known baseline diagnostics on master.
-          # Reject new/removed diagnostic-count drift while master is reconciled.
+          # Reject increases over the known baseline while allowing reductions.
           count="$(grep -Ec 'error TS[0-9]+:' /tmp/motion-tsc.txt || true)"
           echo "new-app full tsc diagnostic count: $count (master baseline: 456)"
-          if [ "$count" -ne 456 ]; then
-            echo "Batch 6 TypeScript diagnostic count differs from master" >&2
+          if [ "$count" -gt 456 ]; then
+            echo "Batch 6 TypeScript diagnostic count exceeds master baseline" >&2
             grep -E 'error TS[0-9]+:' /tmp/motion-tsc.txt | tail -80 >&2 || true
             exit 1
           fi
