@@ -78,3 +78,29 @@ def test_fontconfig_selects_pinned_family(font):
     result = subprocess.run(["fc-match", "-f", "%{file}", font["assFamily"]],
                             capture_output=True, text=True, check=True)
     assert result.stdout.endswith("/" + font["local"]), (font["assFamily"], result.stdout)
+
+@pytest.mark.parametrize("font", SOURCES["fallbackFonts"], ids=lambda f: f["slug"])
+def test_pinned_unicode_fallback_bytes_and_licenses(font):
+    browser = (BROWSER / font["local"]).read_bytes()
+    worker = (WORKER / font["local"]).read_bytes()
+    assert browser == worker
+    assert len(browser) == font["size"]
+    assert blob_sha(browser) == font["blobSha"]
+    for root in (BROWSER, WORKER):
+        notice = (root / "licenses" / (font["slug"] + "-OFL.txt")).read_bytes()
+        assert blob_sha(notice) == font["licenseBlobSha"]
+        assert b"SIL OPEN FONT LICENSE Version 1.1" in notice
+
+
+@pytest.mark.parametrize("slug,fixture", [
+    ("notosansarabic", "مرحبا"),
+    ("notosansdevanagari", "नमस्ते"),
+    ("notosansthai", "สวัสดี"),
+    ("notosansjp", "日本語"),
+    ("notoemoji", "🙂"),
+])
+def test_mixed_unicode_has_actual_pinned_fallback_glyphs(slug, fixture):
+    row = next(r for r in SOURCES["fallbackFonts"] if r["slug"] == slug)
+    cmap = TTFont(WORKER / row["local"]).getBestCmap() or {}
+    missing = [hex(ord(ch)) for ch in fixture if ord(ch) not in cmap]
+    assert not missing, (slug, missing)
