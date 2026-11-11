@@ -18,6 +18,7 @@ export function SoloRecordClient() {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [prepareError, setPrepareError] = useState<string | null>(null)
+  const [deviceError, setDeviceError] = useState<string | null>(null)
   const [prepareAttempt, setPrepareAttempt] = useState(0)
   const [importing, setImporting] = useState(false)
   const [teleprompterOpen, setTeleprompterOpen] = useState(false)
@@ -169,12 +170,25 @@ export function SoloRecordClient() {
         onMicId={recorder.setMicId}
         countdownEnabled={recorder.countdownEnabled}
         onCountdownEnabled={recorder.setCountdownEnabled}
-        onStart={() => void recorder.startRecording()}
+        onStart={() => {
+          setDeviceError(null)
+          if (!navigator.mediaDevices?.getUserMedia) {
+            setDeviceError('Camera and microphone are unavailable in this browser. Use a secure HTTPS origin and allow device access.')
+            return
+          }
+          void recorder.startRecording().catch((err: unknown) => {
+            const denied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+            setDeviceError(denied
+              ? 'Camera or microphone access was denied. Enable permission in browser site settings, then select Start recording again.'
+              : err instanceof Error ? err.message : 'Could not start recording. Check your camera and microphone, then try again.')
+          })
+        }}
         onStop={() => void handleStop()}
         onPause={() => undefined}
         recordLabel="Start recording"
       />
 
+      {deviceError ? <p className="mx-auto mt-3 w-full max-w-[960px] px-3 text-sm text-destructive" role="alert" data-testid="solo-device-error">{deviceError}</p> : null}
       {teleprompterOpen ? (
         <section className="mx-auto mt-3 w-full max-w-[960px] rounded-xl border border-border bg-card p-3" aria-label="Teleprompter" data-testid="solo-teleprompter">
           <div className="mb-2 flex items-center justify-between gap-2">
