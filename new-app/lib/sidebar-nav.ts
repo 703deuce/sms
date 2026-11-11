@@ -103,7 +103,7 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
   if (
     p.startsWith('/app/video-editor') ||
     p.startsWith('/app/editor') ||
-    /^\/app\/clips\/[^/]+\/(edit|studio|script)(\/|$)/.test(p)
+    /^\/app\/clips\/[^/]+\/(edit|studio|script|story|templates|generate|chat)(\/|$)/.test(p)
   )
     return 'editor'
   if (p === '/app' || p === '/app/home' || p === '/app/dashboard') return 'home'
@@ -114,5 +114,5 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
 }
 
 export function isClipEditRoute(pathname: string): boolean {
-  return /^\/app\/(clips|video-editor)\/[^/]+\/edit\/[^/]+/.test(pathname)
+  return /^\/app\/(clips|video-editor)\/[^/]+\/(edit|story|templates|generate|chat)\/[^/]+(?:\/|$)/.test(pathname)
 }
