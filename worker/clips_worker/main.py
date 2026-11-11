@@ -858,17 +858,22 @@ def _poll_loop(dsn: str) -> None:
                     log("[clipper:worker] drain complete — exiting")
                     return
                 job = claim_job(conn)
-                if job and (job.get("type") or "").startswith("STREAM_"):
-                    from clips_worker.streamer.disk_guard import disk_guard_blocks_new_stream_work
+                if job:
+                    from clips_worker.job_contract import stream_job_needs_disk_guard
 
-                    try:
-                        blocked = disk_guard_blocks_new_stream_work()
-                    except Exception as guard_exc:
-                        log(f"disk_guard check failed (continuing): {guard_exc}")
-                        blocked = False
-                    if blocked:
-                        release_job_claim(conn, job["id"])
-                        job = None
+                    if stream_job_needs_disk_guard(job.get("type") or ""):
+                        from clips_worker.streamer.disk_guard import disk_guard_blocks_new_stream_work
+
+                        try:
+                            blocked = disk_guard_blocks_new_stream_work()
+                        except Exception as guard_exc:
+                            log(f"disk_guard check failed (continuing): {guard_exc}")
+                            blocked = False
+                        if blocked:
+                            from clips_worker.job_contract import defer_job_for_disk_pressure
+
+                            defer_job_for_disk_pressure(conn, job)
+                            job = None
                 if not job:
                     idle_polls += 1
                     if worker_lane() == "stream" and idle_polls % 60 == 1:
