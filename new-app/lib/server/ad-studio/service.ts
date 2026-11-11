@@ -617,16 +617,17 @@ export async function regenerateAdImageVariant(
   const key = adKeySchema.safeParse(keyValue)
   if (!key.success) throw adInvalid('An idempotency key is required for still regeneration.')
   const row = await required(workspaceId, id)
-  if (row.mode !== 'image_to_ad' || !['done','failed'].includes(row.status)) {
-    throw adInvalid('Only a completed or failed photo-ad run can regenerate a still.')
-  }
+  if (row.mode !== 'image_to_ad') throw adInvalid('Only a photo-ad run can regenerate a still.')
   const saved = row.plan as unknown as SavedPlan | null
   if (!saved?.photoAds) throw adInvalid('Photo-ad plan is missing.')
   const variant = await prisma().adStudioImageVariant.findFirst({ where: { id: variantId, runId: id } })
   if (!variant) throw adInvalid('Image-ad variant was not found.')
   if (saved._imageRetryKeys?.[variantId] === key.data) {
-    console.info('[ad-studio:r5] still_regenerate_replay', { runId: id, variantId })
+    console.info('[ad-studio:r5] still_regenerate_replay', { runId: id, variantId, status: row.status })
     return getAdRun(workspaceId, id)
+  }
+  if (!['done','failed'].includes(row.status)) {
+    throw adInvalid('Only a completed or failed photo-ad run can regenerate a still.')
   }
   const qcByIndex = { ...(saved.photoAds.qcByIndex ?? {}) }
   delete qcByIndex[String(variant.index)]
