@@ -1,10 +1,13 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { filterVideoTemplates, validateVideoTemplateGallery, validateVideoTemplateRelease, type VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
-import { compileTemplate } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplate, templateFrameToMs } from '@/lib/clips/real-video-templates/sequence-contract'
 import { compileTemplateWithMusic } from '@/lib/clips/real-video-templates/music-sequence'
 import { BATCH9A_DEFAULT_MUSIC } from '@/lib/clips/real-video-templates/batch9a-anchors'
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
 
 function fixture(id: string): VideoTemplateRelease {
   return {
@@ -40,6 +43,16 @@ describe('standalone real video gallery', () => {
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.spritePath)).size).toBe(10)
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.previewMedia?.sha256)).size).toBe(10)
   })
+  it('pins every committed real-media preview sprite to its manifest SHA-256', () => {
+    for (const release of FIRST_PARTY_VIDEO_TEMPLATES) {
+      const preview = release.previewMedia
+      expect(preview, release.id).toBeDefined()
+      const file = resolve(process.cwd(), 'public', preview!.spritePath.replace(/^\//, ''))
+      const digest = createHash('sha256').update(readFileSync(file)).digest('hex')
+      expect(digest, release.id).toBe(preview!.sha256)
+    }
+  })
+
   it('keeps all ten Preview anchors above the Batch 9A authoring-quality floor', () => {
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.design.stylePackId)).size).toBe(10)
     expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.family.texts[0]?.defaultText)).size).toBe(10)
@@ -99,10 +112,50 @@ describe('standalone real video gallery', () => {
         durationFrames:release.family.totalFrames,
         edits:defaultEdits({clipStartMs:0,clipEndMs:Math.round(release.family.totalFrames*1000/30)}),
       })
-      expect(compiled.edits.sourceSegments).toHaveLength(release.family.slots.length)
-      expect(compiled.edits.transitions).toHaveLength(release.family.slots.length-1)
-      expect(compiled.edits.textItems).toHaveLength(release.family.texts.length+(release.family.graphics?.length??0))
-      expect(compiled.edits.audio?.music).toMatchObject({uploadId:musicAsset.id})
+      const edits=compiled.edits
+      const durationMs=templateFrameToMs(release.family.totalFrames)
+      const expectedCuts=release.family.slots.slice(1).map(slot=>templateFrameToMs(slot.startFrame))
+      const expectedTransitions=release.family.slots.slice(1).map(slot=>{
+        if(slot.transition==='cut')throw new Error('Batch 9A release lost authored transition')
+        return {srcMs:templateFrameToMs(slot.startFrame),type:slot.transition.type,
+          durMs:templateFrameToMs(slot.transition.durationFrames)}
+      })
+      expect(edits.sourceSegments).toHaveLength(release.family.slots.length)
+      expect(compiled.sequence.items).toHaveLength(release.family.slots.length)
+      for(const [index,slot] of release.family.slots.entries()){
+        expect(edits.sourceSegments?.[index]).toMatchObject({
+          startMs:templateFrameToMs(slot.startFrame),
+          endMs:templateFrameToMs(slot.startFrame+slot.durationFrames),
+          fit:slot.fit,
+        })
+        expect(compiled.sequence.items[index]).toMatchObject({
+          slotId:slot.id,outputStartFrame:slot.startFrame,
+          outputEndFrame:slot.startFrame+slot.durationFrames,
+        })
+      }
+      expect(edits.videoSplits).toEqual(expectedCuts)
+      expect(edits.transitions).toEqual(expectedTransitions)
+      expect(edits.textItems).toHaveLength(release.family.texts.length+(release.family.graphics?.length??0))
+      expect(edits.textItems?.every(layer=>Boolean(layer.anim))).toBe(true)
+      expect(edits.textItems?.filter(layer=>layer.kind==='shape')).toHaveLength(release.family.graphics?.length??0)
+      expect(edits.keyframes?.some(track=>track.target==='video'&&track.points.length>=2)).toBe(true)
+      expect(edits.audio?.music).toMatchObject({
+        uploadId:musicAsset.id,generationId:musicAsset.id,startMs:0,endMs:durationMs,
+        loop:false,volume:0.35,
+      })
+      expect(edits.inserts).toBeUndefined()
+      expect(edits.cutRanges).toEqual([])
+      expect(edits.templateProvenance).toMatchObject({
+        familyId:release.family.familyId,designId:release.design.designId,
+      })
+      const reloaded=normalizeEdits(JSON.parse(JSON.stringify(edits)),{
+        clipStartMs:0,clipEndMs:durationMs,
+      })
+      expect(reloaded.sourceSegments).toEqual(edits.sourceSegments)
+      expect(reloaded.videoSplits).toEqual(edits.videoSplits)
+      expect(reloaded.transitions).toEqual(edits.transitions)
+      expect(reloaded.textItems).toEqual(edits.textItems)
+      expect(reloaded.audio?.music).toEqual(edits.audio?.music)
     }
   })
 
