@@ -96,6 +96,8 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.keyframes?.some((k) => k.target.startsWith('text:b7_route__arrow'))).toBe(true)
     expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_2)?.layout?.kind).toBe('side_by_side')
     expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_4)?.layout?.kind).toBe('side_by_side')
+    expect(result.edits.textItems?.length).toBeLessThanOrEqual(60)
+    expect(new Set(result.edits.textItems?.map((item) => item.id)).size).toBe(result.edits.textItems?.length)
   })
 
   it('preserves unrelated manual text, groups and keyframes and survives normalization without dropped text', () => {
@@ -118,7 +120,8 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.textItems?.find((i) => i.id === 'manual_note')).toEqual(manual)
     expect(result.edits.keyframes?.some((k) => k.target === 'text:manual_note')).toBe(true)
     expect(result.edits.groups).toEqual(extra.groups)
-    const reloaded = normalizeEdits(result.edits, { clipStartMs: 0, clipEndMs: 2000 })
+    const persisted = JSON.parse(JSON.stringify(result.edits)) as ClipEditsV2
+    const reloaded = normalizeEdits(persisted, { clipStartMs: 0, clipEndMs: 2000 })
     expect(reloaded.textItems).toHaveLength(result.edits.textItems?.length)
     expect(reloaded.textItems?.some((i) => i.id === 'manual_note')).toBe(true)
   })
@@ -178,6 +181,55 @@ describe('Batch 7 standalone reusable primitives', () => {
     expect(result.edits.sourceSegments?.[0]?.id).not.toBe(result.edits.sourceSegments?.[1]?.id)
     expect(result.edits.sourceSegments?.[0]?.transform).toEqual({ cropL: 5, cropR: 3, scale: 108 })
     expect(result.edits.sourceSegments?.[0]?.sourceId).toBe(result.edits.sourceSegments?.[1]?.sourceId)
+  })
+
+  it('keeps authored crop and primitive structure when a photo slot is replaced', () => {
+    const f = family(2)
+    f.slots[0] = { ...f.slots[0], transform: { cropL: 7, cropT: 4, cropR: 2, cropB: 3, scale: 112 } }
+    f.primitives = [{ kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
+      box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style }]
+    const before = compileTemplate(f, design, {
+      ...choices(2),
+      media: { shot_1: asset('photo_before', 'image'), shot_2: asset('photo_2', 'image') },
+    }, carrier(f.totalFrames))
+    const after = compileTemplate(f, design, {
+      ...choices(2),
+      media: { shot_1: asset('photo_after', 'image'), shot_2: asset('photo_2', 'image') },
+    }, carrier(f.totalFrames))
+    const beforeSeg = before.edits.sourceSegments?.find((seg) => seg.id === before.slotToItemIds.shot_1)
+    const afterSeg = after.edits.sourceSegments?.find((seg) => seg.id === after.slotToItemIds.shot_1)
+    expect(after.slotToItemIds.shot_1).toBe(before.slotToItemIds.shot_1)
+    expect(afterSeg?.sourceId).not.toBe(beforeSeg?.sourceId)
+    expect(afterSeg?.transform).toEqual(beforeSeg?.transform)
+    expect(afterSeg?.transform).toEqual({ cropL: 7, cropT: 4, cropR: 2, cropB: 3, scale: 112 })
+    expect(after.edits.textItems?.map((item) => item.id)).toEqual(before.edits.textItems?.map((item) => item.id))
+  })
+
+  it('keeps a dense complex graphic composition under the 60-item capacity without dropping layers', () => {
+    const f = family(1)
+    f.primitives = [
+      { kind: 'confetti', id: 'confetti', startFrame: 0, durationFrames: 60,
+        box: { x: .04, y: .04, width: .92, height: .72 }, count: 12, style },
+      { kind: 'roster_selection', id: 'roster', startFrame: 0, durationFrames: 60,
+        title: 'Starting five', entries: ['Avery', 'Blake', 'Casey', 'Drew', 'Emery'], selectedIndex: 2,
+        box: { x: .12, y: .18, width: .76, height: .62 }, style },
+      { kind: 'calendar_label', id: 'calendar', startFrame: 0, durationFrames: 60,
+        month: 'NOV', day: 11, label: 'Launch day',
+        box: { x: .62, y: .05, width: .30, height: .28 }, style },
+      { kind: 'route_arrow', id: 'route', startFrame: 0, durationFrames: 60, label: 'Next stop',
+        box: { x: .18, y: .78, width: .64, height: .08 }, style },
+      { kind: 'text_underline', id: 'underline', startFrame: 0, durationFrames: 60, text: 'Built to move',
+        box: { x: .12, y: .05, width: .42, height: .16 }, style },
+      { kind: 'text_glow', id: 'glow', startFrame: 0, durationFrames: 60, text: 'Night mode',
+        box: { x: .15, y: .88, width: .70, height: .10 }, style },
+    ]
+    const result = compileTemplate(f, design, choices(1), carrier(f.totalFrames))
+    const generated = result.edits.textItems ?? []
+    expect(generated.length).toBeGreaterThan(25)
+    expect(generated.length).toBeLessThanOrEqual(60)
+    expect(new Set(generated.map((item) => item.id)).size).toBe(generated.length)
+    expect(generated.some((item) => item.id === 'b7_roster__entry_4')).toBe(true)
+    expect(generated.filter((item) => item.id.startsWith('b7_confetti__confetti_'))).toHaveLength(12)
   })
 
   it('reduces slot motion and flashing transitions at the shared compiler boundary', () => {
