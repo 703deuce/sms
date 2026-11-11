@@ -53,7 +53,14 @@ export function validateVideoTemplateRelease(input: VideoTemplateRelease): Video
   const design = validateTemplateDesign(input.design, family)
   if (new Set(input.authoredDimensions.filter(x => allowedDimensions.has(x))).size < 3)
     throw new Error('A treatment needs at least three independently authored visible dimensions')
-  if (input.requiredCapabilities.some(x => !releaseId.test(x))) throw new Error('Unknown capability ID')
+  if (!Array.isArray(input.requiredCapabilities) ||
+      input.requiredCapabilities.some(x => !releaseId.test(x)))
+    throw new Error('Unknown capability ID')
+  // An unsupported requirement must never be advertised as a usable release.
+  const supported = new Set(['clip_edits_v2', 'source_transforms', 'text_layers',
+    'music_track', 'cross_source_transitions', 'frame_accurate_slots'])
+  if (input.requiredCapabilities.some(x => !supported.has(x)))
+    throw new Error('This first-party release requires an unimplemented capability')
   return { ...input, family, design }
 }
 export function validateVideoTemplateGallery(releases: readonly VideoTemplateRelease[]): VideoTemplateRelease[] {

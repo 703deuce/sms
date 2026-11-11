@@ -106,7 +106,13 @@ export function VideoTemplatesGallery() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {group.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
             <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
-              src={item.demoPath} className="aspect-video w-full bg-black object-cover"
+              src={item.demoPath} onMouseEnter={event => {
+                if (event.currentTarget.muted) void event.currentTarget.play().catch(() => {})
+              }}
+              onMouseLeave={event => {
+                event.currentTarget.pause()
+                try { event.currentTarget.currentTime = 0 } catch { /* not seekable yet */ }
+              }} className="aspect-video w-full bg-black object-cover"
               aria-label={`Preview ${item.title}`} />
             <div className="space-y-2 p-4">
               <div className="flex items-center justify-between gap-2">
@@ -117,7 +123,14 @@ export function VideoTemplatesGallery() {
               </div>
               <p className="text-xs text-muted-foreground">{item.family.aspects.join(', ')} · {item.family.slots.length} slots · {item.family.totalFrames / 30}s</p>
               <p className="text-sm">{item.description}</p>
-              <p className="text-xs text-muted-foreground">{item.rights}</p>
+              <p className="text-xs text-muted-foreground">Rights: {item.rights}</p>
+              <p className="text-xs text-muted-foreground">
+                {item.design.musicPolicy === 'none' ? 'No music track' : 'Licensed or user-owned music only'}
+                {' · '}Editable: slot media, text, colors, source trim and audio
+              </p>
+              {!!item.requiredCapabilities.length && <p className="text-xs text-muted-foreground">
+                Requires {item.requiredCapabilities.join(', ')}
+              </p>}
               <button type="button" onClick={() => setSound(sound === item.id ? null : item.id)}
                 className="rounded-lg border px-3 py-2 text-xs">{sound === item.id ? 'Mute demo' : 'Enable demo sound'}</button>
               <Link href={'/app/clips/video-templates/' + encodeURIComponent(item.id)}
