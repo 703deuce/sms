@@ -13,7 +13,7 @@ import {
   monotonicPct,
   type ExportRenderDetail,
 } from '@/lib/clips/editor/export-progress-text'
-import { exportActionLabel, effectiveAudioDeliverFormat, exportDownloadLabel, audioFormatOptionLabel } from '@/lib/clips/export-format-labels'
+import { exportActionLabel, exportDownloadLabel, mp3EncoderAvailable } from '@/lib/clips/export-format-labels'
 import { defaultExportDialogState } from '@/lib/clips/export-dialog-defaults'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -482,6 +482,7 @@ export function ExportDialog({
       ? exportActionLabel(deliverFormat, encoders)
       : exportButton.label
   const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
+  const mp3Unsupported = exportPlatform === 'none' && deliverFormat === 'mp3' && !mp3EncoderAvailable(encoders)
   useEffect(() => {
     if (!open) setServerCaptionSyncWarnings([])
   }, [open])
@@ -490,7 +491,7 @@ export function ExportDialog({
   }, [captionSyncWarnings.length])
 
   const startExport = async () => {
-    if (exportButton.disabled || captionSyncBlocksExport) return
+    if (exportButton.disabled || captionSyncBlocksExport || mp3Unsupported) return
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
@@ -542,7 +543,7 @@ export function ExportDialog({
         removeDeadAir,
         exportSfx,
         edits: exportEdits,
-        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: effectiveAudioDeliverFormat(deliverFormat, encoders) } : {}),
+        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: deliverFormat } : {}),
         ...(exportPlatform === 'none' &&
         (deliverFormat === 'mp4' || deliverFormat === 'mov') &&
         codec !== 'h264'
@@ -779,6 +780,11 @@ export function ExportDialog({
           </div>
           {gifDisabled ? (
             <p className="mt-1 text-xs text-muted-foreground">GIF is limited to 30 seconds.</p>
+          ) : null}
+          {mp3Unsupported ? (
+            <p className="mt-1 text-xs text-destructive" role="alert" data-testid="export-mp3-unavailable">
+              MP3 encoding is unavailable on the configured worker. Select another audio format explicitly.
+            </p>
           ) : null}
         </div>
         {(deliverFormat === 'mp4' || deliverFormat === 'mov') && !platformLocked ? (
@@ -1286,7 +1292,7 @@ export function ExportDialog({
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
-              disabled={exportButton.disabled || captionSyncBlocksExport}
+              disabled={exportButton.disabled || captionSyncBlocksExport || mp3Unsupported}
               data-testid="export-mp4-button"
               title={
                 captionSyncBlocksExport
