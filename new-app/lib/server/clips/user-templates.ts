@@ -348,8 +348,11 @@ export async function listPrivateUserTemplates(workspaceId:string,q:string,page:
   const [total,rows]=await Promise.all([
     getPrisma().clipUserTemplate.count({where}),
     getPrisma().clipUserTemplate.findMany({where,orderBy:{updatedAt:'desc'},take,skip:(safePage-1)*take,
-      select:{id:true,title:true,description:true,currentRevision:true,updatedAt:true,
-        revisions:{orderBy:{revision:'desc'},take:1,select:{definition:true,assetManifest:true,revision:true}}}}),
+      select:{id:true,title:true,description:true,currentRevision:true,updatedAt:true,createdById:true,
+        revisions:{orderBy:{revision:'desc'},take:1,select:{definition:true,assetManifest:true,revision:true}},
+        publications:{orderBy:{createdAt:'desc'},take:8,select:{id:true,state:true,revisionId:true,createdAt:true,
+          submittedAt:true,publishedAt:true,rejectedAt:true,hiddenAt:true,withdrawnAt:true,
+          revision:{select:{revision:true}}}}}}),
   ])
   return {items:rows,total,page:safePage,pages:Math.max(1,Math.ceil(total/take))}
 }
