@@ -21,7 +21,7 @@ export default function TemplatesModeError({
   return (
     <div className="flex min-h-[60vh] items-center justify-center bg-background px-6 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-        <h1 className="text-lg font-semibold">Templates could not load</h1>
+        <h1 className="text-lg font-semibold">Layouts could not load</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Your clip was not changed. Retry this editor mode, or return to the project and open it again.
         </p>
