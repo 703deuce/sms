@@ -805,7 +805,9 @@ export function PreviewStage({
         if (el instanceof HTMLVideoElement) {
           if (on && sseg) {
             const t = segmentMediaMs(sseg, s, src) / 1000
-            if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
+            // B6 freeze and piecewise ramps must not drift by four+ decoded frames.
+            const allowedDrift = sseg.playback ? (sourceSegmentPlaybackRate(sseg, s, src) === 0 ? 0.015 : 0.04) : 0.15
+            if (Math.abs(el.currentTime - t) > allowedDrift) el.currentTime = t
             const muted = segmentAudio(sseg, s) === 'main' || voiceOutputMutedRef.current
             if (el.muted !== muted) el.muted = muted
             const localRate = sourceSegmentPlaybackRate(sseg, s, src)

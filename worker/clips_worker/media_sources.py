@@ -226,6 +226,12 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
         if r.get("auto") is True:
             seg["auto"] = True
         playback = normalize_source_playback(r.get("playback")) if src["mediaType"] == "video" else None
+        if r.get("playback") is not None and (
+            not playback or src["mediaType"] != "video"
+            or playback["outputFrames"] != round((b - a) * 30 / 1000)
+            or r.get("speed") is not None
+        ):
+            raise ValueError("source playback: unsupported media, speed conflict or frame budget")
         if playback:
             seg["playback"] = playback
         else:
@@ -1111,6 +1117,8 @@ def apply_full_render_sources(
     for w in windows:
         p = media_path_for(edits, w["sourceId"], media)
         if p is None or not Path(p).is_file():
+            if w.get("playback") or isinstance(edits.get("templateProvenance"), dict):
+                raise RuntimeError("template source media missing; cannot render black fallback")
             print(f"[clipper:sources] skip {w['id']} (media missing)", flush=True)
             continue
         usable.append(w)

@@ -95,9 +95,9 @@ def test_playback_window_freezes_picture_and_does_not_repeat_source_audio(tmp_pa
     _make_dynamic(source)
     render_playback_window(source, PLAYBACK, 500, 3000, 0, 30, 30.0, out, include_audio=True)
 
-    assert abs((probe_video_nb_frames(out) or 0) - 30) <= 1
+    assert probe_video_nb_frames(out) == 30
     frames = _raw_frames(out)
-    assert len(frames) >= 30
+    assert len(frames) == 30
     assert _mean_abs(frames[10], frames[14]) < 1.0
     assert _mean_abs(frames[6], frames[20]) > 2.0
 
@@ -167,3 +167,26 @@ def test_shader_cross_source_transition_uses_real_shader_when_renderer_available
     after = _pixel(out, 1.25)
     assert during != before
     assert during != after
+
+
+def test_photo_video_no_audio_source_and_half_second_shots(tmp_path: Path) -> None:
+    """No-audio uploaded footage still renders ramped picture; silence is not fabricated as dialogue."""
+    mute_video = tmp_path / "mute_upload.mp4"
+    _make_video(mute_video, "green", audio=False)
+    short_plan = {
+        "v": 1, "fps": 30, "outputFrames": 15,
+        "pieces": [
+            {"kind": "play", "frames": 5, "rate": 0.5},
+            {"kind": "hold", "frames": 5},
+            {"kind": "play", "frames": 5, "rate": 2},
+        ],
+    }
+    out = tmp_path / "short_silent.mp4"
+    render_playback_window(mute_video, short_plan, 200, 3000, 0, 15, 30.0, out, include_audio=False)
+    assert probe_video_nb_frames(out) == 15
+    decoded = _raw_frames(out)
+    assert len(decoded) == 15
+    assert decoded[5] == decoded[9]  # frozen decoded picture, not a black carrier
+
+    with pytest.raises(ValueError, match="head handles"):
+        render_playback_window(mute_video, short_plan, 0, 3000, -3, 15, 30.0, out, include_audio=False)

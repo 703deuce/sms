@@ -204,7 +204,9 @@ function safeId(v: unknown): string {
 export function normalizeSourceSegmentPlayback(raw: unknown): SourceSegmentPlayback | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
   const o = raw as Record<string, unknown>
-  if (o.v !== 1 || o.fps !== SOURCE_PLAYBACK_FPS || !Number.isSafeInteger(o.outputFrames) || Number(o.outputFrames) < 1 || !Array.isArray(o.pieces) || !o.pieces.length)
+  if (o.v !== 1 || o.fps !== SOURCE_PLAYBACK_FPS || Object.keys(o).some(k => !['v','fps','outputFrames','pieces'].includes(k)) ||
+      !Number.isSafeInteger(o.outputFrames) || Number(o.outputFrames) < 1 ||
+      !Array.isArray(o.pieces) || !o.pieces.length || o.pieces.length > 256)
     return undefined
   const pieces: SourcePlaybackPiece[] = []
   let total = 0
@@ -214,11 +216,15 @@ export function normalizeSourceSegmentPlayback(raw: unknown): SourceSegmentPlayb
     if (!Number.isSafeInteger(p.frames) || Number(p.frames) < 1) return undefined
     const frames = Number(p.frames)
     if (p.kind === 'hold') {
+      if (Object.keys(p).some(k => k !== 'kind' && k !== 'frames')) return undefined
       pieces.push({ kind: 'hold', frames })
     } else if (p.kind === 'play') {
-      const rate = Number(p.rate)
-      if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) return undefined
-      pieces.push({ kind: 'play', frames, rate: Math.round(rate * 1000) / 1000 })
+      if (Object.keys(p).some(k => k !== 'kind' && k !== 'frames' && k !== 'rate') ||
+          typeof p.rate !== 'number') return undefined
+      const rate = p.rate
+      if (!Number.isFinite(rate) || rate < 0.25 || rate > 4 ||
+          Math.abs(rate - Math.round(rate * 1000) / 1000) > 1e-9) return undefined
+      pieces.push({ kind: 'play', frames, rate })
     } else {
       return undefined
     }
@@ -332,6 +338,12 @@ export function normalizeSourceSegments(
     const inMs = int(o.inMs)
     const layout = normalizeSegmentLayout(o.layout, sources, src.id)
     const playback = src.mediaType === 'video' ? normalizeSourceSegmentPlayback(o.playback) : undefined
+    if (o.playback != null && (!playback || src.mediaType !== 'video' ||
+        playback.outputFrames !== Math.round((b - a) * SOURCE_PLAYBACK_FPS / 1000) ||
+        o.speed != null)) {
+      // An invalid opt-in plan must not silently become normal-speed footage.
+      throw new Error('source playback: unsupported media, speed conflict or frame budget')
+    }
     const rawSpeed = finite(o.speed)
     const speed = !playback && rawSpeed != null && src.mediaType === 'video' && Math.abs(rawSpeed - 1) >= 0.0001
       ? Math.round(clamp(rawSpeed, 0.25, 4) * 1000) / 1000

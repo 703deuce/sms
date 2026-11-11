@@ -173,12 +173,12 @@ def render_playback_window(
             cmd += ["-ss", format(seek_s, ".6f"), "-i", str(source_path)]
             filters.append(
                 f"[{idx}:v]fps={PLAYBACK_FPS},trim=end_frame=1,setpts=PTS-STARTPTS,"
-                f"tpad=stop_mode=clone:stop_duration={duration_s + 0.1:.6f},"
-                f"trim=end_frame={frames},setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]"
+                f"tpad=stop_mode=clone:stop={frames - 1},"
+                f"trim=end_frame={frames},setsar=1,format=yuv420p,setpts=N/({PLAYBACK_FPS}*TB)[v{idx}]"
             )
             if include_audio:
                 filters.append(
-                    f"anullsrc=r=48000:cl=stereo,atrim=duration={duration_s:.6f},"
+                    f"anullsrc=r=48000:cl=stereo,atrim=end_sample={frames * 1600},"
                     f"asetpts=PTS-STARTPTS[a{idx}]"
                 )
         else:
@@ -190,13 +190,13 @@ def render_playback_window(
             ]
             filters.append(
                 f"[{idx}:v]setpts=(PTS-STARTPTS)/{rate:.6f},fps={PLAYBACK_FPS},"
-                f"trim=end_frame={frames},setsar=1,format=yuv420p,setpts=PTS-STARTPTS[v{idx}]"
+                f"trim=end_frame={frames},setsar=1,format=yuv420p,setpts=N/({PLAYBACK_FPS}*TB)[v{idx}]"
             )
             if include_audio:
                 filters.append(
                     f"[{idx}:a]asetpts=PTS-STARTPTS,{_atempo_chain(rate)},aresample=48000,"
                     f"aformat=sample_fmts=fltp:channel_layouts=stereo,"
-                    f"atrim=duration={duration_s:.6f},asetpts=PTS-STARTPTS[a{idx}]"
+                    f"apad,atrim=end_sample={frames * 1600},asetpts=PTS-STARTPTS[a{idx}]"
                 )
         vlabels.append(f"[v{idx}]")
         if include_audio:
@@ -221,10 +221,18 @@ def render_playback_window(
     else:
         cmd += ["-an"]
     cmd += [
-        "-r", str(PLAYBACK_FPS),
+        "-r", str(PLAYBACK_FPS), "-t", f"{frame_count / PLAYBACK_FPS:.9f}",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
         str(out_path),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError("source playback render failed: " + (proc.stderr or "")[-1000:])
+    # A short output otherwise falls back to the black neutral carrier at the end.
+    # Validate decoded pictures, not container duration/frames requested on the command line.
+    from clips_worker.ffmpeg_util import probe_video_nb_frames
+    actual = probe_video_nb_frames(out_path)
+    if actual != frame_count:
+        raise RuntimeError(
+            f"source playback decoded-frame mismatch: expected {frame_count}, got {actual}"
+        )
