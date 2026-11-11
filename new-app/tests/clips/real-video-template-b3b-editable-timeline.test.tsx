@@ -8,6 +8,7 @@ import {
   moveSourceSegmentBoundary,
   patchSourceSegment,
   replaceSourceSegmentMedia,
+  segmentMediaMs,
   type ClipMediaSource,
 } from '@/lib/clips/editor/sources'
 import { setCutTransition } from '@/lib/clips/editor/transitions'
@@ -139,7 +140,9 @@ describe('Batch 3B existing editor surfaces expose real authoritative objects', 
       .toEqual(e.sourceSegments?.map((seg) => seg.id))
     expect(ui.getAllByTestId('timeline-source-keyframe').length).toBeGreaterThan(0)
     const transitions = ui.getAllByTestId('timeline-transition-handle')
+    expect(transitions).toHaveLength(2)
     expect(transitions.some((el) => el.getAttribute('data-type') === 'crossfade')).toBe(true)
+    expect(transitions.some((el) => el.getAttribute('data-type') == null)).toBe(true)
     expect(ui.getAllByTestId('timeline-item-text').length).toBeGreaterThanOrEqual(2)
     expect(ui.getAllByTestId('timeline-item-music')).toHaveLength(1)
   })
@@ -203,7 +206,17 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     expect(snapshotEditableTimelineStructure(reloaded)).toEqual(beforeReload)
     expect(reloaded.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
     expect(reloaded.sourceSegments?.[1]?.sourceId).toBe('replacement_source')
-    expect(reloaded.sourceSegments?.[1]?.fx).toMatchObject({ contrast: 22, saturation: -7 })
+    expect(reloaded.sourceSegments?.[1]).toMatchObject({
+      id: second,
+      startMs: 1033,
+      inMs: 450,
+      speed: 1.5,
+      transform: { x: 4, scale: 105 },
+      fx: { contrast: 22, saturation: -7 },
+    })
+    const mappedSource = reloaded.sources?.find((row) => row.id === 'replacement_source')
+    expect(mappedSource).toBeTruthy()
+    expect(segmentMediaMs(reloaded.sourceSegments![1]!, mappedSource, 1100)).toBe(551)
     expect(reloaded.transitions?.find((t) => t.srcMs === 1033)?.type).toBe('wipe_left')
     expect(reloaded.textItems?.find((item) => item.id === text.id)).toMatchObject({ text: 'Edited after publish' })
     expect(reloaded.audio?.music).toMatchObject({ generationId: 'replacement_music', volume: 0 })
@@ -214,6 +227,9 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     const redo = reloaded
     expect(undo.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
     expect(redo.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
+    expect(redo.keyframes?.filter((k) => k.target === sourceSegmentTarget(second)).map((k) => k.prop).sort())
+      .toEqual(['scale', 'x'])
+    expect(redo.textItems?.map((item) => item.id).sort()).toEqual(undo.textItems?.map((item) => item.id).sort())
   })
 })
 
