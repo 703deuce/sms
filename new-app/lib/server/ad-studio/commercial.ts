@@ -39,7 +39,10 @@ export async function createCommercialFromImageAd(workspaceId: string, sourceRun
     create: { id: referenceAssetId, workspaceId, userId: parent.userId,
       storageKey: job.outputStorageKey, storageDriver: job.outputStorageDriver,
       contentType: job.outputContentType, kind: 'image' },
-    update: {},
+    update: {
+      storageKey: job.outputStorageKey, storageDriver: job.outputStorageDriver,
+      contentType: job.outputContentType,
+    },
   })
   console.info('[ad-studio:b3] commercial_reference_registered', {
     sourceRunId, variantId: variant.id, studioJobId: job.id, assetId: referenceAssetId,
