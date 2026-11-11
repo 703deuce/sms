@@ -29,6 +29,11 @@ describe('durable streamer agent batch state',()=>{
       draftClipIds:['draft'],publishedClipIds:[],
     }})).toEqual([])
   })
+  it('keeps old batches parseable when the window policy version is absent',()=>{
+    expect(readStreamerAgentBatch({agentClipBatch:state})?.windowPolicy).toBeUndefined()
+    expect(readStreamerAgentBatch({agentClipBatch:{...state,windowPolicy:'fold_short_tail_v1'}})?.windowPolicy)
+      .toBe('fold_short_tail_v1')
+  })
   it('does not interpret unrelated project settings as an active batch',()=>{
     expect(readStreamerAgentBatch({streamer:{}})).toBeNull()
     expect(streamerAgentSettings(null)).toEqual({})
