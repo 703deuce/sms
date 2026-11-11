@@ -42,6 +42,17 @@ def _finite(raw, default: float = 0.0) -> float:
     return default if v != v or v in (float("inf"), float("-inf")) else v
 
 
+def _normalize_source_fx(raw) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    for key in ("brightness", "contrast", "saturation"):
+        value = _clamp(_finite(raw.get(key)), -100.0, 100.0)
+        if abs(value) >= 0.001:
+            out[key] = round(value, 2)
+    return out or None
+
+
 def _normalize_source_transform(raw) -> dict | None:
     if not isinstance(raw, dict):
         return None
@@ -211,6 +222,9 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
         transform = _normalize_source_transform(r.get("transform"))
         if transform:
             seg["transform"] = transform
+        fx = _normalize_source_fx(r.get("fx"))
+        if fx:
+            seg["fx"] = fx
         layout = _normalize_segment_layout(r.get("layout"), by_id, src["id"])
         if layout:
             seg["layout"] = layout
@@ -278,6 +292,8 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
             }
         if s.get("transform"):
             row["transform"] = s["transform"]
+        if s.get("fx"):
+            row["fx"] = s["fx"]
         if s.get("layout"):
             row["layout"] = s["layout"]
             row["windowStartMs"] = lo
@@ -430,6 +446,17 @@ def fit_filter(fit: str, w: int, h: int) -> str:
         return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
     return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+
+
+def source_fx_filter(fx: dict | None) -> str:
+    n = _normalize_source_fx(fx)
+    if not n:
+        return ""
+    # ffmpeg eq: brightness -1..1; contrast/saturation 0..2 for our -100..100 contract.
+    brightness = float(n.get("brightness", 0.0)) / 100.0
+    contrast = 1.0 + float(n.get("contrast", 0.0)) / 100.0
+    saturation = 1.0 + float(n.get("saturation", 0.0)) / 100.0
+    return f",eq=brightness={brightness:.6f}:contrast={contrast:.6f}:saturation={saturation:.6f}"
 
 
 def source_transform_filter(transform: dict | None, w: int, h: int) -> str:
@@ -687,7 +714,7 @@ def build_sources_filtergraph(
         dur = max(0.04, t1 - t0)
         if w["mediaType"] == "image":
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)},fps={fps:g},format=yuv420p"
+            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
             in_idx += 1
         elif w["mediaType"] == "audio":
             inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
