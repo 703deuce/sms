@@ -531,6 +531,22 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
     }
   }
 
+  async function regenerateStill(variant: AdImageVariant) {
+    if (!run || busy || run.mode !== 'image_to_ad') return
+    setBusy(true)
+    setError(null)
+    console.log('[ad-studio:ui] still_regenerate', { step: 'begin', runId: run.id, variantId: variant.id })
+    try {
+      const next = await liveClient.regenerateStill(run.id, variant.id, newIdempotencyKey())
+      console.log('[ad-studio:ui] still_regenerate', { step: 'complete', runId: next.id, status: next.status, variantId: variant.id })
+      setRun(next)
+    } catch (err) {
+      showError(err)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function openHistoryRun(id: string) {
     setBusy(true)
     setError(null)
@@ -666,6 +682,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
                 downloadBusy={downloadBusy}
                 onDownload={() => void downloadFinalRender()}
                 onCommercial={(variant) => void makeCommercial(variant)}
+                onRegenerateStill={(variant) => void regenerateStill(variant)}
               />
             ) : null}
             {screen === 'history' ? <HistoryPanel runs={history} busy={busy} loading={historyLoading} unavailable={Boolean(historyError)} onOpen={(id) => void openHistoryRun(id)} /> : null}
