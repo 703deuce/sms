@@ -72,6 +72,16 @@ describe('real video template B5 music rights and frame timing',()=>{
     expect(undo.after).toEqual(preview.proposed)
     expect(timing).toEqual(before)
   })
+  it('does not silently move off-grid cuts or fade windows',()=>{
+    const bad={...timing,boundaries:[0,31,...timing.boundaries.slice(2)]}
+    expect(()=>previewMusicReplacement({timing:bad,previous:pinned(120),
+      replacement:pinned(90),license,choice:'re-sync'})).toThrow(/Off-grid/)
+    const aligned=previewMusicReplacement({timing,previous:pinned(120),
+      replacement:pinned(90),license,choice:'re-sync'})
+    expect(aligned.proposed.windows.find(w=>w.id==='fade')).toEqual({
+      id:'fade',kind:'audio-fade',startFrame:1173,endFrame:1200,
+    })
+  })
   it('rejects unapproved protected anchors, lyric mismatches, short tracks and implausible tempos',()=>{
     const old=pinned(120)
     const replacement=pinned(90)
