@@ -14,7 +14,8 @@ import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS } from '../lib/clips/real-vide
 import { lintB8Legibility } from '../lib/clips/real-video-templates/b8-legibility'
 import { generateB8Candidates, proveB8Structure, reportB8Quality,
   locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence,
-  B8_ENGINE_REVISION, type B8Candidate, type B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
+  B8_ENGINE_REVISION, reconcileB8Queue,
+  type B8Candidate, type B8Evidence, type B8QueueJobState } from '../lib/clips/real-video-templates/b8-factory'
 import { compileTemplate, templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
 import { defaultEdits } from '../lib/clips/edits'
 
@@ -70,8 +71,13 @@ async function verifiedFixtures():Promise<FixtureManifest>{
        !['image','video'].includes(row.kind)||!row.license?.reference||
        !await verifyPublic(row.path,row.sha256))
       throw new Error('Fixture must exist with exact licensed bytes: '+row.id)
-    if(row.kind==='video'&&(!Number.isSafeInteger(row.durationFrames)||!row.durationFrames))
-      throw new Error('Video fixture needs verified durationFrames: '+row.id)
+    if(row.kind==='video'){
+      if(!Number.isSafeInteger(row.durationFrames)||!row.durationFrames)
+        throw new Error('Video fixture needs verified durationFrames: '+row.id)
+      const actual=probe(fileInPublic(row.path))
+      if(!actual.hasVideo||Math.abs(actual.durationFrames-row.durationFrames)>1)
+        throw new Error('Video fixture frame count differs from actual decoded media: '+row.id)
+    }
     ids.add(row.id)
   }
   return fixture
@@ -125,8 +131,7 @@ function requiredCandidate():B8Candidate {
   if(!candidate)throw new Error('Specify a known design ID, e.g. f01_bold')
   return candidate
 }
-type QueueJob=ReturnType<typeof shardB8Jobs>[number]&{attempts:number;
-  runStatus:'queued'|'running'|'failed'|'done'|'canceled';error?:string}
+type QueueJob=B8QueueJobState
 function withQueueLock<T>(fn:()=>T):T {
   mkdirSync(directory,{recursive:true})
   const lock=join(directory,'jobs.lock')
@@ -136,7 +141,7 @@ function withQueueLock<T>(fn:()=>T):T {
 }
 function loadQueue():QueueJob[] {return readJSON<QueueJob[]>(join(directory,'jobs.json'))}
 type FFProbeResult={format?:{duration?:string};streams?:Array<{codec_type?:string}>}
-function probe(file:string):{durationFrames:number;hasAudio:boolean}{
+function probe(file:string):{durationFrames:number;hasAudio:boolean;hasVideo:boolean}{
   const output=spawnSync('ffprobe',['-v','error','-show_entries','format=duration',
     '-show_entries','stream=codec_type','-of','json',file],{
       encoding:'utf8',timeout:30000,maxBuffer:1024*1024,
@@ -146,7 +151,8 @@ function probe(file:string):{durationFrames:number;hasAudio:boolean}{
   const duration=Number(data.format?.duration)
   if(!Number.isFinite(duration)||duration<=0)throw new Error('Video metadata has no duration')
   return {durationFrames:Math.round(duration*30),
-    hasAudio:Boolean(data.streams?.some(stream=>stream.codec_type==='audio'))}
+    hasAudio:Boolean(data.streams?.some(stream=>stream.codec_type==='audio')),
+    hasVideo:Boolean(data.streams?.some(stream=>stream.codec_type==='video'))}
 }
 function framePixels(file:string,atFrame:number,durationFrames:number):Buffer{
   const ss=Math.max(0,Math.min((durationFrames-1)/30,atFrame/30))
@@ -244,11 +250,15 @@ async function execute(){
     if(!images.length||!videos.length)throw new Error('Preview needs both real photos and video fixtures')
     const media:Record<string,TemplateAsset>={}
     c.family.slots.forEach((slot,i)=>{
-      const video=videos.find(v=>(v.durationFrames??0)>=slot.durationFrames+12)
+      const required=slot.durationFrames+(slot.handles?.headFrames??0)+
+        (slot.handles?.tailFrames??0)
+      const video=videos.find(v=>(v.durationFrames??0)>=required)
       const source=i%2===0||!video?images[i%images.length]!:video
       media[slot.id]={id:source.id,kind:source.kind,license:source.license,
         ...(source.durationFrames?{durationFrames:source.durationFrames}:{})}
     })
+    if(!Object.values(media).some(asset=>asset.kind==='video'))
+      throw new Error('No verified video is long enough for an authored slot and both handles; mixed-media QA cannot proceed')
     // Video sources must begin after authored incoming source handles; images can hold
     // without advancing media time. Never render a clip at 0 with missing handles.
     const sampledFamily={...c.family,slots:c.family.slots.map(slot=>({
@@ -278,13 +288,19 @@ async function execute(){
   }else if(command==='jobs'){
     const fixtures=await verifiedFixtures()
     const shardCount=Number(argument('--shards','16'))
-    const jobs=shardB8Jobs(candidates,{hashes:fixtures.media.map(m=>m.sha256),
-      rendererRevision:fixtures.rendererRevision},shardCount).map(j=>({...j,attempts:0,
-      runStatus:'queued' as const}))
-    withQueueLock(()=>save(join(directory,'jobs.json'),jobs))
-    save(join(directory,'limits.json'),{maxConcurrent:2,cpusPerJob:2,ramMiBPerJob:4096,
-      diskGiBPerJob:8,maxAttempts:3,checkpoint:'jobs.json',shardCount})
-    console.log('Queued '+jobs.length+' deterministic cached jobs for existing worker adapter.')
+    const planned=shardB8Jobs(candidates,{hashes:fixtures.media.map(m=>m.sha256),
+      rendererRevision:fixtures.rendererRevision},shardCount)
+    const jobs=withQueueLock(()=>{
+      const existing=existsSync(join(directory,'jobs.json'))?loadQueue():[]
+      const merged=reconcileB8Queue(planned,existing)
+      save(join(directory,'jobs.json'),merged)
+      save(join(directory,'limits.json'),{maxConcurrent:2,cpusPerJob:2,ramMiBPerJob:4096,
+        diskGiBPerJob:8,maxAttempts:3,checkpoint:'jobs.json',shardCount})
+      return merged
+    })
+    console.log('Reconciled '+jobs.length+' content-addressed jobs; '+
+      jobs.filter(j=>j.runStatus==='done').length+' completed and '+
+      jobs.filter(j=>j.runStatus==='running').length+' active leases preserved.')
   }else if(['claim','cancel','fail','retry','resume','complete'].includes(command)){
     const completedEvidence=command==='complete'?await verifiedEvidence():[]
     withQueueLock(()=>{

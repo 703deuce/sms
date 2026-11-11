@@ -2,7 +2,7 @@ import { describe,expect,it } from 'vitest'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
-  auditB8Evidence,scoreB8Review,shardB8Jobs,locallyApprovedB8Releases,
+  auditB8Evidence,scoreB8Review,shardB8Jobs,reconcileB8Queue,locallyApprovedB8Releases,
   type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
 import { validateTemplateFamily } from '@/lib/clips/real-video-templates/sequence-contract'
 const candidates=generateB8Candidates()
@@ -96,6 +96,21 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     const altered={...candidate,family:{...candidate.family,texts:candidate.family.texts.map(
       (text,i)=>i===0?{...text,defaultText:'A'.repeat(70)}:text)}}
     expect(lintB8Legibility(altered).some(c=>c.code==='default_overflow')).toBe(true)
+  })
+  it('preserves running/done checkpoints on repeated queue generation without erasing work',()=>{
+    const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)
+    const running={...first[0]!,attempts:1,runStatus:'running' as const}
+    const done={...first[1]!,attempts:1,runStatus:'done' as const}
+    const reconciled=reconcileB8Queue(first,[running,done])
+    expect(reconciled.find(j=>j.id===running.id)?.runStatus).toBe('running')
+    expect(reconciled.find(j=>j.id===done.id)?.runStatus).toBe('done')
+    expect(reconciled.filter(j=>j.runStatus==='queued')).toHaveLength(1998)
+    expect(reconcileB8Queue(first,reconciled)).toEqual(reconciled)
+    const changed=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v2'},8)
+    expect(()=>reconcileB8Queue(changed,reconciled)).toThrow(/active Batch 8 worker lease/)
+    const reset=reconcileB8Queue(changed,reconciled.filter(j=>j.id!==running.id))
+    expect(reset.every(j=>j.runStatus==='queued')).toBe(true)
+    expect(()=>reconcileB8Queue(first,[done,done])).toThrow(/Duplicate/)
   })
   it('invalidates cache keys on fixture or renderer revisions; limits sharding',()=>{
     const fixture={hashes:[hash],rendererRevision:'worker-v1'}

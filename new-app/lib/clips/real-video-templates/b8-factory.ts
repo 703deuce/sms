@@ -317,3 +317,45 @@ export function shardB8Jobs(candidates:readonly B8Candidate[],
       cacheKey,definitionHash:c.definitionHash,status:'queued',maxAttempts:3}
   }).sort((a,b)=>a.shard-b.shard||a.id.localeCompare(b.id))
 }
+
+/** A durable local checkpoint for a specific content-addressed render job. */
+export type B8QueueJobState = B8ShardJob & {
+  attempts: number
+  runStatus: 'queued' | 'running' | 'failed' | 'done' | 'canceled'
+  error?: string
+}
+
+/**
+ * Idempotently reconcile the 2,000-job manifest. Re-running 'jobs' must never
+ * erase a successful render, reclaim an active job, or retry a failed job
+ * without an explicit operator action. Only changed cache keys are reset.
+ * A changed definition/fixture/renderer cannot replace an active worker lease.
+ */
+export function reconcileB8Queue(
+  planned: readonly B8ShardJob[],
+  prior: readonly B8QueueJobState[] = [],
+): B8QueueJobState[] {
+  const wanted = new Map(planned.map(job => [job.id, job]))
+  const previous = new Map(prior.map(job => [job.id, job]))
+  if (wanted.size !== planned.length || previous.size !== prior.length)
+    throw new Error('Duplicate Batch 8 job IDs in checkpoint')
+  for (const old of prior) {
+    const next = wanted.get(old.id)
+    if (old.runStatus === 'running' && (!next ||
+        next.cacheKey !== old.cacheKey || next.definitionHash !== old.definitionHash))
+      throw new Error('Cannot replace an active Batch 8 worker lease: ' + old.id)
+  }
+  return planned.map(job => {
+    const old = previous.get(job.id)
+    if (!old || old.cacheKey !== job.cacheKey || old.definitionHash !== job.definitionHash)
+      return { ...job, attempts: 0, runStatus: 'queued' as const }
+    if (!Number.isInteger(old.attempts) || old.attempts < 0 ||
+        old.attempts > job.maxAttempts ||
+        !['queued','running','failed','done','canceled'].includes(old.runStatus))
+      throw new Error('Corrupt Batch 8 checkpoint for ' + job.id)
+    return {
+      ...job, attempts: old.attempts, runStatus: old.runStatus,
+      ...(old.error ? { error: old.error } : {}),
+    }
+  })
+}
