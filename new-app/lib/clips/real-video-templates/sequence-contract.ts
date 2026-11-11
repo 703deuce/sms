@@ -143,7 +143,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     oneOf(s.sourceAudio, ['mute','source'] as const, 'sourceAudio')
     oneOf(s.transition, ['cut'] as const, 'transition')
     if (integer(s.startFrame, 0, total - 1, 'startFrame') !== cursor) throw new Error('slot: gap/overlap in output sequence')
-    const duration = integer(s.durationFrames, 1, total, 'durationFrames')
+    const duration = integer(s.durationFrames, 3, total, 'durationFrames')
     integer(s.sourceInFrame ?? 0, 0, MAX_FRAMES, 'sourceInFrame')
     cursor += duration
     if (cursor > total) throw new Error('slot: exceeds totalFrames')
@@ -241,6 +241,7 @@ export function compileTemplatePrototype(
       sourceIds.set(key, sourceId)
       sources.push({ id: sourceId, ref: 'upload', refId: asset.id, mediaType: asset.kind, ...(asset.durationFrames ? { durationMs: ms(asset.durationFrames) } : {}) })
     }
+    if (sources.length > 50) throw new Error('sequence: legacy source registry exceeds 50; versioned source adapter required')
     const itemId = seededId(choices.instanceId, family.familyId, String(family.revision), 'slot', slot.id)
     slotToItemIds[slot.id] = itemId
     sequence.push({ id: itemId, slotId: slot.id, assetId: asset.id, outputStartFrame: slot.startFrame, outputEndFrame: slot.startFrame + slot.durationFrames, mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio })
