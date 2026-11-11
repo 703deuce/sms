@@ -9,6 +9,12 @@ import { corsMediaProps } from '@/components/clips/editor/g4/media-cors'
 import { videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { cn } from '@/lib/utils'
 
+function paneMediaType(partnerId: string, edits: ClipEditsV2): 'image' | 'video' | null {
+  if (partnerId === 'main' || partnerId === MAIN_ANGLE) return 'video'
+  const src = sourceById(edits.sources, partnerId)
+  return src?.mediaType === 'image' || src?.mediaType === 'video' ? src.mediaType : null
+}
+
 function partnerUrl(
   partnerId: string,
   edits: ClipEditsV2,
@@ -168,20 +174,22 @@ export function PreviewSegmentLayout({
     const [bg, inset] = panes
     return (
       <div className="pointer-events-none absolute inset-0 z-[25] overflow-hidden bg-black" data-testid={`preview-layout-${layout.kind}`}>
-        <LayoutPaneVideo
+        <LayoutPaneMedia
           ref={(el) => {
             innerRefs.current[0] = el
           }}
           url={partnerUrl(bg!.partnerId, edits, sourceUrls, mainVideoUrl)}
+          mediaType={paneMediaType(bg!.partnerId, edits)}
           mediaTimeSec={mediaTimeForPane(bg!)}
           className="absolute inset-0 size-full object-cover"
           testId={bg!.testId}
         />
-        <LayoutPaneVideo
+        <LayoutPaneMedia
           ref={(el) => {
             innerRefs.current[1] = el
           }}
           url={partnerUrl(inset!.partnerId, edits, sourceUrls, mainVideoUrl)}
+          mediaType={paneMediaType(inset!.partnerId, edits)}
           mediaTimeSec={mediaTimeForPane(inset!)}
           className="absolute rounded border border-white/40 object-cover"
           style={{
@@ -203,11 +211,12 @@ export function PreviewSegmentLayout({
     >
       {panes.map((pane, i) => (
         <div key={pane.testId} className="relative min-h-0 min-w-0 overflow-hidden bg-black" data-testid={pane.testId}>
-          <LayoutPaneVideo
+          <LayoutPaneMedia
             ref={(el) => {
               innerRefs.current[i] = el
             }}
             url={partnerUrl(pane.partnerId, edits, sourceUrls, mainVideoUrl)}
+            mediaType={paneMediaType(pane.partnerId, edits)}
             mediaTimeSec={mediaTimeForPane(pane)}
             className="size-full object-cover"
             testId={`${pane.testId}-video`}
@@ -218,16 +227,17 @@ export function PreviewSegmentLayout({
   )
 }
 
-const LayoutPaneVideo = forwardRef<
+const LayoutPaneMedia = forwardRef<
   HTMLVideoElement,
   {
     url: string | null
+    mediaType: 'image' | 'video' | null
     className?: string
     style?: React.CSSProperties
     testId: string
     mediaTimeSec: number
   }
->(function LayoutPaneVideo({ url, className, style, testId, mediaTimeSec }, ref) {
+>(function LayoutPaneMedia({ url, mediaType, className, style, testId, mediaTimeSec }, ref) {
   const seek = (el: HTMLVideoElement | null) => {
     if (!el || !Number.isFinite(mediaTimeSec) || mediaTimeSec < 0) return
     if (el.readyState >= 1 && Math.abs(el.currentTime - mediaTimeSec) > 0.08) {
@@ -243,8 +253,12 @@ const LayoutPaneVideo = forwardRef<
     else if (ref) ref.current = el
     seek(el)
   }
-  if (!url) {
+  if (!url || !mediaType) {
     return <div className={cn(className, 'bg-neutral-900')} data-testid={testId} data-layout-pane="1" style={style} />
+  }
+  if (mediaType === 'image') {
+    return <img {...corsMediaProps(url)} src={url} alt="" className={className} style={style}
+      data-testid={testId} data-layout-pane="1" data-layout-image="1" />
   }
   return (
     <video

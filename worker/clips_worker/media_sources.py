@@ -623,16 +623,19 @@ def _append_layout_composite(
         p = media_path_for(edits, source_id, media)
         if not src or not p:
             return None, fit
-        inputs.extend(
-            [
-                "-ss",
-                f"{segment_media_ms(seg, src, w['windowStartMs']) / 1000.0:.3f}",
-                "-t",
-                f"{dur + 0.25:.3f}",
-                "-i",
-                str(p),
-            ]
-        )
+        if src["mediaType"] == "image":
+            inputs.extend(["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)])
+        else:
+            inputs.extend(
+                [
+                    "-ss",
+                    f"{segment_media_ms(seg, src, w['windowStartMs']) / 1000.0:.3f}",
+                    "-t",
+                    f"{dur + 0.25:.3f}",
+                    "-i",
+                    str(p),
+                ]
+            )
         idx = in_idx
         in_idx += 1
         return idx, fit
@@ -767,12 +770,20 @@ def build_sources_filtergraph(
         t1 = w["t1Ms"] / 1000.0
         dur = max(0.04, t1 - t0)
         if w["mediaType"] == "image":
+            primary_v_in = in_idx
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
+            chain = f"[{primary_v_in}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
             in_idx += 1
-            # Still sources must be placed on the carrier clock and composited just like video.
-            # Without this overlay, image-only template slots render as the black carrier.
-            parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            layout = w.get("layout")
+            if layout and edits and media:
+                in_idx, s_lbl = _append_layout_composite(
+                    i, w, layout, parts=parts, inputs=inputs, in_idx=in_idx,
+                    width=width, height=height, fps=fps, t0=t0, t1=t1, dur=dur,
+                    primary_v_in=primary_v_in, edits=edits, media=media,
+                )
+                parts.append(f"[{s_lbl}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            else:
+                parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
             nxt = f"vb{i + 1}"
             parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
             cur = nxt

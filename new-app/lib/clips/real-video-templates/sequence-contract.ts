@@ -17,6 +17,7 @@ import {
   validateTemplatePlaybackSpec,
   type TemplateSlotPlaybackSpec,
 } from '@/lib/clips/real-video-templates/slot-playback'
+import { compileBatch7Primitives, validateBatch7Primitives, type Batch7TemplatePrimitive } from './batch7-primitives'
 
 export type TemplateAsset = {
   id: string
@@ -92,6 +93,8 @@ export type TemplateFamilyV1 = {
   graphics?: TemplateGraphic[]
   beatAnchors: number[]
   phraseAnchors?: TemplatePhraseAnchor[]
+  /** Batch 7 declarative standalone graphics/composite primitives. */
+  primitives?: Batch7TemplatePrimitive[]
 }
 export type TemplateDesignV1 = {
   schemaVersion: 1
@@ -107,6 +110,9 @@ export type TemplateChoices = {
   media: Record<string, TemplateAsset>
   texts?: Record<string, string>
   music?: TemplateAsset
+  /** Selected template preview/render aspect. Defaults to the family's first authored aspect. */
+  aspect?: '9:16' | '16:9' | '1:1'
+  accessibility?: { reducedMotion?: boolean; reducedFlash?: boolean }
 }
 export type TemplateSequenceItem = {
   id: string
@@ -245,7 +251,7 @@ function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransi
 
 export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   if (!own(raw)) throw new Error('family: expected JSON object')
-  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors'], 'family')
+  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors','primitives'], 'family')
   if (raw.schemaVersion !== 1 || raw.fps !== 30) throw new Error('family: unsupported schema/fps')
   id(raw.familyId, 'family')
   integer(raw.revision, 1, 1_000_000, 'family revision')
@@ -384,6 +390,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       }
     })
   }
+  if (texts.length + (graphics?.length ?? 0) > MAX_TEXTS)
+    throw new Error('family: combined text/graphic budget exceeds editor capacity')
   if (!Array.isArray(raw.beatAnchors) || raw.beatAnchors.length > 500) throw new Error('family: beat budget exceeded')
   const beatAnchors = raw.beatAnchors.map(n => integer(n, 0, total - 1, 'beat'))
   let phraseAnchors: TemplatePhraseAnchor[] | undefined
@@ -399,11 +407,13 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       return { id: pid, frame: integer(value.frame, 0, total - 1, 'phraseAnchor.frame'), ...(textFieldId ? { textFieldId } : {}) }
     })
   }
+  const primitives = raw.primitives == null ? undefined : validateBatch7Primitives(raw.primitives, total, new Set(slots.map((slot) => slot.id)))
   return {
     schemaVersion: 1, familyId: raw.familyId as string, revision: raw.revision as number,
     title: raw.title.trim(), tags: [...raw.tags] as string[], aspects: [...raw.aspects] as TemplateFamilyV1['aspects'],
     fps: 30, totalFrames: total, slots, texts, ...(graphics?.length ? { graphics } : {}),
     beatAnchors, ...(phraseAnchors?.length ? { phraseAnchors } : {}),
+    ...(primitives?.length ? { primitives } : {}),
   }
 }
 export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): TemplateDesignV1 {
@@ -447,6 +457,8 @@ export function compileTemplate(
   const family = validateTemplateFamily(rawFamily)
   const design = validateTemplateDesign(rawDesign, family)
   id(choices?.instanceId, 'instance')
+  const selectedAspect = choices.aspect ?? family.aspects[0]!
+  if (!family.aspects.includes(selectedAspect)) throw new Error('instance: selected aspect not authored by family')
   if (carrier.durationFrames !== family.totalFrames) throw new Error('carrier: exact frame count required')
   if (carrier.edits.inserts?.length) throw new Error('carrier: post-composite inserts not permitted')
   if (!choices?.media || typeof choices.media !== 'object' || Array.isArray(choices.media)) throw new Error('instance: media assignments required')
@@ -461,8 +473,13 @@ export function compileTemplate(
   const sourceSegments: NonNullable<ClipEditsV2['sourceSegments']> = []
   const sequence: TemplateSequenceItem[] = []
   const slotToItemIds: Record<string, string> = {}
+  const slotToSourceIds: Record<string, string> = {}
+  const slotToMediaKind: Record<string, 'image' | 'video'> = {}
+  const slotWindows: Record<string, { startFrame: number; durationFrames: number }> = {}
   const transitions: NonNullable<ClipEditsV2['transitions']> = []
   const videoSplits: number[] = []
+  const reducedMotion = choices.accessibility?.reducedMotion === true
+  const reducedFlash = choices.accessibility?.reducedFlash === true
 
   for (const [index, slot] of family.slots.entries()) {
     const asset = validateAsset(choices.media[slot.id], slot.media === 'either' ? ['image','video'] : [slot.media], slot.id)
@@ -495,6 +512,10 @@ export function compileTemplate(
     if (sources.length > 50) throw new Error('sequence: source registry exceeds supported budget')
     const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'slot', slot.id)
     slotToItemIds[slot.id] = itemId
+    slotToSourceIds[slot.id] = sourceId
+    if (asset.kind === 'audio') throw new Error('slot ' + slot.id + ': audio-only media is unsupported')
+    slotToMediaKind[slot.id] = asset.kind
+    slotWindows[slot.id] = { startFrame: slot.startFrame, durationFrames: slot.durationFrames }
     const startMs = templateFrameToMs(slot.startFrame), endMs = templateFrameToMs(slot.startFrame + slot.durationFrames)
     sourceSegments.push({
       id: itemId, sourceId, startMs, endMs,
@@ -505,27 +526,32 @@ export function compileTemplate(
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
+    const effectiveTransition: 'cut' | TemplateTransition = slot.transition === 'cut'
+      ? 'cut'
+      : reducedMotion
+        ? 'cut'
+        : reducedFlash && slot.transition.type === 'dip_white'
+          ? { ...slot.transition, type: 'crossfade' }
+          : slot.transition
     if (index > 0) {
       videoSplits.push(startMs)
-      if (slot.transition !== 'cut') transitions.push({
-        srcMs: startMs, type: slot.transition.type, durMs: templateFrameToMs(slot.transition.durationFrames),
+      if (effectiveTransition !== 'cut') transitions.push({
+        srcMs: startMs, type: effectiveTransition.type, durMs: templateFrameToMs(effectiveTransition.durationFrames),
       })
     }
     sequence.push({
       id: itemId, slotId: slot.id, assetId: asset.id,
       outputStartFrame: slot.startFrame, outputEndFrame: slot.startFrame + slot.durationFrames,
-      mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio,
-      ...(slot.speed ? { speed: slot.speed } : {}),
+      mediaInFrame: inFrame, fit: slot.fit, sourceAudio: slot.sourceAudio, ...(slot.speed ? { speed: slot.speed } : {}), transition: effectiveTransition,
       ...(playback ? { playback } : {}),
-      transition: slot.transition,
-      ...(slot.motion ? { motion: slot.motion } : {}),
+      ...(!reducedMotion && slot.motion ? { motion: slot.motion } : {}),
       ...(slot.transform ? { transform: slot.transform } : {}),
       ...(slot.fx ? { fx: slot.fx } : {}),
     })
   }
 
   const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
-  if (family.slots.some((slot) => slot.motion)) {
+  if (!reducedMotion && family.slots.some((slot) => slot.motion)) {
     const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
     for (const prop of ['x','y','scale','rotation'] as const) {
       const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = []
@@ -571,12 +597,19 @@ export function compileTemplate(
       endMs: templateFrameToMs(family.totalFrames), loop: true }
   }
 
-  const edits: ClipEditsV2 = {
+  const motionTrackKeys = new Set(motionKeyframes.map((track) => track.target + '|' + track.prop))
+  const preservedKeyframes = (carrier.edits.keyframes ?? []).filter((track) => !motionTrackKeys.has(track.target + '|' + track.prop))
+  const mergedKeyframes = [...preservedKeyframes, ...motionKeyframes]
+  const mergedTextItems = [...(carrier.edits.textItems ?? []), ...textItems]
+  if (mergedTextItems.length > MAX_TEXTS)
+    throw new Error('template: textItems capacity exceeded before primitive compilation')
+
+  const baseEdits: ClipEditsV2 = {
     ...structuredClone(carrier.edits),
     sources, sourceSegments, videoSplits: videoSplits.length ? videoSplits : undefined,
     transitions: transitions.length ? transitions : undefined,
-    keyframes: motionKeyframes.length ? motionKeyframes : carrier.edits.keyframes,
-    textItems: textItems.length ? textItems : undefined,
+    keyframes: mergedKeyframes.length ? mergedKeyframes : undefined,
+    textItems: mergedTextItems.length ? mergedTextItems : undefined,
     audio: { music, sfx: [] },
     captions: { ...carrier.edits.captions, enabled: false },
     trim: { in: 0, out: templateFrameToMs(family.totalFrames) },
@@ -584,6 +617,13 @@ export function compileTemplate(
     templateProvenance: { v: 1, instanceId: choices.instanceId, familyId: family.familyId, familyRevision: family.revision,
       designId: design.designId, designRevision: design.revision, slotToItemIds },
   }
+  const primitiveResult = family.primitives?.length
+    ? compileBatch7Primitives(baseEdits, family.primitives, {
+        format: selectedAspect, totalFrames: family.totalFrames, slotToItemIds, slotToSourceIds, slotToMediaKind, slotWindows,
+      }, choices.accessibility)
+    : { ok: true as const, edits: baseEdits, addedIds: [] as string[] }
+  if (!primitiveResult.ok) throw new Error('template primitives: ' + primitiveResult.code + ': ' + primitiveResult.detail)
+  const edits = primitiveResult.edits
   return {
     edits,
     sequence: { v: 1, fps: 30, totalFrames: family.totalFrames, items: sequence,

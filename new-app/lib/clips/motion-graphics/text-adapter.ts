@@ -26,11 +26,11 @@ type ApplyResult =
   | { ok: false; code: string; detail: string }
 
 function edge(a: MotionGraphic['intro']): TextAnimEdge | undefined {
-  if (a.kind === 'none' || a.durationMs === 0) return undefined
+  if (a.kind === 'none' || a.durationMs === 0 || a.kind === 'count_up' || a.kind === 'draw') return undefined
   const type: TextAnimEdge['type'] =
     a.kind === 'fade' ? 'fade' :
     a.kind === 'slide' ? 'slide_up' :
-    a.kind === 'scale' || a.kind === 'count_up' ? 'pop' :
+    a.kind === 'scale' ? 'pop' :
     a.kind === 'type_on' ? 'typewriter' : 'fade'
   return { type, unit: type === 'typewriter' ? 'char' : 'block',
     durMs: Math.min(5000, Math.max(100, a.durationMs)) }
