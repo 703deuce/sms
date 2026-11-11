@@ -83,7 +83,7 @@ const originalEdits=()=>({
   layout:{mode:'full_frame',shotOverrides:[]},
   sources:[{id:'src_cam',ref:'upload',refId:'source_src',mediaType:'video',durationMs:5000,label:'Second camera'}],
   sourceSegments:[{
-    sourceId:'src_cam',startMs:2000,endMs:4000,inMs:250,
+    id:'seg_cam',sourceId:'src_cam',startMs:2000,endMs:4000,inMs:250,
     transform:{scale:108,x:3,y:-2},fx:{contrast:6},
     playback:{outputFrames:60,pieces:[{kind:'play',frames:30,rate:1},{kind:'hold',frames:30}]},
   }],
