@@ -5,7 +5,8 @@ import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/re
 import {
   BATCH9_PHASE_A_ANCHORS,BATCH9_PHASE_B_VARIANT_TARGET,
   batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,batch9PhaseBReleaseGate,
-  batch9PhaseBReviewedReleases,batch9PhaseBStatus,eligibleBatch9PhaseBVariants,
+  batch9PhaseBReviewedReleases,batch9PhaseBStatus,batch9PhaseBWorkerIds,
+  eligibleBatch9PhaseBVariants,
 } from '@/lib/clips/real-video-templates/batch9-phase-b'
 
 describe('Batch 9 Phase B style-pack expansion gate',()=>{
@@ -26,6 +27,7 @@ describe('Batch 9 Phase B style-pack expansion gate',()=>{
     expect(rows).toHaveLength(BATCH9_PHASE_B_VARIANT_TARGET)
     expect(rows.every(row=>Number(row.familyId.slice(1))<=10&&row.treatmentId!=='bold')).toBe(true)
     expect(new Set(rows.map(row=>row.id)).size).toBe(390)
+    expect(batch9PhaseBWorkerIds()).toEqual(rows.map(row=>row.id))
   })
   it('fails closed before all ten anchors carry real reviewed evidence',()=>{
     expect(batch9PhaseAAnchorGate([]).ready).toBe(false)

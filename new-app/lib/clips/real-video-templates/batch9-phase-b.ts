@@ -130,3 +130,10 @@ export function batch9PhaseBReviewedReleases(
     } satisfies VideoTemplateRelease
   })
 }
+
+export function batch9PhaseBWorkerIds():readonly string[]{
+  const ids=batch9PhaseBExpansionCandidates().map(candidate=>candidate.id)
+  if(ids.length!==BATCH9_PHASE_B_VARIANT_TARGET||new Set(ids).size!==ids.length)
+    throw new Error('Batch 9 Phase B worker IDs must be 390 unique variants')
+  return ids
+}
