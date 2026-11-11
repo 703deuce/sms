@@ -144,7 +144,7 @@ describe('motion graphic requested font fidelity', () => {
     expect(text.ok).toBe(true)
     if (text.ok) expect(text.edits.textItems?.[0]?.style.font).toBe('Bangers')
     const chart = { ...custom, graphics: [{ ...custom.graphics[0]!, templateId: 'bar_chart' as const,
-      text: undefined, bars: [{ label: 'Revenue', value: 42 }] }] }
+      text: undefined, box: { x: .15, y: .15, width: .7, height: .4 }, bars: [{ label: 'Revenue', value: 42 }] }] }
     const result = addTextBackedMotionPlan(base, chart)
     expect(result.ok).toBe(true)
     if (result.ok) expect(result.edits.textItems?.filter(t => t.text).every(t => t.style.font === 'Bangers')).toBe(true)
