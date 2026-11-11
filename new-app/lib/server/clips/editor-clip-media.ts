@@ -8,6 +8,12 @@ export type EditorMediaUrls = {
   segment: string | null
 }
 
+/** Same-origin editor poster URL so poster image loads never depend on bucket CORS. */
+export function editorPosterUrl(clipId: string, posterKey: string | null | undefined): string | null {
+  if (!posterKey) return null
+  return `/api/clips/clips/${encodeURIComponent(clipId)}/poster`
+}
+
 export function streamerPrefersClipSegmentMedia(opts: {
   hasStreamVod: boolean
   bulkyStoragePurged: boolean
