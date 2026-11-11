@@ -197,14 +197,21 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
     where: { id: { in: assetIds }, workspaceId },
   }) : []
   if (assets.length !== assetIds.length) throw new Error('Original product reference media was not found')
+  const assetsById = new Map(assets.map(asset => [asset.id, asset]))
   const productPhotos: Array<{ uploadId: string; label: string }> = []
-  for (const asset of assets) {
+  for (const [index, assetId] of input.imageAssetIds.entries()) {
+    const asset = assetsById.get(assetId)
+    if (!asset) throw new Error('Original product reference media was not found')
     const uploadId = stableId('upl_adphoto_', runId + ':' + asset.id)
     await ensureMediaUpload({ workspaceId, projectId, uploadId, key: asset.storageKey,
-      filename: `Original product ${productPhotos.length + 1}.png`, mime: asset.contentType,
+      filename: `Original product ${index + 1}.png`, mime: asset.contentType,
       driver: asset.storageDriver })
     productPhotos.push({ uploadId, label: 'Original product reference' })
   }
+  console.info('[ad-studio:b3] product_references_materialized', {
+    runId, requested: input.imageAssetIds.length, attached: productPhotos.length,
+    primaryReferencePresent: Boolean(productPhotos[0]),
+  })
   let voice: { uploadId: string; durationMs: number; wordsAvailable: boolean } | undefined
   let voiceWords: AdVoiceWord[] = []
   if (run.voiceoverStatus === 'ready' && run.voiceoverStorageKey && run.voiceoverDurationMs) {
@@ -216,12 +223,15 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
   }
 
   const plannedDurationMs = input.durationSec * 1000
-  const durationMs = voice
-    ? Math.min(plannedDurationMs, Math.max(1000, voice.durationMs + 500))
-    : plannedDurationMs
+  // The user's selected ad length is a hard editorial target. A short narration
+  // holds the CTA/last shot; it never shrinks the clip.
+  const durationMs = plannedDurationMs
   console.info('[ad-studio:b3] timeline_duration_resolved', {
-    runId, plannedDurationMs, voiceDurationMs: voice?.durationMs ?? null, durationMs,
-    deadAirMs: voice ? Math.max(0, durationMs - voice.durationMs) : null,
+    runId,
+    plannedDurationMs,
+    voiceDurationMs: voice?.durationMs ?? null,
+    durationMs,
+    ctaHoldMs: voice ? Math.max(0, plannedDurationMs - voice.durationMs) : plannedDurationMs,
   })
 
   let music: { uploadId: string } | undefined
@@ -235,14 +245,12 @@ export async function ensureAdEditorClip(workspaceId: string, runId: string): Pr
     })
   }
 
-  const ctaScene = [...timelineScenes].reverse().find(scene => scene.status !== 'skipped' && scene.role === 'cta')
-  const logoAsset = input.logoAssetId ? assets.find(asset => asset.id === input.logoAssetId) : undefined
-  const plannedSceneEndMs = Math.max(plannedDurationMs, ...timelineScenes.map(scene => scene.endMs))
-  const timelineScale = plannedSceneEndMs > durationMs ? durationMs / plannedSceneEndMs : 1
+  const ctaScene = [...timelineScenes].reverse().find(scene => scene.role === 'cta')
+  const logoAsset = input.logoAssetId ? assetsById.get(input.logoAssetId) : undefined
   const logo = logoAsset && ctaScene
     ? {
         storageKey: logoAsset.storageKey,
-        startMs: Math.max(0, Math.min(durationMs - 300, Math.round(ctaScene.startMs * timelineScale))),
+        startMs: Math.max(0, Math.min(durationMs - 300, ctaScene.startMs)),
         endMs: durationMs,
       }
     : undefined
