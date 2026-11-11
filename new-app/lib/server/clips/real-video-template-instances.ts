@@ -163,15 +163,21 @@ export async function loadAndValidateAssets(
     // immutable license/hash field matches the checked-in manifest.
     const userOwned = choices.music.license.provenance === 'user-owned' &&
       /^(user-owned|user-upload)$/i.test(authorization.rights.license)
+    const batch9aMusic = [
+      BATCH9A_DEFAULT_MUSIC,
+      { ...BATCH9A_DEFAULT_MUSIC, revision: 'batch9a-audio-v1',
+        sha256: '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e' },
+    ]
     const batch9aFirstParty = choices.music.license.provenance === 'first-party' &&
       choices.music.license.id === 'batch9a_first_party' &&
-      choices.music.license.reference === BATCH9A_DEFAULT_MUSIC.revision &&
-      authorization.rights.origin === 'first-party-generated' &&
-      authorization.rights.author === BATCH9A_DEFAULT_MUSIC.author &&
-      authorization.rights.license === BATCH9A_DEFAULT_MUSIC.license &&
-      authorization.rights.revision === BATCH9A_DEFAULT_MUSIC.revision &&
-      authorization.rights.sha256.toLowerCase() === BATCH9A_DEFAULT_MUSIC.sha256 &&
-      authorization.rights.verifiedDurationFrames === BATCH9A_DEFAULT_MUSIC.durationFrames &&
+      batch9aMusic.some(manifest =>
+        choices.music?.license.reference === manifest.revision &&
+        authorization.rights.origin === 'first-party-generated' &&
+        authorization.rights.author === manifest.author &&
+        authorization.rights.license === manifest.license &&
+        authorization.rights.revision === manifest.revision &&
+        authorization.rights.sha256.toLowerCase() === manifest.sha256 &&
+        authorization.rights.verifiedDurationFrames === manifest.durationFrames) &&
       authorization.rights.commercialUse === true &&
       authorization.rights.exportAllowed === true
     if (!userOwned && !batch9aFirstParty)
