@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const findMany = vi.hoisted(() => vi.fn(async () => []))
+const findMany = vi.hoisted(() => vi.fn(async (_args: unknown) => []))
 vi.mock('@/lib/server/db', () => ({ getPrisma: () => ({ clipProject: { findMany } }) }))
 vi.mock('@/lib/server/clips/feature-gates', () => ({ isT2vFeatureEnabled: () => true }))
 
