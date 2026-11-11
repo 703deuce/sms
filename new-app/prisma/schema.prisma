@@ -10762,3 +10762,132 @@ model AdStudioScene {
 
   @@unique([runId, index])
 }
+
+
+// --- Batch 15: user-made video templates, private reuse + moderated community ---
+model ClipUserTemplate {
+  id              String   @id
+  workspaceId     String
+  createdById     String
+  title           String
+  description     String   @default("")
+  visibility      String   @default("private")
+  currentRevision Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  revisions       ClipUserTemplateRevision[]
+  publications    ClipTemplatePublication[]
+
+  @@index([workspaceId, deletedAt, updatedAt])
+  @@index([workspaceId, title])
+  @@map("clip_user_templates")
+}
+
+model ClipUserTemplateRevision {
+  id                String   @id
+  templateId        String
+  workspaceId       String
+  revision          Int
+  definition        Json
+  assetManifest     Json
+  sourceFingerprint String
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  template          ClipUserTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  publications      ClipTemplatePublication[]
+
+  @@unique([templateId, revision])
+  @@index([workspaceId, createdAt])
+  @@map("clip_user_template_revisions")
+}
+
+model ClipTemplatePublication {
+  id                String   @id
+  templateId        String
+  revisionId        String
+  creatorUserId     String
+  creatorName       String
+  state             String   @default("private_draft")
+  title             String
+  description       String   @default("")
+  category          String
+  tags              String[] @default([])
+  aspect            String
+  clipCount         Int
+  durationMs        Int
+  licenseTerms      String
+  publicDefinition  Json
+  publicPreview     Json
+  rightsAttestation Json
+  moderationFlags   Json     @default("[]")
+  submittedAt       DateTime?
+  approvedAt        DateTime?
+  publishedAt       DateTime?
+  rejectedAt        DateTime?
+  hiddenAt          DateTime?
+  withdrawnAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  template          ClipUserTemplate         @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  revision          ClipUserTemplateRevision @relation(fields: [revisionId], references: [id], onDelete: Restrict)
+  reports           ClipTemplateReport[]
+  audit             ClipTemplateModerationEvent[]
+
+  @@index([state, publishedAt])
+  @@index([category, aspect, clipCount, durationMs])
+  @@index([creatorUserId, state])
+  @@index([templateId, createdAt])
+  @@map("clip_template_publications")
+}
+
+model ClipTemplateModerationEvent {
+  id            String   @id
+  publicationId String
+  actorUserId   String
+  actorRole     String
+  action        String
+  reason        String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  publication   ClipTemplatePublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("clip_template_moderation_events")
+}
+
+model ClipTemplateReport {
+  id             String   @id
+  publicationId  String
+  reporterUserId String
+  workspaceId    String
+  reason         String
+  details        String?
+  status         String   @default("open")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  publication    ClipTemplatePublication @relation(fields: [publicationId], references: [id], onDelete: Cascade)
+
+  @@index([publicationId, status, createdAt])
+  @@index([reporterUserId, createdAt])
+  @@map("clip_template_reports")
+}
+
+model ClipTemplateRateLimit {
+  id          String   @id
+  scope       String
+  actorKey    String
+  windowStart DateTime
+  count       Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([scope, actorKey, windowStart])
+  @@index([windowStart])
+  @@map("clip_template_rate_limits")
+}
