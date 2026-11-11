@@ -44,7 +44,7 @@ def frame_mean(path:Path,frame:int,total:int)->float:
         timeout=30)
     return sum(data)/max(1,len(data))
 
-def fixtures(root:Path)->tuple[dict[str,Path],Path]:
+def fixtures(root:Path,music_source:Path)->tuple[dict[str,Path],Path]:
     media=root/"media"; media.mkdir(parents=True,exist_ok=True)
     paths:dict[str,Path]={}
     previews=ROOT/"new-app"/"public"/"clips"/"template-previews"
@@ -61,9 +61,10 @@ def fixtures(root:Path)->tuple[dict[str,Path],Path]:
             "-vf",f"zoompan=z='min(zoom+0.0007,1.08)':d=240:s={W}x{H}:fps=30,format=yuv420p",
             "-an","-c:v","libx264","-preset","ultrafast","-crf","28",str(video))
         paths[f"b8_video_{i}"]=video
+    if not music_source.is_file() or music_source.stat().st_size<=44:
+        raise RuntimeError("missing pinned certification soundtrack")
     music=media/"music.wav"
-    run(FFMPEG,"-y","-v","error","-f","lavfi","-i",
-        "sine=frequency=220:sample_rate=48000:duration=60","-filter:a","volume=0.10",str(music))
+    shutil.copyfile(music_source,music)
     return paths,music
 
 def carrier(cache:dict[int,Path],work:Path,total:int)->Path:
@@ -175,16 +176,20 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
 def main()->int:
     ap=argparse.ArgumentParser()
     ap.add_argument("--contract",required=True);ap.add_argument("--out",required=True)
+    ap.add_argument("--music",required=True)
     ap.add_argument("--shard",type=int,required=True);ap.add_argument("--shards",type=int,required=True)
     ap.add_argument("--limit",type=int,default=0)
     ap.add_argument("--production-smoke",action="store_true")
     args=ap.parse_args()
     if not FFMPEG or not FFPROBE: raise RuntimeError("ffmpeg/ffprobe required")
     contract=json.loads(Path(args.contract).read_text())
+    music_source=Path(args.music)
+    if sha(music_source)!=contract.get("fixture",{}).get("musicSha"):
+        raise RuntimeError("pinned certification soundtrack SHA-256 mismatch")
     rows=[r for i,r in enumerate(contract["designs"]) if i%args.shards==args.shard]
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
-    media,music=fixtures(out/"_fixtures")
+    media,music=fixtures(out/"_fixtures",music_source)
     cache_dir=out/"_carrier_cache";cache_dir.mkdir(exist_ok=True)
     cache:dict[int,Path]={}
     results=[]

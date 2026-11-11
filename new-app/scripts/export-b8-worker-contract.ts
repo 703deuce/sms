@@ -1,6 +1,7 @@
 #!/usr/bin/env tsx
+import { createHash } from 'node:crypto'
 import { mkdirSync,writeFileSync } from 'node:fs'
-import { dirname,resolve } from 'node:path'
+import { dirname,join,resolve } from 'node:path'
 import { defaultEdits } from '../lib/clips/edits'
 import { generateB8Candidates,B8_ENGINE_REVISION } from '../lib/clips/real-video-templates/b8-factory'
 import { syncB8FamilyToMusic } from '../lib/clips/real-video-templates/b8-music-sync'
@@ -8,8 +9,23 @@ import { compileTemplateWithMusic,type TemplateMusicDecisionV1 } from '../lib/cl
 import { templateFrameToMs,type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
 
 const out=resolve(process.cwd(),process.argv[2]??'../build/real-video-templates/b8/worker-contract.json')
+const musicPath=join(dirname(out),'b8-cert-music.wav')
+function certificationWav(seconds=60,sampleRate=8000):Buffer{
+  const samples=seconds*sampleRate,bytes=Buffer.alloc(44+samples*2)
+  bytes.write('RIFF',0);bytes.writeUInt32LE(36+samples*2,4);bytes.write('WAVE',8)
+  bytes.write('fmt ',12);bytes.writeUInt32LE(16,16);bytes.writeUInt16LE(1,20)
+  bytes.writeUInt16LE(1,22);bytes.writeUInt32LE(sampleRate,24)
+  bytes.writeUInt32LE(sampleRate*2,28);bytes.writeUInt16LE(2,32);bytes.writeUInt16LE(16,34)
+  bytes.write('data',36);bytes.writeUInt32LE(samples*2,40)
+  for(let i=0;i<samples;i++){
+    const phase=(i*220/sampleRate)%1
+    bytes.writeInt16LE(phase<0.5?2400:-2400,44+i*2)
+  }
+  return bytes
+}
+const musicBytes=certificationWav()
 const musicId='b8_factory_cert_music'
-const musicSha='6'.repeat(64)
+const musicSha=createHash('sha256').update(musicBytes).digest('hex')
 const rights={
   assetId:musicId,origin:'first-party-generated',author:'Transovo AI',
   license:'Transovo first-party internal certification fixture',revision:'b8-cert-v1',
@@ -59,9 +75,12 @@ const designs=generateB8Candidates().map(candidate=>{
 })
 if(designs.length!==2000)throw new Error('Batch 8 worker contract must contain 2000 designs')
 mkdirSync(dirname(out),{recursive:true})
+writeFileSync(musicPath,musicBytes)
 writeFileSync(out,JSON.stringify({
   v:1,engine:B8_ENGINE_REVISION,source:'batch8-canonical-v1',fps:30,
-  fixture:{musicId,musicSha,mediaOrigin:'Batch 9A first-party preview sprites'},
+  fixture:{musicId,musicSha,musicFile:'b8-cert-music.wav',
+    mediaOrigin:'Batch 9A first-party preview sprites'},
   designs,
 })+'\n')
-console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out)
+console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out+
+  ' with pinned music '+musicSha)
