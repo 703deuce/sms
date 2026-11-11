@@ -8,6 +8,7 @@
  * are forbidden for template assembly.
  */
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest'
 import type { SourceSegmentFx, SourceSegmentPlayback, SourceSegmentTransform } from '@/lib/clips/editor/sources'
 import { TRANSITION_TYPES, type TransitionType } from '@/lib/clips/editor/motion-schema'
 import {
@@ -64,7 +65,7 @@ export type TemplateText = {
   durationFrames: number
   x: number
   y: number
-  font: 'Montserrat' | 'Anton' | 'Poppins'
+  font: string
   size: number
   color: string
   /** Real ASS/worker/libass text choreography, not preview-only CSS. */
@@ -174,6 +175,9 @@ export const TEMPLATE_UNAVAILABLE_TRANSITION_TYPES = TRANSITION_TYPES.filter(
   (type) => !(TEMPLATE_TRANSITION_TYPES as readonly TransitionType[]).includes(type),
 )
 const GRAPHICS = new Set(['rect','rounded','circle','triangle','star','heart','arrow'])
+/** Only vendored, integrity-pinned faces shared by browser and worker are eligible. */
+const TEMPLATE_FONTS = new Set(CLIP_FONT_MANIFEST.filter(row =>
+  row.browserGitBlobSha1 && row.workerFile && row.licenseFile && row.licenseNoticeRevision).map(row => row.id))
 const own = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const exact = (o: Record<string, unknown>, keys: readonly string[], context: string) => {
   for (const k of Object.keys(o)) if (!keys.includes(k)) throw new Error(`${context}: unsupported field "${k}"`)
@@ -404,7 +408,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     return {
       id: tid, defaultText: value.defaultText, maxChars, startFrame, durationFrames,
       x: finite(value.x, 0, 100, 'text.x'), y: finite(value.y, 0, 100, 'text.y'),
-      font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'font'),
+      font: typeof value.font === 'string' && TEMPLATE_FONTS.has(value.font)
+        ? value.font : (() => { throw new Error('text.font: missing from the pinned licensed font manifest') })(),
       size: integer(value.size, 24, 240, 'text.size'), color,
       ...(validateAuthoredAnim(value.anim, 'text') ? { anim: validateAuthoredAnim(value.anim, 'text') } : {}),
     }
