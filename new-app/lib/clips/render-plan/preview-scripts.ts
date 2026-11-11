@@ -5,6 +5,7 @@
  *   title/headline + badge text (clip_export_template / stream_frame).
  */
 import { buildCaptionsAss, type AssWord } from '@/lib/clips/render-plan/captions-ass'
+import { CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { resolveWordFixText } from '@/lib/clips/edits'
 import { hookAssForEdits } from '@/lib/clips/render-plan/hook-ass'
@@ -192,22 +193,16 @@ export function assFontFamilies(ass: string): string[] {
 }
 
 /** Canonical family → the pinned file under /fonts/clip (same bytes as the worker's). */
-export const CLIP_FONT_FILES: Record<string, string> = {
-  anton: 'Anton-Regular.ttf',
-  'montserrat black': 'Montserrat-Black.ttf',
-  montserrat: 'Montserrat-Black.ttf',
-  'poppins extrabold': 'Poppins-ExtraBold.ttf',
-  poppins: 'Poppins-ExtraBold.ttf',
-  'archivo black': 'ArchivoBlack.ttf',
-  bangers: 'Bangers.ttf',
-  'bebas neue': 'BebasNeue.ttf',
-  inter: 'Inter.ttf',
-  'lato black': 'Lato.ttf',
-  lato: 'Lato.ttf',
-  'luckiest guy': 'LuckiestGuy.ttf',
-  oswald: 'Oswald.ttf',
-  'dejavu sans': 'DejaVuSans-Bold.ttf',
-}
+export const CLIP_FONT_FILES: Record<string, string> = Object.fromEntries([
+  ...CLIP_FONT_MANIFEST.flatMap(row => [
+    [row.id.toLowerCase(), row.browserFile.split('/').at(-1)!],
+    [row.assFamily.toLowerCase(), row.browserFile.split('/').at(-1)!],
+  ]),
+  // Retain historical aliases for existing serialized documents and libass.
+  ['montserrat black', 'Montserrat-Black.ttf'],
+  ['poppins extrabold', 'Poppins-ExtraBold.ttf'],
+  ['lato black', 'Lato.ttf'],
+])
 
 /** G3b: workspace fonts (family, lower-case → same-origin file URL) — use-workspace-fonts fills it. */
 const USER_FONT_URLS = new Map<string, string>()
