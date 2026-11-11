@@ -1,5 +1,6 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import {
+  applyTemplateDesignTreatment,
   templateFrameToMs,
   templateSeededId,
   validateTemplateDesign,
@@ -211,8 +212,9 @@ export function proveEditableTimelineStructure(
   compiled: TemplateCompileResult,
   actualEdits: ClipEditsV2 = compiled.edits,
 ): EditableTimelineStructureProof {
-  const family = validateTemplateFamily(rawFamily)
-  const design = validateTemplateDesign(rawDesign, family)
+  const baseFamily = validateTemplateFamily(rawFamily)
+  const design = validateTemplateDesign(rawDesign, baseFamily)
+  const family = applyTemplateDesignTreatment(baseFamily, design)
   const expected = expectedEditableTimelineStructure(family, design, choices, compiled)
   const actual = snapshotEditableTimelineStructure(actualEdits)
   const errors: string[] = []
