@@ -249,6 +249,26 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     }
   })
   if (cursor !== total) throw new Error(`family: slots cover ${cursor}/${total} frames`)
+  // A/B handles are structural requirements, not best-effort render hints. A transition consumes
+  // half its duration from each adjacent source; adjacent transition halves may not overlap.
+  for (let i = 1; i < slots.length; i++) {
+    const incoming = slots[i]!.transition
+    if (incoming === 'cut') continue
+    const need = Math.ceil(incoming.durationFrames / 2)
+    if ((slots[i - 1]!.handles?.tailFrames ?? 0) < need ||
+        (slots[i]!.handles?.headFrames ?? 0) < need)
+      throw new Error(`slot.transition: ${slots[i]!.id} requires ${need}-frame source handles on both sides`)
+  }
+  for (let i = 0; i < slots.length; i++) {
+    const incomingHalf = i > 0 && slots[i]!.transition !== 'cut'
+      ? Math.ceil((slots[i]!.transition as TemplateTransition).durationFrames / 2)
+      : 0
+    const outgoingHalf = i + 1 < slots.length && slots[i + 1]!.transition !== 'cut'
+      ? Math.ceil((slots[i + 1]!.transition as TemplateTransition).durationFrames / 2)
+      : 0
+    if (incomingHalf + outgoingHalf > slots[i]!.durationFrames)
+      throw new Error(`slot.transition: transition windows overlap inside ${slots[i]!.id}`)
+  }
 
   if (!Array.isArray(raw.texts) || raw.texts.length > MAX_TEXTS) throw new Error('family: text budget exceeded')
   const textIds = new Set<string>()
