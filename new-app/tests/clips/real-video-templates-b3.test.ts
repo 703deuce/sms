@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compileTemplatePrototype, validateTemplateFamily } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 const slot = (n: number, frames = 30) => ({
@@ -18,7 +18,7 @@ const family = (count: number) => ({
 })
 const design = { schemaVersion: 1, designId: 'design_a', revision: 3,
   stylePackId: 'style_a', familyId: 'family_a', familyRevision: 2, musicPolicy: 'licensed-only' }
-const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 90) => ({
+const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 90): TemplateAsset => ({
   id, kind, ...(kind === 'image' ? {} : { durationFrames: frames }),
   license: { id: 'license_1', provenance: 'user-owned', reference: 'library_1' },
 })
@@ -27,7 +27,7 @@ const carrier = (count: number) => ({
   edits: { v: 2, trim: { in: 0, out: count * 1000 }, cutRanges: [],
     wordFixes: {}, captions: {}, layout: { mode: 'full_frame', shotOverrides: [] } } as ClipEditsV2,
 })
-const choices = (count: number) => ({
+const choices = (count: number): TemplateChoices => ({
   instanceId: 'instance_a',
   media: Object.fromEntries(Array.from({ length: count }, (_, i) =>
     [`shot_${i + 1}`, asset('image_one', 'image')])),
