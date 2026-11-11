@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, Download, Loader2, Pause, Play, Redo2, Undo2 } from 'lucide-react'
+import { LayoutGrid, Loader2, Palette, Pause, Play, Sparkles, Type } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { LayoutQuickPicker } from '@/components/clips/editor/layout-quick-picker'
@@ -16,8 +16,7 @@ import { ExportDialog } from '@/components/clips/editor/export-dialog'
 import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import type { EditorClipShell } from '@/components/clips/editor/editor-clip-shell'
 import { editorMediaLoadFallbacks } from '@/lib/server/clips/editor-clip-media'
-import { editorIconBtn, editorToolbarDivider, editorToolbarRow, editorToolbarTextBtn } from '@/lib/clips/editor/editor-chrome-tokens'
-import { EditorModeSwitcher } from '@/components/clips/editor/editor-mode-switcher'
+import { StandaloneEditorChrome, StandaloneEditorToolRail, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { buildTemplateCatalog, type CatalogItem, type CatalogTab } from '@/lib/clips/templates/catalog'
@@ -25,7 +24,7 @@ import { CatalogTplThumb } from '@/lib/clips/templates/catalog-thumb'
 import { applyCatalogToken, parseApplyToken } from '@/lib/clips/templates/apply-from-hub'
 import { BRAND_STARTERS } from '@/lib/clips/brand-starters'
 import { applyBrandTemplateToEdits, type BrandTemplatePayload } from '@/lib/clips/apply-brand'
-import { canonicalEditsJson, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { canonicalEditsJson, displayDurationMs, displayPositionMs, normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { clipStyleSettingsFromEdits, type ClipBrandEdits } from '@/lib/clips/brand'
 import { BRAND_FONTS } from '@/lib/clips/brand-kit'
 import { clipsFetch, listProjectClips, patchClip } from '@/lib/clips-api'
@@ -58,7 +57,7 @@ type CaptionDraft = {
   activeStyle?: 'color' | 'highlight' | 'fill'
   highlightColor?: string
 }
-type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'export'
+type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'export' | 'layout-script' | 'layout-timeline'
 type BulkResult = { updated: number; skipped: number; errors: number }
 type CaptionView = 'choose' | 'edit'
 type CustomizerSection = 'layout' | 'subtitle' | 'headline' | 'background' | 'logo' | 'outro'
@@ -489,6 +488,7 @@ export function TemplatesEditorShell(props: Props) {
   const [applyingAll, setApplyingAll] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [playhead, setPlayhead] = useState(props.initialEdits.trim.in)
+  const [playheadOut, setPlayheadOut] = useState(0)
   const [media, setMedia] = useState(props.primaryMedia)
   const [brandLogoUrl, setBrandLogoUrl] = useState<string | null>(null)
   const [previewRetryKey, setPreviewRetryKey] = useState(0)
@@ -1097,7 +1097,17 @@ export function TemplatesEditorShell(props: Props) {
     }
   }
 
-  const navigateAfterSave = (target: HandoffTarget) => {
+  const navigateAfterSave = async (target: HandoffTarget) => {
+    if (target === 'layout-script' || target === 'layout-timeline') {
+      await finishStandaloneLayoutHandoff({
+        view: target === 'layout-script' ? 'script' : 'timeline',
+        projectId,
+        clipId,
+        clipperStudio: props.clipperStudio,
+        flushSave,
+      })
+      return
+    }
     if (target === 'export') {
       setExportOpen(true)
       console.info('[editor:templates-mode] export-opened', { projectId, clipId })
@@ -1148,7 +1158,7 @@ export function TemplatesEditorShell(props: Props) {
       target,
       scope: 'saved-edit',
     })
-    navigateAfterSave(target)
+    await navigateAfterSave(target)
   }
 
   const requestHandoff = (target: HandoffTarget) => {
@@ -1181,7 +1191,7 @@ export function TemplatesEditorShell(props: Props) {
       rememberRecent(activeEntry)
       cancelPreview('handoff')
       setHandoffTarget(null)
-      navigateAfterSave(target)
+      await navigateAfterSave(target)
     } catch {
       console.error('[editor:templates-gaps] handoff-apply-failed', {
         projectId,
@@ -1211,59 +1221,37 @@ export function TemplatesEditorShell(props: Props) {
   return (
     <ClipperSurfaceErrorBoundary surface="Templates editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="templates-editor">
-        <header className={editorToolbarRow + ' relative z-50'}>
-          <button
-            type="button"
-            className={editorIconBtn}
-            aria-label="Back to project clips"
-            onClick={() => requestHandoff('project')}
-          >
-            <ArrowLeft />
-          </button>
-          <div className="min-w-0">
-            <p className="max-w-[220px] truncate text-[10px] text-muted-foreground">{props.projectTitle}</p>
-            <h1 className="max-w-[280px] truncate text-xs font-semibold">{props.initialTitle}</h1>
-          </div>
-          <span className="ml-auto text-[11px] text-muted-foreground" aria-live="polite">
-            {saveState === 'saved'
-              ? hasDraftChange
-                ? 'Saved edit · preview not applied'
-                : 'Saved'
-              : saveState === 'error'
-                ? 'Save failed'
-                : 'Saving…'}
-          </span>
-          {saveState === 'error' ? (
-            <Button size="sm" variant="outline" onClick={() => void flushSave().catch(() => toast.error('Save retry failed'))}>
-              Retry save
-            </Button>
-          ) : null}
-          <span className={editorToolbarDivider} />
-          <button type="button" className={editorIconBtn} disabled={!canUndo} aria-label="Undo" onClick={() => {
+        <StandaloneEditorChrome
+          projectTitle={props.projectTitle}
+          title={props.initialTitle}
+          current="templates"
+          saveState={saveState}
+          statusText={saveState === 'saved' ? (hasDraftChange ? 'Saved edit · preview not applied' : 'Saved') : saveState === 'error' ? 'Save failed' : 'Saving…'}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          disabled={handoffBusy}
+          onBack={() => requestHandoff('project')}
+          onUndo={() => {
             clearPreviewForHistory()
             undo()
             console.info('[editor:templates-mode] undo', { projectId, clipId })
-          }}><Undo2 /></button>
-          <button type="button" className={editorIconBtn} disabled={!canRedo} aria-label="Redo" onClick={() => {
+          }}
+          onRedo={() => {
             clearPreviewForHistory()
             redo()
             console.info('[editor:templates-mode] redo', { projectId, clipId })
-          }}><Redo2 /></button>
-          <button type="button" className={editorToolbarTextBtn} onClick={() => requestHandoff('export')}>
-            <Download />Export
-          </button>
-          <EditorModeSwitcher
-            current="templates"
-            disabled={handoffBusy}
-            onSelect={(mode) => {
-              console.info('[editor:templates-mode] mode-selected', { projectId, clipId, mode })
-              if (mode === 'templates') return
-              requestHandoff(mode)
-            }}
-          />
-        </header>
+          }}
+          onExport={() => requestHandoff('export')}
+          onRetrySave={() => { void flushSave().catch(() => toast.error('Save retry failed')) }}
+          onModeSelect={(mode) => {
+            console.info('[editor:templates-mode] mode-selected', { projectId, clipId, mode })
+            if (mode === 'templates') return
+            requestHandoff(mode)
+          }}
+          onLayoutSelect={(view) => requestHandoff(view === 'script' ? 'layout-script' : 'layout-timeline')}
+        />
 
-        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)] overflow-hidden gap-1 p-1 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)]" data-testid="templates-editor-layout-grid">
+        <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)_3.5rem] overflow-hidden gap-1 p-1 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)_3.5rem]" data-testid="templates-editor-layout-grid">
           <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card/60" aria-label="Template gallery">
             <div className="border-b border-border px-4 pb-3 pt-4">
               <h2 className="text-sm font-semibold">Templates</h2>
@@ -1616,6 +1604,7 @@ export function TemplatesEditorShell(props: Props) {
                   onEditorMediaError={onMediaError}
                   onTick={(tick) => {
                     setPlayhead(tick.sourceMs)
+                    setPlayheadOut(tick.outputMs)
                     setPlaying(tick.playing)
                   }}
                 />
@@ -1640,12 +1629,12 @@ export function TemplatesEditorShell(props: Props) {
                 {playing ? <Pause className="size-4" /> : <Play className="size-4" />}
               </Button>
               <span className="font-mono text-xs tabular-nums">
-                {clock(playhead - draftEdits.trim.in)} / {clock(draftEdits.trim.out - draftEdits.trim.in)}
+                {clock(displayPositionMs(previewEdits, playheadOut))} / {clock(displayDurationMs(previewEdits))}
               </span>
               <span className="rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">{effectiveAspect}</span>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-card/60 px-5 py-4">
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-border bg-card/60 px-5 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-medium">
                   {activeEntry ? activeEntry.item.name : aspectOverride || customFieldNames.length ? 'Customized saved style' : 'Choose a template'}
@@ -1683,6 +1672,15 @@ export function TemplatesEditorShell(props: Props) {
               </div>
             </div>
           </main>
+          <StandaloneEditorToolRail
+            label="Template tools"
+            items={[
+              { id: 'layouts', label: 'Layouts', icon: LayoutGrid, active: tab === 'layouts', onSelect: () => setTab('layouts') },
+              { id: 'captions', label: 'Captions', icon: Type, active: tab === 'captions', onSelect: () => setTab('captions') },
+              { id: 'looks', label: 'Looks', icon: Palette, active: tab === 'looks', onSelect: () => setTab('looks') },
+              { id: 'brand', label: 'Brand', icon: Sparkles, active: tab === 'brand', onSelect: () => setTab('brand') },
+            ]}
+          />
         </div>
 
         <ExportDialog
@@ -1865,6 +1863,7 @@ export function TemplatesEditorShell(props: Props) {
                         onEditorMediaError={onMediaError}
                         onTick={(tick) => {
                           setPlayhead(tick.sourceMs)
+                          setPlayheadOut(tick.outputMs)
                           setPlaying(tick.playing)
                         }}
                       />
@@ -1875,7 +1874,7 @@ export function TemplatesEditorShell(props: Props) {
                 </section>
               </div>
 
-              <footer className="flex flex-wrap items-center gap-2 border-t border-border bg-card/60 px-4 py-3">
+              <footer className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border bg-card/60 px-4 py-3">
                 <p className="mr-auto text-[11px] text-muted-foreground">
                   Cancel discards only customizer-local changes. Save creates a reusable style; it does not apply the preview.
                 </p>

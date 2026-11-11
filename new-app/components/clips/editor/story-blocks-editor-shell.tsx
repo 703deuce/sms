@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, AudioLines, ChevronLeft, ChevronRight, Clapperboard, Download, FileText, GripVertical, ImageIcon, Layers3, LayoutGrid, Loader2, Palette, Pencil, Plus, Redo2, RefreshCw, Scissors, Search, Sparkles, Trash2, Undo2 } from 'lucide-react'
+import { ArrowLeft, AudioLines, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clapperboard, FileText, GripVertical, ImageIcon, Layers3, LayoutGrid, Loader2, Palette, Pencil, Plus, Scissors, Search, Sparkles, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
@@ -35,8 +34,8 @@ import { t6CaptionPresetsEnabled } from '@/lib/clips/t6-feature-flags'
 import { splitLayoutSegmentAt, setLayoutModeForSegmentAt } from '@/lib/clips/layout-segments'
 import { clipsFetch, requestClipReframe } from '@/lib/clips-api'
 import { routes } from '@/lib/routes'
-import { editorToolbarRow } from '@/lib/clips/editor/editor-chrome-tokens'
-import { EditorModeSwitcher, type EditorModeSwitcherMode } from '@/components/clips/editor/editor-mode-switcher'
+import type { EditorModeSwitcherMode } from '@/components/clips/editor/editor-mode-switcher'
+import { StandaloneEditorChrome, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
 
 type Props = Parameters<typeof EditorClipShell>[0]
@@ -270,12 +269,16 @@ export function StoryBlocksEditorShell(props: Props) {
     if (next) setSelectedStart(null)
   }
   const deleteScene = () => deleteSceneTarget(selected)
-  const reorderScene = (from: number, before: number) => {
+  const reorderScene = (from: number, before: number | null) => {
     const moving = scenes[from]
-    const target = scenes[before]
-    if (!moving || !target || from === before || !canReorder(moving) || !canReorder(target))
+    const target = before == null ? null : scenes[before]
+    if (!moving || from === before || !canReorder(moving) || (target != null && !canReorder(target)))
       return reportError('reorder', new Error(simpleEdlReason || 'Reorder needs scene boundaries that match a video segment. Open the clip editor to split the footage first.'))
-    const next = moveVideoSegment({ edits, previewEdits }, 'seg:' + moving.sourceStartMs, 'seg:' + target.sourceStartMs)
+    const next = moveVideoSegment(
+      { edits, previewEdits },
+      'seg:' + moving.sourceStartMs,
+      target ? 'seg:' + target.sourceStartMs : null,
+    )
     if (!next || timebaseFor(editorPreviewEdits(next, words)).durationMs !== tb.durationMs)
       return reportError('reorder', new Error('The section-order normalizer could not preserve this scene move.'))
     commit('reorder-sectionOrder', next)
@@ -364,25 +367,43 @@ export function StoryBlocksEditorShell(props: Props) {
 
   return <ClipperSurfaceErrorBoundary surface="Story blocks editor">
     <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="story-blocks-editor">
-      <header className={editorToolbarRow + ' relative z-50'}>
-        <Button variant="ghost" size="icon" render={<Link href={routes.project(projectId)} />} aria-label="Back to project"><ArrowLeft className="size-4" /></Button>
-        <div className="min-w-0"><p className="truncate text-[10px] text-muted-foreground">{props.projectTitle}</p><h1 className="max-w-56 truncate text-sm font-semibold">{props.initialTitle}</h1></div>
-        <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium">Story blocks</span>
-        <button type="button" className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted" onClick={() => { setTab('layouts'); console.log('[editor:story-mode] header-aspect-open', { projectId, clipId, aspect: edits.aspectRatio ?? '9:16' }) }}>{aspectName(edits.aspectRatio)}</button>
-        <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">{saveState === 'saved' ? 'Saved' : saveState === 'error' ? 'Save failed' : 'Saving…'}</span>
-        {saveState === 'error' && <Button variant="outline" size="sm" onClick={() => void flushSave().catch((e) => reportError('save-retry', e))}><RefreshCw className="mr-1 size-3" />Retry</Button>}
-        <Button variant="ghost" size="icon" aria-label="Undo" disabled={!canUndo} onClick={() => { undo(); setSelectedStart(null); console.log('[editor:story-mode] undo', { projectId, clipId }) }}><Undo2 className="size-4" /></Button>
-        <Button variant="ghost" size="icon" aria-label="Redo" disabled={!canRedo} onClick={() => { redo(); setSelectedStart(null); console.log('[editor:story-mode] redo', { projectId, clipId }) }}><Redo2 className="size-4" /></Button>
-        <Button size="sm" variant="outline" onClick={() => { setExportOpen(true); console.log('[editor:story-mode] export-open', { projectId, clipId }) }}><Download className="mr-1 size-4" />Export</Button>
-        <EditorModeSwitcher
-          current="story"
-          onSelect={(mode) => {
-            console.log('[editor:story-mode] mode-selected', { projectId, clipId, mode })
-            if (mode === 'story') return
-            void openOther(mode)
-          }}
-        />
-      </header>
+      <StandaloneEditorChrome
+        projectTitle={props.projectTitle}
+        title={props.initialTitle}
+        current="story"
+        saveState={saveState}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        contextSlot={<>
+          <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium">Story blocks</span>
+          <button type="button" className="rounded-md border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted" onClick={() => { setTab('layouts'); console.log('[editor:story-mode] header-aspect-open', { projectId, clipId, aspect: edits.aspectRatio ?? '9:16' }) }}>{aspectName(edits.aspectRatio)}</button>
+        </>}
+        onBack={() => {
+          console.log('[editor:story-mode] project-handoff-start', { projectId, clipId })
+          void flushSave()
+            .then(() => window.location.assign(routes.project(projectId)))
+            .catch((e) => reportError('project-handoff', e))
+        }}
+        onUndo={() => { undo(); setSelectedStart(null); console.log('[editor:story-mode] undo', { projectId, clipId }) }}
+        onRedo={() => { redo(); setSelectedStart(null); console.log('[editor:story-mode] redo', { projectId, clipId }) }}
+        onExport={() => { setExportOpen(true); console.log('[editor:story-mode] export-open', { projectId, clipId }) }}
+        onRetrySave={() => { void flushSave().catch((e) => reportError('save-retry', e)) }}
+        onModeSelect={(mode) => {
+          console.log('[editor:story-mode] mode-selected', { projectId, clipId, mode })
+          if (mode === 'story') return
+          void openOther(mode)
+        }}
+        onLayoutSelect={(view) => {
+          console.log('[editor:story-mode] layout-handoff-start', { projectId, clipId, view })
+          void finishStandaloneLayoutHandoff({
+            view,
+            projectId,
+            clipId,
+            clipperStudio: props.clipperStudio,
+            flushSave,
+          }).catch((e) => reportError('layout-handoff', e))
+        }}
+      />
       <div className="flex min-h-0 flex-1 gap-1 p-1">
         <nav className="order-last flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-y-auto rounded-lg border border-border/70 bg-muted/20 px-1 py-2" aria-label="Story tools" data-testid="story-tool-rail">
           {rail.map(({ id, label, icon: Icon }) => <button key={id} type="button" onClick={() => {
@@ -432,6 +453,8 @@ export function StoryBlocksEditorShell(props: Props) {
                           <span className="min-w-0 flex-1"><span className="block text-[11px] font-semibold">Scene {index + 1}</span><span className="mt-1 line-clamp-3 block text-xs leading-snug">{scene.label}</span><span className="mt-2 block text-[10px] tabular-nums text-muted-foreground">{clock(displayPositionMs(previewEdits, scene.endMs) - displayPositionMs(previewEdits, scene.startMs))}</span></span>
                         </button>
                         {selected?.id === scene.id ? <div className="flex shrink-0 flex-col gap-1">
+                          <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={'Move scene ' + (index + 1) + ' up'} title="Move scene up" disabled={Boolean(search) || index <= 0 || !canReorder(scene)} onClick={() => reorderScene(index, index - 1)}><ChevronUp className="size-3.5" /></Button>
+                          <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={'Move scene ' + (index + 1) + ' down'} title="Move scene down" disabled={Boolean(search) || index >= scenes.length - 1 || !canReorder(scene)} onClick={() => reorderScene(index, index + 2 < scenes.length ? index + 2 : null)}><ChevronDown className="size-3.5" /></Button>
                           <Button type="button" size="icon" variant="ghost" className="size-7" aria-label={'Edit scene ' + (index + 1)} title="Edit selected scene" onClick={() => { selectScene(scene); setTab('story') }}><Pencil className="size-3.5" /></Button>
                           <Button type="button" size="icon" variant="ghost" className="size-7 text-destructive" aria-label={'Delete scene ' + (index + 1)} title={simpleEdlReason ?? 'Delete selected footage'} disabled={Boolean(simpleEdlReason) || scenes.length < 2} onClick={() => deleteSceneTarget(scene)}><Trash2 className="size-3.5" /></Button>
                         </div> : null}
@@ -491,7 +514,7 @@ export function StoryBlocksEditorShell(props: Props) {
               <Button variant="outline" size="sm" onClick={() => setTab('layouts')}>Layout</Button>
             </div>}
           </div>
-          <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/10 p-4">
+          <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-muted/10 p-4" data-testid="story-preview-host">
             {videoUrl ? <PreviewStage clipId={clipId} videoUrl={videoUrl} posterUrl={props.posterUrl} edits={previewEdits} words={words} cropTrack={props.cropTrack} brollMedia={brollMedia} media={media} videoRef={videoRef} onEditorMediaError={onMediaError} onTick={(tick) => {
               setPlayheadOut(tick.outputMs); setPlaying(tick.playing)
               if (tick.playing) {
