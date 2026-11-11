@@ -182,11 +182,35 @@ export function previewMusicReplacement(input: {
     throw new Error('Re-sync requires two pinned beat-time schedules')
   const ratio = previous.bpm / replacement.bpm
   if (ratio < 0.5 || ratio > 2) throw new Error('Tempo difference outside safe re-sync limits')
-  const total = Math.round(timing.totalFrames * ratio)
-  if (total > replacement.durationFrames && !input.allowLoop)
+  const oldGrid = previous.beats.map(n => n + previous.offsetFrames)
+  const newGrid = replacement.beats.map(n => n + replacement.offsetFrames)
+  if (!oldGrid.length || oldGrid[0]! > 1 || Math.abs(oldGrid[0]!) > 1)
+    throw new Error('Authored music offset does not align with the template origin')
+  const nearestIndex = (frames: readonly number[], target: number) => {
+    let low=0,high=frames.length-1
+    while(low<high) {const mid=Math.floor((low+high)/2);if(frames[mid]!<target)low=mid+1;else high=mid}
+    if(low>0 && Math.abs(frames[low-1]!-target)<=Math.abs(frames[low]!-target))return low-1
+    return low
+  }
+  // Every authored cut must already be on the pinned source grid (within one frame).
+  // This is an explicit re-sync, not a guess at where a singer's phrase began.
+  const cutIndices = timing.boundaries.map(f=>{
+    const idx=nearestIndex(oldGrid,f)
+    if(Math.abs(oldGrid[idx]!-f)>1)
+      throw new Error('Off-grid authored cut: manual anchor correction required')
+    if(idx>=newGrid.length)
+      throw new Error('Replacement song ends before all authored beat anchors')
+    return idx
+  })
+  const bounds=cutIndices.map(idx=>newGrid[idx]!)
+  const total=bounds[bounds.length-1]!
+  if(bounds[0]!==0 || total<=0)
+    throw new Error('Replacement offset cannot preserve a zero-origin edit')
+  if(total > replacement.durationFrames && !input.allowLoop)
     throw new Error('Music too short: looping/crossfade requires explicit acceptance')
-  if (total < timing.minShotFrames * (timing.boundaries.length-1))
-    throw new Error('Music tempo makes minimum shot lengths impossible')
+  for(let i=1;i<bounds.length;i++)
+    if(bounds[i]!-bounds[i-1]!<timing.minShotFrames)
+      throw new Error('Music tempo makes minimum shot lengths impossible')
   const oldCues = previous.phrases.filter(p => p.kind !== 'instrumental')
   for (const cue of oldCues)
     if (!replacement.phrases.some(p => p.id === cue.id && p.kind === cue.kind))
@@ -195,18 +219,9 @@ export function previewMusicReplacement(input: {
     const replacementAnchor = [...replacement.protectedAnchors, ...(replacement.manualOverrides ?? [])]
       .find(a => a.id === anchor.id)
     if (!replacementAnchor) throw new Error('Protected anchor needs an approved replacement: ' + anchor.id)
-  }
-  // Cut weights preserve each shot's relative authored rhythm while distributing integer frames.
-  const weights = timing.boundaries.slice(1).map((b,i) => b-timing.boundaries[i]!)
-  const bounds = distributeFrameBoundaries(weights, total, timing.minShotFrames)
-  // Original hard-protected cut anchors must map to manually approved target positions.
-  for (const a of previous.protectedAnchors) {
-    const oldCut = timing.boundaries.indexOf(a.frame)
-    if (oldCut >= 0) {
-      const target = [...replacement.protectedAnchors, ...(replacement.manualOverrides ?? [])].find(x=>x.id===a.id)!
-      if (bounds[oldCut] !== target.frame)
-        throw new Error('Protected anchor conflicts with re-sync; manual edit required: ' + a.id)
-    }
+    const oldCut = timing.boundaries.indexOf(anchor.frame)
+    if(oldCut >= 0 && bounds[oldCut] !== replacementAnchor.frame)
+      throw new Error('Protected anchor conflicts with re-sync; manual edit required: ' + anchor.id)
   }
   const map = (f:number) => {
     if (f === timing.totalFrames) return total
