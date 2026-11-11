@@ -41,6 +41,14 @@ const design = {
   familyRevision: 1,
   musicPolicy: 'licensed-only',
 }
+const playbackSpec = {
+  pieces: [
+    { kind: 'play', frames: 5, rate: 0.5 },
+    { kind: 'hold', frames: 3 },
+    { kind: 'curve', frames: 7, curve: 'ramp_up' },
+  ],
+}
+
 const family = {
   schemaVersion: 1,
   familyId: 'family_b6',
@@ -62,13 +70,7 @@ const family = {
       handles: { headFrames: 8, tailFrames: 8 },
       fit: 'cover',
       sourceAudio: 'source',
-      playback: {
-        pieces: [
-          { kind: 'play', frames: 5, rate: 0.5 },
-          { kind: 'hold', frames: 3 },
-          { kind: 'curve', frames: 7, curve: 'ramp_up' },
-        ],
-      },
+      playback: playbackSpec,
       transition: 'cut',
       transform: { scale: 112, x: 4 },
       fx: { contrast: 8 },
@@ -123,7 +125,7 @@ const choices: TemplateChoices = {
 
 describe('real-video template B6 slot-local playback', () => {
   it('expands a speed curve + freeze into one exact output-frame plan', () => {
-    const plan = compileTemplatePlayback(family.slots[0].playback, 15)
+    const plan = compileTemplatePlayback(playbackSpec, 15)
     expect(plan.outputFrames).toBe(15)
     expect(plan.pieces.reduce((n, p) => n + p.frames, 0)).toBe(15)
     expect(sampleTemplatePlayback(plan, 24, 5).mediaFrame).toBe(sampleTemplatePlayback(plan, 24, 7).mediaFrame)

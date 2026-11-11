@@ -19,6 +19,12 @@ import re
 import subprocess
 from pathlib import Path
 
+from clips_worker.template_playback import (
+    normalize_source_playback,
+    playback_media_offset_ms,
+    render_playback_window,
+)
+
 SOURCE_SEG_MIN_MS = 100
 MAX_SOURCES = 50
 MAX_SOURCE_SEGMENTS = 500
@@ -219,12 +225,16 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
             seg["fit"] = "contain"
         if r.get("auto") is True:
             seg["auto"] = True
-        try:
-            rate = float(r.get("speed", 1))
-        except (TypeError, ValueError):
-            rate = 1.0
-        if src["mediaType"] == "video" and 0.25 <= rate <= 4.0 and abs(rate - 1.0) >= 0.0001:
-            seg["speed"] = round(rate, 3)
+        playback = normalize_source_playback(r.get("playback")) if src["mediaType"] == "video" else None
+        if playback:
+            seg["playback"] = playback
+        else:
+            try:
+                rate = float(r.get("speed", 1))
+            except (TypeError, ValueError):
+                rate = 1.0
+            if src["mediaType"] == "video" and 0.25 <= rate <= 4.0 and abs(rate - 1.0) >= 0.0001:
+                seg["speed"] = round(rate, 3)
         transform = _normalize_source_transform(r.get("transform"))
         if transform:
             seg["transform"] = transform
@@ -249,7 +259,7 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
 
 
 def _is_synced(seg: dict, src: dict | None) -> bool:
-    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg and "speed" not in seg)
+    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg and "speed" not in seg and "playback" not in seg)
 
 
 def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
@@ -257,6 +267,10 @@ def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
         return 0
     if _is_synced(seg, src):
         return max(0, src_ms + int(src.get("syncMs") or 0))
+    if seg.get("playback"):
+        local_ms = src_ms - int(seg["startMs"])
+        mapped = int(seg.get("inMs") or 0) + playback_media_offset_ms(seg["playback"], local_ms)
+        return max(0, int(round(mapped)))
     return max(0, int(round(int(seg.get("inMs") or 0) + (src_ms - int(seg["startMs"])) * float(seg.get("speed") or 1.0))))
 
 
@@ -296,7 +310,13 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
             }
-        if s.get("speed"):
+        if s.get("playback"):
+            row["playback"] = s["playback"]
+            row["playbackSourceInMs"] = int(s.get("inMs") or 0)
+            row["playbackStartFrame"] = int(round((lo - int(s["startMs"])) * 30.0 / 1000.0))
+            if src.get("durationMs"):
+                row["sourceDurationMs"] = int(src["durationMs"])
+        elif s.get("speed"):
             row["speed"] = s["speed"]
         if s.get("transform"):
             row["transform"] = s["transform"]
@@ -929,6 +949,8 @@ def _source_transition_rows(edits: dict, clip_start_ms: int, clip_end_ms: int, f
             "rightSource": right_src,
             "leftMediaMs": segment_media_ms(left, left_src, int(round(actual_start_src_ms))),
             "rightMediaMs": segment_media_ms(right, right_src, int(round(actual_start_src_ms))),
+            "leftLocalFrame": int(round((actual_start_src_ms - int(left["startMs"])) * 30.0 / 1000.0)),
+            "rightLocalFrame": int(round((actual_start_src_ms - int(right["startMs"])) * 30.0 / 1000.0)),
         })
     return out
 
@@ -938,12 +960,32 @@ def _render_source_transition_side(
     source: dict,
     seg: dict,
     media_in_ms: int,
+    local_frame: int,
     frames: int,
     width: int,
     height: int,
     fps: float,
     out: Path,
 ) -> None:
+    if seg.get("playback"):
+        if source["mediaType"] != "video":
+            raise RuntimeError("source playback transition requires video")
+        raw = out.with_name(out.stem + "_playback.mp4")
+        render_playback_window(
+            path,
+            seg["playback"],
+            int(seg.get("inMs") or 0),
+            int(source["durationMs"]) if source.get("durationMs") else None,
+            int(local_frame),
+            int(frames),
+            fps,
+            raw,
+            include_audio=False,
+        )
+        path = raw
+        media_in_ms = 0
+        seg = {k: v for k, v in seg.items() if k not in ("playback", "speed")}
+        source = {**source, "mediaType": "video"}
     speed = float(seg.get("speed") or 1.0)
     speed_prefix = f"setpts=(PTS-STARTPTS)/{speed:.6f}," if source["mediaType"] == "video" and abs(speed - 1.0) >= 0.0001 else ""
     vf = (
@@ -976,7 +1018,8 @@ def apply_source_segment_transitions(
     media: dict[str, Path],
 ) -> Path:
     """Overlay cross-source Video-split transition windows using the two registered media assets."""
-    from clips_worker.motion_render import xfade_window_filters
+    from clips_worker.motion import SHADER_TRANSITIONS
+    from clips_worker.motion_render import shader_rendered_window_filter, window_decode_cmd, xfade_window_filters
 
     width, height = probe_size(full_render)
     fps = probe_fps(full_render)
@@ -996,14 +1039,38 @@ def apply_source_segment_transitions(
         a = Path(work_dir) / f"source_transition_{i}_a.mp4"
         b = Path(work_dir) / f"source_transition_{i}_b.mp4"
         _render_source_transition_side(Path(left_path), win["leftSource"], win["left"], int(win["leftMediaMs"]),
-                                       int(win["frames"]), width, height, fps, a)
+                                       int(win["leftLocalFrame"]), int(win["frames"]), width, height, fps, a)
         _render_source_transition_side(Path(right_path), win["rightSource"], win["right"], int(win["rightMediaMs"]),
-                                       int(win["frames"]), width, height, fps, b)
-        cmd += ["-i", str(a), "-i", str(b)]
+                                       int(win["rightLocalFrame"]), int(win["frames"]), width, height, fps, b)
         label = f"st{i}"
-        parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))
-        input_idx += 2
         w0 = win["startFrame"] / fps
+        if win["type"] in SHADER_TRANSITIONS:
+            if abs(fps - 30.0) > 0.01:
+                raise RuntimeError("template shader transition requires 30fps")
+            from clips_worker.shader_transitions import gl_context, render_window
+            shader_out = Path(work_dir) / f"source_transition_{i}_shader.mkv"
+            ctx, _renderer = gl_context()
+            try:
+                span = int(win["frames"]) / fps + 0.2
+                render_window(
+                    ctx,
+                    win["type"],
+                    window_decode_cmd(a, 0.0, span, 0.0, int(win["frames"]), width, height),
+                    window_decode_cmd(b, 0.0, span, 0.0, int(win["frames"]), width, height),
+                    int(win["frames"]),
+                    width,
+                    height,
+                    shader_out,
+                )
+            finally:
+                ctx.release()
+            cmd += ["-i", str(shader_out)]
+            parts.append(shader_rendered_window_filter(input_idx, int(win["frames"]), width, height, w0, label))
+            input_idx += 1
+        else:
+            cmd += ["-i", str(a), "-i", str(b)]
+            parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))
+            input_idx += 2
         w1 = (win["startFrame"] + win["frames"]) / fps
         nxt = f"stbase{i}"
         parts.append(
@@ -1052,6 +1119,38 @@ def apply_full_render_sources(
         return full_render
     width, height = probe_size(full_render)
     fps = probe_fps(full_render)
+    prepared_usable: list[dict] = []
+    prepared_paths: list[Path] = []
+    for i, (window, source_path) in enumerate(zip(usable, paths)):
+        playback = window.get("playback")
+        if not playback:
+            prepared_usable.append(window)
+            prepared_paths.append(source_path)
+            continue
+        if abs(fps - 30.0) > 0.01:
+            raise RuntimeError("template playback requires 30fps source clock")
+        frame_count = max(1, int(round((int(window["t1Ms"]) - int(window["t0Ms"])) * 30.0 / 1000.0)))
+        prepared = Path(work_dir) / f"source_playback_{i}.mp4"
+        need_audio = window.get("audio") in ("source", "mix") and has_audio_stream(source_path)
+        render_playback_window(
+            source_path,
+            playback,
+            int(window.get("playbackSourceInMs") or 0),
+            int(window["sourceDurationMs"]) if window.get("sourceDurationMs") else None,
+            int(window.get("playbackStartFrame") or 0),
+            frame_count,
+            fps,
+            prepared,
+            include_audio=need_audio,
+        )
+        normalized = dict(window)
+        for key in ("playback", "playbackSourceInMs", "playbackStartFrame", "sourceDurationMs", "speed"):
+            normalized.pop(key, None)
+        normalized["mediaInMs"] = 0
+        prepared_usable.append(normalized)
+        prepared_paths.append(prepared)
+    usable = prepared_usable
+    paths = prepared_paths
     inputs, fc, vlabel, alabel = build_sources_filtergraph(
         usable,
         paths,
