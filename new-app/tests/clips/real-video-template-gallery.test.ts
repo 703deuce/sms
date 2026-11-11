@@ -30,9 +30,32 @@ describe('standalone real video gallery', () => {
       Array.from({length:10},(_,i)=>'f'+String(i+1).padStart(2,'0')+'_bold'))
     expect(FIRST_PARTY_VIDEO_TEMPLATES.every(x =>
       x.certificationStatus==='preview' && !x.reviewed && !x.previewRenderVerified &&
-      x.musicRequired && x.defaultMusic?.sha256 === '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+      x.musicRequired && x.defaultMusic?.sha256 === BATCH9A_DEFAULT_MUSIC.sha256
     )).toBe(true)
   })
+  it('keeps all ten Preview anchors above the Batch 9A authoring-quality floor', () => {
+    expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.design.stylePackId)).size).toBe(10)
+    expect(new Set(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.family.texts[0]?.defaultText)).size).toBe(10)
+    const transitionTypes=new Set(FIRST_PARTY_VIDEO_TEMPLATES.flatMap(x=>
+      x.family.slots.slice(1).map(slot=>slot.transition==='cut'?'cut':slot.transition.type)))
+    expect(transitionTypes.size).toBeGreaterThanOrEqual(6)
+    for(const release of FIRST_PARTY_VIDEO_TEMPLATES){
+      const score=[
+        release.family.revision>=2 && release.design.revision>=2,
+        release.family.texts.length>=2 && release.family.texts.every(text=>Boolean(text.anim?.in)),
+        (release.family.graphics?.length??0)>=1 && release.family.graphics!.every(graphic=>Boolean(graphic.anim)),
+        release.family.slots.slice(1).every(slot=>slot.transition!=='cut'),
+        release.family.slots.every(slot=>Boolean(slot.motion)),
+        release.family.slots.every(slot=>Boolean(slot.fx)),
+        release.family.slots.every(slot=>slot.startFrame%BATCH9A_DEFAULT_MUSIC.beatEveryFrames===0),
+        release.family.texts[0]!.maxChars<=40,
+        release.family.texts[0]!.size>=58,
+        release.family.totalFrames>=210 && release.family.totalFrames<=450,
+      ].filter(Boolean).length
+      expect(score,release.id).toBeGreaterThanOrEqual(9)
+    }
+  })
+
   it('compiles every Batch 9A anchor with beat cuts, transitions, animated layers and music', () => {
     const musicAsset = {
       id:'batch9a_test_music',kind:'audio' as const,durationFrames:BATCH9A_DEFAULT_MUSIC.durationFrames,
