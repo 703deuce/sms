@@ -19,6 +19,8 @@ export type StudioModelConfig = StudioModelPublic & {
   /** Maps a contract resolution to the provider spelling. */
   resolveResolution?: (value: string) => string | null
   requiresStartOrReference?: boolean
+  /** Internal-only models whose credit price has not been published to the general Studio catalog. */
+  adStudioOnly?: boolean
 }
 
 const ASPECTS_ALL: StudioAspect[] = ['9:16', '16:9', '1:1']
@@ -132,6 +134,7 @@ export const STUDIO_MODELS: StudioModelConfig[] = [
     durationsSec: [2, 4, 5, 6, 8, 10, 12, 15, 20, 30],
     resolutions: ['480P', '720P', '1080P'],
     creditEstimate: 0,
+    adStudioOnly: true,
     providerModel: 'wan/3-0-video',
     providerApi: 'jobs',
     defaultAspect: '16:9',
@@ -150,6 +153,7 @@ export const STUDIO_MODELS: StudioModelConfig[] = [
     durationsSec: [4, 5, 6, 8, 10, 12, 15, 20, 30],
     resolutions: ['480p', '720p', '1080p'],
     creditEstimate: 0,
+    adStudioOnly: true,
     providerModel: 'bytedance/seedance-2-5',
     providerApi: 'jobs',
     defaultAspect: '16:9',
@@ -268,6 +272,7 @@ export function publicStudioModel(model: StudioModelConfig): StudioModelPublic {
     defaultResolution: _defaultResolution,
     resolveResolution: _resolveResolution,
     requiresStartOrReference: _requiresStartOrReference,
+    adStudioOnly: _adStudioOnly,
     ...pub
   } = model
   void _providerModel
@@ -277,13 +282,15 @@ export function publicStudioModel(model: StudioModelConfig): StudioModelPublic {
   void _defaultResolution
   void _resolveResolution
   void _requiresStartOrReference
+  void _adStudioOnly
   return pub
 }
 
 export function getStudioRegistryDocument(opts?: { mode?: StudioMode }): StudioRegistryDocument {
+  const visible = STUDIO_MODELS.filter((model) => model.adStudioOnly !== true)
   const models = opts?.mode
-    ? STUDIO_MODELS.filter((model) => model.modes.includes(opts.mode!))
-    : STUDIO_MODELS.filter((model) => !model.modes.includes('source_video_edit'))
+    ? visible.filter((model) => model.modes.includes(opts.mode!))
+    : visible.filter((model) => !model.modes.includes('source_video_edit'))
   return {
     version: STUDIO_REGISTRY_VERSION,
     models: models.map(publicStudioModel),
