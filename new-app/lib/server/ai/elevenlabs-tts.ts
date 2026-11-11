@@ -123,6 +123,8 @@ export async function ttsWithTimestamps(input: {
   previousText?: string
   nextText?: string
   seed?: number
+  /** Disable model fallback when the caller requires exactly one provider request. */
+  allowModelFallback?: boolean
 }): Promise<{
   audio: Buffer
   alignment: TtsAlignment
