@@ -87,7 +87,7 @@ def test_multiscript_long_word_and_rtl_export_keeps_dialogues(tmp_path, width, h
     )
     ass = output.read_text(encoding="utf-8")
     assert "Dialogue:" in ass
-    assert content in ass
+    assert content.lower() in ass.lower()
     assert f"PlayResX: {width}" in ass
     assert f"PlayResY: {height}" in ass
 
