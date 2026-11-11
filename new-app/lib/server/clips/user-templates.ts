@@ -13,6 +13,7 @@ import type {
   UserTemplateSlotV1,
   UserTemplateDecorativeAssetV1,
 } from '@/lib/clips/user-templates/contract'
+import { assertUserTemplateEditableStructure } from '@/lib/clips/user-templates/structure-gate'
 
 const SAFE_ID = /^[A-Za-z0-9_:.~-]{1,120}$/
 const MAX_TEMPLATE_BYTES = 2_000_000
@@ -124,6 +125,15 @@ export async function inspectClipForUserTemplate(
   if (music) {
     const id = music.uploadId ?? music.generationId
     decorative.push({ key:'music:' + id, label:'Current soundtrack', kind:music.uploadId ? 'upload' : 'generation' })
+  }
+  for (const cue of edits.audio?.sfx ?? []) {
+    const id = cue.uploadId ?? cue.generationId
+    decorative.push({ key:'sfx:' + cue.generationId, label:'Sound effect ' + cue.generationId.slice(0,32),
+      kind:cue.uploadId ? 'upload' : 'generation' })
+  }
+  if (edits.audio?.studioSound?.generationId) {
+    decorative.push({ key:'studio-sound:' + edits.audio.studioSound.generationId,
+      label:'Studio Sound processing', kind:'generation' })
   }
   return {
     clipId:row.id, editsSaveVersion:row.editsSaveVersion,
@@ -247,6 +257,18 @@ async function buildFromClip(workspaceId:string,input:SaveInput):Promise<Built> 
   }else if(input.musicPolicy!=='mute') {
     throw new Error('This edit has no soundtrack to preserve or replace')
   }
+  for(const cue of edits.audio?.sfx??[]){
+    const id=cue.uploadId??cue.generationId
+    const key='sfx:'+cue.generationId
+    if(!decorative.has(key)) throw new Error('Sound effect '+cue.generationId+' must be intentionally preserved or removed before saving')
+    manifestDecorative.push({key,kind:cue.uploadId?'upload':'generation',assetId:id,media:'audio',redistributionCleared:false})
+  }
+  if(edits.audio?.studioSound?.generationId){
+    const id=edits.audio.studioSound.generationId
+    const key='studio-sound:'+id
+    if(!decorative.has(key)) throw new Error('Studio Sound must be intentionally preserved or disabled before saving')
+    manifestDecorative.push({key,kind:'generation',assetId:id,media:'audio',redistributionCleared:false})
+  }
 
   const uploadIds=manifestDecorative.filter(x=>x.kind==='upload').map(x=>x.assetId)
   if(uploadIds.length){
@@ -281,6 +303,7 @@ async function buildFromClip(workspaceId:string,input:SaveInput):Promise<Built> 
     },
   }
   const manifest:UserTemplateAssetManifestV1={v:1,slots,decorative:manifestDecorative,musicPolicy:input.musicPolicy}
+  assertUserTemplateEditableStructure(definition,manifest)
   if(containsInjectedUrl(definition)||containsInjectedUrl(manifest)) throw new Error('Template definition contains an external URL')
   const fingerprint=createHash('sha256').update(JSON.stringify({definition,manifest})).digest('hex')
   return {definition,manifest,fingerprint}
@@ -333,7 +356,7 @@ export async function listPrivateUserTemplates(workspaceId:string,q:string,page:
 
 export async function getPrivateUserTemplate(workspaceId:string,templateId:string,revision?:number){
   const template=await getPrisma().clipUserTemplate.findFirst({where:{id:templateId,workspaceId,deletedAt:null},
-    select:{id:true,title:true,description:true,currentRevision:true,updatedAt:true}})
+    select:{id:true,title:true,description:true,currentRevision:true,updatedAt:true,createdById:true}})
   if(!template) throw new Error('Template not found')
   const rev=await getPrisma().clipUserTemplateRevision.findFirst({where:{
     templateId,workspaceId,revision:revision??template.currentRevision}})
@@ -445,6 +468,7 @@ export async function usePrivateUserTemplate(workspaceId:string,actorUserId:stri
   for(const src of edits.sources??[]) if(src.ref==='upload'&&src.refId!==main.id) secondaryUploads.add(src.refId)
   for(const item of edits.broll??[]) if(item.source==='upload'&&item.uploadId!==main.id) secondaryUploads.add(item.uploadId)
   if(edits.audio?.music?.uploadId&&edits.audio.music.uploadId!==main.id) secondaryUploads.add(edits.audio.music.uploadId)
+  for(const cue of edits.audio?.sfx??[]) if(cue.uploadId&&cue.uploadId!==main.id) secondaryUploads.add(cue.uploadId)
 
   await getPrisma().$transaction(async tx=>{
     await tx.clipProject.create({data:{id:projectId,workspaceId,createdById:actorUserId,

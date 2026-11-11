@@ -12,6 +12,7 @@ import type {
   UserTemplateAssetManifestV1,
   UserTemplateDefinitionV1,
 } from '@/lib/clips/user-templates/contract'
+import { assertUserTemplateEditableStructure } from '@/lib/clips/user-templates/structure-gate'
 
 const CATEGORIES=new Set(['gaming','podcast','social','business','education','lifestyle','other'])
 const TAG=/^[a-z0-9][a-z0-9 _-]{0,31}$/i
@@ -89,8 +90,8 @@ export async function submitUserTemplateForReview(workspaceId:string,actorUserId
   const tags=[...new Set(input.tags.map(t=>t.trim()).filter(Boolean))]
   if(tags.length>8||tags.some(t=>!TAG.test(t))) throw new Error('Use up to 8 short plain-text tags')
   const loaded=await getPrivateUserTemplate(workspaceId,templateId,input.revision)
-  if(loaded.revision.createdById!==actorUserId&&loaded.id!==templateId)
-    throw new Error('Template revision is not available')
+  if(loaded.createdById!==actorUserId)
+    throw new Error('Only the template creator can submit it to the public community')
   const definition=loaded.revision.definition as unknown as UserTemplateDefinitionV1
   const manifest=loaded.revision.assetManifest as unknown as UserTemplateAssetManifestV1
   if(!object(definition)||definition.v!==1||!object(manifest)||manifest.v!==1)
@@ -99,8 +100,7 @@ export async function submitUserTemplateForReview(workspaceId:string,actorUserId
     throw new Error('Public templates cannot include private decorative uploads, generated assets, music, or uploaded fonts. Make them slots or remove them first.')
   if(manifest.musicPolicy==='keep')
     throw new Error('A private soundtrack cannot be redistributed. Make music replaceable or mute it.')
-  if(!definition.slots.some(s=>s.target.kind==='main'))
-    throw new Error('Public templates must make the main source replaceable')
+  assertUserTemplateEditableStructure(definition,manifest,{public:true})
   if(recursiveUnsafe(definition))
     throw new Error('Public definition contains private IDs/URLs/credentials; remove that dependency before submitting')
   const publicTitle=publicText(input.title,120)
@@ -246,7 +246,7 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
   action:'approve'|'reject'|'hide'|'unpublish'|'restore';reason?:string
 }){
   const pub=await getPrisma().clipTemplatePublication.findUnique({where:{id:publicationId},
-    select:{id:true,state:true,creatorUserId:true,publicDefinition:true}})
+    select:{id:true,state:true,creatorUserId:true,publicDefinition:true,publishedAt:true}})
   if(!pub) throw new Error('Publication not found')
   if(pub.creatorUserId===moderatorUserId) throw new Error('Creators cannot approve or moderate their own publication')
   const reason=(input.reason??'').replace(/[\u0000-\u001f\u007f]/g,' ').trim().slice(0,1000)
@@ -257,7 +257,8 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
   if(input.action==='approve'){
     if(pub.state!=='submitted') throw new Error('Only submitted templates can be approved')
     const bundle=parsePublicBundle(pub.publicDefinition)
-    if(bundle.manifest.decorative.length||recursiveUnsafe(bundle))
+    assertUserTemplateEditableStructure(bundle.definition,bundle.manifest,{public:true})
+    if(recursiveUnsafe(bundle))
       throw new Error('Sanitization gate failed')
     data={state:'published',approvedAt:now,publishedAt:now,rejectedAt:null,hiddenAt:null,withdrawnAt:null}
     action='approved'
@@ -271,7 +272,7 @@ export async function moderateCommunityTemplate(moderatorUserId:string,publicati
     action=input.action==='hide'?'hidden':'unpublished'
   }else{
     if(pub.state!=='hidden') throw new Error('Only hidden templates can be restored')
-    data={state:'published',hiddenAt:null,publishedAt:pub.state==='hidden'?now:undefined}
+    data={state:'published',hiddenAt:null,publishedAt:pub.publishedAt ?? now}
     action='restored'
   }
   return getPrisma().$transaction(async tx=>{
