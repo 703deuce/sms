@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { outputToSequenceFrame, itemLocalToSequenceFrame, sourceToSequenceFrames, frameToMs } from '@/lib/clips/real-video-templates/sequence-timebase'
 
 const slot = (n: number, frames = 30) => ({
   id: `shot_${n}`, ordinal: n, role: 'hero', media: 'either',
@@ -78,5 +79,21 @@ describe('real-video template B3 experimental contract', () => {
       .toThrow(/music forbidden/)
     expect(() => compileTemplatePrototype(family(1), design, choices(1), carrier(2)))
       .toThrow(/exact frame count/)
+  })
+})
+
+describe('B3 exact source/output/item-local frame clock', () => {
+  it('round-trips every frame and preserves repeated source ambiguity', () => {
+    const seq = compileTemplatePrototype(family(30), design, choices(30), carrier(30)).sequence
+    for (let output = 0; output < seq.totalFrames; output++) {
+      const location = outputToSequenceFrame(seq, output)
+      expect(itemLocalToSequenceFrame(seq, location.itemId, location.itemLocalFrame)).toEqual(location)
+      const matching = sourceToSequenceFrames(seq, location.sourceId, location.mediaFrame)
+      expect(matching).toContainEqual(location)
+    }
+    expect(sourceToSequenceFrames(seq, 'image_one', 0)).toHaveLength(30)
+    expect(frameToMs(900)).toBe(30000)
+    expect(() => outputToSequenceFrame(seq, 900)).toThrow(/outside sequence/)
+    expect(() => itemLocalToSequenceFrame(seq, 'unknown', 0)).toThrow(/unknown sequence item/)
   })
 })
