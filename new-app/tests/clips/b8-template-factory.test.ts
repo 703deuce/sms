@@ -201,10 +201,15 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)
     const running={...first[0]!,attempts:1,runStatus:'running' as const}
     const done={...first[1]!,attempts:1,runStatus:'done' as const}
-    const reconciled=reconcileB8Queue(first,[running,done])
+    const rendered={...first[2]!,attempts:1,runStatus:'rendered' as const,
+      renderEvidence:'render-evidence/f03_bold.json'}
+    const reconciled=reconcileB8Queue(first,[running,done,rendered])
     expect(reconciled.find(j=>j.id===running.id)?.runStatus).toBe('running')
     expect(reconciled.find(j=>j.id===done.id)?.runStatus).toBe('done')
-    expect(reconciled.filter(j=>j.runStatus==='queued')).toHaveLength(1998)
+    expect(reconciled.find(j=>j.id===rendered.id)).toMatchObject({
+      runStatus:'rendered',renderEvidence:'render-evidence/f03_bold.json',
+    })
+    expect(reconciled.filter(j=>j.runStatus==='queued')).toHaveLength(1997)
     expect(reconcileB8Queue(first,reconciled)).toEqual(reconciled)
     const changed=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v2'},8)
     expect(()=>reconcileB8Queue(changed,reconciled)).toThrow(/active Batch 8 worker lease/)

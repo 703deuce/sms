@@ -402,8 +402,10 @@ export function shardB8Jobs(candidates:readonly B8Candidate[],
 /** A durable local checkpoint for a specific content-addressed render job. */
 export type B8QueueJobState = B8ShardJob & {
   attempts: number
-  runStatus: 'queued' | 'running' | 'failed' | 'done' | 'canceled'
+  runStatus: 'queued' | 'running' | 'rendered' | 'failed' | 'done' | 'canceled'
   error?: string
+  claimedAt?: string
+  renderEvidence?: string
 }
 
 /**
@@ -432,11 +434,13 @@ export function reconcileB8Queue(
       return { ...job, attempts: 0, runStatus: 'queued' as const }
     if (!Number.isInteger(old.attempts) || old.attempts < 0 ||
         old.attempts > job.maxAttempts ||
-        !['queued','running','failed','done','canceled'].includes(old.runStatus))
+        !['queued','running','rendered','failed','done','canceled'].includes(old.runStatus))
       throw new Error('Corrupt Batch 8 checkpoint for ' + job.id)
     return {
       ...job, attempts: old.attempts, runStatus: old.runStatus,
       ...(old.error ? { error: old.error } : {}),
+      ...(old.claimedAt ? { claimedAt: old.claimedAt } : {}),
+      ...(old.renderEvidence ? { renderEvidence: old.renderEvidence } : {}),
     }
   })
 }
