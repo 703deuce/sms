@@ -27,8 +27,11 @@ vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server/db', () => ({ getPrisma: () => db }))
 
 import { normalizeEdits } from '@/lib/clips/edits'
-import { moveSourceSegmentBoundary, patchSourceSegment } from '@/lib/clips/editor/sources'
-import { buildEditableTimelineProofCases } from '@/lib/clips/real-video-templates/editable-timeline-proof-cases'
+import { sourceSegmentTarget } from '@/lib/clips/editor/keyframes'
+import {
+  buildEditableTimelineProofCases,
+  buildEditedReloadProofCase,
+} from '@/lib/clips/real-video-templates/editable-timeline-proof-cases'
 import { snapshotEditableTimelineStructure } from '@/lib/clips/real-video-templates/editable-timeline-proof'
 import { writeClipEdits } from '@/lib/server/clips/write-clip-edits'
 
@@ -43,22 +46,12 @@ beforeEach(() => {
 })
 
 describe('Batch 3B production save/reload', () => {
-  it('flushes template clip edits through the ordinary CAS writer and reloads every authoritative object', async () => {
-    const initial = normalizeEdits(row.edits, bounds)
-    const ids = initial.sourceSegments!.map((seg) => seg.id)
-    let edited = moveSourceSegmentBoundary(initial, ids[0]!, ids[1]!, 1033)
-    edited = {
-      ...edited,
-      sourceSegments: patchSourceSegment(
-        edited.sourceSegments,
-        ids[1]!,
-        { fx: { contrast: 17 }, transform: { x: 5, scale: 111 } },
-        edited.sources,
-      ),
-      captionLines: [{ id: 'caption_all', text: 'Saved through every slot', startMs: 0, endMs: 3000 }],
-    }
+  it('flushes every required edited object through the ordinary CAS writer and reloads it losslessly', async () => {
+    const proof = buildEditedReloadProofCase()
+    const edited = proof.edits
+    const ids = proof.sourceSegmentIds
+    const expected = snapshotEditableTimelineStructure(edited)
 
-    const expected = snapshotEditableTimelineStructure(normalizeEdits(edited, bounds))
     const saved = await writeClipEdits('clip_b3b', bounds, 0, () => edited)
     expect(saved.ok).toBe(true)
     if (!saved.ok) throw new Error('unexpected save conflict')
@@ -71,13 +64,38 @@ describe('Batch 3B production save/reload', () => {
     expect(reloaded.sourceSegments?.map((seg) => seg.id)).toEqual(ids)
     expect(reloaded.sourceSegments?.[1]).toMatchObject({
       id: ids[1],
+      sourceId: 'replacement_source',
       startMs: 1033,
-      fx: { contrast: 17 },
-      transform: { x: 5, scale: 111 },
+      inMs: 450,
+      speed: 1.5,
+      transform: { x: 4, scale: 105, cropL: 8, cropR: 4 },
+      fx: { contrast: 22, saturation: -7 },
+    })
+    expect(reloaded.transitions?.find((t) => t.srcMs === 1033)).toMatchObject({
+      type: 'wipe_left',
+      durMs: 300,
+    })
+    expect(reloaded.textItems?.find((item) => item.kind !== 'shape')).toMatchObject({
+      text: 'Edited after publish',
+      anim: { in: { type: 'pop', unit: 'block', durMs: 200 } },
+    })
+    expect(reloaded.textItems?.find((item) => item.kind === 'shape')).toMatchObject({
+      x: 74,
+      anim: { in: { type: 'fade', unit: 'block', durMs: 200 } },
+    })
+    expect(reloaded.keyframes?.find((k) => k.target === sourceSegmentTarget(ids[1]!) && k.prop === 'x')?.points[0]?.v).toBe(-5)
+    expect(reloaded.audio?.music).toMatchObject({
+      generationId: 'replacement_music',
+      uploadId: 'replacement_music',
+      volume: 0.35,
+      startMs: 0,
+      endMs: 3000,
+      loop: true,
     })
     expect(reloaded.captionLines).toEqual([
-      { id: 'caption_all', text: 'Saved through every slot', startMs: 0, endMs: 3000 },
+      { id: 'caption_all', text: 'CAPTION THROUGH EVERY SLOT', startMs: 0, endMs: 3000 },
     ])
+    expect(reloaded.inserts ?? []).toHaveLength(0)
   })
 
   it('returns the normal optimistic conflict shape when the version is stale', async () => {
