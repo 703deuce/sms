@@ -13,7 +13,7 @@ import {
   monotonicPct,
   type ExportRenderDetail,
 } from '@/lib/clips/editor/export-progress-text'
-import { exportActionLabel, exportDownloadLabel, mp3EncoderAvailable } from '@/lib/clips/export-format-labels'
+import { exportActionLabel, exportDownloadLabelForFilename, mp3EncoderAvailable } from '@/lib/clips/export-format-labels'
 import { defaultExportDialogState } from '@/lib/clips/export-dialog-defaults'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -180,6 +180,7 @@ export function ExportDialog({
   const exportClickedRef = useRef(false)
   const exportPrefsInitializedRef = useRef(false)
   const resolutionTouchedRef = useRef(false)
+  const aspectTouchedRef = useRef(false)
   // FV4d: the in-flight render this dialog re-attached to (wins over saved export preferences).
   const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ExportAspect | null } | null>(null)
   const [lookupPending, setLookupPending] = useState(false)
@@ -219,6 +220,7 @@ export function ExportDialog({
     if (!open) {
       exportPrefsInitializedRef.current = false
       resolutionTouchedRef.current = false
+      aspectTouchedRef.current = false
       return
     }
     if (exportPrefsInitializedRef.current) return
@@ -236,19 +238,21 @@ export function ExportDialog({
       if (resumed) {
         // FV4d: re-attached to an in-flight render — keep its resolution / aspect selected.
         if (resumed.resolution && !resolutionTouchedRef.current) setResolution(resumed.resolution)
-        if (resumed.aspectRatio) setAspect(resumed.aspectRatio)
+        if (resumed.aspectRatio && !aspectTouchedRef.current) setAspect(resumed.aspectRatio)
       } else if (fullVideo) {
         const a = edits.aspectRatio ?? '16:9'
-        setAspect(a)
+        if (!aspectTouchedRef.current) setAspect(a)
         if (!resolutionTouchedRef.current) {
           if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
           else setResolution(can('', 'export_1080p') ? '1080p' : '720p')
         }
-        onAspectChange?.(a)
+        if (!aspectTouchedRef.current) onAspectChange?.(a)
       } else {
         const clipDefaults = defaultExportDialogState(edits)
-        setAspect(clipDefaults.aspect)
-        onAspectChange?.(clipDefaults.aspect)
+        if (!aspectTouchedRef.current) {
+          setAspect(clipDefaults.aspect)
+          onAspectChange?.(clipDefaults.aspect)
+        }
         if (!resolutionTouchedRef.current) {
           setResolution(clipDefaults.resolution ?? (can('', 'export_1080p') ? '1080p' : '720p'))
         }
@@ -352,7 +356,7 @@ export function ExportDialog({
         // FV4d: show the running render's settings, whatever the saved / default selection was.
         setExportPlatform('none')
         if (resume.resolution && !resolutionTouchedRef.current) setResolution(resume.resolution)
-        if (resume.aspectRatio) setAspect(resume.aspectRatio)
+        if (resume.aspectRatio && !aspectTouchedRef.current) setAspect(resume.aspectRatio)
         setInFlightResolution(resume.resolution)
       })
       .catch(() => {
@@ -483,7 +487,7 @@ export function ExportDialog({
     exportButton.label === 'Export MP4'
       ? exportActionLabel(deliverFormat, encoders)
       : exportButton.label
-  const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
+  const downloadCtaLabel = exportDownloadLabelForFilename(downloadUrl ? filename : null, deliverFormat)
   const mp3Unsupported = exportPlatform === 'none' && deliverFormat === 'mp3' && !mp3EncoderAvailable(encoders)
   useEffect(() => {
     if (!open) setServerCaptionSyncWarnings([])
@@ -732,6 +736,7 @@ export function ExportDialog({
                 onClick={() => {
                   setExportPlatform(id)
                   const preset = EXPORT_PLATFORM_PRESETS[id]
+                  aspectTouchedRef.current = true
                   setAspect(preset.aspect)
                   if (can('', 'export_1080p') || preset.resolution === '720p') {
                     setResolution(preset.resolution)
@@ -1040,6 +1045,7 @@ export function ExportDialog({
                 size="sm"
                 variant={aspect === a ? 'default' : 'outline'}
                 onClick={() => {
+                  aspectTouchedRef.current = true
                   setAspect(a)
                   onAspectChange?.(a)
                   persistExportDialogPreferences({ defaultAspect: a })
