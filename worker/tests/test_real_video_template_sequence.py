@@ -86,7 +86,7 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
             },
             {
                 "id": "slot_2", "sourceId": "src_video", "startMs": 1000, "endMs": 2000,
-                "inMs": 300, "audio": "source", "fit": "cover",
+                "inMs": 300, "audio": "source", "fit": "cover", "speed": 1.5,
                 "transform": {"x": 4, "scale": 105}, "fx": {"brightness": 5},
             },
             {
