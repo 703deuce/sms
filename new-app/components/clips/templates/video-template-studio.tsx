@@ -29,6 +29,43 @@ type RenderJob = { id: string; status: string; progress: number | null; phase: s
 const inputClass = 'h-10 w-full rounded-xl border border-border bg-background px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary'
 const buttonClass = 'rounded-xl border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const primaryClass = 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+
+function batch9aPulseFile(music: NonNullable<VideoTemplateRelease['defaultMusic']>): File {
+  if (music.generator !== 'batch9a-pulse-v1') throw new Error('Unsupported first-party soundtrack generator')
+  const sampleRate=8000
+  const seconds=music.durationFrames / 30
+  const sampleCount=Math.round(sampleRate * seconds)
+  const buffer=new ArrayBuffer(44 + sampleCount * 2)
+  const view=new DataView(buffer)
+  const ascii=(offset:number,value:string)=>{for(let i=0;i<value.length;i++)view.setUint8(offset+i,value.charCodeAt(i))}
+  ascii(0,'RIFF');view.setUint32(4,36+sampleCount*2,true);ascii(8,'WAVE');ascii(12,'fmt ')
+  view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,1,true)
+  view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*2,true)
+  view.setUint16(32,2,true);view.setUint16(34,16,true);ascii(36,'data');view.setUint32(40,sampleCount*2,true)
+  const subdivision=Math.floor(sampleRate/10)
+  const pulseFrames=Math.floor(sampleRate/50)
+  const barFrames=Math.floor(sampleRate*1.6)
+  for(let i=0;i<sampleCount;i++){
+    const base=i%72<36?900:-900
+    const sub=i%subdivision
+    let pulse=0
+    if(sub<pulseFrames){
+      const strong=Math.floor(i/subdivision)%4===0
+      const amp=strong?9000:4500
+      pulse=i%8<4?amp:-amp
+    }
+    const bar=i%barFrames
+    const lift=bar<Math.floor(sampleRate/20)?(i%36<18?1400:-1400):0
+    const value=Math.max(-32768,Math.min(32767,base+pulse+lift))
+    view.setInt16(44+i*2,value,true)
+  }
+  return new File([buffer],music.id+'.wav',{type:'audio/wav'})
+}
+async function sha256Hex(file:File){
+  if(!globalThis.crypto?.subtle) throw new Error('Secure browser hashing is required for first-party music')
+  const digest=await globalThis.crypto.subtle.digest('SHA-256',await file.arrayBuffer())
+  return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join('')
+}
 function readable(error: unknown, fallback = 'Something went wrong') {
   return error instanceof Error ? error.message : fallback
 }
@@ -116,6 +153,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const future = useRef<StudioDraft[]>([])
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const musicAudioRef = useRef<HTMLAudioElement | null>(null)
+  const defaultMusicInit = useRef<string | null>(null)
   const setCurrentProject = (value: Project | null) => { projectRef.current = value; setProject(value) }
   const setCurrentDraft = (value: StudioDraft | null) => { draftRef.current = value; setDraft(value) }
   const commitDraft = (value: StudioDraft) => {
@@ -212,6 +250,63 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     void start()
     return () => { live = false }
   }, [initialProjectId, release.id, refreshMedia, loadSelectedMedia, refreshClip, router])
+  useEffect(() => {
+    const music=release.defaultMusic
+    const state=projectRef.current
+    const current=draftRef.current
+    if(!music || !state || state.status!=='DRAFT' || !current || current.music) return
+    const key=state.id+':'+music.id
+    if(defaultMusicInit.current===key) return
+    defaultMusicInit.current=key
+    let canceled=false
+    void (async()=>{
+      try{
+        setNotice('Preparing first-party soundtrack…')
+        const file=batch9aPulseFile(music)
+        const digest=await sha256Hex(file)
+        if(digest!==music.sha256) throw new Error('First-party soundtrack integrity check failed')
+        const uploaded=await uploadClipFile(file,setUploadStatus,{kind:'media'})
+        let item:MediaItem|undefined
+        for(let attempt=0;attempt<15&&!item?.available;attempt++){
+          const selected=await loadSelectedMedia([uploaded.uploadId])
+          item=selected.get(uploaded.uploadId)
+          if(!item?.available) await new Promise(resolve=>window.setTimeout(resolve,350))
+        }
+        if(canceled) return
+        if(!item?.available) throw new Error('First-party soundtrack is still processing; choose music manually or retry')
+        const latest=draftRef.current
+        if(!latest || latest.music) return
+        const asset:TemplateAsset={
+          id:uploaded.uploadId,kind:'audio',durationFrames:music.durationFrames,
+          license:{id:'batch9a_first_party',provenance:'first-party',reference:music.revision},
+        }
+        const beats=Array.from({length:Math.floor((music.durationFrames-1)/music.beatEveryFrames)+1},
+          (_,index)=>index*music.beatEveryFrames)
+        setCurrentDraft({...latest,music,templateMusic:{
+          v:1,choice:'keep-timing',acceptLoop:false,
+          rights:{
+            assetId:uploaded.uploadId,origin:'first-party-generated',author:music.author,
+            license:music.license,revision:music.revision,sha256:music.sha256,
+            commercialUse:true,exportAllowed:true,redistributionAllowed:true,
+            verifiedDurationFrames:music.durationFrames,verifiedAt:music.revision,
+          },
+          schedule:{
+            v:1,mode:'beat-time',musicAssetId:uploaded.uploadId,sha256:music.sha256,
+            bpm:music.bpm,confidence:'manual',offsetFrames:0,durationFrames:music.durationFrames,
+            beats,phrases:[],protectedAnchors:[],
+          },
+        },musicRightsConfirmed:true,musicTiming:'keep'})
+        dirtyRef.current=true
+        setDirty(true)
+        setNotice('First-party beat-synced soundtrack ready')
+      }catch(e){
+        if(!canceled){defaultMusicInit.current=null;setError(readable(e,'Could not prepare first-party soundtrack'))}
+      }finally{
+        if(!canceled)setUploadStatus(null)
+      }
+    })()
+    return()=>{canceled=true}
+  }, [project?.id, project?.status, release.defaultMusic, loadSelectedMedia])
   useEffect(() => {
     if (!project || project.status === 'DRAFT' || project.status === 'READY' || project.status === 'CANCELED') return
     const timer = window.setInterval(() => {
@@ -441,7 +536,8 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     else if (!play && !audio.paused) audio.pause()
   }
   const ready = project?.status === 'READY' && Boolean(clip && project.clipId)
-  const canPublish = progress.filled === progress.total && project?.status === 'DRAFT' && !busy
+  const musicReady = !release.musicRequired || Boolean(draft?.music && draft?.templateMusic && draft.musicRightsConfirmed)
+  const canPublish = progress.filled === progress.total && musicReady && project?.status === 'DRAFT' && !busy
   return (
     <div className="mx-auto max-w-[1560px] space-y-5 px-4 py-6 sm:px-6" data-testid="video-template-studio">
       <nav className="text-xs text-muted-foreground" aria-label="Breadcrumb">
@@ -450,7 +546,12 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       </nav>
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-widest text-primary">{release.category} · {release.family.aspects.join(', ')}</p>
+          <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-widest text-primary">
+            <span>{release.category} · {release.family.aspects.join(', ')}</span>
+            <span className={release.certificationStatus === 'certified'
+              ? 'rounded-full border border-emerald-500/40 px-2 py-0.5 text-emerald-600'
+              : 'rounded-full border border-amber-500/40 px-2 py-0.5 text-amber-600'}>{release.certificationStatus === 'certified' ? 'Certified' : 'Preview'}</span>
+          </p>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{release.title}</h1>
           <p className="max-w-2xl text-sm text-muted-foreground">{release.description}</p>
           <p className="text-xs text-muted-foreground">{release.family.totalFrames / 30}s · {release.family.slots.length} media slots · {release.family.texts.length} text fields</p>
@@ -593,8 +694,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
                 }}
               />}
               <p className="text-xs text-muted-foreground">
-                Select an uploaded song and verify the exact file hash and music rights before saving.
-                Replacement can keep cut timing or use an approved pinned beat re-sync.
+                {release.defaultMusic
+                  ? 'This Preview template starts with an original first-party beat bed whose pulses align to every authored cut. You can remove it and verify your own replacement track.'
+                  : 'Select an uploaded song and verify the exact file hash and music rights before saving. Replacement can keep cut timing or use an approved pinned beat re-sync.'}
               </p>
             </>}
           </section>
@@ -729,8 +831,11 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
             <h2 className="text-sm font-semibold">Project and export</h2>
             <p className="text-xs text-muted-foreground">A template always creates a separate project. Existing clip timelines are never replaced.</p>
             <p className="text-xs">Project status: <strong>{project?.status ?? 'Creating draft'}</strong></p>
-            {project?.status === 'DRAFT' && <button type="button" className={primaryClass}
-              disabled={!canPublish || dirty && busy} onClick={() => void publish()}>Prepare full preview and project</button>}
+            {project?.status === 'DRAFT' && <>
+              <button type="button" className={primaryClass}
+                disabled={!canPublish || dirty && busy} onClick={() => void publish()}>Prepare full preview and project</button>
+              {!musicReady ? <p className="text-xs text-amber-600">Preparing or verifying the required template soundtrack…</p> : null}
+            </>}
             {ready && <button type="button" className={primaryClass} disabled={busy}
               onClick={() => void doExport()}>Save and export video · 720p</button>}
             {render && <div className="space-y-2 rounded-xl border p-3" role="status">
