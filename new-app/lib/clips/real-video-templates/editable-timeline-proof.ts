@@ -14,7 +14,17 @@ import {
 export const EDITABLE_TIMELINE_PROOF_VERSION = 1
 export const EDITABLE_TIMELINE_FRAME_MS = 1000 / 30
 
-export type StructureItem = { id: string; slotId?: string; startMs: number; endMs: number; sourceId?: string }
+export type StructureItem = {
+  id: string
+  slotId?: string
+  startMs: number
+  endMs: number
+  sourceId?: string
+  audio?: 'main' | 'source' | 'mix'
+  speed?: number
+  transform?: unknown
+  fx?: unknown
+}
 export type StructureCut = { id: string; srcMs: number }
 export type StructureTransition = { id: string; srcMs: number; type: string; durMs: number }
 export type StructureLayer = {
@@ -85,6 +95,12 @@ export function expectedEditableTimelineStructure(
     slotId: slot.id,
     startMs: templateFrameToMs(slot.startFrame),
     endMs: templateFrameToMs(slot.startFrame + slot.durationFrames),
+    ...(slot.media === 'video' || slot.media === 'either'
+      ? { audio: slot.sourceAudio === 'source' ? 'source' as const : 'main' as const }
+      : {}),
+    ...(slot.speed != null ? { speed: slot.speed } : {}),
+    ...(slot.transform ? { transform: slot.transform } : {}),
+    ...(slot.fx ? { fx: slot.fx } : {}),
   }))
   const cuts: StructureCut[] = []
   const transitions: StructureTransition[] = []
@@ -133,7 +149,13 @@ export function expectedEditableTimelineStructure(
 
 export function snapshotEditableTimelineStructure(edits: ClipEditsV2): EditableTimelineStructure {
   const segments = [...(edits.sourceSegments ?? [])].sort((a, b) => a.startMs - b.startMs)
-  const mediaItems = segments.map((s) => ({ id: s.id, startMs: s.startMs, endMs: s.endMs, sourceId: s.sourceId }))
+  const mediaItems = segments.map((s) => ({
+    id: s.id, startMs: s.startMs, endMs: s.endMs, sourceId: s.sourceId,
+    ...(s.audio ? { audio: s.audio } : {}),
+    ...(s.speed != null ? { speed: s.speed } : {}),
+    ...(s.transform ? { transform: s.transform } : {}),
+    ...(s.fx ? { fx: s.fx } : {}),
+  }))
   const cuts: StructureCut[] = []
   for (let i = 1; i < segments.length; i++) {
     const left = segments[i - 1]!, right = segments[i]!
@@ -203,6 +225,10 @@ export function proveEditableTimelineStructure(
     const source = a.sourceId ? actualEdits.sources?.find((row) => row.id === a.sourceId) : undefined
     if (!slotId || !selected || !source || source.ref !== 'upload' || source.refId !== selected.id)
       errors.push(`source assignment mismatch ${e.id}`)
+    if (e.audio !== a.audio || e.speed !== a.speed ||
+        JSON.stringify(e.transform ?? null) !== JSON.stringify(a.transform ?? null) ||
+        JSON.stringify(e.fx ?? null) !== JSON.stringify(a.fx ?? null))
+      errors.push(`media edit semantics mismatch ${e.id}`)
   }
   for (const e of expected.cuts) {
     const a = actual.cuts.find((x) => x.id === e.id)
