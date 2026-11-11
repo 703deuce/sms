@@ -183,6 +183,14 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
         : item),
     }
     next = setPropertyAt(next, `text:${text.id}`, 'x', 0, 7)
+    const graphic = next.textItems!.find((item) => item.kind === 'shape')!
+    next = {
+      ...next,
+      textItems: next.textItems!.map((item) => item.id === graphic.id
+        ? { ...item, x: 74, anim: { in: { type: 'fade' as const, unit: 'block' as const, durMs: 200 } } }
+        : item),
+    }
+    next = setPropertyAt(next, sourceSegmentTarget(second), 'x', 0, -5)
 
     const musicId = next.audio!.music!.generationId
     const muted = patchAudioClip(next, 'music', musicId, { volume: 0 })!
@@ -194,7 +202,10 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
 
     next = {
       ...next,
-      sourceSegments: patchSourceSegment(next.sourceSegments, second, { fx: { contrast: 22, saturation: -7 } }, next.sources),
+      sourceSegments: patchSourceSegment(next.sourceSegments, second, {
+        transform: { x: 4, scale: 105, cropL: 8, cropR: 4 },
+        fx: { contrast: 22, saturation: -7 },
+      }, next.sources),
     }
 
     next = {
@@ -215,7 +226,7 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
       startMs: 1033,
       inMs: 450,
       speed: 1.5,
-      transform: { x: 4, scale: 105 },
+      transform: { x: 4, scale: 105, cropL: 8, cropR: 4 },
       fx: { contrast: 22, saturation: -7 },
     })
     const mappedSource = reloaded.sources?.find((row) => row.id === 'replacement_source')
@@ -223,6 +234,11 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     expect(segmentMediaMs(reloaded.sourceSegments![1]!, mappedSource, 1100)).toBe(551)
     expect(reloaded.transitions?.find((t) => t.srcMs === 1033)?.type).toBe('wipe_left')
     expect(reloaded.textItems?.find((item) => item.id === text.id)).toMatchObject({ text: 'Edited after publish' })
+    expect(reloaded.textItems?.find((item) => item.id === graphic.id)).toMatchObject({
+      x: 74,
+      anim: { in: { type: 'fade', unit: 'block', durMs: 200 } },
+    })
+    expect(reloaded.keyframes?.find((k) => k.target === sourceSegmentTarget(second) && k.prop === 'x')?.points[0]?.v).toBe(-5)
     expect(reloaded.audio?.music).toMatchObject({ generationId: 'replacement_music', uploadId: 'replacement_music', volume: 0.35 })
     expect(reloaded.captionLines).toEqual([{ id: 'caption_all', startMs: 0, endMs: 3000, text: 'CAPTION THROUGH EVERY SLOT' }])
 

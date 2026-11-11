@@ -315,6 +315,7 @@ def test_b3b_generated_edited_reload_contract_renders(tmp_path: Path) -> None:
     text_ass = text_items_ass(edits, w=90, h=160)
     assert "Edited after publish" in text_ass
     assert "0:00:03.00" in text_ass
+    assert r"\\p1" in text_ass or "m " in text_ass  # edited graphic layer survived into the render program
     apply_text_items(sourced, texted, edits, play_w=90, play_h=160)
     assert frames(texted) == 90
 

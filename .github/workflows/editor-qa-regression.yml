@@ -236,7 +236,7 @@ jobs:
         working-directory: new-app
         run: |
           pnpm exec tsx scripts/prove-real-video-template-editable-structure.ts > ../editable-timeline-structure-proof.json
-          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("../editable-timeline-structure-proof.json","utf8")); if(p.schema!=="transovo.real-video-template.editable-timeline-proof.v1" || p.cases.length!==3 || !p.cases.every(c=>c.matches) || !p.editedReload || p.editedReload.structure.mediaItems.length!==3 || p.editedReload.edits.audio.music.uploadId!=="replacement_music") process.exit(1); console.log(p.cases.map(c=>c.id+":"+c.actual.mediaItems.length+" items").join(", ")+", edited-reload:ok")'
+          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("../editable-timeline-structure-proof.json","utf8")); const s=p.editedReload?.structure; if(p.schema!=="transovo.real-video-template.editable-timeline-proof.v1" || p.cases.length!==3 || !p.cases.every(c=>c.matches) || !s || s.mediaItems.length!==3 || !s.layers.some(l=>l.kind==="text") || !s.layers.some(l=>l.kind==="graphic") || !s.keyframes.some(k=>k.target.startsWith("source:")) || s.inserts.length!==0 || p.editedReload.edits.audio.music.uploadId!=="replacement_music") process.exit(1); console.log(p.cases.map(c=>c.id+":"+c.actual.mediaItems.length+" items").join(", ")+", edited-reload:all-layers-ok")'
       - uses: actions/upload-artifact@v4
         with:
           name: real-video-template-editable-timeline-proof

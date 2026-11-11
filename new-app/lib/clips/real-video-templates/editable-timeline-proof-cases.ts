@@ -149,6 +149,14 @@ export function buildEditedReloadProofCase(): {
       : item),
   }
   edits = setPropertyAt(edits, `text:${text.id}`, 'x', 0, 7)
+  const graphic = edits.textItems!.find((item) => item.kind === 'shape')!
+  edits = {
+    ...edits,
+    textItems: edits.textItems!.map((item) => item.id === graphic.id
+      ? { ...item, x: 74, anim: { in: { type: 'fade' as const, unit: 'block' as const, durMs: 200 } } }
+      : item),
+  }
+  edits = setPropertyAt(edits, `source:${second}`, 'x', 0, -5)
   edits = {
     ...edits,
     audio: {
@@ -163,7 +171,7 @@ export function buildEditedReloadProofCase(): {
     sourceSegments: patchSourceSegment(
       edits.sourceSegments,
       second,
-      { fx: { contrast: 22, saturation: -7 } },
+      { transform: { x: 4, scale: 105, cropL: 8, cropR: 4 }, fx: { contrast: 22, saturation: -7 } },
       edits.sources,
     ),
     captions: { ...edits.captions, enabled: true },
