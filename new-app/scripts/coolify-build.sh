@@ -80,4 +80,10 @@ fi
 # Start script + runtime migrate helper (Docker / standalone cwd)
 cp -a scripts/start-production.mjs scripts/run-db-migrations.mjs .next/standalone/ 2>/dev/null || true
 
+# Ad Studio legacy photo-ad style refs (fs.readFile; not always picked up by NFT tracing)
+if [[ -d lib/server/ad-studio/style-refs ]]; then
+  mkdir -p .next/standalone/lib/server/ad-studio
+  cp -a lib/server/ad-studio/style-refs .next/standalone/lib/server/ad-studio/
+fi
+
 echo "[new-app/coolify-build] complete"
