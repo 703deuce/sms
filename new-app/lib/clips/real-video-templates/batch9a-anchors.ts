@@ -1,7 +1,7 @@
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
   type FactoryFamilySeed, type FactoryTreatmentRecipe } from './b8-authoring-catalog'
 import { validateTemplateDesign, validateTemplateFamily,
-  type TemplateFamilyV1 } from './sequence-contract'
+  type TemplateFamilyV1, type TemplateTextFinish } from './sequence-contract'
 import type { VideoTemplateRelease } from './gallery'
 
 type Direction = readonly [
@@ -19,6 +19,30 @@ const DIRECTIONS: Readonly<Record<string,Direction>> = {
   f08:['luxury',"TONIGHT'S TABLE",'STAY FOR DESSERT','Premium food atmosphere edit with elegant type and restrained dissolves.','crossfade',105,2,62],
   f09:['sport','DAY ONE','NOW','Athletic progress edit with hard hierarchy and whip-pan momentum.','whip_pan',109,4,72],
   f10:['tutorial','STEP BY STEP','TRY THIS NEXT','Creator tutorial with legible instructional type and steady directional continuity.','push_left',103,2,62],
+}
+
+type DirectionFinish = { headline: TemplateTextFinish; closing: TemplateTextFinish }
+const TEXT_FINISHES: Readonly<Record<string,DirectionFinish>> = {
+  f01:{headline:{stroke:{color:'#09090B',width:2},shadow:{color:'#000000',opacity:82,dist:4},letterSpacing:1.2},
+       closing:{stroke:{color:'#09090B',width:1.2},shadow:{color:'#000000',opacity:74,dist:3},letterSpacing:.8}},
+  f02:{headline:{stroke:{color:'#020617',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5},
+       closing:{shadow:{color:'#000000',opacity:62,dist:3},letterSpacing:.3}},
+  f03:{headline:{stroke:{color:'#020617',width:1.6},shadow:{color:'#020617',opacity:84,dist:4},letterSpacing:2},
+       closing:{stroke:{color:'#020617',width:1},shadow:{color:'#020617',opacity:76,dist:3},letterSpacing:1.4}},
+  f04:{headline:{stroke:{color:'#431407',width:1},shadow:{color:'#000000',opacity:66,dist:3},letterSpacing:.2},
+       closing:{shadow:{color:'#431407',opacity:64,dist:3}}},
+  f05:{headline:{stroke:{color:'#0C0A09',width:1.4},shadow:{color:'#000000',opacity:80,dist:4},letterSpacing:.9},
+       closing:{stroke:{color:'#0C0A09',width:1},shadow:{color:'#000000',opacity:72,dist:3},letterSpacing:.6}},
+  f06:{headline:{stroke:{color:'#1C1917',width:1.2},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5},
+       closing:{stroke:{color:'#1C1917',width:1},shadow:{color:'#000000',opacity:62,dist:3},letterSpacing:.3}},
+  f07:{headline:{stroke:{color:'#450A0A',width:1.6},shadow:{color:'#000000',opacity:76,dist:3},letterSpacing:.8},
+       closing:{stroke:{color:'#450A0A',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5}},
+  f08:{headline:{stroke:{color:'#1C1917',width:1.2},shadow:{color:'#000000',opacity:78,dist:4},letterSpacing:1.6},
+       closing:{stroke:{color:'#1C1917',width:1},shadow:{color:'#000000',opacity:72,dist:3},letterSpacing:1}},
+  f09:{headline:{stroke:{color:'#09090B',width:2.2},shadow:{color:'#000000',opacity:86,dist:4},letterSpacing:1},
+       closing:{stroke:{color:'#09090B',width:1.5},shadow:{color:'#000000',opacity:78,dist:3},letterSpacing:.6}},
+  f10:{headline:{stroke:{color:'#052E16',width:1.5},shadow:{color:'#000000',opacity:76,dist:3},letterSpacing:.7},
+       closing:{stroke:{color:'#052E16',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.4}},
 }
 function directionFor(seed:FactoryFamilySeed): {direction:Direction;recipe:FactoryTreatmentRecipe} {
   const direction=DIRECTIONS[seed.id]
@@ -55,6 +79,8 @@ const BATCH9A_PREVIEW_MEDIA = [
 
 function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe, direction: Direction): TemplateFamilyV1 {
   const [,headline,closing,,transition,motionScale,motionShift,headlineSize]=direction
+  const finish=TEXT_FINISHES[seed.id]
+  if(!finish)throw new Error('Missing Batch 9A text finish: '+seed.id)
   let at = 0
   const slots: TemplateFamilyV1['slots'] = seed.frames.map((durationFrames,index) => {
     const slot: TemplateFamilyV1['slots'][number] = {
@@ -111,13 +137,14 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
       {
         id:'headline',defaultText:headline,maxChars:40,startFrame:0,durationFrames:titleFrames,
         x:recipe.x,y:recipe.y,font:recipe.headingFont,size:headlineSize,
-        color:recipe.foreground,
+        color:recipe.foreground,finish:finish.headline,
         anim:{in:{type:recipe.enter,unit:'block',durMs:360},out:{type:'fade',unit:'block',durMs:260}},
       },
       {
         id:'closing_line',defaultText:closing,maxChars:44,
         startFrame:totalFrames-outroFrames,durationFrames:outroFrames,
         x:recipe.x,y:secondaryY,font:recipe.supportFont,size:44,color:recipe.foreground,
+        finish:finish.closing,
         anim:{in:{type:'fade',unit:'block',durMs:440},out:{type:'fade',unit:'block',durMs:260}},
       },
     ],
