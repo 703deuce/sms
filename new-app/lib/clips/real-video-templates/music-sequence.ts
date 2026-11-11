@@ -58,6 +58,7 @@ function toTiming(f: TemplateFamilyV1, decision: TemplateMusicDecisionV1): Templ
 export function planTemplateMusic(
   rawFamily: TemplateFamilyV1,
   decision: TemplateMusicDecisionV1,
+  userTexts?: Record<string, string>,
 ): {
   family: TemplateFamilyV1
   durationFrames: number
@@ -120,6 +121,16 @@ export function planTemplateMusic(
   // Structural validator rejects impossible transition handles, overlapping FX,
   // unreadable text, zero-length shots and unsupported source speeds.
   const checked = validateTemplateFamily(updated)
+  // Respect user-written words: re-sync must reject unreadable durations, never
+  // shorten, paraphrase or silently omit a title to fit the new soundtrack.
+  for (const title of checked.texts) {
+    const written = userTexts?.[title.id] ?? title.defaultText
+    if (typeof written !== 'string' || !written.trim() || Array.from(written).length > title.maxChars)
+      throw new Error('Text ' + title.id + ' exceeds its authored length limit')
+    const readingFrames = Math.max(9, Math.ceil(Array.from(written).length / 15 * 30))
+    if (title.durationFrames < readingFrames)
+      throw new Error('Text ' + title.id + ' needs at least ' + readingFrames + ' frames to remain readable')
+  }
   const inWindow = moved.windows.find(w => w.id === 'music-fade-in')
   const outWindow = moved.windows.find(w => w.id === 'music-fade-out')
   return { family: checked, durationFrames: checked.totalFrames, preview,
@@ -139,7 +150,7 @@ export function compileTemplateWithMusic(
     throw new Error('Music rights and a pinned schedule are required before template export')
   if (!choices.music && choices.templateMusic)
     throw new Error('Cannot schedule missing music')
-  const plan = choices.templateMusic ? planTemplateMusic(family, choices.templateMusic) : null
+  const plan = choices.templateMusic ? planTemplateMusic(family, choices.templateMusic, choices.texts) : null
   if (plan && choices.music?.id !== choices.templateMusic?.rights.assetId)
     throw new Error('Selected music upload differs from approved music bytes')
   const actualFamily = plan?.family ?? family
