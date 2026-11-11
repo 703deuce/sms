@@ -171,7 +171,7 @@ async function verifyPinnedFont(row: ClipFontManifestRow): Promise<ArrayBuffer> 
   const data = await response.arrayBuffer()
   if (!data.byteLength) throw new Error('clip_font_empty:' + row.id)
   if (!globalThis.crypto?.subtle) throw new Error('clip_font_crypto_unavailable:' + row.id)
-  const prefix = new TextEncoder().encode('blob ' + data.byteLength + '\\0')
+  const prefix = new TextEncoder().encode('blob ' + data.byteLength + String.fromCharCode(0))
   const blobBytes = new Uint8Array(data)
   const combined = new Uint8Array(prefix.byteLength + blobBytes.byteLength)
   combined.set(prefix)
