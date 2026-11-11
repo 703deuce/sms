@@ -276,7 +276,7 @@ export function TextPanel({
         <button type="button" className="text-xs font-medium text-primary underline-offset-2 hover:underline" data-testid="text-jump-to-styles" onClick={() => document.getElementById('text-selected-style-controls')?.scrollIntoView({ block: 'nearest' })}>
           Selected text: jump to Font / Bold / Italic
         </button>
-      )
+      )}
       <section className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Styles</p>
         <div className="grid grid-cols-3 gap-2">
