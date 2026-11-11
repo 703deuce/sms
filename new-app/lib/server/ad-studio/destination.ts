@@ -11,7 +11,9 @@ import type { AdPlan, AdProductInput } from '@/lib/ad-studio/types'
 import { adVoiceWordsKey } from '@/lib/ad-studio/voice'
 import { attachStockAudioToProject } from '@/lib/server/ai/stock-audio'
 import { enqueueRenderClip } from '@/lib/server/clips/renders'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { defaultEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { createDefaultStudioService } from '@/lib/studio/runtime'
+import { getStudioJobForOutput } from '@/lib/studio/jobs'
 
 const stableId = (prefix: string, key: string) =>
   prefix + createHash('sha256').update(key).digest('hex').slice(0, 32)
@@ -320,4 +322,96 @@ export async function advanceAdRender(workspaceId: string, runId: string): Promi
         errorMessage: 'Ad Studio could not enqueue the commercial render.' } })
     console.warn('[ad-studio:b3] render_enqueue_failed', { runId, type: err instanceof Error ? err.name : typeof err })
   }
+}
+
+
+/**
+ * Round 5 direct commercial: the single native-audio KIE output is itself the finished MP4.
+ * It is registered as project source, editor clip, and READY render without a second render worker pass.
+ */
+export async function materializeDirectAdCommercial(workspaceId: string, runId: string): Promise<boolean> {
+  const db = getPrisma()
+  const run = await db.adStudioRun.findFirst({ where: { id: runId, workspaceId } })
+  if (!run || run.mode !== 'image_ad_to_commercial' || run.status !== 'generating') return false
+  const input = run.input as unknown as AdProductInput
+  const scene = await db.adStudioScene.findFirst({ where: { runId, status: 'ready' }, orderBy: { index: 'asc' } })
+  if (!scene?.studioJobId) return false
+  const svc = createDefaultStudioService()
+  const job = await getStudioJobForOutput(svc, workspaceId, scene.studioJobId)
+  if (job.outputKind !== 'video' || !job.outputStorageKey || !job.outputContentType) return false
+
+  const durationMs = 15_000
+  const uploadId = stableId('upl_ad_direct_', runId)
+  const projectId = stableId('proj_ad_direct_', runId)
+  const clipId = stableId('clip_ad_direct_', runId)
+  const renderId = stableId('rnd_ad_direct_', runId)
+  const settings = defaultClipSettings({
+    aspectRatio: input.aspect,
+    rangeStartMs: 0,
+    rangeEndMs: durationMs,
+    byo: true,
+    fullVideo: true,
+    captions: { enabled: false, presetId: 'bold_pop', language: 'en' },
+  })
+  const edits = {
+    ...defaultEdits({ clipStartMs: 0, clipEndMs: durationMs, trimMinMs: 0, trimMaxMs: durationMs }),
+    aspectRatio: input.aspect,
+    captions: { enabled: false },
+    audio: { music: null, sfx: [] },
+  } satisfies ClipEditsV2
+
+  console.info('[ad-studio:r5] direct_materialize_begin', {
+    runId, jobId: job.id, modelId: job.modelId, aspect: input.aspect,
+  })
+  await db.$transaction(async (tx) => {
+    await tx.clipUpload.upsert({
+      where: { id: uploadId },
+      create: {
+        id: uploadId, workspaceId, key: job.outputStorageKey!, filename: (input.name + ' 15s commercial.mp4').slice(0, 180),
+        bytes: BigInt(0), mime: job.outputContentType!, durationMs,
+        width: job.outputWidth, height: job.outputHeight, status: 'COMPLETE',
+        storageDriver: job.outputStorageDriver, kind: 'source',
+      },
+      update: {},
+    })
+    await tx.clipProject.upsert({
+      where: { id: projectId },
+      create: {
+        id: projectId, workspaceId, createdById: run.userId, title: (input.name + ' commercial').slice(0,120),
+        uploadId, sourceKind: 'ad_studio_direct', settings: toPrismaJson(settings),
+        rangeStartMs: 0, rangeEndMs: durationMs, status: 'READY', stage: 'ready', progress: 100,
+      },
+      update: {},
+    })
+    await tx.clip.upsert({
+      where: { id: clipId },
+      create: {
+        id: clipId, workspaceId, projectId, title: (input.name + ' 15s commercial').slice(0,120),
+        reason: 'ad_studio_direct', startMs: 0, endMs: durationMs,
+        segmentKey: job.outputStorageKey, sourceSegKey: job.outputStorageKey,
+        sourceSegStartMs: 0, sourceSegEndMs: durationMs, previewKey: job.outputStorageKey,
+        storageDriver: job.outputStorageDriver, edits: toPrismaJson(edits),
+        aiMeta: toPrismaJson({ adStudioRunId: runId, directCommercial: true, modelId: job.modelId, nativeAudio: true }),
+      },
+      update: {},
+    })
+    await tx.clipRender.upsert({
+      where: { id: renderId },
+      create: {
+        id: renderId, clipId, workspaceId, status: 'READY', outputKey: job.outputStorageKey,
+        format: 'mp4', resolution: job.resolution ?? '720p', aspectRatio: input.aspect,
+        watermark: false, filename: (input.name + '-15s-commercial.mp4').slice(0,180),
+      },
+      update: {},
+    })
+    await tx.adStudioRun.updateMany({
+      where: { id: runId, workspaceId, status: 'generating' },
+      data: {
+        status: 'done', projectId, clipId, renderId, renderStatus: 'ready',
+        voiceoverStatus: 'skipped', completedAt: new Date(), errorCode: null, errorMessage: null,
+      },
+    })
+  })
+  console.info('[ad-studio:r5] direct_materialize_complete', { runId, projectId, clipId, renderId })
+  return true
 }
