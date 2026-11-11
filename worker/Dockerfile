@@ -43,6 +43,11 @@ RUN set -eux; \
     test -s /app/v3/fonts/t6/Caveat.ttf; \
     test -s /app/v3/fonts/t6/SpaceGrotesk.ttf; \
     test -s /app/v3/fonts/t6/SpaceMono-Regular.ttf; \
+    test -s /app/v3/fonts/t6/NotoSansArabic.ttf; \
+    test -s /app/v3/fonts/t6/NotoSansDevanagari.ttf; \
+    test -s /app/v3/fonts/t6/NotoSansThai.ttf; \
+    test -s /app/v3/fonts/t6/NotoSansJP.ttf; \
+    test -s /app/v3/fonts/t6/NotoEmoji.ttf; \
     fc-cache -f; \
     fc-list | grep -i montserrat | head -3; \
     fc-match -f '%{file}\n' 'Montserrat Black' | grep -q Montserrat-Black.ttf; \
