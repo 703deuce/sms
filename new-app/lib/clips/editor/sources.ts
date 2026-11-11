@@ -423,6 +423,74 @@ export function pruneSources(
   return next.length ? next : undefined
 }
 
+/** B3B: replace the media behind one real source-slot clip without changing its stable item id/keyframes. */
+export function replaceSourceSegmentMedia(
+  edits: ClipEditsV2,
+  segmentId: string,
+  source: ClipMediaSource,
+): ClipEditsV2 {
+  const current = edits.sourceSegments?.find((seg) => seg.id === segmentId)
+  if (!current || source.mediaType === 'audio') return edits
+  const upserted = upsertSource(edits.sources, source).sources
+  const { inMs: oldIn, audio: oldAudio, speed: oldSpeed, ...base } = current
+  const replacement: SourceSegment = {
+    ...base,
+    sourceId: source.id,
+    ...(source.mediaType === 'video' ? {
+      ...(oldIn != null ? { inMs: oldIn } : { inMs: 0 }),
+      ...(oldAudio ? { audio: oldAudio } : { audio: 'main' as const }),
+      ...(oldSpeed ? { speed: oldSpeed } : {}),
+    } : {}),
+  }
+  const sourceSegments = setSourceSegment(
+    edits.sourceSegments?.filter((seg) => seg.id !== segmentId),
+    replacement,
+    upserted,
+  )
+  return {
+    ...edits,
+    sources: pruneSources(upserted, sourceSegments, edits.multicam, edits.inserts),
+    sourceSegments,
+  }
+}
+
+/**
+ * B3B roll one authored slot cut while keeping the two real item IDs, transition object and
+ * item-local keyframes. The incoming media in-point advances/rewinds with its source speed.
+ */
+export function moveSourceSegmentBoundary(
+  edits: ClipEditsV2,
+  leftId: string,
+  rightId: string,
+  nextSrcMs: number,
+): ClipEditsV2 {
+  const segments = [...(edits.sourceSegments ?? [])]
+  const li = segments.findIndex((seg) => seg.id === leftId)
+  const ri = segments.findIndex((seg) => seg.id === rightId)
+  if (li < 0 || ri < 0) return edits
+  const left = segments[li]!, right = segments[ri]!
+  const old = right.startMs
+  if (Math.abs(left.endMs - old) > 1) return edits
+  const next = Math.round(Math.max(left.startMs + SOURCE_SEG_MIN_MS, Math.min(right.endMs - SOURCE_SEG_MIN_MS, nextSrcMs)))
+  if (next === old) return edits
+  const delta = next - old
+  const rightIn = right.inMs
+  segments[li] = { ...left, endMs: next }
+  segments[ri] = {
+    ...right,
+    startMs: next,
+    ...(rightIn != null ? { inMs: Math.max(0, Math.round(rightIn + delta * (right.speed ?? 1))) } : {}),
+  }
+  const splits = (edits.videoSplits ?? []).map((ms) => Math.abs(ms - old) <= 1 ? next : ms)
+  const transitions = edits.transitions?.map((tr) => Math.abs(tr.srcMs - old) <= 1 ? { ...tr, srcMs: next } : tr)
+  return {
+    ...edits,
+    sourceSegments: normalizeSourceSegments(segments, edits.sources),
+    videoSplits: [...new Set(splits)].sort((a, b) => a - b),
+    transitions,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Multicam: the EXISTING D8 active-speaker rules → source segments
 // ---------------------------------------------------------------------------
