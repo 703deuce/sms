@@ -111,7 +111,7 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
         !object(fill.asset) || !['image', 'video'].includes(String(fill.asset.kind)) ||
         !validAsset(fill.asset, fill.asset.kind as 'image' | 'video') ||
         (slot.media !== 'either' && slot.media !== fill.asset.kind) ||
-        (slot.playback && fill.asset.kind !== 'video') ||
+        (slot.playback && (fill.asset.kind !== 'video' || fill.remedy !== 'replace')) ||
         (fill.asset.kind === 'image' && (fill.sourceInFrame !== 0 || fill.remedy !== 'replace')) ||
         (fill.remedy === 'hold' && fill.asset.kind !== 'video') ||
         (fill.holdAsset !== undefined && !validAsset(fill.holdAsset, 'image')))
