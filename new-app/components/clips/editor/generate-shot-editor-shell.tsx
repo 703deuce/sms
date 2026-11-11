@@ -32,6 +32,7 @@ import { normalizeEditSpeed, orderedKeepSegments, type ClipEditsV2 } from '@/lib
 import { replaceVideoRange, type ProjectMediaItem } from '@/lib/clips/editor/media-add'
 import { routes } from '@/lib/routes'
 import { StandaloneEditorChrome, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
+import { useFullVideoModeHandoff } from '@/components/clips/editor/full-video-mode-handoff'
 import { generatePreviewCandidates, clampGeneratePreviewSeek } from '@/lib/clips/editor/generate-preview-media'
 
 type EditorProps = Parameters<typeof EditorClipShell>[0]
@@ -153,6 +154,7 @@ export function GenerateShotEditorShell(props: Props) {
         ? (props.aiMeta as { __editorSaveSeq: number }).__editorSaveSeq
         : 0,
   })
+  const fullVideoMode = useFullVideoModeHandoff(clipId, flushSave)
   const latestEditsRef = useRef(edits)
   latestEditsRef.current = edits
 
@@ -1025,6 +1027,7 @@ export function GenerateShotEditorShell(props: Props) {
           onModeSelect={(mode) => {
             console.info('[editor:generate-mode] mode-selected', { projectId, clipId, mode })
             if (mode === 'generate') return
+            if (mode === 'full-video') { void fullVideoMode.open(); return }
             const query = props.fromStudio ? { from: 'studio' } : undefined
             if (mode === 'clip') { void navigate(editorHref, 'clip'); return }
             if (mode === 'producer') { void navigate(routes.chat(projectId, clipId, query), 'producer'); return }
