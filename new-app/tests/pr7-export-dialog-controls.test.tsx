@@ -45,6 +45,19 @@ describe('PR7 XE04/XE05 export dialog', () => {
     expect(container.textContent).toContain('Close')
   })
 
+  it('ignores a stale preference response after closing and reopening the dialog', async () => {
+    let resolveOld!: (value: unknown) => void
+    mocks.loadPreferences.mockReturnValueOnce(new Promise((r) => { resolveOld = r }))
+      .mockResolvedValueOnce({ alsoSrt: false, alsoVtt: false, exportSfx: 'off' })
+    const props = { clipId: 'fixture-clip', title: 'Fixture', edits: defaultEdits({ clipStartMs: 0, clipEndMs: 60_000 }), onClose: () => {} }
+    const { rerender } = render(<ExportDialog {...props} open />)
+    rerender(<ExportDialog {...props} open={false} />)
+    rerender(<ExportDialog {...props} open />)
+    fireEvent.click(screen.getByRole('button', { name: '1:1' }))
+    resolveOld({ alsoSrt: false, alsoVtt: false, exportSfx: 'off', defaultAspect: '9:16' })
+    await waitFor(() => expect(screen.getByText(/Output 1080×1080/)).toBeTruthy())
+  })
+
   it('does not overwrite an explicit aspect selection when preferences finish loading', async () => {
     let resolve!: (value: unknown) => void
     mocks.loadPreferences.mockReturnValue(new Promise((r) => { resolve = r }))
