@@ -18,7 +18,6 @@ export async function planAdScenes(args: {
   const cards = script.onScreenText.length >= 4
     ? script.onScreenText.slice(0, 4)
     : narration.map(line => line.split(/\s+/).slice(0, 6).join(' '))
-  const claims = input.sellingPoints
   const productRef = input.imageAssetIds[0]
   const fidelity = 'keep the exact product from the reference image: same shape, colors, materials and branding; do not add or invent logos or text'
   const planned: AdScene[] = []
