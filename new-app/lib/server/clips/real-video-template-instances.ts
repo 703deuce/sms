@@ -3,6 +3,7 @@ import 'server-only'
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
 import { defaultEdits } from '@/lib/clips/edits'
+import { compileTemplatePlayback, playbackSourceBounds } from '@/lib/clips/real-video-templates/slot-playback'
 import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
 import {
   compileTemplate,
@@ -114,10 +115,12 @@ async function loadAndValidateAssets(
     if (slot.media !== 'either' && slot.media !== asset.kind) throw new TemplateAssetUnavailable()
     if (asset.kind !== 'image' && asset.kind !== 'video') throw new TemplateAssetUnavailable()
     const handles = slot.handles ?? { headFrames: 0, tailFrames: 0 }
-    selected.push({
-      asset,
-      minimumFrames: (slot.sourceInFrame ?? 0) + Math.ceil(slot.durationFrames * (slot.speed ?? 1)) + handles.tailFrames,
-    })
+    const minimumFrames = slot.playback
+      ? Math.ceil(playbackSourceBounds(
+          compileTemplatePlayback(slot.playback, slot.durationFrames), slot.sourceInFrame ?? 0,
+        ).maxFrame + 1 + handles.tailFrames)
+      : (slot.sourceInFrame ?? 0) + Math.ceil(slot.durationFrames * (slot.speed ?? 1)) + handles.tailFrames
+    selected.push({ asset, minimumFrames })
   }
   if (choices.music) {
     if (design.musicPolicy !== 'licensed-only' || choices.music.kind !== 'audio')

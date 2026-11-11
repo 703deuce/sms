@@ -294,7 +294,8 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const fillSlot = (id: string, asset: TemplateAsset) => {
     if (!draft) return
     const slot = release.family.slots.find(s => s.id === id)
-    if (!slot || asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind)) {
+    if (!slot || asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind) ||
+        (slot.playback && asset.kind !== 'video')) {
       setError('The selected file does not match the required slot media type')
       return
     }
@@ -562,15 +563,18 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
                       onChange={e => patchFill(activeSlot.id, { muteSourceAudio: e.target.checked })} />
                     Mute source clip audio
                   </label>
-                  <label className="block space-y-1 text-xs">If this clip is too short
+                  {activeSlot.playback ? <p className="text-xs text-muted-foreground">
+                    Variable-speed and freeze-frame slots need source footage that supports the authored playback.
+                    Loop and extra hold remedies are unavailable for these slots.
+                  </p> : <label className="block space-y-1 text-xs">If this clip is too short
                     <select className={inputClass} value={activeFill.remedy}
                       onChange={e => patchFill(activeSlot.id, { remedy: e.target.value as StudioSlotFill['remedy'] })}>
                       <option value="replace">Choose another video</option>
                       <option value="loop">Loop full source (visible hard cuts)</option>
                       <option value="hold">Hold the final frame</option>
                     </select>
-                  </label>
-                  {activeFill.remedy === 'hold' && <button type="button" className={buttonClass} disabled={busy}
+                  </label>}
+                  {!activeSlot.playback && activeFill.remedy === 'hold' && <button type="button" className={buttonClass} disabled={busy}
                     onClick={() => void createHold(activeSlot.id)}>
                     {activeFill.holdAsset ? 'Recapture last frame' : 'Capture and upload last frame'}
                   </button>}

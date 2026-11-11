@@ -53,6 +53,28 @@ describe('Batch 4 standalone slot fulfillment', () => {
     d.slots.s0!.focalX=70
     expect(materializeStudioDraft(f,d,'instance1').family.slots[0]!.transform?.x).toBe(2)
   })
+  it('honors Batch 6 piecewise playback source bounds, rather than assuming 1x speed', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!, media: 'video',
+      playback: { pieces: [{ kind: 'play', frames: 60, rate: 0.5 }] } }
+    const d = assignSelectionInOrder(newStudioDraft('release','draft_01234567'),
+      f,[video('slow_playback',40)]).draft
+    const result = materializeStudioDraft(f,d,'instance1')
+    expect(result.family.slots).toHaveLength(1)
+    expect(result.family.slots[0]?.playback?.pieces[0]).toMatchObject({ kind: 'play', rate: 0.5 })
+    expect(result.choices.media.s0?.id).toBe('slow_playback')
+    const short = assignSelectionInOrder(newStudioDraft('release','draft_01234567'),
+      f,[video('too_short',12)]).draft
+    expect(() => materializeStudioDraft(f,short,'instance1')).toThrow('longer source')
+  })
+  it('rejects still photos in variable-speed slots before compilation', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!,
+      playback: { pieces: [{ kind: 'hold', frames: 60 }] } }
+    const selection = assignSelectionInOrder(newStudioDraft('release','draft_01234567'),f,[image('still')])
+    expect(selection.used).toBe(0)
+    expect(selection.rejected.map(asset => asset.id)).toEqual(['still'])
+  })
   it('rejects wrong media, overflow and invalid focal point', () => {
     const f=family(1)
     let d=assignSelectionInOrder(newStudioDraft('release','draft_01234567'),f,[image('pic')]).draft
