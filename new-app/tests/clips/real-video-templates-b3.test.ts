@@ -36,7 +36,7 @@ const choices = (count: number): TemplateChoices => ({
     [`shot_${i + 1}`, asset('image_one', 'image')])),
   music: asset('music_one', 'audio'),
 })
-describe('real-video template B3 experimental contract', () => {
+describe('real-video template B3 production contract', () => {
   it('compiles 30 ordered slots without inserts and holds text/music end-to-end', () => {
     const r = compileTemplatePrototype(family(30), design, choices(30), carrier(30))
     expect(r.renderable).toBe(true)
@@ -103,7 +103,32 @@ describe('real-video template B3 experimental contract', () => {
       ...f.slots[1]!,
       transition: { type: 'crossfade', durationFrames: 30 },
     }
-    expect(() => validateTemplateFamily(f)).toThrow(/requires 15-frame source handles/)
+    expect(() => validateTemplateFamily(f)).toThrow(/requires source handles \(left 15, right 15 frames\)/)
+  })
+
+
+  it('keeps authored output duration while mapping per-slot source speed through preview/export clocks', () => {
+    const f = family(2)
+    f.slots[0] = { ...f.slots[0]!, media: 'video', speed: 1.5 }
+    f.slots[1] = { ...f.slots[1]!, media: 'video', speed: 0.5 }
+    const c = choices(2)
+    c.media.shot_1 = asset('speed_a', 'video', 90)
+    c.media.shot_2 = asset('speed_b', 'video', 90)
+    const r = compileTemplatePrototype(f, design, c, carrier(2))
+    expect(r.edits.trim).toEqual({ in: 0, out: 2000 })
+    expect(r.edits.sourceSegments?.map((seg) => seg.speed)).toEqual([1.5, 0.5])
+    expect(r.sequence.items.map((item) => item.speed)).toEqual([1.5, 0.5])
+    const first = outputToSequenceFrame(r.sequence, 20)
+    expect(first.mediaFrame).toBe(30)
+    const second = outputToSequenceFrame(r.sequence, 40)
+    expect(second.itemLocalFrame).toBe(10)
+    expect(second.mediaFrame).toBe(5)
+  })
+
+  it('rejects playback speed on still-image slots', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!, speed: 2 }
+    expect(() => validateTemplateFamily(f)).toThrow(/images do not support playback speed/)
   })
 
   it('is deterministic, including source reuse and stable slot IDs', () => {
@@ -265,7 +290,7 @@ describe('B3 production slot edit representation', () => {
   it('rejects transitions without declared A/B source handles and overlapping windows', () => {
     const missing = family(2)
     missing.slots[1] = { ...missing.slots[1], transition: { type: 'crossfade', durationFrames: 12 } }
-    expect(() => validateTemplateFamily(missing)).toThrow(/requires 6-frame source handles/)
+    expect(() => validateTemplateFamily(missing)).toThrow(/requires source handles \(left 6, right 6 frames\)/)
 
     const overlap = family(3)
     overlap.slots[0] = { ...overlap.slots[0], handles: { headFrames: 0, tailFrames: 18 } }
