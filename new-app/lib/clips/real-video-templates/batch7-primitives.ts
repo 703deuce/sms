@@ -48,6 +48,8 @@ export type Batch7CompileContext = {
   totalFrames: number
   slotToItemIds: Readonly<Record<string, string>>
   slotToSourceIds: Readonly<Record<string, string>>
+  slotToMediaKind: Readonly<Record<string, 'image' | 'video'>>
+  slotWindows: Readonly<Record<string, { startFrame: number; durationFrames: number }>>
 }
 export type Batch7Accessibility = { reducedMotion?: boolean; reducedFlash?: boolean }
 export type Batch7CompileResult =
@@ -319,11 +321,24 @@ export function compileBatch7Primitives(
       },
     }
   }
-  const setComposite = (anchorSlot: string, otherSlots: readonly string[], kind: 'side_by_side' | 'grid') => {
+  const setComposite = (
+    primitive: { startFrame: number; durationFrames: number },
+    anchorSlot: string,
+    otherSlots: readonly string[],
+    kind: 'side_by_side' | 'grid',
+  ) => {
     const itemId = context.slotToItemIds[anchorSlot]
     if (!itemId || layoutBySegment.has(itemId)) throw new Error('slot_layout_conflict:' + anchorSlot)
+    const window = context.slotWindows[anchorSlot]
+    if (!window || primitive.startFrame !== window.startFrame || primitive.durationFrames !== window.durationFrames)
+      throw new Error('composite_window_mismatch:' + anchorSlot)
+    if (context.slotToMediaKind[anchorSlot] !== 'image' || otherSlots.some((slot) => context.slotToMediaKind[slot] !== 'image'))
+      throw new Error('composite_requires_images:' + anchorSlot)
+    const ownSource = context.slotToSourceIds[anchorSlot]
     const sources = otherSlots.map((slot) => context.slotToSourceIds[slot]).filter(Boolean)
     if (sources.length !== otherSlots.length) throw new Error('missing_slot_source:' + anchorSlot)
+    if (!ownSource || sources.some((source) => source === ownSource))
+      throw new Error('composite_requires_distinct_sources:' + anchorSlot)
     const layout: SourceSegmentLayout = kind === 'side_by_side'
       ? { kind, withSourceId: sources[0]!, split: 0.5 }
       : {
@@ -335,9 +350,9 @@ export function compileBatch7Primitives(
     layoutBySegment.set(itemId, layout)
   }
   const frameBorder = (p: Extract<Batch7TemplatePrimitive, { kind: 'photo_frame' }>) => {
-    const tX = p.thickness / motionReferenceWidth(context.format)
-    const tY = p.thickness / 1920
     const b = p.box
+    const tX = Math.min(p.thickness / motionReferenceWidth(context.format), b.width / 2)
+    const tY = Math.min(p.thickness / 1920, b.height / 2)
     add(shape(p, 'frame_top', 'rect', { x: b.x, y: b.y, width: b.width, height: tY }, p.style.accentColor))
     add(shape(p, 'frame_bottom', 'rect', { x: b.x, y: b.y + b.height - tY, width: b.width, height: tY }, p.style.accentColor))
     add(shape(p, 'frame_left', 'rect', { x: b.x, y: b.y, width: tX, height: b.height }, p.style.accentColor))
@@ -355,7 +370,7 @@ export function compileBatch7Primitives(
           frameBorder(primitive)
           break
         case 'collage_card': {
-          setComposite(primitive.slotIds[0]!, primitive.slotIds.slice(1), primitive.slotIds.length === 2 ? 'side_by_side' : 'grid')
+          setComposite(primitive, primitive.slotIds[0]!, primitive.slotIds.slice(1), primitive.slotIds.length === 2 ? 'side_by_side' : 'grid')
           const border = { x: 0.015, y: 0.015, width: 0.97, height: 0.97 }
           const fp: Extract<Batch7TemplatePrimitive, { kind: 'photo_frame' }> = {
             ...primitive, kind: 'photo_frame', slotId: primitive.slotIds[0]!, box: border, thickness: 12,
@@ -400,7 +415,7 @@ export function compileBatch7Primitives(
           break
         }
         case 'before_after': {
-          setComposite(primitive.leftSlotId, [primitive.rightSlotId], 'side_by_side')
+          setComposite(primitive, primitive.leftSlotId, [primitive.rightSlotId], 'side_by_side')
           add(shape(primitive, 'divider', 'rect', { x: .497, y: .08, width: .006, height: .84 }, primitive.style.accentColor))
           add(fittedText(primitive, 'left_label', primitive.leftLabel,
             { x: .05, y: .05, width: .40, height: .09 }, primitive.style.headlineFont, 72))
@@ -490,9 +505,8 @@ export function compileBatch7Primitives(
 
   if (existing.length + generated.length > TEXT_MAX_ITEMS)
     return { ok: false, code: 'text_capacity', detail: 'Batch 7 would exceed textItems capacity ' + TEXT_MAX_ITEMS }
-  const all = [...existing, ...generated]
-  const normalized = normalizeTextItems(all, totalMs) ?? []
-  if (normalized.length !== all.length)
+  const normalizedGenerated = normalizeTextItems(generated, totalMs) ?? []
+  if (normalizedGenerated.length !== generated.length)
     return { ok: false, code: 'text_normalization_failed', detail: 'Batch 7 generated a non-renderable text/shape item' }
 
   const sourceSegments = edits.sourceSegments?.map((segment) => {
@@ -509,7 +523,7 @@ export function compileBatch7Primitives(
     ok: true,
     edits: {
       ...edits,
-      textItems: normalized,
+      textItems: [...existing, ...normalizedGenerated],
       keyframes: [...(edits.keyframes ?? []), ...generatedTracks],
       ...(sourceSegments ? { sourceSegments } : {}),
     },

@@ -443,6 +443,8 @@ export function compileTemplate(
   const sequence: TemplateSequenceItem[] = []
   const slotToItemIds: Record<string, string> = {}
   const slotToSourceIds: Record<string, string> = {}
+  const slotToMediaKind: Record<string, 'image' | 'video'> = {}
+  const slotWindows: Record<string, { startFrame: number; durationFrames: number }> = {}
   const transitions: NonNullable<ClipEditsV2['transitions']> = []
   const videoSplits: number[] = []
 
@@ -471,6 +473,8 @@ export function compileTemplate(
     const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'slot', slot.id)
     slotToItemIds[slot.id] = itemId
     slotToSourceIds[slot.id] = sourceId
+    slotToMediaKind[slot.id] = asset.kind
+    slotWindows[slot.id] = { startFrame: slot.startFrame, durationFrames: slot.durationFrames }
     const startMs = templateFrameToMs(slot.startFrame), endMs = templateFrameToMs(slot.startFrame + slot.durationFrames)
     sourceSegments.push({
       id: itemId, sourceId, startMs, endMs,
@@ -543,12 +547,17 @@ export function compileTemplate(
       endMs: templateFrameToMs(family.totalFrames), loop: true }
   }
 
+  const motionTrackKeys = new Set(motionKeyframes.map((track) => track.target + '|' + track.prop))
+  const preservedKeyframes = (carrier.edits.keyframes ?? []).filter((track) => !motionTrackKeys.has(track.target + '|' + track.prop))
+  const mergedKeyframes = [...preservedKeyframes, ...motionKeyframes]
+  const mergedTextItems = [...(carrier.edits.textItems ?? []), ...textItems]
+
   const baseEdits: ClipEditsV2 = {
     ...structuredClone(carrier.edits),
     sources, sourceSegments, videoSplits: videoSplits.length ? videoSplits : undefined,
     transitions: transitions.length ? transitions : undefined,
-    keyframes: motionKeyframes.length ? motionKeyframes : carrier.edits.keyframes,
-    textItems: textItems.length ? textItems : undefined,
+    keyframes: mergedKeyframes.length ? mergedKeyframes : undefined,
+    textItems: mergedTextItems.length ? mergedTextItems : undefined,
     audio: { music, sfx: [] },
     captions: { ...carrier.edits.captions, enabled: false },
     trim: { in: 0, out: templateFrameToMs(family.totalFrames) },
@@ -558,7 +567,7 @@ export function compileTemplate(
   }
   const primitiveResult = family.primitives?.length
     ? compileBatch7Primitives(baseEdits, family.primitives, {
-        format: selectedAspect, totalFrames: family.totalFrames, slotToItemIds, slotToSourceIds,
+        format: selectedAspect, totalFrames: family.totalFrames, slotToItemIds, slotToSourceIds, slotToMediaKind, slotWindows,
       }, choices.accessibility)
     : { ok: true as const, edits: baseEdits, addedIds: [] as string[] }
   if (!primitiveResult.ok) throw new Error('template primitives: ' + primitiveResult.code + ': ' + primitiveResult.detail)

@@ -74,8 +74,8 @@ describe('Batch 7 standalone reusable primitives', () => {
         box: { x: .05, y: .05, width: .9, height: .75 }, count: 6, style },
       { kind: 'countdown', id: 'countdown', startFrame: 0, from: 3, stepFrames: 10,
         box: { x: .30, y: .28, width: .40, height: .35 }, style },
-      { kind: 'before_after', id: 'compare', startFrame: 0, durationFrames: 60,
-        leftSlotId: 'shot_1', rightSlotId: 'shot_2', leftLabel: 'Before', rightLabel: 'After', style },
+      { kind: 'before_after', id: 'compare', startFrame: 180, durationFrames: 60,
+        leftSlotId: 'shot_4', rightSlotId: 'shot_1', leftLabel: 'Before', rightLabel: 'After', style },
       { kind: 'roster_selection', id: 'roster', startFrame: 120, durationFrames: 60,
         title: 'Starting five', entries: ['Avery', 'Blake', 'Casey'], selectedIndex: 1,
         box: { x: .12, y: .18, width: .76, height: .62 }, style },
@@ -89,8 +89,6 @@ describe('Batch 7 standalone reusable primitives', () => {
       { kind: 'text_glow', id: 'glow', startFrame: 180, durationFrames: 60, text: 'Night mode',
         box: { x: .15, y: .08, width: .70, height: .16 }, style },
     ]
-    // Two composites cannot own the same anchor span; use a separate anchor for comparison.
-    f.primitives[4] = { ...f.primitives[4], leftSlotId: 'shot_4', rightSlotId: 'shot_1' } as typeof f.primitives[number]
     const result = compileTemplate(f, design, choices(), carrier(f.totalFrames))
     expect(result.edits.textItems?.some((i) => i.id.includes('frame_top'))).toBe(true)
     expect(result.edits.textItems?.some((i) => i.id.includes('confetti_'))).toBe(true)
@@ -106,13 +104,16 @@ describe('Batch 7 standalone reusable primitives', () => {
       id: 'manual_note', text: 'Keep me', startMs: 0, endMs: 2000, x: 50, y: 50,
       style: { font: 'Montserrat' as const, size: 72, color: '#FFFFFF', align: 'center' as const, case: 'none' as const },
     }
+    const manual2 = {
+      ...manual, id: 'manual_badge', text: 'Also keep me', y: 65,
+    }
     const f = family(1)
     f.primitives = [{ kind: 'text_glow', id: 'glow', startFrame: 0, durationFrames: 60, text: 'Template',
       box: { x: .15, y: .15, width: .70, height: .20 }, style }]
     const extra = {
-      textItems: [manual],
+      textItems: [manual, manual2],
       keyframes: [{ target: 'text:manual_note', prop: 'x', points: [{ tMs: 0, v: 0 }, { tMs: 1000, v: 8 }] }],
-      groups: [{ id: 'grp1', itemIds: ['text:manual_note'] }],
+      groups: [{ id: 'grp1', items: ['text:manual_note', 'text:manual_badge'] }],
     } as unknown as Partial<ClipEditsV2>
     const result = compileTemplate(f, design, choices(1), carrier(f.totalFrames, extra))
     expect(result.edits.textItems?.find((i) => i.id === 'manual_note')).toEqual(manual)
@@ -150,14 +151,14 @@ describe('Batch 7 standalone reusable primitives', () => {
   it('keeps the same source usable in independent slots and preserves authored crop transforms', () => {
     const f = family(2)
     f.slots[0] = { ...f.slots[0], transform: { cropL: 5, cropR: 3, scale: 108 } }
-    f.primitives = [{ kind: 'before_after', id: 'compare', startFrame: 0, durationFrames: 60,
-      leftSlotId: 'shot_1', rightSlotId: 'shot_2', leftLabel: 'One', rightLabel: 'Two', style }]
+    f.primitives = [{ kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
+      box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style }]
     const result = compileTemplate(f, design, choices(2, true), carrier(f.totalFrames))
     expect(result.edits.sources).toHaveLength(1)
     expect(result.edits.sourceSegments).toHaveLength(2)
     expect(result.edits.sourceSegments?.[0]?.id).not.toBe(result.edits.sourceSegments?.[1]?.id)
     expect(result.edits.sourceSegments?.[0]?.transform).toEqual({ cropL: 5, cropR: 3, scale: 108 })
-    expect(result.edits.sourceSegments?.[0]?.layout?.kind).toBe('side_by_side')
+    expect(result.edits.sourceSegments?.[0]?.sourceId).toBe(result.edits.sourceSegments?.[1]?.sourceId)
   })
 
   it('provides reduced-motion / reduced-flash alternatives without changing static structure', () => {
