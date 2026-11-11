@@ -1,92 +1,84 @@
-# Real video templates — Batch 3 sequence boundary (2026-11-11)
+# Real video templates — Batch 3 representation and migration boundary
 
-## Status: production representation implemented
+## Production representation
 
-Batch 3 uses the existing ClipEditsV2/editor/export stack rather than a parallel player or a flattened
-template movie. A template compiles to ordinary editable lanes on a neutral, silent, exact-frame
-carrier. The carrier is only the source/output clock; user photos/videos remain registered media and
-are editable after publishing.
+Batch 3 uses the existing ClipEditsV2 editor/render contract. It does **not** add a proprietary
+player, appended inserts, or a flattened user-media MP4.
 
-The implementation is intentionally opt-in through template provenance. Legacy clips with no template
-provenance retain their existing normalization, timeline, preview, cache-hash and worker behavior.
+- A purpose-generated neutral black/silent carrier supplies the complete 30fps output clock.
+  Template carriers may be photo-only; no sacrificial video upload or ASR is required.
+- Each authored slot is a normal `sourceSegment` spanning carrier/source time and is also bounded
+  by ordinary `videoSplits`. Those are the same Video-lane items used by Compact and the full
+  Timeline.
+- Slot media time is explicit: `inMs + source-clock delta * speed`. Fixed slot duration is
+  independent of the source playback rate.
+- Per-slot fit, position/scale/rotation/crop and the supported brightness/contrast/saturation look
+  are persisted on the source segment. Browser preview and the shared clips worker normalize the
+  same fields.
+- Incoming cross-source transitions are ordinary `edits.transitions` records at the matching
+  Video split. Source-handle requirements are declared and validated before publish. Preview
+  clones and worker export both read A/B frames directly from the registered source media;
+  unsupported transition types are rejected rather than downgraded.
+- Text and trusted built-in graphics remain ordinary `textItems` on the output clock. Music remains
+  `audio.music` and can span/loop across the full sequence. Neither is embedded in slot footage.
+- `templateProvenance` is non-authoritative lineage only. Source segments, transitions, text,
+  tracks and audio are the editable/rendered truth. Provenance survives normalizers but is excluded
+  from render-cache hashing.
 
-## Authoritative representation
+Existing clips with no template provenance keep the legacy source-segment/transition behavior.
+Existing insert behavior is unchanged and templates never use inserts.
 
-- Family/design definitions are immutable revisioned JSON. Unknown fields, unsupported operations,
-  invalid rights metadata and budget overflow fail closed instead of being clamped or dropped.
-- The authored sequence is a gap-free 30fps frame clock. `sequence-timebase.ts` maps output frame,
-  item-local frame and media frame exactly, including repeated-source ambiguity.
-- Each media slot compiles to a real `sources` + `sourceSegments` Video-lane record, with a seeded
-  stable item ID, media in-point, fit, source-audio policy, per-slot transform and per-slot FX.
-- Slot boundaries compile to ordinary `videoSplits`. Supported cross-source transitions compile to
-  ordinary `transitions` records; required A/B source handles are validated and transition windows
-  may not overlap.
-- Text/shape layers remain `textItems`; music remains the normal `audio.music` lane. Their authored
-  time ranges are not burned into slot media, so full-sequence overlays/audio survive every slot.
-- `inserts` are not used for template assembly.
-- `templateProvenance` is non-authoritative lineage/slot lookup only. It survives edit
-  normalization/patching but is excluded from render cache hashes.
+## Versioned definitions and snapshots
 
-## Preview and editor parity
+Family/design JSON is strict and DATA-only. Definitions contain no JavaScript, React, arbitrary
+remote URLs, or executable render expressions. Validators reject unknown fields/capabilities,
+oversized budgets, missing slots, short media/handles, overlapping transition windows and invalid
+rights metadata without silently clamping or dropping authored content.
 
-- PreviewStage resolves the same source segment, media time, fit, transform and FX used by export.
-- Transition A/B clones are pinned to the outgoing/incoming slot at the split and seek the registered
-  source handles instead of cloning the carrier frame.
-- Compact draws every slot over its existing 44px Video filmstrip and selects it through the existing
-  Media inspector; no Compact geometry changed.
-- Full Timeline uses the existing source-segment Video-lane filmstrips/selection and transition
-  handles. Slot records remain editable after template creation.
-- Authoring state is metadata only after publish. Normal editor saves remain authoritative and are
-  never regenerated from the template snapshot.
+Published projects snapshot the validated family/design revisions in the clip's existing `aiMeta`.
+Updating a catalog definition later cannot change that project's snapshot. Deterministic IDs derive
+from instance + immutable family revision + source/slot/layer role.
 
-## Worker/export parity
+## Transactional publishing — no migration
 
-Required shared-clips changes are limited to:
+Batch 3 adds no database table or migration. A serializable transaction uses the existing
+`clip_uploads`, `clip_projects`, `clip_project_media`, `clips` and `clip_jobs` tables to:
 
-- `worker/clips_worker/blank_project.py` — exact authored 30fps neutral carrier generation.
-- `worker/clips_worker/media_sources.py` — mirrored source-segment transforms/FX and direct
-  cross-source transition windows rendered from the registered A/B media handles.
-- `worker/clips_worker/edits_render.py` — prevents template source transitions already consumed by
-  the source adapter from being rendered a second time.
-- `worker/tests/test_real_video_template_sequence.py` — low-resolution FFmpeg/ffprobe proof for
-  exact frames, mixed photo/video slots, source transforms/FX, a cross-source transition,
-  full-span text and continuous music/audio.
+1. verify every selected upload belongs to the workspace and is complete/compatible;
+2. create the neutral carrier upload/project;
+3. register all selected media and music;
+4. create one preseeded full-video clip containing the compiled editable timeline; and
+5. queue the existing PROCESS_PROJECT path with an exact-frame template-carrier flag.
 
-The production path keeps text and music after source composition; no slot footage is flattened into
-the carrier.
+Deterministic project/clip/job IDs make retries idempotent. The worker's existing
+`preseededFullVideo` path enriches that same clip instead of creating a competing timeline.
+Authoring choices are stored separately in `aiMeta.videoTemplate.authoringState` with an optimistic
+authoring version; saving those choices never regenerates over Compact/Timeline edits. Cancellation
+only cancels pending carrier work. Unknown or foreign media is reported generically as not found.
 
-## Transactional publishing boundary
+## Proof and regression boundary
 
-`publishTemplateProject` creates a NEW workspace-owned full-video project only. Inside one
-Serializable transaction it validates all selected COMPLETE uploads, registers project media, stores
-the compiled editable ClipEditsV2 payload and pinned family/design snapshot, creates the exact-frame
-carrier upload record, and queues the existing PROCESS_PROJECT worker path.
+Automated Batch 3 tests cover deterministic compile, exact frame count, output/item/source mapping
+(including repeated sources and per-slot speed), photo-only and mixed inputs, 30 slots, full-span
+text/music, source-vs-muted video audio, short-video/handle rejection, legacy absent-field
+normalization, Compact/full-Timeline slot representation, transaction/idempotency/CAS behavior and
+cache-hash isolation.
 
-IDs are deterministic from workspace + idempotency key. A retry returns the original project when the
-pinned definition matches and conflicts when it does not. Foreign/missing media returns a non-leaking
-not-found style failure. Mid-transaction failures expose no partial project. Cancellation stops pending
-carrier work without deleting the user's timeline.
+The worker FFmpeg regression runs the production helpers: an exact-frame neutral carrier,
+photo/video/photo source slots, a cross-source transition sourced from real A/B handles, per-slot
+transform/FX/speed, source audio, a full-span Text-lane item and looping full-span music. It asserts
+frame count/duration and audio/video output. A second fixture proves a 73-frame carrier exactly.
 
-`saveTemplateAuthoringState` uses an optimistic authoring version in clip metadata. It does not
-rewrite `clips.edits`; Compact/Timeline edits remain authoritative.
+Worker files changed in Batch 3:
+- `worker/clips_worker/blank_project.py`
+- `worker/clips_worker/media_sources.py`
+- `worker/clips_worker/edits_render.py`
+- `worker/tests/test_real_video_template_sequence.py`
 
-No Batch 3 database migration is required.
+## "Analysis errored" investigation
 
-## Regression gates
-
-The existing Editor QA workflow now runs:
-
-- deterministic compiler/validation/timebase/legacy-golden tests,
-- transactional publish/idempotency/ownership/CAS/cancellation/rollback tests,
-- Compact + full Timeline slot-editor regressions,
-- a scoped real TypeScript compiler gate covering every Batch 3 web/API integration,
-- the FFmpeg worker sequence parity test above.
-
-The standalone 2-slot and 30-slot proof scripts remain as reproducible offline fixtures.
-
-## Intentional boundary for later batches
-
-Batch 3 does not create a React component per template, a proprietary timeline/player, arbitrary
-executable template code, arbitrary remote asset URLs, or a new render service. The transition set is
-limited to the types proven through the shared browser/FFmpeg transition math; unsupported types are
-rejected rather than silently downgraded.
+The earlier visible proof error was not a product analyzer failure. A one-off notebook command tried
+to write into `/mnt/data/tv-proof`, a path already owned by an uploaded attachment, and FFmpeg
+returned `Permission denied`. Repository search found no product code emitting "Analysis errored".
+All committed proofs use an isolated temporary directory (`mktemp` / pytest `tmp_path`) so file
+ownership from uploads cannot collide with generated proof media.
