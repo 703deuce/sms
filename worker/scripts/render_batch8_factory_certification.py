@@ -16,6 +16,7 @@ from clips_worker.audio_render import apply_audio_mix, require_template_soundtra
 from clips_worker.media_sources import apply_full_render_sources, source_transition_boundaries
 from clips_worker.motion_render import apply_motion_after_cut
 from clips_worker.text_items import apply_text_items
+from clips_worker.edits_render import render_edited_clip
 
 FFMPEG=shutil.which("ffmpeg")
 FFPROBE=shutil.which("ffprobe")
@@ -76,6 +77,55 @@ def carrier(cache:dict[int,Path],work:Path,total:int)->Path:
     cache[total]=path
     return path
 
+def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int,Path])->dict:
+    did=row["id"]; total=int(row["totalFrames"]); duration_ms=round(total*1000/30)
+    target=out_root/did; target.mkdir(parents=True,exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=f"b8-prod-{did}-") as td:
+        work=Path(td)
+        src=carrier(cache,out_root/"_carrier_cache",total)
+        final=target/"render.mp4"
+        settings={"aspectRatio":"9:16","exportResolution":"720p","layout":"full_frame",
+                  "captions":{"enabled":False},"aiMeta":{"videoTemplate":{"v":1}}}
+        audio_assets={
+            "media_paths":media,"music_path":music,"sfx_paths":[],
+            "music_meta":{"volume":0.35,"duckDepth":0.55,"fadeInMs":500,
+                          "fadeOutMs":1000,"loop":False},
+        }
+        render_meta={}
+        rendered,_,_=render_edited_clip(
+            src,final,[],row["edits"],0,duration_ms,settings,work,
+            audio_assets=audio_assets,render_id="b8-production-smoke",
+            render_meta=render_meta,compose_spec=None,
+        )
+        if rendered != final and rendered.is_file():
+            shutil.copy(rendered,final)
+        poster=target/"poster.jpg"
+        run(FFMPEG,"-y","-v","error","-ss",f"{total/60:.3f}","-i",str(final),
+            "-frames:v","1","-vf","scale=360:-2:flags=lanczos",str(poster))
+    info=probe(final); streams=info.get("streams",[])
+    duration=float(info["format"]["duration"])
+    boundaries=[int(x) for x in row["boundaries"]]
+    black=[f for f in [1,max(1,total-2),*boundaries[1:-1]] if frame_mean(final,f,total)<=8]
+    checks={
+        "productionRenderEditedClip":True,
+        "video":any(s.get("codec_type")=="video" for s in streams),
+        "audio":any(s.get("codec_type")=="audio" for s in streams),
+        "duration":abs(duration-total/30.0)<0.12,
+        "blackFrames":black,
+        "sourceSegments":len(row["edits"].get("sourceSegments") or []),
+        "transitions":len(row["edits"].get("transitions") or []),
+        "textItems":len(row["edits"].get("textItems") or []),
+        "musicTrack":bool((row["edits"].get("audio") or {}).get("music")),
+    }
+    expected_slots=len(boundaries)-1
+    ok=(checks["video"] and checks["audio"] and checks["duration"] and not black and
+        checks["sourceSegments"]==expected_slots and
+        checks["transitions"]==max(0,expected_slots-1) and
+        checks["textItems"]>=2 and checks["musicTrack"])
+    return {"id":did,"definitionHash":row["definitionHash"],"ok":ok,
+        "render":str(final.relative_to(out_root)),"poster":str(poster.relative_to(out_root)),
+        "renderSha256":sha(final),"posterSha256":sha(poster),"checks":checks}
+
 def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int,Path])->dict:
     did=row["id"]; total=int(row["totalFrames"]); duration_ms=round(total*1000/30)
     target=out_root/did; target.mkdir(parents=True,exist_ok=True)
@@ -127,6 +177,7 @@ def main()->int:
     ap.add_argument("--contract",required=True);ap.add_argument("--out",required=True)
     ap.add_argument("--shard",type=int,required=True);ap.add_argument("--shards",type=int,required=True)
     ap.add_argument("--limit",type=int,default=0)
+    ap.add_argument("--production-smoke",action="store_true")
     args=ap.parse_args()
     if not FFMPEG or not FFPROBE: raise RuntimeError("ffmpeg/ffprobe required")
     contract=json.loads(Path(args.contract).read_text())
@@ -139,7 +190,8 @@ def main()->int:
     results=[]
     for n,row in enumerate(rows,1):
         try:
-            result=render(row,out,media,music,cache)
+            result=(render_production_smoke(row,out,media,music,cache)
+                    if args.production_smoke else render(row,out,media,music,cache))
         except Exception as exc:
             result={"id":row["id"],"definitionHash":row["definitionHash"],"ok":False,
                 "error":f"{type(exc).__name__}: {str(exc)[:500]}"}

@@ -39,10 +39,17 @@ const designs=generateB8Candidates().map(candidate=>{
   })
   const family={...beat.family,slots}
   const durationMs=templateFrameToMs(family.totalFrames)
+  const base=defaultEdits({clipStartMs:0,clipEndMs:durationMs})
+  const carrierEdits={
+    ...base,
+    trim:{in:0,out:durationMs},
+    layout:{...base.layout,mode:'full_frame' as const},
+    aspectRatio:'9:16' as const,
+    captions:{...base.captions,enabled:false},
+  }
   const compiled=compileTemplateWithMusic(family,candidate.design,{
     instanceId:'b8_worker_'+candidate.id,media,music,templateMusic:decision,
-  },{durationFrames:family.totalFrames,
-    edits:defaultEdits({clipStartMs:0,clipEndMs:durationMs})})
+  },{durationFrames:family.totalFrames,edits:carrierEdits})
   return {
     id:candidate.id,familyId:candidate.familyId,treatmentId:candidate.treatmentId,
     definitionHash:candidate.definitionHash,totalFrames:family.totalFrames,
