@@ -122,6 +122,15 @@ export function ensureClone(host: HTMLElement | null, main: HTMLElement | null):
   return Array.from(host.querySelectorAll('video'))
 }
 
+export type TransitionSourceFrame = {
+  sourceId: string
+  mediaTimeSec: number
+  fit: 'cover' | 'contain'
+  transform: string
+  clipPath: string
+  filter: string
+}
+
 export function syncClone(
   host: HTMLElement | null,
   main: HTMLElement | null,
@@ -131,6 +140,7 @@ export function syncClone(
   rate: number,
   look = '',
   gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean,
+  sourceFrameAt?: (srcMs: number) => TransitionSourceFrame | null,
 ) {
   const vids = ensureClone(host, main)
   const layerRoot = host?.firstElementChild instanceof HTMLElement ? host.firstElementChild : null
@@ -165,6 +175,28 @@ export function syncClone(
     if (playing && v.paused) void v.play().catch(() => {})
     if (!playing && !v.paused) v.pause()
   })
+  if (host && sourceFrameAt) {
+    const sf = sourceFrameAt(srcMs)
+    host.querySelectorAll<HTMLElement>('[data-source-id]').forEach((box) => {
+      const active = Boolean(sf && box.dataset.sourceId === sf.sourceId)
+      box.style.visibility = active ? 'visible' : 'hidden'
+      if (!active || !sf) return
+      box.style.transform = sf.transform
+      box.style.clipPath = sf.clipPath
+      box.style.filter = sf.filter
+      box.style.transformOrigin = '50% 50%'
+      const media = box.querySelector('video, img') as HTMLVideoElement | HTMLImageElement | null
+      if (media) media.style.objectFit = sf.fit
+      if (media instanceof HTMLVideoElement) {
+        if (Math.abs(media.currentTime - sf.mediaTimeSec) > (playing ? 0.12 : 0.02)) {
+          try { media.currentTime = sf.mediaTimeSec } catch { /* metadata not ready */ }
+        }
+        media.playbackRate = rate
+        if (playing && media.paused) void media.play().catch(() => {})
+        if (!playing && !media.paused) media.pause()
+      }
+    })
+  }
 }
 
 function pauseClone(host: HTMLElement | null) {
@@ -377,6 +409,8 @@ export function applyMotionFrame(
     lookAt?: (srcMs: number) => string
     /** TR-06: grade clones through WebGL mirror; when true, syncClone skips style.filter. */
     gradeClone?: (layer: HTMLElement, vids: HTMLVideoElement[], srcMs: number) => boolean
+    /** B3/E5: resolve an alternate-source frame for A/B transition clones. */
+    sourceFrameAt?: (srcMs: number) => TransitionSourceFrame | null
     exportW?: number
     exportH?: number
     onShaderNotice?: (msg: string | null) => void
@@ -394,8 +428,8 @@ export function applyMotionFrame(
   const cutHost = dom.cloneA?.parentElement ?? null
   if (main.cut) {
     const c = main.cut
-    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs), gradeClone)
-    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs), gradeClone)
+    syncClone(dom.cloneA, dom.mainLayer, c.aSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.aSrcMs), gradeClone, opts.sourceFrameAt)
+    syncClone(dom.cloneB, dom.mainLayer, c.bSrcMs, opts.mediaOffsetMs, opts.playing, opts.rate, look(c.bSrcMs), gradeClone, opts.sourceFrameAt)
     if (c.pixel) {
       hideShaderCanvas(cutHost)
       drawPixelTransition(cutHost, dom.cloneA, dom.cloneB, c.pixel, opts.boxW, boxH, look(c.aSrcMs), look(c.bSrcMs))
@@ -454,8 +488,8 @@ export function applyMotionFrame(
   } else {
     if (main.upcoming) {
       // Pre-seek both clones to the window start so they are decoded when it begins.
-      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.aSrcMs), gradeClone)
-      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.bSrcMs), gradeClone)
+      syncClone(dom.cloneA, dom.mainLayer, main.upcoming.aSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.aSrcMs), gradeClone, opts.sourceFrameAt)
+      syncClone(dom.cloneB, dom.mainLayer, main.upcoming.bSrcMs, opts.mediaOffsetMs, false, opts.rate, look(main.upcoming.bSrcMs), gradeClone, opts.sourceFrameAt)
     } else {
       pauseClone(dom.cloneA)
       pauseClone(dom.cloneB)
