@@ -53,7 +53,7 @@ describe('FV-11 layout panel aspects', () => {
     />)
     expect(screen.getByTestId('layout-disabled-reason-split').textContent).toContain('Needs 2 speakers')
     expect(screen.getByTestId('layout-disabled-reason-facecam_stack').textContent).toContain('Needs gameplay + facecam')
-    const split = screen.getByText('Two-speaker split').closest('button')!
+    const split = screen.getByText('Two-speaker split').closest('button') as HTMLButtonElement
     expect(split.disabled).toBe(true)
     fireEvent.click(split)
     expect(onMode).not.toHaveBeenCalled()
