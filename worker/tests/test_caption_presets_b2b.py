@@ -60,6 +60,7 @@ def test_each_design_burns_visible_pixels_with_libass(preset, tmp_path):
     command = [
         "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
         "-f", "lavfi", "-i", "color=c=black:s=240x240:r=30:d=1",
+        "-ss", "0.5",
         "-vf", f"ass={ass}:fontsdir={FONTS}",
         "-frames:v", "1", str(png),
     ]
@@ -89,3 +90,15 @@ def test_multiscript_long_word_and_rtl_export_keeps_dialogues(tmp_path, width, h
     assert content in ass
     assert f"PlayResX: {width}" in ass
     assert f"PlayResY: {height}" in ass
+
+
+def test_every_recipe_uses_an_actual_pinned_browser_and_worker_font():
+    manifest_source = (ROOT / "new-app/lib/clips/font-manifest.ts").read_text()
+    for family in {p["font"] for p in DESIGNS}:
+        assert f'"id": "{family}"' in manifest_source or family == "Montserrat", family
+
+
+def test_saved_preset_defaults_remain_unchanged():
+    assert resolve_preset(None)["slug"] == "bold-pop"
+    for id_ in ("bold_pop", "clean_white", "boxed", "karaoke", "minimal"):
+        assert id_ in PRESETS
