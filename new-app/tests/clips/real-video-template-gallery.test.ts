@@ -21,12 +21,24 @@ function fixture(id: string): VideoTemplateRelease {
   }
 }
 describe('standalone real video gallery', () => {
-  it('never invents released designs from the 2,000 target', () => {
+  it('publishes only the 10 Batch 9A anchors as truthful Preview releases', () => {
     expect(validateVideoTemplateGallery(FIRST_PARTY_VIDEO_TEMPLATES)).toEqual(FIRST_PARTY_VIDEO_TEMPLATES)
+    expect(FIRST_PARTY_VIDEO_TEMPLATES).toHaveLength(10)
+    expect(FIRST_PARTY_VIDEO_TEMPLATES.map(x=>x.id)).toEqual(
+      Array.from({length:10},(_,i)=>'f'+String(i+1).padStart(2,'0')+'_bold'))
+    expect(FIRST_PARTY_VIDEO_TEMPLATES.every(x =>
+      x.certificationStatus==='preview' && !x.reviewed && !x.previewRenderVerified &&
+      x.musicRequired && x.defaultMusic?.sha256 === '4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+    )).toBe(true)
   })
   it('requires real local demos and three visible authored dimensions', () => {
     expect(validateVideoTemplateRelease(fixture('one')).id).toBe('one')
-    expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false } as unknown as VideoTemplateRelease)).toThrow('Unreviewed')
+    expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false } as unknown as VideoTemplateRelease))
+      .toThrow('Preview templates must not claim completed certification')
+    expect(validateVideoTemplateRelease({
+      ...fixture('preview'), demoPath: undefined, demoPosterPath: undefined,
+      reviewed: false, previewRenderVerified: false, certificationStatus: 'preview',
+    }).certificationStatus).toBe('preview')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), demoPath: 'https://remote.example/demo.mp4' })).toThrow('local demo')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), authoredDimensions: ['font-hierarchy', 'color','aspect'] })).toThrow('three')
   })
