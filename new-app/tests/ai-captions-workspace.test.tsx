@@ -115,7 +115,7 @@ describe('AI Captions workspace', () => {
       onProgress({ filename: 'talk.mp4', bytes: 10, loaded: 10, percent: 100, state: 'complete', uploadId: 'upl_1' })
     })
   })
-  afterEach(() => cleanup())
+  afterEach(() => { cleanup(); vi.useRealTimers() })
 
   it('renders human history titles, selects by run id, and reloads history on remount', async () => {
     const historyRun = {
@@ -244,7 +244,11 @@ describe('AI Captions workspace', () => {
       result: null,
     }
     listAiCaptionsRuns.mockResolvedValue([running])
-    getAiCaptionsRun.mockRejectedValue(new Error('network interrupted'))
+    let statusCalls = 0
+    getAiCaptionsRun.mockImplementation(() => {
+      statusCalls += 1
+      return statusCalls === 1 ? Promise.resolve(running) : Promise.reject(new Error('network interrupted'))
+    })
 
     render(<AiCaptionsWorkspace />)
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
@@ -264,7 +268,6 @@ describe('AI Captions workspace', () => {
     expect(getAiCaptionsRun.mock.calls.length).toBe(stoppedAt + 1)
     expect(createAiCaptionsRun).not.toHaveBeenCalled()
     expect(startAiCaptionsExport).not.toHaveBeenCalled()
-    vi.useRealTimers()
   })
 
   it('uploads, starts a captions run, shows preparing, then Edit opens the Captions tab', async () => {
