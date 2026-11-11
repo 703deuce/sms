@@ -243,7 +243,34 @@ export async function publishTemplateProject(
           kind: 'source',
         },
       })
-      const project = await tx.clipProject.create({
+      const existingDraft = await tx.clipProject.findFirst({
+        where: { id: ids.projectId, workspaceId, deletedAt: null, sourceKind: 'video_template_draft', status: 'DRAFT' },
+        select: { id: true, settings: true },
+      })
+      // An unfilled studio draft is already a workspace-owned NEW project.
+      // Publish that same ID; never create a duplicate or mutate an unrelated clip.
+      const preserved = existingDraft?.settings && typeof existingDraft.settings === 'object' &&
+        !Array.isArray(existingDraft.settings) ? existingDraft.settings as Record<string, unknown> : {}
+      const projectData = {
+        workspaceId,
+        title: title?.trim().slice(0, 200) || family.title,
+        uploadId: ids.uploadId,
+        settings: toPrismaJson({ ...settings,
+          ...(preserved.videoTemplateDraft ? { videoTemplateDraft: preserved.videoTemplateDraft } : {}) }),
+        rangeStartMs: 0,
+        rangeEndMs: durationMs,
+        status: 'QUEUED' as const,
+        stage: 'queued',
+        progress: 0,
+        transcriptWords: toPrismaJson([]),
+        sourceKind: 'upload',
+      }
+      const project = existingDraft
+        ? await tx.clipProject.update({ where: { id: ids.projectId }, data: projectData })
+        : await tx.clipProject.create({ data: { id: ids.projectId, ...projectData } })
+      /* previous creation fields replaced by the shared draft/new-project path */
+      /*
+      const projectUnused = await tx.clipProject.create({
         data: {
           id: ids.projectId,
           workspaceId,
@@ -260,6 +287,8 @@ export async function publishTemplateProject(
         },
       })
 
+      */
+      
       const uniqueAssets = new Map<string, TemplateAsset>()
       for (const asset of Object.values(choicesRaw.media)) uniqueAssets.set(asset.id, asset)
       if (choicesRaw.music) uniqueAssets.set(choicesRaw.music.id, choicesRaw.music)
