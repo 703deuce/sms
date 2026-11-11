@@ -103,7 +103,7 @@ async function loadAndValidateAssets(
     const handles = slot.handles ?? { headFrames: 0, tailFrames: 0 }
     selected.push({
       asset,
-      minimumFrames: (slot.sourceInFrame ?? 0) + slot.durationFrames + handles.tailFrames,
+      minimumFrames: (slot.sourceInFrame ?? 0) + Math.ceil(slot.durationFrames * (slot.speed ?? 1)) + handles.tailFrames,
     })
   }
   if (choices.music) {
