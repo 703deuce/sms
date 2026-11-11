@@ -19,6 +19,7 @@ import { generateB8Candidates, proveB8Structure, reportB8Quality,
 import { templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
 import { compileTemplateWithMusic, type TemplateMusicDecisionV1 } from '../lib/clips/real-video-templates/music-sequence'
 import { assertAudioLicense } from '../lib/clips/real-video-templates/music-timing'
+import { syncB8FamilyToMusic } from '../lib/clips/real-video-templates/b8-music-sync'
 import { defaultEdits } from '../lib/clips/edits'
 import {
   B8_RENDER_QA_REVISION, summarizeB8AudioEnvelopeQA, summarizeB8FrameQA,
@@ -264,8 +265,11 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
     const images=fixtures.media.filter(m=>m.kind==='image')
     const videos=fixtures.media.filter(m=>m.kind==='video')
     if(!images.length||!videos.length)throw new Error('Preview needs both real photos and video fixtures')
+    if(!fixtures.soundtrack)
+      throw new Error('Batch 8 full-motion preview needs licensed pinned beat-time music')
+    const beatSync=syncB8FamilyToMusic(c.family,fixtures.soundtrack.decision.schedule)
     const media:Record<string,TemplateAsset>={}
-    c.family.slots.forEach((slot,i)=>{
+    beatSync.family.slots.forEach((slot,i)=>{
       const required=slot.durationFrames+(slot.handles?.headFrames??0)+
         (slot.handles?.tailFrames??0)
       const video=videos.find(v=>(v.durationFrames??0)>=required)
@@ -274,22 +278,21 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
         ...(source.durationFrames?{durationFrames:source.durationFrames}:{})}
     })
     if(!Object.values(media).some(asset=>asset.kind==='video'))
-      throw new Error('No verified video is long enough for an authored slot and both handles; mixed-media QA cannot proceed')
+      throw new Error('No verified video is long enough for a beat-synced slot and both handles')
     // Video sources must begin after authored incoming source handles; images can hold
     // without advancing media time. Never render a clip at 0 with missing handles.
-    const sampledFamily={...c.family,slots:c.family.slots.map(slot=>({
+    const sampledFamily={...beatSync.family,slots:beatSync.family.slots.map(slot=>({
       ...slot,...(media[slot.id]?.kind==='video'
         ? {sourceInFrame:slot.handles?.headFrames??0} : {}),
     }))}
-    if(!fixtures.soundtrack)
-      throw new Error('Batch 8 full-motion preview needs licensed pinned beat-time music')
-    const duration=templateFrameToMs(c.family.totalFrames)
+    const duration=templateFrameToMs(sampledFamily.totalFrames)
     const edits=compileTemplateWithMusic(sampledFamily,c.design,{
       instanceId:'b8_qa_'+c.familyId,media,music:fixtures.soundtrack.asset,
       templateMusic:fixtures.soundtrack.decision,
-    },{durationFrames:c.family.totalFrames,
+    },{durationFrames:sampledFamily.totalFrames,
       edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
-    const editableIssues=auditB8EditableOutput(c,edits,{
+    const syncedCandidate={...c,family:sampledFamily}
+    const editableIssues=auditB8EditableOutput(syncedCandidate,edits,{
       requireMusic:true,expectedMusicAssetId:fixtures.soundtrack.asset.id,
     })
     if(editableIssues.length)
@@ -298,7 +301,12 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
     save(dest,{v:1,cacheKey,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
       footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
       soundtrack:fixtures.soundtrack,edits:edits.edits,
-      structuralProof:proveB8Structure(c),
+      authoredStructuralProof:proveB8Structure(c),
+      beatSync:{oldBoundaries:beatSync.oldBoundaries,newBoundaries:beatSync.newBoundaries,
+        movedBoundaries:beatSync.movedBoundaries,allCutsOnPinnedBeats:true},
+      authoring:{family:sampledFamily,design:c.design,choices:{
+        media,music:fixtures.soundtrack.asset,templateMusic:fixtures.soundtrack.decision,
+      }},
       editableProof:{
         slotSegments:edits.edits.sourceSegments?.length??0,
         cutBoundaries:edits.edits.videoSplits?.length??0,
@@ -306,7 +314,7 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
         animatedLayers:edits.edits.textItems?.filter(layer=>Boolean(layer.anim)).length??0,
         videoMotionTracks:edits.edits.keyframes?.filter(track=>track.target==='video').length??0,
         separateMusicTrack:Boolean(edits.edits.audio?.music),
-        issues:editableIssues,
+        beatSyncedCuts:true,issues:editableIssues,
       },
       expectedAudioTrack:true,expectedMusicSourceSha256:fixtures.soundtrack.sha256,
       message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})

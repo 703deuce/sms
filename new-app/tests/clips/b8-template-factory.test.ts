@@ -1,5 +1,6 @@
 import { describe,expect,it } from 'vitest'
 import { summarizeB8AudioEnvelopeQA,summarizeB8FrameQA } from '@/lib/clips/real-video-templates/b8-render-qa'
+import { syncB8FamilyToMusic } from '@/lib/clips/real-video-templates/b8-music-sync'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
@@ -107,9 +108,31 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(lintB8Legibility(candidate).some(c=>c.code.startsWith('low_contrast_on_'))).toBe(true)
     expect(auditB8Evidence(altered,evidence(altered.id))).toContain('unresolved_static_legibility')
   })
+  it('retimes all 50 structures onto real pinned music beats without changing slot order',()=>{
+    const schedule={
+      v:1 as const,mode:'beat-time' as const,musicAssetId:'grid',sha256:hash,bpm:120,
+      confidence:'high' as const,offsetFrames:0,durationFrames:3600,
+      beats:Array.from({length:240},(_,i)=>i*15),
+      phrases:[],protectedAnchors:[],
+    }
+    for(const candidate of candidates.filter(c=>c.treatmentId==='bold')){
+      const synced=syncB8FamilyToMusic(candidate.family,schedule)
+      const beats=new Set(schedule.beats)
+      expect(synced.family.slots.map(s=>s.id)).toEqual(candidate.family.slots.map(s=>s.id))
+      expect(synced.family.slots.slice(1).every(s=>beats.has(s.startFrame)),candidate.id).toBe(true)
+      expect(beats.has(synced.family.totalFrames),candidate.id).toBe(true)
+      expect(synced.family.slots.every(s=>s.durationFrames>=9),candidate.id).toBe(true)
+    }
+  })
   it('keeps B4 mixed sources and B5 pinned music as separate edit lanes',()=>{
     const c=candidates.find(c=>c.id==='f01_bold')!
-    const family={...c.family,slots:c.family.slots.map((slot,i)=>
+    const baseSchedule={
+      v:1 as const,mode:'beat-time' as const,musicAssetId:'music_fixture',sha256:hash,bpm:120,
+      confidence:'high' as const,offsetFrames:0,durationFrames:600,
+      beats:Array.from({length:40},(_,i)=>i*15),phrases:[],protectedAnchors:[],
+    }
+    const synced=syncB8FamilyToMusic(c.family,baseSchedule).family
+    const family={...synced,slots:synced.slots.map((slot,i)=>
       i===1?{...slot,sourceInFrame:6}:slot)}
     const license={id:'fixture_owned',provenance:'user-owned' as const,reference:'test-only'}
     const media=Object.fromEntries(family.slots.map((slot,i)=>[slot.id,i===1?

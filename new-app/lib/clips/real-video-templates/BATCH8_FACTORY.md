@@ -76,9 +76,11 @@ rights and schedule must agree. Repeated sources and all-photo cases should
 also be checked separately. No fixture is automatically granted commercial
 redistribution rights.
 
-The preview command maps media to native source segments, compiles through
-the existing Batch 5 music-aware template compiler and writes the authoritative
-expected timeline/worker input plan with a separate pinned soundtrack lane. The actual MP4 must be rendered through
+The preview command first re-times each structural family onto the actual
+pinned soundtrack beat grid (preserving slot order and minimum shot lengths),
+then maps media to native source segments and compiles through the existing
+Batch 5 music-aware template compiler. The resulting worker plan keeps every
+cut on a real pinned beat and keeps the soundtrack on a separate editable lane. The actual MP4 must be rendered through
 the existing preseeded project/FFmpeg worker and returned as a local
 `renderMp4`; a false success flag or placeholder cannot create a release.
 A local playable MP4 cannot be generated from unregistered or absent
@@ -212,3 +214,15 @@ boundary, and persists measured hashes/durations in the QA sidecar. It remains
 sampled evidence only: full-motion flash, fine glyphs, readable text on moving
 footage, specific music identity, and real visual parity still require actual
 inspection and the human release gates.
+
+## Beat-synced factory timing
+
+Batch 8 no longer treats a `beat-time` label as proof of sync. Before a
+preview/worker request is emitted, the family boundaries are deterministically
+mapped to frames from the verified soundtrack's pinned beat schedule. Slot
+order and structure remain unchanged; text, graphics, phrase anchors and
+transition durations move on the same output clock. The request is rejected
+if the grid is too sparse, a shot would fall below nine frames, a transition
+would become unsafe, the soundtrack is too short, or any interior cut/final
+boundary fails to land on a pinned music beat. This runtime factory retiming
+does not modify the Batch 9A anchor source files.
