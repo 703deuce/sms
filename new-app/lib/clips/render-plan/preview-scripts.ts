@@ -202,6 +202,8 @@ export const CLIP_FONT_FILES: Record<string, string> = Object.fromEntries([
   ['montserrat black', 'Montserrat-Black.ttf'],
   ['poppins extrabold', 'Poppins-ExtraBold.ttf'],
   ['lato black', 'Lato.ttf'],
+  // DejaVu is a system/worker fallback, not a repository-pinned worker pair.
+  ['dejavu sans', 'DejaVuSans-Bold.ttf'],
 ])
 
 /** G3b: workspace fonts (family, lower-case → same-origin file URL) — use-workspace-fonts fills it. */
