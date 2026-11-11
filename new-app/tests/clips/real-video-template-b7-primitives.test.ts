@@ -1,73 +1,239 @@
 import { describe, expect, it } from 'vitest'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
-import type { TextItem } from '@/lib/clips/editor/text-items'
-import { applyStandaloneTemplatePrimitives, B7_CAPABILITIES, type TemplatePrimitive } from '@/lib/clips/real-video-templates/b7-primitives'
-const blank = {} as ClipEditsV2
-const base = (id: string, kind: TemplatePrimitive['kind']): TemplatePrimitive => ({
-  id, kind, startMs: 0, endMs: 1800, box: { x: .1, y: .12, width: .8, height: .7 },
-  color: '#FFFFFF', accent: '#FFAA33', font: 'Montserrat',
-})
-function ready(result: ReturnType<typeof applyStandaloneTemplatePrimitives>) {
-  expect(result.ok).toBe(true)
-  if (!result.ok) throw new Error(result.code)
-  return result
+import {
+  compileTemplate,
+  type TemplateAsset,
+  type TemplateChoices,
+  type TemplateFamilyV1,
+  type TemplateSlot,
+} from '@/lib/clips/real-video-templates/sequence-contract'
+import {
+  BATCH7_DEPTH_CAPABILITIES,
+  depthDerivedCacheKey,
+  planSuppliedLayerParallax,
+} from '@/lib/clips/real-video-templates/batch7-depth'
+import { addTextBackedMotionPlan } from '@/lib/clips/motion-graphics/text-adapter'
+import type { MotionPlan } from '@/lib/clips/motion-graphics/contract'
+import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+
+const style = {
+  headlineFont: 'Bangers' as const,
+  bodyFont: 'Poppins' as const,
+  textColor: '#FFFFFF',
+  accentColor: '#22D3EE',
+  panelColor: '#111827',
 }
-describe('Batch 7 standalone primitives', () => {
-  it.each(['9:16','1:1','16:9'] as const)('fits calendar text in %s', format => {
-    const r = ready(applyStandaloneTemplatePrimitives(blank,[{...base('date','calendar'),text:'November 11'}],format,1800))
-    expect(r.edits.textItems).toHaveLength(3)
-    expect(r.edits.textItems?.find(x=>x.id==='b7_date__date')?.text).toContain('November')
+const slot = (n: number, frames = 60): TemplateSlot => ({
+  id: 'shot_' + n, ordinal: n, role: n === 1 ? 'hero' : 'support', media: 'image',
+  startFrame: (n - 1) * frames, durationFrames: frames, fit: 'cover',
+  sourceAudio: 'mute', transition: 'cut',
+})
+const asset = (id: string, kind: 'image' | 'video' | 'audio', frames = 180): TemplateAsset => ({
+  id, kind, ...(kind === 'image' ? {} : { durationFrames: frames }),
+  license: { id: 'license_1', provenance: 'user-owned', reference: 'library_1' },
+})
+function family(count = 4, aspect: '9:16' | '1:1' | '16:9' = '9:16'): TemplateFamilyV1 {
+  return {
+    schemaVersion: 1, familyId: 'family_b7', revision: 1, title: 'Batch 7 primitives',
+    tags: ['photo'], aspects: [aspect], fps: 30, totalFrames: count * 60,
+    slots: Array.from({ length: count }, (_, i) => slot(i + 1)),
+    texts: [], beatAnchors: [],
+  }
+}
+const design = {
+  schemaVersion: 1 as const, designId: 'design_b7', revision: 1, stylePackId: 'style_b7',
+  familyId: 'family_b7', familyRevision: 1, musicPolicy: 'none' as const,
+}
+function choices(count = 4, shared = false): TemplateChoices {
+  return {
+    instanceId: 'instance_b7',
+    media: Object.fromEntries(Array.from({ length: count }, (_, i) => [
+      'shot_' + (i + 1), asset(shared ? 'same_photo' : 'photo_' + (i + 1), 'image'),
+    ])),
+  }
+}
+function carrier(frames: number, extra: Partial<ClipEditsV2> = {}) {
+  return {
+    durationFrames: frames,
+    edits: {
+      v: 2, trim: { in: 0, out: Math.round(frames * 1000 / 30) }, cutRanges: [],
+      wordFixes: {}, captions: {}, layout: { mode: 'full_frame', shotOverrides: [] },
+      ...extra,
+    } as ClipEditsV2,
+  }
+}
+
+describe('Batch 7 standalone reusable primitives', () => {
+  it('compiles the required primitive set into existing editable render records', () => {
+    const f = family()
+    f.primitives = [
+      { kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
+        box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style },
+      { kind: 'collage_card', id: 'collage', startFrame: 60, durationFrames: 60,
+        slotIds: ['shot_2', 'shot_3', 'shot_4'], title: 'Weekend', style },
+      { kind: 'confetti', id: 'confetti', startFrame: 120, durationFrames: 60,
+        box: { x: .05, y: .05, width: .9, height: .75 }, count: 6, style },
+      { kind: 'countdown', id: 'countdown', startFrame: 0, from: 3, stepFrames: 10,
+        box: { x: .30, y: .28, width: .40, height: .35 }, style },
+      { kind: 'before_after', id: 'compare', startFrame: 0, durationFrames: 60,
+        leftSlotId: 'shot_1', rightSlotId: 'shot_2', leftLabel: 'Before', rightLabel: 'After', style },
+      { kind: 'roster_selection', id: 'roster', startFrame: 120, durationFrames: 60,
+        title: 'Starting five', entries: ['Avery', 'Blake', 'Casey'], selectedIndex: 1,
+        box: { x: .12, y: .18, width: .76, height: .62 }, style },
+      { kind: 'calendar_label', id: 'calendar', startFrame: 180, durationFrames: 60,
+        month: 'NOV', day: 11, label: 'Launch day',
+        box: { x: .25, y: .18, width: .50, height: .55 }, style },
+      { kind: 'route_arrow', id: 'route', startFrame: 180, durationFrames: 60, label: 'Next stop',
+        box: { x: .18, y: .62, width: .64, height: .10 }, style },
+      { kind: 'text_underline', id: 'underline', startFrame: 120, durationFrames: 60, text: 'Built to move',
+        box: { x: .12, y: .08, width: .76, height: .18 }, style },
+      { kind: 'text_glow', id: 'glow', startFrame: 180, durationFrames: 60, text: 'Night mode',
+        box: { x: .15, y: .08, width: .70, height: .16 }, style },
+    ]
+    // Two composites cannot own the same anchor span; use a separate anchor for comparison.
+    f.primitives[4] = { ...f.primitives[4], leftSlotId: 'shot_4', rightSlotId: 'shot_1' } as typeof f.primitives[number]
+    const result = compileTemplate(f, design, choices(), carrier(f.totalFrames))
+    expect(result.edits.textItems?.some((i) => i.id.includes('frame_top'))).toBe(true)
+    expect(result.edits.textItems?.some((i) => i.id.includes('confetti_'))).toBe(true)
+    expect(result.edits.textItems?.filter((i) => /b7_countdown__n_/.test(i.id))).toHaveLength(3)
+    expect(result.edits.textItems?.some((i) => i.id === 'b7_glow__text' && i.style.shadow?.color === '#22D3EE')).toBe(true)
+    expect(result.edits.keyframes?.some((k) => k.target.startsWith('text:b7_route__arrow'))).toBe(true)
+    expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_2)?.layout?.kind).toBe('grid')
+    expect(result.edits.sourceSegments?.find((s) => s.id === result.slotToItemIds.shot_4)?.layout?.kind).toBe('side_by_side')
   })
-  it('keeps independent shapes/labels and original source edits', () => {
-    const edits = {...blank,sources:[{id:'original',assetId:'source'}]} as unknown as ClipEditsV2
-    const r=ready(applyStandaloneTemplatePrimitives(edits,[
-      {...base('a','before_after'),labels:['Before','After']},
-      {...base('b','roster'),labels:['One','Two','Three']},
-    ],'16:9',1800))
-    expect(r.edits.sources).toBe(edits.sources)
-    expect(r.edits.textItems?.some(x=>x.text==='Before')).toBe(true)
-    expect(r.edits.textItems?.some(x=>x.text==='Three')).toBe(true)
-    expect(r.edits.textItems?.some(x=>x.kind==='shape')).toBe(true)
+
+  it('preserves unrelated manual text, groups and keyframes and survives normalization without dropped text', () => {
+    const manual = {
+      id: 'manual_note', text: 'Keep me', startMs: 0, endMs: 2000, x: 50, y: 50,
+      style: { font: 'Montserrat' as const, size: 72, color: '#FFFFFF', align: 'center' as const, case: 'none' as const },
+    }
+    const f = family(1)
+    f.primitives = [{ kind: 'text_glow', id: 'glow', startFrame: 0, durationFrames: 60, text: 'Template',
+      box: { x: .15, y: .15, width: .70, height: .20 }, style }]
+    const extra = {
+      textItems: [manual],
+      keyframes: [{ target: 'text:manual_note', prop: 'x', points: [{ tMs: 0, v: 0 }, { tMs: 1000, v: 8 }] }],
+      groups: [{ id: 'grp1', itemIds: ['text:manual_note'] }],
+    } as unknown as Partial<ClipEditsV2>
+    const result = compileTemplate(f, design, choices(1), carrier(f.totalFrames, extra))
+    expect(result.edits.textItems?.find((i) => i.id === 'manual_note')).toEqual(manual)
+    expect(result.edits.keyframes?.some((k) => k.target === 'text:manual_note')).toBe(true)
+    expect(result.edits.groups).toEqual(extra.groups)
+    const reloaded = normalizeEdits(result.edits, { clipStartMs: 0, clipEndMs: 2000 })
+    expect(reloaded.textItems).toHaveLength(result.edits.textItems?.length)
+    expect(reloaded.textItems?.some((i) => i.id === 'manual_note')).toBe(true)
   })
-  it('preserves manually authored layers and keyframes and refuses collisions', () => {
-    const manual: TextItem={id:'b7_x__title',text:'Manual',startMs:0,endMs:1800,x:50,y:50,
-      style:{font:'Montserrat',size:90,color:'#FFFFFF',align:'center',case:'none'}}
-    const prev={...blank,textItems:[manual],keyframes:[]} as ClipEditsV2
-    const p={...base('x','underline'),text:'Title'}
-    expect(applyStandaloneTemplatePrimitives(prev,[p],'9:16',1800))
-      .toMatchObject({ok:false,code:'id_collision'})
-    const r=ready(applyStandaloneTemplatePrimitives(prev,[{...p,id:'fresh'}],'9:16',1800))
-    expect(r.edits.textItems?.[0]).toBe(manual)
-    expect(r.edits.keyframes?.length).toBeGreaterThan(0)
+
+  it('fails closed at textItems capacity instead of dropping manual items', () => {
+    const f = family(1)
+    f.primitives = [{ kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',
+      box: { x: .05, y: .05, width: .9, height: .9 }, thickness: 12, style }]
+    const manual = Array.from({ length: 58 }, (_, i) => ({
+      id: 'manual_' + i, text: 'M' + i, startMs: 0, endMs: 2000, x: 50, y: 50,
+      style: { font: 'Montserrat' as const, size: 48, color: '#FFFFFF', align: 'center' as const, case: 'none' as const },
+    }))
+    expect(() => compileTemplate(f, design, choices(1), carrier(f.totalFrames, { textItems: manual })))
+      .toThrow(/text_capacity/)
   })
-  it('refuses overflowing the shared 60-item cap without dropping manual layers', () => {
-    const prev={...blank,textItems:Array.from({length:50},(_,i)=>({
-      id:'manual_'+i,text:'Manual',startMs:0,endMs:1800,x:50,y:50,
-      style:{font:'Montserrat' as const,size:40,color:'#FFFFFF',align:'center' as const,case:'none' as const},
-    }))} as ClipEditsV2
-    expect(applyStandaloneTemplatePrimitives(prev,[base('particles','confetti')],'1:1',1800))
-      .toMatchObject({ok:false,code:'text_capacity'})
-    expect(prev.textItems).toHaveLength(50)
+
+  it.each(['9:16', '1:1', '16:9'] as const)('fits authored text deterministically in %s', (aspect) => {
+    const f = family(1, aspect)
+    f.primitives = [{ kind: 'text_underline', id: 'headline', startFrame: 0, durationFrames: 60,
+      text: 'A professionally fitted title across the frame',
+      box: { x: .08, y: .10, width: .84, height: .24 }, style }]
+    const result = compileTemplate(f, design, { ...choices(1), aspect }, carrier(f.totalFrames))
+    const item = result.edits.textItems?.find((i) => i.id === 'b7_headline__text')
+    expect(item?.text).toBeTruthy()
+    expect(item?.style.size).toBeGreaterThanOrEqual(24)
+    expect(item?.style.size).toBeLessThanOrEqual(240)
   })
-  it('static reduced motion retains visible layers', () => {
-    const r=ready(applyStandaloneTemplatePrimitives(blank,[{
-      ...base('line','line_reveal'),text:'Reveal',reducedMotion:true,
-    }],'9:16',1800))
-    expect(r.edits.keyframes ?? []).toHaveLength(0)
-    expect(r.edits.textItems).toHaveLength(2)
+
+  it('keeps the same source usable in independent slots and preserves authored crop transforms', () => {
+    const f = family(2)
+    f.slots[0] = { ...f.slots[0], transform: { cropL: 5, cropR: 3, scale: 108 } }
+    f.primitives = [{ kind: 'before_after', id: 'compare', startFrame: 0, durationFrames: 60,
+      leftSlotId: 'shot_1', rightSlotId: 'shot_2', leftLabel: 'One', rightLabel: 'Two', style }]
+    const result = compileTemplate(f, design, choices(2, true), carrier(f.totalFrames))
+    expect(result.edits.sources).toHaveLength(1)
+    expect(result.edits.sourceSegments).toHaveLength(2)
+    expect(result.edits.sourceSegments?.[0]?.id).not.toBe(result.edits.sourceSegments?.[1]?.id)
+    expect(result.edits.sourceSegments?.[0]?.transform).toEqual({ cropL: 5, cropR: 3, scale: 108 })
+    expect(result.edits.sourceSegments?.[0]?.layout?.kind).toBe('side_by_side')
   })
-  it('never calls a static numeral a numeric count-up', () => {
-    expect(applyStandaloneTemplatePrimitives(blank,[{
-      ...base('counter','countdown'),text:'1,000',
-    }],'9:16',1800)).toMatchObject({ok:false,code:'unsupported_design'})
-    expect(B7_CAPABILITIES.numericCountUp).toContain('unsupported')
+
+  it('provides reduced-motion / reduced-flash alternatives without changing static structure', () => {
+    const f = family(1)
+    f.primitives = [
+      { kind: 'confetti', id: 'confetti', startFrame: 0, durationFrames: 60,
+        box: { x: .05, y: .05, width: .9, height: .8 }, count: 5, style },
+      { kind: 'route_arrow', id: 'route', startFrame: 0, durationFrames: 60,
+        box: { x: .2, y: .7, width: .6, height: .1 }, style },
+    ]
+    const result = compileTemplate(f, design,
+      { ...choices(1), accessibility: { reducedMotion: true, reducedFlash: true } },
+      carrier(f.totalFrames))
+    expect(result.edits.textItems?.some((i) => i.id.includes('confetti'))).toBe(true)
+    expect(result.edits.keyframes?.some((k) => k.target.startsWith('text:b7_'))).toBe(false)
   })
-  it('rejects duplicate IDs and out-of-bounds graphics', () => {
-    const p=base('dup','route_arrow')
-    expect(applyStandaloneTemplatePrimitives(blank,[p,p],'16:9',1800))
-      .toMatchObject({ok:false,code:'duplicate_id'})
-    expect(applyStandaloneTemplatePrimitives(blank,[{
-      ...p,box:{x:.8,y:.8,width:.4,height:.4},
-    }],'16:9',1800)).toMatchObject({ok:false,code:'invalid_box'})
+})
+
+describe('Batch 7 count-up gating and existing font propagation', () => {
+  it('rejects count_up rather than pretending pop is numeric progression', () => {
+    const plan: MotionPlan = {
+      version: 1, mode: 'streamer_continuous', styleProfileId: null, fps: 30, durationMs: 3000, format: '9:16',
+      graphics: [{
+        id: 'counter', templateId: 'stat_counter', startMs: 0, endMs: 3000, text: '42',
+        box: { x: .2, y: .2, width: .6, height: .2 }, zIndex: 1,
+        style: { fontFamily: 'Bangers', textColor: '#FFFFFF', accentColor: '#22D3EE' },
+        intro: { kind: 'count_up', durationMs: 500, easing: 'out' },
+        outro: { kind: 'fade', durationMs: 200, easing: 'in' },
+        keyframes: [], assetIds: [], rationale: 'explicit counter',
+      }],
+    }
+    const result = addTextBackedMotionPlan(carrier(90).edits, plan)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.code).toBe('unsupported_animation')
+  })
+})
+
+describe('Batch 7 F05 depth honesty and supplied-layer planning', () => {
+  it('keeps ordinary-photo true depth hidden and records the exact existing RVM revision/license', () => {
+    expect(BATCH7_DEPTH_CAPABILITIES.ordinaryPhotoTrueDepth.defaultEligible).toBe(false)
+    expect(BATCH7_DEPTH_CAPABILITIES.ordinaryPhotoTrueDepth.status).toBe('unsupported_hidden')
+    expect(BATCH7_DEPTH_CAPABILITIES.existingVideoMatte.revision)
+      .toBe('53d74c6826735f01f4406b5ca9075eee27bec094')
+    expect(BATCH7_DEPTH_CAPABILITIES.existingVideoMatte.license).toContain('GPL-3.0')
+  })
+
+  it('keys derivation by workspace, source, revision and crop only', () => {
+    const base = { workspaceId: 'ws1', sourceAssetId: 'photo1', model: 'depth_model', revision: 'r1',
+      crop: { x: 0, y: 0, width: 1, height: 1 } }
+    expect(depthDerivedCacheKey(base)).toBe(depthDerivedCacheKey(base))
+    expect(depthDerivedCacheKey({ ...base, crop: { x: .1, y: 0, width: .9, height: 1 } }))
+      .not.toBe(depthDerivedCacheKey(base))
+    expect(depthDerivedCacheKey({ ...base, sourceAssetId: 'photo2' })).not.toBe(depthDerivedCacheKey(base))
+  })
+
+  it('plans four independent supplied-layer photo scenes without flattening unrelated edits', () => {
+    let edits = carrier(240, {
+      keyframes: [{ target: 'video', prop: 'scale', points: [{ tMs: 0, v: 100 }, { tMs: 7999, v: 105 }] }],
+    }).edits
+    const keys = new Set<string>()
+    for (let i = 0; i < 4; i++) {
+      const planned = planSuppliedLayerParallax(edits, {
+        id: 'scene' + i, workspaceId: 'ws1', sourceAssetId: 'photo' + i,
+        backgroundPlateUploadId: 'bg' + i, foregroundAlphaUploadId: 'fg' + i,
+        startMs: i * 2000, endMs: (i + 1) * 2000,
+        crop: { x: 0, y: 0, width: 1, height: 1 },
+      })
+      expect(planned.ok).toBe(true)
+      if (!planned.ok) throw new Error(planned.detail)
+      expect(planned.releaseReady).toBe(false)
+      keys.add(planned.cacheKey)
+      edits = planned.edits
+    }
+    expect(keys.size).toBe(4)
+    expect(edits.broll).toHaveLength(8)
+    expect(edits.keyframes?.some((k) => k.target === 'video')).toBe(true)
+    expect(edits.keyframes?.filter((k) => k.target.startsWith('broll:b7depth_'))).toHaveLength(16)
   })
 })
