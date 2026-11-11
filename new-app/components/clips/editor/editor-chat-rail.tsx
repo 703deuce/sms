@@ -61,6 +61,7 @@ export function EditorChatRail({
   const [planTools, setPlanTools] = useState<ProducerToolCall[]>([])
   const [attachedMediaId, setAttachedMediaId] = useState<string | null>(null)
   const mediaInputRef = useRef<HTMLInputElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const attachedMedia = projectMedia.items.find((item) => item.id === attachedMediaId) ?? null
   const highlights = useFullVideoHighlights(projectId, fullVideo, [])
   const [previewing, setPreviewing] = useState(false)
@@ -91,6 +92,14 @@ export function EditorChatRail({
       console.info('[editor:chat-mode] proposal-stale', { projectId, clipId })
     }
   }, [stale, previewing, onAudition, projectId, clipId])
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    closeButtonRef.current?.focus()
+    return () => {
+      if (previousFocus?.isConnected) previousFocus.focus()
+    }
+  }, [open])
   useEffect(() => {
     if (!open) return
     const onKey = (event: KeyboardEvent) => {
@@ -149,7 +158,7 @@ export function EditorChatRail({
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-3">
         <Sparkles className="size-4 text-primary" aria-hidden />
         <h2 className="min-w-0 flex-1 text-sm font-semibold">Edit with AI</h2>
-        <Button variant="ghost" size="icon" aria-label="Close Edit with AI" onClick={() => {
+        <Button ref={closeButtonRef} variant="ghost" size="icon" aria-label="Close Edit with AI" onClick={() => {
           console.info('[editor:chat-mode] close', { projectId, clipId })
           onClose()
         }}><X className="size-4" /></Button>
