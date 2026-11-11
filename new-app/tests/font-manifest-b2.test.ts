@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { resolve } from 'node:path'
 import { CLIP_FONT_MANIFEST, CLIP_FONT_MANIFEST_VERSION, findClipFont, waitForClipFont } from '@/lib/clips/font-manifest'
-import { CLIP_FONT_FILES } from '@/lib/clips/render-plan/preview-scripts'
+import { CLIP_FONT_FILES, fontUrlsForAss } from '@/lib/clips/render-plan/preview-scripts'
 import { TEXT_FONTS } from '@/lib/clips/editor/text-items'
 import { TEXT_FONTS as ASS_TEXT_FONTS } from '@/lib/clips/render-plan/text-items-ass'
 
@@ -36,4 +36,17 @@ describe('versioned pinned font inventory', () => {
   it('never silently reports an uninstalled font ready', async () => {
     await expect(waitForClipFont('Uninstalled New Font')).rejects.toThrow('clip_font_not_in_manifest')
   })
+  it('loads pinned script-dependent JASSUB fallback faces for mixed Unicode and emoji', () => {
+    const header = 'Style: Cap,Space Grotesk,48,0,0,0,0'
+    const ascii = header + String.fromCharCode(10) + 'Dialogue: 0,0:00:00.00,0:00:01.00,Cap,,0,0,0,,Hello'
+    expect(fontUrlsForAss(ascii)).toEqual(['/fonts/clip/SpaceGrotesk.ttf'])
+    const mixed = header + String.fromCharCode(10) + 'Dialogue: 0,0:00:00.00,0:00:01.00,Cap,,0,0,0,,Café Привет مرحبا नमस्ते สวัสดี 日本語 🙂'
+    expect(fontUrlsForAss(mixed)).toEqual([
+      '/fonts/clip/SpaceGrotesk.ttf', '/fonts/clip/DejaVuSans-Bold.ttf',
+      '/fonts/clip/NotoSansArabic.ttf', '/fonts/clip/NotoSansDevanagari.ttf',
+      '/fonts/clip/NotoSansThai.ttf', '/fonts/clip/NotoSansJP.ttf',
+      '/fonts/clip/NotoEmoji.ttf',
+    ])
+  })
+
 })
