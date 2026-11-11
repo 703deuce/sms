@@ -224,12 +224,14 @@ export function ExportDialog({
       return
     }
     if (exportPrefsInitializedRef.current) return
+    let cancelled = false
     refreshChannels()
     void fetch('/api/clips/export/capabilities')
       .then((r) => r.json())
-      .then((j) => setEncoders(Array.isArray(j.encoders) ? j.encoders : []))
-      .catch(() => setEncoders([]))
+      .then((j) => { if (!cancelled) setEncoders(Array.isArray(j.encoders) ? j.encoders : []) })
+      .catch(() => { if (!cancelled) setEncoders([]) })
     void loadMergedExportDialogPreferences().then((prefs) => {
+      if (cancelled) return
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
       setAlsoVtt(Boolean(prefs.alsoVtt))
@@ -289,7 +291,11 @@ export function ExportDialog({
         setExportTemplate(edits.exportTemplate)
       }
       exportPrefsInitializedRef.current = true
+    }).catch(() => {
+      // A failed preference request must not leave the export dialog uninitialized.
+      if (!cancelled) exportPrefsInitializedRef.current = false
     })
+    return () => { cancelled = true }
   }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl, fullVideo, onAspectChange])
 
   useEffect(() => {
