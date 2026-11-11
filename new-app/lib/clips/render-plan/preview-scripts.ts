@@ -222,5 +222,16 @@ export function fontUrlsForAss(ass: string, base = '/fonts/clip/'): string[] {
       if (user) files.add(user)
     }
   }
+  // JASSUB uses a sealed WASM fontset, unlike browser CSS's system fallback.
+  // Load a pinned Unicode face when dialogue contains glyphs outside basic
+  // Latin. This extends coverage without altering any historical ASCII ASS.
+  const dialogue = ass.split('\\n').filter(line => line.startsWith('Dialogue: ')).join(' ')
+  if (/[^\\x00-\\x7f]/u.test(dialogue)) files.add(base + 'DejaVuSans-Bold.ttf')
+  if (/[\\u0600-\\u06ff\\u0750-\\u077f\\u08a0-\\u08ff]/u.test(dialogue))
+    files.add(base + 'NotoSansArabic.ttf')
+  if (/[\\u0900-\\u097f]/u.test(dialogue)) files.add(base + 'NotoSansDevanagari.ttf')
+  if (/[\\u0e00-\\u0e7f]/u.test(dialogue)) files.add(base + 'NotoSansThai.ttf')
+  if (/[\\u3040-\\u30ff\\u3400-\\u9fff]/u.test(dialogue)) files.add(base + 'NotoSansJP.ttf')
+  if (/[\\u2600-\\u27bf\\u{1f300}-\\u{1faff}]/u.test(dialogue)) files.add(base + 'NotoEmoji.ttf')
   return [...files]
 }
