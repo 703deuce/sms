@@ -43,7 +43,8 @@ def test_each_design_builds_real_worker_ass(preset, tmp_path):
     )
     ass = output.read_text(encoding="utf-8")
     assert "Dialogue:" in ass, preset["slug"]
-    assert f"Style: Cap,{preset['font']}," in ass, preset["slug"]
+    canonical = {'Poppins': 'Poppins ExtraBold', 'Lato': 'Lato Black', 'Montserrat': 'Montserrat Black'}.get(preset['font'], preset['font'])
+    assert f"Style: Cap,{canonical}," in ass, preset["slug"]
     assert "THOUGHTFUL" in ass or "thoughtful" in ass.lower()
     assert "MOMENTS" in ass or "moments" in ass.lower()
 

@@ -1,0 +1,114 @@
+name: Batch 2B vendored font library finalization
+on:
+  push:
+    branches: [templates-b2b-font-library-captions]
+    paths:
+      - 'new-app/scripts/vendor-b2b-fonts.py'
+      - '.github/workflows/b2b-vendor-font-library.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: transovo-b2b-vendor-font-library
+  cancel-in-progress: false
+
+jobs:
+  vendor-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '12.3.4'
+      - name: Install pinned audit and rasterization dependencies
+        run: |
+          python -m pip install 'fonttools==4.60.2' 'pytest==8.4.2' 'pillow==11.3.0'
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq fontconfig ffmpeg fonts-noto-core fonts-noto-cjk
+      - name: Download exact upstream TTFs, audit OFL and hashes, generate parity inventory
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python new-app/scripts/vendor-b2b-fonts.py
+      - name: Install bundled worker fonts into fontconfig
+        run: |
+          mkdir -p "$HOME/.local/share/fonts/transovo"
+          cp worker/prototype/v3/fonts/*.ttf worker/v3/fonts/t6/*.ttf "$HOME/.local/share/fonts/transovo/"
+          fc-cache -f
+      - name: Install app dependencies
+        working-directory: new-app
+        run: pnpm install --frozen-lockfile
+      - name: Require no new TypeScript error count beyond 456 existing master failures
+        working-directory: new-app
+        run: |
+          set +e
+          pnpm exec tsc --noEmit --pretty false > /tmp/b2b-typecheck.log 2>&1
+          code=$?
+          set -e
+          count=$(grep -Ec 'error TS[0-9]+:' /tmp/b2b-typecheck.log || true)
+          echo "tsc exit=$code errors=$count baseline=456"
+          if [ "$count" -gt 456 ]; then
+            tail -100 /tmp/b2b-typecheck.log
+            exit 1
+          fi
+      - name: Batch 2 + B2B font, caption and protected editor Vitest
+        working-directory: new-app
+        run: |
+          pnpm exec vitest run \
+            tests/font-manifest-b2.test.ts \
+            tests/clip-font-exact-readiness.test.ts \
+            tests/caption-presets-b2b.test.ts \
+            tests/premium-caption-styles-b2.test.ts \
+            tests/typography-treatments-b2.test.ts \
+            tests/typography-panel-b2.test.tsx \
+            tests/motion-graphics-text-adapter.test.ts \
+            tests/g1a-canvas-ui.test.tsx \
+            tests/preview-stage-e3.test.tsx \
+            tests/text-template-panel-add.test.tsx \
+            tests/caption-fonts-user.test.ts \
+            tests/caption-user-font.test.ts \
+            tests/caption-case.test.ts \
+            tests/caption-style-snapshot.test.ts \
+            tests/caption-overlay-preview.test.tsx \
+            tests/caption-line-max-chars.test.ts
+      - name: Chromium pinned-font load and real glyph rasterization smoke QA
+        working-directory: new-app
+        run: |
+          pnpm exec playwright install chromium
+          node scripts/b2b-font-browser-qa.mjs
+      - name: Worker OFL and caption ASS / rasterization pytest
+        env:
+          PYTHONPATH: worker
+        run: |
+          python -m pytest -q \
+            worker/tests/test_ofl_font_parity.py \
+            worker/tests/test_ofl_render_samples.py \
+            worker/tests/test_caption_presets_b2b.py \
+            worker/tests/test_b2b_font_library.py
+      - name: Commit only fully verified vendored files to the existing PR branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          test "$(git branch --show-current)" = "templates-b2b-font-library-captions"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add new-app/lib/clips new-app/components/clips/editor/clip-editor-fonts.ts \
+            new-app/public/fonts/clip new-app/scripts/pinned-b2b-font-sources.json \
+            worker/v3/fonts/t6 worker/clips_worker worker/tests/test_b2b_font_library.py
+          git diff --cached --check
+          test "$(git diff --cached --name-only | grep -Ec '\.ttf$')" -ge 124
+          git commit -m "feat(clips): vendor 62 pinned OFL font families for browser and worker"
+          git push origin HEAD:templates-b2b-font-library-captions
+          gh pr ready 1180 --repo 703deuce/sms
