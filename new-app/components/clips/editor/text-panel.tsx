@@ -506,10 +506,21 @@ export function TextPanel({
                     if ((v as string) === UPLOAD) return fileRef.current?.click()
                     const uf = userFonts.fonts.find((f) => `user:${f.id}` === v)
                     if (uf) return patchStyle({ font: v as TextStyle['font'], fontFamily: uf.family })
-                    patchStyle({ font: v as TextStyle['font'], fontFamily: undefined })
+                    setFontBusy(true)
+                    void waitForClipFont(String(v))
+                      .then(() => {
+                        patchStyle({ font: v as TextStyle['font'], fontFamily: undefined })
+                        setFontMsg(null)
+                      })
+                      .catch((error: unknown) => {
+                        const message = error instanceof Error ? error.message : 'Font failed to load'
+                        setFontMsg(message)
+                        toast.error('Font unavailable: ' + message)
+                      })
+                      .finally(() => setFontBusy(false))
                   }}
                 >
-                  <SelectTrigger className="h-8 text-xs" data-testid="text-font">
+                  <SelectTrigger disabled={fontBusy} className="h-8 text-xs" data-testid="text-font">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
