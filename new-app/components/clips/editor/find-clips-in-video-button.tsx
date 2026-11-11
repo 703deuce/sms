@@ -40,15 +40,18 @@ export function FindClipsInVideoButton({
 }) {
   const router = useRouter()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const busyRef = useRef(false)
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState<{ credits: number | null; mode: 'highlights' | 'project' } | null>(null)
+
+  useEffect(() => { busyRef.current = busy }, [busy])
 
   useEffect(() => {
     if (!confirm) return
     const priorFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     dialogRef.current?.querySelector<HTMLButtonElement>('[data-testid="find-clips-start"]')?.focus()
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) {
+      if (e.key === 'Escape' && !busyRef.current) {
         e.preventDefault()
         e.stopPropagation()
         setConfirm(null)
@@ -62,7 +65,7 @@ export function FindClipsInVideoButton({
     }
     window.addEventListener('keydown', onKey, true)
     return () => { window.removeEventListener('keydown', onKey, true); priorFocus?.focus() }
-  }, [Boolean(confirm), busy])
+  }, [Boolean(confirm)])
 
   const ask = async (mode: 'highlights' | 'project') => {
     if (busy) return
