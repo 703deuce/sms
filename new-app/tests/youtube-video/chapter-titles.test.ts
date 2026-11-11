@@ -46,7 +46,12 @@ describe('YouTube grounded chapter titles',()=>{
       if(name==='yt_submit_chapter_title_repair'){
         return {titles:['Beat 1: still generic','Part 2']}
       }
-      throw new Error('unexpected structured decision '+name)
+      const calls = structuredDecision.mock.calls.map(args => ({
+        argc: args.length,
+        types: args.map(v => typeof v),
+        stage: typeof args[0] === 'string' && args[0].startsWith('yt_submit_') ? args[0] : null,
+      }))
+      throw new Error('unexpected structured decision '+name+' call-shapes='+JSON.stringify(calls))
     })
     const result=await ytFinishWholeSourceStory([
       finishedWindow(0,0,20*60_000,
