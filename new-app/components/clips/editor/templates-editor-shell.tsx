@@ -1382,7 +1382,7 @@ export function TemplatesEditorShell(props: Props) {
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder={'Search ' + tab + ' by name or tag'}
                       className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-primary"
-                      aria-label={'Search ' + tab + ' templates'}
+                      aria-label={'Search ' + tab + ' options'}
                     />
                     {searchQuery ? (
                       <Button size="sm" variant="ghost" onClick={() => setSearchQuery('')}>Clear</Button>
@@ -1512,7 +1512,7 @@ export function TemplatesEditorShell(props: Props) {
                   ) : (
                     <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-border bg-background/40 px-6 text-center">
                       <div>
-                        <p className="text-sm font-medium">{searchQuery ? 'No matching templates' : 'No templates in this section'}</p>
+                        <p className="text-sm font-medium">{searchQuery ? 'No matching options' : 'No options in this section'}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {searchQuery ? 'Clear search or try a different real template name/tag.' : 'Choose another tab or retry saved brand kits.'}
                         </p>
@@ -1646,7 +1646,7 @@ export function TemplatesEditorShell(props: Props) {
                   {activeEntry ? activeEntry.item.name : aspectOverride || customFieldNames.length ? 'Customized saved style' : 'Choose a template'}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Preview changes are local until applied. Templates change styling/layout only — never source footage.
+                  Preview changes are local until applied. Layout and style choices never replace source footage.
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
                   Project scope applies compatible fields clip-by-clip and skips incompatible clips; no hidden scene scope is added.
@@ -1679,7 +1679,7 @@ export function TemplatesEditorShell(props: Props) {
             </div>
           </main>
           <StandaloneEditorToolRail
-            label="Template tools"
+            label="Layout tools"
             items={[
               { id: 'layouts', label: 'Layouts', icon: LayoutGrid, active: tab === 'layouts', onSelect: () => setTab('layouts') },
               { id: 'captions', label: 'Captions', icon: Type, active: tab === 'captions', onSelect: () => setTab('captions') },
@@ -1709,7 +1709,7 @@ export function TemplatesEditorShell(props: Props) {
         />
 
         {customizerOpen && customizerEdits ? (
-          <div className="fixed inset-0 z-[70] bg-black/65 p-4" role="dialog" aria-modal="true" aria-label="Template customizer">
+          <div className="fixed inset-0 z-[70] bg-black/65 p-4" role="dialog" aria-modal="true" aria-label="Layout customizer">
             <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl" data-testid="templates-customizer">
               <div className="flex min-h-0 flex-1">
                 <nav className="w-36 shrink-0 border-r border-border bg-card/50 p-2" aria-label="Customizer sections">
@@ -1921,7 +1921,7 @@ export function TemplatesEditorShell(props: Props) {
                 The saved edit is unchanged. Apply this preview to this clip, discard only the local preview, or stay here.
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Apply uses current-clip scope only. Project-wide apply remains the explicit button on the Templates page.
+                Apply uses current-clip scope only. Project-wide apply remains the explicit button on the Layouts page.
               </p>
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <Button variant="ghost" disabled={handoffBusy} onClick={() => {
