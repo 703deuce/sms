@@ -435,7 +435,7 @@ export const CLIP_FONT_MANIFEST: readonly ClipFontManifestRow[] = [
     ],
     "licenseFile": "/fonts/clip/licenses/notoemoji-OFL.txt",
     "licenseNoticeRevision": "5bb28733cec313b63fbd415b574b5ae35c8aa8b8"
-  }
+  },
   ...B2B_CLIP_FONT_MANIFEST,
 ] as const
 
