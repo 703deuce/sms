@@ -1015,9 +1015,10 @@ export function GenerateShotEditorShell(props: Props) {
           title={'Change this shot · ' + props.initialTitle}
           current="generate"
           saveState={saveState}
+          statusText={fullVideoMode.progress ?? undefined}
           canUndo={canUndo}
           canRedo={canRedo}
-          disabled={navigating}
+          disabled={navigating || fullVideoMode.loading}
           contextSlot={<span className="hidden shrink-0 text-[11px] text-muted-foreground xl:inline">Change this shot</span>}
           onBack={() => void navigate(editorHref, 'edit')}
           onUndo={() => { undo(); console.info('[editor:generate-mode] undo', { projectId, clipId }) }}
