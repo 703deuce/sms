@@ -262,6 +262,7 @@ describe('B3 production slot edit representation', () => {
       handles: { headFrames: 0, tailFrames: 6 },
       transform: { scale: 110, x: 4, cropL: 3 },
       fx: { brightness: 5, saturation: -10 },
+      motion: { from: { x: 0, scale: 100 }, to: { x: 12, scale: 118 }, ease: 'inOut' },
     }
     f.slots[1] = {
       ...f.slots[1],
@@ -282,8 +283,24 @@ describe('B3 production slot edit representation', () => {
       fx: { brightness: 5, saturation: -10 },
     })
     expect(r.edits.sourceSegments?.[1]).toMatchObject({ startMs: 1000, endMs: 2000, inMs: 200 })
+    const xMotion = r.edits.keyframes?.find((track) => track.target === 'video' && track.prop === 'x')
+    expect(xMotion?.points).toEqual([
+      { tMs: 0, v: 0, ease: 'inOut' },
+      { tMs: 999, v: 12 },
+      { tMs: 1000, v: 0 },
+      { tMs: 1999, v: 0 },
+    ])
     expect(r.edits.textItems?.some((item) => item.kind === 'shape' && item.shape?.type === 'rounded')).toBe(true)
     expect(r.edits.templateProvenance?.slotToItemIds).toEqual(r.slotToItemIds)
+  })
+
+  it('rejects unsupported or empty slot motion data rather than dropping it', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!, motion: { to: {} } }
+    expect(() => validateTemplateFamily(f)).toThrow(/to state requires at least one property/)
+    const unknown = family(1) as unknown as { slots: Array<Record<string, unknown>> }
+    unknown.slots[0] = { ...unknown.slots[0], motion: { to: { x: 4 }, spring: 2 } }
+    expect(() => validateTemplateFamily(unknown)).toThrow(/slot.motion: unsupported field/)
   })
 
   it('rejects transitions without declared A/B source handles and overlapping windows', () => {
