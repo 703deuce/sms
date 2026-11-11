@@ -5,6 +5,7 @@
  */
 import { CC0_MUSIC, KENNEY_SFX } from '@/lib/clips/stock-audio-catalog'
 import type { AudioLicenseRecord } from './music-timing'
+import pinnedStock from './stock-music-approved.json'
 
 export type TemplateAudioAssetLicense = {
   id: string
@@ -28,6 +29,9 @@ export type TemplateAudioAssetLicense = {
  * verified duration. All are intentionally ineligible for template export.
  * They remain untouched in the legacy music / SFX pickers.
  */
+/** Only explicitly reviewed, content-hash-pinned files can be first-party template music. */
+export const TEMPLATE_APPROVED_STOCK_AUDIO_V1: readonly TemplateAudioAssetLicense[] =
+  pinnedStock as TemplateAudioAssetLicense[]
 export const TEMPLATE_STOCK_AUDIO_AUDIT_V1: readonly TemplateAudioAssetLicense[] = [
   ...CC0_MUSIC.map(row => ({
     id: row.id, kind: 'music' as const,
@@ -56,7 +60,7 @@ export const TEMPLATE_STOCK_AUDIO_AUDIT_V1: readonly TemplateAudioAssetLicense[]
 export function requireClearedTemplateStockAudio(
   id: string,
   actual: { sha256: string; durationFrames: number },
-  manifest: readonly TemplateAudioAssetLicense[] = TEMPLATE_STOCK_AUDIO_AUDIT_V1,
+  manifest: readonly TemplateAudioAssetLicense[] = [...TEMPLATE_APPROVED_STOCK_AUDIO_V1, ...TEMPLATE_STOCK_AUDIO_AUDIT_V1],
 ): AudioLicenseRecord {
   const row = manifest.find(x => x.id === id && x.kind === 'music')
   if (!row || row.status !== 'verified' || !row.sha256 ||
