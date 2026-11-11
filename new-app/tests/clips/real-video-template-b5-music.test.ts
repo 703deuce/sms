@@ -82,6 +82,28 @@ describe('real video template B5 music rights and frame timing',()=>{
       id:'fade',kind:'audio-fade',startFrame:1173,endFrame:1200,
     })
   })
+  it('supports off-grid musical pickups and explicitly approved protected lyric cues',()=>{
+    const old={...pinned(120),offsetFrames:7,
+      protectedAnchors:[{id:'verse-start',frame:22,approved:true as const}],
+      phrases:[{id:'verse-start',frame:22,kind:'lyric' as const}]}
+    const next={...pinned(90),offsetFrames:7,
+      manualOverrides:[{id:'verse-start',frame:28,approved:true as const}],
+      phrases:[{id:'verse-start',frame:28,kind:'lyric' as const}]}
+    const shifted:TemplateTimingV1={
+      v:1,fps:30,totalFrames:37,minShotFrames:3,minTextFrames:9,
+      boundaries:[0,7,22,37],
+      windows:[{id:'lyric',kind:'text',startFrame:7,endFrame:37}],
+    }
+    const preview=previewMusicReplacement({
+      timing:shifted,previous:old,replacement:next,license,choice:'re-sync',
+    })
+    expect(preview.proposed.boundaries).toEqual([0,7,28,47])
+    expect(preview.proposed.windows[0]).toMatchObject({startFrame:7,endFrame:47})
+    const notApproved={...next,manualOverrides:[]}
+    expect(()=>previewMusicReplacement({
+      timing:shifted,previous:old,replacement:notApproved,license,choice:'re-sync',
+    })).toThrow(/Protected/)
+  })
   it('rejects unapproved protected anchors, lyric mismatches, short tracks and implausible tempos',()=>{
     const old=pinned(120)
     const replacement=pinned(90)
