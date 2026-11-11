@@ -114,6 +114,7 @@ jobs:
             tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
             tests/clips/real-video-template-b3b-save-reload.test.ts \
             tests/clips/real-video-template-b3b-save-reload.test.ts \
+            tests/clips/real-video-template-b3b-save-reload.test.ts \
             tests/clips/real-video-template-typecheck.test.ts \
             tests/fullsuite-batch2.test.ts \
             tests/fullsuite-batch3.test.ts \
@@ -236,7 +237,7 @@ jobs:
         working-directory: new-app
         run: |
           pnpm exec tsx scripts/prove-real-video-template-editable-structure.ts > ../editable-timeline-structure-proof.json
-          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("../editable-timeline-structure-proof.json","utf8")); if(p.schema!=="transovo.real-video-template.editable-timeline-proof.v1" || p.cases.length!==3 || !p.cases.every(c=>c.matches)) process.exit(1); console.log(p.cases.map(c=>c.id+":"+c.actual.mediaItems.length+" items").join(", "))'
+          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("../editable-timeline-structure-proof.json","utf8")); if(p.schema!=="transovo.real-video-template.editable-timeline-proof.v1" || p.cases.length!==3 || !p.cases.every(c=>c.matches) || !p.editedReload || p.editedReload.structure.mediaItems.length!==3 || p.editedReload.edits.audio.music.uploadId!=="replacement_music") process.exit(1); console.log(p.cases.map(c=>c.id+":"+c.actual.mediaItems.length+" items").join(", ")+", edited-reload:ok")'
       - uses: actions/upload-artifact@v4
         with:
           name: real-video-template-editable-timeline-proof
