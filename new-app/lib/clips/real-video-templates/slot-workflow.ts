@@ -110,6 +110,8 @@ function fitParts(slot: TemplateSlot, fill: StudioSlotFill): Array<{ slot: Templ
   const available = asset.durationFrames
   if (!available || !valid(available)) throw new Error(`Slot ${slot.ordinal}: unknown video duration; reupload or choose another`)
   if (slot.playback) {
+    if (fill.remedy !== 'replace')
+      throw new Error(`Slot ${slot.ordinal}: Loop/Hold cannot rewrite an authored playback ramp; choose a longer source`)
     const plan = compileTemplatePlayback(slot.playback, slot.durationFrames)
     const inFrame = slot.sourceInFrame ?? 0
     const head = slot.handles?.headFrames ?? 0

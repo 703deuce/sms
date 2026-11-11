@@ -63,6 +63,8 @@ describe('Batch 4 standalone slot fulfillment', () => {
     expect(result.family.slots).toHaveLength(1)
     expect(result.family.slots[0]?.playback?.pieces[0]).toMatchObject({ kind: 'play', rate: 0.5 })
     expect(result.choices.media.s0?.id).toBe('slow_playback')
+    const unsupported = { ...d, slots: { s0: { ...d.slots.s0!, remedy: 'loop' as const } } }
+    expect(() => materializeStudioDraft(f,unsupported,'instance1')).toThrow('Loop/Hold')
     const short = assignSelectionInOrder(newStudioDraft('release','draft_01234567'),
       f,[video('too_short',12)]).draft
     expect(() => materializeStudioDraft(f,short,'instance1')).toThrow('longer source')
