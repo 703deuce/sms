@@ -53,8 +53,8 @@ export function formatExportProgressLine(input: {
   if (d && input.progress != null && stepPct != null) {
     stepPct = alignStepPctWithOverall(input.progress, stepPct, d.steps, d.step)
   }
-  if (d && d.steps > 1) {
-    line += ` · step ${Math.min(d.step, d.steps)} of ~${d.steps}`
+  if (d && d.steps > 1 && d.step >= 1 && d.step <= d.steps) {
+    line += ` · step ${d.step} of ~${d.steps}`
     if (stepPct != null) line += ` (${stepPct}%)`
   } else if (input.phase && input.phase !== 'render_clip') {
     line += ` (${input.phase.replace(/_/g, ' ')})`
