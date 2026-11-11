@@ -3,7 +3,7 @@
 export const MAX_AGENT_SOURCE_WINDOW_MS=20*60_000
 
 export function streamerAgentWindows(sourceStartMs:number,sourceDurationMs:number,
-  all:boolean,selectedStartMin=0):Array<[number,number]>{
+  all:boolean,selectedStartMin=0,tailPolicy:'fold'|'legacy'='fold'):Array<[number,number]>{
   if(!Number.isInteger(sourceStartMs)||!Number.isInteger(sourceDurationMs)||
     sourceStartMs<0||sourceDurationMs<15_000)throw Error('stream_agent_invalid_source_duration')
   const sourceEnd=sourceStartMs+sourceDurationMs
@@ -18,10 +18,10 @@ export function streamerAgentWindows(sourceStartMs:number,sourceDurationMs:numbe
   // A source of 15–59 seconds remains one valid window.
   for(let at=start;at<sourceEnd;){
     let end=Math.min(sourceEnd,at+MAX_AGENT_SOURCE_WINDOW_MS)
-    if(all&&end<sourceEnd&&sourceEnd-end<60_000){
+    if(all&&tailPolicy==='fold'&&end<sourceEnd&&sourceEnd-end<60_000){
       end=sourceEnd-60_000
     }
-    windows.push([at,end])
+    if(end-at>=15_000)windows.push([at,end])
     if(!all)break
     at=end
   }
