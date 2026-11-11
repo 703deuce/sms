@@ -39,6 +39,8 @@ export type ClipAudioSfx = {
    * "Music…" audio track is music (lib/clips/editor/audio-kind.ts), else SFX.
    */
   kind?: 'music' | 'audio'
+  /** Ad Studio narration is displayed in the Voice lane while retaining the existing audio-mix contract. */
+  voiceover?: boolean
   /** G2fix: loop the media to fill `durMs` (music clips; export `-stream_loop -1`). Needs durMs. */
   loop?: boolean
   /** AU-12: balance pan −100 (L) … 100 (R); absent = centre. */
@@ -173,6 +175,7 @@ export function normalizeAudioEdits(raw: unknown): ClipEditsAudio {
         ...fadeMs('fadeOutMs', s.fadeOutMs),
         ...(s.duckDepth != null && Number.isFinite(Number(s.duckDepth)) ? { duckDepth: clamp01(s.duckDepth, DEFAULT_DUCK_DEPTH) } : {}),
         ...(s.kind === 'music' || s.kind === 'audio' ? { kind: s.kind } : {}),
+        ...(s.voiceover === true ? { voiceover: true } : {}),
         ...(s.loop === true && num(s.durMs, 0) >= 100 ? { loop: true } : {}),
         ...(normalizePan(s.pan) != null ? { pan: normalizePan(s.pan) } : {}),
       }
