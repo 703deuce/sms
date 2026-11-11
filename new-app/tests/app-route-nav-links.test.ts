@@ -29,5 +29,10 @@ describe('nav links after /app restructure', () => {
   it('isClipEditRoute covers the moved editor path so chrome stays immersive', () => {
     expect(isClipEditRoute('/app/video-editor/p/edit/c')).toBe(true)
     expect(isClipEditRoute('/app/clips/p/edit/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/story/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/templates/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/generate/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/chat/c')).toBe(true)
+    expect(isClipEditRoute('/app/video-editor/p/studio/c')).toBe(false)
   })
 })
