@@ -2,7 +2,8 @@ import 'server-only'
 
 import { createHash } from 'node:crypto'
 import type { Prisma } from '@prisma/client'
-import { defaultEdits } from '@/lib/clips/edits'
+import { defaultEdits, normalizeEdits } from '@/lib/clips/edits'
+import { assertEditableTimelineStructure } from '@/lib/clips/real-video-templates/editable-timeline-proof'
 import { clipProjectSettingsSchema, defaultClipSettings } from '@/lib/clips/settings'
 import {
   compileTemplate,
@@ -213,6 +214,18 @@ export async function publishTemplateProject(
           },
         },
       )
+      const compileChoices = { instanceId: ids.instanceId, ...choicesRaw }
+      // B3B: publication fails if any authoritative editable object is absent, flattened or lost by
+      // the ordinary ClipEditsV2 normalizer. Store the normalized representation that passed proof.
+      assertEditableTimelineStructure(family, design, compileChoices, compiled, compiled.edits)
+      const authoritativeEdits = normalizeEdits(compiled.edits, {
+        clipStartMs: 0,
+        clipEndMs: durationMs,
+        trimMinMs: 0,
+        trimMaxMs: durationMs,
+      })
+      assertEditableTimelineStructure(family, design, compileChoices, compiled, authoritativeEdits)
+
       const aiMeta = {
         byo: true,
         fullVideo: true,
@@ -291,7 +304,7 @@ export async function publishTemplateProject(
           endMs: durationMs,
           score: 0,
           scores: toPrismaJson({}),
-          edits: toPrismaJson(compiled.edits),
+          edits: toPrismaJson(authoritativeEdits),
           editsSaveVersion: 0,
           aiMeta: toPrismaJson(aiMeta),
         },

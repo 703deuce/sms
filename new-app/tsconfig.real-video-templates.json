@@ -22,7 +22,16 @@
     "./app/api/clips/projects/[id]/template-instance/route.ts",
     "./tests/clips/real-video-templates-b3.test.ts",
     "./tests/clips/real-video-template-instance.test.ts",
-    "./tests/clips/real-video-template-editor.test.tsx"
+    "./tests/clips/real-video-template-editor.test.tsx",
+    "./lib/clips/real-video-templates/editable-timeline-proof.ts",
+    "./lib/clips/real-video-templates/editable-timeline-proof-cases.ts",
+    "./lib/clips/real-video-templates/launch-catalog.ts",
+    "./lib/clips/editor/motion-schema.ts",
+    "./lib/clips/editor/keyframes.ts",
+    "./lib/clips/editor/source-segment-motion.ts",
+    "./components/clips/editor/timeline.tsx",
+    "./tests/clips/real-video-template-b3b-editable-timeline.test.tsx",
+    "./tests/clips/real-video-template-b3b-save-reload.test.ts"
   ],
   "include": []
 }

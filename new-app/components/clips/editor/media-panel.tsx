@@ -8,6 +8,8 @@ import { AudioLines, Film, Image as ImageIcon, Plus, RefreshCw, Upload, Video, X
 import { toast } from 'sonner'
 import { formatTimecode } from '@/lib/clips/format'
 import { Button } from '@/components/ui/button'
+import { KeyframeInspector } from '@/components/clips/editor/timeline/keyframe-inspector'
+import { sourceSegmentTarget } from '@/lib/clips/editor/keyframes'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -24,6 +26,8 @@ import {
   fillActiveSpeakerGaps,
   multicamSpeakerRows,
   patchSourceSegment,
+  replaceSourceSegmentMedia,
+  moveSourceSegmentBoundary,
   pruneSources,
   removeSourceSegment,
   segmentAudio,
@@ -78,6 +82,8 @@ export function MediaLibraryGrid({
   onAdd,
   onReplaceSelected,
   canReplace = false,
+  onUseForSlot,
+  canUseForSlot = false,
   compact = false,
   onInsert,
 }: {
@@ -88,6 +94,9 @@ export function MediaLibraryGrid({
   onAdd: (item: ProjectMediaItem, lane: MediaDropLane) => void
   onReplaceSelected?: (item: ProjectMediaItem) => void
   canReplace?: boolean
+  /** B3B: replace the selected real source-slot item, preserving its stable timeline id. */
+  onUseForSlot?: (item: ProjectMediaItem) => void
+  canUseForSlot?: boolean
   compact?: boolean
   /** E5b: insert at the playhead / append at the end (lengthens the video). */
   onInsert?: (item: ProjectMediaItem, mode: InsertMode) => void
@@ -198,6 +207,11 @@ export function MediaLibraryGrid({
                     Use for selected
                   </Button>
                 ) : null}
+                {canUseForSlot && onUseForSlot && fits.includes('video') ? (
+                  <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[11px]" onClick={() => onUseForSlot(item)} data-testid="media-use-for-slot">
+                    Use for slot
+                  </Button>
+                ) : null}
                 {onInsert && fits.includes('video') ? (
                   <>
                     <Button size="xs" variant="secondary" className="h-6 px-1.5 text-[11px]" onClick={() => onInsert(item, 'insert')} title="Insert at the playhead — everything after it moves right" data-testid="media-insert">
@@ -301,6 +315,18 @@ export function MediaPanel({
   )
   const mc: ClipMulticam = edits.multicam ?? {}
   const autoCount = edits.sourceSegments?.filter((s) => s.auto).length ?? 0
+
+  const replaceSlot = (item: ProjectMediaItem) => {
+    if (!seg || item.mediaType === 'audio') return
+    onEdits(replaceSourceSegmentMedia(edits, seg.id, sourceFromItem(item)))
+  }
+  const moveIncomingCut = (deltaMs: number) => {
+    if (!seg) return
+    const ordered = [...(edits.sourceSegments ?? [])].sort((a, b) => a.startMs - b.startMs)
+    const index = ordered.findIndex((row) => row.id === seg.id)
+    if (index <= 0) return
+    onEdits(moveSourceSegmentBoundary(edits, ordered[index - 1]!.id, seg.id, seg.startMs + deltaMs))
+  }
 
   const patchSeg = (patch: Parameters<typeof patchSourceSegment>[2]) => {
     if (!seg) return
@@ -479,6 +505,20 @@ export function MediaPanel({
               ))}
             </div>
           </div>
+          {seg ? (
+            <div className="space-y-1.5" data-testid="media-seg-motion-keyframes">
+              <Label className="text-[11px]">Clip motion</Label>
+              <KeyframeInspector
+                edits={edits}
+                target={sourceSegmentTarget(seg.id)}
+                label="Clip motion"
+                localMs={Math.max(0, playheadSourceMs - seg.startMs)}
+                onCommit={onEdits}
+                onSeekLocal={(t) => onSeekSource(seg.startMs + t)}
+                props={['x', 'y', 'scale', 'rotation']}
+              />
+            </div>
+          ) : null}
           <div className="space-y-1.5" data-testid="media-seg-fx-controls">
             <Label className="text-[11px]">Slot look</Label>
             <div className="grid grid-cols-3 gap-1.5">
@@ -508,6 +548,12 @@ export function MediaPanel({
             </div>
           </div>
           <div className="flex flex-wrap gap-1">
+            <Button size="xs" variant="outline" onClick={() => moveIncomingCut(-Math.round(1000 / 30))} data-testid="media-seg-cut-prev-frame">
+              Cut −1f
+            </Button>
+            <Button size="xs" variant="outline" onClick={() => moveIncomingCut(Math.round(1000 / 30))} data-testid="media-seg-cut-next-frame">
+              Cut +1f
+            </Button>
             <Button size="xs" variant="outline" disabled={playheadSourceMs <= seg.startMs + 100 || playheadSourceMs >= seg.endMs} onClick={() => patchSeg({ endMs: Math.round(playheadSourceMs) })}>
               End at playhead
             </Button>
@@ -541,7 +587,8 @@ export function MediaPanel({
           onEdits={onEdits}
         />
       ) : null}
-      <MediaLibraryGrid media={media} filter={filter} onAdd={onAdd} onReplaceSelected={onReplaceSelected} canReplace={Boolean(selectedVideo)} onInsert={onInsert} />
+      <MediaLibraryGrid media={media} filter={filter} onAdd={onAdd} onReplaceSelected={onReplaceSelected} canReplace={Boolean(selectedVideo)}
+        onUseForSlot={replaceSlot} canUseForSlot={Boolean(seg)} onInsert={onInsert} />
       <InsertsSection edits={edits} media={media} onEdits={onEdits} />
       <p className="text-[11px] text-muted-foreground">
         Drag onto a timeline lane or use + Video / B-roll / Music / SFX. Video segments replace the picture of that part of the clip; the transcript and captions stay on the main video unless you transcribe that clip. Insert / Append add footage and lengthen the video.

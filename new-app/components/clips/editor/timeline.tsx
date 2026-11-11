@@ -169,6 +169,7 @@ import {
   deleteKeyframeTimes,
   keyframeTimes,
   shiftKeyframeTimes,
+  sourceSegmentTarget,
   toggleKfSelection,
   targetForItem,
   targetOriginMs,
@@ -2239,6 +2240,11 @@ export function Timeline({
     [edits.sourceSegments, edits.sources, tb],
   )
   const brollWindows = useMemo(() => brollTransitionWindows(edits.broll), [edits.broll])
+  // EDL cuts keep their existing resolver. Authored template/video-split transitions are stored
+  // directly at the split source ms, so fall back only when this site is not an EDL cut.
+  const storedTransitionAtSite = (srcMs: number) =>
+    transitionAtCut(tb.segs, edits.transitions, srcMs)
+    ?? edits.transitions?.find((t) => Math.abs(t.srcMs - srcMs) <= 1)
   const openCutTransition = (
     e: React.MouseEvent,
     site: { cutK: number | null; srcMs: number },
@@ -2267,7 +2273,7 @@ export function Timeline({
   const trValue: TransitionSpec | null = (() => {
     if (!trPop) return null
     if (trPop.kind === 'cut') {
-      const t = transitionAtCut(tb.segs, edits.transitions, trPop.srcMs)
+      const t = storedTransitionAtSite(trPop.srcMs)
       return t ? { type: t.type, durMs: t.durMs } : null
     }
     const b = edits.broll?.find((x) => x.id === trPop.id)
@@ -3986,9 +3992,18 @@ export function Timeline({
                           }}
                           title={`${c.label} (other source)`}
                           data-testid="timeline-source-segment"
+                          data-item-id={c.id}
                           data-source-id={c.sourceId}
                         >
                           {(c.endMs - c.startMs) * pxPerMs >= TIMELINE_MIN_LABEL_PX ? c.label : null}
+                          {keyframeTimes(edits, sourceSegmentTarget(c.id)).map((t) => (
+                            <span
+                              key={t}
+                              data-testid="timeline-source-keyframe"
+                              className="pointer-events-none absolute top-[2px] size-1.5 -translate-x-1/2 rotate-45 bg-white"
+                              style={{ left: `${Math.max(0, Math.min(100, (t / Math.max(1, c.endMs - c.startMs)) * 100))}%` }}
+                            />
+                          ))}
                         </button>
                       ))
                     : null}
@@ -3998,7 +4013,7 @@ export function Timeline({
                         const slots = layoutCutHandles(cutTransitionHandles.map((s) => xs(s.outputMs)))
                         return cutTransitionHandles.map((site, ci) => {
                         const slot = slots[ci]!
-                        const tr = transitionAtCut(tb.segs, edits.transitions, site.srcMs)
+                        const tr = storedTransitionAtSite(site.srcMs)
                         return (
                           <button
                             key={`cut${site.srcMs}`}

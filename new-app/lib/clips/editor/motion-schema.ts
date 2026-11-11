@@ -110,6 +110,7 @@ export type KeyframeTarget =
   | 'text'
   | 'captions'
   | `broll:${string}`
+  | `source:${string}`
   | `text:${string}`
   | `sfx:${string}`
   | `adjust:${string}`
@@ -307,7 +308,12 @@ function clampN(n: number, lo: number, hi: number): number {
 
 function isTarget(t: unknown): t is KeyframeTarget {
   if (typeof t !== 'string') return false
-  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || t === 'captions' || (t.startsWith('broll:') && t.length > 6) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t) || isAdjustTarget(t)
+  return t === 'video' || t === 'voice' || t === 'music' || t === 'text' || t === 'captions' || (t.startsWith('broll:') && t.length > 6) || isSourceTarget(t) || (t.startsWith('text:') && t.length > 5) || isSfxTarget(t) || isAdjustTarget(t)
+}
+
+/** B3B: a real source-segment Video item; motion is item-local and rendered before transitions. */
+export function isSourceTarget(t: string): t is `source:${string}` {
+  return t.startsWith('source:') && t.length > 7
 }
 
 /** G4a: adjustment layer (`adjust:<id>`, local ms from the layer start) — color props only. */
@@ -330,6 +336,7 @@ export function propsForTarget(target: KeyframeTarget): readonly KeyProp[] {
   if (target === 'captions') return [...CAPTION_PROPS]
   if (target === 'voice' || target === 'music' || isSfxTarget(target)) return ['volume']
   if (isAdjustTarget(target)) return []
+  if (isSourceTarget(target)) return ['x', 'y', 'scale', 'rotation']
   if (isMediaLayerTarget(target)) return ['x', 'y', 'scale', 'rotation', 'opacity', ...CROP_PROPS]
   return ['x', 'y', 'scale', 'rotation', 'opacity']
 }

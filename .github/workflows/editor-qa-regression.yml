@@ -111,6 +111,8 @@ jobs:
             tests/clips/real-video-templates-b3.test.ts \
             tests/clips/real-video-template-instance.test.ts \
             tests/clips/real-video-template-editor.test.tsx \
+            tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
+            tests/clips/real-video-template-b3b-save-reload.test.ts \
             tests/clips/real-video-template-typecheck.test.ts \
             tests/fullsuite-batch2.test.ts \
             tests/fullsuite-batch3.test.ts \
@@ -185,6 +187,86 @@ jobs:
             tests/streamer-unified-results.test.tsx \
             tests/editor-initial-panel.test.ts \
             tests/ai-captions-workspace.test.tsx
+
+
+  real-video-template-b3b:
+    name: Real video template B3B editable timeline
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install new-app dependencies
+        working-directory: new-app
+        run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        working-directory: new-app
+        run: pnpm exec prisma generate --schema=prisma/schema.prisma
+      - name: Batch 3 + 3B Vitest suites
+        working-directory: new-app
+        run: |
+          pnpm exec vitest run \
+            tests/clips/real-video-templates-b3.test.ts \
+            tests/clips/real-video-template-instance.test.ts \
+            tests/clips/real-video-template-editor.test.tsx \
+            tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
+            tests/clips/real-video-template-b3b-save-reload.test.ts \
+            tests/clips/real-video-template-typecheck.test.ts \
+            tests/e5-model.test.ts \
+            tests/script-view-compact-timeline.test.tsx \
+            tests/timeline-e2-render.test.tsx
+      - name: Batch 3B scoped TypeScript
+        working-directory: new-app
+        run: NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.real-video-templates.json --noEmit --pretty false
+      - name: Full new-app TypeScript diagnostic gate
+        working-directory: new-app
+        run: |
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc --noEmit --pretty false > /tmp/b3b-full-tsc.txt 2>&1 || true
+          cat /tmp/b3b-full-tsc.txt
+          diagnostic_count=$(grep -Ec 'error TS[0-9]+' /tmp/b3b-full-tsc.txt || true)
+          echo "Full new-app TypeScript diagnostics: $diagnostic_count (master baseline: 456)"
+          if [[ "$diagnostic_count" -ne 456 ]]; then
+            echo "Full TypeScript diagnostics changed from master baseline 456" >&2
+            exit 1
+          fi
+          if grep -E '^(lib/clips/real-video-templates/|lib/clips/editor/(sources|motion-frame|motion-schema|keyframes|source-segment-motion)\.ts|lib/clips/edits(-version-hash)?\.ts|lib/server/clips/real-video-template-instances\.ts|components/clips/editor/(motion-preview|preview-stage|script-view-compact-timeline|media-panel|editor-shell|timeline)\.(ts|tsx)|app/api/clips/(video-templates/publish|clips/\[id\]/template-authoring|projects/\[id\]/template-instance)/route\.ts|tests/clips/real-video-template).*error TS' /tmp/b3b-full-tsc.txt; then
+            echo "Batch 3B-owned TypeScript diagnostics found" >&2
+            exit 1
+          fi
+      - name: Generate machine-readable editable timeline proof
+        working-directory: new-app
+        run: |
+          pnpm exec tsx scripts/prove-real-video-template-editable-structure.ts > ../editable-timeline-structure-proof.json
+          node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync("../editable-timeline-structure-proof.json","utf8")); const s=p.editedReload?.structure; if(p.schema!=="transovo.real-video-template.editable-timeline-proof.v1" || p.cases.length!==3 || !p.cases.every(c=>c.matches) || !s || s.mediaItems.length!==3 || !s.layers.some(l=>l.kind==="text") || !s.layers.some(l=>l.kind==="graphic") || !s.keyframes.some(k=>k.target.startsWith("source:")) || s.inserts.length!==0 || p.editedReload.edits.audio.music.uploadId!=="replacement_music") process.exit(1); console.log(p.cases.map(c=>c.id+":"+c.actual.mediaItems.length+" items").join(", ")+", edited-reload:all-layers-ok")'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: real-video-template-editable-timeline-proof
+          path: editable-timeline-structure-proof.json
+      - name: Compile Batch 3B worker modules
+        run: python -m py_compile worker/clips_worker/motion.py worker/clips_worker/media_sources.py worker/tests/test_real_video_template_sequence.py
+      - name: Install ffmpeg and pytest
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          python -m pip install pytest
+      - name: Batch 3B worker FFmpeg proof
+        env:
+          B3B_EDITABLE_PROOF: editable-timeline-structure-proof.json
+        run: |
+          PYTHONPATH=worker python -m pytest -q -rs --tb=short \
+            worker/tests/test_real_video_template_sequence.py \
+            worker/tests/test_media_sources_layouts.py \
+            worker/tests/test_e5_parity.py \
+            worker/tests/test_e5b_parity.py
 
   captions-worker-regression:
     runs-on: ubuntu-latest

@@ -4113,6 +4113,19 @@ export function EditorShell({
                   sourceUrls={sourceUrls}
                   selectedSourceSegmentId={selectedSourceSegmentId}
                   onSelectSourceSegment={onSelectSourceSegment}
+                  onSelectTextItem={(id) => {
+                    setSelectedTextId(id)
+                    setCanvasSel({ target: `text:${id}`, label: 'Text / graphic' })
+                    selectPanel('text')
+                  }}
+                  onSelectMusic={() => {
+                    setCanvasSel({ target: 'music', label: 'Music' })
+                    selectPanel('audio')
+                  }}
+                  onOpenTransition={(srcMs) => {
+                    setLayoutViewPersist('timeline')
+                    seekSource(srcMs)
+                  }}
                   onSeekOutput={seekOutput}
                 />
               }

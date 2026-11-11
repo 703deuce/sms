@@ -28,6 +28,7 @@ import { wordSourceMs } from '@/lib/clips/source-words'
 import { cn } from '@/lib/utils'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { segmentMediaMs, sourceById, sourceSegmentWindows } from '@/lib/clips/editor/sources'
+import { keyframeTimes, sourceSegmentTarget } from '@/lib/clips/editor/keyframes'
 
 const THUMB_H = 44
 const WORD_H = 18
@@ -50,6 +51,9 @@ export function ScriptViewCompactTimeline({
   sourceUrls,
   selectedSourceSegmentId = null,
   onSelectSourceSegment,
+  onSelectTextItem,
+  onSelectMusic,
+  onOpenTransition,
   onSeekOutput,
   className,
 }: {
@@ -67,6 +71,9 @@ export function ScriptViewCompactTimeline({
   sourceUrls?: Record<string, string>
   selectedSourceSegmentId?: string | null
   onSelectSourceSegment?: (id: string) => void
+  onSelectTextItem?: (id: string) => void
+  onSelectMusic?: () => void
+  onOpenTransition?: (srcMs: number) => void
   onSeekOutput: (ms: number) => void
   className?: string
 }) {
@@ -149,6 +156,9 @@ export function ScriptViewCompactTimeline({
       segment: previewEdits.sourceSegments?.find((seg) => seg.id === w.id),
     })).filter((w) => Boolean(w.source && w.segment))
   }, [previewEdits])
+  const compactTextItems = useMemo(() => previewEdits.textItems ?? [], [previewEdits.textItems])
+  const compactMusic = previewEdits.audio?.music
+  const compactTransitions = previewEdits.transitions ?? []
 
   const applyZoom = useCallback(
     (nextPxPerSec: number, anchorX?: number) => {
@@ -255,6 +265,7 @@ export function ScriptViewCompactTimeline({
                     )}
                     style={{ left, width }}
                     data-testid="script-compact-source-segment"
+                    data-item-id={chip.id}
                     data-source-id={source.id}
                     aria-label={'Select ' + (source.label ?? 'source clip')}
                     onPointerDown={(event) => event.stopPropagation()}
@@ -262,8 +273,82 @@ export function ScriptViewCompactTimeline({
                       event.stopPropagation()
                       onSelectSourceSegment?.(chip.id)
                     }}
-                  />
+                  >
+                    {keyframeTimes(previewEdits, sourceSegmentTarget(chip.id)).map((t) => (
+                      <span
+                        key={t}
+                        data-testid="script-compact-source-keyframe"
+                        className="pointer-events-none absolute top-1 size-1.5 -translate-x-1/2 rotate-45 bg-white shadow"
+                        style={{ left: `${Math.max(0, Math.min(100, (t / Math.max(1, segment.endMs - segment.startMs)) * 100))}%` }}
+                      />
+                    ))}
+                  </button>
+                  {chip.startMs > 0 ? (() => {
+                    const cutMs = (previewEdits.videoSplits ?? []).find((ms) => Math.abs(ms - chip.srcStartMs) <= 1)
+                    if (cutMs == null) return null
+                    const tr = compactTransitions.find((row) => Math.abs(row.srcMs - cutMs) <= 17)
+                    return (
+                      <>
+                        <span
+                          className="pointer-events-none absolute top-0 z-[5] h-[44px] w-px bg-white/80"
+                          style={{ left }}
+                          data-testid="script-compact-slot-cut"
+                          data-src-ms={cutMs}
+                        />
+                        {tr ? (
+                          <button
+                            type="button"
+                            className="absolute top-[15px] z-[7] size-3 -translate-x-1/2 rounded-full border border-white bg-primary"
+                            style={{ left }}
+                            data-testid="script-compact-transition"
+                            data-type={tr.type}
+                            data-src-ms={tr.srcMs}
+                            aria-label={`Edit ${tr.type} transition`}
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onOpenTransition?.(tr.srcMs)
+                            }}
+                          />
+                        ) : null}
+                      </>
+                    )
+                  })() : null}
                 </div>
+              )
+            })}
+            {compactTextItems.map((item, index) => {
+              const left = xs(item.startMs)
+              const width = Math.max(3, xe(item.endMs) - left)
+              const target = `text:${item.id}` as const
+              const isGraphic = item.kind === 'shape'
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className={cn(
+                    'absolute z-[8] h-[5px] rounded-sm border border-white/70',
+                    isGraphic ? 'bottom-[2px] bg-fuchsia-500/85' : 'bottom-[9px] bg-sky-400/90',
+                  )}
+                  style={{ left, width, opacity: 0.9 - Math.min(index, 3) * 0.08 }}
+                  data-testid={isGraphic ? 'script-compact-graphic-item' : 'script-compact-text-item'}
+                  data-item-id={item.id}
+                  aria-label={isGraphic ? 'Edit graphic layer' : 'Edit text layer'}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onSelectTextItem?.(item.id)
+                  }}
+                >
+                  {keyframeTimes(previewEdits, target).map((t) => (
+                    <span
+                      key={t}
+                      data-testid="script-compact-layer-keyframe"
+                      className="pointer-events-none absolute -top-0.5 size-1.5 -translate-x-1/2 rotate-45 bg-white"
+                      style={{ left: `${Math.max(0, Math.min(100, (t / Math.max(1, item.endMs - item.startMs)) * 100))}%` }}
+                    />
+                  ))}
+                </button>
               )
             })}
           </div>
@@ -305,6 +390,19 @@ export function ScriptViewCompactTimeline({
             })}
           </div>
           <div className="absolute left-0 overflow-hidden" style={{ top: THUMB_H + WORD_H + PAD, width: widthPx, height: WAVE_H }}>
+            {compactMusic ? (
+              <button
+                type="button"
+                className="absolute bottom-0 z-[4] h-[6px] rounded-sm border border-white/40 bg-emerald-500/80"
+                style={{
+                  left: xs(compactMusic.startMs ?? 0),
+                  width: Math.max(3, xe(compactMusic.endMs ?? outputDurationMs) - xs(compactMusic.startMs ?? 0)),
+                }}
+                data-testid="script-compact-music-item"
+                aria-label="Edit music track"
+                onClick={(event) => { event.stopPropagation(); onSelectMusic?.() }}
+              />
+            ) : null}
             <TimelineWaveform
               peaks={peaks}
               mediaFromMs={mediaFromMs}

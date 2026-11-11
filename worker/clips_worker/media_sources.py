@@ -292,6 +292,7 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "t0Ms": lo - window_start_ms,
                 "t1Ms": hi - window_start_ms,
                 "mediaInMs": segment_media_ms(s, src, lo),
+                "localStartMs": lo - int(s["startMs"]),
                 "audio": segment_audio(s, src),
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
@@ -524,6 +525,77 @@ def source_transform_filter(transform: dict | None, w: int, h: int) -> str:
     return "," + ",".join(parts) if parts else ""
 
 
+
+def _source_crop_filter(transform: dict | None, w: int, h: int) -> str:
+    """Static crop portion of source_transform_filter, before item-local motion."""
+    t = _normalize_source_transform(transform)
+    if not t:
+        return ""
+    l, r = float(t.get("cropL", 0)) / 100.0, float(t.get("cropR", 0)) / 100.0
+    top, bot = float(t.get("cropT", 0)) / 100.0, float(t.get("cropB", 0)) / 100.0
+    if not (l or r or top or bot):
+        return ""
+    cw = max(2, int(round(w * (1.0 - l - r))) // 2 * 2)
+    ch = max(2, int(round(h * (1.0 - top - bot))) // 2 * 2)
+    cx = max(0, min(w - cw, int(round(w * l))))
+    cy = max(0, min(h - ch, int(round(h * top))))
+    return f",crop={cw}:{ch}:{cx}:{cy},pad={w}:{h}:{cx}:{cy}:color=black"
+
+
+def source_motion_filtergraph(
+    edits: dict | None,
+    seg_id: str,
+    local_start_ms: float,
+    input_label: str,
+    output_label: str,
+    *,
+    fit: str,
+    transform: dict | None,
+    fx: dict | None,
+    width: int,
+    height: int,
+    fps: float,
+    duration_s: float,
+    prefix: str = "",
+) -> list[str] | None:
+    """B3B item-local source motion, mirrored by source-segment-motion.ts.
+
+    Returns None when the source item has no keyframes, preserving the legacy static chain exactly.
+    """
+    if not edits:
+        return None
+    from clips_worker.motion import find_track, track_expr
+
+    target = f"source:{seg_id}"
+    tracks = {p: find_track(edits, target, p) for p in ("x", "y", "scale", "rotation")}
+    if not any(tracks.values()):
+        return None
+
+    base = _normalize_source_transform(transform) or {}
+    origin_s = -float(local_start_ms) / 1000.0
+    dx = track_expr(tracks["x"], "x", var="t", origin_s=origin_s)
+    dy = track_expr(tracks["y"], "y", var="t", origin_s=origin_s)
+    ds = track_expr(tracks["scale"], "scale", var="t", origin_s=origin_s)
+    dr = track_expr(tracks["rotation"], "rotation", var="t", origin_s=origin_s)
+    x = f"({float(base.get('x', 0.0)):.6f})+({dx})"
+    y = f"({float(base.get('y', 0.0)):.6f})+({dy})"
+    scale = f"({float(base.get('scale', 100.0)):.6f})*({ds})/100"
+    rotation = f"({float(base.get('rotation', 0.0)):.6f})+({dr})"
+
+    layer = f"{output_label}_layer"
+    bg = f"{output_label}_bg"
+    parts = [
+        f"[{input_label}]{prefix}{fit_filter(fit, width, height)}"
+        f"{_source_crop_filter(transform, width, height)}{source_fx_filter(fx)},format=rgba,"
+        f"scale=w='max(2,trunc(iw*({scale})/200)*2)':h='max(2,trunc(ih*({scale})/200)*2)':eval=frame,"
+        f"rotate=a='({rotation})*PI/180':ow=iw:oh=ih:c=black@0[{layer}]",
+        f"color=c=black:s={width}x{height}:r={fps:g}:d={max(0.05, duration_s):.6f},format=rgba[{bg}]",
+        f"[{bg}][{layer}]overlay=x='(main_w-overlay_w)/2+({x})*{width}/100':"
+        f"y='(main_h-overlay_h)/2+({y})*{height}/100':eval=frame,format=yuv420p[{output_label}]",
+    ]
+    return parts
+
+
 def still_to_video(image: Path, out: Path, duration_s: float, fps: float = 30.0) -> Path:
     """Image → short H.264 clip (even size), so B-roll stills reuse the B-roll video path."""
     subprocess.check_call(
@@ -736,30 +808,22 @@ def build_sources_filtergraph(
     mute: list[str] = []
     a_labels: list[str] = []
     in_idx = 1
+
     for i, (w, p) in enumerate(zip(windows, paths)):
         t0 = w["t0Ms"] / 1000.0
         t1 = w["t1Ms"] / 1000.0
         dur = max(0.04, t1 - t0)
-        if w["mediaType"] == "image":
-            inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
-            in_idx += 1
-            # Still sources must be placed on the carrier clock and composited just like video.
-            # Without this overlay, image-only template slots render as the black carrier.
-            parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
-            nxt = f"vb{i + 1}"
-            parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
-            cur = nxt
-            continue
-        elif w["mediaType"] == "audio":
+
+        if w["mediaType"] == "audio":
             inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
             v_in = in_idx
             in_idx += 1
             inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
             a_in = in_idx
             in_idx += 1
-            chain = f"[{v_in}:v]fps={fps:g},format=yuv420p,setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]"
-            parts.append(chain)
+            parts.append(
+                f"[{v_in}:v]fps={fps:g},format=yuv420p,setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]"
+            )
             nxt = f"vb{i + 1}"
             parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
             cur = nxt
@@ -771,54 +835,80 @@ def build_sources_filtergraph(
             a_labels.append(f"[sa{i}]")
             mute.append(f"between(t,{t0:.3f},{t1:.3f})")
             continue
-        else:
-            speed = float(w.get("speed") or 1.0)
-            media_dur = dur * speed
-            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
-            # Preserve the legacy filtergraph exactly for absent/1x speed (golden parity).
-            pts = "setpts=PTS-STARTPTS" if speed == 1.0 else f"setpts=(PTS-STARTPTS)/{speed:.6f}"
-            chain = (f"[{in_idx}:v]trim=0:{media_dur:.3f},{pts},fps={fps:g},"
-                     f"{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},format=yuv420p")
-            v_in = in_idx
-            in_idx += 1
-            layout = w.get("layout")
-            if layout and edits and media:
-                in_idx, s_lbl = _append_layout_composite(
-                    i,
-                    w,
-                    layout,
-                    parts=parts,
-                    inputs=inputs,
-                    in_idx=in_idx,
-                    width=width,
-                    height=height,
-                    fps=fps,
-                    t0=t0,
-                    t1=t1,
-                    dur=dur,
-                    primary_v_in=v_in,
-                    edits=edits,
-                    media=media,
-                )
-                parts.append(f"[{s_lbl}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+
+        if w["mediaType"] == "image":
+            inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
+            motion = source_motion_filtergraph(
+                edits, w["id"], w.get("localStartMs", 0), f"{in_idx}:v", f"sm{i}",
+                fit=w["fit"], transform=w.get("transform"), fx=w.get("fx"),
+                width=width, height=height, fps=fps, duration_s=dur + 0.1, prefix=f"fps={fps:g},",
+            )
+            if motion:
+                parts.extend(motion)
+                parts.append(f"[sm{i}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
             else:
-                parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+                parts.append(
+                    f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}"
+                    f"{source_transform_filter(w.get('transform'), width, height)}"
+                    f"{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p,"
+                    f"setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]"
+                )
+            in_idx += 1
             nxt = f"vb{i + 1}"
             parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
             cur = nxt
-            mode = w["audio"]
-            if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
-                ms = int(round(t0 * 1000))
-                tempo = atempo_filter(speed)
-                tempo_part = (tempo + ",") if tempo else ""
-                audio_parts.append(
-                    f"[{v_in}:a]atrim=0:{media_dur:.3f},asetpts=PTS-STARTPTS,{tempo_part}aresample=48000,"
-                    f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
-                )
-                a_labels.append(f"[sa{i}]")
-            if mode == "source":
-                mute.append(f"between(t,{t0:.3f},{t1:.3f})")
             continue
+
+        speed = float(w.get("speed") or 1.0)
+        # Keep absent/1x source timing identical to the legacy filtergraph.
+        pts = "setpts=PTS-STARTPTS" if speed == 1.0 else f"setpts=(PTS-STARTPTS)/{speed:.6f}"
+        media_dur = dur * speed
+        inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
+        v_in = in_idx
+        motion = source_motion_filtergraph(
+            edits, w["id"], w.get("localStartMs", 0), f"{v_in}:v", f"sm{i}",
+            fit=w["fit"], transform=w.get("transform"), fx=w.get("fx"),
+            width=width, height=height, fps=fps, duration_s=dur + 0.1,
+            prefix=f"trim=0:{media_dur:.3f},{pts},fps={fps:g},",
+        )
+        in_idx += 1
+        layout = w.get("layout")
+        if layout and edits and media:
+            # Existing multi-angle layout path is unchanged. Template slots do not author segment layouts.
+            in_idx, s_lbl = _append_layout_composite(
+                i, w, layout, parts=parts, inputs=inputs, in_idx=in_idx,
+                width=width, height=height, fps=fps, t0=t0, t1=t1, dur=dur,
+                primary_v_in=v_in, edits=edits, media=media,
+            )
+            parts.append(f"[{s_lbl}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+        elif motion:
+            parts.extend(motion)
+            parts.append(f"[sm{i}]setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+        else:
+            parts.append(
+                f"[{v_in}:v]trim=0:{media_dur:.3f},{pts},fps={fps:g},"
+                f"{fit_filter(w['fit'], width, height)}"
+                f"{source_transform_filter(w.get('transform'), width, height)}"
+                f"{source_fx_filter(w.get('fx'))},format=yuv420p,"
+                f"setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]"
+            )
+
+        nxt = f"vb{i + 1}"
+        parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
+        cur = nxt
+        mode = w["audio"]
+        if mode in ("source", "mix") and source_has_audio[i]:
+            ms = int(round(t0 * 1000))
+            tempo = atempo_filter(speed)
+            tempo_part = (tempo + ",") if tempo else ""
+            audio_parts.append(
+                f"[{v_in}:a]atrim=0:{media_dur:.3f},asetpts=PTS-STARTPTS,{tempo_part}aresample=48000,"
+                f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
+            )
+            a_labels.append(f"[sa{i}]")
+        if mode == "source":
+            mute.append(f"between(t,{t0:.3f},{t1:.3f})")
+
     alabel: str | None = None
     if (mute or a_labels) and main_has_audio:
         main = "[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo"
@@ -838,8 +928,7 @@ def build_sources_filtergraph(
             f"[sil]{''.join(a_labels)}amix=inputs={len(a_labels) + 1}:duration=first:dropout_transition=0:normalize=0[aout]"
         )
         alabel = "aout"
-    fc = ";".join(parts + audio_parts)
-    return inputs, fc, cur, alabel
+    return inputs, ";".join(parts + audio_parts), cur, alabel
 
 
 def source_transition_boundaries(edits: dict) -> set[int]:
@@ -929,6 +1018,8 @@ def _source_transition_rows(edits: dict, clip_start_ms: int, clip_end_ms: int, f
             "rightSource": right_src,
             "leftMediaMs": segment_media_ms(left, left_src, int(round(actual_start_src_ms))),
             "rightMediaMs": segment_media_ms(right, right_src, int(round(actual_start_src_ms))),
+            "leftLocalStartMs": actual_start_src_ms - int(left["startMs"]),
+            "rightLocalStartMs": actual_start_src_ms - int(right["startMs"]),
         })
     return out
 
@@ -938,14 +1029,22 @@ def _render_source_transition_side(
     source: dict,
     seg: dict,
     media_in_ms: int,
+    local_start_ms: float,
     frames: int,
     width: int,
     height: int,
     fps: float,
     out: Path,
+    edits: dict,
 ) -> None:
     speed = float(seg.get("speed") or 1.0)
     speed_prefix = f"setpts=(PTS-STARTPTS)/{speed:.6f}," if source["mediaType"] == "video" and abs(speed - 1.0) >= 0.0001 else ""
+    motion = source_motion_filtergraph(
+        edits, seg["id"], local_start_ms, "0:v", "vout",
+        fit=seg.get("fit") or "cover", transform=seg.get("transform"), fx=seg.get("fx"),
+        width=width, height=height, fps=fps, duration_s=(frames + 2) / fps,
+        prefix=speed_prefix + f"fps={fps:g},",
+    )
     vf = (
         speed_prefix
         + fit_filter(seg.get("fit") or "cover", width, height)
@@ -958,8 +1057,12 @@ def _render_source_transition_side(
         cmd += ["-loop", "1", "-framerate", f"{fps:g}", "-i", str(path)]
     else:
         cmd += ["-ss", f"{media_in_ms / 1000.0:.6f}", "-i", str(path)]
+    if motion:
+        cmd += ["-filter_complex", ";".join(motion), "-map", "[vout]"]
+    else:
+        cmd += ["-vf", vf]
     cmd += [
-        "-vf", vf, "-frames:v", str(frames + 1), "-an",
+        "-frames:v", str(frames + 1), "-an",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(out),
     ]
     proc = subprocess.run(cmd, capture_output=True, text=True)
@@ -995,10 +1098,14 @@ def apply_source_segment_transitions(
             raise RuntimeError("source transition media missing")
         a = Path(work_dir) / f"source_transition_{i}_a.mp4"
         b = Path(work_dir) / f"source_transition_{i}_b.mp4"
-        _render_source_transition_side(Path(left_path), win["leftSource"], win["left"], int(win["leftMediaMs"]),
-                                       int(win["frames"]), width, height, fps, a)
-        _render_source_transition_side(Path(right_path), win["rightSource"], win["right"], int(win["rightMediaMs"]),
-                                       int(win["frames"]), width, height, fps, b)
+        _render_source_transition_side(
+            Path(left_path), win["leftSource"], win["left"], int(win["leftMediaMs"]),
+            float(win["leftLocalStartMs"]), int(win["frames"]), width, height, fps, a, edits,
+        )
+        _render_source_transition_side(
+            Path(right_path), win["rightSource"], win["right"], int(win["rightMediaMs"]),
+            float(win["rightLocalStartMs"]), int(win["frames"]), width, height, fps, b, edits,
+        )
         cmd += ["-i", str(a), "-i", str(b)]
         label = f"st{i}"
         parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))

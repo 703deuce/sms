@@ -104,7 +104,8 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
-import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
+import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss } from '@/lib/clips/editor/sources'
+import { sourceSegmentMotionCss } from '@/lib/clips/editor/source-segment-motion'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -791,7 +792,7 @@ export function PreviewStage({
         const vis = on ? 'visible' : 'hidden'
         if (box.style.visibility !== vis) box.style.visibility = vis
         if (on && sseg) {
-          const tf = sourceSegmentTransformCss(sseg.transform)
+          const tf = sourceSegmentMotionCss(e, sseg, src)
           if (box.style.transform !== tf.transform) box.style.transform = tf.transform
           if (box.style.clipPath !== tf.clipPath) box.style.clipPath = tf.clipPath
           const filter = sourceSegmentFxCss(sseg.fx)
@@ -1056,7 +1057,7 @@ export function PreviewStage({
             if (!seg) return null
             const source = sourceById(e.sources, seg.sourceId)
             if (!source || source.mediaType === 'audio') return null
-            const transform = sourceSegmentTransformCss(seg.transform)
+            const transform = sourceSegmentMotionCss(e, seg, targetSrcMs)
             return {
               sourceId: source.id,
               mediaTimeSec: segmentMediaMs(seg, source, targetSrcMs) / 1000,
@@ -1814,7 +1815,9 @@ export function PreviewStage({
           const url = s.mediaType !== 'audio' ? sourceUrls?.[s.refId] : undefined
           if (!url) return null
           const showSourceLayer = !segmentLayoutActive && activeSourceSegment?.sourceId === s.id
-          const slotTransform = sourceSegmentTransformCss(showSourceLayer ? activeSourceSegment?.transform : undefined)
+          const slotTransform = showSourceLayer && activeSourceSegment
+            ? sourceSegmentMotionCss(edits, activeSourceSegment, previewSourceMs)
+            : { transform: '', clipPath: '' }
           const slotFilter = sourceSegmentFxCss(showSourceLayer ? activeSourceSegment?.fx : undefined)
           return (
             <div

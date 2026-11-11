@@ -10,6 +10,7 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceSegmentFx, SourceSegmentTransform } from '@/lib/clips/editor/sources'
 import type { TransitionType } from '@/lib/clips/editor/motion-schema'
+import { TEXT_ANIM_BLOCK_ONLY, TEXT_ANIM_IN_TYPES, TEXT_ANIM_LOOP_TYPES, TEXT_ANIM_UNITS, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 export type TemplateAsset = {
   id: string
@@ -40,10 +41,15 @@ export type TemplateSlot = {
   speed?: number
   /** Incoming edge. First slot must be cut. */
   transition: 'cut' | TemplateTransition
-  /** Output-clock animation compiled to ordinary target=video keyframes. */
+  /** Item-local animation compiled to ordinary source:<stable-slot-id> keyframes. */
   motion?: TemplateMotion
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
+}
+export type TemplateAnimation = {
+  in?: { type: (typeof TEXT_ANIM_IN_TYPES)[number]; unit: (typeof TEXT_ANIM_UNITS)[number]; durationFrames: number }
+  out?: { type: (typeof TEXT_ANIM_IN_TYPES)[number]; unit: (typeof TEXT_ANIM_UNITS)[number]; durationFrames: number }
+  loop?: { type: (typeof TEXT_ANIM_LOOP_TYPES)[number]; periodFrames: number }
 }
 export type TemplateText = {
   id: string
@@ -56,6 +62,8 @@ export type TemplateText = {
   font: 'Montserrat' | 'Anton' | 'Poppins'
   size: number
   color: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
 }
 export type TemplateGraphic = {
   id: string
@@ -67,6 +75,8 @@ export type TemplateGraphic = {
   w: number
   h: number
   color: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
 }
 export type TemplatePhraseAnchor = { id: string; frame: number; textFieldId?: string }
 export type TemplateFamilyV1 = {
@@ -83,6 +93,41 @@ export type TemplateFamilyV1 = {
   graphics?: TemplateGraphic[]
   beatAnchors: number[]
   phraseAnchors?: TemplatePhraseAnchor[]
+  /** B3B editorial timing policy used by first-party release validation. */
+  timingMode?: 'beat' | 'semantic'
+}
+export type TemplateDesignTextTreatment = {
+  id: string
+  font?: TemplateText['font']
+  size?: number
+  x?: number
+  y?: number
+  color?: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
+}
+export type TemplateDesignGraphicTreatment = {
+  id: string
+  type?: TemplateGraphic['type']
+  x?: number
+  y?: number
+  w?: number
+  h?: number
+  color?: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
+}
+export type TemplateDesignSlotTreatment = {
+  id: string
+  transition?: 'cut' | TemplateTransition
+  motion?: TemplateMotion
+  transform?: SourceSegmentTransform
+  fx?: SourceSegmentFx
+}
+export type TemplateDesignTreatment = {
+  texts?: TemplateDesignTextTreatment[]
+  graphics?: TemplateDesignGraphicTreatment[]
+  slots?: TemplateDesignSlotTreatment[]
 }
 export type TemplateDesignV1 = {
   schemaVersion: 1
@@ -92,6 +137,8 @@ export type TemplateDesignV1 = {
   familyId: string
   familyRevision: number
   musicPolicy: 'none' | 'licensed-only'
+  /** B3B: authored, DATA-only treatment that changes the actual compiled editable timeline. */
+  treatment?: TemplateDesignTreatment
 }
 export type TemplateChoices = {
   instanceId: string
@@ -220,6 +267,46 @@ function validateMotion(raw: unknown): TemplateMotion | undefined {
   return { ...(from ? { from } : {}), to, ...(ease && ease !== 'linear' ? { ease } : {}) }
 }
 
+function validateTemplateAnimation(raw: unknown, durationFrames: number, layer: boolean): TemplateAnimation | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('animation: expected object')
+  exact(raw, ['in','out','loop'], 'animation')
+  const out: TemplateAnimation = {}
+  for (const edge of ['in','out'] as const) {
+    const value = raw[edge]
+    if (value == null) continue
+    if (!own(value)) throw new Error(`animation.${edge}: expected object`)
+    exact(value, ['type','unit','durationFrames'], `animation.${edge}`)
+    const type = oneOf(value.type, TEXT_ANIM_IN_TYPES, `animation.${edge}.type`)
+    let unit = oneOf(value.unit, TEXT_ANIM_UNITS, `animation.${edge}.unit`)
+    if (layer && (type === 'typewriter' || type === 'bounce_in' || type === 'zoom_out' || type === 'rotate_in'))
+      throw new Error(`animation.${edge}: text-only animation is not valid for graphics`)
+    if ((TEXT_ANIM_BLOCK_ONLY as readonly string[]).includes(type)) unit = 'block'
+    const frames = integer(value.durationFrames, 3, Math.max(3, durationFrames), `animation.${edge}.durationFrames`)
+    out[edge] = { type, unit, durationFrames: frames }
+  }
+  if (raw.loop != null) {
+    if (!own(raw.loop)) throw new Error('animation.loop: expected object')
+    exact(raw.loop, ['type','periodFrames'], 'animation.loop')
+    out.loop = {
+      type: oneOf(raw.loop.type, TEXT_ANIM_LOOP_TYPES, 'animation.loop.type'),
+      periodFrames: integer(raw.loop.periodFrames, 9, Math.max(9, durationFrames * 4), 'animation.loop.periodFrames'),
+    }
+  }
+  const edgeTotal = (out.in?.durationFrames ?? 0) + (out.out?.durationFrames ?? 0)
+  if (edgeTotal > durationFrames) throw new Error('animation: entrance and exit exceed layer duration')
+  return Object.keys(out).length ? out : undefined
+}
+
+function compiledAnimation(raw: TemplateAnimation | undefined): TextAnim | undefined {
+  if (!raw) return undefined
+  return {
+    ...(raw.in ? { in: { type: raw.in.type, unit: raw.in.unit, durMs: templateFrameToMs(raw.in.durationFrames) } } : {}),
+    ...(raw.out ? { out: { type: raw.out.type, unit: raw.out.unit, durMs: templateFrameToMs(raw.out.durationFrames) } } : {}),
+    ...(raw.loop ? { loop: { type: raw.loop.type, periodMs: templateFrameToMs(raw.loop.periodFrames) } } : {}),
+  }
+}
+
 function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransition {
   if (raw === 'cut') return 'cut'
   if (!own(raw)) throw new Error('slot.transition: unsupported capability')
@@ -231,7 +318,7 @@ function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransi
 
 export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   if (!own(raw)) throw new Error('family: expected JSON object')
-  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors'], 'family')
+  exact(raw, ['schemaVersion','familyId','revision','title','tags','aspects','fps','totalFrames','slots','texts','graphics','beatAnchors','phraseAnchors','timingMode'], 'family')
   if (raw.schemaVersion !== 1 || raw.fps !== 30) throw new Error('family: unsupported schema/fps')
   id(raw.familyId, 'family')
   integer(raw.revision, 1, 1_000_000, 'family revision')
@@ -318,7 +405,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   const textIds = new Set<string>()
   const texts: TemplateText[] = raw.texts.map((value: unknown) => {
     if (!own(value)) throw new Error('text: expected object')
-    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color'], 'text')
+    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','animation','motion'], 'text')
     const tid = id(value.id, 'text'); unique(tid, textIds, 'text')
     const maxChars = integer(value.maxChars, 1, 200, 'text.maxChars')
     if (typeof value.defaultText !== 'string' || !value.defaultText.trim() || Array.from(value.defaultText).length > maxChars) throw new Error('text: invalid default')
@@ -332,6 +419,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       x: finite(value.x, 0, 100, 'text.x'), y: finite(value.y, 0, 100, 'text.y'),
       font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'font'),
       size: integer(value.size, 24, 240, 'text.size'), color,
+      ...(validateTemplateAnimation(value.animation, durationFrames, false) ? { animation: validateTemplateAnimation(value.animation, durationFrames, false) } : {}),
+      ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
     }
   })
 
@@ -341,7 +430,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const ids = new Set<string>()
     graphics = raw.graphics.map((value: unknown) => {
       if (!own(value)) throw new Error('graphic: expected object')
-      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color'], 'graphic')
+      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color','animation','motion'], 'graphic')
       const gid = id(value.id, 'graphic'); unique(gid, ids, 'graphic')
       if (!GRAPHICS.has(String(value.type))) throw new Error('graphic: unsupported type')
       const startFrame = integer(value.startFrame, 0, total - 1, 'graphic.startFrame')
@@ -352,6 +441,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
         id: gid, type: value.type as TemplateGraphic['type'], startFrame, durationFrames,
         x: finite(value.x, 0, 100, 'graphic.x'), y: finite(value.y, 0, 100, 'graphic.y'),
         w: integer(value.w, 8, 1920, 'graphic.w'), h: integer(value.h, 8, 1920, 'graphic.h'), color,
+        ...(validateTemplateAnimation(value.animation, durationFrames, true) ? { animation: validateTemplateAnimation(value.animation, durationFrames, true) } : {}),
+        ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
       }
     })
   }
@@ -375,18 +466,169 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     title: raw.title.trim(), tags: [...raw.tags] as string[], aspects: [...raw.aspects] as TemplateFamilyV1['aspects'],
     fps: 30, totalFrames: total, slots, texts, ...(graphics?.length ? { graphics } : {}),
     beatAnchors, ...(phraseAnchors?.length ? { phraseAnchors } : {}),
+    ...(raw.timingMode != null ? { timingMode: oneOf(raw.timingMode, ['beat','semantic'] as const, 'family.timingMode') } : {}),
   }
 }
+
+export function validateTemplateEditorialTiming(family: TemplateFamilyV1): void {
+  if (!family.timingMode) throw new Error('family: first-party release requires explicit timingMode')
+  const phraseFrames = new Set((family.phraseAnchors ?? []).map((a) => a.frame))
+  const beatFrames = new Set(family.beatAnchors)
+  const near = (frame: number, set: Set<number>) => [...set].some((v) => Math.abs(v - frame) <= 1)
+
+  if (family.timingMode === 'beat') {
+    if (!beatFrames.size) throw new Error('family: beat-driven release requires beat anchors')
+    for (const slot of family.slots.slice(1)) {
+      if (!near(slot.startFrame, beatFrames) && !near(slot.startFrame, phraseFrames))
+        throw new Error(`family: beat-driven cut ${slot.id} is not on an authored beat/phrase accent`)
+    }
+    for (const text of family.texts) {
+      if (text.animation?.in && !near(text.startFrame, beatFrames) && !near(text.startFrame, phraseFrames))
+        throw new Error(`family: text entrance ${text.id} is not synchronized to an authored accent`)
+      if (text.animation?.out) {
+        const cue = text.startFrame + text.durationFrames - text.animation.out.durationFrames
+        if (!near(cue, beatFrames) && !near(cue, phraseFrames))
+          throw new Error(`family: text exit ${text.id} is not synchronized to an authored accent`)
+      }
+    }
+  } else {
+    if (!phraseFrames.size) throw new Error('family: semantic release requires phrase anchors')
+    for (const text of family.texts) {
+      if (text.durationFrames < 15) throw new Error(`family: semantic text ${text.id} has insufficient reading time`)
+      const own = (family.phraseAnchors ?? []).some((a) => a.textFieldId === text.id)
+      if (!own) throw new Error(`family: semantic text ${text.id} needs an explicit phrase anchor`)
+    }
+  }
+}
+function validateDesignTreatment(raw: unknown, family: TemplateFamilyV1): TemplateDesignTreatment | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('design.treatment: expected object')
+  exact(raw, ['texts','graphics','slots'], 'design.treatment')
+  const out: TemplateDesignTreatment = {}
+
+  if (raw.texts != null) {
+    if (!Array.isArray(raw.texts) || raw.texts.length > family.texts.length) throw new Error('design.treatment.texts: invalid budget')
+    const seen = new Set<string>()
+    out.texts = raw.texts.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.text: expected object')
+      exact(value, ['id','font','size','x','y','color','animation','motion'], 'design.treatment.text')
+      const tid = id(value.id, 'design.treatment.text')
+      unique(tid, seen, 'design.treatment.text')
+      const base = family.texts.find((t) => t.id === tid)
+      if (!base) throw new Error('design.treatment.text: unknown text field')
+      const color = value.color == null ? undefined : String(value.color)
+      if (color != null && !COLOR.test(color)) throw new Error('design.treatment.text: invalid color')
+      const animation = value.animation == null ? undefined : validateTemplateAnimation(value.animation, base.durationFrames, false)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      return {
+        id: tid,
+        ...(value.font != null ? { font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'design.treatment.text.font') } : {}),
+        ...(value.size != null ? { size: integer(value.size, 24, 240, 'design.treatment.text.size') } : {}),
+        ...(value.x != null ? { x: finite(value.x, 0, 100, 'design.treatment.text.x') } : {}),
+        ...(value.y != null ? { y: finite(value.y, 0, 100, 'design.treatment.text.y') } : {}),
+        ...(color != null ? { color } : {}),
+        ...(animation ? { animation } : {}),
+        ...(motion ? { motion } : {}),
+      }
+    })
+  }
+
+  if (raw.graphics != null) {
+    if (!Array.isArray(raw.graphics) || raw.graphics.length > (family.graphics?.length ?? 0)) throw new Error('design.treatment.graphics: invalid budget')
+    const seen = new Set<string>()
+    out.graphics = raw.graphics.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.graphic: expected object')
+      exact(value, ['id','type','x','y','w','h','color','animation','motion'], 'design.treatment.graphic')
+      const gid = id(value.id, 'design.treatment.graphic')
+      unique(gid, seen, 'design.treatment.graphic')
+      const base = family.graphics?.find((g) => g.id === gid)
+      if (!base) throw new Error('design.treatment.graphic: unknown graphic')
+      const color = value.color == null ? undefined : String(value.color)
+      if (color != null && !COLOR.test(color)) throw new Error('design.treatment.graphic: invalid color')
+      const type = value.type == null ? undefined : String(value.type)
+      if (type != null && !GRAPHICS.has(type)) throw new Error('design.treatment.graphic: unsupported type')
+      const animation = value.animation == null ? undefined : validateTemplateAnimation(value.animation, base.durationFrames, true)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      return {
+        id: gid,
+        ...(type != null ? { type: type as TemplateGraphic['type'] } : {}),
+        ...(value.x != null ? { x: finite(value.x, 0, 100, 'design.treatment.graphic.x') } : {}),
+        ...(value.y != null ? { y: finite(value.y, 0, 100, 'design.treatment.graphic.y') } : {}),
+        ...(value.w != null ? { w: integer(value.w, 8, 1920, 'design.treatment.graphic.w') } : {}),
+        ...(value.h != null ? { h: integer(value.h, 8, 1920, 'design.treatment.graphic.h') } : {}),
+        ...(color != null ? { color } : {}),
+        ...(animation ? { animation } : {}),
+        ...(motion ? { motion } : {}),
+      }
+    })
+  }
+
+  if (raw.slots != null) {
+    if (!Array.isArray(raw.slots) || raw.slots.length > family.slots.length) throw new Error('design.treatment.slots: invalid budget')
+    const seen = new Set<string>()
+    out.slots = raw.slots.map((value: unknown) => {
+      if (!own(value)) throw new Error('design.treatment.slot: expected object')
+      exact(value, ['id','transition','motion','transform','fx'], 'design.treatment.slot')
+      const sid = id(value.id, 'design.treatment.slot')
+      unique(sid, seen, 'design.treatment.slot')
+      const index = family.slots.findIndex((slot) => slot.id === sid)
+      if (index < 0) throw new Error('design.treatment.slot: unknown slot')
+      const transition = value.transition == null ? undefined : validateTransition(value.transition, index)
+      const motion = value.motion == null ? undefined : validateMotion(value.motion)
+      const transform = value.transform == null ? undefined : validateTransform(value.transform)
+      const fx = value.fx == null ? undefined : validateFx(value.fx)
+      return {
+        id: sid,
+        ...(transition ? { transition } : {}),
+        ...(motion ? { motion } : {}),
+        ...(transform ? { transform } : {}),
+        ...(fx ? { fx } : {}),
+      }
+    })
+  }
+
+  const normalized = {
+    ...(out.texts?.length ? { texts: out.texts } : {}),
+    ...(out.graphics?.length ? { graphics: out.graphics } : {}),
+    ...(out.slots?.length ? { slots: out.slots } : {}),
+  }
+  return Object.keys(normalized).length ? normalized : undefined
+}
+
+export function applyTemplateDesignTreatment(family: TemplateFamilyV1, design: Pick<TemplateDesignV1, 'treatment'>): TemplateFamilyV1 {
+  if (!design.treatment) return family
+  const textById = new Map((design.treatment.texts ?? []).map((row) => [row.id, row]))
+  const graphicById = new Map((design.treatment.graphics ?? []).map((row) => [row.id, row]))
+  const slotById = new Map((design.treatment.slots ?? []).map((row) => [row.id, row]))
+  const patched = {
+    ...structuredClone(family),
+    texts: family.texts.map((row) => ({ ...row, ...(textById.get(row.id) ?? {}) })),
+    ...(family.graphics ? { graphics: family.graphics.map((row) => ({ ...row, ...(graphicById.get(row.id) ?? {}) })) } : {}),
+    slots: family.slots.map((row) => ({ ...row, ...(slotById.get(row.id) ?? {}) })),
+  }
+  // Re-run the family validator so treatment transitions/animation/motion cannot bypass handles,
+  // overlap, duration, rights-safe data or operation constraints.
+  return validateTemplateFamily(patched)
+}
+
 export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): TemplateDesignV1 {
   if (!own(raw)) throw new Error('design: expected object')
-  exact(raw, ['schemaVersion','designId','revision','stylePackId','familyId','familyRevision','musicPolicy'], 'design')
+  exact(raw, ['schemaVersion','designId','revision','stylePackId','familyId','familyRevision','musicPolicy','treatment'], 'design')
   if (raw.schemaVersion !== 1) throw new Error('design: unsupported version')
   const designId = id(raw.designId, 'design'), stylePackId = id(raw.stylePackId, 'stylePack')
   const revision = integer(raw.revision, 1, 1_000_000, 'design revision')
   if (raw.familyId !== family.familyId || raw.familyRevision !== family.revision) throw new Error('design: family revision mismatch')
-  return { schemaVersion: 1, designId, revision, stylePackId, familyId: family.familyId, familyRevision: family.revision,
-    musicPolicy: oneOf(raw.musicPolicy, ['none','licensed-only'] as const, 'music') }
+  const treatment = validateDesignTreatment(raw.treatment, family)
+  const design: TemplateDesignV1 = {
+    schemaVersion: 1, designId, revision, stylePackId, familyId: family.familyId, familyRevision: family.revision,
+    musicPolicy: oneOf(raw.musicPolicy, ['none','licensed-only'] as const, 'music'),
+    ...(treatment ? { treatment } : {}),
+  }
+  // Validate the fully treated family now, not only when compiled.
+  applyTemplateDesignTreatment(family, design)
+  return design
 }
+
 function validateAsset(asset: unknown, kind: TemplateAsset['kind'][], context: string): TemplateAsset {
   if (!own(asset)) throw new Error(`${context}: missing registered asset`)
   exact(asset, ['id','kind','license','durationFrames'], context)
@@ -415,8 +657,9 @@ export function compileTemplate(
   rawFamily: unknown, rawDesign: unknown, choices: TemplateChoices,
   carrier: { durationFrames: number; edits: ClipEditsV2 },
 ): TemplateCompileResult {
-  const family = validateTemplateFamily(rawFamily)
-  const design = validateTemplateDesign(rawDesign, family)
+  const baseFamily = validateTemplateFamily(rawFamily)
+  const design = validateTemplateDesign(rawDesign, baseFamily)
+  const family = applyTemplateDesignTreatment(baseFamily, design)
   id(choices?.instanceId, 'instance')
   if (carrier.durationFrames !== family.totalFrames) throw new Error('carrier: exact frame count required')
   if (carrier.edits.inserts?.length) throw new Error('carrier: post-composite inserts not permitted')
@@ -484,27 +727,27 @@ export function compileTemplate(
     })
   }
 
+  // B3B: slot motion is item-local on the real source-segment item, never on the opaque carrier.
   const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
-  if (family.slots.some((slot) => slot.motion)) {
-    const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
+  const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
+  const appendLayerMotion = (target: `source:${string}` | `text:${string}`, motion: TemplateMotion | undefined, durationFrames: number) => {
+    if (!motion) return
+    const localEndMs = templateFrameToMs(durationFrames - 1)
     for (const prop of ['x','y','scale','rotation'] as const) {
-      const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = []
-      let used = false
-      for (const slot of family.slots) {
-        const startMs = templateFrameToMs(slot.startFrame)
-        const endMs = templateFrameToMs(slot.startFrame + slot.durationFrames - 1)
-        const from = slot.motion?.from?.[prop] ?? defaults[prop]
-        const to = slot.motion?.to?.[prop] ?? (slot.motion ? from : defaults[prop])
-        if (from !== defaults[prop] || to !== defaults[prop]) used = true
-        points.push({
-          tMs: startMs,
-          v: from,
-          ...(slot.motion?.ease ? { ease: slot.motion.ease } : {}),
-        })
-        if (endMs > startMs) points.push({ tMs: endMs, v: to })
-      }
-      if (used) motionKeyframes.push({ target: 'video', prop, points })
+      const from = motion.from?.[prop] ?? defaults[prop]
+      const to = motion.to?.[prop] ?? from
+      if (from === defaults[prop] && to === defaults[prop]) continue
+      const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = [
+        { tMs: 0, v: from, ...(motion.ease ? { ease: motion.ease } : {}) },
+      ]
+      if (localEndMs > 0) points.push({ tMs: localEndMs, v: to })
+      motionKeyframes.push({ target, prop, points })
     }
+  }
+
+  for (const slot of family.slots) {
+    if (!slot.motion) continue
+    appendLayerMotion(`source:${slotToItemIds[slot.id]!}`, slot.motion, slot.durationFrames)
   }
 
   const textItems: NonNullable<ClipEditsV2['textItems']> = family.texts.map(t => {
@@ -514,14 +757,24 @@ export function compileTemplate(
       id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id),
       text, startMs: templateFrameToMs(t.startFrame), endMs: templateFrameToMs(t.startFrame + t.durationFrames),
       x: t.x, y: t.y, style: { font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const },
+      ...(compiledAnimation(t.animation) ? { anim: compiledAnimation(t.animation) } : {}),
     }
   })
+  for (const t of family.texts) {
+    const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id)
+    appendLayerMotion(`text:${itemId}`, t.motion, t.durationFrames)
+  }
   for (const g of family.graphics ?? []) textItems.push({
     id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'graphic', g.id),
     text: '', kind: 'shape', shape: { type: g.type, w: g.w, h: g.h },
     startMs: templateFrameToMs(g.startFrame), endMs: templateFrameToMs(g.startFrame + g.durationFrames),
     x: g.x, y: g.y, style: { font: 'Montserrat', size: 24, color: g.color, align: 'center', case: 'none' },
+    ...(compiledAnimation(g.animation) ? { anim: compiledAnimation(g.animation) } : {}),
   })
+  for (const g of family.graphics ?? []) {
+    const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'graphic', g.id)
+    appendLayerMotion(`text:${itemId}`, g.motion, g.durationFrames)
+  }
 
   let music = null
   if (choices.music) {
