@@ -12,7 +12,9 @@
     "./lib/clips/real-video-templates/b8-render-qa.ts",
     "./scripts/template-factory-worker.ts",
     "./scripts/template-factory.ts",
-    "./tests/clips/b8-template-factory.test.ts"
+    "./tests/clips/b8-template-factory.test.ts",
+    "./lib/clips/real-video-templates/b8-reference-catalog.ts",
+    "./scripts/export-b8-worker-contract.ts"
   ],
   "include": []
 }

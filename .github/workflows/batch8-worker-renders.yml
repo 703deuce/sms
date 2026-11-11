@@ -28,6 +28,12 @@ jobs:
           cache-dependency-path: new-app/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: new-app
+      - name: Focused Batch 8 typecheck
+        run: pnpm typecheck:templates:b8
+        working-directory: new-app
+      - name: Batch 8 factory tests
+        run: pnpm test:templates:b8
+        working-directory: new-app
       - run: pnpm templates:b8:worker-contract ../build/b8-worker-contract.json
         working-directory: new-app
       - uses: actions/upload-artifact@v4
