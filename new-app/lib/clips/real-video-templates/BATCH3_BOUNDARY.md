@@ -3,7 +3,7 @@
 ## Status: experimental, NOT launchable
 The data-contract and compile prototype are intentionally not connected to project creation, PATCH,
 ClipEditsV2 save, preview, export, or customer-facing template lists. `renderable: false` is a
-hard gate. No generated carrier is uploaded to customer projects. No migrations.
+hard gate. No generated carrier is uploaded to customer projects. An additive migration now creates an isolated template-instance table; it changes no existing rows or edit payloads.
 
 ## Proven representation
 - Immutable family/design snapshots addressed by (ID, revision); family output slots are a
@@ -61,3 +61,4 @@ before that validation.
   before color/cut and before `_legacy_compose` burns text, so the
   full-length-carrier architecture has a plausible existing cut-only path.
   The code path still has no proven cross-source dissolve/individual transforms.
+\n## New additive DB boundary\n\nMigration `20261111150000_real_video_template_instances` adds one independent table\nwith workspace+idempotency uniqueness, immutable snapshot JSON, separate authoring JSON,\noptimistic authoringVersion and nullable project/clip links. It does not touch existing\nclips.edits or editor save versions. The only server helper is unexposed (no API route).\nUntil worker/preview parity and a transactional project creation path exist,\nno template instance can be published by this code.\n
