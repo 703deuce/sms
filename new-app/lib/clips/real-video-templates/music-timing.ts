@@ -26,6 +26,8 @@ export type AuthoredMusicScheduleV1 = {
   musicAssetId: string
   sha256: string
   bpm: number | null
+  /** Low-confidence grids may be used with fixed-time timing, never silently for re-sync. */
+  confidence?: 'high' | 'uncertain' | 'manual'
   offsetFrames: number
   durationFrames: number
   /** Sorted absolute source-music frames, not recomputed at reload. */
@@ -97,7 +99,8 @@ export function pinMusicSchedule(input: {
     throw new Error('Protected anchor requires manual approval')
   return {
     v: 1, mode: input.mode, musicAssetId: input.assetId, sha256: input.license.sha256,
-    bpm: input.grid.bpm > 0 ? input.grid.bpm : null, offsetFrames: offset,
+    bpm: input.grid.bpm > 0 ? input.grid.bpm : null,
+    confidence: beats.length >= 8 ? 'high' : 'uncertain', offsetFrames: offset,
     durationFrames: duration, beats, phrases: structuredClone(phrases),
     protectedAnchors: structuredClone(anchors),
   }
@@ -149,6 +152,10 @@ function verifiedSchedule(s: AuthoredMusicScheduleV1, license: AudioLicenseRecor
     if (!validFrame(s.beats[i]!) || s.beats[i]! >= s.durationFrames ||
         (i && s.beats[i]! <= s.beats[i-1]!))
       throw new Error('Invalid pinned music beat schedule')
+  for (const p of s.phrases)
+    if (!p.id || !validFrame(p.frame) || p.frame >= s.durationFrames ||
+        !['instrumental','lyric','narration'].includes(p.kind))
+      throw new Error('Invalid pinned music phrase/lyric cue')
   for (const a of [...s.protectedAnchors, ...(s.manualOverrides ?? [])])
     if (!a.approved || !a.id || !validFrame(a.frame) || a.frame >= s.durationFrames)
       throw new Error('Unapproved or invalid manual anchor')
@@ -180,55 +187,84 @@ export function previewMusicReplacement(input: {
       !replacement.beats.length || !previous.beats.length ||
       !(replacement.bpm && previous.bpm))
     throw new Error('Re-sync requires two pinned beat-time schedules')
+  if ((previous.confidence === 'uncertain' || replacement.confidence === 'uncertain') &&
+      !(previous.protectedAnchors.length && replacement.protectedAnchors.length))
+    throw new Error('Uncertain beat grid: use fixed-time or approve manual protected anchors')
   const ratio = previous.bpm / replacement.bpm
   if (ratio < 0.5 || ratio > 2) throw new Error('Tempo difference outside safe re-sync limits')
   const oldGrid = previous.beats.map(n => n + previous.offsetFrames)
   const newGrid = replacement.beats.map(n => n + replacement.offsetFrames)
-  if (!oldGrid.length || oldGrid[0]! > 1 || Math.abs(oldGrid[0]!) > 1)
-    throw new Error('Authored music offset does not align with the template origin')
   const nearestIndex = (frames: readonly number[], target: number) => {
-    let low=0,high=frames.length-1
-    while(low<high) {const mid=Math.floor((low+high)/2);if(frames[mid]!<target)low=mid+1;else high=mid}
-    if(low>0 && Math.abs(frames[low-1]!-target)<=Math.abs(frames[low]!-target))return low-1
-    return low
+    let low = 0, high = frames.length - 1
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      if (frames[mid]! < target) low = mid + 1
+      else high = mid
+    }
+    return low > 0 && Math.abs(frames[low-1]! - target) <= Math.abs(frames[low]! - target)
+      ? low - 1 : low
   }
-  // Every authored cut must already be on the pinned source grid (within one frame).
-  // This is an explicit re-sync, not a guess at where a singer's phrase began.
-  const cutIndices = timing.boundaries.map(f=>{
-    const idx=nearestIndex(oldGrid,f)
-    if(Math.abs(oldGrid[idx]!-f)>1)
+  const last = timing.boundaries.length - 1
+  // The first video frame remains zero even with a pickup/off-grid musical intro.
+  // Interior cuts must have known authored beat indices or explicitly protected overrides.
+  const bounds: number[] = [0]
+  for (let i = 1; i < last; i++) {
+    const oldFrame = timing.boundaries[i]!
+    const idx = nearestIndex(oldGrid, oldFrame)
+    const protectedAtCut = previous.protectedAnchors.find(a => a.frame === oldFrame)
+    const override = protectedAtCut && [...replacement.protectedAnchors, ...(replacement.manualOverrides ?? [])]
+      .find(a => a.id === protectedAtCut.id)
+    if (protectedAtCut && !override)
+      throw new Error('Protected anchor needs an approved replacement: ' + protectedAtCut.id)
+    if (Math.abs(oldGrid[idx]! - oldFrame) > 1 && !protectedAtCut)
       throw new Error('Off-grid authored cut: manual anchor correction required')
-    if(idx>=newGrid.length)
+    if (!override && idx >= newGrid.length)
       throw new Error('Replacement song ends before all authored beat anchors')
-    return idx
-  })
-  const bounds=cutIndices.map(idx=>newGrid[idx]!)
-  const total=bounds[bounds.length-1]!
-  if(bounds[0]!==0 || total<=0)
+    bounds.push(override ? override.frame : newGrid[idx]!)
+  }
+  // Map end independently of slot rounding; final duration is an integer frame.
+  // When the authored end is on a beat, preserve its exact beat index.
+  const lastIdx = nearestIndex(oldGrid, timing.totalFrames)
+  const onBeatEnd = Math.abs(oldGrid[lastIdx]! - timing.totalFrames) <= 1
+  const total = onBeatEnd
+    ? newGrid[lastIdx]!
+    : Math.round(timing.totalFrames * ratio + replacement.offsetFrames - previous.offsetFrames)
+  if (!validFrame(total) || total === 0)
     throw new Error('Replacement offset cannot preserve a zero-origin edit')
-  if(total > replacement.durationFrames && !input.allowLoop)
+  bounds.push(total)
+  if (total > replacement.durationFrames && !input.allowLoop)
     throw new Error('Music too short: looping/crossfade requires explicit acceptance')
-  for(let i=1;i<bounds.length;i++)
-    if(bounds[i]!-bounds[i-1]!<timing.minShotFrames)
+  for (let i = 1; i < bounds.length; i++)
+    if (!validFrame(bounds[i]!) || bounds[i]! - bounds[i-1]! < timing.minShotFrames)
       throw new Error('Music tempo makes minimum shot lengths impossible')
+  for (const anchor of previous.protectedAnchors) {
+    const replacementAnchor = [...replacement.protectedAnchors, ...(replacement.manualOverrides ?? [])]
+      .find(a => a.id === anchor.id)
+    if (!replacementAnchor)
+      throw new Error('Protected anchor needs an approved replacement: ' + anchor.id)
+    if (!timing.boundaries.includes(anchor.frame))
+      throw new Error('Protected anchor must be attached to a shot cut: ' + anchor.id)
+    const cut = timing.boundaries.indexOf(anchor.frame)
+    if (bounds[cut] !== replacementAnchor.frame)
+      throw new Error('Protected anchor conflict: manual correction required: ' + anchor.id)
+  }
   const oldCues = previous.phrases.filter(p => p.kind !== 'instrumental')
   for (const cue of oldCues)
     if (!replacement.phrases.some(p => p.id === cue.id && p.kind === cue.kind))
       throw new Error('Re-sync needs an explicit matching lyric/narration cue: ' + cue.id)
-  for (const anchor of previous.protectedAnchors) {
-    const replacementAnchor = [...replacement.protectedAnchors, ...(replacement.manualOverrides ?? [])]
-      .find(a => a.id === anchor.id)
-    if (!replacementAnchor) throw new Error('Protected anchor needs an approved replacement: ' + anchor.id)
-    const oldCut = timing.boundaries.indexOf(anchor.frame)
-    if(oldCut >= 0 && bounds[oldCut] !== replacementAnchor.frame)
-      throw new Error('Protected anchor conflicts with re-sync; manual edit required: ' + anchor.id)
-  }
   const map = (f:number) => {
     if (f === timing.totalFrames) return total
     let i=1
     while (i < timing.boundaries.length && f >= timing.boundaries[i]!) i++
     const a=timing.boundaries[i-1]!, b=timing.boundaries[i]!
     return bounds[i-1]! + Math.round((f-a)*(bounds[i]!-bounds[i-1]!)/(b-a))
+  }
+  // A lyric/narration must land on its explicit replacement cue; never stretch speech
+  // as an implicit side-effect of swapping the backing song.
+  for (const cue of oldCues) {
+    const matched = replacement.phrases.find(p => p.id === cue.id && p.kind === cue.kind)!
+    if (Math.abs(map(cue.frame) - matched.frame) > 1)
+      throw new Error('Narration/lyric cue requires manual edit: ' + cue.id)
   }
   const windows = timing.windows.map(w => ({...w,startFrame:map(w.startFrame),endFrame:map(w.endFrame)}))
   for (const w of windows)
