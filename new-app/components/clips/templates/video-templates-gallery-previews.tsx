@@ -5,9 +5,9 @@ import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gall
 import { aspectCss } from '@/lib/clips/export-aspect'
 
 export function galleryCardAspectStyle(aspect: string) {
-  if (aspect === '9:16') return { className: 'aspect-[9/16] max-h-[420px] w-full mx-auto', ratio: aspectCss('9:16') }
-  if (aspect === '1:1') return { className: 'aspect-square w-full', ratio: aspectCss('1:1') }
-  return { className: 'aspect-video w-full', ratio: aspectCss('16:9') }
+  if (aspect === '9:16') return { className: 'aspect-[9/16] max-h-[min(420px,72vh)] w-full mx-auto', ratio: aspectCss('9:16') }
+  if (aspect === '1:1') return { className: 'aspect-square max-h-[min(360px,60vh)] w-full mx-auto', ratio: aspectCss('1:1') }
+  return { className: 'aspect-video max-h-[min(280px,50vh)] w-full', ratio: aspectCss('16:9') }
 }
 
 export function AnimatedTemplateCardPreview({ item }: { item: VideoTemplateRelease }) {
@@ -114,6 +114,11 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
 
   if (!media || failed) return <AnimatedTemplateCardPreview item={item} />
   const seconds = (item.family.totalFrames / item.family.fps).toFixed(1).replace(/\.0$/, '')
+  const framePosters = media.framePosterPaths
+  const col = frame % Math.max(1, media.columns)
+  const hdSrc = framePosters?.length
+    ? framePosters[frame % framePosters.length]
+    : media.posterPath ?? media.spritePath
   return (
     <div
       className={'group relative overflow-hidden bg-black ' + frameStyle.className}
@@ -123,16 +128,41 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
       onMouseLeave={() => { if (!forcePlay) { setPlaying(false); setFrame(0) } }}
     >
       <div className="absolute inset-0 overflow-hidden">
-        <img
-          src={media.spritePath}
-          alt=""
-          aria-hidden
-          className="pointer-events-none h-full max-w-none select-none"
-          style={{
-            width: (media.columns * 100) + '%',
-            transform: 'translateX(-' + ((frame % media.columns) * (100 / media.columns)) + '%)',
-          }}
-        />
+        {item.demoPath && playing && !reducedMotion ? (
+          <video
+            src={item.demoPath}
+            poster={item.demoPosterPath ?? media.posterPath}
+            muted
+            playsInline
+            autoPlay
+            loop
+            className="h-full w-full object-cover"
+            aria-label={'HD preview ' + item.title}
+          />
+        ) : null}
+        {framePosters?.length || media.posterPath ? (
+          <img
+            src={hdSrc}
+            alt=""
+            aria-hidden
+            decoding="async"
+            className={'pointer-events-none h-full w-full object-cover select-none ' +
+              (item.demoPath && playing && !reducedMotion ? 'hidden' : '')}
+          />
+        ) : (
+          <img
+            src={media.spritePath}
+            alt=""
+            aria-hidden
+            decoding="async"
+            className={'pointer-events-none h-full max-w-none select-none ' +
+              (item.demoPath && playing && !reducedMotion ? 'hidden' : '')}
+            style={{
+              width: (media.columns * 100) + '%',
+              transform: 'translateX(-' + (col * (100 / media.columns)) + '%)',
+            }}
+          />
+        )}
       </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15" />
       <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-black/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-100">

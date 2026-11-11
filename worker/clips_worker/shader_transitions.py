@@ -82,6 +82,21 @@ def _read_exact(stream, nbytes: int, deadline: float) -> bytes:
     return bytes(buf)
 
 
+def _flip_gl_rgb24_bottom_up(raw: bytes | bytearray, w: int, h: int) -> bytes:
+    """OpenGL read() returns bottom-up RGB24; convert to top-down for ffmpeg rawvideo."""
+    row = w * 3
+    need = row * h
+    if len(raw) < need:
+        raise ShaderRenderError(f"short_gl_read:{len(raw)}<{need}")
+    data = bytes(raw[:need])
+    out = bytearray(need)
+    for y in range(h):
+        src = (h - 1 - y) * row
+        dst = y * row
+        out[dst:dst + row] = data[src:src + row]
+    return bytes(out)
+
+
 def _write_all(stream, data: bytes | memoryview, deadline: float) -> None:
     mv = memoryview(data) if not isinstance(data, memoryview) else data
     offset = 0
@@ -225,7 +240,7 @@ def render_window(
             fbo.use()
             vao.render()
             raw = fbo.read(components=3, alignment=1)
-            frame = bytes(raw[h - 1 :: -1])
+            frame = _flip_gl_rgb24_bottom_up(raw, w, h)
             if len(frame) != need:
                 raise ShaderRenderError(f"short_gl_read:{len(frame)}<{need}")
             _write_all(enc.stdin, frame, deadline)

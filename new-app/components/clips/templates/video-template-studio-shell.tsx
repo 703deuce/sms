@@ -140,6 +140,7 @@ export function VideoTemplateStudioShell(props: {
         }}
       >
         <PreviewStage
+          key={project.clipId + ':' + clip.edits.v + ':' + (clip.edits.trim?.in ?? 0)}
           clipId={project.clipId}
           edits={clip.edits}
           videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}

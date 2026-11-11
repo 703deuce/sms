@@ -50,6 +50,23 @@ def test_source_hygiene():
     assert (SHADER_DIR / "NOTICE.md").is_file()
 
 
+def test_flip_gl_rgb24_bottom_up():
+    from clips_worker.shader_transitions import ShaderRenderError, _flip_gl_rgb24_bottom_up
+
+    w, h = 4, 3
+    row = w * 3
+    need = row * h
+    raw = bytearray()
+    for y in range(h):
+        raw.extend(bytes([y]) * row)
+    out = _flip_gl_rgb24_bottom_up(bytes(raw), w, h)
+    assert len(out) == need
+    assert out[0:row] == bytes([h - 1]) * row
+    assert out[(h - 1) * row:(h * row)] == bytes([0]) * row
+    with pytest.raises(ShaderRenderError, match="short_gl_read"):
+        _flip_gl_rgb24_bottom_up(bytes(raw[: row]), w, h)
+
+
 def test_endpoints_spin():
     try:
         ctx, _ = _gl()

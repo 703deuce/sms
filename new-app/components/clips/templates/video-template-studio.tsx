@@ -15,7 +15,7 @@ import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelec
   newStudioDraft, type StudioDraft, type StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
 
 type Project = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null; editsSaveVersion?: number }
-type MediaItem = { asset: TemplateAsset; label: string; mime?: string; durationMs: number | null;
+type MediaItem = { asset: TemplateAsset; label: string; mime?: string; bytes?: number; durationMs: number | null;
   width: number | null; height: number | null; url: string | null; stillUrl?: string | null; available: boolean }
 type MediaPage = { items: MediaItem[]; page: number; pages: number; total: number }
 type ClipDetail = {
@@ -105,7 +105,8 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [knownMedia, setKnownMedia] = useState<Record<string, MediaItem>>({})
   const [mediaSearch, setMediaSearch] = useState('')
   const [mediaKind, setMediaKind] = useState<'all' | 'video' | 'image' | 'audio'>('all')
-  const [selectedSlot, setSelectedSlot] = useState(release.family.slots[0]?.id ?? '')
+  const defaultSlotId = [...release.family.slots].sort((a, b) => a.ordinal - b.ordinal)[0]?.id ?? ''
+  const [selectedSlot, setSelectedSlot] = useState(defaultSlotId)
   const [selectedUploads, setSelectedUploads] = useState<TemplateAsset[]>([])
   const [selectedAudio, setSelectedAudio] = useState(false)
   const [pendingMusic, setPendingMusic] = useState<MediaItem | null>(null)
@@ -207,7 +208,19 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     setClip(detail)
     editsVersionRef.current = detail.clip.editsSaveVersion
     setCurrentProject({ ...value, editsSaveVersion: detail.clip.editsSaveVersion })
-  }, [])
+    const orderedSlots = [...release.family.slots].sort((a, b) => a.ordinal - b.ordinal)
+    const firstFilled = orderedSlots.find(slot => draftRef.current?.slots[slot.id])?.id
+    if (firstFilled) setSelectedSlot(firstFilled)
+    setClockMs(0)
+    lastClockRounded.current = -1
+    window.requestAnimationFrame(() => {
+      const video = videoRef.current
+      if (video) {
+        try { video.currentTime = 0 } catch { /* not seekable yet */ }
+        video.pause()
+      }
+    })
+  }, [release.family.slots])
   useEffect(() => {
     let live = true
     void refreshMedia().catch(e => live && setError(readable(e, 'Could not load workspace media')))
@@ -382,6 +395,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       for (const file of files) {
         if (!file.type.startsWith('image/') && !file.type.startsWith('video/') && !file.type.startsWith('audio/'))
           throw new Error('Select photos, video clips or audio files')
+        const mime = file.type || 'application/octet-stream'
+        const reuse = Object.values(knownMedia).find(item =>
+          item.available && item.label === file.name && item.bytes === file.size && (item.mime ?? '') === mime)
+        if (reuse) {
+          ids.push(reuse.asset)
+          continue
+        }
         const result = await uploadClipFile(file, setUploadStatus, { kind: 'media' })
         const kind = file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video'
         ids.push({ id: result.uploadId, kind,
@@ -395,11 +415,32 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
           throw new Error('Uploaded media is processing or unavailable; refresh the library and retry')
         return metadata.asset
       })
-      setSelectedUploads(prev => [...prev, ...withMeta])
+      setKnownMedia(previous => ({
+        ...previous,
+        ...Object.fromEntries([...uploaded.entries()]),
+      }))
+      setSelectedUploads(withMeta)
       recentUploads.current = [...withMeta, ...recentUploads.current].slice(0, 80)
       setLibrarySelection(withMeta)
       lastUploadBatch.current = withMeta
-      setNotice(withMeta.length + ' files uploaded')
+      const unfilled = release.family.slots.filter(slot => !draftRef.current?.slots[slot.id]).length
+      if (unfilled > 0 && withMeta.some(item => item.kind !== 'audio')) {
+        const currentDraft = draftRef.current
+        if (currentDraft) {
+          const { draft: filled, used } = assignSelectionInOrder(
+            currentDraft, release.family, withMeta.filter(item => item.kind !== 'audio'))
+          if (used) {
+            commitDraft(filled)
+            setNotice(used + ' slot' + (used === 1 ? '' : 's') + ' filled from upload')
+          } else {
+            setNotice(withMeta.length + ' files uploaded')
+          }
+        } else {
+          setNotice(withMeta.length + ' files uploaded')
+        }
+      } else {
+        setNotice(withMeta.length + ' files uploaded')
+      }
     } catch (e) { setError(readable(e, 'Upload failed — retry or choose a different file')) }
     finally { setBusy(false);setUploadStatus(null) }
   }

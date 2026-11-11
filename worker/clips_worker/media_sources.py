@@ -1066,24 +1066,38 @@ def apply_source_segment_transitions(
                 raise RuntimeError("template shader transition requires 30fps")
             from clips_worker.shader_transitions import gl_context, render_window
             shader_out = Path(work_dir) / f"source_transition_{i}_shader.mkv"
-            ctx, _renderer = gl_context()
+            shader_ok = False
             try:
                 span = int(win["frames"]) / fps + 0.2
-                render_window(
-                    ctx,
-                    win["type"],
-                    window_decode_cmd(a, 0.0, span, 0.0, int(win["frames"]), width, height),
-                    window_decode_cmd(b, 0.0, span, 0.0, int(win["frames"]), width, height),
-                    int(win["frames"]),
-                    width,
-                    height,
-                    shader_out,
+                ctx, _renderer = gl_context()
+                try:
+                    render_window(
+                        ctx,
+                        win["type"],
+                        window_decode_cmd(a, 0.0, span, 0.0, int(win["frames"]), width, height),
+                        window_decode_cmd(b, 0.0, span, 0.0, int(win["frames"]), width, height),
+                        int(win["frames"]),
+                        width,
+                        height,
+                        shader_out,
+                    )
+                    shader_ok = True
+                finally:
+                    ctx.release()
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[clipper:sources] shader_fallback type={win['type']} win={i} "
+                    f"reason={type(exc).__name__}:{str(exc)[:160]}",
+                    flush=True,
                 )
-            finally:
-                ctx.release()
-            cmd += ["-i", str(shader_out)]
-            parts.append(shader_rendered_window_filter(input_idx, int(win["frames"]), width, height, w0, label))
-            input_idx += 1
+            if shader_ok:
+                cmd += ["-i", str(shader_out)]
+                parts.append(shader_rendered_window_filter(input_idx, int(win["frames"]), width, height, w0, label))
+                input_idx += 1
+            else:
+                cmd += ["-i", str(a), "-i", str(b)]
+                parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))
+                input_idx += 2
         else:
             cmd += ["-i", str(a), "-i", str(b)]
             parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))

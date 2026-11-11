@@ -64,18 +64,33 @@ export const BATCH9A_DEFAULT_MUSIC = {
   revision: 'batch9a-audio-v2',
 }
 
-const BATCH9A_PREVIEW_MEDIA = [
-  {spritePath:'/clips/template-previews/f01_bold.webp',frames:4,columns:4,sha256:'58ef2a887bda559f694d9e4672959a1ef75f7fb0af1dcbf6ce41f1efd2c122e5'},
-  {spritePath:'/clips/template-previews/f02_bold.webp',frames:4,columns:4,sha256:'7a8145775fa34ceddf8c47e2c839cae871adffc43a5ae1a73c958fc193ac5c63'},
-  {spritePath:'/clips/template-previews/f03_bold.webp',frames:4,columns:4,sha256:'279d895fb616d1f84a51214d771ce952fee78966a8a70cf5a319ffd69af38606'},
-  {spritePath:'/clips/template-previews/f04_bold.webp',frames:4,columns:4,sha256:'3ed78acee0174b631acf0d065ab535ed3038d9fdd10438a5d30c06f2c2a5bac1'},
-  {spritePath:'/clips/template-previews/f05_bold.webp',frames:4,columns:4,sha256:'26b57939e0f759966163379d39d9aa558cc9db18dd30b7e3b772af8418142e26'},
-  {spritePath:'/clips/template-previews/f06_bold.webp',frames:4,columns:4,sha256:'ccd5f1e9f987b9d2c2097cf5f0a58eb9ae74ce578e1f94f276efd26f01917fa1'},
-  {spritePath:'/clips/template-previews/f07_bold.webp',frames:4,columns:4,sha256:'03e79394ded98bbc6768bb05467c075894ff8ea4c072b0c9dcb936f7d3b69bb5'},
-  {spritePath:'/clips/template-previews/f08_bold.webp',frames:4,columns:4,sha256:'17e030a72dcb7d710a596d0caa52e89cb4b60f3c7cd4916eaa0ce812637500e1'},
-  {spritePath:'/clips/template-previews/f09_bold.webp',frames:4,columns:4,sha256:'45c9052aa72c277a00590dd1c8ca1ee54835643e088cc88fa219ba8a2f3af264'},
-  {spritePath:'/clips/template-previews/f10_bold.webp',frames:4,columns:4,sha256:'bde7dc5f35299e825341937fcc8861c49fa7b05bac54eade599994a63ec65de9'},
+function batch9aPreviewMedia(index: number, spriteSha: string) {
+  const n = String(index + 1).padStart(2, '0')
+  const base = '/clips/template-previews/f' + n + '_bold'
+  return {
+    spritePath: base + '.webp',
+    frames: 4,
+    columns: 4,
+    sha256: spriteSha,
+    posterPath: base + '_frame0.webp',
+    framePosterPaths: [0, 1, 2, 3].map(col => base + '_frame' + col + '.webp'),
+  } as const
+}
+
+const BATCH9A_PREVIEW_SPRITE_SHA = [
+  '58ef2a887bda559f694d9e4672959a1ef75f7fb0af1dcbf6ce41f1efd2c122e5',
+  '7a8145775fa34ceddf8c47e2c839cae871adffc43a5ae1a73c958fc193ac5c63',
+  '279d895fb616d1f84a51214d771ce952fee78966a8a70cf5a319ffd69af38606',
+  '3ed78acee0174b631acf0d065ab535ed3038d9fdd10438a5d30c06f2c2a5bac1',
+  '26b57939e0f759966163379d39d9aa558cc9db18dd30b7e3b772af8418142e26',
+  'ccd5f1e9f987b9d2c2097cf5f0a58eb9ae74ce578e1f94f276efd26f01917fa1',
+  '03e79394ded98bbc6768bb05467c075894ff8ea4c072b0c9dcb936f7d3b69bb5',
+  '17e030a72dcb7d710a596d0caa52e89cb4b60f3c7cd4916eaa0ce812637500e1',
+  '45c9052aa72c277a00590dd1c8ca1ee54835643e088cc88fa219ba8a2f3af264',
+  'bde7dc5f35299e825341937fcc8861c49fa7b05bac54eade599994a63ec65de9',
 ] as const
+
+const BATCH9A_PREVIEW_MEDIA = BATCH9A_PREVIEW_SPRITE_SHA.map((sha, index) => batch9aPreviewMedia(index, sha))
 
 function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe, direction: Direction): TemplateFamilyV1 {
   const [,headline,closing,,transition,motionScale,motionShift,headlineSize]=direction

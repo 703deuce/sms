@@ -20,6 +20,9 @@ export type VideoTemplateRelease = {
     frames: number
     columns: number
     sha256: string
+    /** Sharp still for the idle card; hover cycles `framePosterPaths` when set. */
+    posterPath?: string
+    framePosterPaths?: readonly string[]
   }
   family: TemplateFamilyV1
   design: TemplateDesignV1
@@ -95,6 +98,16 @@ export function validateVideoTemplateRelease(input: VideoTemplateRelease): Video
         !Number.isSafeInteger(media.columns) || media.columns < media.frames || media.columns > 12 ||
         !/^[a-f0-9]{64}$/i.test(media.sha256))
       throw new Error('Invalid preview sprite definition')
+    if (media.posterPath && (!localMediaPath.test(media.posterPath) || !/\.webp$/i.test(media.posterPath)))
+      throw new Error('Preview poster must be a local WebP asset')
+    if (media.framePosterPaths) {
+      if (media.framePosterPaths.length < media.frames)
+        throw new Error('framePosterPaths must cover every preview frame')
+      for (const path of media.framePosterPaths) {
+        if (!localMediaPath.test(path) || !/\.webp$/i.test(path))
+          throw new Error('Preview frame posters must be local WebP assets')
+      }
+    }
   }
   if (!input.rights.trim()) throw new Error('Music and demo rights must be described')
   const family = validateTemplateFamily(input.family)
