@@ -10,6 +10,7 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { SourceSegmentFx, SourceSegmentTransform } from '@/lib/clips/editor/sources'
 import type { TransitionType } from '@/lib/clips/editor/motion-schema'
+import { TEXT_ANIM_BLOCK_ONLY, TEXT_ANIM_IN_TYPES, TEXT_ANIM_LOOP_TYPES, TEXT_ANIM_UNITS, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 
 export type TemplateAsset = {
   id: string
@@ -45,6 +46,11 @@ export type TemplateSlot = {
   transform?: SourceSegmentTransform
   fx?: SourceSegmentFx
 }
+export type TemplateAnimation = {
+  in?: { type: (typeof TEXT_ANIM_IN_TYPES)[number]; unit: (typeof TEXT_ANIM_UNITS)[number]; durationFrames: number }
+  out?: { type: (typeof TEXT_ANIM_IN_TYPES)[number]; unit: (typeof TEXT_ANIM_UNITS)[number]; durationFrames: number }
+  loop?: { type: (typeof TEXT_ANIM_LOOP_TYPES)[number]; periodFrames: number }
+}
 export type TemplateText = {
   id: string
   defaultText: string
@@ -56,6 +62,8 @@ export type TemplateText = {
   font: 'Montserrat' | 'Anton' | 'Poppins'
   size: number
   color: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
 }
 export type TemplateGraphic = {
   id: string
@@ -67,6 +75,8 @@ export type TemplateGraphic = {
   w: number
   h: number
   color: string
+  animation?: TemplateAnimation
+  motion?: TemplateMotion
 }
 export type TemplatePhraseAnchor = { id: string; frame: number; textFieldId?: string }
 export type TemplateFamilyV1 = {
@@ -220,6 +230,46 @@ function validateMotion(raw: unknown): TemplateMotion | undefined {
   return { ...(from ? { from } : {}), to, ...(ease && ease !== 'linear' ? { ease } : {}) }
 }
 
+function validateTemplateAnimation(raw: unknown, durationFrames: number, layer: boolean): TemplateAnimation | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error('animation: expected object')
+  exact(raw, ['in','out','loop'], 'animation')
+  const out: TemplateAnimation = {}
+  for (const edge of ['in','out'] as const) {
+    const value = raw[edge]
+    if (value == null) continue
+    if (!own(value)) throw new Error(`animation.${edge}: expected object`)
+    exact(value, ['type','unit','durationFrames'], `animation.${edge}`)
+    const type = oneOf(value.type, TEXT_ANIM_IN_TYPES, `animation.${edge}.type`)
+    let unit = oneOf(value.unit, TEXT_ANIM_UNITS, `animation.${edge}.unit`)
+    if (layer && (type === 'typewriter' || type === 'bounce_in' || type === 'zoom_out' || type === 'rotate_in'))
+      throw new Error(`animation.${edge}: text-only animation is not valid for graphics`)
+    if ((TEXT_ANIM_BLOCK_ONLY as readonly string[]).includes(type)) unit = 'block'
+    const frames = integer(value.durationFrames, 3, Math.max(3, durationFrames), `animation.${edge}.durationFrames`)
+    out[edge] = { type, unit, durationFrames: frames }
+  }
+  if (raw.loop != null) {
+    if (!own(raw.loop)) throw new Error('animation.loop: expected object')
+    exact(raw.loop, ['type','periodFrames'], 'animation.loop')
+    out.loop = {
+      type: oneOf(raw.loop.type, TEXT_ANIM_LOOP_TYPES, 'animation.loop.type'),
+      periodFrames: integer(raw.loop.periodFrames, 9, Math.max(9, durationFrames * 4), 'animation.loop.periodFrames'),
+    }
+  }
+  const edgeTotal = (out.in?.durationFrames ?? 0) + (out.out?.durationFrames ?? 0)
+  if (edgeTotal > durationFrames) throw new Error('animation: entrance and exit exceed layer duration')
+  return Object.keys(out).length ? out : undefined
+}
+
+function compiledAnimation(raw: TemplateAnimation | undefined): TextAnim | undefined {
+  if (!raw) return undefined
+  return {
+    ...(raw.in ? { in: { type: raw.in.type, unit: raw.in.unit, durMs: templateFrameToMs(raw.in.durationFrames) } } : {}),
+    ...(raw.out ? { out: { type: raw.out.type, unit: raw.out.unit, durMs: templateFrameToMs(raw.out.durationFrames) } } : {}),
+    ...(raw.loop ? { loop: { type: raw.loop.type, periodMs: templateFrameToMs(raw.loop.periodFrames) } } : {}),
+  }
+}
+
 function validateTransition(raw: unknown, index: number): 'cut' | TemplateTransition {
   if (raw === 'cut') return 'cut'
   if (!own(raw)) throw new Error('slot.transition: unsupported capability')
@@ -317,7 +367,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   const textIds = new Set<string>()
   const texts: TemplateText[] = raw.texts.map((value: unknown) => {
     if (!own(value)) throw new Error('text: expected object')
-    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color'], 'text')
+    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','animation','motion'], 'text')
     const tid = id(value.id, 'text'); unique(tid, textIds, 'text')
     const maxChars = integer(value.maxChars, 1, 200, 'text.maxChars')
     if (typeof value.defaultText !== 'string' || !value.defaultText.trim() || Array.from(value.defaultText).length > maxChars) throw new Error('text: invalid default')
@@ -331,6 +381,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       x: finite(value.x, 0, 100, 'text.x'), y: finite(value.y, 0, 100, 'text.y'),
       font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'font'),
       size: integer(value.size, 24, 240, 'text.size'), color,
+      ...(validateTemplateAnimation(value.animation, durationFrames, false) ? { animation: validateTemplateAnimation(value.animation, durationFrames, false) } : {}),
+      ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
     }
   })
 
@@ -340,7 +392,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const ids = new Set<string>()
     graphics = raw.graphics.map((value: unknown) => {
       if (!own(value)) throw new Error('graphic: expected object')
-      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color'], 'graphic')
+      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color','animation','motion'], 'graphic')
       const gid = id(value.id, 'graphic'); unique(gid, ids, 'graphic')
       if (!GRAPHICS.has(String(value.type))) throw new Error('graphic: unsupported type')
       const startFrame = integer(value.startFrame, 0, total - 1, 'graphic.startFrame')
@@ -351,6 +403,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
         id: gid, type: value.type as TemplateGraphic['type'], startFrame, durationFrames,
         x: finite(value.x, 0, 100, 'graphic.x'), y: finite(value.y, 0, 100, 'graphic.y'),
         w: integer(value.w, 8, 1920, 'graphic.w'), h: integer(value.h, 8, 1920, 'graphic.h'), color,
+        ...(validateTemplateAnimation(value.animation, durationFrames, true) ? { animation: validateTemplateAnimation(value.animation, durationFrames, true) } : {}),
+        ...(validateMotion(value.motion) ? { motion: validateMotion(value.motion) } : {}),
       }
     })
   }
@@ -486,20 +540,24 @@ export function compileTemplate(
   // B3B: slot motion is item-local on the real source-segment item, never on the opaque carrier.
   const motionKeyframes: NonNullable<ClipEditsV2['keyframes']> = []
   const defaults = { x: 0, y: 0, scale: 100, rotation: 0 } as const
-  for (const slot of family.slots) {
-    if (!slot.motion) continue
-    const itemId = slotToItemIds[slot.id]!
-    const localEndMs = templateFrameToMs(slot.durationFrames - 1)
+  const appendLayerMotion = (target: `source:${string}` | `text:${string}`, motion: TemplateMotion | undefined, durationFrames: number) => {
+    if (!motion) return
+    const localEndMs = templateFrameToMs(durationFrames - 1)
     for (const prop of ['x','y','scale','rotation'] as const) {
-      const from = slot.motion.from?.[prop] ?? defaults[prop]
-      const to = slot.motion.to?.[prop] ?? from
+      const from = motion.from?.[prop] ?? defaults[prop]
+      const to = motion.to?.[prop] ?? from
       if (from === defaults[prop] && to === defaults[prop]) continue
       const points: NonNullable<ClipEditsV2['keyframes']>[number]['points'] = [
-        { tMs: 0, v: from, ...(slot.motion.ease ? { ease: slot.motion.ease } : {}) },
+        { tMs: 0, v: from, ...(motion.ease ? { ease: motion.ease } : {}) },
       ]
       if (localEndMs > 0) points.push({ tMs: localEndMs, v: to })
-      motionKeyframes.push({ target: `source:${itemId}`, prop, points })
+      motionKeyframes.push({ target, prop, points })
     }
+  }
+
+  for (const slot of family.slots) {
+    if (!slot.motion) continue
+    appendLayerMotion(`source:${slotToItemIds[slot.id]!}`, slot.motion, slot.durationFrames)
   }
 
   const textItems: NonNullable<ClipEditsV2['textItems']> = family.texts.map(t => {
@@ -509,14 +567,24 @@ export function compileTemplate(
       id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id),
       text, startMs: templateFrameToMs(t.startFrame), endMs: templateFrameToMs(t.startFrame + t.durationFrames),
       x: t.x, y: t.y, style: { font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const },
+      ...(compiledAnimation(t.animation) ? { anim: compiledAnimation(t.animation) } : {}),
     }
   })
+  for (const t of family.texts) {
+    const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id)
+    appendLayerMotion(`text:${itemId}`, t.motion, t.durationFrames)
+  }
   for (const g of family.graphics ?? []) textItems.push({
     id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'graphic', g.id),
     text: '', kind: 'shape', shape: { type: g.type, w: g.w, h: g.h },
     startMs: templateFrameToMs(g.startFrame), endMs: templateFrameToMs(g.startFrame + g.durationFrames),
     x: g.x, y: g.y, style: { font: 'Montserrat', size: 24, color: g.color, align: 'center', case: 'none' },
+    ...(compiledAnimation(g.animation) ? { anim: compiledAnimation(g.animation) } : {}),
   })
+  for (const g of family.graphics ?? []) {
+    const itemId = templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'graphic', g.id)
+    appendLayerMotion(`text:${itemId}`, g.motion, g.durationFrames)
+  }
 
   let music = null
   if (choices.music) {
