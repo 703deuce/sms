@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -255,3 +256,99 @@ def test_template_carrier_cancellation_guard_is_fail_closed() -> None:
     assert template_project_canceled(_StatusConn("CANCELED"), "project_a") is True
     assert template_project_canceled(_StatusConn("READY"), "project_a") is False
     assert template_project_canceled(_StatusConn(None), "missing_project") is True
+
+
+@pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
+def test_b3b_generated_edited_reload_contract_renders(tmp_path: Path) -> None:
+    proof_name = os.environ.get("B3B_EDITABLE_PROOF")
+    if not proof_name:
+        pytest.skip("dedicated B3B job supplies generated edited-reload proof")
+    proof_path = Path(proof_name)
+    assert proof_path.exists(), f"missing generated proof: {proof_path}"
+    payload = json.loads(proof_path.read_text())
+    assert payload["schema"] == "transovo.real-video-template.editable-timeline-proof.v1"
+    edits = payload["editedReload"]["edits"]
+    assert len(edits["sourceSegments"]) == 3
+    assert edits["transitions"][0]["type"] == "wipe_left"
+    assert edits["transitions"][0]["srcMs"] == 1033
+    assert edits["audio"]["music"]["uploadId"] == "replacement_music"
+    assert edits["captionLines"][0]["endMs"] == 3000
+
+    carrier = tmp_path / "edited_carrier.mp4"
+    make_template_carrier(carrier, "9:16", 90)
+
+    intro = tmp_path / "proof_intro.png"
+    close = tmp_path / "proof_close.png"
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=red:s=90x160", "-frames:v", "1", str(intro)])
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i", "color=c=green:s=90x160", "-frames:v", "1", str(close)])
+
+    replacement = tmp_path / "replacement_video.mp4"
+    run([
+        FFMPEG, "-y", "-v", "error",
+        "-f", "lavfi", "-i", "color=c=blue:s=90x160:r=30:d=4",
+        "-f", "lavfi", "-i", "sine=frequency=880:sample_rate=48000:duration=4",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(replacement),
+    ])
+    music = tmp_path / "replacement_music.m4a"
+    run([FFMPEG, "-y", "-v", "error", "-f", "lavfi", "-i",
+         "sine=frequency=440:sample_rate=48000:duration=1", "-c:a", "aac", str(music)])
+
+    media = {
+        "proof_intro": intro,
+        "replacement_video": replacement,
+        "proof_close": close,
+        "replacement_music": music,
+    }
+    sourced = apply_full_render_sources(carrier, edits, 0, 3000, tmp_path, media)
+    assert frames(sourced) == 90
+    assert abs(duration(sourced) - 3.0) <= (1 / 30) + 0.002
+
+    # Compare actual low-res output to the authored source order after the 1033 ms rolled cut.
+    before = center_rgb(sourced, 0.45)
+    middle = center_rgb(sourced, 1.55)
+    after = center_rgb(sourced, 2.55)
+    assert before[0] > before[2] + 70
+    assert middle[2] > middle[0] + 70
+    assert after[1] > after[2] + 50
+
+    texted = tmp_path / "edited_texted.mp4"
+    text_ass = text_items_ass(edits, w=90, h=160)
+    assert "Edited after publish" in text_ass
+    assert "0:00:03.00" in text_ass
+    apply_text_items(sourced, texted, edits, play_w=90, play_h=160)
+    assert frames(texted) == 90
+
+    cap_ass = tmp_path / "edited_captions.ass"
+    cap_words = caption_line_render_words(edits)
+    build_ass(cap_words, edits["captions"], cap_ass, play_w=90, play_h=160, edits=edits)
+    cap_text = cap_ass.read_text()
+    assert "CAPTION THROUGH EVERY SLOT" in cap_text
+    assert "0:00:03.00" in cap_text
+    captioned = tmp_path / "edited_captioned.mp4"
+    run([
+        FFMPEG, "-y", "-v", "error", "-i", str(texted),
+        "-vf", f"ass={cap_ass}", "-map", "0:v:0", "-map", "0:a?",
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", str(captioned),
+    ])
+    assert frames(captioned) == 90
+
+    final = tmp_path / "edited_final.mp4"
+    music_row = edits["audio"]["music"]
+    apply_audio_mix(
+        captioned, final, music, [],
+        length_s=3.0,
+        volume=float(music_row.get("volume", 1.0)),
+        duck_depth=0.0,
+        fade_in_s=0.0,
+        fade_out_s=0.0,
+        music_window={
+            "startMs": int(music_row.get("startMs", 0)),
+            "endMs": int(music_row.get("endMs", 3000)),
+            "inMs": int(music_row.get("inMs", 0)),
+        },
+        music_loop=bool(music_row.get("loop")),
+    )
+    assert frames(final) == 90
+    assert abs(duration(final) - 3.0) <= (1 / 30) + 0.002
+    streams = json.loads(run([FFPROBE, "-v", "error", "-show_streams", "-of", "json", str(final)]))["streams"]
+    assert {stream["codec_type"] for stream in streams} == {"video", "audio"}
