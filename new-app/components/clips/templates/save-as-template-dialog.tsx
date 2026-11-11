@@ -19,6 +19,7 @@ type Inspection = {
   warnings: string[]
 }
 type Choice = 'slot'|'keep'
+type ExistingTemplate = { id:string;title:string;description:string;currentRevision:number }
 type Props = { open:boolean;clipId:string;defaultTitle:string;onClose:()=>void }
 
 function decorativeFor(inspection:Inspection,key:string){
@@ -39,6 +40,8 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
   const [editableText,setEditableText]=useState<Record<string,boolean>>({})
   const [extraDecorative,setExtraDecorative]=useState<Record<string,boolean>>({})
   const [musicPolicy,setMusicPolicy]=useState<''|'keep'|'replace'|'mute'>('')
+  const [existingTemplates,setExistingTemplates]=useState<ExistingTemplate[]>([])
+  const [versionTarget,setVersionTarget]=useState('')
   const [previewStart,setPreviewStart]=useState(0)
   const [previewEnd,setPreviewEnd]=useState(15000)
 
@@ -46,7 +49,11 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
     if(!open)return
     let live=true
     setLoading(true);setError(null);setInspection(null);setChoices({});setEditableText({});setExtraDecorative({})
-    setMusicPolicy('');setTitle(defaultTitle);setDescription('')
+    setMusicPolicy('');setTitle(defaultTitle);setDescription('');setVersionTarget('')
+    fetch('/api/clips/user-templates?page=1',{cache:'no-store'})
+      .then(async r=>{const body=await r.json() as {data?:{items:ExistingTemplate[]}}
+        if(live&&r.ok&&body.data)setExistingTemplates(body.data.items)})
+      .catch(()=>{if(live)setExistingTemplates([])})
     fetch('/api/clips/user-templates/inspect?clipId='+encodeURIComponent(clipId),{cache:'no-store'})
       .then(async r=>{const body=await r.json() as {data?:Inspection;error?:string}
         if(!r.ok||!body.data)throw new Error(body.error??'Could not inspect this edit')
@@ -83,7 +90,10 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
       ? inspection.decorativeDependencies.filter(d=>d.key.startsWith('music:')).map(d=>d.key):[]
     setSaving(true);setError(null)
     try{
-      const response=await fetch('/api/clips/user-templates',{method:'POST',headers:{'content-type':'application/json'},
+      const endpoint=versionTarget
+        ? '/api/clips/user-templates/'+encodeURIComponent(versionTarget)+'/revisions'
+        : '/api/clips/user-templates'
+      const response=await fetch(endpoint,{method:'POST',headers:{'content-type':'application/json'},
         body:JSON.stringify({
           clipId,title,description,
           replaceableItemKeys:inspection.replaceable.filter(x=>choices[x.key]==='slot').map(x=>x.key),
@@ -94,7 +104,7 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
         })})
       const body=await response.json() as {data?:{id:string};error?:string}
       if(!response.ok||!body.data)throw new Error(body.error??'Could not save template')
-      toast.success('Saved to My templates')
+      toast.success(versionTarget?'Saved as a new immutable template revision':'Saved to My templates')
       onClose()
     }catch(e){setError(e instanceof Error?e.message:'Could not save template')}
     finally{setSaving(false)}
@@ -108,6 +118,23 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
       {loading?<p className="py-8 text-sm text-muted-foreground">Reading the latest saved edit…</p>:null}
       {error?<p role="alert" className="rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">{error}</p>:null}
       {inspection?<div className="space-y-5">
+        <div className="space-y-1">
+          <Label>Save destination</Label>
+          <select className="h-10 w-full rounded-lg border bg-background px-3 text-sm" value={versionTarget}
+            onChange={e=>{
+              const id=e.target.value
+              setVersionTarget(id)
+              if(!id){setTitle(defaultTitle);setDescription('');return}
+              const target=existingTemplates.find(x=>x.id===id)
+              if(target){setTitle(target.title);setDescription(target.description)}
+            }}>
+            <option value="">New private template</option>
+            {existingTemplates.map(t=><option key={t.id} value={t.id}>{t.title} · revision {t.currentRevision}</option>)}
+          </select>
+          <p className="text-xs text-muted-foreground">{versionTarget
+            ? 'Creates a new revision. Existing projects stay pinned to the revision they used.'
+            : 'Creates a separate private template; the current project remains unchanged.'}</p>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Label className="space-y-1">Template title
             <Input value={title} maxLength={120} onChange={e=>setTitle(e.target.value)} />
@@ -177,7 +204,7 @@ export function SaveAsTemplateDialog({open,clipId,defaultTitle,onClose}:Props){
         {inspection.warnings.map(w=><p key={w} className="text-xs text-muted-foreground">{w}</p>)}
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
-          <Button onClick={()=>void save()} disabled={!complete||!title.trim()||saving}>{saving?'Saving…':'Save private template'}</Button>
+          <Button onClick={()=>void save()} disabled={!complete||!title.trim()||saving}>{saving?'Saving…':versionTarget?'Save new revision':'Save private template'}</Button>
         </div>
       </div>:null}
     </DialogContent>
