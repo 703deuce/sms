@@ -7,8 +7,8 @@ export const ASS_SCRIPT_FALLBACKS: Readonly<Record<FontGlyphCoverage, string>> =
   arabic: 'Noto Sans Arabic',
   devanagari: 'Noto Sans Devanagari',
   thai: 'Noto Sans Thai',
-  cjk: 'Noto Sans CJK JP',
-  emoji: 'Noto Sans',
+  cjk: 'Noto Sans JP',
+  emoji: 'Noto Emoji',
 }
 
 const RE: Readonly<Record<FontGlyphCoverage, RegExp>> = {
@@ -55,7 +55,9 @@ export function cssFallbackStack(fontId: string): string {
     '"Noto Sans Arabic"',
     '"Noto Sans Devanagari"',
     '"Noto Sans Thai"',
+    '"Noto Sans JP"',
     '"Noto Sans CJK JP"',
+    '"Noto Emoji"',
     '"Noto Color Emoji"',
     '"Apple Color Emoji"',
     '"Segoe UI Emoji"',
