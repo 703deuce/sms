@@ -287,6 +287,28 @@ def test_badge_sprite_active() -> None:
     assert not badge_sprite_active({"showLabel": False, "showLink": False, "showLogo": False})
 
 
+def test_load_source_words_missing_clip_words_json(monkeypatch, tmp_path) -> None:
+    key = "ws/w1/projects/p1/clips/c1/words.json"
+
+    def fake_download(object_key: str, dest: Path) -> None:
+        if object_key.endswith("words.json"):
+            raise RuntimeError(f"storage_object_missing:{key}")
+
+    monkeypatch.setattr("clips_worker.render_job.download_object", fake_download)
+    words, words_fallback = load_source_words(
+        {
+            "startMs": 0,
+            "endMs": 5000,
+            "clipId": "c1",
+            "workspaceId": "w1",
+            "projectId": "p1",
+        },
+        tmp_path,
+    )
+    assert words == []
+    assert words_fallback is False
+
+
 def test_load_source_words_fallback_on_no_overlap(monkeypatch, tmp_path) -> None:
     calls: list[str] = []
 

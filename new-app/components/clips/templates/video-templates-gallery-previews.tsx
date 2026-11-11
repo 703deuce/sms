@@ -113,7 +113,6 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
   }, [failed, frame, item.family.slots, media, playing, reducedMotion])
 
   if (!media || failed) return <AnimatedTemplateCardPreview item={item} />
-  const position = media.columns <= 1 ? 0 : (frame * 100) / (media.columns - 1)
   const seconds = (item.family.totalFrames / item.family.fps).toFixed(1).replace(/\.0$/, '')
   return (
     <div
@@ -123,12 +122,18 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
       onMouseEnter={() => setPlaying(true)}
       onMouseLeave={() => { if (!forcePlay) { setPlaying(false); setFrame(0) } }}
     >
-      <div className="absolute inset-0 bg-cover bg-center" style={{
-        backgroundImage: 'url("' + media.spritePath + '")',
-        backgroundSize: (media.columns * 100) + '% 100%',
-        backgroundPosition: position + '% 50%',
-        backgroundRepeat: 'no-repeat',
-      }} />
+      <div className="absolute inset-0 overflow-hidden">
+        <img
+          src={media.spritePath}
+          alt=""
+          aria-hidden
+          className="pointer-events-none h-full max-w-none select-none"
+          style={{
+            width: (media.columns * 100) + '%',
+            transform: 'translateX(-' + ((frame % media.columns) * (100 / media.columns)) + '%)',
+          }}
+        />
+      </div>
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/15" />
       <span className="absolute left-3 top-3 rounded-full border border-amber-300/40 bg-black/50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-amber-100">
         {item.certificationStatus === 'certified' ? 'Certified' : 'Preview'}

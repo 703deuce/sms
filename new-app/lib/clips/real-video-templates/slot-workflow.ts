@@ -56,21 +56,30 @@ export function assignSelectionInOrder(
 ): { draft: StudioDraft; used: number; rejected: TemplateAsset[] } {
   const slots = { ...draft.slots }
   const rejected: TemplateAsset[] = []
-  let index = 0
+  const emptyByOrdinal = [...family.slots]
+    .filter(slot => !slots[slot.id])
+    .sort((a, b) => a.ordinal - b.ordinal)
+  let slotIndex = 0
+  let used = 0
   for (const asset of assets) {
-    while (index < family.slots.length && slots[family.slots[index]!.id]) index++
-    const slot = family.slots[index]
-    if (!slot) { rejected.push(asset); continue }
-    if (asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind) ||
-        (slot.playback && asset.kind !== 'video')) {
-      rejected.push(asset); continue
+    let placed = false
+    while (slotIndex < emptyByOrdinal.length) {
+      const slot = emptyByOrdinal[slotIndex]!
+      slotIndex++
+      if (asset.kind === 'audio' || (slot.media !== 'either' && slot.media !== asset.kind) ||
+          (slot.playback && asset.kind !== 'video')) {
+        continue
+      }
+      slots[slot.id] = { ...defaultFill(asset), fit: slot.fit,
+        sourceInFrame: asset.kind === 'video' ? slot.handles?.headFrames ?? 0 : 0,
+        muteSourceAudio: slot.sourceAudio === 'mute' }
+      used++
+      placed = true
+      break
     }
-    slots[slot.id] = { ...defaultFill(asset), fit: slot.fit,
-      sourceInFrame: asset.kind === 'video' ? slot.handles?.headFrames ?? 0 : 0,
-      muteSourceAudio: slot.sourceAudio === 'mute' }
-    index++
+    if (!placed) rejected.push(asset)
   }
-  return { draft: { ...draft, slots }, used: assets.length - rejected.length, rejected }
+  return { draft: { ...draft, slots }, used, rejected }
 }
 export function moveSelection<T>(arr: readonly T[], from: number, to: number): T[] {
   if (!valid(from) || !valid(to) || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return [...arr]

@@ -21,7 +21,7 @@ import { compileTemplateWithMusic, planTemplateMusic, type TemplateMusicDecision
 import { BATCH9A_DEFAULT_MUSIC } from '@/lib/clips/real-video-templates/batch9a-anchors'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { buildProcessProjectJobPayload } from '@/lib/server/clips/process-project-payload'
-import { storageDriverName, uploadSourceKey } from '@/lib/storage'
+import { clipWordsKey, storageDriverName, uploadSourceKey } from '@/lib/storage'
 
 const KEY_RE = /^[A-Za-z0-9_-]{8,120}$/
 const ID_RE = /^[A-Za-z0-9_-]{1,120}$/
@@ -242,7 +242,7 @@ export async function publishTemplateProject(
   }
 
   try {
-    return await prisma.$transaction(async (tx) => {
+    const published = await prisma.$transaction(async (tx) => {
       const assetRows = await loadAndValidateAssets(tx, workspaceId, musicPlan?.family ?? family, design, choicesRaw)
       const selectedAspect = choicesRaw.aspect ?? family.aspects[0]!
       if (!family.aspects.includes(selectedAspect)) throw new Error('Selected template aspect is not authored by this family')
@@ -348,6 +348,7 @@ export async function publishTemplateProject(
         })
       }
 
+      const wordsKey = clipWordsKey(workspaceId, ids.projectId, ids.clipId)
       const clip = await tx.clip.create({
         data: {
           id: ids.clipId,
@@ -361,6 +362,7 @@ export async function publishTemplateProject(
           scores: toPrismaJson({}),
           edits: toPrismaJson(compiled.edits),
           editsSaveVersion: 0,
+          wordsKey,
           aiMeta: toPrismaJson(aiMeta),
         },
       })
@@ -382,6 +384,14 @@ export async function publishTemplateProject(
       })
       return resultFromRows(ids.instanceId, project, clip)
     }, { isolationLevel: 'Serializable' })
+    const wordsKey = clipWordsKey(workspaceId, ids.projectId, ids.clipId)
+    try {
+      await getClipStorage().putJson(wordsKey, [])
+    } catch {
+      const existingWords = await getClipStorage().getJson<unknown[]>(wordsKey).catch(() => null)
+      if (existingWords === null) throw new Error('Could not seed empty clip transcript for template export')
+    }
+    return published
   } catch (error) {
     const won = await prisma.clipProject.findFirst({
       where: { id: ids.projectId, workspaceId, deletedAt: null },

@@ -221,6 +221,13 @@ export function VideoTemplatesGallery() {
                 {item.family.slots.filter(slot => slot.media === 'either').length} flexible
               </p>
               <p className="line-clamp-2 text-sm text-muted-foreground">{item.description}</p>
+              <button
+                type="button"
+                className="text-left text-xs font-medium text-primary underline-offset-2 hover:underline"
+                onClick={() => setDetailTemplate(item as VideoTemplateRelease)}
+              >
+                Open details
+              </button>
               <details className="rounded-lg border border-border/70 p-2 text-xs">
                 <summary className="cursor-pointer font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary">
                   Exact slot lengths and editable fields

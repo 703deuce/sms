@@ -34,13 +34,23 @@ const primaryClass = 'rounded-xl bg-primary px-4 py-2 text-sm font-semibold text
 function readable(error: unknown, fallback = 'Something went wrong') {
   return error instanceof Error ? error.message : fallback
 }
+class StudioRequestError extends Error {
+  readonly status: number
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'StudioRequestError'
+    this.status = status
+  }
+}
 async function request<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   const response = await fetch(path, { method,
     ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
     cache: 'no-store' })
   const json = await response.json() as { data?: T; error?: string }
-  if (!response.ok || !json.data) throw new Error(json.error || 'Request failed (' + response.status + ')')
-  return json.data
+  if (!response.ok || (method !== 'DELETE' && json.data === undefined)) {
+    throw new StudioRequestError(json.error || 'Request failed (' + response.status + ')', response.status)
+  }
+  return json.data as T
 }
 /** Capture an actual frame, then upload it as an independent workspace-owned still. */
 async function frameHoldFile(url: string, holdAtMs: number): Promise<File> {
@@ -106,6 +116,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [clockMs, setClockMs] = useState(0)
   const lastClockRounded = useRef(-1)
   const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -113,6 +124,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const versionRef = useRef(0)
   const editsVersionRef = useRef(0)
   const saveLock = useRef<Promise<void> | null>(null)
+  const saveNowRef = useRef<(attempt?: number) => Promise<void>>(async () => {})
   const initKey = useRef<string | null>(null)
   const history = useRef<StudioDraft[]>([])
   const future = useRef<StudioDraft[]>([])
@@ -120,6 +132,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const musicAudioRef = useRef<HTMLAudioElement | null>(null)
   const prepareLock = useRef(false)
   const recentUploads = useRef<TemplateAsset[]>([])
+  const lastUploadBatch = useRef<TemplateAsset[]>([])
   const [rightTab, setRightTab] = useState<'text' | 'music' | 'style'>('text')
   const [exportOpen, setExportOpen] = useState(false)
   const [exportResolution, setExportResolution] = useState<'720p' | '1080p'>('720p')
@@ -237,9 +250,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         if (canceled) return
         versionRef.current = updated.version
         setCurrentProject(updated)
-        setCurrentDraft(updated.draft)
+        const keepLocal = dirtyRef.current && draftRef.current
+        setCurrentDraft(keepLocal
+          ? { ...updated.draft, slots: draftRef.current!.slots, texts: draftRef.current!.texts }
+          : updated.draft)
         if (updated.draft.music) await loadSelectedMedia([updated.draft.music.id])
         setNotice('First-party beat-synced soundtrack ready')
+        if (dirtyRef.current) void saveNowRef.current()
       } catch (e) {
         if (!canceled) setError(readable(e, 'Could not prepare first-party soundtrack'))
       }
@@ -258,35 +275,63 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     }, 4000)
     return () => window.clearInterval(timer)
   }, [project?.id, project?.status, refreshClip])
-  const saveNow = useCallback(async (): Promise<void> => {
-    if (saveLock.current) { await saveLock.current; if (dirtyRef.current) return saveNow(); return }
+  const syncVersionFromServer = useCallback(async (projectId: string) => {
+    const fresh = await request<Project>('/api/clips/video-templates/drafts/' + encodeURIComponent(projectId))
+    versionRef.current = fresh.version
+    if (typeof fresh.editsSaveVersion === 'number') editsVersionRef.current = fresh.editsSaveVersion
+    setCurrentProject(previous => previous && previous.id === fresh.id
+      ? { ...previous, version: fresh.version, status: fresh.status, clipId: fresh.clipId,
+        editsSaveVersion: fresh.editsSaveVersion ?? previous.editsSaveVersion }
+      : previous)
+    return fresh
+  }, [])
+  const saveNow = useCallback(async (attempt = 0): Promise<void> => {
+    if (saveLock.current) { await saveLock.current; if (dirtyRef.current) return saveNow(attempt); return }
     const value = draftRef.current, state = projectRef.current
     if (!dirtyRef.current || !state || !value || state.status === 'QUEUED') return
     if (state.status !== 'DRAFT' && state.status !== 'READY') return
     const snapshot = value
     const action = (async () => {
-      const url = '/api/clips/video-templates/drafts/' + encodeURIComponent(state.id)
-      const response = state.status === 'DRAFT'
-        ? await request<Project>(url, 'PATCH', { expectedVersion: versionRef.current, draft: snapshot })
-        : await request<{ version: number; editsSaveVersion: number }>(url + '/studio', 'PATCH',
-          { expectedVersion: versionRef.current, expectedEditsSaveVersion: editsVersionRef.current, draft: snapshot })
-      const newVersion = response.version
-      versionRef.current = newVersion
-      if ('editsSaveVersion' in response && typeof response.editsSaveVersion === 'number')
-        editsVersionRef.current = response.editsSaveVersion
-      const savedProject = projectRef.current
-      if (savedProject) setCurrentProject({ ...savedProject, version: newVersion,
-        editsSaveVersion: editsVersionRef.current })
-      if (draftRef.current === snapshot) {
-        dirtyRef.current = false
-        setDirty(false)
-        setNotice('Saved in your workspace')
+      setSaving(true)
+      try {
+        const url = '/api/clips/video-templates/drafts/' + encodeURIComponent(state.id)
+        const response = state.status === 'DRAFT'
+          ? await request<Project>(url, 'PATCH', { expectedVersion: versionRef.current, draft: snapshot })
+          : await request<{ version: number; editsSaveVersion: number }>(url + '/studio', 'PATCH',
+            { expectedVersion: versionRef.current, expectedEditsSaveVersion: editsVersionRef.current, draft: snapshot })
+        const newVersion = response.version
+        versionRef.current = newVersion
+        if ('editsSaveVersion' in response && typeof response.editsSaveVersion === 'number')
+          editsVersionRef.current = response.editsSaveVersion
+        const savedProject = projectRef.current
+        if (savedProject) setCurrentProject({ ...savedProject, version: newVersion,
+          editsSaveVersion: editsVersionRef.current })
+        if (draftRef.current === snapshot) {
+          dirtyRef.current = false
+          setDirty(false)
+          setNotice('Saved in your workspace')
+        }
+        if (state.status === 'READY' && projectRef.current) await refreshClip(projectRef.current)
+      } catch (e) {
+        const status = e instanceof StudioRequestError ? e.status : 0
+        const conflict = status === 409 || readable(e).toLowerCase().includes('conflict')
+        if (conflict && attempt < 2) {
+          await syncVersionFromServer(state.id)
+          if (draftRef.current === snapshot && dirtyRef.current) return saveNow(attempt + 1)
+          dirtyRef.current = false
+          setDirty(false)
+          setNotice('Saved in your workspace')
+          return
+        }
+        throw e
+      } finally {
+        setSaving(false)
       }
-      if (state.status === 'READY' && projectRef.current && clip) await refreshClip(projectRef.current)
     })()
     saveLock.current = action
     try { await action } finally { saveLock.current = null }
-  }, [clip, refreshClip])
+  }, [clip, refreshClip, syncVersionFromServer])
+  saveNowRef.current = saveNow
   useEffect(() => {
     if (!dirty || !project || (project.status !== 'DRAFT' && project.status !== 'READY')) return
     const timer = window.setTimeout(() => {
@@ -352,7 +397,8 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       })
       setSelectedUploads(prev => [...prev, ...withMeta])
       recentUploads.current = [...withMeta, ...recentUploads.current].slice(0, 80)
-      setLibrarySelection(prev => [...prev, ...withMeta])
+      setLibrarySelection(withMeta)
+      lastUploadBatch.current = withMeta
       setNotice(withMeta.length + ' files uploaded')
     } catch (e) { setError(readable(e, 'Upload failed — retry or choose a different file')) }
     finally { setBusy(false);setUploadStatus(null) }
@@ -380,8 +426,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   }
   const autoFill = (source?: TemplateAsset[]) => {
     if (!draft) return
-    const queue = (source ?? (selectedUploads.length ? selectedUploads : librarySelection.length
-      ? librarySelection : recentUploads.current)).filter(item => item.kind !== 'audio')
+    const queue = (source ?? (lastUploadBatch.current.length ? lastUploadBatch.current
+      : selectedUploads.length ? selectedUploads
+      : librarySelection.length ? librarySelection : recentUploads.current)).filter(item => item.kind !== 'audio')
     const { draft: updated, used, rejected } = assignSelectionInOrder(draft, release.family, queue)
     if (used) commitDraft(updated)
     setSelectedUploads(rejected)
@@ -524,7 +571,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const exportHint = slotsRemaining
     ? 'Fill ' + slotsRemaining + ' more slot' + (slotsRemaining === 1 ? '' : 's') + ' to export'
     : project?.status !== 'READY' ? 'Preview is preparing…' : null
-  const saveStatus = dirty ? 'Saving…' : notice || 'All changes saved'
+  const saveStatus = saving ? 'Saving…' : dirty ? 'Unsaved changes' : notice || 'All changes saved'
   const previewAspect = (release.family.aspects[0] ?? '9:16') as ExportAspect
   const previewFrameMaxH = 640
   const { aw: previewAw, ah: previewAh } = aspectRatioParts(previewAspect)
@@ -567,6 +614,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         ready={ready}
         previewPreparing={previewPreparing}
         saveStatus={saveStatus}
+        uploadProgress={uploadStatus}
         exportHint={exportHint}
         busy={busy}
         dirty={dirty}
@@ -601,6 +649,9 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         knownMedia={knownMedia}
         onAssignAsset={fillSlot}
         onBatchFill={() => autoFill()}
+        onBatchFillFiles={files => void uploadFiles(files).then(() => autoFill())}
+        canBatchFillFromSelection={librarySelection.length > 0 || selectedUploads.length > 0
+          || lastUploadBatch.current.length > 0}
         onCommitDraft={commitDraft}
         patchFill={patchFill}
         onCreateHold={id => void createHold(id)}

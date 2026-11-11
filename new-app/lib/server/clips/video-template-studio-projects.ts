@@ -15,6 +15,7 @@ import { attachDefaultMusicToDraft } from '@/lib/server/clips/video-template-def
 import { publishTemplateProject, loadAndValidateAssets, TemplateInstanceConflict, TemplateInstanceNotFound } from '@/lib/server/clips/real-video-template-instances'
 
 const KEY = /^[A-Za-z0-9_-]{8,120}$/
+const DRAFT_TX = { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 15_000, timeout: 120_000 } as const
 type DraftRecord = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null }
 const releaseFor = (id: string) => FIRST_PARTY_VIDEO_TEMPLATES.find(item => item.id === id)
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
@@ -246,7 +247,7 @@ export async function saveVideoTemplateDraft(
           version: expectedVersion + 1, draft,
         } }) },
       })
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    }, DRAFT_TX)
   } catch (error) {
     if (error instanceof TemplateInstanceConflict) throw error
     if (object(error) && error.code === 'P2034') throw new TemplateInstanceConflict()
@@ -427,7 +428,7 @@ export async function savePublishedStudioDraft(
         } }) },
       })
       return { version: expectedVersion + 1, editsSaveVersion: expectedEditsSaveVersion + 1 }
-    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
+    }, DRAFT_TX)
   } catch (error) {
     if (error instanceof TemplateInstanceConflict || error instanceof TemplateInstanceNotFound) throw error
     if (object(error) && error.code === 'P2034') throw new TemplateInstanceConflict()

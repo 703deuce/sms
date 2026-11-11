@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import type { ComponentProps, RefObject } from 'react'
+import { useRef, type ComponentProps, type RefObject } from 'react'
 import { PreviewStage } from '@/components/clips/editor/preview-stage'
 import { TemplateMusicChoicePanel } from '@/components/clips/templates/template-music-choice-panel'
 import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
@@ -78,6 +78,9 @@ export function VideoTemplateStudioShell(props: {
   knownMedia: Record<string, MediaItem>
   onAssignAsset: (slotId: string, asset: TemplateAsset) => void
   onBatchFill: () => void
+  onBatchFillFiles: (files: File[]) => void
+  canBatchFillFromSelection: boolean
+  uploadProgress: UploadProgress | null
   onCommitDraft: (value: StudioDraft) => void
   patchFill: (id: string, changes: Partial<StudioSlotFill>) => void
   onCreateHold: (id: string) => void
@@ -108,11 +111,15 @@ export function VideoTemplateStudioShell(props: {
     onToggleMobilePick, onMobileNext, undo, redo, onExportOpen, rightTab, onRightTab,
     mediaSearch, onMediaSearch, mediaKind, onMediaKind, onBrowseMusic, media, onRefreshMedia,
     librarySelection, onToggleLibrarySelect, onUpload, uploadStatus, selectedSlot, onSelectSlot,
-    knownMedia, onAssignAsset, onBatchFill, onCommitDraft, patchFill, onCreateHold,
+    knownMedia, onAssignAsset, onBatchFill, onBatchFillFiles, canBatchFillFromSelection,
+    uploadProgress, onCommitDraft, patchFill, onCreateHold,
     activeSlot, activeFill, clip, previewFrameStyle, videoRef, musicAudioRef, sourceUrls,
     clockMs, onClockMs, syncMusicPreview, releaseFamilySlots, pendingMusic, onPendingMusic,
     musicMedia, musicConfig,
   } = props
+
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const batchInputRef = useRef<HTMLInputElement>(null)
 
   const editorHref = project?.clipId && project.status === 'READY'
     ? '/app/clips/' + encodeURIComponent(project.id) + '/edit/' + encodeURIComponent(project.clipId)
@@ -200,9 +207,30 @@ export function VideoTemplateStudioShell(props: {
         <span className="text-sm font-medium" role="status">
           {progress.filled} / {progress.total} slots filled
         </span>
-        <button type="button" className={subtleBtn} disabled={!draft || busy} onClick={onBatchFill} aria-label="Batch fill">
+        <button
+          type="button"
+          className={subtleBtn}
+          disabled={!draft || busy}
+          onClick={() => (canBatchFillFromSelection ? onBatchFill() : batchInputRef.current?.click())}
+          aria-label="Batch fill"
+        >
           Batch fill
         </button>
+        <input
+          ref={batchInputRef}
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden
+          disabled={busy}
+          onChange={e => {
+            const chosen = Array.from(e.target.files ?? [])
+            e.target.value = ''
+            if (chosen.length) onBatchFillFiles(chosen)
+          }}
+        />
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Select a template slot">
         {releaseFamilySlots.map(slot => {
@@ -344,21 +372,39 @@ export function VideoTemplateStudioShell(props: {
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(220px,280px)_minmax(0,1fr)_minmax(260px,300px)] grid-rows-[1fr_auto] overflow-hidden">
           <aside className="flex min-h-0 flex-col border-r">
             <div className="space-y-2 border-b p-3">
-              <label className="block cursor-pointer rounded-lg border border-dashed border-primary/40 px-3 py-2 text-center text-xs font-medium hover:bg-primary/5">
+              <button
+                type="button"
+                className="block w-full cursor-pointer rounded-lg border border-dashed border-primary/40 px-3 py-2 text-center text-xs font-medium hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={busy}
+                onClick={() => uploadInputRef.current?.click()}
+              >
                 Upload photos or videos
-                <input
-                  className="sr-only"
-                  type="file"
-                  accept="image/*,video/*"
-                  multiple
-                  disabled={busy}
-                  onChange={e => {
-                    const chosen = Array.from(e.target.files ?? [])
-                    e.target.value = ''
-                    onUpload(chosen)
-                  }}
-                />
-              </label>
+              </button>
+              <input
+                ref={uploadInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                tabIndex={-1}
+                aria-hidden
+                disabled={busy}
+                onChange={e => {
+                  const chosen = Array.from(e.target.files ?? [])
+                  e.target.value = ''
+                  onUpload(chosen)
+                }}
+              />
+              {uploadStatus || uploadProgress ? (
+                <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
+                  {uploadProgress
+                    ? (uploadProgress.state === 'finalizing' ? 'Finalizing ' : 'Uploading ')
+                      + (uploadProgress.filename || 'file') + '… ' + Math.round(uploadProgress.percent) + '%'
+                    : uploadStatus
+                      ? uploadStatus.state + (uploadStatus.percent != null ? ' · ' + Math.round(uploadStatus.percent) + '%' : '')
+                      : null}
+                </p>
+              ) : null}
               <input
                 id="video-template-media-search"
                 className={inputClass}

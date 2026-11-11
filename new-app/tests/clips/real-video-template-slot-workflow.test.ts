@@ -69,6 +69,17 @@ describe('Batch 4 standalone slot fulfillment', () => {
       f,[video('too_short',12)]).draft
     expect(() => materializeStudioDraft(f,short,'instance1')).toThrow('longer source')
   })
+  it('fills empty slots in ordinal order even when family slot array is shuffled', () => {
+    const f = family(4)
+    f.slots = [...f.slots].reverse()
+    const assets = [image('a'), image('b'), image('c'), image('d')]
+    const { draft, used } = assignSelectionInOrder(newStudioDraft('release', 'draft_01234567'), f, assets)
+    expect(used).toBe(4)
+    expect(draft.slots.s0?.asset.id).toBe('a')
+    expect(draft.slots.s1?.asset.id).toBe('b')
+    expect(draft.slots.s2?.asset.id).toBe('c')
+    expect(draft.slots.s3?.asset.id).toBe('d')
+  })
   it('rejects still photos in variable-speed slots before compilation', () => {
     const f = family(1)
     f.slots[0] = { ...f.slots[0]!,
