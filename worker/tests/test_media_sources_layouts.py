@@ -43,6 +43,28 @@ def test_no_layout_filtergraph_unchanged():
     assert inputs[0:2] == ["-ss", "0.000"]
 
 
+def test_explicit_unit_speed_preserves_legacy_filtergraph():
+    _, fc, _, _ = build_sources_filtergraph(
+        [_base_window(speed=1.0)],
+        [Path('/tmp/primary.mp4')],
+        1920, 1080, 30.0,
+        main_has_audio=False,
+        source_has_audio=[True],
+    )
+    assert fc == GOLDEN_NO_LAYOUT
+
+
+def test_non_unit_speed_applies_time_warp():
+    _, fc, _, _ = build_sources_filtergraph(
+        [_base_window(speed=1.5)],
+        [Path('/tmp/primary.mp4')],
+        1920, 1080, 30.0,
+        main_has_audio=False,
+        source_has_audio=[True],
+    )
+    assert 'setpts=(PTS-STARTPTS)/1.500000' in fc
+
+
 def test_side_by_side_contains_hstack():
     edits = {
         "sources": [

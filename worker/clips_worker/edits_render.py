@@ -1913,7 +1913,26 @@ def render_edited_clip(
             cut_mp4 = apply_split_audio(cut_mp4, full_render, work_dir / "cut_split.mp4", audio_secs)
             stage("split_audio_done", n=sum(1 for a, s in zip(audio_secs, segs_sec) if a != s))
 
-    if edits.get("transitions") or edits.get("keyframes") or edits.get("layerProps"):
+    # B3: cross-source transitions at template Video-split boundaries were already rendered from
+    # the two registered media assets (with real handles) in apply_full_render_sources. Keep all
+    # ordinary cut transitions/keyframes unchanged, but never apply those consumed boundaries twice.
+    motion_edits = edits
+    if isinstance(edits.get("templateProvenance"), dict) and edits.get("transitions"):
+        from clips_worker.media_sources import source_transition_boundaries
+
+        consumed = source_transition_boundaries(edits)
+        if consumed:
+            remaining = []
+            for tr in edits.get("transitions") or []:
+                try:
+                    src_ms = int(round(float((tr or {}).get("srcMs")))) if isinstance(tr, dict) else -1
+                except (TypeError, ValueError):
+                    src_ms = -1
+                if src_ms not in consumed:
+                    remaining.append(tr)
+            motion_edits = {**edits, "transitions": remaining or None}
+
+    if motion_edits.get("transitions") or motion_edits.get("keyframes") or motion_edits.get("layerProps"):
         # E3: cut transitions (centred on the cut, video only → length / audio unchanged) and
         # Video-lane keyframes, on the same segments that were just concatenated.
         from clips_worker.motion_render import apply_motion_after_cut
@@ -1921,7 +1940,7 @@ def render_edited_clip(
         concat_ms = [
             (clip_start_ms + int(round(a * 1000)), clip_start_ms + int(round(b * 1000))) for a, b in segs_sec
         ]
-        cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, edits, concat_ms, clip_start_ms, work_dir, render_meta)
+        cut_mp4 = apply_motion_after_cut(cut_mp4, full_render, motion_edits, concat_ms, clip_start_ms, work_dir, render_meta)
         stage("motion_done")
 
     if render_meta is not None and edits.get("segmentSpeeds"):

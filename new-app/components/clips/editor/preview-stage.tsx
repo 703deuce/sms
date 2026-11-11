@@ -104,7 +104,7 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
-import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt } from '@/lib/clips/editor/sources'
+import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
 function clamp(n: number, lo: number, hi: number) {
@@ -790,6 +790,14 @@ export function PreviewStage({
         const on = Boolean(sseg && sseg.sourceId === s.id)
         const vis = on ? 'visible' : 'hidden'
         if (box.style.visibility !== vis) box.style.visibility = vis
+        if (on && sseg) {
+          const tf = sourceSegmentTransformCss(sseg.transform)
+          if (box.style.transform !== tf.transform) box.style.transform = tf.transform
+          if (box.style.clipPath !== tf.clipPath) box.style.clipPath = tf.clipPath
+          const filter = sourceSegmentFxCss(sseg.fx)
+          if (box.style.filter !== filter) box.style.filter = filter
+          if (box.style.transformOrigin !== '50% 50%') box.style.transformOrigin = '50% 50%'
+        }
         if (el && on && sseg) {
           const fit = sseg.fit === 'contain' ? 'contain' : 'cover'
           if (el.style.objectFit !== fit) el.style.objectFit = fit
@@ -800,7 +808,8 @@ export function PreviewStage({
             if (Math.abs(el.currentTime - t) > 0.15) el.currentTime = t
             const muted = segmentAudio(sseg, s) === 'main' || voiceOutputMutedRef.current
             if (el.muted !== muted) el.muted = muted
-            if (v && el.playbackRate !== v.playbackRate) el.playbackRate = v.playbackRate
+            const sourceRate = (v?.playbackRate ?? rate) * (sseg.speed ?? 1)
+            if (el.playbackRate !== sourceRate) el.playbackRate = sourceRate
             if (v && !v.paused && el.paused) void el.play().catch(() => {})
             if (v && v.paused && !el.paused) el.pause()
           } else {
@@ -1037,6 +1046,27 @@ export function PreviewStage({
                 return true
               }
             : undefined,
+          sourceFrameAt: (targetSrcMs, side, boundarySrcMs) => {
+            const tol = 2
+            const seg = (e.sourceSegments ?? []).find((candidate) =>
+              side === 'a'
+                ? Math.abs(candidate.endMs - boundarySrcMs) <= tol
+                : Math.abs(candidate.startMs - boundarySrcMs) <= tol,
+            )
+            if (!seg) return null
+            const source = sourceById(e.sources, seg.sourceId)
+            if (!source || source.mediaType === 'audio') return null
+            const transform = sourceSegmentTransformCss(seg.transform)
+            return {
+              sourceId: source.id,
+              mediaTimeSec: segmentMediaMs(seg, source, targetSrcMs) / 1000,
+              fit: seg.fit ?? 'cover',
+              transform: transform.transform,
+              clipPath: transform.clipPath,
+              filter: sourceSegmentFxCss(seg.fx),
+              rateMultiplier: seg.speed ?? 1,
+            }
+          },
           exportW: (() => {
             const bw = boxSizeRef.current.w
             const bh = boxSizeRef.current.h
@@ -1784,6 +1814,8 @@ export function PreviewStage({
           const url = s.mediaType !== 'audio' ? sourceUrls?.[s.refId] : undefined
           if (!url) return null
           const showSourceLayer = !segmentLayoutActive && activeSourceSegment?.sourceId === s.id
+          const slotTransform = sourceSegmentTransformCss(showSourceLayer ? activeSourceSegment?.transform : undefined)
+          const slotFilter = sourceSegmentFxCss(showSourceLayer ? activeSourceSegment?.fx : undefined)
           return (
             <div
               key={`${s.id}:${url}`}
@@ -1791,7 +1823,13 @@ export function PreviewStage({
                 srcBoxRefs.current[s.id] = el
               }}
               className="pointer-events-none absolute inset-0 z-[1] overflow-hidden bg-black"
-              style={{ visibility: showSourceLayer ? 'visible' : 'hidden' }}
+              style={{
+                visibility: showSourceLayer ? 'visible' : 'hidden',
+                transform: slotTransform.transform || undefined,
+                clipPath: slotTransform.clipPath || undefined,
+                transformOrigin: '50% 50%',
+                filter: slotFilter || undefined,
+              }}
               data-testid="preview-source"
               data-source-id={s.id}
             >

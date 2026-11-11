@@ -95,6 +95,17 @@ export type ClipEditsCleanTakeReview = {
   }>
 }
 
+export type ClipTemplateProvenance = {
+  v: 1
+  instanceId: string
+  familyId: string
+  familyRevision: number
+  designId: string
+  designRevision: number
+  /** Non-authoritative lookup only; sourceSegments/textItems remain the editable render truth. */
+  slotToItemIds: Record<string, string>
+}
+
 export type ClipEditsV2 = {
   v: 2
   trim: { in: number; out: number }
@@ -313,6 +324,8 @@ export type ClipEditsV2 = {
   bgRemoval?: BgRemoval
   /** TBE (TB-08): Script speaker display names keyed by speaker label ('A','B'…). Editor-only; worker ignores. */
   speakerNames?: Record<string, string>
+  /** B3 non-authoritative template lineage. Excluded from render-cache hashing. */
+  templateProvenance?: ClipTemplateProvenance
 }
 
 export type ClipBounds = {
@@ -702,6 +715,24 @@ export function editsPayloadForSave(edits: ClipEditsV2): Record<string, unknown>
   return payload
 }
 
+function normalizeTemplateProvenance(raw: unknown): ClipTemplateProvenance | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  const id = (v: unknown) => typeof v === 'string' && /^[A-Za-z0-9_-]{1,120}$/.test(v) ? v : ''
+  const instanceId = id(o.instanceId), familyId = id(o.familyId), designId = id(o.designId)
+  const familyRevision = Number(o.familyRevision), designRevision = Number(o.designRevision)
+  if (o.v !== 1 || !instanceId || !familyId || !designId || !Number.isInteger(familyRevision) || familyRevision < 1 || !Number.isInteger(designRevision) || designRevision < 1) return undefined
+  const slotToItemIds: Record<string, string> = {}
+  if (!o.slotToItemIds || typeof o.slotToItemIds !== 'object' || Array.isArray(o.slotToItemIds)) return undefined
+  for (const [k, v] of Object.entries(o.slotToItemIds as Record<string, unknown>)) {
+    const key = id(k), value = id(v)
+    if (!key || !value) return undefined
+    slotToItemIds[key] = value
+    if (Object.keys(slotToItemIds).length > 120) return undefined
+  }
+  return { v: 1, instanceId, familyId, familyRevision, designId, designRevision, slotToItemIds }
+}
+
 export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   const base = defaultEdits(bounds)
   if (!raw || typeof raw !== 'object') return base
@@ -869,6 +900,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     timelineOpts: normalizeTimelineOpts(o.timelineOpts),
     beatSync: normalizeBeatSync(o.beatSync),
     speakerNames: normalizeSpeakerNames(o.speakerNames),
+    templateProvenance: normalizeTemplateProvenance(o.templateProvenance),
   }
   // N8: old generated clips often have headlineBar.enabled=false without anyone hiding
   // the Headline. Migrate that old default to visible; from now on an explicit eye

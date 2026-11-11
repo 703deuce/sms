@@ -33,6 +33,29 @@ export type MediaRef = 'upload' | 'take'
 export type SourceAudio = 'main' | 'source' | 'mix'
 export type SourceFit = 'cover' | 'contain'
 
+/** B3: per-slot framing; percentages are resolution independent and persist as ordinary edit data. */
+export type SourceSegmentFx = {
+  /** -100..100, 0 = identity. */
+  brightness?: number
+  contrast?: number
+  saturation?: number
+}
+
+export type SourceSegmentTransform = {
+  /** Frame translation in percent of the output frame. */
+  x?: number
+  y?: number
+  /** 25..400; 100 = identity. */
+  scale?: number
+  /** Degrees clockwise. */
+  rotation?: number
+  /** Crop edges in percent of the already-fitted frame; opposing edges must leave >= 5%. */
+  cropL?: number
+  cropT?: number
+  cropR?: number
+  cropB?: number
+}
+
 export type ClipMediaSource = {
   /** Stable id inside the clip (= refId; one entry per media). */
   id: string
@@ -57,6 +80,12 @@ export type SourceSegment = {
   audio?: SourceAudio
   /** Mixed sizes: crop to fill (default) or fit with padding. */
   fit?: SourceFit
+  /** B3 fixed-duration source playback rate; output span stays unchanged. */
+  speed?: number
+  /** B3 template-slot transform; also editable on ordinary source segments. */
+  transform?: SourceSegmentTransform
+  /** B3 small, worker-mirrored per-slot look. */
+  fx?: SourceSegmentFx
   /** Created by multicam auto-switch (regenerating replaces only these). */
   auto?: true
   /** Multi-angle composite (side-by-side / stack / PiP / 2×2 grid). Export: media_sources.build_sources_filtergraph. */
@@ -81,6 +110,68 @@ export const MULTICAM_WIDE_EVERY_RANGE: readonly [number, number] = [5_000, 120_
 
 const MEDIA_TYPES = new Set<MediaType>(['video', 'image', 'audio'])
 const AUDIO_MODES = new Set<SourceAudio>(['main', 'source', 'mix'])
+
+function clamp(n: number, lo: number, hi: number): number { return Math.min(hi, Math.max(lo, n)) }
+function finite(v: unknown): number | undefined { const n = Number(v); return Number.isFinite(n) ? n : undefined }
+export function normalizeSourceSegmentFx(raw: unknown): SourceSegmentFx | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  const out: SourceSegmentFx = {}
+  for (const key of ['brightness', 'contrast', 'saturation'] as const) {
+    const n = finite(o[key])
+    if (n != null && Math.abs(n) >= 0.001) out[key] = Math.round(clamp(n, -100, 100) * 100) / 100
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
+export function sourceSegmentFxCss(raw: SourceSegmentFx | undefined): string {
+  const fx = normalizeSourceSegmentFx(raw)
+  if (!fx) return ''
+  const filters: string[] = []
+  if (fx.brightness) filters.push(`brightness(${1 + fx.brightness / 100})`)
+  if (fx.contrast) filters.push(`contrast(${1 + fx.contrast / 100})`)
+  if (fx.saturation) filters.push(`saturate(${1 + fx.saturation / 100})`)
+  return filters.join(' ')
+}
+
+export function normalizeSourceSegmentTransform(raw: unknown): SourceSegmentTransform | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  const x = finite(o.x), y = finite(o.y), scale = finite(o.scale), rotation = finite(o.rotation)
+  let cropL = clamp(finite(o.cropL) ?? 0, 0, 90)
+  let cropR = clamp(finite(o.cropR) ?? 0, 0, 90)
+  let cropT = clamp(finite(o.cropT) ?? 0, 0, 90)
+  let cropB = clamp(finite(o.cropB) ?? 0, 0, 90)
+  if (cropL + cropR > 95) cropR = Math.max(0, 95 - cropL)
+  if (cropT + cropB > 95) cropB = Math.max(0, 95 - cropT)
+  const out: SourceSegmentTransform = {}
+  if (x != null && Math.abs(x) >= 0.001) out.x = Math.round(clamp(x, -100, 100) * 100) / 100
+  if (y != null && Math.abs(y) >= 0.001) out.y = Math.round(clamp(y, -100, 100) * 100) / 100
+  if (scale != null && Math.abs(scale - 100) >= 0.001) out.scale = Math.round(clamp(scale, 25, 400) * 100) / 100
+  if (rotation != null && Math.abs(rotation) >= 0.001) out.rotation = Math.round(clamp(rotation, -360, 360) * 100) / 100
+  if (cropL) out.cropL = Math.round(cropL * 100) / 100
+  if (cropT) out.cropT = Math.round(cropT * 100) / 100
+  if (cropR) out.cropR = Math.round(cropR * 100) / 100
+  if (cropB) out.cropB = Math.round(cropB * 100) / 100
+  return Object.keys(out).length ? out : undefined
+}
+
+/** Shared preview styling for the worker-mirrored B3 transform. */
+export function sourceSegmentTransformCss(raw: SourceSegmentTransform | undefined): {
+  transform: string
+  clipPath: string
+} {
+  const t = normalizeSourceSegmentTransform(raw)
+  if (!t) return { transform: '', clipPath: '' }
+  const parts: string[] = []
+  if (t.x || t.y) parts.push(`translate(${t.x ?? 0}%, ${t.y ?? 0}%)`)
+  if (t.scale != null) parts.push(`scale(${t.scale / 100})`)
+  if (t.rotation) parts.push(`rotate(${t.rotation}deg)`)
+  const clipPath = t.cropL || t.cropT || t.cropR || t.cropB
+    ? `inset(${t.cropT ?? 0}% ${t.cropR ?? 0}% ${t.cropB ?? 0}% ${t.cropL ?? 0}%)`
+    : ''
+  return { transform: parts.join(' '), clipPath }
+}
 
 function int(v: unknown): number | undefined {
   const n = Math.round(Number(v))
@@ -159,6 +250,12 @@ export function normalizeSourceSegments(
     if (b - a < SOURCE_SEG_MIN_MS || a < 0) continue
     const inMs = int(o.inMs)
     const layout = normalizeSegmentLayout(o.layout, sources, src.id)
+    const rawSpeed = finite(o.speed)
+    const speed = rawSpeed != null && src.mediaType === 'video' && Math.abs(rawSpeed - 1) >= 0.0001
+      ? Math.round(clamp(rawSpeed, 0.25, 4) * 1000) / 1000
+      : undefined
+    const transform = normalizeSourceSegmentTransform(o.transform)
+    const fx = normalizeSourceSegmentFx(o.fx)
     out.push({
       id,
       sourceId: src.id,
@@ -169,6 +266,9 @@ export function normalizeSourceSegments(
       ...(src.mediaType === 'audio' ? { audio: 'source' as const } : {}),
       ...(o.fit === 'contain' ? { fit: 'contain' as const } : {}),
       ...(o.auto === true ? { auto: true as const } : {}),
+      ...(speed ? { speed } : {}),
+      ...(transform ? { transform } : {}),
+      ...(fx ? { fx } : {}),
       ...(layout ? { layout } : {}),
     })
   }
@@ -223,14 +323,14 @@ export function sourceSegmentAt(segs: readonly SourceSegment[] | undefined, srcM
 }
 
 export function isSynced(seg: SourceSegment, source: ClipMediaSource | undefined): boolean {
-  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined)
+  return Boolean(source && source.mediaType === 'video' && source.syncMs !== undefined && seg.inMs === undefined && seg.speed === undefined)
 }
 
 /** Media ms of `source` shown at main source ms `srcMs` inside `seg`. */
 export function segmentMediaMs(seg: SourceSegment, source: ClipMediaSource | undefined, srcMs: number): number {
   if (!source || source.mediaType === 'image') return 0
   if (isSynced(seg, source)) return Math.max(0, srcMs + (source.syncMs ?? 0))
-  return Math.max(0, (seg.inMs ?? 0) + (srcMs - seg.startMs))
+  return Math.max(0, (seg.inMs ?? 0) + (srcMs - seg.startMs) * (seg.speed ?? 1))
 }
 
 export function segmentAudio(seg: SourceSegment, source: ClipMediaSource | undefined): SourceAudio {
@@ -270,7 +370,7 @@ export function clearSourceRange(
         ...s,
         id: `${s.id}~${Math.round(toMs)}`.slice(0, 120),
         startMs: toMs,
-        ...(s.inMs !== undefined ? { inMs: s.inMs + shift } : {}),
+        ...(s.inMs !== undefined ? { inMs: s.inMs + Math.round(shift * (s.speed ?? 1)) } : {}),
       })
     }
   }
@@ -285,7 +385,7 @@ export function removeSourceSegment(segs: readonly SourceSegment[] | undefined, 
 export function patchSourceSegment(
   segs: readonly SourceSegment[] | undefined,
   id: string,
-  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout'>>,
+  patch: Partial<Pick<SourceSegment, 'audio' | 'fit' | 'inMs' | 'startMs' | 'endMs' | 'layout' | 'transform' | 'fx' | 'speed'>>,
   sources: readonly ClipMediaSource[] | undefined,
 ): SourceSegment[] | undefined {
   const cur = (segs ?? []).find((s) => s.id === id)
@@ -519,8 +619,8 @@ export function sourceRenderWindows(
   edits: { sources?: ClipMediaSource[]; sourceSegments?: SourceSegment[] },
   windowStartMs: number,
   windowEndMs: number,
-): { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType }[] {
-  const out: { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType }[] = []
+): { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType; speed?: number; transform?: SourceSegmentTransform; fx?: SourceSegmentFx }[] {
+  const out: { id: string; sourceId: string; t0Ms: number; t1Ms: number; mediaInMs: number; audio: SourceAudio; fit: SourceFit; mediaType: MediaType; speed?: number; transform?: SourceSegmentTransform; fx?: SourceSegmentFx }[] = []
   for (const s of edits.sourceSegments ?? []) {
     const src = sourceById(edits.sources, s.sourceId)
     if (!src) continue
@@ -536,6 +636,9 @@ export function sourceRenderWindows(
       audio: segmentAudio(s, src),
       fit: s.fit ?? 'cover',
       mediaType: src.mediaType,
+      ...(s.speed ? { speed: s.speed } : {}),
+      ...(s.transform ? { transform: s.transform } : {}),
+      ...(s.fx ? { fx: s.fx } : {}),
     })
   }
   return out

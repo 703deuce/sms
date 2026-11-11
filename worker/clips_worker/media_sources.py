@@ -34,6 +34,50 @@ def _clamp(v: float, lo: float, hi: float) -> float:
     return min(hi, max(lo, v))
 
 
+def _finite(raw, default: float = 0.0) -> float:
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return default
+    return default if v != v or v in (float("inf"), float("-inf")) else v
+
+
+def _normalize_source_fx(raw) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    for key in ("brightness", "contrast", "saturation"):
+        value = _clamp(_finite(raw.get(key)), -100.0, 100.0)
+        if abs(value) >= 0.001:
+            out[key] = round(value, 2)
+    return out or None
+
+
+def _normalize_source_transform(raw) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict = {}
+    x = _clamp(_finite(raw.get("x")), -100.0, 100.0)
+    y = _clamp(_finite(raw.get("y")), -100.0, 100.0)
+    scale = _clamp(_finite(raw.get("scale"), 100.0), 25.0, 400.0)
+    rotation = _clamp(_finite(raw.get("rotation")), -360.0, 360.0)
+    l = _clamp(_finite(raw.get("cropL")), 0.0, 90.0)
+    r = _clamp(_finite(raw.get("cropR")), 0.0, 90.0)
+    t = _clamp(_finite(raw.get("cropT")), 0.0, 90.0)
+    b = _clamp(_finite(raw.get("cropB")), 0.0, 90.0)
+    if l + r > 95.0:
+        r = max(0.0, 95.0 - l)
+    if t + b > 95.0:
+        b = max(0.0, 95.0 - t)
+    for key, value, identity in (
+        ("x", x, 0.0), ("y", y, 0.0), ("scale", scale, 100.0), ("rotation", rotation, 0.0),
+        ("cropL", l, 0.0), ("cropR", r, 0.0), ("cropT", t, 0.0), ("cropB", b, 0.0),
+    ):
+        if abs(value - identity) >= 0.001:
+            out[key] = round(value, 2)
+    return out or None
+
+
 def _resolve_with_id(raw, sources: dict, own_id: str) -> str | None:
     if raw in ("main", MAIN_ANGLE):
         return "main"
@@ -175,6 +219,18 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
             seg["fit"] = "contain"
         if r.get("auto") is True:
             seg["auto"] = True
+        try:
+            rate = float(r.get("speed", 1))
+        except (TypeError, ValueError):
+            rate = 1.0
+        if src["mediaType"] == "video" and 0.25 <= rate <= 4.0 and abs(rate - 1.0) >= 0.0001:
+            seg["speed"] = round(rate, 3)
+        transform = _normalize_source_transform(r.get("transform"))
+        if transform:
+            seg["transform"] = transform
+        fx = _normalize_source_fx(r.get("fx"))
+        if fx:
+            seg["fx"] = fx
         layout = _normalize_segment_layout(r.get("layout"), by_id, src["id"])
         if layout:
             seg["layout"] = layout
@@ -193,7 +249,7 @@ def normalize_source_segments(raw, sources) -> list[dict] | None:
 
 
 def _is_synced(seg: dict, src: dict | None) -> bool:
-    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg)
+    return bool(src and src["mediaType"] == "video" and "syncMs" in src and "inMs" not in seg and "speed" not in seg)
 
 
 def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
@@ -201,7 +257,7 @@ def segment_media_ms(seg: dict, src: dict | None, src_ms: int) -> int:
         return 0
     if _is_synced(seg, src):
         return max(0, src_ms + int(src.get("syncMs") or 0))
-    return max(0, int(seg.get("inMs") or 0) + (src_ms - int(seg["startMs"])))
+    return max(0, int(round(int(seg.get("inMs") or 0) + (src_ms - int(seg["startMs"])) * float(seg.get("speed") or 1.0))))
 
 
 def segment_audio(seg: dict, src: dict | None) -> str:
@@ -240,6 +296,12 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
             }
+        if s.get("speed"):
+            row["speed"] = s["speed"]
+        if s.get("transform"):
+            row["transform"] = s["transform"]
+        if s.get("fx"):
+            row["fx"] = s["fx"]
         if s.get("layout"):
             row["layout"] = s["layout"]
             row["windowStartMs"] = lo
@@ -392,6 +454,74 @@ def fit_filter(fit: str, w: int, h: int) -> str:
         return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
     return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+
+
+def atempo_filter(rate: float) -> str:
+    """FFmpeg atempo supports 0.5..2 per stage; chain for the B3 0.25..4 range."""
+    r = max(0.25, min(4.0, float(rate or 1.0)))
+    parts: list[float] = []
+    while r > 2.0 + 1e-9:
+        parts.append(2.0)
+        r /= 2.0
+    while r < 0.5 - 1e-9:
+        parts.append(0.5)
+        r /= 0.5
+    if abs(r - 1.0) >= 1e-9:
+        parts.append(r)
+    return ",".join(f"atempo={x:.6f}" for x in parts)
+
+
+def source_fx_filter(fx: dict | None) -> str:
+    n = _normalize_source_fx(fx)
+    if not n:
+        return ""
+    # Browser preview uses CSS brightness(multiplier) -> contrast -> saturate, in that order.
+    # Mirror brightness with channel multipliers (not eq's additive brightness), then eq's
+    # center-relative contrast and saturation. Keeping the operation order is important for parity.
+    brightness = 1.0 + float(n.get("brightness", 0.0)) / 100.0
+    contrast = 1.0 + float(n.get("contrast", 0.0)) / 100.0
+    saturation = 1.0 + float(n.get("saturation", 0.0)) / 100.0
+    return (
+        f",colorchannelmixer=rr={brightness:.6f}:gg={brightness:.6f}:bb={brightness:.6f},"
+        f"eq=contrast={contrast:.6f}:saturation={saturation:.6f}"
+    )
+
+
+def source_transform_filter(transform: dict | None, w: int, h: int) -> str:
+    """B3 mirror of sourceSegmentTransformCss: crop mask, scale/rotate, then translate on black."""
+    t = _normalize_source_transform(transform)
+    if not t:
+        return ""
+    parts: list[str] = []
+    l, r = float(t.get("cropL", 0)) / 100.0, float(t.get("cropR", 0)) / 100.0
+    top, bot = float(t.get("cropT", 0)) / 100.0, float(t.get("cropB", 0)) / 100.0
+    if l or r or top or bot:
+        cw = max(2, int(round(w * (1.0 - l - r))) // 2 * 2)
+        ch = max(2, int(round(h * (1.0 - top - bot))) // 2 * 2)
+        cx = max(0, min(w - cw, int(round(w * l))))
+        cy = max(0, min(h - ch, int(round(h * top))))
+        # Keep the crop at its original frame position rather than stretching it.
+        parts.append(f"crop={cw}:{ch}:{cx}:{cy}")
+        parts.append(f"pad={w}:{h}:{cx}:{cy}:color=black")
+    scale = float(t.get("scale", 100.0)) / 100.0
+    if abs(scale - 1.0) >= 0.0001:
+        sw = max(2, int(round(w * scale)) // 2 * 2)
+        sh = max(2, int(round(h * scale)) // 2 * 2)
+        parts.append(f"scale={sw}:{sh}")
+        if scale >= 1.0:
+            parts.append(f"crop={w}:{h}:(iw-{w})/2:(ih-{h})/2")
+        else:
+            parts.append(f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black")
+    rotation = float(t.get("rotation", 0.0))
+    if abs(rotation) >= 0.0001:
+        parts.append(f"rotate={rotation}*PI/180:ow=iw:oh=ih:c=black")
+    dx = int(round(float(t.get("x", 0.0)) * w / 100.0))
+    dy = int(round(float(t.get("y", 0.0)) * h / 100.0))
+    if dx or dy:
+        ax, ay = abs(dx), abs(dy)
+        parts.append(f"pad={w + 2 * ax}:{h + 2 * ay}:{ax}:{ay}:color=black")
+        parts.append(f"crop={w}:{h}:{ax - dx}:{ay - dy}")
+    return "," + ",".join(parts) if parts else ""
 
 
 def still_to_video(image: Path, out: Path, duration_s: float, fps: float = 30.0) -> Path:
@@ -612,8 +742,15 @@ def build_sources_filtergraph(
         dur = max(0.04, t1 - t0)
         if w["mediaType"] == "image":
             inputs += ["-loop", "1", "-framerate", f"{fps:g}", "-t", f"{dur + 0.1:.3f}", "-i", str(p)]
-            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)},fps={fps:g},format=yuv420p"
+            chain = f"[{in_idx}:v]{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},fps={fps:g},format=yuv420p"
             in_idx += 1
+            # Still sources must be placed on the carrier clock and composited just like video.
+            # Without this overlay, image-only template slots render as the black carrier.
+            parts.append(f"{chain},setpts=PTS-STARTPTS+{t0:.3f}/TB[s{i}]")
+            nxt = f"vb{i + 1}"
+            parts.append(f"[{cur}][s{i}]overlay=eof_action=pass:enable='between(t,{t0:.3f},{t1:.3f})'[{nxt}]")
+            cur = nxt
+            continue
         elif w["mediaType"] == "audio":
             inputs += ["-f", "lavfi", "-i", f"color=c=black:s={width}x{height}:r={fps}:d={dur + 0.1:.3f}"]
             v_in = in_idx
@@ -635,9 +772,13 @@ def build_sources_filtergraph(
             mute.append(f"between(t,{t0:.3f},{t1:.3f})")
             continue
         else:
-            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{dur + 0.25:.3f}", "-i", str(p)]
-            chain = (f"[{in_idx}:v]trim=0:{dur:.3f},setpts=PTS-STARTPTS,fps={fps:g},"
-                     f"{fit_filter(w['fit'], width, height)},format=yuv420p")
+            speed = float(w.get("speed") or 1.0)
+            media_dur = dur * speed
+            inputs += ["-ss", f"{w['mediaInMs'] / 1000.0:.3f}", "-t", f"{media_dur + 0.25:.3f}", "-i", str(p)]
+            # Preserve the legacy filtergraph exactly for absent/1x speed (golden parity).
+            pts = "setpts=PTS-STARTPTS" if speed == 1.0 else f"setpts=(PTS-STARTPTS)/{speed:.6f}"
+            chain = (f"[{in_idx}:v]trim=0:{media_dur:.3f},{pts},fps={fps:g},"
+                     f"{fit_filter(w['fit'], width, height)}{source_transform_filter(w.get('transform'), width, height)}{source_fx_filter(w.get('fx'))},format=yuv420p")
             v_in = in_idx
             in_idx += 1
             layout = w.get("layout")
@@ -668,8 +809,10 @@ def build_sources_filtergraph(
             mode = w["audio"]
             if mode in ("source", "mix") and w["mediaType"] == "video" and source_has_audio[i]:
                 ms = int(round(t0 * 1000))
+                tempo = atempo_filter(speed)
+                tempo_part = (tempo + ",") if tempo else ""
                 audio_parts.append(
-                    f"[{v_in}:a]atrim=0:{dur:.3f},asetpts=PTS-STARTPTS,aresample=48000,"
+                    f"[{v_in}:a]atrim=0:{media_dur:.3f},asetpts=PTS-STARTPTS,{tempo_part}aresample=48000,"
                     f"aformat=sample_fmts=fltp:channel_layouts=stereo,adelay={ms}|{ms}[sa{i}]"
                 )
                 a_labels.append(f"[sa{i}]")
@@ -697,6 +840,191 @@ def build_sources_filtergraph(
         alabel = "aout"
     fc = ";".join(parts + audio_parts)
     return inputs, fc, cur, alabel
+
+
+def source_transition_boundaries(edits: dict) -> set[int]:
+    """Template/source Video-split boundaries consumed by the direct source transition adapter."""
+    if not isinstance(edits.get("templateProvenance"), dict):
+        return set()
+    splits = {
+        int(round(float(x))) for x in (edits.get("videoSplits") or [])
+        if isinstance(x, (int, float))
+    }
+    if not splits:
+        return set()
+    sources = normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []
+    segs = normalize_source_segments(edits.get("sourceSegments"), sources) or []
+    transitions = edits.get("transitions") if isinstance(edits.get("transitions"), list) else []
+    tr_points: set[int] = set()
+    for tr in transitions:
+        if not isinstance(tr, dict):
+            continue
+        try:
+            src_ms = int(round(float(tr.get("srcMs"))))
+        except (TypeError, ValueError):
+            continue
+        tr_points.add(src_ms)
+    out: set[int] = set()
+    for left, right in zip(segs, segs[1:]):
+        boundary = int(right["startMs"])
+        if abs(int(left["endMs"]) - boundary) <= 1 and boundary in splits and boundary in tr_points:
+            out.add(boundary)
+    return out
+
+
+def _source_transition_rows(edits: dict, clip_start_ms: int, clip_end_ms: int, fps: float) -> list[dict]:
+    """Cross-source transition windows on the source/carrier clock."""
+    from clips_worker.motion import normalize_transition_spec
+
+    boundaries = source_transition_boundaries(edits)
+    if not boundaries:
+        return []
+    sources = normalize_media_sources(edits.get("sources"), youtube_long_form_enabled(edits)) or []
+    by_id = {src["id"]: src for src in sources}
+    segs = normalize_source_segments(edits.get("sourceSegments"), sources) or []
+    trs = []
+    for raw in edits.get("transitions") or []:
+        if not isinstance(raw, dict):
+            continue
+        spec = normalize_transition_spec(raw)
+        if not spec:
+            continue
+        try:
+            src_ms = int(round(float(raw.get("srcMs"))))
+        except (TypeError, ValueError):
+            continue
+        if src_ms in boundaries:
+            trs.append((src_ms, spec))
+    by_boundary = {src_ms: spec for src_ms, spec in trs}
+    out: list[dict] = []
+    last_end_frame = 0
+    for left, right in zip(segs, segs[1:]):
+        boundary = int(right["startMs"])
+        spec = by_boundary.get(boundary)
+        if not spec or abs(int(left["endMs"]) - boundary) > 1:
+            continue
+        left_src, right_src = by_id.get(left["sourceId"]), by_id.get(right["sourceId"])
+        if not left_src or not right_src or left_src["mediaType"] == "audio" or right_src["mediaType"] == "audio":
+            continue
+        dur_ms = min(int(spec["durMs"]), int(left["endMs"]) - int(left["startMs"]), int(right["endMs"]) - int(right["startMs"]))
+        frames = max(2, int(round(dur_ms * fps / 1000.0)))
+        start_src_ms = boundary - dur_ms / 2.0
+        start_frame = int(round((start_src_ms - clip_start_ms) * fps / 1000.0))
+        start_frame = max(start_frame, last_end_frame, 0)
+        end_frame_limit = int((clip_end_ms - clip_start_ms) * fps / 1000.0)
+        frames = min(frames, end_frame_limit - start_frame)
+        if frames < 2:
+            continue
+        last_end_frame = start_frame + frames
+        actual_start_src_ms = clip_start_ms + start_frame * 1000.0 / fps
+        out.append({
+            "srcMs": boundary,
+            "type": spec["type"],
+            "durMs": dur_ms,
+            "frames": frames,
+            "startFrame": start_frame,
+            "left": left,
+            "right": right,
+            "leftSource": left_src,
+            "rightSource": right_src,
+            "leftMediaMs": segment_media_ms(left, left_src, int(round(actual_start_src_ms))),
+            "rightMediaMs": segment_media_ms(right, right_src, int(round(actual_start_src_ms))),
+        })
+    return out
+
+
+def _render_source_transition_side(
+    path: Path,
+    source: dict,
+    seg: dict,
+    media_in_ms: int,
+    frames: int,
+    width: int,
+    height: int,
+    fps: float,
+    out: Path,
+) -> None:
+    speed = float(seg.get("speed") or 1.0)
+    speed_prefix = f"setpts=(PTS-STARTPTS)/{speed:.6f}," if source["mediaType"] == "video" and abs(speed - 1.0) >= 0.0001 else ""
+    vf = (
+        speed_prefix
+        + fit_filter(seg.get("fit") or "cover", width, height)
+        + source_transform_filter(seg.get("transform"), width, height)
+        + source_fx_filter(seg.get("fx"))
+        + f",fps={fps:g},format=yuv420p"
+    )
+    cmd = ["ffmpeg", "-y", "-v", "error"]
+    if source["mediaType"] == "image":
+        cmd += ["-loop", "1", "-framerate", f"{fps:g}", "-i", str(path)]
+    else:
+        cmd += ["-ss", f"{media_in_ms / 1000.0:.6f}", "-i", str(path)]
+    cmd += [
+        "-vf", vf, "-frames:v", str(frames + 1), "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", str(out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"source transition side failed: {(proc.stderr or '')[-800:]}")
+
+
+def apply_source_segment_transitions(
+    full_render: Path,
+    edits: dict,
+    clip_start_ms: int,
+    clip_end_ms: int,
+    work_dir: Path,
+    media: dict[str, Path],
+) -> Path:
+    """Overlay cross-source Video-split transition windows using the two registered media assets."""
+    from clips_worker.motion_render import xfade_window_filters
+
+    width, height = probe_size(full_render)
+    fps = probe_fps(full_render)
+    windows = _source_transition_rows(edits, clip_start_ms, clip_end_ms, fps)
+    if not windows:
+        return full_render
+    cmd = ["ffmpeg", "-y", "-v", "error", "-i", str(full_render)]
+    parts = ["[0:v]setsar=1,format=yuv420p[base]"]
+    cur = "base"
+    input_idx = 1
+    rendered = 0
+    for i, win in enumerate(windows):
+        left_path = media_path_for(edits, win["left"]["sourceId"], media)
+        right_path = media_path_for(edits, win["right"]["sourceId"], media)
+        if not left_path or not right_path or not Path(left_path).is_file() or not Path(right_path).is_file():
+            raise RuntimeError("source transition media missing")
+        a = Path(work_dir) / f"source_transition_{i}_a.mp4"
+        b = Path(work_dir) / f"source_transition_{i}_b.mp4"
+        _render_source_transition_side(Path(left_path), win["leftSource"], win["left"], int(win["leftMediaMs"]),
+                                       int(win["frames"]), width, height, fps, a)
+        _render_source_transition_side(Path(right_path), win["rightSource"], win["right"], int(win["rightMediaMs"]),
+                                       int(win["frames"]), width, height, fps, b)
+        cmd += ["-i", str(a), "-i", str(b)]
+        label = f"st{i}"
+        parts.append(xfade_window_filters(win, input_idx, input_idx + 1, width, height, label))
+        input_idx += 2
+        w0 = win["startFrame"] / fps
+        w1 = (win["startFrame"] + win["frames"]) / fps
+        nxt = f"stbase{i}"
+        parts.append(
+            f"[{cur}][{label}]overlay=0:0:eof_action=pass:"
+            f"enable='between(t,{w0 - 0.5 / fps:.6f},{w1 - 0.5 / fps:.6f})'[{nxt}]"
+        )
+        cur = nxt
+        rendered += 1
+    if not rendered:
+        return full_render
+    out = Path(work_dir) / "full_render_source_transitions.mp4"
+    cmd += [
+        "-filter_complex", ";".join(parts), "-map", f"[{cur}]", "-map", "0:a?",
+        "-r", f"{fps:g}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+        "-c:a", "copy", str(out),
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"source transitions failed: {(proc.stderr or '')[-1000:]}")
+    print(f"[clipper:sources] source_transitions={rendered}", flush=True)
+    return out
 
 
 def apply_full_render_sources(
@@ -748,7 +1076,7 @@ def apply_full_render_sources(
     if proc.returncode != 0:
         raise RuntimeError(f"sources composite failed: {(proc.stderr or '')[-800:]}")
     print(f"[clipper:sources] {json.dumps({'segments': len(usable), 'audio': alabel or 'copy'})}", flush=True)
-    return out
+    return apply_source_segment_transitions(out, edits, clip_start_ms, clip_end_ms, work_dir, media)
 
 
 def upload_broll_spec_path(item: dict, media: dict[str, Path], work_dir: Path, pos: int) -> Path | None:

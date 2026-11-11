@@ -45,6 +45,35 @@ def make_blank_video(dest: Path, aspect: str | None, dur_ms: int) -> tuple[int, 
     return w, h
 
 
+def template_carrier_frames(raw) -> int:
+    """Exact authored 30fps frame budget. Unlike ordinary blank projects this is never duration-clamped."""
+    try:
+        frames = int(raw)
+    except (TypeError, ValueError):
+        raise ValueError("template carrier requires an exact frame count")
+    if frames < 3 or frames > 30 * 60 * 30:
+        raise ValueError("template carrier frame budget is out of range")
+    return frames
+
+
+def make_template_carrier(dest: Path, aspect: str | None, frames: int) -> tuple[int, int]:
+    """Neutral black/silent carrier with an exact 30fps frame count."""
+    w, h = blank_size(aspect)
+    d = frames / 30.0
+    subprocess.check_call(
+        [
+            "ffmpeg", "-y", "-v", "error",
+            "-f", "lavfi", "-i", f"color=c=black:s={w}x{h}:r=30",
+            "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+            "-frames:v", str(frames), "-t", f"{d:.9f}",
+            "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-crf", "35",
+            "-g", "30", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "32k",
+            "-movflags", "+faststart", str(dest),
+        ]
+    )
+    return w, h
+
+
 def prepare_blank_source(conn, project: dict, payload: dict, dest: Path) -> Path:
     """Generate + upload the canvas to the project's upload key; mark the upload COMPLETE."""
     from clips_worker.probe import probe_duration
@@ -55,8 +84,12 @@ def prepare_blank_source(conn, project: dict, payload: dict, dest: Path) -> Path
         import json
 
         settings = json.loads(settings)
-    dur = blank_duration_ms(payload.get("blankMs"))
-    w, h = make_blank_video(dest, settings.get("aspectRatio"), dur)
+    if payload.get("templateCarrier") is True:
+        frames = template_carrier_frames(payload.get("templateCarrierFrames"))
+        w, h = make_template_carrier(dest, settings.get("aspectRatio"), frames)
+    else:
+        dur = blank_duration_ms(payload.get("blankMs"))
+        w, h = make_blank_video(dest, settings.get("aspectRatio"), dur)
     upload_file(project["source_key"], dest, "video/mp4")
     real_ms = int(round(probe_duration(dest) * 1000))
     with conn.cursor() as cur:
