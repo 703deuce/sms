@@ -107,6 +107,10 @@ jobs:
             tests/ef24-bg-removal-edits.test.ts \
             tests/stock-audio-picker-placement.test.tsx \
             tests/batch5-template-full-video.test.tsx \
+            tests/clips/real-video-templates-b3.test.ts \
+            tests/clips/real-video-template-instance.test.ts \
+            tests/clips/real-video-template-editor.test.tsx \
+            tests/clips/real-video-template-typecheck.test.ts \
             tests/fullsuite-batch2.test.ts \
             tests/fullsuite-batch3.test.ts \
             tests/fullsuite-batch4.test.tsx \
