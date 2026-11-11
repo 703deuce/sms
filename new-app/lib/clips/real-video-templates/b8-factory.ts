@@ -8,7 +8,8 @@ import { CLIP_FONT_MANIFEST, CLIP_FONT_MANIFEST_VERSION } from '@/lib/clips/font
 import { defaultEdits } from '@/lib/clips/edits'
 import {
   compileTemplate, templateFrameToMs, validateTemplateDesign, validateTemplateFamily,
-  type TemplateAsset, type TemplateDesignV1, type TemplateFamilyV1, type TemplateSlot,
+  type TemplateAsset, type TemplateCompileResult, type TemplateDesignV1,
+  type TemplateFamilyV1, type TemplateSlot,
 } from './sequence-contract'
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
   type FactoryFamilySeed, type FactoryTreatmentRecipe } from './b8-authoring-catalog'
@@ -154,6 +155,83 @@ export type B8StructureProof = {
   id:string; durationFrames:number; slotItems:number; transitions:number;
   textItems:number; videoCuts:number; musicPresent:boolean; compilationHash:string
 }
+export type B8EditableAuditOptions = {
+  requireMusic?: boolean
+  expectedMusicAssetId?: string
+}
+/**
+ * Exact structural audit for the native ClipEditsV2 emitted by the shared
+ * template compiler. This is intentionally stricter than "it compiled":
+ * every authored cut, cross-source transition, animated layer and output-clock
+ * segment must survive as independently editable data. It never inspects MP4
+ * pixels; render QA remains a separate gate.
+ */
+export function auditB8EditableOutput(
+  c:B8Candidate,
+  compiled:TemplateCompileResult,
+  options:B8EditableAuditOptions={},
+):string[] {
+  const issues:string[]=[]
+  const edits=compiled.edits
+  const expectedCuts=c.family.slots.slice(1).map(slot=>templateFrameToMs(slot.startFrame))
+  const expectedTransitions=c.family.slots.slice(1).filter(slot=>slot.transition!=='cut')
+  const segments=edits.sourceSegments??[]
+  if(segments.length!==c.family.slots.length)issues.push('editable_source_segment_count')
+  if(compiled.sequence.items.length!==c.family.slots.length)issues.push('sequence_item_count')
+  for(const [index,slot] of c.family.slots.entries()){
+    const segment=segments[index],item=compiled.sequence.items[index]
+    const startMs=templateFrameToMs(slot.startFrame)
+    const endMs=templateFrameToMs(slot.startFrame+slot.durationFrames)
+    if(!segment||segment.startMs!==startMs||segment.endMs!==endMs)
+      issues.push('slot_clock_mismatch:'+slot.id)
+    if(!item||item.slotId!==slot.id||item.outputStartFrame!==slot.startFrame||
+       item.outputEndFrame!==slot.startFrame+slot.durationFrames)
+      issues.push('sequence_clock_mismatch:'+slot.id)
+  }
+  if(JSON.stringify(edits.videoSplits??[])!==JSON.stringify(expectedCuts))
+    issues.push('editable_cut_boundaries')
+  const transitions=edits.transitions??[]
+  if(transitions.length!==expectedTransitions.length)issues.push('editable_transition_count')
+  for(const slot of expectedTransitions){
+    const transition=slot.transition
+    if(transition==='cut')continue
+    const srcMs=templateFrameToMs(slot.startFrame)
+    const found=transitions.find(row=>row.srcMs===srcMs)
+    if(!found||found.type!==transition.type||
+       found.durMs!==templateFrameToMs(transition.durationFrames))
+      issues.push('editable_transition_mismatch:'+slot.id)
+  }
+  const authoredLayers=c.family.texts.length+(c.family.graphics?.length??0)
+  const layers=edits.textItems??[]
+  if(layers.length!==authoredLayers)issues.push('editable_layer_count')
+  if(layers.filter(layer=>Boolean(layer.anim)).length!==authoredLayers)
+    issues.push('animated_layer_loss')
+  if(layers.filter(layer=>layer.kind==='shape').length!==(c.family.graphics?.length??0))
+    issues.push('editable_graphic_loss')
+  const textLayers=layers.filter(layer=>layer.kind!=='shape')
+  for(const text of c.family.texts){
+    const startMs=templateFrameToMs(text.startFrame),endMs=templateFrameToMs(text.startFrame+text.durationFrames)
+    if(!textLayers.some(layer=>layer.startMs===startMs&&layer.endMs===endMs&&
+       layer.style?.font===text.font&&layer.anim))
+      issues.push('editable_text_mismatch:'+text.id)
+  }
+  if(c.family.slots.some(slot=>slot.motion)&&
+     !(edits.keyframes??[]).some(track=>track.target==='video'&&track.points.length>=2))
+    issues.push('source_motion_keyframes_missing')
+  if((edits.inserts?.length??0)!==0)issues.push('flattened_insert_present')
+  if((edits.cutRanges?.length??0)!==0)issues.push('destructive_cut_ranges_present')
+  if(edits.templateProvenance?.familyId!==c.family.familyId||
+     edits.templateProvenance?.designId!==c.design.designId)
+    issues.push('template_provenance_mismatch')
+  if(options.requireMusic){
+    const music=edits.audio?.music
+    if(!music)issues.push('separate_music_track_missing')
+    else if(options.expectedMusicAssetId&&
+      music.uploadId!==options.expectedMusicAssetId&&music.generationId!==options.expectedMusicAssetId)
+      issues.push('music_asset_identity_mismatch')
+  }
+  return [...new Set(issues)]
+}
 /** In-memory compiler proof only; NEVER a rendered MP4 or certified release. */
 export function proveB8Structure(c:B8Candidate):B8StructureProof {
   const durationMs = templateFrameToMs(c.family.totalFrames)
@@ -168,9 +246,9 @@ export function proveB8Structure(c:B8Candidate):B8StructureProof {
   const count = compiled.edits.sourceSegments?.length ?? 0
   const transitions = compiled.edits.transitions?.length ?? 0
   const layers = compiled.edits.textItems?.length ?? 0
-  if (count !== c.family.slots.length || transitions !== c.family.slots.length-1 ||
-      layers !== c.family.texts.length + (c.family.graphics?.length ?? 0))
-    throw new Error('Compiler dropped authored editable structure for '+c.id)
+  const editableIssues=auditB8EditableOutput(c,compiled)
+  if(editableIssues.length)
+    throw new Error('Compiler dropped authored editable structure for '+c.id+': '+editableIssues.join(','))
   return {id:c.id,durationFrames:c.family.totalFrames,slotItems:count,transitions,
     videoCuts:compiled.edits.videoSplits?.length ?? 0,
     textItems:layers,musicPresent:Boolean(compiled.edits.audio?.music),

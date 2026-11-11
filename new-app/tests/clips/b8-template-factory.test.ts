@@ -2,7 +2,7 @@ import { describe,expect,it } from 'vitest'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
-  auditB8Evidence,scoreB8Review,shardB8Jobs,reconcileB8Queue,locallyApprovedB8Releases,
+  auditB8EditableOutput,auditB8Evidence,scoreB8Review,shardB8Jobs,reconcileB8Queue,locallyApprovedB8Releases,
   type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
 import { validateTemplateFamily, templateFrameToMs } from '@/lib/clips/real-video-templates/sequence-contract'
 import { compileTemplateWithMusic } from '@/lib/clips/real-video-templates/music-sequence'
@@ -135,6 +135,19 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(result.edits.audio?.music).toMatchObject({uploadId:'music_fixture',loop:false,
       endMs:duration,fadeInMs:500,fadeOutMs:1000})
     expect(result.edits.inserts).toBeUndefined()
+    expect(auditB8EditableOutput(c,result,{
+      requireMusic:true,expectedMusicAssetId:'music_fixture',
+    })).toEqual([])
+    const broken={...result,edits:{...result.edits,
+      videoSplits:result.edits.videoSplits?.slice(1),
+      textItems:result.edits.textItems?.map((layer,i)=>i?layer:{...layer,anim:undefined}),
+      audio:{...result.edits.audio,music:null},
+    }}
+    expect(auditB8EditableOutput(c,broken,{
+      requireMusic:true,expectedMusicAssetId:'music_fixture',
+    })).toEqual(expect.arrayContaining([
+      'editable_cut_boundaries','animated_layer_loss','separate_music_track_missing',
+    ]))
   })
   it('preserves running/done checkpoints on repeated queue generation without erasing work',()=>{
     const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)
