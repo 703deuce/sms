@@ -212,17 +212,17 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
       reviewed: release.reviewed,
       verified: release.previewRenderVerified,
     }
-    const hash='4fb1206922f32a40c53ae14780d721541eb1fe0c42259f666016b23d68a11d3e'
+    const hash='c418b398ea7dc14a92a16596b7687d190735e1f14947bc954e357d62ba6f1482'
     const audio = {
       asset:{id:'generated_audio',kind:'audio',durationFrames:480,license},
       label:'Batch 9A pulse bed',durationMs:16000,width:null,height:null,
-      url:'/batch9a-pulse.wav',available:true,
+      url:'/batch9a-groove.wav',available:true,
     }
     release.design.musicPolicy='licensed-only'
     release.defaultMusic={
-      id:'batch9a_anchor_bed_v1',generator:'batch9a-pulse-v1',sha256:hash,
+      id:'batch9a_anchor_groove_v2',generator:'batch9a-groove-v2',sha256:hash,
       durationFrames:480,bpm:150,beatEveryFrames:3,author:'Transovo AI',
-      license:'Transovo first-party original template music',revision:'batch9a-audio-v1',
+      license:'Transovo first-party original template music',revision:'batch9a-audio-v2',
     }
     release.musicRequired=true
     release.certificationStatus='preview'
