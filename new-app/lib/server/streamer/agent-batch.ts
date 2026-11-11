@@ -198,8 +198,10 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
               workspaceId:p.workspaceId,deletedAt:null,
             },select:{id:true,projectId:true}}):[]
         const seen=new Set(next.completed.map(item=>item.clipId))
-        for(const clip of published){
-          if(seen.has(clip.id))continue
+        const publishedById=new Map(published.map(clip=>[clip.id,clip]))
+        for(const id of ids){
+          const clip=publishedById.get(id)
+          if(!clip||seen.has(clip.id))continue
           next.completed.push({clipId:clip.id,projectId:clip.projectId,
             startMin:Math.floor((start-next.sourceStartMs)/60_000)})
           seen.add(clip.id)
