@@ -16,7 +16,9 @@ import { generateB8Candidates, proveB8Structure, reportB8Quality,
   locallyApprovedB8Releases, shardB8Jobs, auditB8Evidence,
   B8_ENGINE_REVISION, reconcileB8Queue,
   type B8Candidate, type B8Evidence, type B8QueueJobState } from '../lib/clips/real-video-templates/b8-factory'
-import { compileTemplate, templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
+import { templateFrameToMs, type TemplateAsset } from '../lib/clips/real-video-templates/sequence-contract'
+import { compileTemplateWithMusic, type TemplateMusicDecisionV1 } from '../lib/clips/real-video-templates/music-sequence'
+import { assertAudioLicense } from '../lib/clips/real-video-templates/music-timing'
 import { defaultEdits } from '../lib/clips/edits'
 
 const args=process.argv.slice(2)
@@ -61,7 +63,8 @@ async function verifyPublic(url:string,expected:string):Promise<boolean>{
 }
 type Fixture={id:string;kind:'image'|'video';path:string;sha256:string;
   durationFrames?:number;license:{id:string;provenance:'user-owned'|'first-party'|'licensed';reference:string}}
-type FixtureManifest={v:1;rendererRevision:string;media:Fixture[]}
+type FixtureManifest={v:1;rendererRevision:string;media:Fixture[];
+  soundtrack?:{asset:TemplateAsset;path:string;sha256:string;decision:TemplateMusicDecisionV1}}
 async function verifiedFixtures():Promise<FixtureManifest>{
   const fixture=readJSON<FixtureManifest>(fixturePath)
   if(fixture.v!==1||!fixture.media?.length||!fixture.rendererRevision)throw new Error('Invalid fixtures')
@@ -79,6 +82,23 @@ async function verifiedFixtures():Promise<FixtureManifest>{
         throw new Error('Video fixture frame count differs from actual decoded media: '+row.id)
     }
     ids.add(row.id)
+  }
+  if(fixture.soundtrack){
+    const {asset,path,sha256,decision}=fixture.soundtrack
+    if(asset?.kind!=='audio'||!asset.id||!asset.license?.reference||
+       !Number.isInteger(asset.durationFrames)||!asset.durationFrames||
+       !HASH.test(sha256)||!await verifyPublic(path,sha256))
+      throw new Error('Pinned soundtrack requires real local audio bytes and license metadata')
+    assertAudioLicense(decision.rights)
+    if(decision.v!==1||decision.choice==='re-sync'||
+       decision.rights.assetId!==asset.id||decision.rights.sha256!==sha256||
+       decision.rights.verifiedDurationFrames!==asset.durationFrames||
+       decision.schedule.musicAssetId!==asset.id||decision.schedule.sha256!==sha256||
+       decision.schedule.durationFrames!==asset.durationFrames)
+      throw new Error('Soundtrack rights, bytes and approved beat schedule differ')
+    const measured=probe(fileInPublic(path))
+    if(!measured.hasAudio||Math.abs(measured.durationFrames-asset.durationFrames)>1)
+      throw new Error('Pinned soundtrack duration differs from decoded audio')
   }
   return fixture
 }
@@ -265,13 +285,21 @@ async function execute(){
       ...slot,...(media[slot.id]?.kind==='video'
         ? {sourceInFrame:slot.handles?.headFrames??0} : {}),
     }))}
+    if(!fixtures.soundtrack)
+      throw new Error('Batch 8 full-motion preview needs licensed pinned beat-time music')
     const duration=templateFrameToMs(c.family.totalFrames)
-    const edits=compileTemplate(sampledFamily,c.design,{instanceId:'b8_qa_'+c.familyId,media},
-      {durationFrames:c.family.totalFrames,edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
+    const edits=compileTemplateWithMusic(sampledFamily,c.design,{
+      instanceId:'b8_qa_'+c.familyId,media,music:fixtures.soundtrack.asset,
+      templateMusic:fixtures.soundtrack.decision,
+    },{durationFrames:c.family.totalFrames,
+      edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
+    if(!edits.edits.audio?.music)
+      throw new Error('Music compiler lost the separate soundtrack lane')
     const dest=join(directory,'preview-requests',c.id+'.json')
     save(dest,{v:1,status:'worker_render_required',designId:c.id,definitionHash:c.definitionHash,
       footage:fixtures.media.filter(f=>Object.values(media).some(a=>a.id===f.id)),
-      edits:edits.edits,expected:proveB8Structure(c),
+      soundtrack:fixtures.soundtrack,edits:edits.edits,expected:proveB8Structure(c),
+      expectedAudioTrack:true,expectedMusicSourceSha256:fixtures.soundtrack.sha256,
       message:'Submit registered assets and this ClipEditsV2 plan to the existing worker. No MP4 is claimed by this command.'})
     console.log('Wrote compiler/worker preview request '+dest+' (NOT an MP4).')
   }else if(command==='qa-media'){
@@ -288,7 +316,10 @@ async function execute(){
   }else if(command==='jobs'){
     const fixtures=await verifiedFixtures()
     const shardCount=Number(argument('--shards','16'))
-    const planned=shardB8Jobs(candidates,{hashes:fixtures.media.map(m=>m.sha256),
+    const hashes=[...fixtures.media.map(m=>m.sha256),
+      ...(fixtures.soundtrack?[fixtures.soundtrack.sha256,
+        createHash('sha256').update(JSON.stringify(fixtures.soundtrack.decision)).digest('hex')]:[])]
+    const planned=shardB8Jobs(candidates,{hashes,
       rendererRevision:fixtures.rendererRevision},shardCount)
     const jobs=withQueueLock(()=>{
       const existing=existsSync(join(directory,'jobs.json'))?loadQueue():[]

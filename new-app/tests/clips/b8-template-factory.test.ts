@@ -4,7 +4,10 @@ import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
   auditB8Evidence,scoreB8Review,shardB8Jobs,reconcileB8Queue,locallyApprovedB8Releases,
   type B8Evidence } from '@/lib/clips/real-video-templates/b8-factory'
-import { validateTemplateFamily } from '@/lib/clips/real-video-templates/sequence-contract'
+import { validateTemplateFamily, templateFrameToMs } from '@/lib/clips/real-video-templates/sequence-contract'
+import { compileTemplateWithMusic } from '@/lib/clips/real-video-templates/music-sequence'
+import { pinMusicSchedule } from '@/lib/clips/real-video-templates/music-timing'
+import { defaultEdits } from '@/lib/clips/edits'
 const candidates=generateB8Candidates()
 const hash='a'.repeat(64)
 function evidence(id:string):B8Evidence{
@@ -102,6 +105,36 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(lintB8Legibility(candidate,{headline:''}).some(c=>c.code==='empty_text')).toBe(true)
     expect(lintB8Legibility(candidate).some(c=>c.code.startsWith('low_contrast_on_'))).toBe(true)
     expect(auditB8Evidence(altered,evidence(altered.id))).toContain('unresolved_static_legibility')
+  })
+  it('keeps B4 mixed sources and B5 pinned music as separate edit lanes',()=>{
+    const c=candidates.find(c=>c.id==='f01_bold')!
+    const family={...c.family,slots:c.family.slots.map((slot,i)=>
+      i===1?{...slot,sourceInFrame:6}:slot)}
+    const license={id:'fixture_owned',provenance:'user-owned' as const,reference:'test-only'}
+    const media=Object.fromEntries(family.slots.map((slot,i)=>[slot.id,i===1?
+      {id:'video_one',kind:'video' as const,durationFrames:300,license}:
+      {id:'image_one',kind:'image' as const,license}]))
+    const rights={assetId:'music_fixture',origin:'first-party-test',author:'Test only',
+      license:'first-party',revision:'1',sha256:hash,commercialUse:true,
+      exportAllowed:true,redistributionAllowed:false,
+      verifiedDurationFrames:600,verifiedAt:'2026-11-11'}
+    const schedule=pinMusicSchedule({assetId:'music_fixture',license:rights,
+      mode:'beat-time',grid:{bpm:120,beatsMs:Array.from({length:40},(_,i)=>i*500)}})
+    const duration=templateFrameToMs(family.totalFrames)
+    const result=compileTemplateWithMusic(family,c.design,{
+      instanceId:'b8_music_preview',media,
+      music:{id:'music_fixture',kind:'audio',durationFrames:600,license},
+      templateMusic:{v:1,rights,schedule,choice:'keep-timing'},
+    },{durationFrames:family.totalFrames,
+      edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
+    expect(result.sequence.items).toHaveLength(family.slots.length)
+    expect(result.edits.sourceSegments).toHaveLength(family.slots.length)
+    expect(result.edits.sources?.some(s=>s.refId==='video_one')).toBe(true)
+    expect(result.edits.textItems).toHaveLength(family.texts.length+(family.graphics?.length??0))
+    expect(result.edits.transitions).toHaveLength(family.slots.length-1)
+    expect(result.edits.audio?.music).toMatchObject({uploadId:'music_fixture',loop:false,
+      endMs:duration,fadeInMs:500,fadeOutMs:1000})
+    expect(result.edits.inserts).toBeUndefined()
   })
   it('preserves running/done checkpoints on repeated queue generation without erasing work',()=>{
     const first=shardB8Jobs(candidates,{hashes:[hash],rendererRevision:'worker-v1'},8)

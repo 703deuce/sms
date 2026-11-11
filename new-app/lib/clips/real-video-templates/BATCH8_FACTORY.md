@@ -64,14 +64,19 @@ Create `fixtures.json` with `v:1`, a pinned `rendererRevision` and
 `media` entries containing: unique local `id`, `kind` (`image` or
 `video`), local `path` below `new-app/public/`, actual file `sha256`,
 `durationFrames` for clips (verified at 30 fps), and a license object
-`{id,provenance,reference}`. At least one independently licensed photo
-and video must exist to prepare a mixed-source preview. Repeated sources
-and all-photo cases should also be checked separately. No test fixture
-is automatically granted commercial redistribution rights.
+`{id,provenance,reference}`. At least one independently licensed photo and a long enough video for
+an authored slot plus handles must exist. For a full-motion preview the
+manifest now also requires `soundtrack: {asset,path,sha256,decision}`.
+`asset` is the registered audio TemplateAsset and `decision` is the
+existing Batch 5 music decision with pinned beat schedule and explicit
+commercial/export license. Source bytes, measured duration, music identity,
+rights and schedule must agree. Repeated sources and all-photo cases should
+also be checked separately. No fixture is automatically granted commercial
+redistribution rights.
 
-The preview command maps selected sample media to native source segments,
-compiles through the existing template compiler and writes the authoritative
-expected timeline/worker input plan. The actual MP4 must be rendered through
+The preview command maps media to native source segments, compiles through
+the existing Batch 5 music-aware template compiler and writes the authoritative
+expected timeline/worker input plan with a separate pinned soundtrack lane. The actual MP4 must be rendered through
 the existing preseeded project/FFmpeg worker and returned as a local
 `renderMp4`; a false success flag or placeholder cannot create a release.
 A local playable MP4 cannot be generated from unregistered or absent
