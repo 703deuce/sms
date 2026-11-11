@@ -490,7 +490,6 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
   if (model.id === 'seedance-2.5') {
     const input: Record<string, unknown> = {
       prompt,
-      aspect_ratio: aspect,
       duration: durationSec ?? 15,
       resolution: resolution || '720p',
       generate_audio: true,
@@ -504,6 +503,9 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
       input.reference_image_urls = [referenceUrl]
     }
     if (endUrl) input.last_frame_url = endUrl
+    // KIE Seedance 2.5: first-frame and first-last-frame jobs require aspect_ratio "adaptive".
+    const frameConditioned = Boolean(input.first_frame_url)
+    input.aspect_ratio = frameConditioned ? 'adaptive' : aspect
     return { api: 'jobs', model: model.providerModel, input }
   }
 
