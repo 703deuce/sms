@@ -80,7 +80,7 @@ _ASS_FONT_ALIASES: dict[str, str] = {
     "Space Grotesk": "Space Grotesk",
     "Space Mono": "Space Mono",
     "Roboto": "Roboto Bold",
-    "Playfair Display": "Playfair Display Bold",
+    "Playfair Display Bold": "Playfair Display",
 }
 
 
