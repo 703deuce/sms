@@ -112,6 +112,20 @@ describe('real-video template B3 experimental contract', () => {
     expect(a).toEqual(b)
     expect(a.sequence.items[0].id).not.toBe(a.sequence.items[1].id)
   })
+  it('maps fixed-duration slot speed through compiler and exact frame clock', () => {
+    const f = family(1)
+    f.slots[0] = { ...f.slots[0]!, media: 'video', sourceInFrame: 15, speed: 2 }
+    const c = choices(1)
+    c.media.shot_1 = asset('video_speed', 'video', 90)
+    const r = compileTemplatePrototype(f, design, c, carrier(1))
+    expect(r.edits.sourceSegments?.[0]).toMatchObject({ inMs: 500, speed: 2, startMs: 0, endMs: 1000 })
+    expect(r.sequence.items[0]).toMatchObject({ mediaInFrame: 15, speed: 2 })
+    const loc = outputToSequenceFrame(r.sequence, 10)
+    expect(loc).toMatchObject({ outputFrame: 10, itemLocalFrame: 10, mediaFrame: 35 })
+    expect(sourceToSequenceFrames(r.sequence, 'video_speed', 35)).toEqual([loc])
+    expect(sourceToSequenceFrames(r.sequence, 'video_speed', 36)).toHaveLength(0)
+  })
+
   it('accepts photos alone, and a mixed photo/video arrangement', () => {
     const c = choices(2)
     c.media.shot_2 = asset('video_two', 'video', 60)
