@@ -80,10 +80,10 @@ export function editorRailGroups(aiExtras: boolean = clipEditorAiExtrasEnabled()
     { id: 'layers', label: 'Layers', icon: Layers, tabs: [{ id: 'layers', tabLabel: 'Layers' }] },
     {
       id: 'templates',
-      label: 'Templates',
+      label: 'Layouts',
       icon: LayoutTemplate,
       tabs: [
-        { id: 'templates', tabLabel: 'Templates' },
+        { id: 'templates', tabLabel: 'Layouts' },
         { id: 'brand', tabLabel: 'Brand' },
       ],
     },
@@ -141,6 +141,7 @@ export const INVENTORY_RAIL_LABEL_TO_PANEL: Record<string, EditorPanelId> = {
   Polish: 'layout',
   Layers: 'layers',
   Templates: 'templates',
+  Layouts: 'templates',
   Brand: 'brand',
   Repurpose: 'repurpose',
   Properties: 'inspector',
