@@ -19,7 +19,7 @@ describe('B3 scoped TypeScript gate', () => {
     if (run.error) throw run.error
     const text = [run.stdout || '', run.stderr || ''].join('\n')
     const diagnostics = text.split(/\r?\n/).filter(line =>
-      /^(lib\/clips\/real-video-templates\/|lib\/clips\/editor\/(sources|motion-frame)\.ts|lib\/clips\/edits(-version-hash)?\.ts|lib\/server\/clips\/real-video-template-instances\.ts|components\/clips\/editor\/(motion-preview|preview-stage|script-view-compact-timeline|media-panel|editor-shell)\.(ts|tsx)|app\/api\/clips\/(video-templates\/publish|clips\/\[id\]\/template-authoring|projects\/\[id\]\/template-instance)\/route\.ts|tests\/clips\/real-video-template)/.test(line)
+      /^(lib\/clips\/real-video-templates\/|lib\/clips\/editor\/(sources|motion-frame|motion-schema|keyframes|source-segment-motion)\.ts|lib\/clips\/edits(-version-hash)?\.ts|lib\/server\/clips\/real-video-template-instances\.ts|components\/clips\/editor\/(motion-preview|preview-stage|script-view-compact-timeline|media-panel|editor-shell|timeline)\.(ts|tsx)|app\/api\/clips\/(video-templates\/publish|clips\/\[id\]\/template-authoring|projects\/\[id\]\/template-instance)\/route\.ts|tests\/clips\/real-video-template)/.test(line)
       && /error TS\d+/.test(line))
     expect(diagnostics, diagnostics.join('\n')).toEqual([])
   }, 190000)
