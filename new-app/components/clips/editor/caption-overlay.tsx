@@ -2,7 +2,8 @@
 
 import './caption-anim.css'
 
-import { Fragment, useMemo, useRef, useEffect } from 'react'
+import { Fragment, useMemo, useRef, useEffect, useState } from 'react'
+import { waitForClipFont } from '@/lib/clips/font-manifest'
 import type { ClipEditsV2, ClipWord } from '@/lib/clips/edits'
 import { wordDisplayText, wordKey } from '@/lib/clips/edits'
 import { activeCaptionWordIndex, captionEmojiForWord, previewCaptionWordIndex } from '@/lib/clips/caption-overlay-active'
@@ -343,7 +344,40 @@ export function CaptionOverlay({
 }
 
 export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: CaptionPreset; label?: string }) {
-  const words = label.split(' ').map((w, i) => ({ w, s: i * 0.35, e: (i + 1) * 0.35 + 0.15, idx: i }))
+  const isB2B = preset.slug.startsWith('b2b-')
+  const holder = useRef<HTMLDivElement>(null)
+  const [visible, setVisible] = useState(!isB2B)
+  const [ready, setReady] = useState(!isB2B)
+  const [failed, setFailed] = useState(false)
+
+  // The 120 opt-in recipe cards must not fetch 120 TTFs or mount 120 ASS
+  // preview canvases on panel open. Only cards near the viewport mount.
+  useEffect(() => {
+    if (!isB2B || !holder.current) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true)
+      return
+    }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) setVisible(true)
+    }, { rootMargin: '120px' })
+    observer.observe(holder.current)
+    return () => observer.disconnect()
+  }, [isB2B])
+
+  useEffect(() => {
+    if (!isB2B || !visible) return
+    let active = true
+    setReady(false)
+    setFailed(false)
+    void waitForClipFont(preset.font)
+      .then(() => { if (active) setReady(true) })
+      .catch(() => { if (active) setFailed(true) })
+    return () => { active = false }
+  }, [isB2B, visible, preset.font])
+
+  const sampleLabel = label === 'CLIP' && isB2B ? 'YOUR BEST MOMENT' : label
+  const words = sampleLabel.split(' ').map((w, i) => ({ w, s: i * 0.35, e: (i + 1) * 0.35 + 0.15, idx: i }))
   const edits: ClipEditsV2 = {
     v: 2,
     trim: { in: 0, out: 99999 },
@@ -358,17 +392,22 @@ export function CaptionMiniPreview({ preset, label = 'CLIP' }: { preset: Caption
     },
     layout: { mode: 'speaker_follow', shotOverrides: [] },
   }
-  const previewTimeSec = 0.25
   return (
-    <div className="relative h-16 overflow-hidden rounded-md bg-gradient-to-b from-zinc-800 to-zinc-950">
-      <CaptionOverlay
-        words={words as ClipWord[]}
-        currentTimeSec={previewTimeSec}
-        edits={edits}
-        boxHeightPx={64}
-        outputDurationSec={2}
-        staticPreview
-      />
+    <div ref={holder} className="relative h-16 overflow-hidden rounded-md bg-gradient-to-b from-zinc-800 to-zinc-950">
+      {(!isB2B || ready) && visible ? (
+        <CaptionOverlay
+          words={words as ClipWord[]}
+          currentTimeSec={0.6}
+          edits={edits}
+          boxHeightPx={64}
+          outputDurationSec={2}
+          staticPreview
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center px-2 text-center text-[10px] text-zinc-300" role="status">
+          {failed ? 'Font preview unavailable' : 'Loading typeface…'}
+        </div>
+      )}
     </div>
   )
 }
