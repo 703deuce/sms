@@ -1,3 +1,4 @@
+import { cssFallbackStack } from '@/lib/clips/font-fallbacks'
 import metrics from '@/lib/clips/caption-font-metrics.json'
 
 const loggedMissing = new Set<string>()
@@ -13,19 +14,19 @@ export function captionFontStack(font: string, resolveUser?: UserFontResolver): 
     return captionFontStack('Poppins')
   }
   if (font.startsWith('user:')) return captionFontStack('Poppins')
-  if (font === 'Poppins') return 'var(--font-poppins), Poppins, sans-serif'
-  if (font === 'Anton') return 'var(--font-clip-anton), Anton, Impact, sans-serif'
+  if (font === 'Poppins') return `var(--font-poppins), ${cssFallbackStack('Poppins')}`
+  if (font === 'Anton') return `var(--font-clip-anton), ${cssFallbackStack('Anton')}`
   if (font === 'Montserrat Black' || font === 'Montserrat')
-    return 'var(--font-clip-montserrat), Montserrat, sans-serif'
-  if (font === 'Bangers') return 'var(--font-clip-bangers), Bangers, Impact, sans-serif'
-  if (font === 'Inter') return 'var(--font-clip-inter), Inter, sans-serif'
-  if (font === 'Lato') return 'var(--font-clip-lato), Lato, sans-serif'
-  if (font === 'Bebas Neue') return 'var(--font-clip-bebas), "Bebas Neue", sans-serif'
-  if (font === 'Archivo Black') return 'var(--font-clip-archivo), "Archivo Black", sans-serif'
-  if (font === 'Oswald') return 'var(--font-clip-oswald), Oswald, sans-serif'
-  if (font === 'Luckiest Guy') return 'var(--font-clip-luckiest), "Luckiest Guy", cursive'
+    return `var(--font-clip-montserrat), ${cssFallbackStack('Montserrat')}`
+  if (font === 'Bangers') return `var(--font-clip-bangers), ${cssFallbackStack('Bangers')}`
+  if (font === 'Inter') return `var(--font-clip-inter), ${cssFallbackStack('Inter')}`
+  if (font === 'Lato') return `var(--font-clip-lato), ${cssFallbackStack('Lato')}`
+  if (font === 'Bebas Neue') return `var(--font-clip-bebas), ${cssFallbackStack('Bebas Neue')}`
+  if (font === 'Archivo Black') return `var(--font-clip-archivo), ${cssFallbackStack('Archivo Black')}`
+  if (font === 'Oswald') return `var(--font-clip-oswald), ${cssFallbackStack('Oswald')}`
+  if (font === 'Luckiest Guy') return `var(--font-clip-luckiest), ${cssFallbackStack('Luckiest Guy')}`
   if (['Rubik', 'Gabarito', 'Fira Sans Condensed', 'DM Serif Display', 'Playfair Display', 'Caveat', 'Space Grotesk', 'Space Mono'].includes(font))
-    return '"' + font.replace(/"/g, '') + '", sans-serif'
+    return cssFallbackStack(font)
   return font
 }
 
