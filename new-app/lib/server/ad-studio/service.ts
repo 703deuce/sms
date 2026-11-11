@@ -33,7 +33,7 @@ function canonicalJson(value: unknown): string {
 }
 
 /** Confirmation metadata is private in plan JSON until a dedicated field is added in B3. */
-type SavedPlan = AdPlan & { _confirmKey?: string; _renderRetryKey?: string; _voiceRetryKey?: string }
+type SavedPlan = AdPlan & { _confirmKey?: string; _renderRetryKey?: string; _voiceRetryKey?: string; _imageRetryKeys?: Record<string,string> }
 
 function publicPlan(raw: unknown): AdPlan | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
@@ -41,11 +41,13 @@ function publicPlan(raw: unknown): AdPlan | null {
     _confirmKey: _confirmHidden,
     _renderRetryKey: _retryHidden,
     _voiceRetryKey: _voiceRetryHidden,
+    _imageRetryKeys: _imageRetryHidden,
     ...plan
   } = raw as unknown as SavedPlan
   void _confirmHidden
   void _retryHidden
   void _voiceRetryHidden
+  void _imageRetryHidden
   return plan as AdPlan
 }
 function toView(
@@ -601,4 +603,52 @@ export async function retryAdVoiceover(
     await canRetryFinalRender(row),
     await canRetryVoiceoverOnly(row),
   )
+}
+
+
+/** User-click-only replacement of one photo-ad still. No QC path calls this automatically. */
+export async function regenerateAdImageVariant(
+  workspaceId: string,
+  id: string,
+  variantId: string,
+  keyValue: unknown,
+): Promise<AdStudioRun> {
+  console.info('[ad-studio:r5] still_regenerate_begin', { runId: id, variantId })
+  const key = adKeySchema.safeParse(keyValue)
+  if (!key.success) throw adInvalid('An idempotency key is required for still regeneration.')
+  const row = await required(workspaceId, id)
+  if (row.mode !== 'image_to_ad' || !['done','failed'].includes(row.status)) {
+    throw adInvalid('Only a completed or failed photo-ad run can regenerate a still.')
+  }
+  const saved = row.plan as unknown as SavedPlan | null
+  if (!saved?.photoAds) throw adInvalid('Photo-ad plan is missing.')
+  const variant = await prisma().adStudioImageVariant.findFirst({ where: { id: variantId, runId: id } })
+  if (!variant) throw adInvalid('Image-ad variant was not found.')
+  if (saved._imageRetryKeys?.[variantId] === key.data) {
+    console.info('[ad-studio:r5] still_regenerate_replay', { runId: id, variantId })
+    return getAdRun(workspaceId, id)
+  }
+  const qcByIndex = { ...(saved.photoAds.qcByIndex ?? {}) }
+  delete qcByIndex[String(variant.index)]
+  const nextPlan: SavedPlan = {
+    ...saved,
+    photoAds: { ...saved.photoAds, qcByIndex },
+    _imageRetryKeys: { ...(saved._imageRetryKeys ?? {}), [variantId]: key.data },
+  }
+  await prisma().$transaction(async (tx) => {
+    await tx.adStudioImageVariant.update({
+      where: { id: variantId },
+      data: { status: 'planned', studioJobId: null },
+    })
+    await tx.adStudioRun.update({
+      where: { id },
+      data: {
+        status: 'generating', plan: jsonValue(nextPlan), completedAt: null,
+        errorCode: null, errorMessage: null,
+      },
+    })
+  })
+  console.info('[ad-studio:r5] still_regenerate_claimed', { runId: id, variantId })
+  await advanceAdStudioRun(workspaceId, id)
+  return getAdRun(workspaceId, id)
 }
