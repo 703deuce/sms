@@ -37,8 +37,12 @@ export function useEditorRecorder(
   const recStartRef = useRef<number | null>(null)
 
   useEffect(() => {
-    void listMediaDeviceOptions('videoinput').then(setCameras)
-    void listMediaDeviceOptions('audioinput').then(setMics)
+    let active = true
+    // Device labels are best-effort until the user grants permission; absence/denial must
+    // not crash the solo recorder or leave unhandled promises after navigation.
+    void listMediaDeviceOptions('videoinput').catch(() => []).then((list) => { if (active) setCameras(list) })
+    void listMediaDeviceOptions('audioinput').catch(() => []).then((list) => { if (active) setMics(list) })
+    return () => { active = false }
   }, [projectId])
 
   useEffect(() => {
@@ -64,6 +68,7 @@ export function useEditorRecorder(
 
   const ensureStream = useCallback(async () => {
     if (streamRef.current) return streamRef.current
+    if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera and microphone are unavailable. Use HTTPS and check browser permissions.')
     const stream = await navigator.mediaDevices.getUserMedia({
       video: cameraId ? { deviceId: cameraId } : true,
       audio: micId ? { deviceId: micId } : true,

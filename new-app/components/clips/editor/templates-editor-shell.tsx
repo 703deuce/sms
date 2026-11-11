@@ -17,6 +17,7 @@ import { useEditorState } from '@/components/clips/editor/use-editor-state'
 import type { EditorClipShell } from '@/components/clips/editor/editor-clip-shell'
 import { editorMediaLoadFallbacks } from '@/lib/server/clips/editor-clip-media'
 import { StandaloneEditorChrome, StandaloneEditorToolRail, finishStandaloneLayoutHandoff } from '@/components/clips/editor/standalone-editor-chrome'
+import { useFullVideoModeHandoff } from '@/components/clips/editor/full-video-mode-handoff'
 import { editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { loadSourceWords } from '@/lib/clips/source-words'
 import { buildTemplateCatalog, type CatalogItem, type CatalogTab } from '@/lib/clips/templates/catalog'
@@ -57,7 +58,7 @@ type CaptionDraft = {
   activeStyle?: 'color' | 'highlight' | 'fill'
   highlightColor?: string
 }
-type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'export' | 'layout-script' | 'layout-timeline'
+type HandoffTarget = 'project' | 'clip' | 'producer' | 'story' | 'generate' | 'full-video' | 'export' | 'layout-script' | 'layout-timeline'
 type BulkResult = { updated: number; skipped: number; errors: number }
 type CaptionView = 'choose' | 'edit'
 type CustomizerSection = 'layout' | 'subtitle' | 'headline' | 'background' | 'logo' | 'outro'
@@ -542,6 +543,7 @@ export function TemplatesEditorShell(props: Props) {
         ? (props.aiMeta as { __editorSaveSeq: number }).__editorSaveSeq
         : 0,
   })
+  const fullVideoMode = useFullVideoModeHandoff(clipId, flushSave)
 
   const loadBrands = useCallback(async () => {
     console.info('[editor:templates-mode] brand-load-start', { projectId, clipId })
@@ -1118,6 +1120,10 @@ export function TemplatesEditorShell(props: Props) {
       window.location.assign(routes.project(projectId))
       return
     }
+    if (target === 'full-video') {
+      await fullVideoMode.open()
+      return
+    }
     const query = props.clipperStudio ? { from: 'studio' } : undefined
     if (target === 'producer') {
       console.info('[editor:templates-mode] open-ai-producer', { projectId, clipId })
@@ -1149,7 +1155,7 @@ export function TemplatesEditorShell(props: Props) {
     try {
       await flushSave()
     } catch {
-      toast.error('Save edits before leaving Templates')
+      toast.error('Save edits before leaving Layouts')
       return
     }
     console.info('[editor:templates-gaps] handoff', {
@@ -1219,17 +1225,17 @@ export function TemplatesEditorShell(props: Props) {
   }
 
   return (
-    <ClipperSurfaceErrorBoundary surface="Templates editor">
+    <ClipperSurfaceErrorBoundary surface="Layouts editor">
       <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-background text-foreground" data-testid="templates-editor">
         <StandaloneEditorChrome
           projectTitle={props.projectTitle}
           title={props.initialTitle}
           current="templates"
           saveState={saveState}
-          statusText={saveState === 'saved' ? (hasDraftChange ? 'Saved edit · preview not applied' : 'Saved') : saveState === 'error' ? 'Save failed' : 'Saving…'}
+          statusText={fullVideoMode.progress ?? (saveState === 'saved' ? (hasDraftChange ? 'Saved edit · preview not applied' : 'Saved') : saveState === 'error' ? 'Save failed' : 'Saving…')}
           canUndo={canUndo}
           canRedo={canRedo}
-          disabled={handoffBusy}
+          disabled={handoffBusy || fullVideoMode.loading}
           onBack={() => requestHandoff('project')}
           onUndo={() => {
             clearPreviewForHistory()
@@ -1252,13 +1258,13 @@ export function TemplatesEditorShell(props: Props) {
         />
 
         <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(320px,390px)_minmax(0,1fr)_3.5rem] overflow-hidden gap-1 p-1 xl:grid-cols-[minmax(360px,430px)_minmax(0,1fr)_3.5rem]" data-testid="templates-editor-layout-grid">
-          <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card/60" aria-label="Template gallery">
+          <aside className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-card/60" aria-label="Layout gallery">
             <div className="border-b border-border px-4 pb-3 pt-4">
-              <h2 className="text-sm font-semibold">Templates</h2>
+              <h2 className="text-sm font-semibold">Layouts</h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 Hover to preview. Apply writes to this clip&apos;s existing edit document.
               </p>
-              <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Template types">
+              <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Layout types">
                 {TABS.map((item) => (
                   <button
                     key={item.id}
@@ -1376,7 +1382,7 @@ export function TemplatesEditorShell(props: Props) {
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder={'Search ' + tab + ' by name or tag'}
                       className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-3 text-xs outline-none focus:border-primary"
-                      aria-label={'Search ' + tab + ' templates'}
+                      aria-label={'Search ' + tab + ' options'}
                     />
                     {searchQuery ? (
                       <Button size="sm" variant="ghost" onClick={() => setSearchQuery('')}>Clear</Button>
@@ -1506,7 +1512,7 @@ export function TemplatesEditorShell(props: Props) {
                   ) : (
                     <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-border bg-background/40 px-6 text-center">
                       <div>
-                        <p className="text-sm font-medium">{searchQuery ? 'No matching templates' : 'No templates in this section'}</p>
+                        <p className="text-sm font-medium">{searchQuery ? 'No matching options' : 'No options in this section'}</p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {searchQuery ? 'Clear search or try a different real template name/tag.' : 'Choose another tab or retry saved brand kits.'}
                         </p>
@@ -1548,7 +1554,7 @@ export function TemplatesEditorShell(props: Props) {
             </div>
           </aside>
 
-          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label="Template preview">
+          <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-border bg-panel" aria-label="Layout preview">
             <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-2">
               <div>
                 <h2 className="text-sm font-semibold">Live preview</h2>
@@ -1640,7 +1646,7 @@ export function TemplatesEditorShell(props: Props) {
                   {activeEntry ? activeEntry.item.name : aspectOverride || customFieldNames.length ? 'Customized saved style' : 'Choose a template'}
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Preview changes are local until applied. Templates change styling/layout only — never source footage.
+                  Preview changes are local until applied. Layout and style choices never replace source footage.
                 </p>
                 <p className="mt-0.5 text-[10px] text-muted-foreground">
                   Project scope applies compatible fields clip-by-clip and skips incompatible clips; no hidden scene scope is added.
@@ -1673,7 +1679,7 @@ export function TemplatesEditorShell(props: Props) {
             </div>
           </main>
           <StandaloneEditorToolRail
-            label="Template tools"
+            label="Layout tools"
             items={[
               { id: 'layouts', label: 'Layouts', icon: LayoutGrid, active: tab === 'layouts', onSelect: () => setTab('layouts') },
               { id: 'captions', label: 'Captions', icon: Type, active: tab === 'captions', onSelect: () => setTab('captions') },
@@ -1703,7 +1709,7 @@ export function TemplatesEditorShell(props: Props) {
         />
 
         {customizerOpen && customizerEdits ? (
-          <div className="fixed inset-0 z-[70] bg-black/65 p-4" role="dialog" aria-modal="true" aria-label="Template customizer">
+          <div className="fixed inset-0 z-[70] bg-black/65 p-4" role="dialog" aria-modal="true" aria-label="Layout customizer">
             <div className="mx-auto flex h-full max-w-[1500px] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-2xl" data-testid="templates-customizer">
               <div className="flex min-h-0 flex-1">
                 <nav className="w-36 shrink-0 border-r border-border bg-card/50 p-2" aria-label="Customizer sections">
@@ -1908,14 +1914,14 @@ export function TemplatesEditorShell(props: Props) {
         ) : null}
 
         {handoffTarget ? (
-          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Unapplied template preview">
+          <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="Unapplied layout preview">
             <div className="w-full max-w-md rounded-xl border border-border bg-card p-4 shadow-2xl">
-              <h2 className="text-sm font-semibold">Unapplied template preview</h2>
+              <h2 className="text-sm font-semibold">Unapplied layout preview</h2>
               <p className="mt-2 text-xs text-muted-foreground">
                 The saved edit is unchanged. Apply this preview to this clip, discard only the local preview, or stay here.
               </p>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Apply uses current-clip scope only. Project-wide apply remains the explicit button on the Templates page.
+                Apply uses current-clip scope only. Project-wide apply remains the explicit button on the Layouts page.
               </p>
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <Button variant="ghost" disabled={handoffBusy} onClick={() => {

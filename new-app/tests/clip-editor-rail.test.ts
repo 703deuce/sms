@@ -15,6 +15,9 @@ describe('clip editor rail', () => {
       'layers',
       'templates',
     ])
+    const layouts = editorRailGroups(false).find((g) => g.id === 'templates')
+    expect(layouts?.label).toBe('Layouts')
+    expect(layouts?.tabs.map((t) => [t.id, t.tabLabel])).toContainEqual(['templates', 'Layouts'])
     const media = editorRailGroups(false).find((g) => g.id === 'media')
     expect(media?.tabs.map((t) => t.id)).toEqual(['media', 'broll', 'thumbnail'])
     const effects = editorRailGroups(false).find((g) => g.id === 'effects')

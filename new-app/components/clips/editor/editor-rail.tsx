@@ -57,7 +57,7 @@ const ALL_EDITOR_RAIL_ITEMS: {
   { id: 'dub', label: 'Dub', icon: Languages, tone: 'text-lane-voice' },
   { id: 'brand', label: 'Brand', icon: Palette, tone: 'text-lane-brand' },
   { id: 'text', label: 'Text', icon: Type, tone: 'text-lane-caption' },
-  { id: 'templates', label: 'Templates', icon: LayoutTemplate, tone: 'text-lane-brand' },
+  { id: 'templates', label: 'Layouts', icon: LayoutTemplate, tone: 'text-lane-brand' },
   { id: 'color', label: 'Effects', icon: SwatchBook, tone: 'text-lane-broll' },
   { id: 'media', label: 'Media', icon: FolderOpen, tone: 'text-lane-broll' },
   { id: 'repurpose', label: 'Repurpose', icon: Megaphone, tone: 'text-lane-ai' },

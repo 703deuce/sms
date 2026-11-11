@@ -224,10 +224,11 @@ export function ThumbnailPanel({
               </div>
             ) : (
               <div className="mb-2 flex h-24 flex-col items-center justify-center gap-1 rounded bg-muted px-2 text-xs" title={t.error ?? undefined}>
-                <span>{t.status === 'FAILED' ? 'Failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}</span>
+                <span role={t.status === 'FAILED' ? 'alert' : undefined}>{t.status === 'FAILED' ? 'Cover failed' : t.status === 'READY' ? 'Loading…' : 'Rendering…'}</span>
+                {t.status === 'FAILED' && t.error ? <span className="line-clamp-2 text-center text-muted-foreground" title={t.error}>{t.error}</span> : null}
                 {t.status === 'FAILED' ? (
-                  <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void generate()}>
-                    Retry
+                  <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy || generating} title="Starts a new three-cover generation; successful covers stay available" onClick={() => void generate()}>
+                    Generate 3 new covers
                   </Button>
                 ) : null}
               </div>
@@ -243,7 +244,7 @@ export function ThumbnailPanel({
                   Download
                 </Button>
               )}
-              <Button size="sm" variant={edits.thumbnailId === t.id || t.picked ? 'default' : 'secondary'} onClick={() => void setCover(t.id)}>
+              <Button size="sm" variant={edits.thumbnailId === t.id || t.picked ? 'default' : 'secondary'} disabled={!t.downloadUrl || t.status === 'FAILED'} title={!t.downloadUrl ? 'Cover image is not available to select yet' : undefined} onClick={() => void setCover(t.id)}>
                 Set as cover
               </Button>
             </div>

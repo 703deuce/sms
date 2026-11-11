@@ -1433,7 +1433,11 @@ export function Timeline({
     if (!editable) return false
     const src = selCompound
     const r = duplicateItems(opCtx(), selection)
-    if (!r) { toast.message('This clip cannot be duplicated here', { id: 'timeline-clipboard' }); return false }
+    if (!r) {
+      toast.message('Select a supported main-video or overlay clip to duplicate', { id: 'timeline-clipboard' })
+      // The editor handled Ctrl/Cmd+D with truthful feedback; do not open browser bookmarks.
+      return true
+    }
     const wrapped =
       src && r.refs.length >= 2
         ? createCompound(r.edits, r.refs, `c_${Date.now().toString(36)}`, undefined, `${src.compound.name} copy`)
@@ -2961,6 +2965,23 @@ export function Timeline({
           height: item.lane === 'video' ? h - 4 - VIDEO_WORDBAR_H : h - 4,
           pointerEvents: interactive && !dimmed ? 'auto' : 'none',
           ...(off ? { backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.45) 0 4px, transparent 4px 8px)' } : {}),
+        }}
+        // HG06: stacked same-time overlays remain keyboard-reachable even when pointer hit-testing
+        // lands on the visually topmost item. Focus order is independent of paint order.
+        tabIndex={item.lane === 'video' || dimmed ? undefined : 0}
+        onKeyDown={(e) => {
+          if (item.lane === 'video' || dimmed) return
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            e.stopPropagation()
+            setSelected(expandToGroups(edits, [{ lane: item.lane, id: item.id }], (lane, id) => ({ lane: lane as LaneId, id }), openCompound))
+          } else if (e.key === 'F10' && e.shiftKey) {
+            e.preventDefault()
+            e.stopPropagation()
+            setSelected([{ lane: item.lane, id: item.id }])
+            const rect = e.currentTarget.getBoundingClientRect()
+            setCtxMenu({ x: rect.left + Math.min(30, rect.width / 2), y: rect.top + Math.min(20, rect.height / 2), hitSrcMs: cutSrcForJl() })
+          }
         }}
         data-testid={host ? 'timeline-compound' : `timeline-item-${item.lane}`}
         data-lane={item.lane}
