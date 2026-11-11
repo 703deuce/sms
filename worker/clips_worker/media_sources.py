@@ -276,6 +276,8 @@ def source_windows(edits: dict, window_start_ms: int, window_end_ms: int) -> lis
                 "fit": s.get("fit") or "cover",
                 "mediaType": src["mediaType"],
             }
+        if s.get("transform"):
+            row["transform"] = s["transform"]
         if s.get("layout"):
             row["layout"] = s["layout"]
             row["windowStartMs"] = lo
