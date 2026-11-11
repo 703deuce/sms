@@ -56,6 +56,7 @@ export async function geminiGenerateJson(input: {
   model: string
   parts: GeminiContentPart[]
   responseSchema: Record<string, unknown>
+  systemInstruction?: string
   temperature?: number
   timeoutMs?: number
 }): Promise<{ text: string; promptTokens: number; outputTokens: number }> {
@@ -66,6 +67,7 @@ export async function geminiGenerateJson(input: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        ...(input.systemInstruction ? { systemInstruction: { parts: [{ text: input.systemInstruction }] } } : {}),
         contents: [{ role: 'user', parts: input.parts }],
         generationConfig: {
           responseMimeType: 'application/json',
