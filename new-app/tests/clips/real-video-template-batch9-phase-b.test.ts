@@ -11,8 +11,12 @@ import {
 describe('Batch 9 Phase B style-pack expansion gate',()=>{
   it('keeps the production Phase B promotion boundary empty until certification',()=>{
     expect(BATCH9_PHASE_B_CERTIFIED_RELEASES).toEqual([])
-    expect(FIRST_PARTY_VIDEO_TEMPLATES).toHaveLength(10)
-    expect(FIRST_PARTY_VIDEO_TEMPLATES.every(row=>row.certificationStatus==='preview')).toBe(true)
+    const phaseA=FIRST_PARTY_VIDEO_TEMPLATES.filter(row=>
+      BATCH9_PHASE_A_ANCHORS.includes(row.id))
+    expect(phaseA).toHaveLength(10)
+    expect(phaseA.every(row=>row.certificationStatus==='preview')).toBe(true)
+    expect(FIRST_PARTY_VIDEO_TEMPLATES.filter(row=>
+      /^f(?:0[1-9]|10)_/.test(row.id)&&!BATCH9_PHASE_A_ANCHORS.includes(row.id))).toEqual([])
   })
   it('defines ten existing bold anchors and exactly 390 non-anchor variants',()=>{
     expect(BATCH9_PHASE_A_ANCHORS).toEqual(
