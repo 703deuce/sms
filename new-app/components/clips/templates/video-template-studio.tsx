@@ -514,7 +514,12 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
             {release.design.musicPolicy !== 'none' && <>
               <button type="button" className={buttonClass} onClick={() => { setSelectedAudio(true);setMediaKind('audio');void refreshMedia(1,'','audio') }}>Choose approved music</button>
               {draft?.music && <button type="button" className={buttonClass}
-                onClick={() => commitDraft({ ...draft, music: undefined })}>Remove music ({draft.music.id})</button>}
+                onClick={() => commitDraft({ ...draft, music: undefined, musicRightsConfirmed: false })}>Remove music ({draft.music.id})</button>}
+              <label className="flex items-start gap-2 text-xs">
+                <input type="checkbox" className="mt-0.5" checked={draft?.musicRightsConfirmed === true}
+                  onChange={e => draft && commitDraft({ ...draft, musicRightsConfirmed: e.target.checked })} />
+                I confirm I own or am licensed to use selected music for this video and its exports.
+              </label>
               <label className="block space-y-1 text-xs">Music timing
                 <select className={inputClass} value="keep" disabled>
                   <option value="keep">Keep existing cuts and timing</option>
@@ -608,7 +613,11 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
                   aria-label={'Use ' + item.label} onClick={() => {
                     if (item.asset.kind === 'audio' || selectedAudio) {
                       if (item.asset.kind !== 'audio') { setError('Select an audio file');return }
-                      if (draft && release.design.musicPolicy !== 'none') commitDraft({ ...draft, music: item.asset })
+                      if (!draft?.musicRightsConfirmed) {
+                        setError('Confirm music ownership or licensing before choosing this track')
+                        return
+                      }
+                      if (release.design.musicPolicy !== 'none') commitDraft({ ...draft, music: item.asset })
                     } else fillSlot(selectedSlot, item.asset)
                   }}>Use</button>
                 <button type="button" className={buttonClass} disabled={!item.available || busy}

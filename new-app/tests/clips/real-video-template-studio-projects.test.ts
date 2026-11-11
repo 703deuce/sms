@@ -181,6 +181,23 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
       first: { ...filled.slots.first, asset: { ...photo, license: {
         ...photo.license, provenance: 'unknown' } } } } })).toThrow('Invalid slot fill')
   })
+  it('requires an explicit rights declaration for a workspace-owned music replacement', async () => {
+    const releases = (await import('@/lib/clips/real-video-templates/releases')).FIRST_PARTY_VIDEO_TEMPLATES
+    const release = releases[0]!
+    const policy = release.design.musicPolicy
+    ;(release.design as any).musicPolicy = 'licensed-only'
+    try {
+      const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
+      const track = { id: 'owned_audio', kind: 'audio',
+        durationFrames: 300, license: { id: 'owned', provenance: 'user-owned', reference: 'workspace_upload' } }
+      const unconfirmed = { ...project.draft, music: track }
+      expect(() => validDraft('one_reviewed', unconfirmed)).toThrow('Confirm ownership')
+      expect(() => validDraft('one_reviewed',
+        { ...unconfirmed, musicRightsConfirmed: true })).not.toThrow()
+    } finally {
+      ;(release.design as any).musicPolicy = policy
+    }
+  })
   it('only discards DRAFT projects, preserving a published clip', async () => {
     const a=await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
     await discardVideoTemplateDraft('ws_one',a.id)

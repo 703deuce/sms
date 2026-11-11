@@ -118,6 +118,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
   }
   if (raw.music !== undefined && (release.design.musicPolicy === 'none' || !validAsset(raw.music, 'audio')))
     throw new Error('Template music is unavailable or unapproved')
+  if (raw.music !== undefined && raw.musicRightsConfirmed !== true)
+    throw new Error('Confirm ownership or licensed use of the selected music before saving')
   for (const [id, text] of Object.entries(raw.texts)) {
     const max = allowedTexts.get(id)
     if (!max || typeof text !== 'string' || !text.trim() || Array.from(text).length > max)
@@ -213,8 +215,10 @@ export async function publishVideoTemplateDraft(workspaceId: string, projectId: 
     throw new TemplateInstanceConflict()
   }
   const instanceId = templateInstanceId(workspaceId, record.draft.draftId)
-  const { family, choices } = materializeStudioDraft(release.family, record.draft, instanceId)
-  await assertDraftAssets(workspaceId, record.draft)
+  // Older drafts may predate the music rights gate: do not publish them until confirmed.
+  const approvedDraft = validDraft(record.draft.releaseId, record.draft)
+  const { family, choices } = materializeStudioDraft(release.family, approvedDraft, instanceId)
+  await assertDraftAssets(workspaceId, approvedDraft)
   const publish = await publishTemplateProject(
     workspaceId, record.draft.draftId, family, release.design,
     { media: choices.media, texts: choices.texts, music: choices.music },

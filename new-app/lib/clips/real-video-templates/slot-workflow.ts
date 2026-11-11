@@ -23,6 +23,8 @@ export type StudioDraft = {
   slots: Record<string, StudioSlotFill>
   texts: Record<string, string>
   music?: TemplateAsset
+  /** Explicit user declaration about commercial/export rights to the selected track. */
+  musicRightsConfirmed?: boolean
   musicTiming: 'keep' | 'resync'
   brandColor?: string
 }
