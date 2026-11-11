@@ -1037,6 +1037,26 @@ export function PreviewStage({
                 return true
               }
             : undefined,
+          sourceFrameAt: (targetSrcMs, side, boundarySrcMs) => {
+            const tol = 2
+            const seg = (e.sourceSegments ?? []).find((candidate) =>
+              side === 'a'
+                ? Math.abs(candidate.endMs - boundarySrcMs) <= tol
+                : Math.abs(candidate.startMs - boundarySrcMs) <= tol,
+            )
+            if (!seg) return null
+            const source = sourceById(e.sources, seg.sourceId)
+            if (!source || source.mediaType === 'audio') return null
+            const transform = sourceSegmentTransformCss(seg.transform)
+            return {
+              sourceId: source.id,
+              mediaTimeSec: segmentMediaMs(seg, source, targetSrcMs) / 1000,
+              fit: seg.fit ?? 'cover',
+              transform: transform.transform,
+              clipPath: transform.clipPath,
+              filter: sourceSegmentFxCss(seg.fx),
+            }
+          },
           exportW: (() => {
             const bw = boxSizeRef.current.w
             const bh = boxSizeRef.current.h
