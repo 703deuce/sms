@@ -44,13 +44,17 @@ def frame_mean(path:Path,frame:int,total:int)->float:
         timeout=30)
     return sum(data)/max(1,len(data))
 
-def fixtures(root:Path,music_source:Path)->tuple[dict[str,Path],Path]:
+def fixtures(root:Path,music_source:Path,preview_sprites:list[dict])->tuple[dict[str,Path],Path]:
     media=root/"media"; media.mkdir(parents=True,exist_ok=True)
     paths:dict[str,Path]={}
     previews=ROOT/"new-app"/"public"/"clips"/"template-previews"
-    for i in range(10):
-        sprite=previews/f"f{i+1:02d}_bold.webp"
+    if len(preview_sprites)!=10:
+        raise RuntimeError("worker contract must pin exactly ten preview sprites")
+    for i,row in enumerate(preview_sprites):
+        sprite=previews/str(row.get("file") or "")
         if not sprite.is_file(): raise RuntimeError(f"missing first-party sprite {sprite}")
+        if sha(sprite)!=row.get("sha256"):
+            raise RuntimeError(f"first-party sprite SHA-256 drift: {sprite.name}")
         image=media/f"image_{i}.png"
         run(FFMPEG,"-y","-v","error","-i",str(sprite),"-vf",
             f"crop=iw/4:ih:0:0,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}",
@@ -189,7 +193,8 @@ def main()->int:
     rows=[r for i,r in enumerate(contract["designs"]) if i%args.shards==args.shard]
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
-    media,music=fixtures(out/"_fixtures",music_source)
+    media,music=fixtures(out/"_fixtures",music_source,
+        contract.get("fixture",{}).get("previewSprites") or [])
     cache_dir=out/"_carrier_cache";cache_dir.mkdir(exist_ok=True)
     cache:dict[int,Path]={}
     results=[]

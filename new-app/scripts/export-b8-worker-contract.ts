@@ -41,6 +41,18 @@ const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'
 const license={id:'batch9a_first_party_qa',provenance:'first-party' as const,
   reference:'batch9a_first_party_qa_v1'}
 const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license}
+const previewSprites=[
+  {file:'f01_bold.webp',sha256:'58ef2a887bda559f694d9e4672959a1ef75f7fb0af1dcbf6ce41f1efd2c122e5'},
+  {file:'f02_bold.webp',sha256:'7a8145775fa34ceddf8c47e2c839cae871adffc43a5ae1a73c958fc193ac5c63'},
+  {file:'f03_bold.webp',sha256:'279d895fb616d1f84a51214d771ce952fee78966a8a70cf5a319ffd69af38606'},
+  {file:'f04_bold.webp',sha256:'3ed78acee0174b631acf0d065ab535ed3038d9fdd10438a5d30c06f2c2a5bac1'},
+  {file:'f05_bold.webp',sha256:'26b57939e0f759966163379d39d9aa558cc9db18dd30b7e3b772af8418142e26'},
+  {file:'f06_bold.webp',sha256:'ccd5f1e9f987b9d2c2097cf5f0a58eb9ae74ce578e1f94f276efd26f01917fa1'},
+  {file:'f07_bold.webp',sha256:'03e79394ded98bbc6768bb05467c075894ff8ea4c072b0c9dcb936f7d3b69bb5'},
+  {file:'f08_bold.webp',sha256:'17e030a72dcb7d710a596d0caa52e89cb4b60f3c7cd4916eaa0ce812637500e1'},
+  {file:'f09_bold.webp',sha256:'45c9052aa72c277a00590dd1c8ca1ee54835643e088cc88fa219ba8a2f3af264'},
+  {file:'f10_bold.webp',sha256:'bde7dc5f35299e825341937fcc8861c49fa7b05bac54eade599994a63ec65de9'},
+] as const
 
 const designs=generateB8Candidates().map(candidate=>{
   const beat=syncB8FamilyToMusic(candidate.family,schedule)
@@ -79,7 +91,7 @@ writeFileSync(musicPath,musicBytes)
 writeFileSync(out,JSON.stringify({
   v:1,engine:B8_ENGINE_REVISION,source:'batch8-canonical-v1',fps:30,
   fixture:{musicId,musicSha,musicFile:'b8-cert-music.wav',
-    mediaOrigin:'Batch 9A first-party preview sprites'},
+    mediaOrigin:'Batch 9A first-party preview sprites',previewSprites},
   designs,
 })+'\n')
 console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out+
