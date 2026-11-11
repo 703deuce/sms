@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { compileTemplatePrototype, validateTemplateFamily, type TemplateChoices, type TemplateAsset, type TemplateFamilyV1, type TemplateSlot } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { outputToSequenceFrame, itemLocalToSequenceFrame, sourceToSequenceFrames, frameToMs } from '@/lib/clips/real-video-templates/sequence-timebase'
+import { clearSourceRange } from '@/lib/clips/editor/sources'
 
 const slot = (n: number, frames = 30): TemplateSlot => ({
   id: `shot_${n}`, ordinal: n, role: 'hero', media: 'either',
@@ -123,6 +124,8 @@ describe('real-video template B3 production contract', () => {
     const second = outputToSequenceFrame(r.sequence, 40)
     expect(second.itemLocalFrame).toBe(10)
     expect(second.mediaFrame).toBe(5)
+    const split = clearSourceRange(r.edits.sourceSegments, 0, 200)
+    expect(split?.[0]).toMatchObject({ startMs: 200, inMs: 300, speed: 1.5 })
   })
 
   it('rejects playback speed on still-image slots', () => {
