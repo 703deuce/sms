@@ -183,7 +183,9 @@ describe('TC1 timeline UI', () => {
 
   it('HG05 Ctrl+D without an eligible selection does not create footage', () => {
     const t = setup()
-    t.key({ key: 'd', ctrlKey: true })
+    const key = new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true, cancelable: true })
+    act(() => void window.dispatchEvent(key))
+    expect(key.defaultPrevented).toBe(true)
     expect(t.onCommitEdits).not.toHaveBeenCalled()
   })
 
