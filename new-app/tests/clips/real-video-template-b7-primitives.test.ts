@@ -134,6 +134,20 @@ describe('Batch 7 standalone reusable primitives', () => {
       .toThrow(/photo_frame_window_mismatch/)
   })
 
+  it('enforces the 60-item capacity before Batch 7 primitives so built-in and manual layers cannot overflow', () => {
+    const f = family(1)
+    f.texts = [{
+      id: 'title', defaultText: 'Template title', maxChars: 40, startFrame: 0, durationFrames: 60,
+      x: 50, y: 20, font: 'Anton', size: 80, color: '#FFFFFF',
+    }]
+    const manual = Array.from({ length: 60 }, (_, i) => ({
+      id: 'manual_' + i, text: 'M' + i, startMs: 0, endMs: 2000, x: 50, y: 50,
+      style: { font: 'Montserrat' as const, size: 48, color: '#FFFFFF', align: 'center' as const, case: 'none' as const },
+    }))
+    expect(() => compileTemplate(f, design, choices(1), carrier(f.totalFrames, { textItems: manual })))
+      .toThrow(/textItems capacity exceeded/)
+  })
+
   it('fails closed at textItems capacity instead of dropping manual items', () => {
     const f = family(1)
     f.primitives = [{ kind: 'photo_frame', id: 'frame', startFrame: 0, durationFrames: 60, slotId: 'shot_1',

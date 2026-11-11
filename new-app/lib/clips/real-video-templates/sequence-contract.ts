@@ -361,6 +361,8 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       }
     })
   }
+  if (texts.length + (graphics?.length ?? 0) > MAX_TEXTS)
+    throw new Error('family: combined text/graphic budget exceeds editor capacity')
   if (!Array.isArray(raw.beatAnchors) || raw.beatAnchors.length > 500) throw new Error('family: beat budget exceeded')
   const beatAnchors = raw.beatAnchors.map(n => integer(n, 0, total - 1, 'beat'))
   let phraseAnchors: TemplatePhraseAnchor[] | undefined
@@ -561,6 +563,8 @@ export function compileTemplate(
   const preservedKeyframes = (carrier.edits.keyframes ?? []).filter((track) => !motionTrackKeys.has(track.target + '|' + track.prop))
   const mergedKeyframes = [...preservedKeyframes, ...motionKeyframes]
   const mergedTextItems = [...(carrier.edits.textItems ?? []), ...textItems]
+  if (mergedTextItems.length > MAX_TEXTS)
+    throw new Error('template: textItems capacity exceeded before primitive compilation')
 
   const baseEdits: ClipEditsV2 = {
     ...structuredClone(carrier.edits),
