@@ -23,6 +23,7 @@ import {
   SHADER_TRANSITIONS,
   shaderProgress,
   transitionFrame,
+  videoSplitTransitionWindows,
   type BrollWindow,
   type CutWindow,
   type LayerCss,
@@ -104,7 +105,12 @@ export function mainFrame(
     opacity: t.opacity / 100,
     clipPath: cropClipPath(layerCropAt(edits, 'video', kfMs)),
   }
-  const wins = cutTransitionWindows(tb.segs, tb.starts, edits.transitions)
+  // Video splits are real editable Video-lane boundaries. Include their transitions in the
+  // same preview math; the helper already excludes boundaries that are also true cut joins.
+  const wins = [
+    ...cutTransitionWindows(tb.segs, tb.starts, edits.transitions),
+    ...videoSplitTransitionWindows(tb, edits.videoSplits, edits.transitions),
+  ].sort((a, b) => a.w0Ms - b.w0Ms)
   let cut: MainFrame['cut'] = null
   let upcoming: MainFrame['upcoming'] = null
   for (const w of wins) {
