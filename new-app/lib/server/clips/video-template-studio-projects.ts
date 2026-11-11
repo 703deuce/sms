@@ -78,7 +78,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     if (!object(rawAsset) || rawAsset.kind !== kind ||
         typeof rawAsset.id !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(rawAsset.id) ||
         !object(rawAsset.license) || rawAsset.license.provenance !== 'user-owned') return false
-    if (kind !== 'image' && (!Number.isSafeInteger(rawAsset.durationFrames) ||
+    if (kind !== 'image' && (typeof rawAsset.durationFrames !== 'number' ||
+        !Number.isSafeInteger(rawAsset.durationFrames) ||
         Number(rawAsset.durationFrames) < 1)) return false
     return true
   }
@@ -87,7 +88,8 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     if (!slot || !object(fill) ||
         !['cover','contain'].includes(String(fill.fit)) ||
         !['replace','loop','hold'].includes(String(fill.remedy)) ||
-        !Number.isSafeInteger(fill.sourceInFrame) || Number(fill.sourceInFrame) < 0 ||
+        (typeof fill.sourceInFrame !== 'number' || !Number.isSafeInteger(fill.sourceInFrame)) ||
+        fill.sourceInFrame < 0 ||
         typeof fill.focalX !== 'number' || !Number.isFinite(fill.focalX) ||
         fill.focalX < 0 || fill.focalX > 100 ||
         typeof fill.focalY !== 'number' || !Number.isFinite(fill.focalY) ||
