@@ -15,6 +15,8 @@ describe('assistant geometry and controls', () => {
   it('preserves escape, stale proposal guards, and save-before-send', () => {
     const rail = source('components/clips/editor/editor-chat-rail.tsx')
     expect(rail).toContain("event.key === 'Escape'")
+    expect(rail).toContain('closeButtonRef.current?.focus()')
+    expect(rail).toContain('previousFocus.focus()')
     expect(rail).toContain('canonicalEditsJson(proposal.before)')
     expect(rail).toContain('onBeforeSend')
     expect(rail).toContain('onAudition(null)')
