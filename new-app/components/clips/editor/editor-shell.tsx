@@ -59,6 +59,7 @@ import { EditorHistoryPanel } from '@/components/clips/editor/history-panel'
 import { CaptionsPanel } from '@/components/clips/editor/captions-panel'
 import { CaptionLinesPanel } from '@/components/clips/editor/caption-lines-panel'
 import { ExportDialog } from '@/components/clips/editor/export-dialog'
+import { SaveAsTemplateDialog } from '@/components/clips/templates/save-as-template-dialog'
 import { RepurposePanel } from '@/components/clips/editor/repurpose-panel'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { FindClipsInVideoButton } from '@/components/clips/editor/find-clips-in-video-button'
@@ -329,6 +330,7 @@ export function EditorShell({
   useSetBreadcrumbTitle('project', projectTitle)
   useSetBreadcrumbTitle('clip', title)
   const [exportOpen, setExportOpen] = useState(false)
+  const [saveTemplateOpen, setSaveTemplateOpen] = useState(false)
   const [projectSettingsOpen, setProjectSettingsOpen] = useState(false)
   const [beatCutApi, setBeatCutApi] = useState<BeatCutRegisterApi | null>(null)
   const registerBeatCut = useCallback((api: BeatCutRegisterApi | null) => {
@@ -3737,6 +3739,11 @@ export function EditorShell({
           onRedo={redo}
           historySlot={historyPanel}
           onExport={() => setExportOpen(true)}
+          onSaveAsTemplate={() => {
+            void flushSave()
+              .then(() => setSaveTemplateOpen(true))
+              .catch(() => toast.error('Save the current edit before creating a template'))
+          }}
           onRetrySave={() => {
             void flushSave()
           }}
@@ -4289,6 +4296,8 @@ export function EditorShell({
         <PanelRightOpen className="size-5" />
       </Button>
       <TimelineShortcutsSheet open={editorShortcutsOpen} onClose={() => setEditorShortcutsOpen(false)} />
+      <SaveAsTemplateDialog open={saveTemplateOpen} clipId={clipId} defaultTitle={title}
+        onClose={() => setSaveTemplateOpen(false)} />
       <ClipperSurfaceErrorBoundary surface="Export">
         <ExportDialog
         clipId={clipId}

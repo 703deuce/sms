@@ -7,6 +7,7 @@ import {
   CloudCheck,
   Download,
   Loader2,
+  Save,
   Redo2,
   Sparkles,
   Undo2,
@@ -34,6 +35,7 @@ export function EditorTopBar({
   onRedo,
   historySlot,
   onExport,
+  onSaveAsTemplate,
   onOpenProducer,
   showStandaloneProducerButton = true,
   onRetrySave,
@@ -58,6 +60,7 @@ export function EditorTopBar({
   onRedo: () => void
   historySlot?: React.ReactNode
   onExport: () => void
+  onSaveAsTemplate?: () => void
   onRetrySave?: () => void
   onOpenProducer?: () => void
   /** The mode switcher already supplies this entry on standard editor surfaces. */
@@ -211,6 +214,10 @@ export function EditorTopBar({
         ) : null}
         {layoutSlot}
         {versionsSlot}
+        {onSaveAsTemplate ? <Button type="button" size="sm" variant="outline" className="gap-1.5" onClick={onSaveAsTemplate}>
+          <Save className="size-4" aria-hidden />
+          <span className="max-[1499px]:sr-only">Save as template</span>
+        </Button> : null}
         <PrimaryButton type="button" size="sm" className="gap-1.5" onClick={onExport}>
           <Download className="size-4" aria-hidden />
           Export
