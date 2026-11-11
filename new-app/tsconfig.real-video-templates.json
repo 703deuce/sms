@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "files": [
+    "./lib/clips/real-video-templates/sequence-contract.ts",
+    "./lib/clips/real-video-templates/sequence-timebase.ts",
+    "./lib/server/clips/real-video-template-instances.ts",
+    "./tests/clips/real-video-templates-b3.test.ts",
+    "./tests/clips/real-video-template-instance.test.ts"
+  ],
+  "include": []
+}
