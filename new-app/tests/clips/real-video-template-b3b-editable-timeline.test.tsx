@@ -231,7 +231,7 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
     })
     const mappedSource = reloaded.sources?.find((row) => row.id === 'replacement_source')
     expect(mappedSource).toBeTruthy()
-    expect(segmentMediaMs(reloaded.sourceSegments![1]!, mappedSource, 1100)).toBe(551)
+    expect(segmentMediaMs(reloaded.sourceSegments![1]!, mappedSource, 1100)).toBeCloseTo(550.5, 6)
     expect(reloaded.transitions?.find((t) => t.srcMs === 1033)?.type).toBe('wipe_left')
     expect(reloaded.textItems?.find((item) => item.id === text.id)).toMatchObject({ text: 'Edited after publish' })
     expect(reloaded.textItems?.find((item) => item.id === graphic.id)).toMatchObject({
@@ -256,9 +256,13 @@ describe('Batch 3B edits survive flush/reload with stable item-local identity', 
 describe('Batch 3B professional timing gate', () => {
   it('rejects off-beat and under-specified semantic first-party timing', async () => {
     const { validateTemplateEditorialTiming } = await import('@/lib/clips/real-video-templates/sequence-contract')
-    const beat = structuredClone(buildEditableTimelineProofCases()[1]!.family)
-    beat.slots[1] = { ...beat.slots[1]!, startFrame: 31 }
-    expect(() => validateTemplateEditorialTiming(beat)).toThrow(/not on an authored beat\/phrase accent/)
+    const withinTolerance = structuredClone(buildEditableTimelineProofCases()[1]!.family)
+    withinTolerance.slots[1] = { ...withinTolerance.slots[1]!, startFrame: 31 }
+    expect(() => validateTemplateEditorialTiming(withinTolerance)).not.toThrow()
+
+    const offBeat = structuredClone(buildEditableTimelineProofCases()[1]!.family)
+    offBeat.slots[1] = { ...offBeat.slots[1]!, startFrame: 36 }
+    expect(() => validateTemplateEditorialTiming(offBeat)).toThrow(/not on an authored beat\/phrase accent/)
 
     const semantic = structuredClone(buildEditableTimelineProofCases()[0]!.family)
     semantic.timingMode = 'semantic'

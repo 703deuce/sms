@@ -219,15 +219,24 @@ jobs:
             tests/clips/real-video-template-instance.test.ts \
             tests/clips/real-video-template-editor.test.tsx \
             tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
-            tests/clips/real-video-template-b3b-save-reload.test.ts
+            tests/clips/real-video-template-b3b-save-reload.test.ts \
+            tests/clips/real-video-template-typecheck.test.ts \
+            tests/script-view-compact-timeline.test.tsx \
+            tests/timeline-e2-render.test.tsx
       - name: Batch 3B scoped TypeScript
         working-directory: new-app
         run: NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.real-video-templates.json --noEmit --pretty false
       - name: Full new-app TypeScript diagnostic gate
         working-directory: new-app
         run: |
-          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.typecheck.json --noEmit --pretty false > /tmp/b3b-full-tsc.txt 2>&1 || true
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc --noEmit --pretty false > /tmp/b3b-full-tsc.txt 2>&1 || true
           cat /tmp/b3b-full-tsc.txt
+          diagnostic_count=$(grep -Ec 'error TS[0-9]+' /tmp/b3b-full-tsc.txt || true)
+          echo "Full new-app TypeScript diagnostics: $diagnostic_count (master baseline: 456)"
+          if [[ "$diagnostic_count" -ne 456 ]]; then
+            echo "Full TypeScript diagnostics changed from master baseline 456" >&2
+            exit 1
+          fi
           if grep -E '^(lib/clips/real-video-templates/|lib/clips/editor/(sources|motion-frame|motion-schema|keyframes|source-segment-motion)\.ts|lib/clips/edits(-version-hash)?\.ts|lib/server/clips/real-video-template-instances\.ts|components/clips/editor/(motion-preview|preview-stage|script-view-compact-timeline|media-panel|editor-shell|timeline)\.(ts|tsx)|app/api/clips/(video-templates/publish|clips/\[id\]/template-authoring|projects/\[id\]/template-instance)/route\.ts|tests/clips/real-video-template).*error TS' /tmp/b3b-full-tsc.txt; then
             echo "Batch 3B-owned TypeScript diagnostics found" >&2
             exit 1
@@ -251,7 +260,12 @@ jobs:
       - name: Batch 3B worker FFmpeg proof
         env:
           B3B_EDITABLE_PROOF: editable-timeline-structure-proof.json
-        run: PYTHONPATH=worker python -m pytest -q -rs --tb=short worker/tests/test_real_video_template_sequence.py worker/tests/test_media_sources_layouts.py
+        run: |
+          PYTHONPATH=worker python -m pytest -q -rs --tb=short \
+            worker/tests/test_real_video_template_sequence.py \
+            worker/tests/test_media_sources_layouts.py \
+            worker/tests/test_e5_parity.py \
+            worker/tests/test_e5b_parity.py
 
   captions-worker-regression:
     runs-on: ubuntu-latest

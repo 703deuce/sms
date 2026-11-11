@@ -291,13 +291,20 @@ describe('B3 production slot edit representation', () => {
       fx: { brightness: 5, saturation: -10 },
     })
     expect(r.edits.sourceSegments?.[1]).toMatchObject({ startMs: 1000, endMs: 2000, inMs: 200 })
-    const xMotion = r.edits.keyframes?.find((track) => track.target === 'video' && track.prop === 'x')
-    expect(xMotion?.points).toEqual([
-      { tMs: 0, v: 0, ease: 'inOut' },
-      { tMs: 967, v: 12 },
-      { tMs: 1000, v: 0 },
-      { tMs: 1967, v: 0 },
+    const shot1Target = `source:${r.slotToItemIds.shot_1}`
+    expect(r.edits.keyframes?.filter((track) => track.target === shot1Target)).toEqual([
+      {
+        target: shot1Target,
+        prop: 'x',
+        points: [{ tMs: 0, v: 0, ease: 'inOut' }, { tMs: 967, v: 12 }],
+      },
+      {
+        target: shot1Target,
+        prop: 'scale',
+        points: [{ tMs: 0, v: 100, ease: 'inOut' }, { tMs: 967, v: 118 }],
+      },
     ])
+    expect(r.edits.keyframes?.some((track) => track.target === 'video')).toBe(false)
     expect(r.edits.textItems?.some((item) => item.kind === 'shape' && item.shape?.type === 'rounded')).toBe(true)
     expect(r.edits.templateProvenance?.slotToItemIds).toEqual(r.slotToItemIds)
   })

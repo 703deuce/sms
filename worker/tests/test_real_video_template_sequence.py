@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -27,6 +28,10 @@ def run(args: list[str]) -> str:
     if proc.returncode:
         raise RuntimeError((proc.stderr or proc.stdout or "")[-2000:])
     return (proc.stdout or "").strip()
+
+
+def ass_plain_text(value: str) -> str:
+    return re.sub(r"\\{[^}]*\\}", "", value).replace(r"\\N", " ")
 
 
 def frames(path: Path) -> int:
@@ -179,7 +184,7 @@ def test_template_worker_sequence_keeps_slots_text_music_and_exact_frames(tmp_pa
     caption_ass = tmp_path / "captions.ass"
     build_ass(caption_line_render_words(edits), edits["captions"], caption_ass, play_w=160, play_h=90, edits=edits)
     caption_text = caption_ass.read_text()
-    assert "CAPTION THROUGH EVERY SLOT" in caption_text
+    assert "CAPTION THROUGH EVERY SLOT" in ass_plain_text(caption_text)
     assert "0:00:03.00" in caption_text
     captioned = tmp_path / "captioned.mp4"
     run([
@@ -323,7 +328,7 @@ def test_b3b_generated_edited_reload_contract_renders(tmp_path: Path) -> None:
     cap_words = caption_line_render_words(edits)
     build_ass(cap_words, edits["captions"], cap_ass, play_w=90, play_h=160, edits=edits)
     cap_text = cap_ass.read_text()
-    assert "CAPTION THROUGH EVERY SLOT" in cap_text
+    assert "CAPTION THROUGH EVERY SLOT" in ass_plain_text(cap_text)
     assert "0:00:03.00" in cap_text
     captioned = tmp_path / "edited_captioned.mp4"
     run([

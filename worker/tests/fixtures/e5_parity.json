@@ -80,6 +80,7 @@
           "t0Ms": 2000,
           "t1Ms": 6000,
           "mediaInMs": 10500,
+          "localStartMs": 0,
           "audio": "main",
           "fit": "cover",
           "mediaType": "video"
@@ -170,6 +171,7 @@
           "t0Ms": 0,
           "t1Ms": 3000,
           "mediaInMs": 1700,
+          "localStartMs": 1000,
           "audio": "mix",
           "fit": "cover",
           "mediaType": "video"
@@ -279,6 +281,7 @@
           "t0Ms": 10000,
           "t1Ms": 12000,
           "mediaInMs": 250,
+          "localStartMs": 0,
           "audio": "source",
           "fit": "contain",
           "mediaType": "video"
@@ -289,6 +292,7 @@
           "t0Ms": 12000,
           "t1Ms": 13000,
           "mediaInMs": 0,
+          "localStartMs": 0,
           "audio": "main",
           "fit": "cover",
           "mediaType": "image"
@@ -345,6 +349,7 @@
           "t0Ms": 0,
           "t1Ms": 30000,
           "mediaInMs": 10900,
+          "localStartMs": 5000,
           "audio": "main",
           "fit": "cover",
           "mediaType": "video"
