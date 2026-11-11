@@ -193,7 +193,7 @@ export async function tickStreamerAgentBatch(projectId:string,batchId:string){
           run.resultProjectId,
           ...(Array.isArray(run.outputProjectIds)?run.outputProjectIds:[]),
         ].filter((id):id is string=>typeof id==='string'&&id.length>0))]
-        const published=outputProjects.length&&ids.length
+        const published:Array<{id:string;projectId:string}>=outputProjects.length&&ids.length
           ?await prisma.clip.findMany({where:{
               id:{in:ids},projectId:{in:outputProjects},
               workspaceId:p.workspaceId,deletedAt:null,
