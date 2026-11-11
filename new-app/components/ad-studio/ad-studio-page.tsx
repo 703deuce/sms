@@ -266,7 +266,7 @@ export function AdStudioPage({ client, sleep, pollMs = 2000 }: Props) {
         if (!cancelled) setFinalMediaLoading(false)
       })
     return () => { cancelled = true }
-  }, [liveClient, run?.id, run?.status])
+  }, [liveClient, run?.id, run?.mode, run?.status])
 
   function openMode(next: SelectableMode) {
     console.log('[ad-studio:ui] load', { step: 'mode', mode: next })
