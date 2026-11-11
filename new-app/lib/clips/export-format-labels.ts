@@ -40,3 +40,10 @@ export function audioFormatOptionLabel(format: 'mp3' | 'm4a', encoders?: string[
   if (format === 'm4a') return 'M4A'
   return format.toUpperCase()
 }
+
+/** XE06: a READY render's stored file is authoritative, not the dialog's next selection. */
+export function exportDownloadLabelForFilename(filename: string | null | undefined, selectedFormat: DeliverFormat): string {
+  const extension = /\.([a-z0-9]+)$/i.exec(filename?.trim() ?? '')?.[1]?.toLowerCase()
+  const known: readonly DeliverFormat[] = ['mp4', 'mov', 'gif', 'mp3', 'wav', 'm4a', 'flac', 'png']
+  return exportDownloadLabel(known.includes(extension as DeliverFormat) ? extension as DeliverFormat : selectedFormat)
+}
