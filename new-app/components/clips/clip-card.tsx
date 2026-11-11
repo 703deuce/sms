@@ -179,7 +179,7 @@ export function ClipCard({
         method: 'PATCH',
         body: JSON.stringify({ hidden: true, disliked: true }),
       })
-      toast.success('Clip hidden — finding a replacement…', { id: tid })
+      toast.success('Feedback saved — clip hidden', { id: tid })
       onHidden(clip.id)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not hide clip', { id: tid })
@@ -417,7 +417,7 @@ export function ClipCard({
             </div>
           </details>
         ) : null}
-        <div className="mt-auto flex flex-nowrap items-center gap-1.5 pt-1" data-testid="clip-card-actions">
+        <div className="mt-auto flex max-w-full min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto pt-1" data-testid="clip-card-actions">
           <Button
             size="sm"
             variant="default"

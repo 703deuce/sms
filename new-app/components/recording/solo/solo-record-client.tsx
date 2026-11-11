@@ -18,7 +18,11 @@ export function SoloRecordClient() {
   const [projectId, setProjectId] = useState<string | null>(null)
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [prepareError, setPrepareError] = useState<string | null>(null)
+  const [deviceError, setDeviceError] = useState<string | null>(null)
+  const [prepareAttempt, setPrepareAttempt] = useState(0)
   const [importing, setImporting] = useState(false)
+  const [teleprompterOpen, setTeleprompterOpen] = useState(false)
+  const [teleprompterText, setTeleprompterText] = useState('')
   const [recoverySessions, setRecoverySessions] = useState<string[]>([])
 
   const onImportComplete = useCallback(
@@ -45,28 +49,47 @@ export function SoloRecordClient() {
 
   useEffect(() => {
     let cancelled = false
+    const controller = new AbortController()
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+    }, 20_000)
+    setPrepareError(null)
     void (async () => {
       try {
         const res = await fetch('/api/recording/solo/prepare', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ title: 'Recording' }),
+          signal: controller.signal,
         })
+        if (cancelled) return
         const json = await res.json()
         if (!res.ok) throw new Error(json.error ?? 'Could not prepare recording')
+        if (!json?.data?.projectId || !json?.data?.sessionId) {
+          throw new Error('Recording preparation returned an incomplete response')
+        }
         if (cancelled) return
         setProjectId(json.data.projectId as string)
         setSessionId(json.data.sessionId as string)
         recorder.setArmed(true)
       } catch (e) {
-        if (!cancelled) setPrepareError(e instanceof Error ? e.message : 'Could not prepare recording')
+        if (cancelled) return
+        setPrepareError(timedOut
+          ? 'Recording preparation timed out. Check your connection and try again.'
+          : e instanceof Error ? e.message : 'Could not prepare recording')
+      } finally {
+        clearTimeout(timeout)
       }
     })()
     return () => {
       cancelled = true
+      clearTimeout(timeout)
+      controller.abort()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- prepare once on mount
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- retry only on explicit user action
+  }, [prepareAttempt])
 
   const handleStop = useCallback(async () => {
     setImporting(true)
@@ -91,7 +114,8 @@ export function SoloRecordClient() {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-4 p-6">
         <PageHeader icon={Video} iconTone="record" title="Record" />
-        <p className="text-sm text-destructive">{prepareError}</p>
+        <p role="alert" className="text-sm text-destructive">{prepareError}</p>
+        <Button type="button" onClick={() => setPrepareAttempt((n) => n + 1)}>Retry preparation</Button>
         <Button variant="outline" render={<Link href="/app/clips" />}>Back to projects</Button>
       </div>
     )
@@ -101,7 +125,7 @@ export function SoloRecordClient() {
     return (
       <div className="mx-auto flex max-w-lg flex-col gap-4 p-6">
         <PageHeader icon={Video} iconTone="record" title="Record" />
-        <p className="text-sm text-muted-foreground">Preparing camera and microphone…</p>
+        <p className="text-sm text-muted-foreground">Preparing recording workspace…</p>
       </div>
     )
   }
@@ -134,7 +158,7 @@ export function SoloRecordClient() {
       <EditorRecorderBar
         armed={recorder.armed}
         onDisarm={() => router.push('/app/clips')}
-        onTeleprompter={() => undefined}
+        onTeleprompter={() => setTeleprompterOpen((open) => !open)}
         recording={recorder.recording}
         countdown={recorder.countdown}
         recSeconds={recorder.recSeconds}
@@ -146,12 +170,35 @@ export function SoloRecordClient() {
         onMicId={recorder.setMicId}
         countdownEnabled={recorder.countdownEnabled}
         onCountdownEnabled={recorder.setCountdownEnabled}
-        onStart={() => void recorder.startRecording()}
+        onStart={() => {
+          setDeviceError(null)
+          if (!navigator.mediaDevices?.getUserMedia) {
+            setDeviceError('Camera and microphone are unavailable in this browser. Use a secure HTTPS origin and allow device access.')
+            return
+          }
+          void recorder.startRecording().catch((err: unknown) => {
+            const denied = err instanceof DOMException && (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+            setDeviceError(denied
+              ? 'Camera or microphone access was denied. Enable permission in browser site settings, then select Start recording again.'
+              : err instanceof Error ? err.message : 'Could not start recording. Check your camera and microphone, then try again.')
+          })
+        }}
         onStop={() => void handleStop()}
         onPause={() => undefined}
         recordLabel="Start recording"
       />
 
+      {deviceError ? <p className="mx-auto mt-3 w-full max-w-[960px] px-3 text-sm text-destructive" role="alert" data-testid="solo-device-error">{deviceError}</p> : null}
+      {teleprompterOpen ? (
+        <section className="mx-auto mt-3 w-full max-w-[960px] rounded-xl border border-border bg-card p-3" aria-label="Teleprompter" data-testid="solo-teleprompter">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Teleprompter notes</h2>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setTeleprompterOpen(false)}>Close teleprompter</Button>
+          </div>
+          <p className="mb-2 text-xs text-muted-foreground">Prepare your script without camera or microphone permission. Notes stay on this page and are not included in the recording.</p>
+          <textarea aria-label="Teleprompter script" className="min-h-28 w-full rounded-md border border-border bg-background p-3 text-sm" value={teleprompterText} onChange={(event) => setTeleprompterText(event.target.value)} placeholder="Enter what you want to say…" />
+        </section>
+      ) : null}
       <div className="mx-auto flex w-full max-w-[960px] flex-1 flex-col items-center gap-4 p-6">
         <div className="flex aspect-video w-full max-w-[960px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/40 text-sm text-muted-foreground">
           Camera / screen preview

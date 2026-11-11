@@ -39,6 +39,26 @@ describe('FV-11 layout panel aspects', () => {
     expect(onEdits.mock.calls.at(-1)?.[0].aspectRatio).toBe('custom:1440x1080')
   })
 
+  it('HG15 explains unsupported split/facecam without enabling the compositor', () => {
+    const onMode = vi.fn()
+    render(<LayoutPanel
+      edits={defaultEdits(B)}
+      shots={[]}
+      onMode={onMode}
+      onShotFocus={() => {}}
+      onRerunReframe={() => {}}
+      onEdits={vi.fn()}
+      reframeV2Enabled
+      words={[]}
+    />)
+    expect(screen.getByTestId('layout-disabled-reason-split').textContent).toContain('Needs 2 speakers')
+    expect(screen.getByTestId('layout-disabled-reason-facecam_stack').textContent).toContain('Needs gameplay + facecam')
+    const split = screen.getByText('Two-speaker split').closest('button') as HTMLButtonElement
+    expect(split.disabled).toBe(true)
+    fireEvent.click(split)
+    expect(onMode).not.toHaveBeenCalled()
+  })
+
   it('invalid ratio shows helper and does not commit bad token', () => {
     const onEdits = vi.fn()
     const edits = normalizeEdits({ ...defaultEdits(B), aspectRatio: 'custom:1440x1080' }, B)

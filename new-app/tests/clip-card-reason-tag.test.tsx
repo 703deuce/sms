@@ -11,6 +11,19 @@ vi.mock('next/navigation', () => ({
 describe('clip-card reason tag', () => {
   afterEach(() => cleanup())
 
+  it('LG09 retains every card action in a scroll-reachable row', () => {
+    const clip = {
+      id: 'clip_narrow', title: 'Small screen', score: 80, durationMs: 10_000,
+      startMs: 0, endMs: 10_000, previewUrl: null, posterUrl: null,
+    }
+    render(<div style={{ width: 220 }}><ClipCard projectId="proj_narrow" clip={clip} /></div>)
+    const row = screen.getByTestId('clip-card-actions')
+    expect(row.className).toContain('overflow-x-auto')
+    expect(screen.getByRole('link', { name: 'Edit' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+    expect(screen.getByTestId('clip-card-more')).toBeTruthy()
+  })
+
   it('renders tag chip and tooltip lines', () => {
     const clip = {
           id: 'clip_x',
