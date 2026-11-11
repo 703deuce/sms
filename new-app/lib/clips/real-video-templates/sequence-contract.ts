@@ -168,7 +168,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   })
   if (!Array.isArray(raw.beatAnchors) || raw.beatAnchors.length > 500) throw new Error('family: beat budget exceeded')
   for (const n of raw.beatAnchors) integer(n, 0, total - 1, 'beat')
-  return structuredClone(raw) as TemplateFamilyV1
+  return structuredClone(raw) as unknown as TemplateFamilyV1
 }
 export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): TemplateDesignV1 {
   if (!own(raw)) throw new Error('design: expected object')
@@ -179,7 +179,7 @@ export function validateTemplateDesign(raw: unknown, family: TemplateFamilyV1): 
   integer(raw.revision, 1, 1000000, 'design revision')
   if (raw.familyId !== family.familyId || raw.familyRevision !== family.revision) throw new Error('design: family revision mismatch')
   oneOf(raw.musicPolicy, ['none','licensed-only'] as const, 'music')
-  return structuredClone(raw) as TemplateDesignV1
+  return structuredClone(raw) as unknown as TemplateDesignV1
 }
 function validateAsset(asset: unknown, kind: TemplateAsset['kind'][], context: string): TemplateAsset {
   if (!own(asset)) throw new Error(`${context}: missing registered asset`)
@@ -193,7 +193,7 @@ function validateAsset(asset: unknown, kind: TemplateAsset['kind'][], context: s
   id(asset.license.reference, 'license reference')
   if (asset.kind === 'video' || asset.kind === 'audio')
     integer(asset.durationFrames, 1, MAX_FRAMES, `${context}.durationFrames`)
-  return structuredClone(asset) as TemplateAsset
+  return structuredClone(asset) as unknown as TemplateAsset
 }
 /** Stable, no random UUID and no runtime-specific crypto implementation. */
 function seededId(...parts: string[]) {
