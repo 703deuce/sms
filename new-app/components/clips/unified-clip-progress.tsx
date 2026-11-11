@@ -14,12 +14,16 @@ export function UnifiedClipProgress({
 }) {
   const stageLabel = (stage ?? 'Starting').replace(/_/g, ' ')
   const etaLine = etaSec > 0 ? `ETA ${formatEtaSeconds(etaSec)}` : stageLabel === 'Starting' ? 'Starting' : 'Finding Story and Continuous clips…'
+  const knownReady = Math.max(0, Math.trunc(Number.isFinite(clipsReady) ? clipsReady : 0))
+  const knownTotal = Math.max(0, Math.trunc(Number.isFinite(clipsTotal) ? clipsTotal : 0))
   const detail =
-    clipsTotal > 0
-      ? `${clipsReady} of ${clipsTotal} ready`
-      : stageLabel === 'Starting'
-        ? 'Finding Story and Continuous clips…'
-        : stageLabel
+    knownTotal >= knownReady && knownTotal > 0
+      ? `${knownReady} of ${knownTotal} ready`
+      : knownReady > 0
+        ? `${knownReady} ready`
+        : stageLabel === 'Starting'
+          ? 'Finding Story and Continuous clips…'
+          : stageLabel
   return (
     <div
       className="flex flex-col gap-4 rounded-xl border border-border bg-card/60 p-5"

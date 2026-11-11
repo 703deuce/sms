@@ -13,7 +13,7 @@ import {
   monotonicPct,
   type ExportRenderDetail,
 } from '@/lib/clips/editor/export-progress-text'
-import { exportActionLabel, effectiveAudioDeliverFormat, exportDownloadLabel, audioFormatOptionLabel } from '@/lib/clips/export-format-labels'
+import { exportActionLabel, exportDownloadLabelForFilename, mp3EncoderAvailable } from '@/lib/clips/export-format-labels'
 import { defaultExportDialogState } from '@/lib/clips/export-dialog-defaults'
 import { Download } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -180,6 +180,7 @@ export function ExportDialog({
   const exportClickedRef = useRef(false)
   const exportPrefsInitializedRef = useRef(false)
   const resolutionTouchedRef = useRef(false)
+  const aspectTouchedRef = useRef(false)
   // FV4d: the in-flight render this dialog re-attached to (wins over saved export preferences).
   const resumeRef = useRef<{ resolution: '720p' | '1080p' | null; aspectRatio: ExportAspect | null } | null>(null)
   const [lookupPending, setLookupPending] = useState(false)
@@ -219,15 +220,18 @@ export function ExportDialog({
     if (!open) {
       exportPrefsInitializedRef.current = false
       resolutionTouchedRef.current = false
+      aspectTouchedRef.current = false
       return
     }
     if (exportPrefsInitializedRef.current) return
+    let cancelled = false
     refreshChannels()
     void fetch('/api/clips/export/capabilities')
       .then((r) => r.json())
-      .then((j) => setEncoders(Array.isArray(j.encoders) ? j.encoders : []))
-      .catch(() => setEncoders([]))
+      .then((j) => { if (!cancelled) setEncoders(Array.isArray(j.encoders) ? j.encoders : []) })
+      .catch(() => { if (!cancelled) setEncoders([]) })
     void loadMergedExportDialogPreferences().then((prefs) => {
+      if (cancelled) return
       setRemoveDeadAir(Boolean(edits.silenceTrim?.enabled))
       setAlsoSrt(prefs.alsoSrt)
       setAlsoVtt(Boolean(prefs.alsoVtt))
@@ -236,19 +240,21 @@ export function ExportDialog({
       if (resumed) {
         // FV4d: re-attached to an in-flight render — keep its resolution / aspect selected.
         if (resumed.resolution && !resolutionTouchedRef.current) setResolution(resumed.resolution)
-        if (resumed.aspectRatio) setAspect(resumed.aspectRatio)
+        if (resumed.aspectRatio && !aspectTouchedRef.current) setAspect(resumed.aspectRatio)
       } else if (fullVideo) {
         const a = edits.aspectRatio ?? '16:9'
-        setAspect(a)
+        if (!aspectTouchedRef.current) setAspect(a)
         if (!resolutionTouchedRef.current) {
           if (prefs.defaultResolution) setResolution(prefs.defaultResolution)
           else setResolution(can('', 'export_1080p') ? '1080p' : '720p')
         }
-        onAspectChange?.(a)
+        if (!aspectTouchedRef.current) onAspectChange?.(a)
       } else {
         const clipDefaults = defaultExportDialogState(edits)
-        setAspect(clipDefaults.aspect)
-        onAspectChange?.(clipDefaults.aspect)
+        if (!aspectTouchedRef.current) {
+          setAspect(clipDefaults.aspect)
+          onAspectChange?.(clipDefaults.aspect)
+        }
         if (!resolutionTouchedRef.current) {
           setResolution(clipDefaults.resolution ?? (can('', 'export_1080p') ? '1080p' : '720p'))
         }
@@ -285,7 +291,11 @@ export function ExportDialog({
         setExportTemplate(edits.exportTemplate)
       }
       exportPrefsInitializedRef.current = true
+    }).catch(() => {
+      // A failed preference request must not leave the export dialog uninitialized.
+      if (!cancelled) exportPrefsInitializedRef.current = false
     })
+    return () => { cancelled = true }
   }, [open, edits.exportTemplate, edits.aspectRatio, edits.silenceTrim?.enabled, platform, defaultChannelUrl, fullVideo, onAspectChange])
 
   useEffect(() => {
@@ -352,7 +362,7 @@ export function ExportDialog({
         // FV4d: show the running render's settings, whatever the saved / default selection was.
         setExportPlatform('none')
         if (resume.resolution && !resolutionTouchedRef.current) setResolution(resume.resolution)
-        if (resume.aspectRatio) setAspect(resume.aspectRatio)
+        if (resume.aspectRatio && !aspectTouchedRef.current) setAspect(resume.aspectRatio)
         setInFlightResolution(resume.resolution)
       })
       .catch(() => {
@@ -483,7 +493,8 @@ export function ExportDialog({
     exportButton.label === 'Export MP4'
       ? exportActionLabel(deliverFormat, encoders)
       : exportButton.label
-  const downloadCtaLabel = exportDownloadLabel(deliverFormat, encoders)
+  const downloadCtaLabel = exportDownloadLabelForFilename(downloadUrl ? filename : null, deliverFormat)
+  const mp3Unsupported = exportPlatform === 'none' && deliverFormat === 'mp3' && !mp3EncoderAvailable(encoders)
   useEffect(() => {
     if (!open) setServerCaptionSyncWarnings([])
   }, [open])
@@ -492,7 +503,7 @@ export function ExportDialog({
   }, [captionSyncWarnings.length])
 
   const startExport = async () => {
-    if (exportButton.disabled || captionSyncBlocksExport) return
+    if (exportButton.disabled || captionSyncBlocksExport || mp3Unsupported) return
     exportClickedRef.current = true
     setBusy(true)
     setErrorDetail(null)
@@ -544,7 +555,7 @@ export function ExportDialog({
         removeDeadAir,
         exportSfx,
         edits: exportEdits,
-        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: effectiveAudioDeliverFormat(deliverFormat, encoders) } : {}),
+        ...(exportPlatform === 'none' && deliverFormat !== 'mp4' ? { format: deliverFormat } : {}),
         ...(exportPlatform === 'none' &&
         (deliverFormat === 'mp4' || deliverFormat === 'mov') &&
         codec !== 'h264'
@@ -731,6 +742,7 @@ export function ExportDialog({
                 onClick={() => {
                   setExportPlatform(id)
                   const preset = EXPORT_PLATFORM_PRESETS[id]
+                  aspectTouchedRef.current = true
                   setAspect(preset.aspect)
                   if (can('', 'export_1080p') || preset.resolution === '720p') {
                     setResolution(preset.resolution)
@@ -782,6 +794,11 @@ export function ExportDialog({
           </div>
           {gifDisabled ? (
             <p className="mt-1 text-xs text-muted-foreground">GIF is limited to 30 seconds.</p>
+          ) : null}
+          {mp3Unsupported ? (
+            <p className="mt-1 text-xs text-destructive" role="alert" data-testid="export-mp3-unavailable">
+              MP3 encoding is unavailable on the configured worker. Select another audio format explicitly.
+            </p>
           ) : null}
         </div>
         {(deliverFormat === 'mp4' || deliverFormat === 'mov') && !platformLocked ? (
@@ -1034,6 +1051,7 @@ export function ExportDialog({
                 size="sm"
                 variant={aspect === a ? 'default' : 'outline'}
                 onClick={() => {
+                  aspectTouchedRef.current = true
                   setAspect(a)
                   onAspectChange?.(a)
                   persistExportDialogPreferences({ defaultAspect: a })
@@ -1303,11 +1321,11 @@ export function ExportDialog({
             onAcknowledgeChange={setCaptionSyncAck}
           />
         ) : null}
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 mt-4 flex flex-wrap gap-2 border-t border-border bg-background p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-6px_16px_-12px_rgba(0,0,0,0.35)]" data-testid="export-dialog-actions">
           {!downloadUrl ? (
             <Button
               onClick={() => void startExport()}
-              disabled={exportButton.disabled || captionSyncBlocksExport}
+              disabled={exportButton.disabled || captionSyncBlocksExport || mp3Unsupported}
               data-testid="export-mp4-button"
               title={
                 captionSyncBlocksExport

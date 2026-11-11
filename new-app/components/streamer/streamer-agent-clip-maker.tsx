@@ -175,7 +175,7 @@ export function StreamerAgentClipMaker({projectId,ready,sourceStartMs,sourceDura
             run:{status:string}
           }
           if(!ACTIVE_AGENT_STATUSES.has(data.run.status)){
-            forgetAgentRun(projectId,remembered.runId)
+            forgetAgentRun(projectId,rememberedRunId)
             remembered=null
           }
         }catch(error){
