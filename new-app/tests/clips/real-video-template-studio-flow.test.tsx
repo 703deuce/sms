@@ -145,7 +145,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     expect(screen.getByRole('link', { name: 'Use template' }).getAttribute('href'))
       .toBe('/app/clips/video-templates/fixture_story')
     gallery.unmount()
-    const first = render(<VideoTemplateStudio release={released[0] as VideoTemplateRelease} />)
+    const first = render(<VideoTemplateStudio release={released[0] as unknown as VideoTemplateRelease} />)
     await screen.findByRole('button', { name: 'Use Photo A' })
     fireEvent.click(screen.getByRole('button', { name: 'Use Photo A' }))
     const slots = within(screen.getByRole('group', { name: 'Select a template slot' }))
@@ -169,7 +169,7 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     first.unmount()
 
     const resumed = render(<VideoTemplateStudio
-      release={released[0] as VideoTemplateRelease} initialProjectId="proj_fixture" />)
+      release={released[0] as unknown as VideoTemplateRelease} initialProjectId="proj_fixture" />)
     await waitFor(() => expect(screen.getByTestId('template-native-preview').textContent)
       .toBe('An edited headline'))
     expect((screen.getByLabelText(/headline.*maximum 100 characters/) as HTMLInputElement).value)
@@ -185,8 +185,8 @@ describe('Batch 4 standalone gallery → slots → preview → save/reload → e
     expect(backend.studioCalls).toBeGreaterThanOrEqual(2)
 
     fireEvent.click(screen.getByRole('button', { name: /Save and export video/ }))
-    expect(await screen.findByRole('link', { name: 'Download video' }))
-      .toHaveAttribute('href', '/signed-template.mp4')
+    expect((await screen.findByRole('link', { name: 'Download video' })).getAttribute('href'))
+      .toBe('/signed-template.mp4')
     expect(backend.exportCalls).toBe(1)
     expect(backend.renderCalls).toBeGreaterThan(0)
     resumed.unmount()
