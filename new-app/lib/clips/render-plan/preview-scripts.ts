@@ -225,13 +225,19 @@ export function fontUrlsForAss(ass: string, base = '/fonts/clip/'): string[] {
   // JASSUB uses a sealed WASM fontset, unlike browser CSS's system fallback.
   // Load a pinned Unicode face when dialogue contains glyphs outside basic
   // Latin. This extends coverage without altering any historical ASCII ASS.
-  const dialogue = ass.split('\\n').filter(line => line.startsWith('Dialogue: ')).join(' ')
-  if (/[^\\x00-\\x7f]/u.test(dialogue)) files.add(base + 'DejaVuSans-Bold.ttf')
-  if (/[\\u0600-\\u06ff\\u0750-\\u077f\\u08a0-\\u08ff]/u.test(dialogue))
+  const dialogue = ass.split(String.fromCharCode(10))
+    .filter(line => line.startsWith('Dialogue: ')).join(' ')
+  const codepoints = Array.from(dialogue, ch => ch.codePointAt(0) ?? 0)
+  const hasGlyph = (lo: number, hi: number) =>
+    codepoints.some(cp => cp >= lo && cp <= hi)
+  if (codepoints.some(cp => cp > 127)) files.add(base + 'DejaVuSans-Bold.ttf')
+  if (hasGlyph(0x0600, 0x06ff) || hasGlyph(0x0750, 0x077f) || hasGlyph(0x08a0, 0x08ff))
     files.add(base + 'NotoSansArabic.ttf')
-  if (/[\\u0900-\\u097f]/u.test(dialogue)) files.add(base + 'NotoSansDevanagari.ttf')
-  if (/[\\u0e00-\\u0e7f]/u.test(dialogue)) files.add(base + 'NotoSansThai.ttf')
-  if (/[\\u3040-\\u30ff\\u3400-\\u9fff]/u.test(dialogue)) files.add(base + 'NotoSansJP.ttf')
-  if (/[\\u2600-\\u27bf\\u{1f300}-\\u{1faff}]/u.test(dialogue)) files.add(base + 'NotoEmoji.ttf')
+  if (hasGlyph(0x0900, 0x097f)) files.add(base + 'NotoSansDevanagari.ttf')
+  if (hasGlyph(0x0e00, 0x0e7f)) files.add(base + 'NotoSansThai.ttf')
+  if (hasGlyph(0x3040, 0x30ff) || hasGlyph(0x3400, 0x9fff))
+    files.add(base + 'NotoSansJP.ttf')
+  if (hasGlyph(0x2600, 0x27bf) || hasGlyph(0x1f300, 0x1faff))
+    files.add(base + 'NotoEmoji.ttf')
   return [...files]
 }
