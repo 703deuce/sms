@@ -39,6 +39,15 @@ export function VideoTemplatesGallery() {
       maxDurationSeconds: duration ? Number(duration) : undefined },
     page, MAX_PAGE_SIZE,
   ), [query, category, aspect, slots, duration, page, onlyFavorites, favorites])
+  const groups = useMemo(() => {
+    const output: Array<{ id: string; title: string; items: typeof result.items }> = []
+    for (const item of result.items) {
+      const last = output[output.length - 1]
+      if (last?.id === item.family.familyId) last.items.push(item)
+      else output.push({ id: item.family.familyId, title: item.family.title, items: [item] })
+    }
+    return output
+  }, [result.items])
   const changeFilters = (setter: (s: string) => void, value: string) => { setter(value); setPage(1) }
   return (
     <main className="mx-auto w-full max-w-7xl space-y-6 px-4 py-8 sm:px-6" data-testid="video-template-gallery">
@@ -91,8 +100,11 @@ export function VideoTemplatesGallery() {
           </label>
         </section>
         <p className="text-sm text-muted-foreground" role="status">{result.total} reviewed templates</p>
-        {result.items.length ? <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {result.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
+        {result.items.length ? <div className="space-y-7">
+          {groups.map(group => <section key={group.id} className="space-y-3" aria-label={group.title + ' variants'}>
+            <h2 className="text-lg font-semibold">{group.title} <span className="ml-2 text-xs font-normal text-muted-foreground">{group.items.length} on this page</span></h2>
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {group.items.map(item => <article key={item.id} className="overflow-hidden rounded-2xl border bg-card" data-testid="video-template-card">
             <video controls playsInline preload="none" muted={sound !== item.id} poster={item.demoPosterPath}
               src={item.demoPath} className="aspect-video w-full bg-black object-cover"
               aria-label={`Preview ${item.title}`} />
@@ -114,6 +126,8 @@ export function VideoTemplatesGallery() {
               </Link>
             </div>
           </article>)}
+            </div>
+          </section>)}
         </div> : <div className="rounded-2xl border border-dashed p-10 text-center">
           <h2 className="font-medium">No released templates match</h2>
           <p className="mt-2 text-sm text-muted-foreground">
