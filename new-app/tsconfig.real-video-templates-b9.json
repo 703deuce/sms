@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "files": [
+    "./lib/clips/real-video-templates/batch9-phase-b.ts",
+    "./scripts/batch9-phase-b.ts",
+    "./tests/clips/real-video-template-batch9-phase-b.test.ts"
+  ],
+  "include": []
+}
