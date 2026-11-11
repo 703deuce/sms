@@ -96,7 +96,7 @@ vi.mock('@/lib/clips/real-video-templates/releases', () => ({
 }))
 import {
   createVideoTemplateDraft, getVideoTemplateDraft, saveVideoTemplateDraft,
-  publishVideoTemplateDraft, savePublishedStudioDraft, discardVideoTemplateDraft,
+  publishVideoTemplateDraft, savePublishedStudioDraft, discardVideoTemplateDraft, validDraft,
 } from '@/lib/server/clips/video-template-studio-projects'
 
 const photo = { id: 'owned_photo', kind: 'image' as const,
@@ -144,6 +144,32 @@ describe('Batch 4 workspace draft and standalone project lifecycle', () => {
     expect((state.clips[0]?.edits as any).textItems[0].text).toBe('My new headline')
     expect((await getVideoTemplateDraft('ws_one',project.id))?.draft.texts.title).toBe('My new headline')
     await expect(savePublishedStudioDraft('ws_one',project.id,1,0,edited)).rejects.toThrow()
+  })
+  it('rejects unsupported music re-sync and unapproved audio without persisting a draft', async () => {
+    const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
+    await expect(saveVideoTemplateDraft('ws_one',project.id,0,
+      { ...project.draft, musicTiming: 'resync' })).rejects.toThrow('Invalid template draft')
+    await expect(saveVideoTemplateDraft('ws_one',project.id,0,
+      { ...project.draft, music: { id: 'audio_1', kind: 'audio',
+        durationFrames: 300, license: { provenance: 'user-owned' } } }))
+      .rejects.toThrow('unavailable or unapproved')
+    expect((await getVideoTemplateDraft('ws_one',project.id))?.version).toBe(0)
+  })
+  it('validates slot type, source trim, media ownership and focal point before saving', async () => {
+    const project = await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')
+    const filled = { ...project.draft, slots: { first: { asset: photo, sourceInFrame: 0,
+      fit: 'cover' as const, muteSourceAudio: true, focalX: 50, focalY: 50,
+      remedy: 'replace' as const } } }
+    expect(() => validDraft('one_reviewed', filled)).not.toThrow()
+    expect(() => validDraft('one_reviewed', { ...filled, slots: {
+      first: { ...filled.slots.first, focalY: -1 } } })).toThrow('Invalid slot fill')
+    expect(() => validDraft('one_reviewed', { ...filled, slots: {
+      first: { ...filled.slots.first, sourceInFrame: 10 } } })).toThrow('Invalid slot fill')
+    expect(() => validDraft('one_reviewed', { ...filled, slots: {
+      first: { ...filled.slots.first, asset: { ...photo, kind: 'audio' } } } })).toThrow('Invalid slot fill')
+    expect(() => validDraft('one_reviewed', { ...filled, slots: {
+      first: { ...filled.slots.first, asset: { ...photo, license: {
+        ...photo.license, provenance: 'unknown' } } } } })).toThrow('Invalid slot fill')
   })
   it('only discards DRAFT projects, preserving a published clip', async () => {
     const a=await createVideoTemplateDraft('ws_one','one_reviewed','request_01234')

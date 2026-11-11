@@ -348,8 +348,13 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
       if (dirtyRef.current) throw new Error('Draft still has unsaved changes. Retry preparation after saving.')
       const result = await request<{ projectId: string; clipId: string; status: string }>(
         '/api/clips/video-templates/drafts/' + encodeURIComponent(project.id) + '/publish', 'POST')
-      setCurrentProject({ ...project, status: result.status, clipId: result.clipId, draft, version: versionRef.current })
-      setNotice('Project created. The template carrier is preparing for frame-accurate preview and export.')
+      const published = { ...project, status: result.status, clipId: result.clipId,
+        draft, version: versionRef.current }
+      setCurrentProject(published)
+      if (published.status === 'READY') await refreshClip(published)
+      setNotice(published.status === 'READY'
+        ? 'Your complete template preview is ready.'
+        : 'Project created. The template carrier is preparing for frame-accurate preview and export.')
     } catch (e) { setError(readable(e, 'Could not prepare template')) }
     finally { setBusy(false) }
   }

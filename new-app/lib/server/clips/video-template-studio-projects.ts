@@ -67,22 +67,42 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
       typeof raw.draftId !== 'string' || !KEY.test(raw.draftId) ||
       !object(raw.slots) || Object.keys(raw.slots).length > 120 ||
       !object(raw.texts) || Object.keys(raw.texts).length > 60 ||
-      (raw.musicTiming !== 'keep' && raw.musicTiming !== 'resync') ||
+      raw.musicTiming !== 'keep' ||
       (raw.brandColor != null && (typeof raw.brandColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(raw.brandColor))))
     throw new Error('Invalid template draft')
   const release = releaseFor(releaseId)
   if (!release) throw new TemplateInstanceNotFound()
-  const allowedSlots = new Set(release.family.slots.map(slot => slot.id))
+  const allowedSlots = new Map(release.family.slots.map(slot => [slot.id, slot]))
   const allowedTexts = new Map(release.family.texts.map(t => [t.id, t.maxChars]))
+  const validAsset = (rawAsset: unknown, kind: 'image' | 'video' | 'audio'): boolean => {
+    if (!object(rawAsset) || rawAsset.kind !== kind ||
+        typeof rawAsset.id !== 'string' || !/^[A-Za-z0-9_-]{1,120}$/.test(rawAsset.id) ||
+        !object(rawAsset.license) || rawAsset.license.provenance !== 'user-owned') return false
+    if (kind !== 'image' && (!Number.isSafeInteger(rawAsset.durationFrames) ||
+        Number(rawAsset.durationFrames) < 1)) return false
+    return true
+  }
   for (const [id, fill] of Object.entries(raw.slots)) {
-    if (!allowedSlots.has(id) || !object(fill) ||
+    const slot = allowedSlots.get(id)
+    if (!slot || !object(fill) ||
         !['cover','contain'].includes(String(fill.fit)) ||
         !['replace','loop','hold'].includes(String(fill.remedy)) ||
-        (typeof fill.sourceInFrame !== 'number' || !Number.isInteger(fill.sourceInFrame)) || Number(fill.sourceInFrame) < 0 ||
-        (typeof fill.focalX !== 'number' || !Number.isFinite(fill.focalX)) ||
-        (typeof fill.focalY !== 'number' || !Number.isFinite(fill.focalY)) ||
-        typeof fill.muteSourceAudio !== 'boolean') throw new Error('Invalid slot fill')
+        !Number.isSafeInteger(fill.sourceInFrame) || Number(fill.sourceInFrame) < 0 ||
+        typeof fill.focalX !== 'number' || !Number.isFinite(fill.focalX) ||
+        fill.focalX < 0 || fill.focalX > 100 ||
+        typeof fill.focalY !== 'number' || !Number.isFinite(fill.focalY) ||
+        fill.focalY < 0 || fill.focalY > 100 ||
+        typeof fill.muteSourceAudio !== 'boolean' ||
+        !object(fill.asset) || !['image', 'video'].includes(String(fill.asset.kind)) ||
+        !validAsset(fill.asset, fill.asset.kind as 'image' | 'video') ||
+        (slot.media !== 'either' && slot.media !== fill.asset.kind) ||
+        (fill.asset.kind === 'image' && (fill.sourceInFrame !== 0 || fill.remedy !== 'replace')) ||
+        (fill.remedy === 'hold' && fill.asset.kind !== 'video') ||
+        (fill.holdAsset !== undefined && !validAsset(fill.holdAsset, 'image')))
+      throw new Error('Invalid slot fill')
   }
+  if (raw.music !== undefined && (release.design.musicPolicy === 'none' || !validAsset(raw.music, 'audio')))
+    throw new Error('Template music is unavailable or unapproved')
   for (const [id, text] of Object.entries(raw.texts)) {
     const max = allowedTexts.get(id)
     if (!max || typeof text !== 'string' || !text.trim() || Array.from(text).length > max)
