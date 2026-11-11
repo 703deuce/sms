@@ -9,6 +9,8 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { captionFontStack } from '@/lib/clips/caption-fonts'
+import { createTypographyTreatment, TYPOGRAPHY_TREATMENTS } from '@/lib/clips/editor/typography-treatments'
+import { waitForClipFont } from '@/lib/clips/font-manifest'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import { reconcileItemMotion } from '@/lib/clips/editor/keyframes'
 import {
@@ -220,6 +222,33 @@ export function TextPanel({
     else onEdits(next)
     onSelect(made[made.length - 1]!.id)
   }
+  const [typographyBusy, setTypographyBusy] = useState(false)
+  const addTypography = async (treatmentId: string) => {
+    if (typographyBusy || items.length > TEXT_MAX_ITEMS - 2 || durationMs < 800) return
+    const treatment = TYPOGRAPHY_TREATMENTS.find(t => t.id === treatmentId)
+    if (!treatment) return
+    setTypographyBusy(true)
+    try {
+      await Promise.all([treatment.headline.font, treatment.subtitle.font].map(font => waitForClipFont(font)))
+      const startMs = Math.max(0, Math.min(Math.round(playheadMs), durationMs - 1500))
+      const endMs = Math.min(durationMs, startMs + 3600)
+      const aspectRatio = edits.aspectRatio === '9:16' || edits.aspectRatio === '1:1'
+        ? edits.aspectRatio : '16:9'
+      const made = createTypographyTreatment({
+        id: newId(), treatmentId, headline: 'YOUR HEADLINE',
+        subtitle: 'Add a supporting line', startMs, endMs, aspectRatio,
+      })
+      const built = build([...items, ...made])
+      const next = placeOnFreeTrack(built, 'text', made.map(item => item.id), startMs, endMs)
+      if (onEditsPass) onEditsPass(next, `Added ${treatment.title} typography`)
+      else onEdits(next)
+      onSelect(made[0]!.id)
+    } catch (error) {
+      toast.error(`Typography could not be added: ${error instanceof Error ? error.message : 'font unavailable'}`)
+    } finally {
+      setTypographyBusy(false)
+    }
+  }
   const addShape = (type: string) => {
     const base = newShapeItem(newId(), type, playheadMs, durationMs)
     const [x, y] = offsetNewOverlayPosition(edits, base.x, base.y)
@@ -305,6 +334,28 @@ export function TextPanel({
               >
                 {p.label.split(' ')[0]}
               </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="space-y-2" aria-label="Paired typography" data-testid="text-typography-treatments">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Paired typography</p>
+        <p className="text-xs text-muted-foreground">Add editable headline and subtitle layers using pinned local fonts.</p>
+        <div className="grid grid-cols-2 gap-2">
+          {TYPOGRAPHY_TREATMENTS.map(treatment => (
+            <button
+              key={treatment.id}
+              type="button"
+              className="min-h-16 rounded-lg border border-border bg-black/80 p-2 text-left text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-40"
+              data-testid={`text-typography-${treatment.id}`}
+              title={`Add ${treatment.title} headline and subtitle at the playhead`}
+              aria-label={`Add ${treatment.title} paired typography`}
+              disabled={typographyBusy || items.length > TEXT_MAX_ITEMS - 2 || durationMs < 800}
+              onClick={() => void addTypography(treatment.id)}
+            >
+              <span className="block truncate text-sm font-semibold" style={{ fontFamily: fontCss(treatment.headline.font), color: treatment.headline.color }}>{treatment.title}</span>
+              <span className="block truncate text-[11px]" style={{ fontFamily: fontCss(treatment.subtitle.font), color: treatment.subtitle.color }}>Headline + subtitle</span>
             </button>
           ))}
         </div>
