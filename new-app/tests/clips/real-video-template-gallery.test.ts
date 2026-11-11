@@ -35,10 +35,11 @@ describe('standalone real video gallery', () => {
     expect(validateVideoTemplateRelease(fixture('one')).id).toBe('one')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), reviewed: false } as unknown as VideoTemplateRelease))
       .toThrow('Preview templates must not claim completed certification')
-    expect(validateVideoTemplateRelease({
-      ...fixture('preview'), demoPath: undefined, demoPosterPath: undefined,
-      reviewed: false, previewRenderVerified: false, certificationStatus: 'preview',
-    }).certificationStatus).toBe('preview')
+    const preview = { ...fixture('preview'),
+      reviewed: false, previewRenderVerified: false, certificationStatus: 'preview' as const }
+    delete preview.demoPath
+    delete preview.demoPosterPath
+    expect(validateVideoTemplateRelease(preview).certificationStatus).toBe('preview')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), demoPath: 'https://remote.example/demo.mp4' })).toThrow('local demo')
     expect(() => validateVideoTemplateRelease({ ...fixture('one'), authoredDimensions: ['font-hierarchy', 'color','aspect'] })).toThrow('three')
   })
