@@ -17,6 +17,7 @@ import {
   validateTemplatePlaybackSpec,
   type TemplateSlotPlaybackSpec,
 } from '@/lib/clips/real-video-templates/slot-playback'
+import { TEXT_ANIM_BLOCK_ONLY, TEXT_ANIM_IN_TYPES, TEXT_ANIM_LOOP_TYPES, TEXT_ANIM_UNITS, TEXT_ONLY_ANIM, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 import { compileBatch7Primitives, validateBatch7Primitives, type Batch7TemplatePrimitive } from './batch7-primitives'
 
 export type TemplateAsset = {
@@ -66,6 +67,8 @@ export type TemplateText = {
   font: 'Montserrat' | 'Anton' | 'Poppins'
   size: number
   color: string
+  /** Real ASS/worker/libass text choreography, not preview-only CSS. */
+  anim?: TextAnim
 }
 export type TemplateGraphic = {
   id: string
@@ -77,6 +80,8 @@ export type TemplateGraphic = {
   w: number
   h: number
   color: string
+  /** Whole-layer animation shares the regular text/graphic renderer. */
+  anim?: TextAnim
 }
 export type TemplatePhraseAnchor = { id: string; frame: number; textFieldId?: string }
 export type TemplateFamilyV1 = {
@@ -229,6 +234,40 @@ function validateMotionState(raw: unknown, context: string): TemplateMotionState
   if (raw.rotation != null) out.rotation = finite(raw.rotation, -360, 360, context + '.rotation')
   return Object.keys(out).length ? out : undefined
 }
+/** Strict authored animation: no silently clamped timing, unknown effects or arbitrary commands. */
+function validateAuthoredAnim(raw: unknown, context: string, graphic = false): TextAnim | undefined {
+  if (raw == null) return undefined
+  if (!own(raw)) throw new Error(`${context}.anim: expected object`)
+  exact(raw, ['in', 'out', 'loop'], `${context}.anim`)
+  const out: TextAnim = {}
+  for (const edge of ['in','out'] as const) {
+    const value = raw[edge]
+    if (value == null) continue
+    if (!own(value)) throw new Error(`${context}.anim.${edge}: expected object`)
+    exact(value, ['type', 'unit', 'durMs'], `${context}.anim.${edge}`)
+    const type = oneOf(value.type, TEXT_ANIM_IN_TYPES, `${context}.anim.${edge}.type`)
+    const unit = oneOf(value.unit, TEXT_ANIM_UNITS, `${context}.anim.${edge}.unit`)
+    if (graphic && (unit !== 'block' || TEXT_ONLY_ANIM.has(type)))
+      throw new Error(`${context}.anim: graphics require whole-layer motion`)
+    if ((TEXT_ANIM_BLOCK_ONLY as readonly string[]).includes(type) && unit !== 'block')
+      throw new Error(`${context}.anim: motion type requires block unit`)
+    if (type === 'typewriter' && unit === 'block')
+      throw new Error(`${context}.anim: typewriter requires a text unit`)
+    out[edge] = { type, unit, durMs: integer(value.durMs, 100, 5000, `${context}.anim.${edge}.durMs`) }
+  }
+  const loop = raw.loop
+  if (loop != null) {
+    if (!own(loop)) throw new Error(`${context}.anim.loop: expected object`)
+    exact(loop, ['type','periodMs'], `${context}.anim.loop`)
+    out.loop = {
+      type: oneOf(loop.type, TEXT_ANIM_LOOP_TYPES, `${context}.anim.loop.type`),
+      periodMs: integer(loop.periodMs, 300, 4000, `${context}.anim.loop.periodMs`),
+    }
+  }
+  if (!Object.keys(out).length) throw new Error(`${context}.anim: no animation specified`)
+  return out
+}
+
 function validateMotion(raw: unknown): TemplateMotion | undefined {
   if (raw == null) return undefined
   if (!own(raw)) throw new Error('slot.motion: expected object')
@@ -353,7 +392,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   const textIds = new Set<string>()
   const texts: TemplateText[] = raw.texts.map((value: unknown) => {
     if (!own(value)) throw new Error('text: expected object')
-    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color'], 'text')
+    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','anim'], 'text')
     const tid = id(value.id, 'text'); unique(tid, textIds, 'text')
     const maxChars = integer(value.maxChars, 1, 200, 'text.maxChars')
     if (typeof value.defaultText !== 'string' || !value.defaultText.trim() || Array.from(value.defaultText).length > maxChars) throw new Error('text: invalid default')
@@ -367,6 +406,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
       x: finite(value.x, 0, 100, 'text.x'), y: finite(value.y, 0, 100, 'text.y'),
       font: oneOf(value.font, ['Montserrat','Anton','Poppins'] as const, 'font'),
       size: integer(value.size, 24, 240, 'text.size'), color,
+      ...(validateAuthoredAnim(value.anim, 'text') ? { anim: validateAuthoredAnim(value.anim, 'text') } : {}),
     }
   })
 
@@ -376,7 +416,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     const ids = new Set<string>()
     graphics = raw.graphics.map((value: unknown) => {
       if (!own(value)) throw new Error('graphic: expected object')
-      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color'], 'graphic')
+      exact(value, ['id','type','startFrame','durationFrames','x','y','w','h','color','anim'], 'graphic')
       const gid = id(value.id, 'graphic'); unique(gid, ids, 'graphic')
       if (!GRAPHICS.has(String(value.type))) throw new Error('graphic: unsupported type')
       const startFrame = integer(value.startFrame, 0, total - 1, 'graphic.startFrame')
@@ -387,6 +427,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
         id: gid, type: value.type as TemplateGraphic['type'], startFrame, durationFrames,
         x: finite(value.x, 0, 100, 'graphic.x'), y: finite(value.y, 0, 100, 'graphic.y'),
         w: integer(value.w, 8, 1920, 'graphic.w'), h: integer(value.h, 8, 1920, 'graphic.h'), color,
+        ...(validateAuthoredAnim(value.anim, 'graphic', true) ? { anim: validateAuthoredAnim(value.anim, 'graphic', true) } : {}),
       }
     })
   }
@@ -580,6 +621,7 @@ export function compileTemplate(
       id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id),
       text, startMs: templateFrameToMs(t.startFrame), endMs: templateFrameToMs(t.startFrame + t.durationFrames),
       x: t.x, y: t.y, style: { font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const },
+      ...(t.anim ? { anim: t.anim } : {}),
     }
   })
   for (const g of family.graphics ?? []) textItems.push({
@@ -587,6 +629,7 @@ export function compileTemplate(
     text: '', kind: 'shape', shape: { type: g.type, w: g.w, h: g.h },
     startMs: templateFrameToMs(g.startFrame), endMs: templateFrameToMs(g.startFrame + g.durationFrames),
     x: g.x, y: g.y, style: { font: 'Montserrat', size: 24, color: g.color, align: 'center', case: 'none' },
+    ...(g.anim ? { anim: g.anim } : {}),
   })
 
   let music = null
