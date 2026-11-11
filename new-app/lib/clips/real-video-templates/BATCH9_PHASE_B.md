@@ -22,3 +22,14 @@ pnpm templates:b9:phase-b --evidence build/real-video-templates/b8/evidence.json
 The command writes a local status/eligible manifest only. It never edits
 `releases.ts`, Batch 9A anchors, the gallery/studio redesign, Compact, or the
 full Timeline.
+
+## Phase B release gate
+
+A local Phase B release manifest is only populated after the ten Phase A anchors
+are certified and each exact variant passes the Batch 8 evidence audit. Before
+any Phase B release rows are returned, independent review must cover at least
+10% of the currently eligible variants, every one of the 39 non-bold treatment
+recipes must have an independently reviewed example, and every flagged variant
+must have an independent reviewer. The generated rows are certified
+`VideoTemplateRelease` records with real reviewed MP4/poster evidence, but the
+CLI still never mutates the production `releases.ts` registry automatically.

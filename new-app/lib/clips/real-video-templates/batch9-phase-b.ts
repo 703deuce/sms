@@ -1,4 +1,5 @@
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from './b8-authoring-catalog'
+import type { VideoTemplateRelease } from './gallery'
 import {
   auditB8Evidence,generateB8Candidates,scoreB8Review,
   type B8Candidate,type B8Evidence,
@@ -76,4 +77,55 @@ export function eligibleBatch9PhaseBVariants(evidence:readonly B8Evidence[]):rea
   const byId=new Map(evidence.map(row=>[row.id,row]))
   return batch9PhaseBExpansionCandidates().filter(candidate=>
     auditB8Evidence(candidate,byId.get(candidate.id)).length===0)
+}
+
+export type Batch9PhaseBReleaseGate={
+  ready:boolean
+  independentCount:number
+  minimumIndependent:number
+  missingTreatmentAudits:string[]
+  flaggedWithoutIndependent:string[]
+}
+export function batch9PhaseBReleaseGate(evidence:readonly B8Evidence[]):Batch9PhaseBReleaseGate{
+  const phaseA=batch9PhaseAAnchorGate(evidence)
+  const byId=new Map(evidence.map(row=>[row.id,row]))
+  const eligible=eligibleBatch9PhaseBVariants(evidence)
+  const independent=eligible.filter(candidate=>Boolean(byId.get(candidate.id)?.independentReviewer?.trim()))
+  const minimumIndependent=Math.ceil(eligible.length*.1)
+  const covered=new Set(independent.map(candidate=>candidate.treatmentId))
+  const missingTreatmentAudits=FACTORY_TREATMENTS
+    .filter(row=>row.id!=='bold'&&!covered.has(row.id)).map(row=>row.id)
+  const flaggedWithoutIndependent=eligible.filter(candidate=>{
+    const row=byId.get(candidate.id)
+    return Boolean(row?.flagged&&!row.independentReviewer?.trim())
+  }).map(candidate=>candidate.id)
+  return {
+    ready:phaseA.ready&&eligible.length>0&&independent.length>=minimumIndependent&&
+      missingTreatmentAudits.length===0&&flaggedWithoutIndependent.length===0,
+    independentCount:independent.length,minimumIndependent,
+    missingTreatmentAudits,flaggedWithoutIndependent,
+  }
+}
+
+export function batch9PhaseBReviewedReleases(
+  evidence:readonly B8Evidence[],
+):readonly VideoTemplateRelease[]{
+  const gate=batch9PhaseBReleaseGate(evidence)
+  if(!gate.ready)return []
+  const byId=new Map(evidence.map(row=>[row.id,row]))
+  return eligibleBatch9PhaseBVariants(evidence).map(candidate=>{
+    const row=byId.get(candidate.id)!
+    const seed=FACTORY_FAMILY_SEEDS.find(item=>item.id===candidate.familyId)!
+    return {
+      id:candidate.id,title:candidate.family.title+' · '+candidate.treatmentId,
+      category:seed.category,description:'Reviewed first-party style expansion',
+      demoPath:row.outputs.renderMp4,demoPosterPath:row.outputs.poster,
+      family:candidate.family,design:candidate.design,
+      rights:'Pinned license evidence: '+row.fixtures.licenseHashes.join(','),
+      requiredCapabilities:['clip_edits_v2','source_transforms','text_layers','music_track'],
+      authoredDimensions:[...candidate.authoredDimensions],
+      reviewed:true,previewRenderVerified:true,certificationStatus:'certified',
+      musicRequired:true,
+    } satisfies VideoTemplateRelease
+  })
 }

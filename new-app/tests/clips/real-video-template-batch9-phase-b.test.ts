@@ -2,8 +2,8 @@ import { describe,expect,it } from 'vitest'
 import { FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import {
   BATCH9_PHASE_A_ANCHORS,BATCH9_PHASE_B_VARIANT_TARGET,
-  batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,batch9PhaseBStatus,
-  eligibleBatch9PhaseBVariants,
+  batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,batch9PhaseBReleaseGate,
+  batch9PhaseBReviewedReleases,batch9PhaseBStatus,eligibleBatch9PhaseBVariants,
 } from '@/lib/clips/real-video-templates/batch9-phase-b'
 
 describe('Batch 9 Phase B style-pack expansion gate',()=>{
@@ -22,6 +22,8 @@ describe('Batch 9 Phase B style-pack expansion gate',()=>{
     expect(status.phaseAReady).toBe(false)
     expect(status.eligible).toBe(0)
     expect(eligibleBatch9PhaseBVariants([])).toEqual([])
+    expect(batch9PhaseBReleaseGate([]).ready).toBe(false)
+    expect(batch9PhaseBReviewedReleases([])).toEqual([])
     expect(Object.keys(status.blockers)).toHaveLength(390)
     expect(status.blockers['f01_editorial']).toContain('first_ten_anchor_gate')
   })
