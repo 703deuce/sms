@@ -99,6 +99,9 @@ export const TEXT_FONTS = [
   { id: 'Playfair Display', label: 'Playfair Display', ass: 'Playfair Display', weight: 400 },
   { id: 'Caveat', label: 'Caveat', ass: 'Caveat', weight: 400 },
   { id: 'Space Grotesk', label: 'Space Grotesk', ass: 'Space Grotesk', weight: 400 },
+  { id: 'Inter', label: 'Inter', ass: 'Inter', weight: 400 },
+  { id: 'Lato', label: 'Lato Black', ass: 'Lato Black', weight: 900 },
+  { id: 'Oswald', label: 'Oswald', ass: 'Oswald', weight: 400 },
   { id: 'Space Mono', label: 'Space Mono', ass: 'Space Mono', weight: 400 },
 ] as const
 export type BuiltinFontId = (typeof TEXT_FONTS)[number]['id']

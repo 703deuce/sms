@@ -34,6 +34,9 @@ export const TEXT_FONTS: Record<string, string> = {
   'Playfair Display': 'Playfair Display',
   'Caveat': 'Caveat',
   'Space Grotesk': 'Space Grotesk',
+  Inter: 'Inter',
+  Lato: 'Lato Black',
+  Oswald: 'Oswald',
   'Space Mono': 'Space Mono',
 }
 const REF_H = 1920

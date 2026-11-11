@@ -7,6 +7,7 @@
   "files": [
     "./lib/clips/real-video-templates/sequence-contract.ts",
     "./lib/clips/real-video-templates/sequence-timebase.ts",
+    "./lib/clips/real-video-templates/slot-playback.ts",
     "./lib/clips/editor/sources.ts",
     "./lib/clips/editor/motion-frame.ts",
     "./lib/clips/edits.ts",
@@ -21,6 +22,7 @@
     "./app/api/clips/clips/[id]/template-authoring/route.ts",
     "./app/api/clips/projects/[id]/template-instance/route.ts",
     "./tests/clips/real-video-templates-b3.test.ts",
+    "./tests/clips/real-video-template-b6-timing.test.ts",
     "./tests/clips/real-video-template-instance.test.ts",
     "./tests/clips/real-video-template-editor.test.tsx"
   ],

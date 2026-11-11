@@ -23,8 +23,10 @@ on:
       - "worker/clips_worker/blank_project.py"
       - "worker/clips_worker/byo_clip_job.py"
       - "worker/clips_worker/media_sources.py"
+      - "worker/clips_worker/template_playback.py"
       - "worker/clips_worker/edits_render.py"
       - "worker/tests/test_real_video_template_sequence.py"
+      - "worker/tests/test_real_video_template_b6_playback.py"
       - "worker/clips_worker/bg_removal.py"
       - "worker/modal_app/matte.py"
       - "worker/tests/test_e8_caption_size.py"
@@ -65,10 +67,34 @@ jobs:
             echo "Motion graphics TypeScript errors" >&2
             exit 1
           fi
+      - name: Full new-app TypeScript diagnostic baseline (Batch 6)
+        run: |
+          # Run the full project config (not the narrower scoped typecheck config).
+          # Master baseline has 456 diagnostics; reductions are allowed, increases are not.
+          NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc --noEmit -p tsconfig.json --pretty false > /tmp/b6-full-tsc.txt 2>&1 || true
+          count="$(grep -Ec 'error TS[0-9]+:' /tmp/b6-full-tsc.txt || true)"
+          echo "new-app full tsc diagnostic count: $count (master maximum: 456)"
+          if [ "$count" -gt 456 ]; then
+            echo "Batch 6 TypeScript diagnostic count exceeds master baseline" >&2
+            grep -E 'error TS[0-9]+:' /tmp/b6-full-tsc.txt | tail -80 >&2 || true
+            exit 1
+          fi
       - name: Editor import and hook guards
         run: |
           pnpm run verify:editor-shell-import
           pnpm run verify:editor-hook-imports
+      - name: Batch 6 focused template, preview, source and motion regression
+        run: |
+          pnpm exec vitest run \
+            tests/clips/real-video-template-*.test.ts* \
+            tests/preview-stage-e3.test.tsx \
+            tests/preview-stage-prod-edits.test.tsx \
+            tests/motion-preview-dom.test.ts \
+            tests/media-source.test.ts \
+            tests/source-ms-to-editor.test.ts \
+            tests/preview-segment-layout.test.tsx \
+            tests/layout-segments.test.ts \
+            tests/e5fv-source-filmstrip.test.tsx
       - name: Editor QA regression tests
         run: |
           pnpm exec vitest run \
@@ -109,6 +135,7 @@ jobs:
             tests/stock-audio-picker-placement.test.tsx \
             tests/batch5-template-full-video.test.tsx \
             tests/clips/real-video-templates-b3.test.ts \
+            tests/clips/real-video-template-b6-timing.test.ts \
             tests/clips/real-video-template-instance.test.ts \
             tests/clips/real-video-template-editor.test.tsx \
             tests/clips/real-video-template-typecheck.test.ts \
@@ -211,7 +238,9 @@ jobs:
             worker/tests/test_audio_only_mute.py \
             worker/tests/test_caption_lines.py \
             worker/tests/test_caption_ass_sentence_case.py \
-            worker/tests/test_real_video_template_sequence.py
+            worker/tests/test_real_video_template_sequence.py \
+            worker/tests/test_real_video_template_b6_playback.py \
+            worker/tests/test_media_sources_layouts.py
           bash .github/scripts/pytest-junit-guard.sh \
             /tmp/captions-worker-regression.xml captions-worker-regression
   visual-audio-worker-regression:

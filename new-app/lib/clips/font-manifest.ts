@@ -475,7 +475,9 @@ export async function waitForClipFont(id: string, timeoutMs = 5000): Promise<voi
       const face = new FontFace(row.assFamily, bytes, { weight: String(row.cssWeight), style: 'normal' })
       await face.load()
       document.fonts.add(face)
-      if (!document.fonts.check(row.cssWeight + ' 24px "' + row.assFamily + '"'))
+      // Another registered face of the same family may still be loading.
+      // Only the integrity-verified pinned instance is authoritative.
+      if (face.status !== 'loaded' || !document.fonts.has(face))
         throw new Error('clip_font_missing:' + row.id)
     })()
     loaded.set(row.id, task)
