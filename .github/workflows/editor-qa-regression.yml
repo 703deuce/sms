@@ -220,7 +220,8 @@ jobs:
             tests/clips/real-video-templates-b3.test.ts \
             tests/clips/real-video-template-instance.test.ts \
             tests/clips/real-video-template-editor.test.tsx \
-            tests/clips/real-video-template-b3b-editable-timeline.test.tsx
+            tests/clips/real-video-template-b3b-editable-timeline.test.tsx \
+            tests/clips/real-video-template-b3b-save-reload.test.ts
       - name: Batch 3B scoped TypeScript
         working-directory: new-app
         run: NODE_OPTIONS=--max-old-space-size=8192 pnpm exec tsc -p tsconfig.real-video-templates.json --noEmit --pretty false
