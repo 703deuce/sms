@@ -7,7 +7,7 @@
       "local": "Rubik.ttf",
       "blobSha": "a59aeb632df494345a542697c357f608875481b0",
       "assFamily": "Rubik",
-      "weight": 700,
+      "weight": 400,
       "size": 359804,
       "licenseBlobSha": "03af63b533942ef3bb9919f81138fde8824d4554"
     },
@@ -17,7 +17,7 @@
       "local": "Gabarito.ttf",
       "blobSha": "f048f3b6527b2aff1adb92bd682acb1d8adcdc9c",
       "assFamily": "Gabarito",
-      "weight": 700,
+      "weight": 400,
       "size": 158144,
       "licenseBlobSha": "b3fef63ddc518006d477f3ad102eb0c8fec09bb2"
     },
@@ -47,7 +47,7 @@
       "local": "PlayfairDisplay.ttf",
       "blobSha": "7a09eb71f10622fd083134ac9ed46f59b21bee18",
       "assFamily": "Playfair Display",
-      "weight": 700,
+      "weight": 400,
       "size": 300724,
       "licenseBlobSha": "13153890847ba9bde8a852596d1515261156e474"
     },
@@ -57,7 +57,7 @@
       "local": "Caveat.ttf",
       "blobSha": "f84acf2ce2d1b3329b194749530dbaec047e6df6",
       "assFamily": "Caveat",
-      "weight": 700,
+      "weight": 400,
       "size": 403648,
       "licenseBlobSha": "6e5220c9576d98dfc684e550ddf0d87f68b3edc5"
     },
@@ -67,7 +67,7 @@
       "local": "SpaceGrotesk.ttf",
       "blobSha": "a1b2e6c26093066510a31147e7aec9abdc8d6c5e",
       "assFamily": "Space Grotesk",
-      "weight": 700,
+      "weight": 400,
       "size": 136676,
       "licenseBlobSha": "cb512b9af44ff61e75e1aad387b7424cdfab36a3"
     },
