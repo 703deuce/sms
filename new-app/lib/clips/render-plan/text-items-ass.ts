@@ -27,6 +27,14 @@ export const TEXT_FONTS: Record<string, string> = {
   'Bebas Neue': 'Bebas Neue',
   'Archivo Black': 'Archivo Black',
   'Luckiest Guy': 'Luckiest Guy',
+  'Rubik': 'Rubik',
+  'Gabarito': 'Gabarito',
+  'Fira Sans Condensed': 'Fira Sans Condensed',
+  'DM Serif Display': 'DM Serif Display',
+  'Playfair Display': 'Playfair Display',
+  'Caveat': 'Caveat',
+  'Space Grotesk': 'Space Grotesk',
+  'Space Mono': 'Space Mono',
 }
 const REF_H = 1920
 const AN: Record<string, number> = { left: 4, center: 5, right: 6 }
