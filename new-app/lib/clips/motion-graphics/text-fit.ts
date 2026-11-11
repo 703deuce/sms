@@ -39,7 +39,7 @@ function glyphWidthEm(ch: string): number {
   if (/[ilI1|!.,'’":;]/u.test(ch)) return 0.3
   if (/[MW@#%&QG]/u.test(ch)) return 0.9
   if (/[A-Z0-9]/u.test(ch)) return 0.66
-  if (/[-_+()\[\]{}/\\]/u.test(ch)) return 0.48
+  if (/[-_+()\[\]{}\/\\\\]/u.test(ch)) return 0.48
   return 0.58
 }
 
