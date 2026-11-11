@@ -2,7 +2,7 @@
 // @ts-expect-error root tsc does not resolve the new-app vitest install
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // @ts-expect-error root tsc does not resolve the new-app testing-library install
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import {
   CAPTIONS_RUN_CREDITS,
   captionsCreditCount,
@@ -176,6 +176,95 @@ describe('AI Captions workspace', () => {
     await waitFor(() => expect(screen.getByTestId('ai-captions-export-timing')).toBeTruthy())
     expect(screen.getByTestId('ai-captions-export-timing').textContent).toMatch(/1m 15s elapsed/)
     expect(screen.getByTestId('ai-captions-export-timing').textContent).toMatch(/ETA about 35s/)
+  })
+
+
+  it('ignores an old pending poll after a different history run is selected', async () => {
+    const newest = {
+      runId: 'run_new',
+      status: 'ready' as const,
+      stage: 'ready' as const,
+      progressPercent: 100,
+      failureCode: null,
+      failureMessage: null,
+      creditEstimate: CAPTIONS_RUN_CREDITS,
+      styleId: 'clean_white',
+      projectId: 'proj_new',
+      displayTitle: 'New selection',
+      result: { ...readyResult, projectId: 'proj_new', clipId: 'clip_new',
+        editorUrl: '/app/video-editor/proj_new/edit/clip_new?tab=captions' },
+    }
+    listAiCaptionsRuns.mockResolvedValue([newest])
+    createAiCaptionsRun.mockResolvedValue({
+      runId: 'run_old',
+      status: 'preparing',
+      creditEstimate: CAPTIONS_RUN_CREDITS,
+    })
+    let resolveOld!: (value: unknown) => void
+    getAiCaptionsRun.mockImplementation((id: string) => {
+      if (id === 'run_old') return new Promise((resolve) => { resolveOld = resolve })
+      if (id === 'run_new') return Promise.resolve(newest)
+      throw new Error('unexpected run')
+    })
+
+    render(<AiCaptionsWorkspace />)
+    await waitFor(() => expect(screen.getByText('New selection')).toBeTruthy())
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['ok'], 'talk.mp4', { type: 'video/mp4' })] } })
+    await waitFor(() => expect(getAiCaptionsRun.mock.calls.some(([id]) => id === 'run_old')).toBe(true))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open caption run New selection' }))
+    await waitFor(() => expect(screen.getByTestId('ai-captions-result')).toBeTruthy())
+    resolveOld({
+      ...newest,
+      runId: 'run_old',
+      projectId: 'proj_old',
+      displayTitle: 'Old response',
+      result: { ...readyResult, projectId: 'proj_old', clipId: 'clip_old' },
+    })
+    await act(async () => { await Promise.resolve() })
+
+    fireEvent.click(screen.getByTestId('ai-captions-edit'))
+    expect(push).toHaveBeenLastCalledWith('/app/video-editor/proj_new/edit/clip_new?tab=captions')
+  })
+
+  it('bounds transient status reconnects and Retry status only replays GET polling', async () => {
+    vi.useFakeTimers()
+    const running = {
+      runId: 'run_reconnect',
+      status: 'transcribing' as const,
+      stage: 'transcribe' as const,
+      progressPercent: 30,
+      failureCode: null,
+      failureMessage: null,
+      creditEstimate: CAPTIONS_RUN_CREDITS,
+      styleId: 'clean_white',
+      projectId: 'proj_reconnect',
+      displayTitle: 'Reconnect test',
+      result: null,
+    }
+    listAiCaptionsRuns.mockResolvedValue([running])
+    getAiCaptionsRun.mockRejectedValue(new Error('network interrupted'))
+
+    render(<AiCaptionsWorkspace />)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    const historyButton = screen.getByRole('button', { name: 'Open caption run Reconnect test' })
+    fireEvent.click(historyButton)
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(getAiCaptionsRun.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(screen.getByTestId('ai-captions-retry-status')).toBeTruthy()
+    const stoppedAt = getAiCaptionsRun.mock.calls.length
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+    expect(getAiCaptionsRun).toHaveBeenCalledTimes(stoppedAt)
+
+    fireEvent.click(screen.getByTestId('ai-captions-retry-status'))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(getAiCaptionsRun.mock.calls.length).toBe(stoppedAt + 1)
+    expect(createAiCaptionsRun).not.toHaveBeenCalled()
+    expect(startAiCaptionsExport).not.toHaveBeenCalled()
+    vi.useRealTimers()
   })
 
   it('uploads, starts a captions run, shows preparing, then Edit opens the Captions tab', async () => {
