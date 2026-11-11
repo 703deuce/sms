@@ -342,9 +342,13 @@ export async function addUserTemplateRevision(workspaceId:string,actorUserId:str
   })
 }
 
-export async function listPrivateUserTemplates(workspaceId:string,q:string,page:number){
+export async function listPrivateUserTemplates(workspaceId:string,q:string,page:number,state:string=''){
   const take=30, safePage=Math.max(1,Math.min(10000,page))
-  const where={workspaceId,deletedAt:null,...(q.trim()?{title:{contains:q.trim().slice(0,120),mode:'insensitive' as const}}:{})}
+  const where:any={workspaceId,deletedAt:null,...(q.trim()?{title:{contains:q.trim().slice(0,120),mode:'insensitive' as const}}:{})}
+  if(state==='pending') where.publications={some:{state:'submitted'}}
+  else if(state==='published') where.publications={some:{state:'published'}}
+  else if(state==='rejected') where.publications={some:{state:'rejected'}}
+  else if(state==='never-submitted') where.publications={none:{}}
   const [total,rows]=await Promise.all([
     getPrisma().clipUserTemplate.count({where}),
     getPrisma().clipUserTemplate.findMany({where,orderBy:{updatedAt:'desc'},take,skip:(safePage-1)*take,
