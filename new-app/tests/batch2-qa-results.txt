@@ -1,0 +1,67 @@
+Batch 2 full check on e4827b7f83a3cef41270fbda2974da13f4a2aa6b
+pnpm exec vitest run [14 new/existing font, Text and caption suites]: exit=0
+pnpm exec tsc --noEmit --pretty false: exit=2
+PYTHONPATH=worker pytest [fontconfig, Unicode, captions/Text/motion FFmpeg samples]: exit=0
+----- vitest failure summary -----
+[22m[39mAggregateError: 
+    Error: connect ECONNREFUSED ::1:3000
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+[22m[39mAggregateError: 
+    Error: connect ECONNREFUSED ::1:3000
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+[22m[39mAggregateError: 
+    Error: connect ECONNREFUSED ::1:3000
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+[22m[39mAggregateError: 
+    Error: connect ECONNREFUSED ::1:3000
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+[22m[39mAggregateError: 
+    Error: connect ECONNREFUSED ::1:3000
+    Error: connect ECONNREFUSED 127.0.0.1:3000
+----- tsc failure summary -----
+app/api/clips/brand/route.ts(75,13): error TS2322: Type '{ captionPreset: { size?: number | undefined; presetId?: string | undefined; position?: string | undefined; case?: string | undefined; animation?: string | undefined; wordsPerLine?: number | undefined; colors?: { ...; } | undefined; }; ... 7 more ...; defaultAspectRatio?: "9:16" | ... 3 more ... | undefined; }' is not assignable to type 'JsonNull | InputJsonValue | undefined'.
+app/api/clips/brand/route.ts(80,13): error TS2322: Type 'string | number | boolean | InputJsonObject | InputJsonArray | { toJSON(): unknown; } | null' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+app/api/clips/brand/route.ts(92,13): error TS2322: Type 'string | number | boolean | InputJsonObject | InputJsonArray | { toJSON(): unknown; } | null' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+app/api/clips/brand/route.ts(118,11): error TS2322: Type '{ captionPreset: { size?: number | undefined; presetId?: string | undefined; position?: string | undefined; case?: string | undefined; animation?: string | undefined; wordsPerLine?: number | undefined; colors?: { ...; } | undefined; }; ... 7 more ...; defaultAspectRatio?: "9:16" | ... 3 more ... | undefined; }' is not assignable to type 'JsonNull | InputJsonValue'.
+app/api/clips/brand/route.ts(136,11): error TS2322: Type '{ captionPreset: { size?: number | undefined; presetId?: string | undefined; position?: string | undefined; case?: string | undefined; animation?: string | undefined; wordsPerLine?: number | undefined; colors?: { ...; } | undefined; }; ... 7 more ...; defaultAspectRatio?: "9:16" | ... 3 more ... | undefined; }' is not assignable to type 'JsonNull | InputJsonValue | undefined'.
+app/api/clips/brand/route.ts(141,11): error TS2322: Type 'string | number | boolean | InputJsonObject | InputJsonArray | { toJSON(): unknown; } | null' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+app/api/clips/brand/route.ts(146,11): error TS2322: Type 'string | number | boolean | InputJsonObject | InputJsonArray | { toJSON(): unknown; } | null' is not assignable to type 'NullableJsonNullValueInput | InputJsonValue | undefined'.
+app/api/clips/clips/[id]/repurpose/route.ts(77,40): error TS2698: Spread types may only be created from object types.
+app/api/clips/clips/[id]/studio-sound/jobs/[jobId]/route.ts(16,44): error TS2353: Object literal may only specify known properties, and 'progress' does not exist in type 'ClipJobSelect<DefaultArgs>'.
+app/api/clips/clips/[id]/studio-sound/jobs/[jobId]/route.ts(23,23): error TS2339: Property 'progress' does not exist on type '{ status: string; error: string | null; id: string; createdAt: Date; type: string; payload: JsonValue; attempts: number; maxAttempts: number; priority: number; runAfter: Date; ... 4 more ...; lockedBy: string | null; }'.
+app/api/clips/projects/[id]/clip-type-layout/route.ts(60,9): error TS2322: Type '{ streamer: { clipTypeLayouts: Record<string, unknown>; }; }' is not assignable to type 'JsonNull | InputJsonValue | undefined'.
+app/api/clips/projects/[id]/highlights/make-clip/route.ts(22,77): error TS2345: Argument of type '{ startMs: number; endMs: number; title?: string | undefined; reasonTag?: string | undefined; score?: number | undefined; why?: string | undefined; findJobId?: string | undefined; }' is not assignable to parameter of type 'MakeClipFromRangeInput'.
+app/api/clips/projects/[id]/retranscribe/route.ts(22,16): error TS2345: Argument of type '"retranscribe"' is not assignable to parameter of type '"status" | "retry" | "project" | "upload" | "transcribe"'.
+app/app/clips/[projectId]/page.tsx(194,13): error TS2322: Type 'unknown' is not assignable to type 'boolean | undefined'.
+components/clips/clip-card.tsx(164,43): error TS2322: Type 'ExportAspect' is not assignable to type '"9:16" | "16:9" | "1:1" | "3:4" | "4:5" | undefined'.
+components/clips/clip-results-toolbar.tsx(105,15): error TS2322: Type 'ExportAspect' is not assignable to type '"9:16" | "16:9" | "1:1" | "4:5" | undefined'.
+components/clips/clip-results-toolbar.tsx(127,46): error TS2322: Type 'ExportAspect' is not assignable to type '"9:16" | "16:9" | "1:1" | "3:4" | "4:5" | undefined'.
+components/clips/editor/audio-panel.tsx(27,15): error TS2305: Module '"@/lib/clips/edits"' has no exported member 'ClipAudioSfx'.
+components/clips/editor/audio-panel.tsx(268,44): error TS2322: Type '1.5 | 1.1 | 1.25 | null' is not assignable to type '1.5 | 1.1 | 1.25 | undefined'.
+components/clips/editor/broll-panel.tsx(301,29): error TS2339: Property 'stockQuery' does not exist on type 'BrollItem'.
+components/clips/editor/broll-panel.tsx(302,65): error TS2339: Property 'stockQuery' does not exist on type 'BrollItem'.
+components/clips/editor/broll-panel.tsx(304,29): error TS2339: Property 'stockQuery' does not exist on type 'BrollItem'.
+components/clips/editor/broll-panel.tsx(332,45): error TS2345: Argument of type 'BrollItem' is not assignable to parameter of type 'Pick<BrollItem, "source" | "still">'.
+components/clips/editor/canvas-background.tsx(375,23): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & NativeButtonProps & Omit<WithBaseUIEvent<DetailedHTMLProps<ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>>, "color" | ... 3 more ... | "defaultChecked"> & { ...; } & { ...; }'.
+components/clips/editor/caption-overlay.tsx(117,5): error TS2304: Cannot find name 'logEditorDecision'.
+components/clips/editor/captions-panel.tsx(341,12): error TS2774: This condition will always return true since this function is always defined. Did you mean to call it instead?
+components/clips/editor/cleanup-panel.tsx(267,37): error TS18048: 'bounds.trimMaxMs' is possibly 'undefined'.
+components/clips/editor/cleanup-panel.tsx(267,56): error TS18048: 'bounds.trimMinMs' is possibly 'undefined'.
+components/clips/editor/cleanup-panel.tsx(270,9): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+components/clips/editor/clip-filler-review.tsx(118,27): error TS2339: Property 'text' does not exist on type '{ t0Ms: number; t1Ms: number; }'.
+components/clips/editor/editor-clip-shell.tsx(172,9): error TS2322: Type 'ClipWord[]' is not assignable to type 'SourceWord[]'.
+components/clips/editor/editor-shell.tsx(643,25): error TS2345: Argument of type '"cleanup_pass"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(663,25): error TS2345: Argument of type '"cleanup_restore_pass"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(687,17): error TS2345: Argument of type '(prev: any) => any' is not assignable to parameter of type '({ id: string; type: "headline"; text: string; enabled: boolean; z: number; placement: "fit_top_band" | "export_bar"; style: { preset: "export_bar" | "stream_white_box" | "bold_news" | "stream_yellow" | "export_bar_dark"; ... 5 more ...; font?: string | undefined; }; startMs?: number | undefined; endMs?: number | un...'.
+components/clips/editor/editor-shell.tsx(687,18): error TS7006: Parameter 'prev' implicitly has an 'any' type.
+components/clips/editor/editor-shell.tsx(688,19): error TS7006: Parameter 'l' implicitly has an 'any' type.
+components/clips/editor/editor-shell.tsx(856,27): error TS2345: Argument of type '"vocab_apply"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(886,27): error TS2345: Argument of type '"version_save"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(921,27): error TS2345: Argument of type '"version_restore"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(967,25): error TS2345: Argument of type '"version_restore"' is not assignable to parameter of type 'EditorDecisionKind'.
+components/clips/editor/editor-shell.tsx(1238,11): error TS2322: Type 'ProjectMediaItem[]' is not assignable to type 'readonly ClipMediaSource[]'.
+components/clips/editor/editor-shell.tsx(2961,31): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & NativeButtonProps & Omit<WithBaseUIEvent<DetailedHTMLProps<ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>>, "color" | ... 3 more ... | "defaultChecked"> & { ...; } & { ...; }'.
+components/clips/editor/editor-shell.tsx(2975,31): error TS2322: Type '{ children: Element; asChild: true; }' is not assignable to type 'IntrinsicAttributes & NativeButtonProps & Omit<WithBaseUIEvent<DetailedHTMLProps<ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>>, "color" | ... 3 more ... | "defaultChecked"> & { ...; } & { ...; }'.
+components/clips/editor/editor-shell.tsx(3272,59): error TS2339: Property 'word' does not exist on type 'SourceWord'.
+components/clips/editor/editor-shell.tsx(3791,44): error TS2345: Argument of type '"text" | "layout" | "templates" | "transcript" | "audio" | "captions" | "broll" | "motion" | "effects"' is not assignable to parameter of type 'EditorPanelId'.
+----- worker failure summary -----
