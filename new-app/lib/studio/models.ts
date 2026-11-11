@@ -23,6 +23,7 @@ export type StudioModelConfig = StudioModelPublic & {
 
 const ASPECTS_ALL: StudioAspect[] = ['9:16', '16:9', '1:1']
 const ASPECTS_VEO: StudioAspect[] = ['9:16', '16:9']
+const ASPECTS_PHOTO_AD: StudioAspect[] = ['9:16', '16:9', '1:1', '3:4']
 
 function aliasResolution(map: Record<string, string>) {
   return (value: string): string | null => {
@@ -121,6 +122,42 @@ export const STUDIO_MODELS: StudioModelConfig[] = [
     }),
   },
   {
+    id: 'wan-3.0',
+    label: 'Wan 3.0',
+    kind: 'video',
+    modes: ['text_to_video', 'image_to_video'],
+    supportsStartEndFrame: true,
+    supportsReferenceImage: true,
+    aspects: ASPECTS_PHOTO_AD,
+    durationsSec: [2, 4, 5, 6, 8, 10, 12, 15, 20, 30],
+    resolutions: ['480P', '720P', '1080P'],
+    creditEstimate: 0,
+    providerModel: 'wan/3-0-video',
+    providerApi: 'jobs',
+    defaultAspect: '16:9',
+    defaultDurationSec: 15,
+    defaultResolution: '720P',
+    resolveResolution: aliasResolution({ '480P': '480P', '480p': '480P', '720P': '720P', '720p': '720P', '1080P': '1080P', '1080p': '1080P' }),
+  },
+  {
+    id: 'seedance-2.5',
+    label: 'Seedance 2.5',
+    kind: 'video',
+    modes: ['text_to_video', 'image_to_video'],
+    supportsStartEndFrame: true,
+    supportsReferenceImage: true,
+    aspects: ASPECTS_PHOTO_AD,
+    durationsSec: [4, 5, 6, 8, 10, 12, 15, 20, 30],
+    resolutions: ['480p', '720p', '1080p'],
+    creditEstimate: 0,
+    providerModel: 'bytedance/seedance-2-5',
+    providerApi: 'jobs',
+    defaultAspect: '16:9',
+    defaultDurationSec: 15,
+    defaultResolution: '720p',
+    resolveResolution: aliasResolution({ '480p': '480p', '720p': '720p', '1080p': '1080p' }),
+  },
+  {
     id: 'seedance-2.0-mini',
     label: 'Seedance 2.0 Mini',
     kind: 'video',
@@ -203,7 +240,7 @@ export const STUDIO_MODELS: StudioModelConfig[] = [
     modes: ['text_to_image'],
     supportsStartEndFrame: false,
     supportsReferenceImage: true,
-    aspects: ASPECTS_ALL,
+    aspects: ASPECTS_PHOTO_AD,
     durationsSec: [],
     resolutions: ['1K', '2K', '4K'],
     creditEstimate: 8,
@@ -266,6 +303,7 @@ export type ResolvedStudioCreate = {
   sourceVideoAssetId: string | null
   creditEstimate: number
   projectId: string | null
+  nativeAudio: boolean
 }
 
 function requirePrompt(raw: string | undefined): string {
@@ -366,6 +404,7 @@ export function resolveStudioCreateInput(input: StudioCreateJobInput): ResolvedS
     sourceVideoAssetId,
     creditEstimate,
     projectId: input.projectId?.trim() || null,
+    nativeAudio: input.nativeAudio === true,
   }
 }
 
@@ -417,13 +456,50 @@ export function buildKieCreateRequest(resolved: ResolvedStudioCreate, urls: Stud
     return { api: 'jobs', model: model.providerModel, input }
   }
 
+  if (model.id === 'wan-3.0') {
+    const input: Record<string, unknown> = {
+      prompt,
+      aspect_ratio: aspect,
+      duration: durationSec ?? 15,
+      resolution: resolution || '720P',
+      audio: true,
+      nsfw_checker: false,
+    }
+    if (mode === 'image_to_video') {
+      if (!startUrl) throw new StudioError('INVALID_PARAMS', 'Wan 3.0 image-to-video requires a first frame')
+      input.first_frame_url = startUrl
+    }
+    if (endUrl) input.last_frame_url = endUrl
+    return { api: 'jobs', model: model.providerModel, input }
+  }
+
+  if (model.id === 'seedance-2.5') {
+    const input: Record<string, unknown> = {
+      prompt,
+      aspect_ratio: aspect,
+      duration: durationSec ?? 15,
+      resolution: resolution || '720p',
+      generate_audio: true,
+      output_format: 'mp4',
+      nsfw_checker: false,
+    }
+    if (mode === 'image_to_video') {
+      if (!startUrl) throw new StudioError('INVALID_PARAMS', 'Seedance 2.5 image-to-video requires a first frame')
+      input.first_frame_url = startUrl
+    } else if (referenceUrl) {
+      input.reference_image_urls = [referenceUrl]
+    }
+    if (endUrl) input.last_frame_url = endUrl
+    return { api: 'jobs', model: model.providerModel, input }
+  }
+
   if (model.id === 'seedance-2.0-mini') {
     const input: Record<string, unknown> = {
       prompt,
       aspect_ratio: aspect,
       duration: durationSec ?? 4,
       resolution: resolution || '480p',
-      generate_audio: false,
+      generate_audio: resolved.nativeAudio,
     }
     // Seedance treats first/last-frame conditioning and reference_image_urls as mutually exclusive.
     // For image-to-video, a lone reference image is the actual first frame; previously startUrl
