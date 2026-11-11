@@ -51,20 +51,22 @@ describe('real-video template B3 experimental contract', () => {
   })
   it('emits real editable slot clips with cross-source transitions and transforms', () => {
     const f = family(2)
-    Object.assign(f.slots[0] as Record<string, unknown>, {
+    f.slots[0] = {
+      ...f.slots[0]!,
       media: 'video',
       handles: { headFrames: 0, tailFrames: 15 },
       transform: { scale: 110, cropR: 4 },
       fx: { contrast: 12 },
-    })
-    Object.assign(f.slots[1] as Record<string, unknown>, {
+    }
+    f.slots[1] = {
+      ...f.slots[1]!,
       media: 'video',
       sourceInFrame: 15,
       handles: { headFrames: 15, tailFrames: 0 },
       transition: { type: 'crossfade', durationFrames: 30 },
       transform: { x: 6, y: -3, scale: 105 },
       fx: { brightness: 5, saturation: -8 },
-    })
+    }
     const c = choices(2)
     c.media.shot_1 = asset('video_a', 'video', 90)
     c.media.shot_2 = asset('video_b', 'video', 90)
@@ -97,9 +99,10 @@ describe('real-video template B3 experimental contract', () => {
 
   it('requires real source handles for cross-source transitions instead of degrading to cuts', () => {
     const f = family(2)
-    Object.assign(f.slots[1] as Record<string, unknown>, {
+    f.slots[1] = {
+      ...f.slots[1]!,
       transition: { type: 'crossfade', durationFrames: 30 },
-    })
+    }
     expect(() => validateTemplateFamily(f)).toThrow(/requires 15-frame source handles/)
   })
 
