@@ -35,6 +35,7 @@ jobs:
         run: |
           pnpm exec vitest run \
             tests/font-manifest-b2.test.ts \
+            tests/premium-caption-styles-b2.test.ts \
             tests/typography-treatments-b2.test.ts \
             tests/typography-panel-b2.test.tsx \
             tests/motion-graphics-text-adapter.test.ts \
