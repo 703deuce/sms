@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { CAPTION_PRESETS, presetSlugToId, resolveCaptionPreset, resolvePreset } from '@/lib/clips/caption-presets'
+import { applyDesignedCaptionPreset } from '@/lib/clips/editor/b2b-caption-apply'
 import { PREMIUM_CAPTION_STYLES, applyPremiumCaptionStyle, clearPremiumCaptionStyle } from '@/lib/clips/premium-caption-styles'
 import { CAPTION_PRESETS_V2 } from '@/lib/clips/templates/registry'
 import { resolveT6CaptionPreset } from '@/lib/clips/caption-v2-bridge'
@@ -279,6 +280,17 @@ export function CaptionsPanel({
     }
   }
 
+  const applyPickedRecipe = (recipe: (typeof CAPTION_PRESETS)[number]) => {
+    const selected = () => onChange(applyDesignedCaptionPreset(cap, recipe))
+    if (!recipe.slug.startsWith('b2b-')) {
+      selected()
+      return
+    }
+    void waitForClipFont(recipe.font)
+      .then(selected)
+      .catch((error: unknown) => toast.error('Font unavailable: ' + (error instanceof Error ? error.message : String(error))))
+  }
+
   const coreColorSwatches = (
     <div className="grid grid-cols-2 gap-3" data-testid="caption-core-colors">
       <CaptionHexInput label="Speaker 1 active" value={cap.colors?.a || preset.active} onCommit={(a) => patch({ colors: { ...cap.colors, a } })} />
@@ -311,7 +323,7 @@ export function CaptionsPanel({
                 }
                 const classic = CAPTION_PRESETS.find((p) => presetSlugToId(p.slug) === id)
                 if (classic) {
-                  onChange({ ...clearPremiumCaptionStyle(cap), enabled: cap.enabled !== false, presetId: id, customPresetId: undefined, animation: classic.animation, size: cap.size ?? classic.sizePct, userSizePct: undefined })
+                  applyPickedRecipe(classic)
                 } else if (id in CAPTION_PRESETS_V2 && t6CaptionPresetsEnabled()) {
                   onChange({ enabled: cap.enabled !== false, presetId: id, emphasis: cap.emphasis, size: cap.size, position: cap.position })
                 }
@@ -668,16 +680,7 @@ export function CaptionsPanel({
             <button
               key={p.slug}
               type="button"
-              onClick={() =>
-                onChange({
-                  ...clearPremiumCaptionStyle(cap),
-                  enabled: cap.enabled !== false,
-                  presetId: id,
-                  animation: p.animation,
-                  size: cap.size ?? p.sizePct,
-                  userSizePct: undefined,
-                })
-              }
+              onClick={() => applyPickedRecipe(p)}
               className={cn(
                 'rounded-lg border p-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 active ? 'border-primary ring-2 ring-primary/20' : 'border-border hover:bg-muted/40',
