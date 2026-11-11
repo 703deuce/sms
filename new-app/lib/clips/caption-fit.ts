@@ -41,6 +41,14 @@ const ASS_FONT_ALIASES: Record<string, string> = {
   'Luckiest Guy': 'Luckiest Guy',
   'Archivo Black': 'Archivo Black',
   Oswald: 'Oswald',
+  Rubik: 'Rubik',
+  Gabarito: 'Gabarito',
+  'Fira Sans Condensed': 'Fira Sans Condensed',
+  'DM Serif Display': 'DM Serif Display',
+  'Playfair Display': 'Playfair Display',
+  Caveat: 'Caveat',
+  'Space Grotesk': 'Space Grotesk',
+  'Space Mono': 'Space Mono',
 }
 
 export function roundHalfUp(x: number): number {
