@@ -125,6 +125,8 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
       expect(synced.family.slots.slice(1).every(s=>beats.has(s.startFrame)),candidate.id).toBe(true)
       expect(beats.has(synced.family.totalFrames),candidate.id).toBe(true)
       expect(synced.family.slots.every(s=>s.durationFrames>=9),candidate.id).toBe(true)
+      expect(lintB8Legibility({...candidate,family:synced.family})
+        .filter(finding=>finding.severity==='block'),candidate.id).toEqual([])
     }
   })
   it('keeps B4 mixed sources and B5 pinned music as separate edit lanes',()=>{

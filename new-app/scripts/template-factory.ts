@@ -297,6 +297,11 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
     },{durationFrames:sampledFamily.totalFrames,
       edits:defaultEdits({clipStartMs:0,clipEndMs:duration})})
     const syncedCandidate={...c,family:sampledFamily}
+    const syncedLegibility=lintB8Legibility(syncedCandidate)
+    const syncedBlocks=syncedLegibility.filter(finding=>finding.severity==='block')
+    if(syncedBlocks.length)
+      throw new Error('Beat-synced template failed legibility: '+
+        syncedBlocks.map(finding=>finding.field+':'+finding.code).join(','))
     const editableIssues=auditB8EditableOutput(syncedCandidate,edits,{
       requireMusic:true,expectedMusicAssetId:fixtures.soundtrack.asset.id,
     })
@@ -313,6 +318,7 @@ function preparePreviewRequest(c:B8Candidate,fixtures:FixtureManifest,cacheKey:s
           .update(JSON.stringify(fixtures.soundtrack.decision.schedule)).digest('hex')},
       beatSync:{oldBoundaries:beatSync.oldBoundaries,newBoundaries:beatSync.newBoundaries,
         movedBoundaries:beatSync.movedBoundaries,allCutsOnPinnedBeats:true},
+      legibilityReview:syncedLegibility,
       authoring:{family:sampledFamily,design:c.design,choices:{
         media,music:fixtures.soundtrack.asset,templateMusic:fixtures.soundtrack.decision,
       }},

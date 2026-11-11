@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.typecheck.json",
+  "compilerOptions": {
+    "incremental": false,
+    "plugins": []
+  },
+  "files": [
+    "./lib/clips/real-video-templates/b8-authoring-catalog.ts",
+    "./lib/clips/real-video-templates/b8-factory.ts",
+    "./lib/clips/real-video-templates/b8-legibility.ts",
+    "./lib/clips/real-video-templates/b8-music-sync.ts",
+    "./lib/clips/real-video-templates/b8-render-qa.ts",
+    "./scripts/template-factory-worker.ts",
+    "./scripts/template-factory.ts",
+    "./tests/clips/b8-template-factory.test.ts"
+  ],
+  "include": []
+}

@@ -170,15 +170,16 @@ real-render or reference-review requirements.
    the local manifest and send it through the coordinator's publication
    workflow. Do not publish unreviewed candidates.
 
-## Open implementation and evidence dependencies
+## Remaining external evidence dependencies
 
 - Original signed F01–F50 family schedules are not present.
 - No 2,000 fully licensed sample video outputs, posters, CapCut/Canva
   review references or signed human scores exist.
-- Actual MP4 generation still runs through the existing app/worker and requires
-  registered licensed fixture uploads plus a live workspace; the factory now
-  prepares all 2,000 native edit requests and performs full-frame/audio QA on
-  returned media instead of claiming render success.
+- Actual MP4 generation requires registered licensed fixture uploads and a live
+  authenticated workspace. The factory implementation now drives that existing
+  worker path for all 2,000 queued designs and performs full-frame/audio QA; it
+  intentionally cannot manufacture credentials, licensed fixture bytes, or
+  worker results that do not exist.
 - Unicode glyph shaping, moving-background text readability, semantic beat
   quality and reference-quality scoring still require real rendered inspection;
   the static lint cannot truthfully certify those from source data alone.
@@ -260,3 +261,12 @@ those actual records; it never substitutes compiler timing for render timing.
 The render-timing evidence stores a SHA-256 of the exact pinned beat schedule,
 not merely the soundtrack file hash. Editing beat annotations therefore
 invalidates cached timing evidence even when the audio bytes are unchanged.
+
+## Focused Batch 8 verification
+
+Use `pnpm typecheck:templates:b8` and `pnpm test:templates:b8` for a focused
+Batch 8 gate. The dedicated TypeScript config includes only the Batch 8
+factory, its shared template contracts pulled transitively, the runner, and
+its tests; it does not add Compact/full Timeline files to this gate. Beat-synced
+worker requests are also re-run through blocking legibility lint after retiming,
+so music synchronization cannot silently make authored titles unreadably short.
