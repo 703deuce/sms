@@ -7,7 +7,8 @@
   "files": [
     "./lib/clips/real-video-templates/review-evidence.ts",
     "./scripts/template-review-evidence.ts",
-    "./tests/clips/template-review-evidence.test.ts"
+    "./tests/clips/template-review-evidence.test.ts",
+    "./scripts/template-review-workbook.ts"
   ],
   "include": []
 }

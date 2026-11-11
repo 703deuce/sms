@@ -6,6 +6,7 @@ on:
     paths:
       - "new-app/lib/clips/real-video-templates/review-evidence.ts"
       - "new-app/scripts/template-review-evidence.ts"
+      - "new-app/scripts/template-review-workbook.ts"
       - "new-app/tests/clips/template-review-evidence.test.ts"
       - "new-app/tsconfig.real-video-template-review.json"
       - "new-app/scripts/typecheck-template-review-evidence.sh"
