@@ -110,6 +110,10 @@ describe('standalone real video gallery', () => {
         release.family.totalFrames>=210 && release.family.totalFrames<=450,
       ].filter(Boolean).length
       expect(score,release.id).toBeGreaterThanOrEqual(9)
+      const hook=release.family.texts[0]!
+      expect(hook.x,release.id+' headline must stay centered in 9:16').toBe(50)
+      if(hook.defaultText.length>=12)
+        expect(hook.size,release.id+' long headline must stay inside 9:16 safe width').toBeLessThanOrEqual(120)
     }
   })
 
