@@ -38,6 +38,11 @@ describe('Batch 9 Phase B style-pack expansion gate',()=>{
     expect(rows).toHaveLength(BATCH9_PHASE_B_VARIANT_TARGET)
     expect(rows.every(row=>Number(row.familyId.slice(1))<=10&&row.treatmentId!=='bold')).toBe(true)
     expect(new Set(rows.map(row=>row.id)).size).toBe(390)
+    const anchors=new Map(BATCH9A_ANCHOR_RELEASES.map(row=>[row.family.familyId,row]))
+    expect(rows.every(row=>row.family.revision===(anchors.get(row.familyId)?.family.revision??0)+1)).toBe(true)
+    expect(rows.every(row=>row.family.texts[0]?.defaultText===anchors.get(row.familyId)?.family.texts[0]?.defaultText)).toBe(true)
+    expect(rows.every(row=>row.family.slots.map(slot=>slot.durationFrames).join(',')===
+      anchors.get(row.familyId)?.family.slots.map(slot=>slot.durationFrames).join(','))).toBe(true)
     expect(batch9PhaseBWorkerIds()).toEqual(rows.map(row=>row.id))
   })
   it('preselects exactly 39 independent reviews covering every non-bold treatment',()=>{

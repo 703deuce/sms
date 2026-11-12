@@ -1,9 +1,11 @@
 import { createHash } from 'node:crypto'
-import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from './b8-authoring-catalog'
+import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS,
+  type FactoryTreatmentRecipe } from './b8-authoring-catalog'
 import { BATCH9A_ANCHOR_RELEASES } from './batch9a-anchors'
 import type { VideoTemplateRelease } from './gallery'
+import { validateTemplateDesign,validateTemplateFamily } from './sequence-contract'
 import {
-  auditB8Evidence,generateB8Candidates,scoreB8Review,
+  auditB8Evidence,scoreB8Review,
   type B8Candidate,type B8Evidence,
 } from './b8-factory'
 
@@ -52,12 +54,77 @@ export function batch9PhaseAAnchorGate(evidence:readonly B8Evidence[]):Batch9Pha
   return {ready:Object.keys(blockers).length===0,blockers}
 }
 
+const phaseBHeadlineSize=(font:string,size:number)=>{
+  const scale=font==='Press Start 2P'?0.62:
+    font==='Monoton'||font==='Rubik Glitch'||font==='Rubik Dirt'?0.78:
+    font==='Permanent Marker'||font==='Bangers'||font==='Bungee'?0.88:1
+  return Math.max(72,Math.round(size*scale))
+}
+function phaseBVariantCandidate(
+  anchor:VideoTemplateRelease,recipe:FactoryTreatmentRecipe,
+):B8Candidate{
+  const last=anchor.family.slots.length-1
+  const family=validateTemplateFamily({
+    ...anchor.family,
+    revision:anchor.family.revision+1,
+    tags:[...anchor.family.tags.filter(tag=>tag!=='first_party_preview'),
+      'batch9_phase_b',recipe.id],
+    slots:anchor.family.slots.map((slot,index)=>({
+      ...slot,
+      transition:index===0?'cut':{
+        type:index===last?'crossfade':recipe.transition,
+        durationFrames:index===last?8:5,
+      },
+    })),
+    texts:anchor.family.texts.map(text=>{
+      const headline=text.id==='headline'
+      return {
+        ...text,
+        x:recipe.x,
+        y:headline?Math.max(24,Math.min(68,recipe.y)):text.y,
+        font:headline?recipe.headingFont:recipe.supportFont,
+        size:headline?phaseBHeadlineSize(recipe.headingFont,text.size):text.size,
+        color:text.colorFromAccent?recipe.accent:recipe.foreground,
+        anim:headline?{
+          ...(text.anim??{}),
+          in:{type:recipe.enter,unit:'block' as const,durMs:360},
+        }:text.anim,
+      }
+    }),
+    graphics:(anchor.family.graphics??[]).map((graphic,index)=>index?graphic:{
+      ...graphic,type:recipe.graphic,x:recipe.gx,y:recipe.gy,
+      w:['circle','star','heart','triangle'].includes(recipe.graphic)?44:124,
+      h:['circle','star','heart','triangle'].includes(recipe.graphic)?44:16,
+      color:recipe.accent,
+    }),
+  })
+  const design=validateTemplateDesign({
+    ...anchor.design,
+    designId:anchor.family.familyId+'_'+recipe.id,
+    revision:anchor.design.revision+1,
+    stylePackId:'batch9b_'+recipe.id,
+    familyRevision:family.revision,
+  },family)
+  return {
+    id:design.designId,familyId:family.familyId,treatmentId:recipe.id,
+    status:'draft',authoringOrigin:'canonical',
+    authoredDimensions:['font-hierarchy','text-placement','animation-choreography',
+      'graphic-composition','transition-treatment','source-motion'],
+    family,design,
+    fingerprint:phaseHash([recipe.id,family.texts,family.graphics,
+      family.slots.map(slot=>[slot.transition,slot.motion,slot.fx])]),
+    definitionHash:phaseHash(['batch9-phase-b-v2',family,design]),
+  }
+}
 export function batch9PhaseBExpansionCandidates():readonly B8Candidate[]{
-  const firstTen=new Set(FACTORY_FAMILY_SEEDS.slice(0,10).map(row=>row.id))
-  const variants=generateB8Candidates().filter(candidate=>
-    firstTen.has(candidate.familyId)&&candidate.treatmentId!=='bold')
-  if(FACTORY_TREATMENTS.length!==40||variants.length!==BATCH9_PHASE_B_VARIANT_TARGET)
-    throw new Error('Batch 9 Phase B must contain exactly 390 non-anchor variants')
+  const recipes=FACTORY_TREATMENTS.filter(recipe=>recipe.id!=='bold')
+  const variants=BATCH9A_ANCHOR_RELEASES.flatMap(anchor=>
+    recipes.map(recipe=>phaseBVariantCandidate(anchor,recipe)))
+  if(FACTORY_TREATMENTS.length!==40||recipes.length!==39||
+     variants.length!==BATCH9_PHASE_B_VARIANT_TARGET)
+    throw new Error('Batch 9 Phase B must contain exactly 390 live-anchor variants')
+  if(new Set(variants.map(row=>row.id)).size!==variants.length)
+    throw new Error('Batch 9 Phase B variant IDs must be unique')
   return variants
 }
 
