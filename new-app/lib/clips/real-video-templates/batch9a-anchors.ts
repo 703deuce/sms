@@ -15,9 +15,11 @@ type Direction = readonly [
   recipeId:string, headline:string, closing:string, description:string,
   transition:FactoryTreatmentRecipe['transition'], motionScale:number, motionShift:number, headlineSize:number
 ]
-/** Reference headline size at 1920px frame height (~9% — legible hook at 720p/1080p export). */
+/** Reference headline size at 1920px frame height (~11% — CapCut-scale hook at 720p/1080p export). */
 const BATCH9A_HEADLINE_REF_H = 1920
-const BATCH9A_HEADLINE_FRAC = 0.09
+const BATCH9A_HEADLINE_FRAC = 0.11
+/** Hook sits on the vertical center line (closing stays nearer the lower third). */
+const BATCH9A_HEADLINE_Y = 50
 const batch9aHeadlinePx = (legacySize: number) =>
   Math.round(legacySize * (BATCH9A_HEADLINE_REF_H * BATCH9A_HEADLINE_FRAC) / 76)
 const batch9aClosingPx = (legacyHeadline: number) => Math.round(44 * batch9aHeadlinePx(legacyHeadline) / 76)
@@ -147,10 +149,11 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
     texts:[
       resolveTemplateTextLayer({
         id:'headline',defaultText:headline,maxChars:40,startFrame:0,durationFrames:titleFrames,
-        x:recipe.x,y:design.headline.y,font:design.headline.font,size:headlineSize,
+        x:recipe.x,y:BATCH9A_HEADLINE_Y,font:design.headline.font,size:headlineSize,
         color:recipe.foreground,
         stylePresetId:design.headline.stylePresetId,
         animPresetId:design.headline.animPresetId,
+        anim:{out:{type:'fade',unit:'block',durMs:260}},
         ...(headlineMarks ? { marks: headlineMarks } : {}),
       }, recipe.accent),
       resolveTemplateTextLayer({

@@ -12,7 +12,7 @@ import type { TemplateAsset } from '@/lib/clips/real-video-templates/sequence-co
 import { aspectCss, aspectRatioParts, type ExportAspect } from '@/lib/clips/export-aspect'
 import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gallery'
 import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelection,
-  newStudioDraft, type StudioDraft, type StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
+  newStudioDraft, templateSlotAtOutputMs, type StudioDraft, type StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
 
 type Project = { id: string; status: string; version: number; draft: StudioDraft; clipId: string | null; editsSaveVersion?: number }
 type MediaItem = { asset: TemplateAsset; label: string; mime?: string; bytes?: number; durationMs: number | null;
@@ -706,7 +706,14 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         musicAudioRef={musicAudioRef}
         sourceUrls={sourceUrls}
         clockMs={clockMs}
-        onClockMs={ms => { if (Math.floor(ms / 100) !== lastClockRounded.current) { lastClockRounded.current = Math.floor(ms / 100); setClockMs(ms) } }}
+        onClockMs={ms => {
+          if (Math.floor(ms / 100) !== lastClockRounded.current) {
+            lastClockRounded.current = Math.floor(ms / 100)
+            setClockMs(ms)
+          }
+          const slot = templateSlotAtOutputMs(release.family, ms)
+          if (slot?.id) setSelectedSlot(slot.id)
+        }}
         syncMusicPreview={syncMusicPreview}
         releaseFamilySlots={release.family.slots}
         pendingMusic={pendingMusic}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelection, newStudioDraft } from '@/lib/clips/real-video-templates/slot-workflow'
+import { assignSelectionInOrder, fillProgress, materializeStudioDraft, moveSelection, newStudioDraft, templateSlotAtOutputMs } from '@/lib/clips/real-video-templates/slot-workflow'
+import { BATCH9A_ANCHOR_RELEASES } from '@/lib/clips/real-video-templates/batch9a-anchors'
 import type { TemplateAsset, TemplateFamilyV1 } from '@/lib/clips/real-video-templates/sequence-contract'
 const image = (id: string): TemplateAsset => ({ id, kind: 'image', license: { id:'owned', provenance:'user-owned', reference:'user_upload' } })
 const video = (id: string, durationFrames: number): TemplateAsset => ({ ...image(id), kind: 'video', durationFrames })
@@ -88,6 +89,13 @@ describe('Batch 4 standalone slot fulfillment', () => {
     expect(selection.used).toBe(0)
     expect(selection.rejected.map(asset => asset.id)).toEqual(['still'])
   })
+  it('maps output ms 0 to the first authored slot on Batch 9A anchors', () => {
+    const f01 = BATCH9A_ANCHOR_RELEASES.find(r => r.id === 'f01_bold')!.family
+    expect(templateSlotAtOutputMs(f01, 0)?.id).toBe('slot_01')
+    expect(templateSlotAtOutputMs(f01, 1499)?.id).toBe('slot_01')
+    expect(templateSlotAtOutputMs(f01, 1500)?.id).toBe('slot_02')
+  })
+
   it('rejects wrong media, overflow and invalid focal point', () => {
     const f=family(1)
     let d=assignSelectionInOrder(newStudioDraft('release','draft_01234567'),f,[image('pic')]).draft

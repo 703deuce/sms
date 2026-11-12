@@ -219,3 +219,14 @@ export function materializeStudioDraft(
 export function fillProgress(family: TemplateFamilyV1, draft: StudioDraft): { filled: number; total: number } {
   return { filled: family.slots.filter(s => Boolean(draft.slots[s.id])).length, total: family.slots.length }
 }
+
+/** Output-timeline slot under `outputMs` (frame-accurate; uses each slot's startFrame/durationFrames). */
+export function templateSlotAtOutputMs(
+  family: TemplateFamilyV1,
+  outputMs: number,
+): TemplateFamilyV1['slots'][number] | undefined {
+  if (!Number.isFinite(outputMs) || outputMs < 0) return undefined
+  const frame = Math.floor((outputMs * family.fps) / 1000 + 1e-6)
+  const ordered = [...family.slots].sort((a, b) => a.startFrame - b.startFrame || a.ordinal - b.ordinal)
+  return ordered.find((slot) => frame >= slot.startFrame && frame < slot.startFrame + slot.durationFrames)
+}

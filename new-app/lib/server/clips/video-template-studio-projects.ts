@@ -344,8 +344,10 @@ export async function savePublishedStudioDraft(
           clip.editsSaveVersion !== expectedEditsSaveVersion)
         throw new TemplateInstanceConflict()
       const original = settings.videoTemplateOriginal
-      const family = validateTemplateFamily(original.family)
-      const design = validateTemplateDesign(original.design, family)
+      const release = releaseFor(draft.releaseId)
+      const catalogFamily = release ? release.family : validateTemplateFamily(original.family)
+      const design = release ? release.design : validateTemplateDesign(original.design, catalogFamily)
+      const family = catalogFamily
       const aiMeta: Record<string, unknown> = object(clip.aiMeta) ? structuredClone(clip.aiMeta) : {}
       const templateMeta = aiMeta.videoTemplate
       if (!object(templateMeta) || templateMeta.instanceId !== templateInstanceId(workspaceId, draft.draftId) ||
@@ -431,6 +433,15 @@ export async function savePublishedStudioDraft(
           editsSaveVersion: { increment: 1 } },
       })
       if (written.count !== 1) throw new TemplateInstanceConflict()
+      await tx.clipProject.update({
+        where: { id: projectId },
+        data: {
+          settings: toPrismaJson({
+            ...(object(settings) ? settings : {}),
+            videoTemplateOriginal: { family: catalogFamily, design },
+          }),
+        },
+      })
       await tx.clipProject.update({ where: { id: projectId },
         data: { settings: toPrismaJson({ ...settings, videoTemplateDraft: {
           version: expectedVersion + 1, draft,

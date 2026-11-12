@@ -624,7 +624,9 @@ export function PreviewStage({
     const sameSource = seekKeyRef.current === seekKey && !epochBump
     seekKeyRef.current = seekKey
     const seekAll = videoTimeFromSourceMs(sameSource && keepMs != null ? keepMs : edits.trim.in, mediaOffsetMs)
-    const needsSeek = Boolean(v0 && Math.abs(v0.currentTime - Math.max(seekAll, 0.04)) > 0.04)
+    const templateTimeline = Boolean(edits.templateProvenance?.v)
+    const minSeekSec = templateTimeline ? 0 : 0.04
+    const needsSeek = Boolean(v0 && Math.abs(v0.currentTime - Math.max(seekAll, minSeekSec)) > 0.04)
     seekPendingRef.current = needsSeek
     if (v0 && v0.readyState >= 2 && !needsSeek) setCanPlay(true)
     if (v0 && needsSeek) {
@@ -635,7 +637,7 @@ export function PreviewStage({
       el.muted = el !== v
       const seek = () => {
         try {
-          if (Number.isFinite(seekAll) && seekAll >= 0) el.currentTime = Math.max(seekAll, 0.04)
+          if (Number.isFinite(seekAll) && seekAll >= 0) el.currentTime = Math.max(seekAll, minSeekSec)
         } catch {
           /* metadata not ready */
         }
@@ -653,6 +655,7 @@ export function PreviewStage({
     layoutMode,
     headlineBandTopFrac,
     playheadEpoch,
+    edits.templateProvenance?.v,
   ])
 
   useEffect(() => {

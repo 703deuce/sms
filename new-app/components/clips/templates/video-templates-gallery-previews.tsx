@@ -121,11 +121,20 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
     ? framePosters[posterIndex]!
     : media.posterPath ?? media.spritePath
   const posterW = media.posterWidth ?? 1080
+  const aspect = item.family.aspects[0] ?? '9:16'
+  const posterH = aspect === '9:16'
+    ? Math.round(posterW * 16 / 9)
+    : aspect === '1:1'
+      ? posterW
+      : Math.round(posterW * 9 / 16)
   const posterSrcSet = framePosters?.length
     ? framePosters.map(path => path + ' ' + posterW + 'w').join(', ')
     : media.posterPath
       ? media.posterPath + ' ' + posterW + 'w'
       : undefined
+  const posterSizes = aspect === '9:16'
+    ? `(max-width: 640px) 90vw, (max-width: 1280px) 50vw, 420px`
+    : `(max-width: 640px) 100vw, 420px`
   return (
     <div
       className={'group relative overflow-hidden bg-black ' + frameStyle.className}
@@ -151,12 +160,13 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
           <img
             src={hdSrc}
             srcSet={posterSrcSet}
-            sizes="(max-width: 480px) 100vw, 420px"
+            sizes={posterSizes}
             alt=""
             aria-hidden
             decoding="async"
+            fetchPriority="high"
             width={posterW}
-            height={Math.round(posterW * 16 / 9)}
+            height={posterH}
             className={'pointer-events-none h-full w-full object-cover select-none ' +
               (item.demoPath && playing && !reducedMotion ? 'hidden' : '')}
           />

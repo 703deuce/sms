@@ -166,43 +166,43 @@ export type Batch9AnchorTextDesign = {
 /** Distinct CapCut-like pairing per Batch 9A anchor (f01–f10). */
 export const BATCH9A_ANCHOR_TEXT_DESIGN: Readonly<Record<string, Batch9AnchorTextDesign>> = {
   f01: {
-    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_overshoot', font: 'Anton', y: 24 },
+    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_overshoot', font: 'Anton', y: 50 },
     closing: { stylePresetId: 'line_accent', animPresetId: 'slide_up_fade', font: 'Montserrat', y: 76, colorFromAccent: true },
   },
   f02: {
-    headline: { stylePresetId: 'hook_soft', animPresetId: 'fade_steady', font: 'Bebas Neue', y: 26 },
+    headline: { stylePresetId: 'hook_soft', animPresetId: 'fade_steady', font: 'Bebas Neue', y: 50 },
     closing: { stylePresetId: 'line_minimal', animPresetId: 'fade_steady', font: 'Inter', y: 74, colorFromAccent: true },
   },
   f03: {
-    headline: { stylePresetId: 'hook_neon', animPresetId: 'zoom_punch', font: 'Archivo Black', y: 22 },
+    headline: { stylePresetId: 'hook_neon', animPresetId: 'zoom_punch', font: 'Archivo Black', y: 50 },
     closing: { stylePresetId: 'line_pill', animPresetId: 'pop_words', font: 'Space Mono', y: 78, colorFromAccent: true },
   },
   f04: {
-    headline: { stylePresetId: 'hook_script', animPresetId: 'slide_up_fade', font: 'Pacifico', y: 28 },
+    headline: { stylePresetId: 'hook_script', animPresetId: 'slide_up_fade', font: 'Pacifico', y: 50 },
     closing: { stylePresetId: 'line_minimal', animPresetId: 'fade_steady', font: 'Poppins', y: 72, colorFromAccent: true },
   },
   f05: {
-    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_words', font: 'Montserrat', y: 24 },
+    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_words', font: 'Montserrat', y: 50 },
     closing: { stylePresetId: 'line_minimal', animPresetId: 'slide_up_fade', font: 'Space Grotesk', y: 76 },
   },
   f06: {
-    headline: { stylePresetId: 'hook_label', animPresetId: 'bounce_energy', font: 'Bangers', y: 26 },
+    headline: { stylePresetId: 'hook_label', animPresetId: 'bounce_energy', font: 'Bangers', y: 50 },
     closing: { stylePresetId: 'hook_script', animPresetId: 'whip_words', font: 'Caveat', y: 74, colorFromAccent: true },
   },
   f07: {
-    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_words', font: 'Luckiest Guy', y: 25 },
+    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_words', font: 'Luckiest Guy', y: 50 },
     closing: { stylePresetId: 'line_pill', animPresetId: 'slide_up_fade', font: 'Baloo 2', y: 77, colorFromAccent: true },
   },
   f08: {
-    headline: { stylePresetId: 'hook_soft', animPresetId: 'fade_steady', font: 'Playfair Display', y: 27 },
+    headline: { stylePresetId: 'hook_soft', animPresetId: 'fade_steady', font: 'Playfair Display', y: 50 },
     closing: { stylePresetId: 'line_minimal', animPresetId: 'fade_steady', font: 'Montserrat', y: 75 },
   },
   f09: {
-    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_overshoot', font: 'Fira Sans Condensed', y: 23 },
+    headline: { stylePresetId: 'hook_punch', animPresetId: 'pop_overshoot', font: 'Fira Sans Condensed', y: 50 },
     closing: { stylePresetId: 'line_accent', animPresetId: 'zoom_punch', font: 'Rubik', y: 78, colorFromAccent: true },
   },
   f10: {
-    headline: { stylePresetId: 'hook_label', animPresetId: 'typewriter_hook', font: 'Gabarito', y: 24 },
+    headline: { stylePresetId: 'hook_label', animPresetId: 'typewriter_hook', font: 'Gabarito', y: 50 },
     closing: { stylePresetId: 'line_pill', animPresetId: 'fade_steady', font: 'Space Grotesk', y: 76, colorFromAccent: true },
   },
 }
