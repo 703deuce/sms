@@ -18,7 +18,7 @@ while(!stopping){
   try{
     const res=await fetch(`${base}/api/cron/youtube-video`,{
       method:'POST',headers:{Authorization:`Bearer ${token}`},
-      signal:AbortSignal.timeout(55_000),cache:'no-store',
+      signal:AbortSignal.timeout(310_000),cache:'no-store',
     })
     if(!res.ok)console.error('[youtube-video:driver] tick_failed',res.status)
     else{
