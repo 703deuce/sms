@@ -21,7 +21,7 @@ if(musicSha!==BATCH9A_DEFAULT_MUSIC.sha256)
 const mediaLicense={
   id:'wikimedia_cc0_photo_pack_v1',
   provenance:'licensed' as const,
-  reference:'CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/',
+  reference:'wikimedia_cc0_photo_pack_v1',
 }
 const musicLicense={
   id:'batch9a_first_party_music',
