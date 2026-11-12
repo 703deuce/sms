@@ -1,0 +1,512 @@
+{
+  "base": "https://transovo.ai",
+  "capturedAt": "2026-07-28T02:31:22.009Z",
+  "count": 84,
+  "okCount": 84,
+  "results": [
+    {
+      "route": "/login",
+      "file": "00__login.png",
+      "ok": true,
+      "bytes": 209206
+    },
+    {
+      "route": "/signup",
+      "file": "00__signup.png",
+      "ok": true,
+      "bytes": 202292
+    },
+    {
+      "route": "/dashboard",
+      "file": "01__dashboard.png",
+      "ok": true,
+      "bytes": 244255
+    },
+    {
+      "route": "/getting-started",
+      "file": "02__getting-started.png",
+      "ok": true,
+      "bytes": 178886
+    },
+    {
+      "route": "/send",
+      "file": "03__send.png",
+      "ok": true,
+      "bytes": 105928
+    },
+    {
+      "route": "/send/quick",
+      "file": "04__send__quick.png",
+      "ok": true,
+      "bytes": 134708
+    },
+    {
+      "route": "/send/test",
+      "file": "05__send__test.png",
+      "ok": true,
+      "bytes": 155982
+    },
+    {
+      "route": "/inbox",
+      "file": "06__inbox.png",
+      "ok": true,
+      "bytes": 149432
+    },
+    {
+      "route": "/inbox/mine",
+      "file": "07__inbox__mine.png",
+      "ok": true,
+      "bytes": 146009
+    },
+    {
+      "route": "/inbox/unassigned",
+      "file": "08__inbox__unassigned.png",
+      "ok": true,
+      "bytes": 120161
+    },
+    {
+      "route": "/inbox/archived",
+      "file": "09__inbox__archived.png",
+      "ok": true,
+      "bytes": 89272
+    },
+    {
+      "route": "/inbox/saved-replies",
+      "file": "10__inbox__saved-replies.png",
+      "ok": true,
+      "bytes": 88635
+    },
+    {
+      "route": "/contacts",
+      "file": "11__contacts.png",
+      "ok": true,
+      "bytes": 178283
+    },
+    {
+      "route": "/contacts/lists",
+      "file": "12__contacts__lists.png",
+      "ok": true,
+      "bytes": 162056
+    },
+    {
+      "route": "/contacts/segments",
+      "file": "13__contacts__segments.png",
+      "ok": true,
+      "bytes": 163383
+    },
+    {
+      "route": "/contacts/tags",
+      "file": "14__contacts__tags.png",
+      "ok": true,
+      "bytes": 127395
+    },
+    {
+      "route": "/contacts/imports",
+      "file": "15__contacts__imports.png",
+      "ok": true,
+      "bytes": 212280
+    },
+    {
+      "route": "/contacts/fields",
+      "file": "16__contacts__fields.png",
+      "ok": true,
+      "bytes": 154512
+    },
+    {
+      "route": "/contacts/unsubscribed",
+      "file": "17__contacts__unsubscribed.png",
+      "ok": true,
+      "bytes": 87103
+    },
+    {
+      "route": "/contacts/blocked",
+      "file": "18__contacts__blocked.png",
+      "ok": true,
+      "bytes": 81206
+    },
+    {
+      "route": "/contacts/invalid",
+      "file": "19__contacts__invalid.png",
+      "ok": true,
+      "bytes": 83740
+    },
+    {
+      "route": "/campaigns",
+      "file": "20__campaigns.png",
+      "ok": true,
+      "bytes": 142582
+    },
+    {
+      "route": "/campaigns/drafts",
+      "file": "21__campaigns__drafts.png",
+      "ok": true,
+      "bytes": 94215
+    },
+    {
+      "route": "/campaigns/scheduled",
+      "file": "22__campaigns__scheduled.png",
+      "ok": true,
+      "bytes": 106166
+    },
+    {
+      "route": "/campaigns/calendar",
+      "file": "23__campaigns__calendar.png",
+      "ok": true,
+      "bytes": 159777
+    },
+    {
+      "route": "/campaigns/completed",
+      "file": "24__campaigns__completed.png",
+      "ok": true,
+      "bytes": 110227
+    },
+    {
+      "route": "/campaigns/failed",
+      "file": "25__campaigns__failed.png",
+      "ok": true,
+      "bytes": 188233
+    },
+    {
+      "route": "/campaigns/recurring",
+      "file": "26__campaigns__recurring.png",
+      "ok": true,
+      "bytes": 195136
+    },
+    {
+      "route": "/automations",
+      "file": "27__automations.png",
+      "ok": true,
+      "bytes": 124723
+    },
+    {
+      "route": "/automations/new",
+      "file": "28__automations__new.png",
+      "ok": true,
+      "bytes": 127926
+    },
+    {
+      "route": "/automations/templates",
+      "file": "29__automations__templates.png",
+      "ok": true,
+      "bytes": 229617
+    },
+    {
+      "route": "/automations/logs",
+      "file": "30__automations__logs.png",
+      "ok": true,
+      "bytes": 172473
+    },
+    {
+      "route": "/templates",
+      "file": "31__templates.png",
+      "ok": true,
+      "bytes": 144645
+    },
+    {
+      "route": "/templates/new",
+      "file": "32__templates__new.png",
+      "ok": true,
+      "bytes": 137385
+    },
+    {
+      "route": "/templates/ai",
+      "file": "33__templates__ai.png",
+      "ok": true,
+      "bytes": 121651
+    },
+    {
+      "route": "/grow/keywords",
+      "file": "34__grow__keywords.png",
+      "ok": true,
+      "bytes": 139513
+    },
+    {
+      "route": "/grow/forms",
+      "file": "35__grow__forms.png",
+      "ok": true,
+      "bytes": 151301
+    },
+    {
+      "route": "/grow/qr-codes",
+      "file": "36__grow__qr-codes.png",
+      "ok": true,
+      "bytes": 122673
+    },
+    {
+      "route": "/grow/pages",
+      "file": "37__grow__pages.png",
+      "ok": true,
+      "bytes": 236301
+    },
+    {
+      "route": "/grow/sources",
+      "file": "38__grow__sources.png",
+      "ok": true,
+      "bytes": 170644
+    },
+    {
+      "route": "/reports",
+      "file": "39__reports.png",
+      "ok": true,
+      "bytes": 159572
+    },
+    {
+      "route": "/reports/campaigns",
+      "file": "40__reports__campaigns.png",
+      "ok": true,
+      "bytes": 133751
+    },
+    {
+      "route": "/reports/messages",
+      "file": "41__reports__messages.png",
+      "ok": true,
+      "bytes": 135771
+    },
+    {
+      "route": "/reports/contacts",
+      "file": "42__reports__contacts.png",
+      "ok": true,
+      "bytes": 142049
+    },
+    {
+      "route": "/reports/inbox",
+      "file": "43__reports__inbox.png",
+      "ok": true,
+      "bytes": 132115
+    },
+    {
+      "route": "/reports/automations",
+      "file": "44__reports__automations.png",
+      "ok": true,
+      "bytes": 166758
+    },
+    {
+      "route": "/reports/links",
+      "file": "45__reports__links.png",
+      "ok": true,
+      "bytes": 127570
+    },
+    {
+      "route": "/reports/usage",
+      "file": "46__reports__usage.png",
+      "ok": true,
+      "bytes": 152772
+    },
+    {
+      "route": "/reports/audit-log",
+      "file": "47__reports__audit-log.png",
+      "ok": true,
+      "bytes": 105920
+    },
+    {
+      "route": "/numbers",
+      "file": "48__numbers.png",
+      "ok": true,
+      "bytes": 106558
+    },
+    {
+      "route": "/numbers/buy",
+      "file": "49__numbers__buy.png",
+      "ok": true,
+      "bytes": 134089
+    },
+    {
+      "route": "/numbers/port",
+      "file": "50__numbers__port.png",
+      "ok": true,
+      "bytes": 166092
+    },
+    {
+      "route": "/numbers/pools",
+      "file": "51__numbers__pools.png",
+      "ok": true,
+      "bytes": 154212
+    },
+    {
+      "route": "/compliance",
+      "file": "52__compliance.png",
+      "ok": true,
+      "bytes": 154254
+    },
+    {
+      "route": "/compliance/business",
+      "file": "53__compliance__business.png",
+      "ok": true,
+      "bytes": 159694
+    },
+    {
+      "route": "/compliance/brand",
+      "file": "54__compliance__brand.png",
+      "ok": true,
+      "bytes": 140434
+    },
+    {
+      "route": "/compliance/campaign",
+      "file": "55__compliance__campaign.png",
+      "ok": true,
+      "bytes": 233655
+    },
+    {
+      "route": "/compliance/check",
+      "file": "56__compliance__check.png",
+      "ok": true,
+      "bytes": 186702
+    },
+    {
+      "route": "/compliance/consent",
+      "file": "57__compliance__consent.png",
+      "ok": true,
+      "bytes": 137152
+    },
+    {
+      "route": "/compliance/suppression",
+      "file": "58__compliance__suppression.png",
+      "ok": true,
+      "bytes": 121903
+    },
+    {
+      "route": "/compliance/events",
+      "file": "59__compliance__events.png",
+      "ok": true,
+      "bytes": 149082
+    },
+    {
+      "route": "/integrations",
+      "file": "60__integrations.png",
+      "ok": true,
+      "bytes": 144614
+    },
+    {
+      "route": "/integrations/api",
+      "file": "61__integrations__api.png",
+      "ok": true,
+      "bytes": 141147
+    },
+    {
+      "route": "/integrations/webhooks",
+      "file": "62__integrations__webhooks.png",
+      "ok": true,
+      "bytes": 143350
+    },
+    {
+      "route": "/integrations/logs",
+      "file": "63__integrations__logs.png",
+      "ok": true,
+      "bytes": 141556
+    },
+    {
+      "route": "/settings/business",
+      "file": "64__settings__business.png",
+      "ok": true,
+      "bytes": 118913
+    },
+    {
+      "route": "/settings/messaging",
+      "file": "65__settings__messaging.png",
+      "ok": true,
+      "bytes": 141559
+    },
+    {
+      "route": "/settings/users",
+      "file": "66__settings__users.png",
+      "ok": true,
+      "bytes": 126342
+    },
+    {
+      "route": "/settings/workspaces",
+      "file": "67__settings__workspaces.png",
+      "ok": true,
+      "bytes": 108168
+    },
+    {
+      "route": "/settings/notifications",
+      "file": "68__settings__notifications.png",
+      "ok": true,
+      "bytes": 137074
+    },
+    {
+      "route": "/settings/billing",
+      "file": "69__settings__billing.png",
+      "ok": true,
+      "bytes": 152442
+    },
+    {
+      "route": "/settings/limits",
+      "file": "70__settings__limits.png",
+      "ok": true,
+      "bytes": 138347
+    },
+    {
+      "route": "/settings/security",
+      "file": "71__settings__security.png",
+      "ok": true,
+      "bytes": 124004
+    },
+    {
+      "route": "/settings/branding",
+      "file": "72__settings__branding.png",
+      "ok": true,
+      "bytes": 111440
+    },
+    {
+      "route": "/settings/data",
+      "file": "73__settings__data.png",
+      "ok": true,
+      "bytes": 148563
+    },
+    {
+      "route": "/admin",
+      "file": "74__admin.png",
+      "ok": true,
+      "bytes": 133608
+    },
+    {
+      "route": "/admin/customers",
+      "file": "75__admin__customers.png",
+      "ok": true,
+      "bytes": 77193
+    },
+    {
+      "route": "/admin/a2p",
+      "file": "76__admin__a2p.png",
+      "ok": true,
+      "bytes": 110070
+    },
+    {
+      "route": "/admin/monitoring",
+      "file": "77__admin__monitoring.png",
+      "ok": true,
+      "bytes": 136972
+    },
+    {
+      "route": "/admin/numbers",
+      "file": "78__admin__numbers.png",
+      "ok": true,
+      "bytes": 95093
+    },
+    {
+      "route": "/admin/billing",
+      "file": "79__admin__billing.png",
+      "ok": true,
+      "bytes": 118826
+    },
+    {
+      "route": "/admin/support",
+      "file": "80__admin__support.png",
+      "ok": true,
+      "bytes": 114443
+    },
+    {
+      "route": "/admin/logs",
+      "file": "81__admin__logs.png",
+      "ok": true,
+      "bytes": 134502
+    },
+    {
+      "route": "/admin/settings",
+      "file": "82__admin__settings.png",
+      "ok": true,
+      "bytes": 146363
+    }
+  ]
+}
