@@ -26,6 +26,8 @@ export function createYoutubeVideoClient(opts: { fetch?: typeof fetch } = {}): Y
     const res = await doFetch(url, {
       credentials: 'include',
       ...init,
+      // Abort stalled GETs so the poller can reconnect rather than hang forever.
+      signal: init.signal ?? AbortSignal.timeout(25_000),
       headers: {
         Accept: 'application/json',
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
