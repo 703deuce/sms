@@ -10,7 +10,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ runId: str
   try {
     const workspaceId = await resolveWorkspaceId()
     const { runId } = await ctx.params
-    const view = await getYoutubeVideoRun(workspaceId, runId, productionRunDeps(), !(process.env.YOUTUBE_VIDEO_DRIVER_TOKEN || process.env.CRON_SECRET))
+    const view = await getYoutubeVideoRun(workspaceId, runId, productionRunDeps(), process.env.YOUTUBE_VIDEO_DRIVER_ENABLED !== '1')
     console.info('[youtube-video:route]', {
       route: 'GET /api/youtube-video/runs/:runId', event: 'done',
       runId: view.runId, status: view.status, elapsedMs: Date.now() - started,
