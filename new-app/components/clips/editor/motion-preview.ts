@@ -307,7 +307,8 @@ function drawMediaFit(
   const sw = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth
   const sh = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight
   if (sw < 1 || sh < 1) return false
-  const fit = media.style.objectFit === 'contain' ? 'contain' : 'cover'
+  const cssFit = typeof getComputedStyle === 'function' ? getComputedStyle(media).objectFit : media.style.objectFit
+  const fit = cssFit === 'contain' ? 'contain' : 'cover'
   const scale = fit === 'contain' ? Math.min(w / sw, h / sh) : Math.max(w / sw, h / sh)
   const dw = sw * scale
   const dh = sh * scale
