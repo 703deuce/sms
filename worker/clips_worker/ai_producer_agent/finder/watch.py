@@ -574,6 +574,7 @@ def validate_and_normalize_moments(
     chunk_offset_s: float = 0.0,
     max_span_s: float | None = None,
     min_moment_s: float = _MIN_MOMENT_S,
+    allow_long_gaming: bool = False,
 ) -> tuple[list[dict], dict[str, int]]:
     """Clamp times and reject spans below the caller's minimum (5s for clipper)."""
     from clips_worker.decision_log import decision_log
@@ -633,7 +634,7 @@ def validate_and_normalize_moments(
                     max_span_s=max_span_s,
                 )
         ct = str(row.get("content_type") or "").strip().lower()
-        if ct == "gaming" and (max_span_s is None or max_span_s >= 90) and end - start > GAMING_AUTO_MAX_SPAN_S:
+        if not allow_long_gaming and ct == "gaming" and (max_span_s is None or max_span_s >= 90) and end - start > GAMING_AUTO_MAX_SPAN_S:
             ns, ne = start, end
             end = min(end, peak + 10.0)
             start = max(start, end - GAMING_AUTO_MAX_SPAN_S)
@@ -1834,7 +1835,8 @@ def watch_video_file(
         )
         meta["frames_est"] = max(1, int(duration_s * fps))
         meta["frames_sent"] = meta["frames_est"] if video_picker_labeled_frames() else None
-        min_need = min_moments_for_video(int(duration_s))
+        youtube_gaming = bool(transcript_text and transcript_text.lstrip().startswith("YOUTUBE GAMING EPISODE WATCHER"))
+        min_need = 1 if youtube_gaming else min_moments_for_video(int(duration_s))
         meta["min_moments"] = min_need
         meta["min_moments_rule"] = min_moments_rule_description(int(duration_s))
         decision_log(
@@ -1856,7 +1858,11 @@ def watch_video_file(
                 "Use burned-in HH:MM:SS on each frame, original audio, "
                 "and the timestamped transcript together."
             )
-        system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
+        if youtube_gaming:
+            from clips_worker.ai_producer_agent.finder.youtube_gaming_prompt import build_youtube_gaming_watcher_prompt
+            system = build_youtube_gaming_watcher_prompt(duration_s)
+        else:
+            system = build_video_picker_system_prompt(duration_s, target_clip_len_s)
         transcript_cap = video_picker_transcript_max_chars()
         transcript_body = transcript_text or "(none)"
         if transcript_text and len(transcript_text) > transcript_cap:
@@ -1876,7 +1882,7 @@ def watch_video_file(
             f"TIMESTAMPED TRANSCRIPT:\n{transcript_body}\n\n"
             f"Return sections and moments JSON for this video only ({duration_s}s max; "
             "all times must match [t=…] labels and transcript).\n\n"
-            f"{full_coverage_user_suffix(int(duration_s))}"
+            f"{'Log every observed gameplay story beat in chronological order.' if youtube_gaming else full_coverage_user_suffix(int(duration_s))}"
         )
         if user_text_override:
             user_text_base = user_text_override
@@ -2146,13 +2152,14 @@ def watch_video_file(
 
                 meta["sections"] = normalize_sections(raw_sections, float(duration_s))[:24]
                 meta["sections_count"] = len(meta["sections"])
-                max_span = max_span_seconds(target_clip_len_s)
+                max_span = float(duration_s) if youtube_gaming else max_span_seconds(target_clip_len_s)
                 moments, normalize_rejects = validate_and_normalize_moments(
                     raw_moments,
                     float(duration_s),
                     chunk_offset_s=0.0,
                     max_span_s=max_span,
                     min_moment_s=min_moment_s,
+                    allow_long_gaming=youtube_gaming,
                 )
                 meta["normalize_rejects"] = normalize_rejects
                 if prior_moments:
