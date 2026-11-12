@@ -5,7 +5,7 @@ import { getYoutubeVideoRun } from '@/lib/youtube-video/runs'
 import { productionRunDeps } from '@/lib/server/youtube-video/deps'
 
 export const dynamic = 'force-dynamic'
-export const maxDuration = 60
+export const maxDuration = 300
 
 /** Called by a separately deployed Coolify YouTube driver, not by the browser.
  * Each tick advances one durable state transition for each active run. */
