@@ -1,0 +1,106 @@
+name: Batch 9A photographic gallery
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "new-app/scripts/export-batch9a-anchor-gallery-contract.ts"
+      - "worker/scripts/extract_batch9a_anchor_gallery_posters.py"
+      - "worker/tests/fixtures/template_media/b8_cc0_photos.json"
+      - ".github/workflows/batch9a-gallery-posters.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: batch9a-gallery-posters-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: worker
+      CLIP_FONTS_DIR: ${{ github.workspace }}/worker/v3/fonts/t6
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.3.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install render dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libegl1 libgl1-mesa-dri mesa-utils
+          python -m pip install --quiet moderngl glcontext pillow 'numpy==1.26.4' 'boto3>=1.34.0'
+          pnpm install --frozen-lockfile
+        working-directory: new-app
+      - name: Compile live gallery contract
+        run: npx tsx scripts/export-batch9a-anchor-gallery-contract.ts ../build/batch9a-anchor-gallery-contract.json
+        working-directory: new-app
+      - name: Regenerate all ten photographic posters and sprites
+        run: |
+          python worker/scripts/extract_batch9a_anchor_gallery_posters.py \
+            --contract build/batch9a-anchor-gallery-contract.json \
+            --out new-app/public/clips/template-previews \
+            --work build/batch9a-gallery-extract
+      - name: Require photographic 1080x1920 frame posters
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          root=Path("new-app/public/clips/template-previews")
+          failures=[]
+          for i in range(1,11):
+              path=root/f"f{i:02d}_bold_frame0.webp"
+              with Image.open(path) as im:
+                  entropy=im.convert("L").entropy()
+                  if im.size != (1080,1920) or entropy < 5.0:
+                      failures.append((path.name,im.size,round(entropy,3)))
+          if failures:
+              raise SystemExit(f"non-photographic gallery frames: {failures}")
+          print("all ten gallery posters are photographic 1080x1920 frames")
+          PY
+      - name: Refresh pinned sprite SHA-256 manifest
+        run: |
+          python - <<'PY'
+          import json,re
+          from pathlib import Path
+          digest=json.loads(Path("build/batch9a-gallery-extract/batch9a_gallery_digest.json").read_text())
+          rows=sorted(digest["anchors"],key=lambda row:row["id"])
+          if [row["id"] for row in rows] != [f"f{i:02d}_bold" for i in range(1,11)]:
+              raise SystemExit("gallery digest does not contain f01-f10 exactly")
+          values=[row["sha256"]["sprite"] for row in rows]
+          path=Path("new-app/lib/clips/real-video-templates/batch9a-anchors.ts")
+          source=path.read_text()
+          replacement="const BATCH9A_PREVIEW_SPRITE_SHA = [\n"+\
+              "".join(f"  '{value}',\n" for value in values)+"] as const"
+          source,count=re.subn(
+              r"const BATCH9A_PREVIEW_SPRITE_SHA = \[.*?\] as const",
+              replacement,source,flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f"expected one Batch 9A sprite SHA manifest, changed {count}")
+          path.write_text(source)
+          PY
+      - name: Commit regenerated gallery assets directly to master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add new-app/public/clips/template-previews new-app/lib/clips/real-video-templates/batch9a-anchors.ts
+          if git diff --cached --quiet; then
+            echo "Gallery assets already current"
+            exit 0
+          fi
+          git commit -m "fix(templates): replace colour-bar gallery posters with real photos"
+          git pull --rebase origin master
+          git push origin HEAD:master
