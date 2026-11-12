@@ -5,7 +5,7 @@ cd "$ROOT"
 OUT="$(mktemp)"
 trap 'rm -f "$OUT"' EXIT
 npx tsc -p tsconfig.real-video-template-review.json --noEmit --pretty false >"$OUT" 2>&1 || true
-OWNED_RE='^(lib/clips/real-video-templates/review-evidence|scripts/template-review-evidence|tests/clips/template-review-evidence)'
+OWNED_RE='^(lib/clips/real-video-templates/review-evidence|scripts/template-review-(evidence|workbook)|tests/clips/template-review-evidence)'
 if grep -Eq "$OWNED_RE.* error TS" "$OUT"; then
   grep -E "$OWNED_RE.* error TS" "$OUT" || true
   echo "[typecheck:templates:review] FAILED — review evidence TypeScript errors" >&2
