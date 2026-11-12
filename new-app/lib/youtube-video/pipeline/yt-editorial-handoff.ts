@@ -73,7 +73,7 @@ export async function ytCreateEditorialHandoff(ctx:YtWindowContext):Promise<YtOu
     if(typeof raw[key]!=='string' || !(raw[key] as string).trim()) throw Error('yt_invalid_story_outline')
   }
   return {
-    title:String(raw.title).slice(0,100),premise:String(raw.premise).slice(0,420),
+    title:String(raw.title).slice(0,100),premise:String(raw.premise),
     opening:String(raw.opening).slice(0,400),
     development:String(raw.development).slice(0,400),
     ending:String(raw.ending).slice(0,400),
@@ -268,11 +268,11 @@ export async function ytQualityReview(
   const last=ctx.windowCount==null||ctx.windowIndex==null||
     ctx.windowIndex===ctx.windowCount-1
   const raw=await ytStructuredDecision('yt_submit_quality_review',
-    'QA: This is window +String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+
-    ' of one longer episode. Judge only whether each passage is source-grounded, joins make sense, and visual-only evidence is genuinely observed. Do not invent words or on-screen actions. '+
-    (first?'Check that the episode opening is understandable. ':'Do NOT require a new opening. ')+
-    (last?'Check that the final episode ending is genuinely supported. ':'Do NOT require a complete episode ending in this window. ')+
-    'Provide specific issues for any failure. Check that goals, attempts, setbacks, quiet visual gameplay and payoffs retain enough context; avoid a highlight-only edit. Target 25–35% of the source and 15–40 minutes overall as soft editorial guidance.',
+    'QA: Window '+String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+
+    '. Screen/action first: visually complete missions, pursuits, fights, regrouping and escapes. Preserve funny lines, hype and reactions as secondary storytelling, never as reasons to cut an unresolved on-screen sequence. '+
+    (first?'Verify an authentic opening and clear stakes. ':'Do not demand a new episode opening in this intermediate window. ')+
+    (last?'Verify the real recorded resolution. ':'Do not demand a complete episode ending in this intermediate window. ')+
+    'Reject missing setup, payoff, quiet action, visual discontinuity and isolated transcript-sized clips. Give FULL explanations with scene/source times and exact fixes; not just category codes. Runtime is only a soft guide.',
     {windowIndex:ctx.windowIndex??0,windowCount:ctx.windowCount??1,outline,
       cuts:cuts.map((cut,index)=>({
         index,kind:cut.kind,startMs:cut.startMs,endMs:cut.endMs,
