@@ -64,11 +64,18 @@ export type YoutubeVideoResult = {
   chapterText: string
   /** Sanitized long-form planning audit, retained after the final MP4 render. */
   analysisAudit?: {
+    premise?: string
+    needsReview?: boolean
+    globalQaIssues?: string[]
+    globalQaIssueHistory?: string[]
     steps: import('@/lib/youtube-video/pipeline/yt-types').YtStep[]
     windows: Array<{
       sourceIndex:number;startMs:number;endMs:number
       acceptedCuts:Array<{sourceId:string;startMs:number;endMs:number}>
       rejectedCuts:Array<{startMs:number;endMs:number;code:string}>
+      qaPassed?: boolean
+      qaIssues?: string[]
+      qaIssueHistory?: string[]
     }>
   }
 }
