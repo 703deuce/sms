@@ -24,6 +24,8 @@ export type StudioDraft = {
   draftId: string
   slots: Record<string, StudioSlotFill>
   texts: Record<string, string>
+  /** Live style/animation/font overrides for template text fields (preview + export). */
+  textLayers?: TemplateChoices['textLayers']
   music?: TemplateAsset
   templateMusic?: TemplateMusicDecisionV1
   /** Explicit user declaration about commercial/export rights to the selected track. */
@@ -204,7 +206,8 @@ export function materializeStudioDraft(
   const instancedFamily = validateTemplateFamily({ ...family, slots: normalizedSlots,
     texts: recolor ? family.texts.map(text => ({ ...text, color: recolor })) : family.texts,
     graphics: recolor ? family.graphics?.map(graphic => ({ ...graphic, color: recolor })) : family.graphics })
-  const choices: TemplateChoices = { instanceId, media: {}, texts: draft.texts,
+  const choices: TemplateChoices = {
+    instanceId, media: {}, texts: draft.texts, textLayers: draft.textLayers,
     ...(draft.music ? { music: draft.music } : {}) }
   const originalSlotIds: Record<string, string> = {}
   for (const p of parts) {

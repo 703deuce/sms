@@ -1,8 +1,15 @@
 import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
   type FactoryFamilySeed, type FactoryTreatmentRecipe } from './b8-authoring-catalog'
 import { validateTemplateDesign, validateTemplateFamily,
-  type TemplateFamilyV1, type TemplateTextFinish } from './sequence-contract'
+  type TemplateFamilyV1 } from './sequence-contract'
 import type { VideoTemplateRelease } from './gallery'
+import {
+  BATCH9A_ANCHOR_TEXT_DESIGN,
+  lastWordBoldMark,
+  resolveTemplateTextLayer,
+  templateTextAnimPreset,
+  templateTextStylePreset,
+} from './template-text-presets'
 
 type Direction = readonly [
   recipeId:string, headline:string, closing:string, description:string,
@@ -15,48 +22,18 @@ const batch9aHeadlinePx = (legacySize: number) =>
   Math.round(legacySize * (BATCH9A_HEADLINE_REF_H * BATCH9A_HEADLINE_FRAC) / 76)
 const batch9aClosingPx = (legacyHeadline: number) => Math.round(44 * batch9aHeadlinePx(legacyHeadline) / 76)
 
+/** Art direction: display-sans hooks; recipe id picks transition/motion/accent only (not serif body). */
 const DIRECTIONS: Readonly<Record<string,Direction>> = {
-  f01:['magazine','WAIT FOR IT','THE REVEAL','Editorial cold-open reveal with a fast hook and clean final landing.','whip_pan',108,5,76],
+  f01:['bold','WAIT FOR IT','THE REVEAL','Editorial cold-open reveal with a fast hook and clean final landing.','whip_pan',108,5,76],
   f02:['minimal','BEFORE','AFTER','Transformation-first comparison with restrained typography and a bright reveal beat.','dip_white',103,1,68],
   f03:['tech','NEW DROP','DETAILS THAT HIT','Product-launch rhythm with crisp tech type and punchy zoom accents.','zoom_blur',110,4,64],
-  f04:['warm','A SMALL MOMENT','WORTH REMEMBERING','Personal mini-story with warmer typography and softer pacing.','crossfade',104,2,58],
+  f04:['brush','A SMALL MOMENT','WORTH REMEMBERING','Personal mini-story with warmer typography and softer pacing.','crossfade',104,2,58],
   f05:['cinema','ADD DEPTH','LAYER THE STORY','Cinematic depth stack with deliberate parallax and dimensional pushes.','push_left',112,6,68],
-  f06:['scrapbook','WEEKEND','ON REPEAT','Energetic lifestyle recap with scrapbook character and rhythmic wipes.','wipe_left',106,3,62],
-  f07:['party',"YOU'RE INVITED",'SAVE THE DATE','Celebratory invitation with a bright entrance and calmer information landing.','push_up',106,3,70],
+  f06:['party','WEEKEND','ON REPEAT','Energetic lifestyle recap with scrapbook character and rhythmic wipes.','wipe_left',106,3,62],
+  f07:['kids',"YOU'RE INVITED",'SAVE THE DATE','Celebratory invitation with a bright entrance and calmer information landing.','push_up',106,3,70],
   f08:['luxury',"TONIGHT'S TABLE",'STAY FOR DESSERT','Premium food atmosphere edit with elegant type and restrained dissolves.','crossfade',105,2,62],
   f09:['sport','DAY ONE','NOW','Athletic progress edit with hard hierarchy and whip-pan momentum.','whip_pan',109,4,72],
   f10:['tutorial','STEP BY STEP','TRY THIS NEXT','Creator tutorial with legible instructional type and steady directional continuity.','push_left',103,2,62],
-}
-
-type DirectionFinish = { headline: TemplateTextFinish; closing: TemplateTextFinish }
-const TEXT_FINISHES: Readonly<Record<string,DirectionFinish>> = {
-  f01:{headline:{stroke:{color:'#09090B',width:2},shadow:{color:'#000000',opacity:82,dist:4},letterSpacing:1.2},
-       closing:{stroke:{color:'#09090B',width:1.2},shadow:{color:'#000000',opacity:74,dist:3},letterSpacing:.8}},
-  f02:{headline:{stroke:{color:'#020617',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5},
-       closing:{shadow:{color:'#000000',opacity:62,dist:3},letterSpacing:.3}},
-  f03:{headline:{stroke:{color:'#020617',width:1.6},shadow:{color:'#020617',opacity:84,dist:4},letterSpacing:2},
-       closing:{stroke:{color:'#020617',width:1},shadow:{color:'#020617',opacity:76,dist:3},letterSpacing:1.4}},
-  f04:{headline:{stroke:{color:'#431407',width:1},shadow:{color:'#000000',opacity:66,dist:3},letterSpacing:.2},
-       closing:{shadow:{color:'#431407',opacity:64,dist:3}}},
-  f05:{headline:{stroke:{color:'#0C0A09',width:1.4},shadow:{color:'#000000',opacity:80,dist:4},letterSpacing:.9},
-       closing:{stroke:{color:'#0C0A09',width:1},shadow:{color:'#000000',opacity:72,dist:3},letterSpacing:.6}},
-  f06:{headline:{stroke:{color:'#1C1917',width:1.2},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5},
-       closing:{stroke:{color:'#1C1917',width:1},shadow:{color:'#000000',opacity:62,dist:3},letterSpacing:.3}},
-  f07:{headline:{stroke:{color:'#450A0A',width:1.6},shadow:{color:'#000000',opacity:76,dist:3},letterSpacing:.8},
-       closing:{stroke:{color:'#450A0A',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.5}},
-  f08:{headline:{stroke:{color:'#1C1917',width:1.2},shadow:{color:'#000000',opacity:78,dist:4},letterSpacing:1.6},
-       closing:{stroke:{color:'#1C1917',width:1},shadow:{color:'#000000',opacity:72,dist:3},letterSpacing:1}},
-  f09:{headline:{stroke:{color:'#09090B',width:2.2},shadow:{color:'#000000',opacity:86,dist:4},letterSpacing:1},
-       closing:{stroke:{color:'#09090B',width:1.5},shadow:{color:'#000000',opacity:78,dist:3},letterSpacing:.6}},
-  f10:{headline:{stroke:{color:'#052E16',width:1.5},shadow:{color:'#000000',opacity:76,dist:3},letterSpacing:.7},
-       closing:{stroke:{color:'#052E16',width:1},shadow:{color:'#000000',opacity:68,dist:3},letterSpacing:.4}},
-}
-function directionFor(seed:FactoryFamilySeed): {direction:Direction;recipe:FactoryTreatmentRecipe} {
-  const direction=DIRECTIONS[seed.id]
-  if(!direction) throw new Error('Missing Batch 9A art direction: '+seed.id)
-  const recipe=FACTORY_TREATMENTS.find(item=>item.id===direction[0])
-  if(!recipe) throw new Error('Missing Batch 9A style recipe: '+direction[0])
-  return {direction,recipe}
 }
 
 export const BATCH9A_DEFAULT_MUSIC = {
@@ -100,12 +77,23 @@ const BATCH9A_PREVIEW_SPRITE_SHA = [
 
 const BATCH9A_PREVIEW_MEDIA = BATCH9A_PREVIEW_SPRITE_SHA.map((sha, index) => batch9aPreviewMedia(index, sha))
 
+function directionFor(seed:FactoryFamilySeed): {direction:Direction;recipe:FactoryTreatmentRecipe} {
+  const direction=DIRECTIONS[seed.id]
+  if(!direction) throw new Error('Missing Batch 9A art direction: '+seed.id)
+  const recipe=FACTORY_TREATMENTS.find(item=>item.id===direction[0])
+  if(!recipe) throw new Error('Missing Batch 9A style recipe: '+direction[0])
+  return {direction,recipe}
+}
+
 function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe, direction: Direction): TemplateFamilyV1 {
   const [,headline,closing,,transition,motionScale,motionShift,legacyHeadlineSize]=direction
   const headlineSize = batch9aHeadlinePx(legacyHeadlineSize)
   const closingSize = batch9aClosingPx(legacyHeadlineSize)
-  const finish=TEXT_FINISHES[seed.id]
-  if(!finish)throw new Error('Missing Batch 9A text finish: '+seed.id)
+  const design = BATCH9A_ANCHOR_TEXT_DESIGN[seed.id]
+  if (!design) throw new Error('Missing Batch 9A text design: ' + seed.id)
+  if (!templateTextStylePreset(design.headline.stylePresetId) ||
+      !templateTextAnimPreset(design.headline.animPresetId))
+    throw new Error('Invalid Batch 9A headline presets: ' + seed.id)
   let at = 0
   const slots: TemplateFamilyV1['slots'] = seed.frames.map((durationFrames,index) => {
     const slot: TemplateFamilyV1['slots'][number] = {
@@ -137,16 +125,14 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
   const totalFrames = at
   const titleFrames = Math.min(totalFrames,Math.max(66,Math.round(seed.frames[0]! * 1.5)))
   const outroFrames = Math.min(totalFrames,Math.max(72,seed.frames[seed.frames.length-1]!))
-  const secondaryY = recipe.y > 59 ? recipe.y - 13 : recipe.y + 13
-  // The first-party groove exposes a rhythmic subdivision every 3 frames. All
-  // F01-F10 authored shot lengths are multiples of 3, so every cut lands on-grid.
   if (slots.some(slot => slot.startFrame % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0 ||
       slot.durationFrames % BATCH9A_DEFAULT_MUSIC.beatEveryFrames !== 0))
     throw new Error('Batch 9A anchor cut is off the first-party music grid: ' + seed.id)
+  const headlineMarks = design.headline.marks ?? lastWordBoldMark(headline)
   return validateTemplateFamily({
     schemaVersion:1,
     familyId:seed.id,
-    revision:2,
+    revision:3,
     title:seed.title,
     tags:[seed.category,'batch9a_anchor','first_party_preview',direction[0]],
     aspects:['9:16'],
@@ -159,19 +145,23 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
       {id:'closing',frame:totalFrames-outroFrames,textFieldId:'closing_line'},
     ],
     texts:[
-      {
+      resolveTemplateTextLayer({
         id:'headline',defaultText:headline,maxChars:40,startFrame:0,durationFrames:titleFrames,
-        x:recipe.x,y:recipe.y,font:recipe.headingFont,size:headlineSize,
-        color:recipe.foreground,finish:finish.headline,
-        anim:{in:{type:recipe.enter,unit:'block',durMs:360},out:{type:'fade',unit:'block',durMs:260}},
-      },
-      {
+        x:recipe.x,y:design.headline.y,font:design.headline.font,size:headlineSize,
+        color:recipe.foreground,
+        stylePresetId:design.headline.stylePresetId,
+        animPresetId:design.headline.animPresetId,
+        ...(headlineMarks ? { marks: headlineMarks } : {}),
+      }, recipe.accent),
+      resolveTemplateTextLayer({
         id:'closing_line',defaultText:closing,maxChars:44,
         startFrame:totalFrames-outroFrames,durationFrames:outroFrames,
-        x:recipe.x,y:secondaryY,font:recipe.supportFont,size:closingSize,color:recipe.foreground,
-        finish:finish.closing,
-        anim:{in:{type:'fade',unit:'block',durMs:440},out:{type:'fade',unit:'block',durMs:260}},
-      },
+        x:recipe.x,y:design.closing.y,font:design.closing.font,size:closingSize,
+        color: design.closing.colorFromAccent ? '__accent__' : recipe.foreground,
+        stylePresetId:design.closing.stylePresetId,
+        animPresetId:design.closing.animPresetId,
+        colorFromAccent: design.closing.colorFromAccent,
+      }, recipe.accent),
     ],
     graphics:[{
       id:'accent_shape',type:recipe.graphic,startFrame:0,durationFrames:Math.min(totalFrames,120),
@@ -187,8 +177,8 @@ export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
     const {direction,recipe}=directionFor(seed)
     const family=authorAnchorFamily(seed,recipe,direction)
     const design=validateTemplateDesign({
-      schemaVersion:1,designId:seed.id+'_bold',revision:2,stylePackId:'batch9a_'+recipe.id,
-      familyId:seed.id,familyRevision:2,musicPolicy:'licensed-only',
+      schemaVersion:1,designId:seed.id+'_bold',revision:3,stylePackId:'batch9a_'+recipe.id,
+      familyId:seed.id,familyRevision:3,musicPolicy:'licensed-only',
     },family)
     return {
       id:design.designId,
@@ -208,8 +198,10 @@ export const BATCH9A_ANCHOR_RELEASES: readonly VideoTemplateRelease[] =
       defaultMusic:BATCH9A_DEFAULT_MUSIC,
       previewMedia:BATCH9A_PREVIEW_MEDIA[index]!,
       previewStyle:{
-        foreground:recipe.foreground,accent:recipe.accent,headingFont:recipe.headingFont,
-        supportFont:recipe.supportFont,graphic:recipe.graphic,enter:recipe.enter,
+        foreground:recipe.foreground,accent:recipe.accent,
+        headingFont:BATCH9A_ANCHOR_TEXT_DESIGN[seed.id]!.headline.font,
+        supportFont:BATCH9A_ANCHOR_TEXT_DESIGN[seed.id]!.closing.font,
+        graphic:recipe.graphic,enter:recipe.enter,
       },
     }
   })

@@ -20,6 +20,7 @@ import {
 } from '@/lib/clips/real-video-templates/slot-playback'
 import { TEXT_ANIM_BLOCK_ONLY, TEXT_ANIM_IN_TYPES, TEXT_ANIM_LOOP_TYPES, TEXT_ANIM_UNITS, TEXT_ONLY_ANIM, type TextAnim } from '@/lib/clips/render-plan/text-anim'
 import { compileBatch7Primitives, validateBatch7Primitives, type Batch7TemplatePrimitive } from './batch7-primitives'
+import { templateTextAnimPreset, templateTextStylePreset } from './template-text-presets'
 
 export type TemplateAsset = {
   id: string
@@ -61,6 +62,7 @@ export type TemplateTextFinish = {
   stroke?: { color: string; width: number }
   shadow?: { color: string; opacity: number; dist: number }
   letterSpacing?: number
+  box?: { color: string; opacity: number; pad: number }
 }
 export type TemplateText = {
   id: string
@@ -73,6 +75,11 @@ export type TemplateText = {
   font: string
   size: number
   color: string
+  case?: 'upper' | 'none'
+  stylePresetId?: string
+  animPresetId?: string
+  /** Bold/italic spans compiled to TextItem marks. */
+  marks?: { s: number; e: number; b?: true; i?: true }[]
   /** Authored readability treatment preserved as ordinary editable TextItem style. */
   finish?: TemplateTextFinish
   /** Real ASS/worker/libass text choreography, not preview-only CSS. */
@@ -118,10 +125,17 @@ export type TemplateDesignV1 = {
   familyRevision: number
   musicPolicy: 'none' | 'licensed-only'
 }
+export type TemplateTextLayerOverride = {
+  stylePresetId?: string
+  animPresetId?: string
+  font?: string
+}
+
 export type TemplateChoices = {
   instanceId: string
   media: Record<string, TemplateAsset>
   texts?: Record<string, string>
+  textLayers?: Record<string, TemplateTextLayerOverride>
   music?: TemplateAsset
   /** Selected template preview/render aspect. Defaults to the family's first authored aspect. */
   aspect?: '9:16' | '16:9' | '1:1'
@@ -249,7 +263,7 @@ function validateMotionState(raw: unknown, context: string): TemplateMotionState
 function validateTextFinish(raw: unknown): TemplateTextFinish | undefined {
   if (raw == null) return undefined
   if (!own(raw)) throw new Error('text.finish: expected object')
-  exact(raw, ['stroke','shadow','letterSpacing'], 'text.finish')
+  exact(raw, ['stroke','shadow','letterSpacing','box'], 'text.finish')
   const out: TemplateTextFinish = {}
   if (raw.stroke != null) {
     if (!own(raw.stroke)) throw new Error('text.finish.stroke: expected object')
@@ -271,6 +285,17 @@ function validateTextFinish(raw: unknown): TemplateTextFinish | undefined {
   }
   if (raw.letterSpacing != null)
     out.letterSpacing = finite(raw.letterSpacing, -20, 40, 'text.finish.letterSpacing')
+  if (raw.box != null) {
+    if (!own(raw.box)) throw new Error('text.finish.box: expected object')
+    exact(raw.box, ['color', 'opacity', 'pad'], 'text.finish.box')
+    const color = String(raw.box.color ?? '')
+    if (!COLOR.test(color)) throw new Error('text.finish.box: invalid color')
+    out.box = {
+      color,
+      opacity: finite(raw.box.opacity, 0, 100, 'text.finish.box.opacity'),
+      pad: finite(raw.box.pad, 0, 80, 'text.finish.box.pad'),
+    }
+  }
   if (!Object.keys(out).length) throw new Error('text.finish: no style specified')
   return out
 }
@@ -432,7 +457,7 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
   const textIds = new Set<string>()
   const texts: TemplateText[] = raw.texts.map((value: unknown) => {
     if (!own(value)) throw new Error('text: expected object')
-    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','finish','anim'], 'text')
+    exact(value, ['id','defaultText','maxChars','startFrame','durationFrames','x','y','font','size','color','case','stylePresetId','animPresetId','marks','finish','anim'], 'text')
     const tid = id(value.id, 'text'); unique(tid, textIds, 'text')
     const maxChars = integer(value.maxChars, 1, 200, 'text.maxChars')
     if (typeof value.defaultText !== 'string' || !value.defaultText.trim() || Array.from(value.defaultText).length > maxChars) throw new Error('text: invalid default')
@@ -441,12 +466,32 @@ export function validateTemplateFamily(raw: unknown): TemplateFamilyV1 {
     if (startFrame + durationFrames > total) throw new Error('text: out of bounds')
     const color = String(value.color ?? '')
     if (!COLOR.test(color)) throw new Error('text: invalid color')
+    const textCase = value.case == null ? undefined : oneOf(value.case, ['upper', 'none'] as const, 'text.case')
+  const stylePresetId = value.stylePresetId == null ? undefined : id(value.stylePresetId, 'text.stylePresetId')
+    const animPresetId = value.animPresetId == null ? undefined : id(value.animPresetId, 'text.animPresetId')
+    let marks: TemplateText['marks']
+    if (value.marks != null) {
+      if (!Array.isArray(value.marks) || value.marks.length > 50) throw new Error('text.marks: invalid')
+      marks = value.marks.map((m: unknown, mi: number) => {
+        if (!own(m)) throw new Error('text.marks: expected object')
+        exact(m, ['s', 'e', 'b', 'i'], `text.marks[${mi}]`)
+        if (!(m.b === true || m.i === true)) throw new Error('text.marks: requires bold or italic')
+        const s = integer(m.s, 0, maxChars, `text.marks[${mi}].s`)
+        const e = integer(m.e, 0, maxChars, `text.marks[${mi}].e`)
+        if (e <= s) throw new Error('text.marks: empty range')
+        return { s, e, ...(m.b === true ? { b: true as const } : {}), ...(m.i === true ? { i: true as const } : {}) }
+      })
+    }
     return {
       id: tid, defaultText: value.defaultText, maxChars, startFrame, durationFrames,
       x: finite(value.x, 0, 100, 'text.x'), y: finite(value.y, 0, 100, 'text.y'),
       font: typeof value.font === 'string' && TEMPLATE_FONTS.has(value.font)
         ? value.font : (() => { throw new Error('text.font: missing from the pinned licensed font manifest') })(),
       size: integer(value.size, 24, 240, 'text.size'), color,
+      ...(textCase ? { case: textCase } : {}),
+      ...(stylePresetId ? { stylePresetId } : {}),
+      ...(animPresetId ? { animPresetId } : {}),
+      ...(marks?.length ? { marks } : {}),
       ...(validateTextFinish(value.finish) ? { finish: validateTextFinish(value.finish) } : {}),
       ...(validateAuthoredAnim(value.anim, 'text') ? { anim: validateAuthoredAnim(value.anim, 'text') } : {}),
     }
@@ -550,6 +595,7 @@ export function compileTemplate(
   if (Object.keys(choices.media).length !== family.slots.length) throw new Error('instance: every slot requires media')
   const textKeys = new Set(family.texts.map(t => t.id))
   for (const k of Object.keys(choices.texts ?? {})) if (!textKeys.has(k)) throw new Error(`unknown text choice: ${k}`)
+  for (const k of Object.keys(choices.textLayers ?? {})) if (!textKeys.has(k)) throw new Error(`unknown text layer override: ${k}`)
 
   const sources: NonNullable<ClipEditsV2['sources']> = []
   const sourceIds = new Map<string, string>()
@@ -660,16 +706,36 @@ export function compileTemplate(
   const textItems: NonNullable<ClipEditsV2['textItems']> = family.texts.map(t => {
     const text = choices.texts?.[t.id] ?? t.defaultText
     if (typeof text !== 'string' || !text.trim() || Array.from(text).length > t.maxChars) throw new Error(`text ${t.id}: limit ${t.maxChars} characters`)
+    const layerOverride = choices.textLayers?.[t.id]
+    const font =
+      layerOverride?.font && TEMPLATE_FONTS.has(layerOverride.font) ? layerOverride.font : t.font
+    let anim = t.anim
+    if (layerOverride?.animPresetId) {
+      anim = templateTextAnimPreset(layerOverride.animPresetId)?.anim ?? anim
+    }
+    let finish = t.finish
+    let textCase = t.case ?? 'none'
+    if (layerOverride?.stylePresetId) {
+      const preset = templateTextStylePreset(layerOverride.stylePresetId)
+      if (preset) {
+        finish = { ...preset.finish, ...(finish ?? {}) }
+        textCase = t.case ?? preset.case
+      }
+    }
     return {
       id: templateSeededId(choices.instanceId, family.familyId, String(family.revision), 'text', t.id),
       text, startMs: templateFrameToMs(t.startFrame), endMs: templateFrameToMs(t.startFrame + t.durationFrames),
       x: t.x, y: t.y, style: {
-        font: t.font, size: t.size, color: t.color, align: 'center' as const, case: 'none' as const,
-        ...(t.finish?.stroke ? { stroke: t.finish.stroke } : {}),
-        ...(t.finish?.shadow ? { shadow: t.finish.shadow } : {}),
-        ...(t.finish?.letterSpacing != null ? { letterSpacing: t.finish.letterSpacing } : {}),
+        font, size: t.size, color: t.color, align: 'center' as const, case: textCase === 'upper' ? 'upper' as const : 'none' as const,
+        ...(finish?.stroke ? { stroke: finish.stroke } : {}),
+        ...(finish?.shadow ? { shadow: finish.shadow } : {}),
+        ...(finish?.letterSpacing != null ? { letterSpacing: finish.letterSpacing } : {}),
+        ...(finish?.box ? { box: finish.box } : {}),
       },
-      ...(t.anim ? { anim: t.anim } : {}),
+      ...(t.stylePresetId || layerOverride?.stylePresetId
+        ? { presetId: `template:${layerOverride?.stylePresetId ?? t.stylePresetId}` } : {}),
+      ...(anim ? { anim } : {}),
+      ...(t.marks?.length ? { marks: t.marks } : {}),
     }
   })
   for (const g of family.graphics ?? []) textItems.push({

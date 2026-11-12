@@ -156,6 +156,15 @@ export function validDraft(releaseId: string, raw: unknown): StudioDraft {
     if (!max || typeof text !== 'string' || !text.trim() || Array.from(text).length > max)
       throw new Error('Invalid template text')
   }
+  if (raw.textLayers != null) {
+    if (!object(raw.textLayers) || Object.keys(raw.textLayers).length > 20) throw new Error('Invalid text layer overrides')
+    for (const [id, layer] of Object.entries(raw.textLayers)) {
+      if (!allowedTexts.has(id) || !object(layer)) throw new Error('Invalid text layer override')
+      if (layer.stylePresetId != null && typeof layer.stylePresetId !== 'string') throw new Error('Invalid text style preset')
+      if (layer.animPresetId != null && typeof layer.animPresetId !== 'string') throw new Error('Invalid text animation preset')
+      if (layer.font != null && typeof layer.font !== 'string') throw new Error('Invalid text font')
+    }
+  }
   if (JSON.stringify(raw).length > 120_000) throw new Error('Template draft too large')
   return raw as unknown as StudioDraft
 }

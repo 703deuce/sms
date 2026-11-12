@@ -10,7 +10,7 @@ import type { TemplateAsset } from '@/lib/clips/real-video-templates/sequence-co
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { UploadProgress } from '@/lib/clips/upload'
-import { CLIP_FONT_MANIFEST } from '@/lib/clips/font-manifest'
+import { TemplateTextPanel } from '@/components/clips/templates/template-text-panel'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -470,18 +470,11 @@ export function VideoTemplateStudioShell(props: {
               </TabsList>
               <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">
                 <TabsContent value="text" className="mt-0 space-y-3">
-                  {release.family.texts.map(text => (
-                    <label key={text.id} className="block space-y-1 text-xs font-medium">
-                      {text.id} · max {text.maxChars}
-                      <input
-                        className={inputClass}
-                        maxLength={text.maxChars}
-                        aria-label={text.id + ' · maximum ' + text.maxChars + ' characters'}
-                        value={draft?.texts[text.id] ?? text.defaultText}
-                        onChange={e => draft && onCommitDraft({ ...draft, texts: { ...draft.texts, [text.id]: e.target.value } })}
-                      />
-                    </label>
-                  ))}
+                  {draft ? (
+                    <TemplateTextPanel release={release} draft={draft} onCommitDraft={onCommitDraft} />
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Start a project to edit text.</p>
+                  )}
                 </TabsContent>
                 <TabsContent value="music" className="mt-0 space-y-3 text-xs">
                   {release.design.musicPolicy === 'none' ? (
@@ -523,14 +516,9 @@ export function VideoTemplateStudioShell(props: {
                       onChange={e => draft && onCommitDraft({ ...draft, brandColor: e.target.value })}
                     />
                   </label>
-                  <p className="text-xs text-muted-foreground">Font presets from the licensed manifest</p>
-                  <ul className="flex flex-wrap gap-1">
-                    {CLIP_FONT_MANIFEST.slice(0, 8).map(row => (
-                      <li key={row.id}>
-                        <span className="rounded border px-2 py-1 text-[10px]" style={{ fontFamily: row.id }}>{row.id}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-xs text-muted-foreground">
+                    Brand accent tints closing lines that use accent color. Edit fonts and presets in the Text tab.
+                  </p>
                 </TabsContent>
               </div>
             </Tabs>
