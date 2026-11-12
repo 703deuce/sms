@@ -5,7 +5,7 @@ import { ytLog, ytErrorCode } from '@/lib/youtube-video/pipeline/yt-audit'
 import { ytFindMoments, ytReadMomentsJob } from '@/lib/youtube-video/pipeline/yt-find-moments'
 import { ytRefineVisualStoryEvidence } from '@/lib/youtube-video/pipeline/yt-visual-refine'
 import {
-  ytCreateEditorialHandoff,ytSelectFootage,ytDialoguePictureReview,ytQualityReview,
+  ytCreateEditorialHandoff,ytSelectFootage,ytDialoguePictureReview,ytQualityReview,ytVisualSceneCovered,
 } from '@/lib/youtube-video/pipeline/yt-editorial-handoff'
 import {
   ytRunStoryFinisher,ytFinishWholeSourceStory,ytQaWholeSourceStory,
@@ -116,8 +116,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
       const valid=cut.kind==='speech'
         ?ctx.words.some(w=>Math.round(w.s*1000)===cut.startMs)&&
           ctx.words.some(w=>Math.round(w.e*1000)===cut.endMs)
-        :cut.kind==='visual'&&ctx.observations.some(m=>
-          cut.startMs>=m.startMs&&cut.endMs<=m.endMs)
+        :cut.kind==='visual'&&ytVisualSceneCovered(ctx,cut.startMs,cut.endMs)
       if(valid)lastEnd=cut.endMs
       return valid
     })
@@ -165,8 +164,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         const result=await ytReadMomentsJob(window.coarseJobId,
           [window.startMs,window.endMs],'coarse')
         if(result.status==='pending'){
-          log('gemini_coarse','waiting',fields)
-          // Avoid unbounded log growth from frequent browser polling.
+          // Waiting is not a new checkpoint event on every driver tick.
           return
         }
         window.coarse=result.observations
