@@ -96,7 +96,8 @@ def export_settings_for_aspect(settings: dict, aspect: str | None) -> dict:
 
 
 def aspect_size(aspect: str, resolution: str = "720p") -> tuple[int, int]:
-    short = 1080 if resolution == "1080p" else 720
+    # 480p is an opt-in YouTube episode resolution; other exports keep their sizes.
+    short = 480 if resolution == "480p" else 1080 if resolution == "1080p" else 720
     aw, ah = aspect_parts(aspect)
     if aw >= ah:
         w, h = round(short * aw / ah), short
