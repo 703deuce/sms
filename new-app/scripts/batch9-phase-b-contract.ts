@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { existsSync,mkdirSync,readFileSync,writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { copyFileSync,existsSync,mkdirSync,readFileSync,writeFileSync } from 'node:fs'
 import { dirname,resolve } from 'node:path'
 import { defaultEdits } from '../lib/clips/edits'
 import {
@@ -14,7 +15,7 @@ const value=(name:string,fallback:string)=>{
   const i=args.indexOf(name)
   return i>=0&&args[i+1]?args[i+1]!:fallback
 }
-const evidencePath=resolve(process.cwd(),value('--evidence','build/real-video-templates/b8/evidence.json'))
+const evidencePath=resolve(process.cwd(),value('--evidence','build/real-video-templates/b9a/evidence.json'))
 const sourcePath=resolve(process.cwd(),value('--source','../build/b8-worker-contract.json'))
 const outPath=resolve(process.cwd(),value('--out','../build/b9-phase-b-worker-contract.json'))
 if(!existsSync(evidencePath))throw new Error('Phase B worker contract requires Phase A evidence: '+evidencePath)
@@ -78,7 +79,15 @@ const designs=batch9PhaseBExpansionCandidates().map(candidate=>{
 if(designs.length!==BATCH9_PHASE_B_VARIANT_TARGET||
    new Set(designs.map(row=>row.id)).size!==BATCH9_PHASE_B_VARIANT_TARGET)
   throw new Error('Phase B contract did not compile exactly 390 unique live-anchor variants')
+const sourceMusic=resolve(dirname(sourcePath),source.fixture.musicFile)
+if(!existsSync(sourceMusic))throw new Error('Missing pinned Phase B soundtrack bytes: '+sourceMusic)
+const musicBytes=readFileSync(sourceMusic)
+const musicSha=createHash('sha256').update(musicBytes).digest('hex')
+if(musicSha!==source.fixture.musicSha)
+  throw new Error('Phase B soundtrack bytes do not match the pinned contract SHA-256')
 mkdirSync(dirname(outPath),{recursive:true})
+const outMusic=resolve(dirname(outPath),source.fixture.musicFile)
+if(outMusic!==sourceMusic)copyFileSync(sourceMusic,outMusic)
 writeFileSync(outPath,JSON.stringify({
   v:1,phase:'batch9-phase-b-live-anchor-v2',sourceEngine:source.engine,fps:source.fps,
   fixture:{...source.fixture,mediaOrigin:'Phase B real-photo/video certification fixture'},

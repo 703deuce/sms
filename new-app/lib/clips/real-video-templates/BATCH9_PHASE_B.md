@@ -16,7 +16,7 @@ Run:
 
 ```sh
 cd new-app
-pnpm templates:b9:phase-b --evidence build/real-video-templates/b8/evidence.json
+pnpm templates:b9:phase-b --evidence build/real-video-templates/b9a/evidence.json
 ```
 
 The command writes a local status/eligible manifest only. It never edits
@@ -33,3 +33,35 @@ recipes must have an independently reviewed example, and every flagged variant
 must have an independent reviewer. The generated rows are certified
 `VideoTemplateRelease` records with real reviewed MP4/poster evidence, but the
 CLI still never mutates the production `releases.ts` registry automatically.
+
+
+## Exact-definition review and production render
+
+Review scope is explicit so same-ID Batch 8 rows cannot certify the redesigned anchors:
+
+```sh
+cd new-app
+pnpm templates:review-workbook --scope batch9a \
+  --evidence build/real-video-templates/b9a/evidence.json
+pnpm templates:review-evidence --scope batch9a \
+  --evidence build/real-video-templates/b9a/evidence.json \
+  --reviews build/real-video-templates/b9a/human-reviews.json
+```
+
+After all ten live anchors pass that gate, Phase B can render through the same
+production export orchestration used by Batch 8. The command refuses to build
+the 390-row contract before Phase A certification and verifies/copies the exact
+pinned soundtrack bytes beside the contract.
+
+```sh
+pnpm templates:b9:phase-b:render \
+  --evidence build/real-video-templates/b9a/evidence.json \
+  --source ../build/b8-worker-contract.json \
+  --shard 0 --shards 10
+```
+
+Each of the 390 variants is already covered by the focused compile gate for
+one editable source segment per slot, native transitions, animated text/graphic
+layers, video motion keyframes, mixed photo/video sources, and music on its own
+track. Public promotion remains fail-closed until exact variant render/review
+evidence also passes.

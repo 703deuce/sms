@@ -11,7 +11,7 @@ import type { B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
 
 const args=process.argv.slice(2)
 const evidenceArg=args.includes('--evidence')?args[args.indexOf('--evidence')+1]:undefined
-const evidencePath=resolve(process.cwd(),evidenceArg??'build/real-video-templates/b8/evidence.json')
+const evidencePath=resolve(process.cwd(),evidenceArg??'build/real-video-templates/b9a/evidence.json')
 const outArg=args.includes('--out')?args[args.indexOf('--out')+1]:undefined
 const out=resolve(process.cwd(),outArg??'build/real-video-templates/b9-phase-b/status.json')
 const evidence: B8Evidence[]=existsSync(evidencePath)
