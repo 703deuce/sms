@@ -41,8 +41,8 @@ export function ytObservations(
     const description = String(row.what_happened ?? row.visual_action ?? row.description ?? '').trim()
     if (!description) continue
     out.push({
-      startMs,endMs,description:description.slice(0,420),
-      whyInteresting:String(row.why_it_works ?? '').slice(0,300),
+      startMs,endMs,description:description.slice(0,1600),
+      whyInteresting:String(row.why_it_works ?? '').slice(0,1200),
       category:String(row.category ?? row.content_type ?? 'moment').slice(0,80),
       score:Number.isFinite(Number(row.score)) ? Number(row.score) : 0,
       tier,
