@@ -288,6 +288,35 @@ function snapCanvas(which: 'a' | 'b'): HTMLCanvasElement {
   return snapPool[key]!
 }
 
+function activeTransitionSourceMedia(layer: HTMLElement): HTMLVideoElement | HTMLImageElement | null {
+  const boxes = Array.from(layer.querySelectorAll<HTMLElement>('[data-source-id]'))
+  for (const box of boxes) {
+    if (box.style.visibility === 'hidden') continue
+    const media = box.querySelector('video, img')
+    if (media instanceof HTMLVideoElement || media instanceof HTMLImageElement) return media
+  }
+  return null
+}
+
+function drawMediaFit(
+  ctx: CanvasRenderingContext2D,
+  media: HTMLVideoElement | HTMLImageElement,
+  w: number,
+  h: number,
+) {
+  const sw = media instanceof HTMLVideoElement ? media.videoWidth : media.naturalWidth
+  const sh = media instanceof HTMLVideoElement ? media.videoHeight : media.naturalHeight
+  if (sw < 1 || sh < 1) return false
+  const fit = media.style.objectFit === 'contain' ? 'contain' : 'cover'
+  const scale = fit === 'contain' ? Math.min(w / sw, h / sh) : Math.max(w / sw, h / sh)
+  const dw = sw * scale
+  const dh = sh * scale
+  const dx = (w - dw) / 2
+  const dy = (h - dh) / 2
+  ctx.drawImage(media, dx, dy, dw, dh)
+  return true
+}
+
 function snapshotClone(
   layer: HTMLElement | null,
   w: number,
@@ -304,18 +333,21 @@ function snapshotClone(
   const ctx = canvas.getContext('2d')
   if (!ctx) return null
   ctx.clearRect(0, 0, w, h)
-  const v = layer.querySelector('video') as HTMLVideoElement | null
   const mirror = layer.querySelector('canvas[data-g4-mirror]') as HTMLCanvasElement | null
   if (graded && mirror && mirror.width > 0) {
     ctx.drawImage(mirror, 0, 0, w, h)
     return canvas
   }
-  if (!v || v.readyState < 2) return null
+  const activeSource = activeTransitionSourceMedia(layer)
+  const media = activeSource ?? (layer.querySelector('video') as HTMLVideoElement | null)
+  if (!media) return null
+  if (media instanceof HTMLVideoElement && media.readyState < 2) return null
+  if (media instanceof HTMLImageElement && (!media.complete || media.naturalWidth < 1)) return null
   ctx.save()
   ctx.filter = look || 'none'
-  ctx.drawImage(v, 0, 0, w, h)
+  const drawn = drawMediaFit(ctx, media, w, h)
   ctx.restore()
-  return canvas
+  return drawn ? canvas : null
 }
 
 function shaderCanvas(host: HTMLElement | null): HTMLCanvasElement | null {
