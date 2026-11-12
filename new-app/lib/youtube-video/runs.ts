@@ -351,7 +351,7 @@ export async function createYoutubeVideoRun(
   const created = await traceYoutubeRunStep(record.id, 'run_create', () => deps.store.create(record), { sourceCount: input.sources.length })
   // With the independent driver installed, web POST returns immediately.
   // The driver advances importing, planning, and rendering asynchronously.
-  if(process.env.YOUTUBE_VIDEO_DRIVER_TOKEN || process.env.CRON_SECRET)
+  if(process.env.YOUTUBE_VIDEO_DRIVER_ENABLED === '1')
     return {view:view(created),created:true}
   return { view: view(await advanceRun(created, deps, true)), created: true }
 }
