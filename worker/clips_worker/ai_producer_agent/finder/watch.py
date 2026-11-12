@@ -2173,7 +2173,7 @@ def watch_video_file(
                     break
 
                 meta["moments_raw"] = moments
-                if not skip_edge_reassess and source_video is not None and scratch is not None:
+                if not youtube_gaming and not skip_edge_reassess and source_video is not None and scratch is not None:
                     t_end = trim_end_s if trim_end_s is not None else trim_start_s + float(duration_s)
                     single_chunk = abs(
                         float(t_end) - float(trim_start_s) - float(duration_s)
