@@ -362,6 +362,43 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
               onError={() => void controller.refetchPlayback()}
               data-testid="youtube-video-player"
             />
+            <section className="space-y-2 rounded-lg border border-border p-3" data-testid="youtube-story-audit">
+              <h3 className="text-sm font-semibold">Storyline it kept</h3>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">{result.analysisAudit?.premise ?? result.plan.premise}</p>
+              {result.analysisAudit?.needsReview && (
+                <p className="text-sm font-semibold text-amber-600" role="status">
+                  Needs review — the last QA revision did not resolve every issue.
+                </p>
+              )}
+              {result.analysisAudit && (
+                <details className="text-sm" open={result.analysisAudit.needsReview}>
+                  <summary className="cursor-pointer font-medium">Editorial QA findings</summary>
+                  {(result.analysisAudit.globalQaIssueHistory?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-1">
+                      <strong>Global story QA</strong>
+                      <ul className="list-disc space-y-1 pl-5">
+                        {result.analysisAudit.globalQaIssueHistory?.map((issue, index) => (
+                          <li key={index} className="whitespace-pre-wrap">{issue}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {result.analysisAudit.windows.map((window, index) => (
+                    <div className="mt-2 space-y-1" key={index}>
+                      <strong>Source window {index + 1} ({Math.floor(window.startMs / 60000)}–{Math.ceil(window.endMs / 60000)} min)</strong>
+                      <p>{window.qaPassed === true ? 'Passed' : window.qaPassed === false ? 'Needs review' : 'Not assessed'}</p>
+                      {(window.qaIssueHistory ?? window.qaIssues ?? []).length > 0 && (
+                        <ul className="list-disc space-y-1 pl-5">
+                          {(window.qaIssueHistory ?? window.qaIssues ?? []).map((issue, i) => (
+                            <li key={i} className="whitespace-pre-wrap">{issue}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </details>
+              )}
+            </section>
             <div className="flex flex-wrap gap-2">
               {result.downloadUrl && (
                 <a
