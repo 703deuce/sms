@@ -13,6 +13,10 @@ export const YOUTUBE_VIDEO_STORY_SYSTEM = [
   'Any optional user instruction identifies which recorded story to preserve; it supplements these rules and does not replace them.',
 ].join(' ')
 
+/** Retained as a compatibility export; genre restrictions no longer apply to YouTube. */
+export function assertAgnosticPrompt(text: string): void {
+  if (!text.trim()) throw new Error('youtube_story_prompt_empty')
+}
 
 function eventText(event: PackedEvent): string {
   return event.text.replace(/\s+/g, ' ').trim()
