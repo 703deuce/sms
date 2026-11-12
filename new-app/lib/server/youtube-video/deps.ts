@@ -89,6 +89,14 @@ export function prismaYoutubeVideoStore(): YoutubeVideoRunStore {
       return row ? fromRow(row as unknown as Record<string, unknown>) : null
     },
     async findActive(workspaceId) {
+      // A crashed process or disconnected browser must not block this workspace forever.
+      // Do not cancel an active long watcher: planning/assembly heartbeat updates updatedAt.
+      const staleBefore=new Date(Date.now()-48*60*60_000)
+      await db().updateMany({
+        where:{workspaceId,status:{in:ACTIVE_STATUSES},updatedAt:{lt:staleBefore}},
+        data:{status:'failed',stage:null,failureCode:'youtube_run_stale',
+          failureMessage:'The YouTube episode run stopped progressing and expired. Start a new run.'},
+      })
       const row = await db().findFirst({ where: { workspaceId, status: { in: ACTIVE_STATUSES } } })
       return row ? fromRow(row as unknown as Record<string, unknown>) : null
     },
