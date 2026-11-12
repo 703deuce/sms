@@ -2,6 +2,7 @@ import 'server-only'
 
 import { ytStructuredDecision } from '@/lib/youtube-video/pipeline/yt-editorial-handoff'
 import { YT_GAMING_RULEBOOK } from '@/lib/youtube-video/pipeline/yt-gaming-rulebook'
+import { chaptersFromCuts } from '@/lib/youtube-video/chapters'
 import type { YtOutline, YtSelectedCut, YtWindowContext, YtFinishedWindow } from '@/lib/youtube-video/pipeline/yt-types'
 
 const int={type:'integer',minimum:0}
@@ -164,7 +165,7 @@ export async function ytFinishWholeSourceStory(
       })),
       approvedScenes:all.map((c,index)=>({
         index,sourceId:c.sourceId,kind:c.kind,startMs:c.startMs,endMs:c.endMs,
-        beat:c.beat,reason:c.reason,
+        beat:c.beat,reason:c.reason,groundedVisualOrDialogueEvidence:c.groundedEvidence,
       })),
       revision:revision??null,
     },
@@ -207,12 +208,18 @@ export async function ytQaWholeSourceStory(
 ):Promise<{pass:boolean;issues:string[]}>{
   const all=windows.flatMap(w=>w.cuts)
   const chosen=selection.selectedIndices.map(i=>all[i]!)
+  const actualChapters=chaptersFromCuts(chosen.map((cut,i)=>({
+    ...cut,label:selection.chapterTitles[i]||cut.label||cut.beat,
+  })),[])
+  const episodeDurationMs=chosen.reduce((sum,cut)=>sum+cut.endMs-cut.startMs,0)
   const raw=await ytStructuredDecision('yt_submit_global_qa',
     'FINAL GLOBAL QA: Check this ONE chronological full-episode story for truthful opening, development, and recorded ending, joins across windows and accurate chapter titles. Check that episode length is approximately 15–40 minutes and retained footage is roughly 25–35% of the source as soft editorial targets, not hard rejection conditions. Check that no critical setup, failure, quiet gameplay transition, strategy change or payoff is missing; do not approve a highlights-only cut. Reject broken mission, chase, fight or escape boundaries and chapter-per-cut fragmentation. Give full issue explanations with evidence and specific repair, not codes. Apply this rulebook: '+YT_GAMING_RULEBOOK+' ',
     {title:selection.title,premise:selection.premise,
+      episodeDurationMs,actualChapters,
       scenes:chosen.map((c,i)=>({
         i,sourceId:c.sourceId,kind:c.kind,startMs:c.startMs,endMs:c.endMs,
         chapterTitle:selection.chapterTitles[i],beat:c.beat,reason:c.reason,
+        groundedVisualOrDialogueEvidence:c.groundedEvidence,
       })),
       windowOutlines:windows.map(w=>w.outline),
     },
