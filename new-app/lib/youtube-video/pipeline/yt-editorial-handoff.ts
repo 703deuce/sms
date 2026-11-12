@@ -3,6 +3,7 @@ import 'server-only'
 import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { YOUTUBE_VIDEO_STORY_SYSTEM } from '@/lib/youtube-video/story-options'
 import { YT_GAMING_RULEBOOK } from '@/lib/youtube-video/pipeline/yt-gaming-rulebook'
+import { ytResolveVisualScenes, ytVisualCoverage } from '@/lib/youtube-video/pipeline/yt-gaming-scene-cuts'
 import type { YtWindowContext, YtOutline, YtSelectedCut, YtObservation } from '@/lib/youtube-video/pipeline/yt-types'
 
 type YtSchema = { name:string;description:string;parameters:Record<string,unknown> }
@@ -122,20 +123,7 @@ function cutFromVisual(
     kind:'visual',...(groundedEvidence?{groundedEvidence}:{})}
 }
 
-/** Visual scene endpoints, not transcript lines, authorize long action ranges.
- * The watched observations must cover the scene without an unobserved >20s hole. */
-export function ytVisualSceneCovered(ctx:YtWindowContext,startMs:number,endMs:number):boolean{
-  if(startMs<ctx.startMs||endMs>ctx.endMs||endMs<=startMs)return false
-  const rows=ctx.observations.filter(o=>o.endMs>startMs&&o.startMs<endMs)
-    .sort((a,b)=>a.startMs-b.startMs)
-  if(!rows.length || rows[0]!.startMs>startMs+2000)return false
-  let covered=rows[0]!.endMs
-  for(const row of rows.slice(1)){
-    if(row.startMs>covered+20_000)return false
-    covered=Math.max(covered,row.endMs)
-  }
-  return covered>=endMs-2000
-}
+export const ytVisualSceneCovered = ytVisualCoverage
 
 function cutFromScene(ctx:YtWindowContext,row:Record<string,unknown>):YtSelectedCut|null{
   const startMs=Number(row.startMs),endMs=Number(row.endMs)
@@ -148,45 +136,6 @@ function cutFromScene(ctx:YtWindowContext,row:Record<string,unknown>):YtSelected
     reason:String(row.reason??'Complete visually observed game scene').slice(0,500),
     groundedEvidence:observations.map(o=>o.description).join(' | ').slice(0,1800),
   }
-}
-
-function acceptNonOverlapping(
-  ctx:YtWindowContext,candidates:YtSelectedCut[],rejected:YtCutsResult['rejected'],
-):YtCutsResult{
-  const cuts:YtSelectedCut[]=[]
-  candidates.sort((a,b)=>a.startMs-b.startMs || (b.endMs-b.startMs)-(a.endMs-a.startMs))
-  for(const candidate of candidates){
-    const previous=cuts[cuts.length-1]
-    if(previous && candidate.startMs<previous.endMs){
-      // Two watch observations may describe different phases of the SAME chase.
-      // Keep the original uninterrupted frames if the union is visually grounded.
-      if(previous.kind==='visual'&&candidate.kind==='visual'&&
-         previous.sourceId===candidate.sourceId&&
-         ytVisualSceneCovered(ctx,previous.startMs,Math.max(previous.endMs,candidate.endMs))){
-        previous.endMs=Math.max(previous.endMs,candidate.endMs)
-        previous.groundedEvidence=[previous.groundedEvidence,candidate.groundedEvidence]
-          .filter(Boolean).join(' | ')
-        continue
-      }
-      rejected.push({startMs:candidate.startMs,endMs:candidate.endMs,
-        code:'yt_overlapping_footage'})
-      continue
-    }
-    // Rejoin sub-minute microbeats across a tiny certified gap; no blank
-    // filler is invented, the original continuous gameplay is retained.
-    if(previous&&previous.kind==='visual'&&candidate.kind==='visual'&&
-       candidate.sourceId===previous.sourceId&&
-       candidate.startMs-previous.endMs<=5000&&
-       (previous.endMs-previous.startMs<60_000||candidate.endMs-candidate.startMs<60_000)&&
-       ytVisualSceneCovered(ctx,previous.startMs,candidate.endMs)){
-      previous.endMs=candidate.endMs
-      previous.groundedEvidence=[previous.groundedEvidence,candidate.groundedEvidence]
-        .filter(Boolean).join(' | ')
-      continue
-    }
-    cuts.push(candidate)
-  }
-  return {cuts,rejected}
 }
 
 export async function ytSelectFootage(
@@ -215,23 +164,22 @@ export async function ytSelectFootage(
     if(cut)candidate.push(cut)
     else rejected.push({startMs:i,endMs:i,code:'yt_scene_visual_coverage_missing'})
   }
-  const sceneCandidates=[...candidate]
   for(const [i,row] of raw.speech.slice(0,80).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromWords(ctx,obj.firstWordId,obj.lastWordId,String(obj.beat??''),String(obj.reason??''))
-    if(cut && !sceneCandidates.some(scene=>scene.endMs>cut.startMs&&scene.startMs<cut.endMs))candidate.push(cut)
-    else if(!cut) rejected.push({startMs:i,endMs:i,code:'yt_invalid_word_ids'})
+    if(cut)candidate.push(cut)
+    else rejected.push({startMs:i,endMs:i,code:'yt_invalid_word_ids'})
   }
   for(const [i,row] of raw.visual.slice(0,60).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromVisual(ctx,obj.observationId,obj.startMs,obj.endMs,
       String(obj.beat??''),String(obj.reason??''))
-    if(cut && !sceneCandidates.some(scene=>scene.endMs>cut.startMs&&scene.startMs<cut.endMs))candidate.push(cut)
-    else if(!cut) rejected.push({startMs:i,endMs:i,code:'yt_visual_evidence_invalid'})
+    if(cut)candidate.push(cut)
+    else rejected.push({startMs:i,endMs:i,code:'yt_visual_evidence_invalid'})
   }
-  // Full-screen scene spans take precedence over their contained dialog or beat markers.
-  candidate.sort((a,b)=>a.startMs-b.startMs||(b.endMs-b.startMs)-(a.endMs-a.startMs))
-  const selected=acceptNonOverlapping(ctx,candidate,rejected)
+  // Speech is ONLY a request to preserve the enclosing visible action, never a bare cut.
+  const selected=ytResolveVisualScenes(ctx,candidate)
+  selected.rejected.push(...rejected)
   if(!selected.cuts.length)throw Error('yt_no_verified_footage')
   return selected
 }
