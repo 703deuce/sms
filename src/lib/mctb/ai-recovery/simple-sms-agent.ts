@@ -212,6 +212,17 @@ export async function handleMctbSimpleSmsAgentInbound(
     booking: bookingOn && bookingUrl ? { enabled: true, url: bookingUrl } : { enabled: false },
   });
 
+  if (!result.handled || !result.reply?.trim()) {
+    const fallback =
+      lrConfig.fallbackPolicy?.customerMessage?.trim() ||
+      "Thanks — we got your message. Someone will follow up shortly.";
+    return {
+      handled: true,
+      reply: fallback,
+      action: "simple_sms_llm_fallback",
+    };
+  }
+
   const { llmProvider: _p, llmModel: _m, ...rest } = result;
   return rest;
 }

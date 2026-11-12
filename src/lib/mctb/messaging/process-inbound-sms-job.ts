@@ -13,6 +13,9 @@ const RETRYABLE_REASONS = new Set([
   "lead_recovery_lock_timeout",
 ]);
 
+/** Terminal inbound failures that should still send the safe customer fallback SMS. */
+const TERMINAL_FALLBACK_REASONS = new Set(["simple_sms_agent_no_reply"]);
+
 function inboundJobIdempotencyKey(workspaceId: string, providerMessageId: string) {
   return `mctb-process-inbound:${workspaceId}:${providerMessageId}`;
 }
@@ -151,7 +154,7 @@ export async function processMctbInboundSmsJob(payload: Record<string, unknown>)
       if (RETRYABLE_REASONS.has(reason) && queueJob.attempts < queueJob.maxAttempts) {
         throw new JobDeferredError(`mctb_lr_retry:${reason}`, 45_000);
       }
-      if (RETRYABLE_REASONS.has(reason)) {
+      if (RETRYABLE_REASONS.has(reason) || TERMINAL_FALLBACK_REASONS.has(reason)) {
         await enqueueTerminalSafeFallback(payload, queueJob.id);
         return { ok: true, handled: false, reason, fallback: true };
       }
