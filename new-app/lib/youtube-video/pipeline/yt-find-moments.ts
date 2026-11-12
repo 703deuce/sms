@@ -1,5 +1,6 @@
 import 'server-only'
-\nimport { YT_GAMING_WATCHER_PROMPT } from '@/lib/youtube-video/pipeline/yt-gaming-watcher-prompt'
+
+import { YT_GAMING_WATCHER_PROMPT } from '@/lib/youtube-video/pipeline/yt-gaming-watcher-prompt'
 
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
