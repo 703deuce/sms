@@ -472,6 +472,120 @@ def music_input_args(music_path: Path, loop: bool) -> list[str]:
     return (["-stream_loop", "-1"] if loop else []) + ["-i", str(music_path)]
 
 
+def template_source_audio_active(edits: dict) -> bool:
+    """Template slots that pass source/mix audio into the program (not muted photo slots)."""
+    for seg in edits.get("sourceSegments") or []:
+        if not isinstance(seg, dict):
+            continue
+        if seg.get("audio") in ("source", "mix"):
+            return True
+    for ins in edits.get("inserts") or []:
+        if isinstance(ins, dict) and ins.get("audio") in ("source", "mix"):
+            return True
+    return False
+
+
+def template_program_has_voice_or_source(
+    edits: dict,
+    dub_assets: dict | None = None,
+    audio_assets: dict | None = None,
+) -> bool:
+    if not isinstance(edits.get("templateProvenance"), dict):
+        return True
+    if dub_assets and dub_assets.get("dub_audio_path"):
+        return True
+    studio = (audio_assets or {}).get("studio_path")
+    if studio is not None and Path(studio).is_file():
+        return True
+    return template_source_audio_active(edits)
+
+
+def template_music_mix_params(
+    edits: dict,
+    *,
+    default_volume: float,
+    default_duck: float,
+    music_volume_expr: str | None,
+    dub_assets: dict | None = None,
+    audio_assets: dict | None = None,
+) -> tuple[float, float, str | None]:
+    """Music-only template exports play the loudnorm bed at unity; duck when voice/source is present."""
+    if not isinstance(edits.get("templateProvenance"), dict):
+        return default_volume, default_duck, music_volume_expr
+    if template_program_has_voice_or_source(edits, dub_assets, audio_assets):
+        return default_volume, default_duck, music_volume_expr
+    return 1.0, 0.0, None
+
+
+def apply_program_loudnorm(
+    video: Path,
+    out_video: Path,
+    *,
+    target_lufs: float = -14.0,
+    true_peak_db: float = -1.0,
+) -> None:
+    """EBU R128 two-pass loudnorm on a rendered program (video copied)."""
+    if not video.is_file():
+        raise FileNotFoundError(video)
+    measure = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-y",
+            "-i",
+            str(video),
+            "-af",
+            f"loudnorm=I={target_lufs}:TP={true_peak_db}:LRA=11:print_format=json",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    blob = measure.stderr or ""
+    match = re.search(r"\{[\s\S]*\}\s*$", blob.strip())
+    if not match:
+        raise RuntimeError("program loudnorm measure failed")
+    stats = json.loads(match.group(0))
+    keys = (
+        "input_i",
+        "input_tp",
+        "input_lra",
+        "input_thresh",
+        "target_offset",
+    )
+    if not all(k in stats for k in keys):
+        raise RuntimeError("program loudnorm stats incomplete")
+    norm = (
+        f"loudnorm=I={target_lufs}:TP={true_peak_db}:LRA=11:"
+        f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
+        f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
+        f"offset={stats['target_offset']}:linear=true:print_format=summary"
+    )
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(video),
+            "-af",
+            norm,
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            str(out_video),
+        ],
+    )
+
+
 def apply_voice_mute(video: Path, out_video: Path) -> None:
     """E2 Voice lane muted: silence the speech track (video copied)."""
     subprocess.check_call(

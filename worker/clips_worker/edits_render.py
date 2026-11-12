@@ -2186,8 +2186,19 @@ def render_edited_clip(
             dub_audio=dub_path,
         )
     if dub_assets and dub_assets.get("dub_audio_path"):
-        from clips_worker.audio_render import apply_dub_speech_mix
+        from clips_worker.audio_render import apply_dub_speech_mix, template_music_mix_params
 
+        mix_volume = float(meta.get("volume", 0.25))
+        mix_duck = float(meta.get("duckDepth", 0.55))
+        mix_music_env = music_env
+        mix_volume, mix_duck, mix_music_env = template_music_mix_params(
+            edits,
+            default_volume=mix_volume,
+            default_duck=mix_duck,
+            music_volume_expr=music_env,
+            dub_assets=dub_assets,
+            audio_assets=audio_assets,
+        )
         mixed = work_dir / "mixed_dub.mp4"
         apply_dub_speech_mix(
             caption_src,
@@ -2196,12 +2207,12 @@ def render_edited_clip(
             music_path,
             sfx_paths,
             length_s=length_s,
-            volume=float(meta.get("volume", 0.25)),
-            duck_depth=float(meta.get("duckDepth", 0.55)),
+            volume=mix_volume,
+            duck_depth=mix_duck,
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
             music_window=music_win,
-            music_volume_expr=music_env,
+            music_volume_expr=mix_music_env,
             speech_volume_expr=voice_env,
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
@@ -2213,8 +2224,19 @@ def render_edited_clip(
         )
         caption_src = mixed
     elif audio_assets and (music_path or sfx_paths):
-        from clips_worker.audio_render import apply_audio_mix
+        from clips_worker.audio_render import apply_audio_mix, template_music_mix_params
 
+        mix_volume = float(meta.get("volume", 0.25))
+        mix_duck = float(meta.get("duckDepth", 0.55))
+        mix_music_env = music_env
+        mix_volume, mix_duck, mix_music_env = template_music_mix_params(
+            edits,
+            default_volume=mix_volume,
+            default_duck=mix_duck,
+            music_volume_expr=music_env,
+            dub_assets=dub_assets,
+            audio_assets=audio_assets,
+        )
         mixed = work_dir / "mixed_audio.mp4"
         apply_audio_mix(
             caption_src,
@@ -2222,12 +2244,12 @@ def render_edited_clip(
             music_path,
             sfx_paths,
             length_s=length_s,
-            volume=float(meta.get("volume", 0.25)),
-            duck_depth=float(meta.get("duckDepth", 0.55)),
+            volume=mix_volume,
+            duck_depth=mix_duck,
             fade_in_s=int(meta.get("fadeInMs", 500)) / 1000.0,
             fade_out_s=int(meta.get("fadeOutMs", 1000)) / 1000.0,
             music_window=music_win,
-            music_volume_expr=music_env,
+            music_volume_expr=mix_music_env,
             sfx_volume_exprs=sfx_envs,
             sfx_trims=sfx_trims,
             track_fx=track_fx,
@@ -2237,6 +2259,21 @@ def render_edited_clip(
             music_pan_ch=int(meta.get("pan_ch") or 2),
         )
         caption_src = mixed
+
+    if isinstance(edits.get("templateProvenance"), dict) and not (
+        edits.get("speechLevelingEnabled") is True and edits.get("loudnessLufs") is not None
+    ):
+        try:
+            from clips_worker.audio_render import apply_program_loudnorm
+
+            tpl_ln = work_dir / "template_program_loudnorm.mp4"
+            apply_program_loudnorm(caption_src, tpl_ln, target_lufs=-14.0, true_peak_db=-1.0)
+            caption_src = tpl_ln
+            if render_meta is not None:
+                render_meta["template_program_loudnorm"] = True
+            print("[clipper:template_audio] program_loudnorm=-14LUFS", flush=True)
+        except Exception as e:
+            print(f"[clipper:template_audio] program_loudnorm skipped reason={type(e).__name__}", flush=True)
 
     loud_lufs = edits.get("loudnessLufs")
     if edits.get("speechLevelingEnabled") is True and loud_lufs is not None:
