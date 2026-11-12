@@ -29,6 +29,11 @@ void main() {
 """
 
 
+FULLSCREEN_QUAD = (
+    -1.0, -1.0,  1.0, -1.0, -1.0,  1.0,
+    -1.0,  1.0,  1.0, -1.0,  1.0,  1.0,
+)
+
 class ShaderUnavailable(Exception):
     pass
 
@@ -218,11 +223,7 @@ def render_window(
     # Default ModernGL VAO rendering uses TRIANGLES. Six vertices are required for
     # a full-screen rectangle; the old four-vertex buffer rendered only one triangle,
     # leaving a diagonal half-frame black during every shader transition.
-    quad = ctx.buffer(struct.pack(
-        "12f",
-        -1, -1,  1, -1, -1,  1,
-        -1,  1,  1, -1,  1,  1,
-    ))
+    quad = ctx.buffer(struct.pack("12f", *FULLSCREEN_QUAD))
     vao = ctx.vertex_array(prog, [(quad, "2f", "in_pos")])
     tex_a = ctx.texture((w, h), 3)
     tex_b = ctx.texture((w, h), 3)
