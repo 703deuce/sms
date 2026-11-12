@@ -55,6 +55,9 @@ export type YtActiveWindow = {
   cuts?: YtSelectedCut[]
   rejected?: Array<{ startMs: number; endMs: number; code: string }>
   qaRevisionAttempted?: boolean
+  qaRevisionCount?: number
+  qaPassed?: boolean
+  qaIssueHistory?: string[]
   qaIssues?: string[]
 }
 
@@ -68,6 +71,8 @@ export type YtFinishedWindow = {
   coarseCount: number
   focusedCount: number
   qaIssues?: string[]
+  qaPassed?: boolean
+  qaIssueHistory?: string[]
 }
 
 export type YtCheckpoint = {
@@ -82,6 +87,10 @@ export type YtCheckpoint = {
     selectedIndices: number[]
     chapterTitles?: string[]
     qaPassed: boolean
+    qaRevisionCount?: number
+    qaIssues?: string[]
+    qaIssueHistory?: string[]
+    needsReview?: boolean
   }
 }
 
