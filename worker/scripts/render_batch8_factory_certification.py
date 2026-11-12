@@ -112,7 +112,10 @@ def transition_black_region_frames(row:dict,ratios:list[float],fps:int=30)->list
         lo=max(0,center-(frames+1)//2-1)
         hi=min(len(ratios),center+frames//2+2)
         for frame in range(lo,hi):
-            if ratios[frame]>=0.12:
+            # A real diagonal/full-frame hole occupies a large contiguous area
+            # (the historical fullscreen-quad bug was ~43-66% pure black).
+            # Natural dark photography in the CC0 set peaks around ~15%.
+            if ratios[frame]>=0.25:
                 out.add(frame)
     return sorted(out)
 
