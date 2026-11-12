@@ -389,9 +389,9 @@ export async function resolveYoutubeVideoRender(
   const storage = getClipStorage()
   const versionHint = `youtube-render:${render.id}:${render.updatedAt.getTime()}:${render.sizeBytes?.toString() ?? ''}`
   const signed = await traceYoutubeRunStep(runId, 'render_sign', async () => {
-    const playbackUrl = await createCachedSignedDownloadUrl(
-      storage, render.outputKey!, { versionHint },
-    )
+    // Stream the same READY render through an authenticated, Range-aware URL.
+    // Playing or seeking never enqueues another export.
+    const playbackUrl = `/api/youtube-video/runs/${encodeURIComponent(runId)}/playback`
     const downloadUrl = await createCachedSignedDownloadUrl(
       storage, render.outputKey!, {
         downloadFilename: render.filename || 'youtube-video.mp4', versionHint,
