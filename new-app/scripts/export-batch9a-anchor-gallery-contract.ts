@@ -27,6 +27,12 @@ const license = {
   provenance: 'first-party' as const,
   reference: BATCH9A_DEFAULT_MUSIC.revision,
 }
+const imageLicense = {
+  id: 'wikimedia_cc0_photo_pack_v1',
+  provenance: 'licensed' as const,
+  reference: 'wikimedia_cc0_photo_pack_v1',
+}
+const PHOTO_SLOT_ORDER = [0, 2, 3, 4, 5, 0, 2, 3, 4, 5] as const
 const rights = {
   assetId: BATCH9A_DEFAULT_MUSIC.id,
   origin: 'first-party-generated' as const,
@@ -74,9 +80,9 @@ const designs = BATCH9A_ANCHOR_RELEASES.map((release) => {
   const media: Record<string, TemplateAsset> = {}
   release.family.slots.forEach((slot, index) => {
     media[slot.id] = {
-      id: `gallery_image_${index}`,
+      id: `gallery_image_${PHOTO_SLOT_ORDER[index % PHOTO_SLOT_ORDER.length]}`,
       kind: 'image',
-      license,
+      license: imageLicense,
     }
   })
   const durationMs = templateFrameToMs(release.family.totalFrames)
