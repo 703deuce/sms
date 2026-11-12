@@ -215,7 +215,14 @@ def render_window(
     prog = program(ctx, shader_type)
     ratio = w / h
     fbo = ctx.framebuffer(color_attachments=[ctx.texture((w, h), 3)])
-    quad = ctx.buffer(struct.pack("8f", -1, -1, 1, -1, -1, 1, 1, 1))
+    # Default ModernGL VAO rendering uses TRIANGLES. Six vertices are required for
+    # a full-screen rectangle; the old four-vertex buffer rendered only one triangle,
+    # leaving a diagonal half-frame black during every shader transition.
+    quad = ctx.buffer(struct.pack(
+        "12f",
+        -1, -1,  1, -1, -1,  1,
+        -1,  1,  1, -1,  1,  1,
+    ))
     vao = ctx.vertex_array(prog, [(quad, "2f", "in_pos")])
     tex_a = ctx.texture((w, h), 3)
     tex_b = ctx.texture((w, h), 3)
