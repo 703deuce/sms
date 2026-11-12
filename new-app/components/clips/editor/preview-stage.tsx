@@ -1884,7 +1884,7 @@ export function PreviewStage({
               ref={(el) => {
                 srcBoxRefs.current[s.id] = el
               }}
-              className="pointer-events-none absolute inset-0 z-[1] overflow-hidden bg-black"
+              className={`pointer-events-none absolute inset-0 z-[1] overflow-hidden ${templatePreview ? 'bg-transparent' : 'bg-black'}`}
               style={{
                 visibility: showSourceLayer ? 'visible' : 'hidden',
                 transform: slotTransform.transform || undefined,
