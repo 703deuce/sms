@@ -119,4 +119,5 @@ export type YtWindowContext = {
   words: YtTranscriptWord[]
   observations: YtObservation[]
   instruction: string | null
+  qaIssues?: string[]
 }
