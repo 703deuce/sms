@@ -69,6 +69,7 @@ const photoManifest={
   revision:'b8-cc0-photo-pack-v1',
   license:'CC0-1.0',
 } as const
+const PHOTO_SLOT_ORDER=[0,2,3,4,5,0,2,3,4,5] as const
 const definitionHash=(release:(typeof BATCH9A_ANCHOR_RELEASES)[number])=>
   createHash('sha256')
     .update(JSON.stringify(['batch9a-live-anchor-v1',release.family,release.design]))
@@ -78,7 +79,7 @@ const designs=BATCH9A_ANCHOR_RELEASES.map(release=>{
   const media:Record<string,TemplateAsset>={}
   release.family.slots.forEach((slot,index)=>{
     media[slot.id]={
-      id:'b8_image_'+String(index%10),
+      id:'b8_image_'+String(PHOTO_SLOT_ORDER[index%PHOTO_SLOT_ORDER.length]),
       kind:'image',
       license:mediaLicense,
     }
