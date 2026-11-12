@@ -82,6 +82,40 @@ def transition_black_frames(row:dict,lumas:list[float],fps:int=30)->list[int]:
     return sorted(out)
 
 
+def frame_black_ratios(path:Path)->list[float]:
+    """Near-black pixel share per decoded frame for transition-region QA."""
+    w,h=48,86
+    data=subprocess.check_output([
+        FFMPEG,"-v","error","-i",str(path),
+        "-vf",f"scale={w}:{h},format=gray",
+        "-f","rawvideo","-pix_fmt","gray","-"],
+        timeout=60)
+    frame_bytes=w*h
+    if not data or len(data)%frame_bytes:
+        raise RuntimeError("decoded black-region QA stream is empty or not frame-aligned")
+    return [
+        sum(1 for value in data[offset:offset+frame_bytes] if value<=4)/frame_bytes
+        for offset in range(0,len(data),frame_bytes)
+    ]
+
+def transition_black_region_frames(row:dict,ratios:list[float],fps:int=30)->list[int]:
+    """Reject substantial pure-black wedges in authored transitions except dip-to-black."""
+    out:set[int]=set()
+    for tr in (row.get("edits") or {}).get("transitions") or []:
+        if not isinstance(tr,dict) or tr.get("type")=="dip_black":
+            continue
+        try:
+            center=int(round(float(tr.get("srcMs"))*fps/1000.0))
+            frames=max(2,int(round(float(tr.get("durMs") or 0)*fps/1000.0)))
+        except (TypeError,ValueError):
+            continue
+        lo=max(0,center-(frames+1)//2-1)
+        hi=min(len(ratios),center+frames//2+2)
+        for frame in range(lo,hi):
+            if ratios[frame]>=0.12:
+                out.add(frame)
+    return sorted(out)
+
 def frame_edge_means(path:Path,frame:int=1)->dict[str,float]:
     """Detect contain-style black bars in a frame that should be cover-filled."""
     w,h=48,86
@@ -212,6 +246,8 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     samples=[1,max(1,total-1),*interiors]
     black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
     transition_black=transition_black_frames(row,lumas)
+    black_ratios=frame_black_ratios(final)
+    transition_black_regions=transition_black_region_frames(row,black_ratios)
     edge_means=frame_edge_means(final)
     edge_black_bars=((edge_means["top"]<=8 and edge_means["bottom"]<=8) or
                      (edge_means["left"]<=8 and edge_means["right"]<=8))
@@ -227,6 +263,8 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
         "duration":abs(duration-total/30.0)<0.12,
         "blackFrames":black,
         "transitionBlackFrames":transition_black,
+        "transitionBlackRegionFrames":transition_black_regions,
+        "maxTransitionBlackRatio":round(max((black_ratios[i] for i in transition_black_regions),default=0.0),4),
         "edgeMeans":{k:round(v,2) for k,v in edge_means.items()},
         "edgeBlackBars":edge_black_bars,
         "sourceSegments":len(row["edits"].get("sourceSegments") or []),
@@ -237,7 +275,8 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and
         checks["frameCountExact"] and not black and not transition_black and
-        not edge_black_bars and checks["sourceSegments"]==expected_slots and
+        not transition_black_regions and not edge_black_bars and
+        checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
     return {"id":did,"definitionHash":row["definitionHash"],"ok":ok,
@@ -280,11 +319,16 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     lumas=frame_lumas(final)
     black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
     transition_black=transition_black_frames(row,lumas)
+    black_ratios=frame_black_ratios(final)
+    transition_black_regions=transition_black_region_frames(row,black_ratios)
     checks={
         "video":any(s.get("codec_type")=="video" for s in streams),
         "audio":any(s.get("codec_type")=="audio" for s in streams),
         "duration":abs(duration-total/30.0)<0.12,
         "blackFrames":black,
+        "transitionBlackFrames":transition_black,
+        "transitionBlackRegionFrames":transition_black_regions,
+        "maxTransitionBlackRatio":round(max((black_ratios[i] for i in transition_black_regions),default=0.0),4),
         "sourceSegments":len(row["edits"].get("sourceSegments") or []),
         "transitions":len(row["edits"].get("transitions") or []),
         "textItems":len(row["edits"].get("textItems") or []),
@@ -297,7 +341,7 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and
         checks["frameCountExact"] and not black and not transition_black and
-        checks["sourceSegments"]==expected_slots and
+        not transition_black_regions and checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
     return {"id":did,"definitionHash":row["definitionHash"],"ok":ok,
