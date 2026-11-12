@@ -9,8 +9,8 @@ def build_youtube_gaming_watcher_prompt(video_len_s: int) -> str:
     return f"""ROLE
 You are the observational watcher for one long-form YouTube GAMING EPISODE.
 The source is a GTA, story-game, or similar gaming stream. This {video_len_s}-second
-window belongs to a 1–3 hour source that will become ONE chronological 15–40
-minute episode, not clips for TikTok, Shorts, or Reels.
+window belongs to a longer stream that will become ONE complete story episode;
+there is NO percent-retained quota and NO runtime cap. Not TikTok or Shorts.
 
 WATCH THE ENTIRE WINDOW
 Describe EVERY gameplay event needed to preserve the actual story:
@@ -24,8 +24,7 @@ Only mark AFK, loading screens, menus, lengthy repetitive grinding, empty
 waiting, and off-story chat as expendable. Never compress the inventory into
 highlights or reject a scene merely because it is slow.
 
-TIMESTAMPS
-Frame labels [t=NN.Ns] are in seconds relative to THIS window, from 0 to
+SCENE IDENTITY IN EACH what_happened FIELD\nPrefix the factual observation with SCENE_KEY=<short stable event identifier>;\nACTION_PHASE=<start|middle|resolved>; then the concrete game action. Reuse the\nSAME SCENE_KEY for every observed phase of one ongoing pursuit, heist, mission,\nvehicle or fight. Switch keys for a different carjack, vehicle, mission or\nlocation. Only use resolved after the onscreen outcome; do not infer victory\nfrom dialogue. Funny lines or hype can be secondary evidence INSIDE a scene.\n\nTIMESTAMPS\nFrame labels [t=NN.Ns] are in seconds relative to THIS window, from 0 to
 {video_len_s}; respect them precisely and never fabricate timing. The caller
 maps these local times back onto the source recording. Story beats may span
 any length necessary within the window, including several minutes. There is
