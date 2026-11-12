@@ -11,6 +11,8 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { BookingQuestion } from "@/lib/appointments/types";
+import { BookingQuestionField } from "@/components/appointments/booking-question-field";
 import type { AppointmentType, Slot } from "../types";
 import { SlotPicker } from "./slot-picker";
 import { SummarySidebar } from "./summary-sidebar";
@@ -65,16 +67,25 @@ function Label({
 
 type View = "form" | "success" | "cancelled";
 
+type StaffOption = { id: string; name: string };
+type LocationOption = { id: string; name: string };
+
 export function AppointmentForm({
   createdId,
   onCreated,
   onReset,
   initialStartsAt,
+  initialServiceId,
+  initialStaffId,
+  initialLocationId,
 }: {
   createdId: string | null;
   onCreated: (id: string) => void;
   onReset: () => void;
   initialStartsAt?: string;
+  initialServiceId?: string;
+  initialStaffId?: string;
+  initialLocationId?: string;
 }) {
   const [view, setView] = useState<View>("form");
   const [types, setTypes] = useState<AppointmentType[]>([]);
@@ -90,6 +101,13 @@ export function AppointmentForm({
   const [contactQuery, setContactQuery] = useState("");
   const [contactOpen, setContactOpen] = useState(false);
   const [linkedContact, setLinkedContact] = useState<string | null>(null);
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [locationOptions, setLocationOptions] = useState<LocationOption[]>([]);
+  const [staffId, setStaffId] = useState(initialStaffId || "");
+  const [locationId, setLocationId] = useState(initialLocationId || "");
+  const [timezoneLabel, setTimezoneLabel] = useState("Workspace timezone");
+  const [bookingAnswers, setBookingAnswers] = useState<Record<string, string>>({});
+  const [quotedPriceCents, setQuotedPriceCents] = useState<number | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [slotError, setSlotError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -116,29 +134,87 @@ export function AppointmentForm({
   >([]);
 
   useEffect(() => {
-    fetch("/api/appointments/types")
-      .then((r) => r.json())
-      .then((json) => {
-        const list = json.data || [];
+    Promise.all([
+      fetch("/api/appointments/types").then((r) => r.json()),
+      fetch("/api/appointments/settings").then((r) => (r.ok ? r.json() : { data: null })),
+    ])
+      .then(([typesJson, settingsJson]) => {
+        const list = (typesJson.data || []) as AppointmentType[];
         setTypes(list);
-        if (list[0]?.id) setServiceId(list[0].id);
+        const preferred =
+          (initialServiceId && list.find((t) => t.id === initialServiceId)?.id) ||
+          list[0]?.id ||
+          "";
+        if (preferred) setServiceId(preferred);
+        const staff = (settingsJson.data?.staff || []) as Array<{ id: string; name: string; active?: boolean }>;
+        const locations = (settingsJson.data?.locations || []) as Array<{ id: string; name: string; active?: boolean }>;
+        setStaffOptions(staff.filter((s) => s.active !== false && s.name).map((s) => ({ id: s.id, name: s.name })));
+        setLocationOptions(locations.filter((l) => l.active !== false && l.name).map((l) => ({ id: l.id, name: l.name })));
+        const tz = settingsJson.data?.timezone as string | undefined;
+        if (tz) setTimezoneLabel(tz.replace(/_/g, " "));
       })
       .catch(() => {});
-  }, []);
+  }, [initialServiceId]);
 
-  // Availability fetch from /api/appointments/availability
+  const activeQuestions = useMemo(() => {
+    const cfg = (selectedType as { config?: { bookingQuestions?: BookingQuestion[] } })?.config;
+    return (cfg?.bookingQuestions || []).filter((q) => q.label?.trim());
+  }, [selectedType]);
+
+  useEffect(() => {
+    setBookingAnswers({});
+    setQuotedPriceCents(null);
+  }, [selectedType?.id]);
+
   useEffect(() => {
     if (!selectedType) return;
     setLoadingSlots(true);
     setSlotError("");
-    fetch(
-      `/api/appointments/availability?serviceName=${encodeURIComponent(selectedType.name)}&daysAhead=14`,
-    )
+    const params = new URLSearchParams({
+      serviceName: selectedType.name,
+      serviceId: selectedType.id,
+      daysAhead: "14",
+      durationMinutes: String(selectedType.durationMinutes || 30),
+    });
+    if (staffId) params.set("staffId", staffId);
+    if (locationId) params.set("locationId", locationId);
+    fetch(`/api/appointments/availability?${params.toString()}`)
       .then((r) => r.json())
       .then((json) => setSlots(json.data?.slots || []))
       .catch(() => setSlotError("Could not load availability."))
       .finally(() => setLoadingSlots(false));
-  }, [selectedType?.id, selectedType?.name]);
+  }, [selectedType?.id, selectedType?.name, selectedType?.durationMinutes, staffId, locationId]);
+
+  useEffect(() => {
+    if (!startsAt || !selectedType) {
+      setQuotedPriceCents(null);
+      return;
+    }
+    const basePrice =
+      (selectedType as { config?: { payment?: { priceCents?: number } } }).config?.payment?.priceCents || 0;
+    if (!basePrice) {
+      setQuotedPriceCents(null);
+      return;
+    }
+    fetch("/api/appointments/service-booking/dynamic-pricing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "evaluate",
+        basePriceCents: basePrice,
+        startsAt,
+        appointmentTypeId: selectedType.id,
+        staffId: staffId || undefined,
+        locationId: locationId || undefined,
+      }),
+    })
+      .then((r) => r.json())
+      .then((json) => {
+        const data = json.data || json;
+        setQuotedPriceCents(typeof data.finalPriceCents === "number" ? data.finalPriceCents : basePrice);
+      })
+      .catch(() => setQuotedPriceCents(basePrice));
+  }, [startsAt, selectedType, staffId, locationId]);
 
   useEffect(() => {
     const q = contactQuery.trim();
@@ -214,6 +290,11 @@ export function AppointmentForm({
     if (!firstName.trim()) errs.firstName = "Enter the customer's first name.";
     if (!phone.trim()) errs.phone = "Enter a mobile number for appointment updates.";
     if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Enter a complete email address.";
+    for (const q of activeQuestions) {
+      if (q.required && !bookingAnswers[q.id]?.trim()) {
+        errs[`q_${q.id}`] = `${q.label} is required.`;
+      }
+    }
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -225,6 +306,8 @@ export function AppointmentForm({
       return;
     }
     setSaving(true);
+    const staff = staffOptions.find((s) => s.id === staffId);
+    const location = locationOptions.find((l) => l.id === locationId);
     const res = await fetch("/api/appointments", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -239,6 +322,12 @@ export function AppointmentForm({
         notes,
         smsConsent,
         status: "scheduled",
+        staffId: staffId || undefined,
+        staffName: staff?.name,
+        locationId: locationId || undefined,
+        locationName: location?.name,
+        bookingAnswers: Object.keys(bookingAnswers).length ? bookingAnswers : undefined,
+        durationMinutes: selectedType?.durationMinutes,
       }),
     });
     const json = await res.json().catch(() => ({}));
@@ -259,6 +348,10 @@ export function AppointmentForm({
     clearContact();
     setNotes("");
     setSmsConsent(false);
+    setStaffId(initialStaffId || "");
+    setLocationId(initialLocationId || "");
+    setBookingAnswers({});
+    setQuotedPriceCents(null);
     setError("");
     setFieldErrors({});
   }
@@ -467,11 +560,52 @@ export function AppointmentForm({
                 ) : null}
               </div>
 
+              {staffOptions.length > 0 ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="staff">Staff</Label>
+                    <select
+                      id="staff"
+                      value={staffId}
+                      onChange={(e) => {
+                        setStaffId(e.target.value);
+                        setStartsAt("");
+                      }}
+                      className="tv-input tv-select"
+                    >
+                      <option value="">Any available staff</option>
+                      {staffOptions.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {locationOptions.length > 0 ? (
+                    <div>
+                      <Label htmlFor="location">Location</Label>
+                      <select
+                        id="location"
+                        value={locationId}
+                        onChange={(e) => {
+                          setLocationId(e.target.value);
+                          setStartsAt("");
+                        }}
+                        className="tv-input tv-select"
+                      >
+                        <option value="">Any location</option>
+                        {locationOptions.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div>
                 <div className="flex items-baseline justify-between">
                   <Label>Available times</Label>
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                    Next 14 days · Eastern Time
+                    Next 14 days · {timezoneLabel}
                   </span>
                 </div>
                 <SlotPicker
@@ -650,10 +784,40 @@ export function AppointmentForm({
               </div>
             </div>
 
-            {/* Step 3: Details & communication */}
+            {/* Step 3: Booking questions */}
+            {activeQuestions.length > 0 ? (
+              <div className="space-y-5 border-b border-[hsl(var(--border))] p-6">
+                <SectionHeading
+                  step="3"
+                  title="Booking questions"
+                  description="Collected for this appointment type."
+                />
+                <div className="space-y-4">
+                  {activeQuestions.map((q) => (
+                    <div key={q.id}>
+                      <BookingQuestionField
+                        question={q}
+                        value={bookingAnswers[q.id] || ""}
+                        onChange={(value) => {
+                          setBookingAnswers((prev) => ({ ...prev, [q.id]: value }));
+                          setFieldErrors((p) => ({ ...p, [`q_${q.id}`]: "" }));
+                        }}
+                      />
+                      {fieldErrors[`q_${q.id}`] ? (
+                        <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[hsl(var(--danger))]">
+                          <AlertCircle className="h-3 w-3" /> {fieldErrors[`q_${q.id}`]}
+                        </p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Step 4: Details & communication */}
             <div className="space-y-5 p-6">
               <SectionHeading
-                step="3"
+                step={activeQuestions.length > 0 ? "4" : "3"}
                 title="Details & communication"
                 description="Internal notes and reminder consent for this appointment."
               />
@@ -718,6 +882,9 @@ export function AppointmentForm({
             lastName={lastName}
             phone={phone}
             smsConsent={smsConsent}
+            staffName={staffOptions.find((s) => s.id === staffId)?.name}
+            locationName={locationOptions.find((l) => l.id === locationId)?.name}
+            priceCents={quotedPriceCents}
           />
         </div>
 

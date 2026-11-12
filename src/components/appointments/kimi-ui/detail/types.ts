@@ -42,6 +42,8 @@ export type Appointment = {
   pendingApproval: boolean;
   remindersSuppressed: boolean;
   source: string;
+  manageAppointmentUrl?: string;
+  manageAppointmentTokenIssuedAt?: string;
   notes: string;
   bookingAnswers: Record<string, string>;
   reminderSchedule: ReminderStep[];

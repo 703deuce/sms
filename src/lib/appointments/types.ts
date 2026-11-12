@@ -467,6 +467,7 @@ export type AppointmentTimelineEvent = {
   type: string;
   label: string;
   detail?: string;
+  actor?: string;
 };
 
 export type AppointmentMetadata = {
