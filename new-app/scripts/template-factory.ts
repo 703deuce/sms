@@ -359,15 +359,29 @@ type RemoteClipDetail={data:{edits:ClipEditsV2;mediaUrls:{preview?:string|null}}
 type RemoteExport={data:{renderId:string;status:string;downloadUrl?:string|null}}
 type RemoteRender={data:{status:string;downloadUrl?:string|null;error?:string|null}}
 
-function extractPoster(renderFile:string,posterFile:string,totalFrames:number){
+function stablePosterFrame(boundaries:readonly number[],totalFrames:number){
+  const clean=[...new Set(boundaries)].filter(frame=>
+    Number.isInteger(frame)&&frame>=0&&frame<=totalFrames).sort((a,b)=>a-b)
+  if(clean[0]!==0)clean.unshift(0)
+  if(clean[clean.length-1]!==totalFrames)clean.push(totalFrames)
+  const spans=clean.slice(0,-1).map((start,index)=>{
+    const end=clean[index+1]!
+    return {start,end,length:end-start}
+  }).filter(row=>row.length>=3)
+  const best=spans.sort((a,b)=>b.length-a.length||a.start-b.start)[0]
+  return best?Math.max(best.start+1,Math.min(best.end-2,best.start+Math.floor(best.length/2))):
+    Math.max(0,Math.min(totalFrames-1,Math.floor(totalFrames/2)))
+}
+function extractPoster(renderFile:string,posterFile:string,totalFrames:number,boundaries:readonly number[]){
   mkdirSync(dirname(posterFile),{recursive:true})
-  const at=Math.max(0,Math.floor(totalFrames/2)/30)
-  const output=spawnSync('ffmpeg',['-nostdin','-y','-v','error','-ss',at.toFixed(3),
-    '-i',renderFile,'-frames:v','1','-vf','scale=480:-2:flags=lanczos',posterFile],{
+  const frame=stablePosterFrame(boundaries,totalFrames)
+  const at=frame/30
+  const output=spawnSync('ffmpeg',['-nostdin','-y','-v','error','-ss',at.toFixed(4),
+    '-i',renderFile,'-frames:v','1','-vf','scale=720:-2:flags=lanczos',posterFile],{
       encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
     })
   if(output.status!==0||!existsSync(posterFile))
-    throw new Error('FFmpeg could not extract a poster from actual worker output')
+    throw new Error('FFmpeg could not extract a stable-shot poster from actual worker output')
 }
 function remoteBaseUrl(){
   return argument('--base-url',process.env.B8_QA_BASE_URL??'')
@@ -497,7 +511,8 @@ async function runRemoteWorkerJob(
   const downloadQaStarted=performance.now()
   const renderFile=fileInPublic(renderUrl)
   await b8Download(remote,ready.downloadUrl,renderFile)
-  extractPoster(renderFile,fileInPublic(posterUrl),request.renderTiming.totalFrames)
+  extractPoster(renderFile,fileInPublic(posterUrl),request.renderTiming.totalFrames,
+    request.renderTiming.boundaries)
   const outputs:B8Evidence['outputs']={
     previewMp4:previewUrl,renderMp4:renderUrl,poster:posterUrl,
     previewSha256:await shaFile(fileInPublic(previewUrl)),

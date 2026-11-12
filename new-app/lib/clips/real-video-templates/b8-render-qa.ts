@@ -2,7 +2,7 @@
  * Batch 8 full-frame render QA math. The CLI supplies decoded RGB/audio bytes
  * from actual FFmpeg output; this module only computes deterministic metrics.
  */
-export const B8_RENDER_QA_REVISION = 'b8-full-frame-v1' as const
+export const B8_RENDER_QA_REVISION = 'b8-full-frame-v2' as const
 
 export type B8FrameQA = {
   revision: typeof B8_RENDER_QA_REVISION
@@ -84,9 +84,9 @@ export function summarizeB8FrameQA(input:{
   }
   const maxFrameDifference=differences.length?Math.max(...differences):Number.POSITIVE_INFINITY
   const p95FrameDifference=percentile(differences,.95)
-  const durationMatch=Math.abs(previewFrames-input.expectedFrames)<=1&&
-    Math.abs(renderFrames-input.expectedFrames)<=1
-  const fullFrameParity=durationMatch&&checkedFrameCount>=input.expectedFrames-1&&
+  const durationMatch=previewFrames===input.expectedFrames&&
+    renderFrames===input.expectedFrames
+  const fullFrameParity=durationMatch&&checkedFrameCount===input.expectedFrames&&
     p95FrameDifference<=p95Threshold&&maxFrameDifference<=maxThreshold
   const firstLast=[0,input.expectedFrames-1].filter(frame=>frame<checkedFrameCount)
   const boundaries=[...new Set(input.boundaryFrames??[])].filter(frame=>frame>=0&&frame<checkedFrameCount)

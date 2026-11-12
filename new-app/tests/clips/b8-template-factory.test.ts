@@ -219,7 +219,12 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     const good=summarizeB8FrameQA({previewRgb:stable,renderRgb:close,width,height,
       expectedFrames:4,boundaryFrames:[2]})
     expect(good.checkedFrameCount).toBe(4)
+    expect(good.durationMatch).toBe(true)
     expect(good.fullFrameParity).toBe(true)
+    const short=summarizeB8FrameQA({previewRgb:stable.slice(0,-frameBytes),
+      renderRgb:close,width,height,expectedFrames:4,boundaryFrames:[2]})
+    expect(short.durationMatch).toBe(false)
+    expect(short.fullFrameParity).toBe(false)
     expect(good.blackFrames).toEqual([])
     expect(good.noExcessFlashing).toBe(true)
     const flashing=concat([frame(20),frame(220),frame(20),frame(30)])
