@@ -1,0 +1,100 @@
+name: Batch 9A live production worker certification
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/batch9a-live-worker-certification.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: batch9a-live-worker-certification
+  cancel-in-progress: true
+
+jobs:
+  render-live-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.3.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: new-app
+      - name: Compile exact live-anchor contract
+        run: npx tsx scripts/export-batch9a-worker-contract.ts ../build/b9a-worker-contract.json
+        working-directory: new-app
+      - name: Prepare isolated certification payload
+        run: |
+          set -euo pipefail
+          ROOT=build/b9a-live/repo
+          mkdir -p "$ROOT/worker/scripts" "$ROOT/worker/tests/fixtures/template_media" "$ROOT/build"
+          cp worker/scripts/render_batch8_factory_certification.py "$ROOT/worker/scripts/"
+          cp worker/tests/fixtures/template_media/b8_cc0_photos.json "$ROOT/worker/tests/fixtures/template_media/"
+          cp build/b9a-worker-contract.json build/b9a-cert-music.wav "$ROOT/build/"
+          tar -C build/b9a-live -czf build/b9a-live-input.tgz repo
+      - name: Setup production-host SSH
+        env:
+          COOLIFY_SSH_KEY: ${{ secrets.COOLIFY_SSH_KEY }}
+        run: |
+          test -n "${COOLIFY_SSH_KEY:-}" || { echo "COOLIFY_SSH_KEY is required"; exit 1; }
+          bash scripts/cloud-agent/install-coolify-ssh.sh
+      - name: Render all ten inside deployed clips-worker image
+        run: |
+          set -euo pipefail
+          scp -q build/b9a-live-input.tgz coolify-server:/tmp/b9a-live-input.tgz
+          ssh coolify-server 'rm -rf /tmp/b9a-live && mkdir -p /tmp/b9a-live && tar xzf /tmp/b9a-live-input.tgz -C /tmp/b9a-live'
+          LIVE_SHA="$(ssh coolify-server "docker run --rm clips-worker:latest cat /app/CLIPS_WORKER_GIT_SHA")"
+          test -n "$LIVE_SHA"
+          printf '%s\n' "$LIVE_SHA" | tee build/b9a-live-worker-sha.txt
+          ssh coolify-server "docker run --rm --name b9a-live-cert --network coolify \
+            -e PYTHONPATH=/app \
+            -e CLIP_FONTS_DIR=/app/v3/fonts/t6 \
+            -e LIBGL_ALWAYS_SOFTWARE=1 \
+            -v /tmp/b9a-live/repo:/tmp/b9a-live/repo \
+            clips-worker:latest \
+            python /tmp/b9a-live/repo/worker/scripts/render_batch8_factory_certification.py \
+              --contract /tmp/b9a-live/repo/build/b9a-worker-contract.json \
+              --music /tmp/b9a-live/repo/build/b9a-cert-music.wav \
+              --out /tmp/b9a-live/repo/build/b9a-live-worker-renders \
+              --shard 0 --shards 1 \
+              --ids f01_bold,f02_bold,f03_bold,f04_bold,f05_bold,f06_bold,f07_bold,f08_bold,f09_bold,f10_bold \
+              --production-smoke"
+          scp -qr coolify-server:/tmp/b9a-live/repo/build/b9a-live-worker-renders build/
+      - name: Require exact live-image pass
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data=json.loads(Path("build/b9a-live-worker-renders/manifest.json").read_text())
+          rows=data.get("results") or []
+          expected={f"f{i:02d}_bold" for i in range(1,11)}
+          ids={str(row.get("id")) for row in rows}
+          if data.get("expected") != 10 or data.get("passed") != 10 or data.get("failed") != 0:
+              raise SystemExit(f"live worker image did not pass all ten anchors: {data}")
+          if ids != expected or any(not row.get("ok") for row in rows):
+              raise SystemExit(f"live worker anchor set mismatch: {sorted(ids)}")
+          bad_transition={row["id"]:row.get("checks",{}).get("transitionBlackFrames")
+                          for row in rows if row.get("checks",{}).get("transitionBlackFrames")}
+          bad_letterbox={row["id"]:row.get("checks",{}).get("edgeMeans")
+                         for row in rows if row.get("checks",{}).get("edgeBlackBars")}
+          if bad_transition or bad_letterbox:
+              raise SystemExit(f"visual worker QA failed: transition={bad_transition} letterbox={bad_letterbox}")
+          print(json.dumps({"anchors":10,"passed":10,"transitionBlackFrames":0,"letterboxed":0},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: b9a-live-production-worker-renders
+          path: |
+            build/b9a-live-worker-renders
+            build/b9a-live-worker-sha.txt
+          compression-level: 1
+          retention-days: 30
+      - name: Clean production-host temp
+        if: always()
+        run: ssh coolify-server 'rm -rf /tmp/b9a-live /tmp/b9a-live-input.tgz' || true
