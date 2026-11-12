@@ -1,4 +1,5 @@
 import 'server-only'
+\nimport { YT_GAMING_WATCHER_PROMPT } from '@/lib/youtube-video/pipeline/yt-gaming-watcher-prompt'
 
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import type { AiProducerSourceRef } from '@/lib/ai-producer-agent/types'
@@ -39,7 +40,7 @@ export function ytObservations(
       score:Number.isFinite(Number(row.score)) ? Number(row.score) : 0,
       tier,
     })
-    if (out.length >= 80) break
+    if (out.length >= 300) break
   }
   return out
 }
@@ -55,10 +56,10 @@ export async function ytFindMoments(input: MediaRange): Promise<string> {
   }
   return ytEnqueueAnalyze({
     runId:input.runId,projectId:input.projectId,source,
-    mode:'best_moments',pass:'coarse',targetClipLenS:60,
+    mode:'best_moments',pass:'coarse',targetClipLenS:1200,
     visualEvidence:{
       enabled:true,model:'gemini-3.1-flash-lite',
-      transcriptText:timestampedAsrForVisual(input.words,source.rangeMs,60_000),
+      transcriptText:YT_GAMING_WATCHER_PROMPT+'\n\n'+timestampedAsrForVisual(input.words,source.rangeMs,120_000),
     },
   })
 }
