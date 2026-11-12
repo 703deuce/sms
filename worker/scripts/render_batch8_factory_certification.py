@@ -20,7 +20,7 @@ from clips_worker.edits_render import render_edited_clip
 
 FFMPEG=shutil.which("ffmpeg")
 FFPROBE=shutil.which("ffprobe")
-W,H=180,320
+W,H=720,1280
 
 def run(*args:str)->None:
     subprocess.run(args,check=True,capture_output=True,text=True,timeout=180)
@@ -60,7 +60,7 @@ def git_blob_sha(path:Path)->str:
     header=f"blob {len(data)}\0".encode()
     return hashlib.sha1(header+data).hexdigest()
 
-def fixtures(root:Path,music_source:Path,preview_sprites:list[dict],
+def fixtures(root:Path,music_source:Path,
              real_video_fixture:dict)->tuple[dict[str,Path],Path]:
     media=root/"media"; media.mkdir(parents=True,exist_ok=True)
     paths:dict[str,Path]={}
@@ -74,18 +74,14 @@ def fixtures(root:Path,music_source:Path,preview_sprites:list[dict],
     run(FFMPEG,"-y","-v","error","-stream_loop","-1","-i",str(real_video),"-t","8",
         "-vf",f"fps=30,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},format=yuv420p",
         "-an","-c:v","libx264","-preset","ultrafast","-crf","24",str(prepared_video))
-    previews=ROOT/"new-app"/"public"/"clips"/"template-previews"
-    if len(preview_sprites)!=10:
-        raise RuntimeError("worker contract must pin exactly ten preview sprites")
-    for i,row in enumerate(preview_sprites):
-        sprite=previews/str(row.get("file") or "")
-        if not sprite.is_file(): raise RuntimeError(f"missing first-party sprite {sprite}")
-        if sha(sprite)!=row.get("sha256"):
-            raise RuntimeError(f"first-party sprite SHA-256 drift: {sprite.name}")
+    # Derive ten deterministic photographic stills from the checked-in camera
+    # clip. Image slots therefore exercise real photo bytes rather than authored
+    # template-card artwork, while video slots use the same rights-safe footage.
+    for i in range(10):
         image=media/f"image_{i}.png"
-        run(FFMPEG,"-y","-v","error","-i",str(sprite),"-vf",
-            f"crop=iw/4:ih:0:0,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H}",
-            "-frames:v","1",str(image))
+        at_s=0.35+(i*0.73)
+        run(FFMPEG,"-y","-v","error","-ss",f"{at_s:.3f}","-i",str(prepared_video),
+            "-frames:v","1","-vf","format=rgb24",str(image))
         paths[f"b8_image_{i}"]=image
         paths[f"b8_video_{i}"]=prepared_video
     if not music_source.is_file() or music_source.stat().st_size<=44:
@@ -93,6 +89,13 @@ def fixtures(root:Path,music_source:Path,preview_sprites:list[dict],
     music=media/"music.wav"
     shutil.copyfile(music_source,music)
     return paths,music
+
+def stable_slot_frame(boundaries:list[int])->int:
+    spans=[(b-a,a,b) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
+    if not spans:return 1
+    _span,a,b=max(spans)
+    return max(a+1,min(b-2,a+(b-a)//2))
+
 
 def carrier(cache:dict[int,Path],work:Path,total:int)->Path:
     if total in cache:return cache[total]
@@ -127,19 +130,24 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
         )
         if rendered != final and rendered.is_file():
             shutil.copy(rendered,final)
+        boundaries=[int(x) for x in row["boundaries"]]
+        poster_frame=stable_slot_frame(boundaries)
         poster=target/"poster.jpg"
-        run(FFMPEG,"-y","-v","error","-ss",f"{total/60:.3f}","-i",str(final),
-            "-frames:v","1","-vf","scale=360:-2:flags=lanczos",str(poster))
+        run(FFMPEG,"-y","-v","error","-ss",f"{poster_frame/30:.4f}","-i",str(final),
+            "-frames:v","1","-vf","scale=720:-2:flags=lanczos",str(poster))
     info=probe(final); streams=info.get("streams",[])
     duration=float(info["format"]["duration"])
     boundaries=[int(x) for x in row["boundaries"]]
     frame_count=video_frames(final)
-    black=[f for f in [1,max(1,total-1),*boundaries[1:-1]] if frame_mean(final,f,total)<=8]
+    interiors=[max(a+1,min(b-2,a+(b-a)//2)) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
+    black=[f for f in [1,max(1,total-1),*interiors] if frame_mean(final,f,total)<=8]
     checks={
         "productionRenderEditedClip":True,
         "expectedFrames":total,
         "videoFrames":frame_count,
         "frameCountExact":frame_count==total,
+        "posterFrame":stable_slot_frame(boundaries),
+        "photoFixtureCount":len([key for key in media if key.startswith("b8_image_")]),
         "video":any(s.get("codec_type")=="video" for s in streams),
         "audio":any(s.get("codec_type")=="audio" for s in streams),
         "duration":abs(duration-total/30.0)<0.12,
@@ -182,13 +190,16 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
         apply_audio_mix(with_text,final,music,[],length_s=total/30.0,volume=.35,
             duck_depth=.55,fade_in_s=.5,fade_out_s=1.0,music_loop=False)
         stage_frames["audioMix"]=video_frames(final)
+        boundaries=[int(x) for x in row["boundaries"]]
+        poster_frame=stable_slot_frame(boundaries)
         poster=target/"poster.jpg"
-        run(FFMPEG,"-y","-v","error","-ss",f"{total/60:.3f}","-i",str(final),
-            "-frames:v","1","-vf","scale=360:-2:flags=lanczos",str(poster))
+        run(FFMPEG,"-y","-v","error","-ss",f"{poster_frame/30:.4f}","-i",str(final),
+            "-frames:v","1","-vf","scale=720:-2:flags=lanczos",str(poster))
     info=probe(final); streams=info.get("streams",[])
     duration=float(info["format"]["duration"])
     boundaries=[int(x) for x in row["boundaries"]]
-    samples=[1,max(1,total-1),*boundaries[1:-1]]
+    interiors=[max(a+1,min(b-2,a+(b-a)//2)) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
+    samples=[1,max(1,total-1),*interiors]
     black=[f for f in samples if frame_mean(final,f,total)<=8]
     checks={
         "video":any(s.get("codec_type")=="video" for s in streams),
@@ -200,6 +211,8 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
         "textItems":len(row["edits"].get("textItems") or []),
         "musicTrack":bool((row["edits"].get("audio") or {}).get("music")),
         "expectedFrames":total,"videoFrames":video_frames(final),"stageFrames":stage_frames,
+        "posterFrame":stable_slot_frame(boundaries),
+        "photoFixtureCount":len([key for key in media if key.startswith("b8_image_")]),
     }
     checks["frameCountExact"]=checks["videoFrames"]==total
     expected_slots=len(boundaries)-1
@@ -229,7 +242,6 @@ def main()->int:
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
     media,music=fixtures(out/"_fixtures",music_source,
-        contract.get("fixture",{}).get("previewSprites") or [],
         contract.get("fixture",{}).get("realVideoFixture") or {})
     cache_dir=out/"_carrier_cache";cache_dir.mkdir(exist_ok=True)
     cache:dict[int,Path]={}
