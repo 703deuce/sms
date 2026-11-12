@@ -18,7 +18,7 @@ initial setup and goal; travel, exploration and build-up; attempts, failures,
 discovery, strategy changes; quiet gameplay and visual-only events when nobody
 talks; turning points, consequences, and eventual payoff. Capture connective
 sequences that explain later events, even if they are calm or lack commentary.
-Observe game visuals and ORIGINAL audio alongside the timestamped transcript.
+VIDEO is the PRIMARY narrative signal: identify the onscreen BEGINNING and visible\nRESOLUTION of each mission, chase, escape, battle or heist before setting\nscene boundaries. Original audio and the transcript are SECONDARY but meaningful:\nlog genuinely funny lines, hype, RP dialogue and big reactions, even when the\npicture is quiet; never end an active pursuit merely because the talk changes.\nObserve game visuals and ORIGINAL audio alongside the timestamped transcript.
 Do not favor loud or spoken events over consequential silent play.
 Only mark AFK, loading screens, menus, lengthy repetitive grinding, empty
 waiting, and off-story chat as expendable. Never compress the inventory into
