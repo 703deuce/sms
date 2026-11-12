@@ -4,6 +4,7 @@ import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS,
 import { BATCH9A_ANCHOR_RELEASES } from './batch9a-anchors'
 import type { VideoTemplateRelease } from './gallery'
 import { validateTemplateDesign,validateTemplateFamily } from './sequence-contract'
+import { templateTextStylePreset } from './template-text-presets'
 import {
   auditB8Evidence,scoreB8Review,
   type B8Candidate,type B8Evidence,
@@ -60,6 +61,17 @@ const phaseBHeadlineSize=(font:string,size:number)=>{
     font==='Permanent Marker'||font==='Bangers'||font==='Bungee'?0.88:1
   return Math.max(72,Math.round(size*scale))
 }
+const phaseBTextFinishes=(recipe:FactoryTreatmentRecipe)=>{
+  const script=/Caveat|Pacifico|Great Vibes|Kalam|Indie Flower|Lobster|Permanent Marker/.test(recipe.headingFont)
+  const neon=/neon|retro_arcade|tech/.test(recipe.id)
+  const soft=/editorial|cinema|luxury|noir|minimal|wedding|warm|journal|magazine/.test(recipe.id)
+  const playful=/party|kids|scrapbook|pastel|rounded/.test(recipe.id)
+  const headlineId=script?'hook_script':neon?'hook_neon':playful?'hook_label':soft?'hook_soft':'hook_punch'
+  const closingId=playful?'line_pill':neon||/sport|news|bold/.test(recipe.id)?'line_accent':'line_minimal'
+  const headline=templateTextStylePreset(headlineId),closing=templateTextStylePreset(closingId)
+  if(!headline||!closing)throw new Error('Missing Phase B text finish preset')
+  return {headline,closing}
+}
 function phaseBVariantCandidate(
   anchor:VideoTemplateRelease,recipe:FactoryTreatmentRecipe,
 ):B8Candidate{
@@ -67,6 +79,7 @@ function phaseBVariantCandidate(
   // Compress extreme editorial placements toward center for large CapCut-scale
   // hooks while preserving a clearly visible left/right treatment difference.
   const textX=Math.round(50+(recipe.x-50)*0.55)
+  const finishes=phaseBTextFinishes(recipe)
   const family=validateTemplateFamily({
     ...anchor.family,
     revision:anchor.family.revision+1,
@@ -87,7 +100,11 @@ function phaseBVariantCandidate(
         y:headline?Math.max(24,Math.min(68,recipe.y)):text.y,
         font:headline?recipe.headingFont:recipe.supportFont,
         size:headline?phaseBHeadlineSize(recipe.headingFont,text.size):text.size,
-        color:recipe.foreground,
+        color:headline?recipe.foreground:
+          (finishes.closing.id==='line_accent'?recipe.accent:recipe.foreground),
+        case:headline?finishes.headline.case:finishes.closing.case,
+        stylePresetId:headline?finishes.headline.id:finishes.closing.id,
+        finish:{...(headline?finishes.headline.finish:finishes.closing.finish)},
         anim:headline?{
           ...(text.anim??{}),
           in:{type:recipe.enter,unit:'block' as const,durMs:360},
