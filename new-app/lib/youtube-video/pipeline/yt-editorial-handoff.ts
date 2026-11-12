@@ -2,6 +2,7 @@ import 'server-only'
 
 import { lunaChat, type LunaMessage } from '@/lib/ai-producer-agent/luna-client'
 import { YOUTUBE_VIDEO_STORY_SYSTEM } from '@/lib/youtube-video/story-options'
+import { YT_GAMING_RULEBOOK } from '@/lib/youtube-video/pipeline/yt-gaming-rulebook'
 import type { YtWindowContext, YtOutline, YtSelectedCut, YtObservation } from '@/lib/youtube-video/pipeline/yt-types'
 
 type YtSchema = { name:string;description:string;parameters:Record<string,unknown> }
@@ -21,7 +22,8 @@ export async function ytStructuredDecision(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       YOUTUBE_VIDEO_STORY_SYSTEM,
-      'GAMING EPISODE SPECIALIST: The original gameplay is authoritative. Preserve setup, objectives, attempts, setbacks, strategy changes, travel, exploration, quiet visual-only action, turning points and payoff in chronological order. Make light trims only for AFK, loading, menus, empty pauses, repetitive grinding and unrelated chat. Never compress the story into highlights. Aim for approximately 25–35% of source runtime and a cohesive 15–40 minute YouTube episode across all windows, without treating duration as a hard rejection threshold. Only the first window needs the opening and only the last needs the actual ending; intermediate windows continue the story. Use exact visual observations and Deepgram word boundaries. Optional user instructions identify which true story to keep.',
+      YT_GAMING_RULEBOOK,
+      'GAMING EPISODE SPECIALIST: The original gameplay is authoritative. Preserve setup, objectives, attempts, setbacks, strategy changes, travel, exploration, quiet visual-only action, turning points and payoff in chronological order. Make light trims only for AFK, loading, menus, empty pauses, repetitive grinding and unrelated chat. Never compress the story into highlights. Aim for approximately 25–35% of source runtime and a cohesive 15–40 minute YouTube episode across all windows, without treating duration as a hard rejection threshold. Only the first window needs the opening and only the last needs the actual ending; intermediate windows continue the story. Choose scene boundaries by ON-SCREEN action; speech word boundaries matter only for trimming spoken passages. Optional user instructions identify which true story to keep.',
       instruction,
     ].join('\n\n')},
     {role:'user',content:JSON.stringify(evidence)},
@@ -59,7 +61,7 @@ function evidenceRows(ctx:YtWindowContext){
 
 export async function ytCreateEditorialHandoff(ctx:YtWindowContext):Promise<YtOutline>{
   const raw=await ytStructuredDecision('yt_submit_story_outline',
-    'STORY: Examine the entire window transcript AND Gemini video/original-audio observations. Outline real events from this segment of a longer recording. Record the beginning, progression and real payoff across the stream: goals, travel/build-up, attempts, failures, strategy shifts, visual-only gameplay and outcomes. Keep enough connective scenes for the story to make sense. First window begins the episode; intermediate windows continue it without artificial endings; only the last needs the genuine recorded ending. Quiet gameplay is valid evidence.',
+    'STORY: Examine the entire window transcript AND Gemini video/original-audio observations. Plan complete visible sequences, not transcript lines. Every mission/chase/fight/escape must have a visual starting cause and a visible resolution. Identify chronological action start/end timestamps and group adjacent beats into 45–60s or longer scenes (brief one-offs allowed). Outline real events from this segment of a longer recording. Record the beginning, progression and real payoff across the stream: goals, travel/build-up, attempts, failures, strategy shifts, visual-only gameplay and outcomes. Keep enough connective scenes for the story to make sense. First window begins the episode; intermediate windows continue it without artificial endings; only the last needs the genuine recorded ending. Quiet gameplay is valid evidence.',
     evidenceRows(ctx),
     {
       title:stringField,premise:stringField,opening:stringField,
@@ -139,7 +141,7 @@ export async function ytSelectFootage(
   ctx:YtWindowContext,outline:YtOutline,
 ):Promise<YtCutsResult>{
   const raw=await ytStructuredDecision('yt_submit_footage',
-    'FOOTAGE: Choose final complete spoken passages by original ZERO-BASED word IDs. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
+    'FOOTAGE: BUILD COMPLETE SCENES FROM ON-SCREEN ACTION FIRST. Select continuous observed visual sequences by observation IDs and their original start/end timestamps; preserve 45–60 second or longer scenes where source evidence supports them. Keep a pursuit until escaped/caught, a fight until won/lost, and a mission until completion/failure. Avoid clips made of transcript snippets. Choose spoken passages by ZERO-BASED word IDs only for indispensable RP dialogue not otherwise covered by visual sequences. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
     {...evidenceRows(ctx),outline},
     {
       speech:{type:'array',maxItems:80,items:{type:'object',additionalProperties:false,
@@ -179,7 +181,7 @@ export async function ytDialoguePictureReview(
       w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
   }))
   const raw=await ytStructuredDecision('yt_submit_dialogue_picture',
-    'DIALOGUE/PICTURE: Check every scene join, incomplete thought and on-screen action. Return ONLY safe trims to existing passages by exact original word IDs for spoken footage; do not introduce new footage, alter story order, trim away a setup or payoff, or remove visual-only actions. Use light trims only; empty adjustments means no edits needed.',
+    'DIALOGUE/PICTURE: Validate complete on-screen action and visual cause → resolution before dialogue. Do not trim a chase, fight, heist or escape mid-action. Merge naturally continuous footage and keep significant quiet gameplay. Check every scene join and incomplete thought. Return ONLY safe trims to existing passages by exact original word IDs for spoken footage; do not introduce new footage, alter story order, trim away a setup or payoff, or remove visual-only actions. Use light trims only; empty adjustments means no edits needed.',
     {outline,joined,fullOriginalTranscript:evidenceRows(ctx).originalTranscriptWordIds,
       observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
     {adjustments:{type:'array',maxItems:24,items:{type:'object',additionalProperties:false,
@@ -225,7 +227,7 @@ export async function ytQualityReview(
   const last=ctx.windowCount==null||ctx.windowIndex==null||
     ctx.windowIndex===ctx.windowCount-1
   const raw=await ytStructuredDecision('yt_submit_quality_review',
-    'QA: This is window '+String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+
+    'QA: This is window +String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+
     ' of one longer episode. Judge only whether each passage is source-grounded, joins make sense, and visual-only evidence is genuinely observed. Do not invent words or on-screen actions. '+
     (first?'Check that the episode opening is understandable. ':'Do NOT require a new opening. ')+
     (last?'Check that the final episode ending is genuinely supported. ':'Do NOT require a complete episode ending in this window. ')+
@@ -236,8 +238,8 @@ export async function ytQualityReview(
         beat:cut.beat,
         dialogue:cut.kind==='speech'?ctx.words.filter(w=>w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
       })),observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
-    {pass:{type:'boolean'},issues:{type:'array',items:stringField,maxItems:12}},
+    {pass:{type:'boolean'},issues:{type:'array',items:stringField,maxItems:30}},
     ['pass','issues'])
   return {pass:raw.pass===true,issues:Array.isArray(raw.issues)
-    ?raw.issues.filter((v):v is string=>typeof v==='string').slice(0,12).map(v=>v.slice(0,240)):[]}
+    ?raw.issues.filter((v):v is string=>typeof v==='string').slice(0,30):[]}
 }
