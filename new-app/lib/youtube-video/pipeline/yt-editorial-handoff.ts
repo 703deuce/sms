@@ -154,7 +154,8 @@ function acceptNonOverlapping(
   candidates:YtSelectedCut[],rejected:YtCutsResult['rejected'],
 ):YtCutsResult{
   const cuts:YtSelectedCut[]=[]
-  candidates.sort((a,b)=>a.startMs-b.startMs || a.endMs-b.endMs)
+  // When starts coincide, the complete scene wins over any micro-beat.
+  candidates.sort((a,b)=>a.startMs-b.startMs || (b.endMs-b.startMs)-(a.endMs-a.startMs))
   for(const candidate of candidates){
     if(cuts.length && candidate.startMs<cuts[cuts.length-1]!.endMs){
       rejected.push({startMs:candidate.startMs,endMs:candidate.endMs,
@@ -170,7 +171,7 @@ export async function ytSelectFootage(
   ctx:YtWindowContext,outline:YtOutline,
 ):Promise<YtCutsResult>{
   const raw=await ytStructuredDecision('yt_submit_footage',
-    'FOOTAGE: BUILD COMPLETE SCENES FROM ON-SCREEN ACTION FIRST. Select continuous observed visual sequences by observation IDs and their original start/end timestamps; preserve 45–60 second or longer scenes where source evidence supports them. Keep a pursuit until escaped/caught, a fight until won/lost, and a mission until completion/failure. Avoid clips made of transcript snippets. Choose spoken passages by ZERO-BASED word IDs only for indispensable RP dialogue not otherwise covered by visual sequences. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
+    'FOOTAGE: BUILD COMPLETE SCENES FROM ON-SCREEN ACTION FIRST. Select continuous observed visual sequences by observation IDs and their original start/end timestamps; preserve 45–60 second or longer scenes where source evidence supports them. Keep a pursuit until escaped/caught, a fight until won/lost, and a mission until completion/failure. VISUAL GAMEPLAY IS PRIMARY: action start/end is defined by the picture. AUDIO IS SECONDARY BUT MUST BE KEPT WHEN IMPORTANT: select every genuinely funny line, memorable RP dialogue, emotional reaction or hype moment even over quiet video. If this happens DURING a mission/chase/fight, retain it inside the unbroken visual scene; do not cut away until visual resolution. Avoid clips made of transcript snippets. Choose spoken passages by ZERO-BASED word IDs only for indispensable RP dialogue not otherwise covered by visual sequences. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
     {...evidenceRows(ctx),outline},
     {
       scenes:{type:'array',maxItems:50,items:{type:'object',additionalProperties:false,
