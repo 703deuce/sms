@@ -266,6 +266,7 @@ def main()->int:
     ap.add_argument("--music",required=True)
     ap.add_argument("--shard",type=int,required=True);ap.add_argument("--shards",type=int,required=True)
     ap.add_argument("--limit",type=int,default=0)
+    ap.add_argument("--ids",default="",help="comma-separated exact design IDs; when set, bypass shard selection")
     ap.add_argument("--production-smoke",action="store_true")
     args=ap.parse_args()
     if not FFMPEG or not FFPROBE: raise RuntimeError("ffmpeg/ffprobe required")
@@ -273,7 +274,14 @@ def main()->int:
     music_source=Path(args.music)
     if sha(music_source)!=contract.get("fixture",{}).get("musicSha"):
         raise RuntimeError("pinned certification soundtrack SHA-256 mismatch")
-    rows=[r for i,r in enumerate(contract["designs"]) if i%args.shards==args.shard]
+    requested={value.strip() for value in args.ids.split(",") if value.strip()}
+    if requested:
+        by_id={str(row.get("id") or ""):row for row in contract["designs"]}
+        missing=sorted(requested-set(by_id))
+        if missing: raise RuntimeError("unknown certification design IDs: "+",".join(missing))
+        rows=[row for row in contract["designs"] if row.get("id") in requested]
+    else:
+        rows=[r for i,r in enumerate(contract["designs"]) if i%args.shards==args.shard]
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
     media,music=fixtures(out/"_fixtures",music_source,
