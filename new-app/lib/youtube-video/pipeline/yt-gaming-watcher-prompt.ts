@@ -8,4 +8,4 @@ export const YT_GAMING_WATCHER_PROMPT = [
   'The start/end interval may be any length warranted by the event, from brief actions to several minutes. Do not cap scenes at 60 seconds or seek standalone vertical social clips.',
   'Treat this as an observational inventory for one 15–40 minute horizontal YouTube episode assembled from a 1–3 hour source; do NOT select isolated highlights.',
   'Do not invent game events, chronology, dialogue or outcomes. Use source timestamps, not offset-local timestamps.',
-].join('\\n')
+].join('\n')
