@@ -3,6 +3,7 @@ import { assembleChosenOption, ingestSources, prepareFromReadyYoutubeSources, ty
 import { YoutubeVideoError } from '@/lib/youtube-video/errors'
 import { traceYoutubeRunStep, youtubeRunEvent } from '@/lib/youtube-video/step-log'
 import { ytLog, ytErrorCode } from '@/lib/youtube-video/pipeline/yt-audit'
+import { ytBuildDecisionAudit } from '@/lib/youtube-video/pipeline/yt-decision-audit'
 import type { YoutubeVideoRunRecord, YoutubeVideoRunStore } from '@/lib/youtube-video/run-store'
 import { requestHash, resolveIdempotencyKey, validateCreateInput } from '@/lib/youtube-video/request'
 import type {
@@ -40,7 +41,9 @@ function view(record: YoutubeVideoRunRecord): YoutubeVideoRunView {
     failureCode: record.failureCode,
     failureMessage: record.failureMessage,
     creditsEstimated: record.creditsEstimated,
-    options: record.status === 'awaiting_choice' ? record.options : null,
+    options: record.status === 'awaiting_choice' || record.status === 'needs_review' ? record.options : null,
+    analysisAudit:record.analysisState && record.options?.length
+      ?ytBuildDecisionAudit(record.analysisState,record.options[0]!) : record.result?.analysisAudit??null,
     result: record.status === 'ready' ? record.result : null,
   }
 }
@@ -99,7 +102,7 @@ async function advanceRender(
 async function maybeAutoPickOnlyStory(
   record: YoutubeVideoRunRecord, deps: YoutubeVideoRunDeps,
 ): Promise<YoutubeVideoRunRecord> {
-  if (record.options?.length !== 1) return record
+  if (record.status === 'needs_review' || record.options?.length !== 1) return record
   youtubeRunEvent(record.id, 'story_choice', 'auto_pick_single_option', { optionCount: 1 })
   await chooseYoutubeVideoOption(record.workspaceId, record.id, record.options[0]!.id, deps)
   return (await deps.store.get(record.workspaceId, record.id)) ?? record
@@ -135,7 +138,7 @@ async function advanceRun(
     }catch{ /* Assembly writes failure status durably. */ }
     return (await deps.store.get(record.workspaceId,record.id))??record
   }
-  if (['ready', 'failed', 'canceled', 'awaiting_choice'].includes(record.status) || record.chosenOptionId) return record
+  if (['ready', 'failed', 'canceled', 'awaiting_choice', 'needs_review'].includes(record.status) || record.chosenOptionId) return record
   const staleBefore = new Date(Date.now() - (deps.pipeline.planLongForm ? 10 * 60_000 : STALE_PLANNING_MS)).toISOString()
   const importStaleBefore = new Date(Date.now() - STALE_PLANNING_MS).toISOString()
   if (record.status === 'running' && record.stage === 'planning' && record.updatedAt >= staleBefore) {
@@ -306,7 +309,10 @@ async function advanceRun(
     const planned = await traceYoutubeRunStep(
       current.id, 'story_options_saved',
       () => deps.store.update(current.workspaceId, current.id, {
-        status: 'awaiting_choice', stage: null, progressPercent: 70,
+        status:current.analysisState?.final?.needsReview ||
+          current.analysisState?.finished.some(w=>w.qaPassed===false)
+          ? 'needs_review' : 'awaiting_choice',
+        stage: null, progressPercent: 70,
         ingested: prepared.ingested, options: prepared.options, creditsEstimated: prepared.creditsEstimated,
       }),
       { optionCount: prepared.options.length },
@@ -401,6 +407,7 @@ export async function chooseYoutubeVideoOption(
   optionId: string,
   deps: YoutubeVideoRunDeps,
   resumeExisting=false,
+  renderAnyway=false,
 ): Promise<YoutubeVideoRunView> {
   if (!optionId?.trim()) throw new YoutubeVideoError('invalid_request', 'optionId is required', 400)
   const record = await deps.store.get(workspaceId, runId)
@@ -412,13 +419,20 @@ export async function chooseYoutubeVideoOption(
     if(record.status!=='running'||record.stage!=='assembling')
       throw new YoutubeVideoError('choice_not_available','Assembly is not pending',409)
   }
-  if((!resumeExisting&&record.status!=='awaiting_choice')||!record.options?.length){
+  if(record.status==='needs_review'&&!renderAnyway)
+    throw new YoutubeVideoError('qa_owner_approval_required','A rejected edit needs explicit Render anyway approval.',409)
+  if((!resumeExisting&&record.status!=='awaiting_choice'&&
+      !(renderAnyway&&record.status==='needs_review'))||!record.options?.length){
     throw new YoutubeVideoError('choice_not_available','Story options are not available to choose yet',409)
   }
   const option = record.options.find((item: YoutubeVideoOption) => item.id === optionId)
   if (!option) throw new YoutubeVideoError('invalid_request', 'optionId does not match an options[].id', 400)
 
   if(!resumeExisting){
+    if(renderAnyway&&record.status==='needs_review'){
+      const claimed=await deps.store.claimReviewAssembly?.(workspaceId,runId,optionId)
+      if(!claimed)throw new YoutubeVideoError('choice_not_available','Review approval was already used or run changed.',409)
+    }else{
     const claimed=await traceYoutubeRunStep(runId,'choice_validation',()=>deps.store.claimAssemblyChoice
       ?deps.store.claimAssemblyChoice(workspaceId,runId,optionId)
       :deps.store.update(workspaceId,runId,{
@@ -428,6 +442,7 @@ export async function chooseYoutubeVideoOption(
       const refreshed=await deps.store.get(workspaceId,runId)
       if(refreshed?.chosenOptionId===optionId)return view(refreshed)
       throw new YoutubeVideoError('option_already_chosen','A different option was already chosen',409)
+    }
     }
   }
   const heartbeat=deps.store.heartbeatAssembling
@@ -443,6 +458,7 @@ export async function chooseYoutubeVideoOption(
     const result: YoutubeVideoResult = await traceYoutubeRunStep(runId, 'applying', () => assembleChosenOption(option, written))
     if (record.analysisState) {
       result.analysisAudit = {
+        ...ytBuildDecisionAudit(record.analysisState,option),
         premise: record.analysisState.final?.premise ?? option.premise,
         needsReview: !!record.analysisState.final?.needsReview ||
           record.analysisState.finished.some(w => w.qaPassed === false),
