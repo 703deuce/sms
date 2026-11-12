@@ -96,7 +96,10 @@ def export_settings_for_aspect(settings: dict, aspect: str | None) -> dict:
 
 
 def aspect_size(aspect: str, resolution: str = "720p") -> tuple[int, int]:
-    # 480p is an opt-in YouTube episode resolution; other exports keep their sizes.
+    # Exactly 854x480 rather than even-rounding 480*16/9 down to 852.
+    # Only YouTube creates renders with resolution="480p".
+    if resolution == "480p" and normalize_aspect_token(aspect) == "16:9":
+        return 854, 480
     short = 480 if resolution == "480p" else 1080 if resolution == "1080p" else 720
     aw, ah = aspect_parts(aspect)
     if aw >= ah:
