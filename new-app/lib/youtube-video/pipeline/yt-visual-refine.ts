@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { YT_GAMING_WATCHER_PROMPT } from '@/lib/youtube-video/pipeline/yt-gaming-watcher-prompt'
+
 import { ytEnqueueAnalyze } from '@/lib/youtube-video/pipeline/yt-find-moments'
 import { chooseVisualFocusWindows, timestampedAsrForVisual } from '@/lib/ai-producer-agent/visual-evidence'
 import type { YtObservation, YtTranscriptWord } from '@/lib/youtube-video/pipeline/yt-types'
@@ -23,12 +25,12 @@ export async function ytRefineVisualStoryEvidence(input: {
       storageKey:input.storageKey,rangeMs:range,
       durationMs:input.endMs-input.startMs,
     },
-    targetClipLenS:60,
+    targetClipLenS:1200,
     visualEvidence:{
       enabled:true,model:'gemini-3.1-flash-lite',
       focusWindows:windows.map(([startMs,endMs])=>({
         startMs,endMs,
-        transcriptText:timestampedAsrForVisual(input.words,[startMs,endMs],12_000),
+        transcriptText:YT_GAMING_WATCHER_PROMPT+'\n\n'+timestampedAsrForVisual(input.words,[startMs,endMs],24_000),
       })),
     },
   })
