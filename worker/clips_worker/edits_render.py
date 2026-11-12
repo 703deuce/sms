@@ -191,6 +191,73 @@ def output_duration_ms(edits: dict) -> int:
     return sum(b - a for a, b in segs)
 
 
+def _video_stream_duration_s(path: Path) -> float | None:
+    """Cheap metadata-only duration probe for the primary video stream."""
+    try:
+        raw = subprocess.check_output(
+            [
+                "ffprobe", "-v", "error", "-select_streams", "v:0",
+                "-show_entries", "stream=duration", "-of", "json", str(path),
+            ],
+            text=True,
+            timeout=20,
+        )
+        streams = (json.loads(raw) or {}).get("streams") or []
+        value = streams[0].get("duration") if streams else None
+        return float(value) if value is not None else None
+    except (OSError, subprocess.SubprocessError, TypeError, ValueError, json.JSONDecodeError, IndexError):
+        return None
+
+
+def ensure_template_video_duration(path: Path, target_ms: int, work_dir: Path) -> bool:
+    """Pad only a short template video tail by cloning the final rendered frame.
+
+    Some FFmpeg transition/compositor paths can finish the video stream a handful
+    of frames before the audio/program clock. Players may then show black or
+    freeze inconsistently. For templates we know the exact output clock, so repair
+    small (<500 ms) under-runs at the final export boundary. Larger gaps remain
+    fail-closed because they indicate a real render defect rather than rounding.
+    """
+    target_s = max(0.0, float(target_ms) / 1000.0)
+    if target_s <= 0.0 or not path.is_file():
+        return False
+    video_s = _video_stream_duration_s(path)
+    if video_s is None:
+        return False
+    gap_s = target_s - video_s
+    # Half a 30 fps frame is close enough and avoids unnecessary re-encodes.
+    if gap_s <= (1.0 / 60.0):
+        return False
+    if gap_s > 0.5:
+        raise RuntimeError(
+            f"template video stream ended too early: video={video_s:.3f}s target={target_s:.3f}s"
+        )
+    fixed = Path(work_dir) / "template_video_duration_fixed.mp4"
+    subprocess.check_call(
+        [
+            "ffmpeg", "-y", "-v", "error", "-i", str(path),
+            "-map", "0:v:0", "-map", "0:a?",
+            "-vf", f"tpad=stop_mode=clone:stop_duration={gap_s + 0.10:.6f}",
+            "-t", f"{target_s:.6f}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "16",
+            "-pix_fmt", "yuv420p", "-c:a", "copy", "-movflags", "+faststart",
+            str(fixed),
+        ]
+    )
+    repaired_s = _video_stream_duration_s(fixed)
+    if repaired_s is None or repaired_s < target_s - (1.0 / 60.0):
+        raise RuntimeError(
+            f"template video duration repair failed: video={repaired_s} target={target_s:.3f}s"
+        )
+    shutil.copy2(fixed, path)
+    print(
+        f"[clipper:template_video] padded_tail_ms={int(round(gap_s * 1000))} "
+        f"target_ms={int(target_ms)}",
+        flush=True,
+    )
+    return True
+
+
 def remap_time_ms(t_ms: int, segs: list[tuple[int, int]]) -> int | None:
     acc = 0
     for a, b in segs:
@@ -2334,6 +2401,13 @@ def render_edited_clip(
             lw.mkdir(exist_ok=True)
             legacy_ctx = {**ctx, "work_dir": lw}
             out_mp4, caption_words = _legacy_compose(caption_src, caption_words, out_mp4, edits, legacy_ctx)
+
+    if isinstance(edits.get("templateProvenance"), dict):
+        target_template_ms = output_duration_ms(edits)
+        if ensure_template_video_duration(out_mp4, target_template_ms, work_dir):
+            if render_meta is not None:
+                render_meta["template_video_tail_padded"] = True
+                render_meta["template_video_target_ms"] = target_template_ms
 
     stage("full_pipeline_done")
     if render_meta is not None and "effective_edits_ms" not in render_meta:
