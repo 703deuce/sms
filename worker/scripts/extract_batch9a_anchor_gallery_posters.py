@@ -45,63 +45,51 @@ def sha(path: Path) -> str:
     return h.hexdigest()
 
 
-def git_blob_sha(path: Path) -> str:
-    data = path.read_bytes()
-    header = f"blob {len(data)}\0".encode()
-    return hashlib.sha1(header + data).hexdigest()
+def _download_cc0_photos(root: Path, manifest_ref: dict) -> list[Path]:
+    rel = str(manifest_ref.get("path") or "")
+    manifest_path = (ROOT / rel).resolve()
+    if not rel or ROOT not in manifest_path.parents or not manifest_path.is_file():
+        raise RuntimeError("missing pinned CC0 photo manifest")
+    manifest = json.loads(manifest_path.read_text())
+    if manifest.get("v") != 1 or manifest.get("revision") != manifest_ref.get("revision"):
+        raise RuntimeError("CC0 photo manifest revision drift")
+    if manifest.get("license") != "CC0-1.0" or len(manifest.get("photos") or []) < 4:
+        raise RuntimeError("CC0 photo manifest must contain licensed photographic fixtures")
+    out = root / "cc0"
+    out.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for index, row in enumerate(manifest["photos"]):
+        sha1 = str(row.get("sha1") or "").lower()
+        filename = str(row.get("fileName") or "")
+        page_url = str(row.get("pageUrl") or "")
+        if len(sha1) != 40 or not filename or not page_url.startswith(
+            "https://commons.wikimedia.org/wiki/File:"
+        ):
+            raise RuntimeError("invalid CC0 photo source row")
+        target = out / f"{index:02d}_{Path(filename).name}"
+        if not target.is_file() or hashlib.sha1(target.read_bytes()).hexdigest() != sha1:
+            url = "https://commons.wikimedia.org/wiki/Special:Redirect/file/" + urllib.parse.quote(filename)
+            request = urllib.request.Request(
+                url, headers={"User-Agent": "TransovoTemplateGallery/1.0 (+https://transovo.ai)"}
+            )
+            with urllib.request.urlopen(request, timeout=90) as response, target.open("wb") as fh:
+                shutil.copyfileobj(response, fh)
+        if hashlib.sha1(target.read_bytes()).hexdigest() != sha1:
+            raise RuntimeError("CC0 photo SHA-1 mismatch: " + filename)
+        paths.append(target)
+    return paths
 
 
-def fixtures(root: Path, music_source: Path, real_video_fixture: dict) -> tuple[dict[str, Path], Path]:
+def fixtures(root: Path, music_source: Path, photo_manifest: dict) -> tuple[dict[str, Path], Path]:
     media = root / "media"
     media.mkdir(parents=True, exist_ok=True)
     paths: dict[str, Path] = {}
-    rel_video = str(real_video_fixture.get("path") or "")
-    real_video = (ROOT / rel_video).resolve()
-    if not rel_video or ROOT not in real_video.parents or not real_video.is_file():
-        raise RuntimeError("missing checked-in real video fixture")
-    if git_blob_sha(real_video) != real_video_fixture.get("gitBlobSha"):
-        raise RuntimeError("real video fixture Git blob SHA drift")
-    prepared_video = media / "real_video.mp4"
-    run(
-        FFMPEG,
-        "-y",
-        "-v",
-        "error",
-        "-stream_loop",
-        "-1",
-        "-i",
-        str(real_video),
-        "-t",
-        "8",
-        "-vf",
-        f"fps=30,scale={PLAY_W}:{PLAY_H}:force_original_aspect_ratio=increase,crop={PLAY_W}:{PLAY_H},format=yuv420p",
-        "-an",
-        "-c:v",
-        "libx264",
-        "-preset",
-        "ultrafast",
-        "-crf",
-        "20",
-        str(prepared_video),
-    )
+    photos = _download_cc0_photos(root, photo_manifest)
     for i in range(10):
-        image = media / f"image_{i}.png"
-        at_s = 0.35 + (i * 0.73)
-        run(
-            FFMPEG,
-            "-y",
-            "-v",
-            "error",
-            "-ss",
-            f"{at_s:.3f}",
-            "-i",
-            str(prepared_video),
-            "-frames:v",
-            "1",
-            "-vf",
-            f"scale={PLAY_W}:{PLAY_H}:force_original_aspect_ratio=increase,crop={PLAY_W}:{PLAY_H},format=rgb24",
-            str(image),
-        )
+        source = photos[i % len(photos)]
+        image = media / f"image_{i}{source.suffix.lower()}"
+        if not image.is_file():
+            shutil.copyfile(source, image)
         paths[f"gallery_image_{i}"] = image
         paths[f"b8_image_{i}"] = image
     music = media / "music.wav"
@@ -272,7 +260,7 @@ def main() -> int:
     out = Path(args.out)
     work_root = Path(args.work)
     work_root.mkdir(parents=True, exist_ok=True)
-    media, music = fixtures(work_root / "_fixtures", music_source, contract["fixture"]["realVideoFixture"])
+    media, music = fixtures(work_root / "_fixtures", music_source, contract["fixture"]["photoManifest"])
     cache: dict[int, Path] = {}
     digests: list[dict] = []
     for row in contract["designs"]:
