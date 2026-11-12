@@ -21,7 +21,7 @@ export async function ytStructuredDecision(
   const messages:LunaMessage[]=[
     {role:'system',content:[
       YOUTUBE_VIDEO_STORY_SYSTEM,
-      'YOUTUBE STORY SPECIALIST: The original source is authoritative. No genre assumptions, fabricated events, mandatory runtime, or short-form compression. Require a coherent opening only for the first window and a source-recorded ending only for the final window; intermediate windows are episode segments, not complete stories. Do not invent timestamp or quote evidence. Visual-only events count if observed by Gemini. The Deepgram transcript controls spoken word boundaries.',
+      'GAMING EPISODE SPECIALIST: The original gameplay is authoritative. Preserve setup, objectives, attempts, setbacks, strategy changes, travel, exploration, quiet visual-only action, turning points and payoff in chronological order. Make light trims only for AFK, loading, menus, empty pauses, repetitive grinding and unrelated chat. Never compress the story into highlights. Aim for approximately 25–35% of source runtime and a cohesive 15–40 minute YouTube episode across all windows, without treating duration as a hard rejection threshold. Only the first window needs the opening and only the last needs the actual ending; intermediate windows continue the story. Use exact visual observations and Deepgram word boundaries. Optional user instructions identify which true story to keep.',
       instruction,
     ].join('\n\n')},
     {role:'user',content:JSON.stringify(evidence)},
@@ -53,13 +53,13 @@ function evidenceRows(ctx:YtWindowContext){
       description:m.description,whyInteresting:m.whyInteresting,category:m.category,
       tier:m.tier,
     })),
-    instruction:ctx.instruction??'Find the strongest truthful story without a length target.',
+    ...(ctx.instruction?.trim() ? {storyToPreserve:ctx.instruction.trim()} : {}),
   }
 }
 
 export async function ytCreateEditorialHandoff(ctx:YtWindowContext):Promise<YtOutline>{
   const raw=await ytStructuredDecision('yt_submit_story_outline',
-    'STORY: Examine the entire window transcript AND Gemini video/original-audio observations. Outline real events from this segment of a longer recording. Only the first window needs an episode opening; only the last needs a genuine episode ending. Intermediate windows must NOT invent a complete episode ending. An ending may be visual with no speech.',
+    'STORY: Examine the entire window transcript AND Gemini video/original-audio observations. Outline real events from this segment of a longer recording. Record the beginning, progression and real payoff across the stream: goals, travel/build-up, attempts, failures, strategy shifts, visual-only gameplay and outcomes. Keep enough connective scenes for the story to make sense. First window begins the episode; intermediate windows continue it without artificial endings; only the last needs the genuine recorded ending. Quiet gameplay is valid evidence.',
     evidenceRows(ctx),
     {
       title:stringField,premise:stringField,opening:stringField,
@@ -139,26 +139,26 @@ export async function ytSelectFootage(
   ctx:YtWindowContext,outline:YtOutline,
 ):Promise<YtCutsResult>{
   const raw=await ytStructuredDecision('yt_submit_footage',
-    'FOOTAGE: Choose final complete spoken passages by original ZERO-BASED word IDs. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Choose only relevant footage, not a highlight reel or source inventory. Every interval must be inside this window. No duration target.',
+    'FOOTAGE: Choose final complete spoken passages by original ZERO-BASED word IDs. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
     {...evidenceRows(ctx),outline},
     {
-      speech:{type:'array',maxItems:24,items:{type:'object',additionalProperties:false,
+      speech:{type:'array',maxItems:80,items:{type:'object',additionalProperties:false,
         properties:{firstWordId:intField,lastWordId:intField,beat:stringField,reason:stringField},
         required:['firstWordId','lastWordId','beat','reason']}},
-      visual:{type:'array',maxItems:12,items:{type:'object',additionalProperties:false,
+      visual:{type:'array',maxItems:60,items:{type:'object',additionalProperties:false,
         properties:{observationId:intField,startMs:intField,endMs:intField,beat:stringField,reason:stringField},
         required:['observationId','startMs','endMs','beat','reason']}},
     },['speech','visual'])
   if(!Array.isArray(raw.speech)||!Array.isArray(raw.visual))throw Error('yt_footage_missing_arrays')
   const candidate:YtSelectedCut[]=[]
   const rejected:YtCutsResult['rejected']=[]
-  for(const [i,row] of raw.speech.slice(0,24).entries()){
+  for(const [i,row] of raw.speech.slice(0,80).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromWords(ctx,obj.firstWordId,obj.lastWordId,String(obj.beat??''),String(obj.reason??''))
     if(cut)candidate.push(cut)
     else rejected.push({startMs:i,endMs:i,code:'yt_invalid_word_ids'})
   }
-  for(const [i,row] of raw.visual.slice(0,12).entries()){
+  for(const [i,row] of raw.visual.slice(0,60).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromVisual(ctx,obj.observationId,obj.startMs,obj.endMs,
       String(obj.beat??''),String(obj.reason??''))
@@ -179,7 +179,7 @@ export async function ytDialoguePictureReview(
       w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
   }))
   const raw=await ytStructuredDecision('yt_submit_dialogue_picture',
-    'DIALOGUE/PICTURE: Check every scene join, incomplete thought and on-screen action. Return ONLY safe trims to existing passages by exact original word IDs for spoken footage; do not introduce new footage, alter the story order or remove visual-only actions. Empty adjustments means no needed edits.',
+    'DIALOGUE/PICTURE: Check every scene join, incomplete thought and on-screen action. Return ONLY safe trims to existing passages by exact original word IDs for spoken footage; do not introduce new footage, alter story order, trim away a setup or payoff, or remove visual-only actions. Use light trims only; empty adjustments means no edits needed.',
     {outline,joined,fullOriginalTranscript:evidenceRows(ctx).originalTranscriptWordIds,
       observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
     {adjustments:{type:'array',maxItems:24,items:{type:'object',additionalProperties:false,
@@ -229,7 +229,7 @@ export async function ytQualityReview(
     ' of one longer episode. Judge only whether each passage is source-grounded, joins make sense, and visual-only evidence is genuinely observed. Do not invent words or on-screen actions. '+
     (first?'Check that the episode opening is understandable. ':'Do NOT require a new opening. ')+
     (last?'Check that the final episode ending is genuinely supported. ':'Do NOT require a complete episode ending in this window. ')+
-    'Provide specific issues for any failure. Do not enforce a duration target.',
+    'Provide specific issues for any failure. Check that goals, attempts, setbacks, quiet visual gameplay and payoffs retain enough context; avoid a highlight-only edit. Target 25–35% of the source and 15–40 minutes overall as soft editorial guidance.',
     {windowIndex:ctx.windowIndex??0,windowCount:ctx.windowCount??1,outline,
       cuts:cuts.map((cut,index)=>({
         index,kind:cut.kind,startMs:cut.startMs,endMs:cut.endMs,
