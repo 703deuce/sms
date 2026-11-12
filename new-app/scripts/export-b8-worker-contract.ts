@@ -38,13 +38,15 @@ const schedule={
   beats:Array.from({length:150},(_,i)=>i*12),phrases:[],protectedAnchors:[],
 }
 const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'}
-const license={id:'b8_first_party_qa',provenance:'first-party' as const,
-  reference:'b8_checked_in_real_media_v1'}
-const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license}
-const realVideoFixture={
-  path:'worker/assets/smoke_deploy.mp4',
-  gitBlobSha:'97f89c62a750a42bdfdf6d424db0658b9af1f9d9',
-  provenance:'checked-in production worker smoke asset',
+const musicLicense={id:'b8_first_party_music_qa',provenance:'first-party' as const,
+  reference:'b8_generated_cert_music_v1'}
+const mediaLicense={id:'wikimedia_cc0_photo_pack_v1',provenance:'licensed' as const,
+  reference:'CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/'}
+const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license:musicLicense}
+const photoManifest={
+  path:'worker/tests/fixtures/template_media/b8_cc0_photos.json',
+  revision:'b8-cc0-photo-pack-v1',
+  license:'CC0-1.0',
 } as const
 
 const designs=generateB8Candidates().map(candidate=>{
@@ -53,8 +55,8 @@ const designs=generateB8Candidates().map(candidate=>{
   const slots=beat.family.slots.map((slot,index)=>{
     const video=index%3===1
     const asset:TemplateAsset=video
-      ? {id:'b8_video_'+String(index%10),kind:'video',durationFrames:1800,license}
-      : {id:'b8_image_'+String(index%10),kind:'image',license}
+      ? {id:'b8_video_'+String(index%10),kind:'video',durationFrames:240,license:mediaLicense}
+      : {id:'b8_image_'+String(index%10),kind:'image',license:mediaLicense}
     media[slot.id]=asset
     return video?{...slot,sourceInFrame:slot.handles?.headFrames??0}:slot
   })
@@ -84,8 +86,8 @@ writeFileSync(musicPath,musicBytes)
 writeFileSync(out,JSON.stringify({
   v:1,engine:B8_ENGINE_REVISION,source:'batch8-canonical-v1',fps:30,
   fixture:{musicId,musicSha,musicFile:'b8-cert-music.wav',
-    mediaOrigin:'decoded real-photo stills + video from checked-in worker camera MP4',
-    realVideoFixture},
+    mediaOrigin:'SHA-1 pinned Wikimedia Commons CC0 photographs; video slots are motion derivatives',
+    photoManifest},
   designs,
 })+'\n')
 console.log('Wrote '+designs.length+' Batch 8 worker contracts to '+out+

@@ -1,0 +1,51 @@
+{
+  "v": 1,
+  "revision": "b8-cc0-photo-pack-v1",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "purpose": "Internal template render/certification fixtures; originals remain attributed to their uploaders.",
+  "photos": [
+    {
+      "id": "mountains",
+      "fileName": "Mountains_Landscape.jpg",
+      "author": "Unknown author / Pikwizard",
+      "sha1": "4992bece12e6923dc91031912b060b99f1a75a94",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Mountains_Landscape.jpg"
+    },
+    {
+      "id": "car",
+      "fileName": "Car_Photography.jpg",
+      "author": "Al Dorecl Sina",
+      "sha1": "047bb029d5649419f9c0f217dbf2b3850addda95",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Car_Photography.jpg"
+    },
+    {
+      "id": "food",
+      "fileName": "Food_image.jpg",
+      "author": "Viveka Ravichandran V",
+      "sha1": "dd9688e1afab8fc76ccdb374fee3879b14455bde",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Food_image.jpg"
+    },
+    {
+      "id": "dog",
+      "fileName": "Photo_of_a_dog.jpg",
+      "author": "ContaDeletada2906",
+      "sha1": "acbdfdec8096f3000c1b3ced473c220da5379327",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Photo_of_a_dog.jpg"
+    },
+    {
+      "id": "coffee",
+      "fileName": "Coffee,_expresso.jpg",
+      "author": "Kurt Kaiser",
+      "sha1": "94fba8cb762909e560e71208a75c26f29851ea32",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Coffee,_expresso.jpg"
+    },
+    {
+      "id": "dogs",
+      "fileName": "Dog_photos.jpg",
+      "author": "Mohanraj55",
+      "sha1": "20891ed3ddb1acf007c6552c344a459248f1ac2e",
+      "pageUrl": "https://commons.wikimedia.org/wiki/File:Dog_photos.jpg"
+    }
+  ]
+}

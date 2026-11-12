@@ -7,7 +7,7 @@ editable source segments/transitions/text/motion/music, produce an MP4 and
 poster, and pass basic frame/audio/duration checks through the worker code.
 """
 from __future__ import annotations
-import argparse, hashlib, json, math, os, shutil, subprocess, sys, tempfile
+import argparse, hashlib, json, math, os, shutil, subprocess, sys, tempfile, urllib.parse, urllib.request
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[2]
@@ -68,35 +68,59 @@ def git_blob_sha(path:Path)->str:
     header=f"blob {len(data)}\0".encode()
     return hashlib.sha1(header+data).hexdigest()
 
-def fixtures(root:Path,music_source:Path,
-             real_video_fixture:dict)->tuple[dict[str,Path],Path]:
+def _download_cc0_photos(root:Path,manifest_ref:dict)->list[Path]:
+    rel=str(manifest_ref.get("path") or "")
+    manifest_path=(ROOT/rel).resolve()
+    if not rel or ROOT not in manifest_path.parents or not manifest_path.is_file():
+        raise RuntimeError("missing pinned CC0 photo manifest")
+    manifest=json.loads(manifest_path.read_text())
+    if manifest.get("v")!=1 or manifest.get("revision")!=manifest_ref.get("revision"):
+        raise RuntimeError("CC0 photo manifest revision drift")
+    if manifest.get("license")!="CC0-1.0" or len(manifest.get("photos") or [])<4:
+        raise RuntimeError("CC0 photo manifest must contain licensed photographic fixtures")
+    out=root/"cc0"; out.mkdir(parents=True,exist_ok=True)
+    paths=[]
+    for index,row in enumerate(manifest["photos"]):
+        sha1=str(row.get("sha1") or "").lower()
+        filename=str(row.get("fileName") or "")
+        if len(sha1)!=40 or not filename or not str(row.get("pageUrl") or "").startswith("https://commons.wikimedia.org/wiki/File:"):
+            raise RuntimeError("invalid CC0 photo source row")
+        target=out/f"{index:02d}_{Path(filename).name}"
+        if not target.is_file() or hashlib.sha1(target.read_bytes()).hexdigest()!=sha1:
+            url="https://commons.wikimedia.org/wiki/Special:Redirect/file/"+urllib.parse.quote(filename)
+            request=urllib.request.Request(url,headers={
+                "User-Agent":"TransovoTemplateCertification/1.0 (+https://transovo.ai)"
+            })
+            with urllib.request.urlopen(request,timeout=90) as response, target.open("wb") as fh:
+                shutil.copyfileobj(response,fh)
+        if hashlib.sha1(target.read_bytes()).hexdigest()!=sha1:
+            raise RuntimeError("CC0 photo SHA-1 mismatch: "+filename)
+        paths.append(target)
+    return paths
+
+
+def fixtures(root:Path,music_source:Path,photo_manifest:dict)->tuple[dict[str,Path],Path]:
     media=root/"media"; media.mkdir(parents=True,exist_ok=True)
     paths:dict[str,Path]={}
-    rel_video=str(real_video_fixture.get("path") or "")
-    real_video=(ROOT/rel_video).resolve()
-    if not rel_video or ROOT not in real_video.parents or not real_video.is_file():
-        raise RuntimeError("missing checked-in real video fixture")
-    if git_blob_sha(real_video)!=real_video_fixture.get("gitBlobSha"):
-        raise RuntimeError("real video fixture Git blob SHA drift")
-    prepared_video=media/"real_video.mp4"
-    run(FFMPEG,"-y","-v","error","-stream_loop","-1","-i",str(real_video),"-t","8",
-        "-vf",f"fps=30,scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},format=yuv420p",
-        "-an","-c:v","libx264","-preset","ultrafast","-crf","24",str(prepared_video))
-    # Derive ten deterministic photographic stills from the checked-in camera
-    # clip. Image slots therefore exercise real photo bytes rather than authored
-    # template-card artwork, while video slots use the same rights-safe footage.
+    photos=_download_cc0_photos(root,photo_manifest)
     for i in range(10):
-        image=media/f"image_{i}.png"
-        at_s=0.35+(i*0.73)
-        run(FFMPEG,"-y","-v","error","-ss",f"{at_s:.3f}","-i",str(prepared_video),
-            "-frames:v","1","-vf","format=rgb24",str(image))
+        source=photos[i%len(photos)]
+        image=media/f"image_{i}{source.suffix.lower()}"
+        if not image.is_file(): shutil.copyfile(source,image)
         paths[f"b8_image_{i}"]=image
-        paths[f"b8_video_{i}"]=prepared_video
+        video=media/f"video_{i}.mp4"
+        if not video.is_file():
+            run(FFMPEG,"-y","-v","error","-loop","1","-i",str(image),"-t","8",
+                "-vf",f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},"
+                      f"zoompan=z='min(zoom+0.0008,1.10)':d=240:s={W}x{H}:fps=30,format=yuv420p",
+                "-an","-c:v","libx264","-preset","ultrafast","-crf","22",str(video))
+        paths[f"b8_video_{i}"]=video
     if not music_source.is_file() or music_source.stat().st_size<=44:
         raise RuntimeError("missing pinned certification soundtrack")
     music=media/"music.wav"
     shutil.copyfile(music_source,music)
     return paths,music
+
 
 def stable_slot_frame(boundaries:list[int])->int:
     spans=[(b-a,a,b) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
@@ -253,7 +277,7 @@ def main()->int:
     if args.limit:rows=rows[:args.limit]
     out=Path(args.out);out.mkdir(parents=True,exist_ok=True)
     media,music=fixtures(out/"_fixtures",music_source,
-        contract.get("fixture",{}).get("realVideoFixture") or {})
+        contract.get("fixture",{}).get("photoManifest") or {})
     cache_dir=out/"_carrier_cache";cache_dir.mkdir(exist_ok=True)
     cache:dict[int,Path]={}
     results=[]

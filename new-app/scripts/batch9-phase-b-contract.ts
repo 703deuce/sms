@@ -24,7 +24,7 @@ const gate=batch9PhaseAAnchorGate(evidence)
 if(!gate.ready)throw new Error('Phase B render multiplication blocked until all ten live anchors are certified')
 const source=JSON.parse(readFileSync(sourcePath,'utf8')) as {
   v:number;engine:string;fps:number
-  fixture:{musicId:string;musicSha:string;musicFile:string;realVideoFixture:unknown;mediaOrigin:string}
+  fixture:{musicId:string;musicSha:string;musicFile:string;photoManifest:unknown;mediaOrigin:string}
   designs:Array<{id:string}>
 }
 if(source.v!==1||source.fps!==30||!Array.isArray(source.designs)||source.designs.length!==2000)
@@ -33,8 +33,8 @@ if(!source.fixture?.musicId||!/^[a-f0-9]{64}$/i.test(source.fixture.musicSha))
   throw new Error('Phase B requires the pinned Batch 8 certification soundtrack bytes')
 
 const musicFrames=1800
-const license={id:'b9_phase_b_first_party_qa',provenance:'first-party' as const,
-  reference:'b9_phase_b_checked_in_real_media_v1'}
+const license={id:'wikimedia_cc0_photo_pack_v1',provenance:'licensed' as const,
+  reference:'CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/'}
 const rights={
   assetId:source.fixture.musicId,origin:'first-party-generated',author:'Transovo AI',
   license:'Transovo first-party internal certification fixture',revision:'b9-phase-b-cert-v1',
@@ -55,7 +55,7 @@ const designs=batch9PhaseBExpansionCandidates().map(candidate=>{
   const slots=candidate.family.slots.map((slot,index)=>{
     const video=index%3===1
     const asset:TemplateAsset=video
-      ? {id:'b8_video_'+String(index%10),kind:'video',durationFrames:musicFrames,license}
+      ? {id:'b8_video_'+String(index%10),kind:'video',durationFrames:240,license}
       : {id:'b8_image_'+String(index%10),kind:'image',license}
     media[slot.id]=asset
     return video?{...slot,sourceInFrame:slot.handles?.headFrames??0}:slot

@@ -172,8 +172,8 @@ real-render or reference-review requirements.
 
 ## Remaining external evidence dependencies
 
-- No 2,000 fully licensed sample video outputs, posters, CapCut/Canva
-  review references or signed human scores exist.
+- The machine render harness now has a pinned CC0 photographic fixture pack,
+  but 2,000 reviewed release outputs and signed human 9/10 scores do not yet exist.
 - Actual MP4 generation requires registered licensed fixture uploads and a live
   authenticated workspace. The factory implementation now drives that existing
   worker path for all 2,000 queued designs and performs full-frame/audio QA; it
@@ -275,8 +275,11 @@ so music synchronization cannot silently make authored titles unreadably short.
 `pnpm templates:b8:worker-contract <path>` exports the exact compiled native
 ClipEditsV2 for all 2,000 canonical family×treatment designs after beat sync.
 `worker/scripts/render_batch8_factory_certification.py` consumes that contract
-with real decodable first-party sample imagery (the checked-in Batch 9A preview
-sprites), derives actual video sources, renders source transitions, video motion,
+with SHA-1 pinned CC0 photographs downloaded from Wikimedia Commons. Every
+source row records its exact Commons page, uploader, CC0 license and original
+SHA-1; the worker refuses drift. Still slots use the verified photos directly
+and video slots use 8-second motion derivatives of those same photographs. It
+renders source transitions, video motion,
 animated text/graphics and the independent music lane through worker modules,
 and writes an MP4, poster, SHA-256 and frame/audio/duration checks per design.
 The dedicated `Batch 8 worker renders` workflow shards the matrix 20 ways and
