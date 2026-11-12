@@ -52,7 +52,11 @@ export function deriveSchedulingClarification(input: {
     };
   }
 
-  if (!normalized?.localDate && meaning.date_relation !== "UNSPECIFIED") {
+  if (
+    !normalized?.localDate &&
+    meaning.date_relation !== "UNSPECIFIED" &&
+    meaning.date_relation !== "EARLIEST_AVAILABLE"
+  ) {
     return {
       required: true,
       reason: "DATE_UNRESOLVED",

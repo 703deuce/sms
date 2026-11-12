@@ -7,6 +7,7 @@ const schedulingDateRelationSchema = z.enum([
   "THIS_WEEKDAY",
   "NEXT_WEEKDAY",
   "EXPLICIT_DATE",
+  "EARLIEST_AVAILABLE",
   "UNSPECIFIED",
 ]);
 
@@ -39,7 +40,7 @@ export const schedulingMeaningZodObject = z.object({
     .nullable()
     .describe("Caller-facing date phrase for audit/display only; null if not spoken."),
   date_relation: schedulingDateRelationSchema.describe(
-    "Semantic date relation — do not compute calendar dates in the model.",
+    "Semantic date relation — do not compute calendar dates in the model. Use EARLIEST_AVAILABLE when the caller wants the soonest opening (earliest appointment, next available, as soon as possible) without naming a specific day.",
   ),
   weekday: schedulingWeekdaySchema
     .nullable()
