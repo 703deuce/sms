@@ -278,7 +278,7 @@ export async function ytQualityReview(
       cuts:cuts.map((cut,index)=>({
         index,kind:cut.kind,startMs:cut.startMs,endMs:cut.endMs,
         beat:cut.beat,
-        dialogue:cut.kind==='speech'?ctx.words.filter(w=>w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
+        dialogue:ctx.words.filter(w=>w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '),
       })),observedVideoAndOriginalAudio:evidenceRows(ctx).observedVideoAndOriginalAudio},
     {pass:{type:'boolean'},issues:{type:'array',items:stringField,maxItems:30}},
     ['pass','issues'])
