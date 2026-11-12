@@ -11,13 +11,14 @@ import {
   type TemplateAsset, type TemplateCompileResult, type TemplateDesignV1,
   type TemplateFamilyV1, type TemplateSlot,
 } from './sequence-contract'
-import { FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
+import { FACTORY_FAMILY_COPY, FACTORY_FAMILY_SEEDS, FACTORY_TREATMENTS,
   type FactoryFamilySeed, type FactoryTreatmentRecipe } from './b8-authoring-catalog'
+import { templateTextStylePreset } from './template-text-presets'
 import type { VideoTemplateRelease } from './gallery'
 import { lintB8Legibility } from './b8-legibility'
 import { b8ReferenceForFamily } from './b8-reference-catalog'
 
-export const B8_ENGINE_REVISION = 'b8-factory-v2' as const
+export const B8_ENGINE_REVISION = 'b8-factory-v3' as const
 export const B8_TARGET = { families: 50, treatmentsPerFamily: 40,
   coreTreatments: 25, authoredAlternates: 15, candidateTotal: 2000 } as const
 const HASH = /^[a-f\d]{64}$/i
@@ -43,6 +44,12 @@ function ensureRecipes() {
       FACTORY_TREATMENTS.filter(r=>r.kind === 'core').length !== B8_TARGET.coreTreatments ||
       FACTORY_TREATMENTS.filter(r=>r.kind === 'alternate').length !== B8_TARGET.authoredAlternates)
     throw new Error('Batch 8 incomplete family/curated style source')
+  for(const seed of FACTORY_FAMILY_SEEDS){
+    const copy=FACTORY_FAMILY_COPY[seed.id]
+    if(!copy?.headline?.trim()||!copy?.closing?.trim()||
+       copy.headline.length>36||copy.closing.length>36)
+      throw new Error('Missing/oversized semantic family copy: '+seed.id)
+  }
   const ids = new Set<string>()
   for (const r of FACTORY_TREATMENTS) {
     if (!safeID.test(r.id) || ids.has(r.id)) throw new Error('Duplicate/unsafe treatment ' + r.id)
@@ -73,7 +80,21 @@ function ensureRecipes() {
     throw new Error('Visually duplicate treatment recipe')
 }
 const ROLES: readonly TemplateSlot['role'][] = ['hero','support','detail','closing']
+function treatmentTextFinishes(recipe:FactoryTreatmentRecipe){
+  const script=/Caveat|Pacifico|Great Vibes|Kalam|Indie Flower|Lobster|Permanent Marker/.test(recipe.headingFont)
+  const neon=/neon|retro_arcade|tech/.test(recipe.id)
+  const soft=/editorial|cinema|luxury|noir|minimal|wedding|warm|journal|magazine/.test(recipe.id)
+  const playful=/party|kids|scrapbook|pastel|rounded/.test(recipe.id)
+  const headlineId=script?'hook_script':neon?'hook_neon':playful?'hook_label':soft?'hook_soft':'hook_punch'
+  const closingId=playful?'line_pill':neon||/sport|news|bold/.test(recipe.id)?'line_accent':'line_minimal'
+  const headline=templateTextStylePreset(headlineId),closing=templateTextStylePreset(closingId)
+  if(!headline||!closing)throw new Error('Missing template text finish preset')
+  return {headline,closing}
+}
 function authorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe): TemplateFamilyV1 {
+  const copy=FACTORY_FAMILY_COPY[seed.id]
+  if(!copy)throw new Error('Missing semantic copy for '+seed.id)
+  const finishes=treatmentTextFinishes(recipe)
   let at = 0
   const slots: TemplateFamilyV1['slots'] = seed.frames.map((durationFrames,index) => {
     const slot: TemplateFamilyV1['slots'][number] = {
@@ -103,16 +124,19 @@ function authorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe): 
     phraseAnchors: [{id:'opening',frame:0,textFieldId:'headline'},
       {id:'closing',frame:total-outroTime,textFieldId:'closing_line'}],
     texts: [
-      { id:'headline', defaultText:'Your story', maxChars:70,
+      { id:'headline', defaultText:copy.headline, maxChars:70,
         startFrame:0, durationFrames:textTime, x:titleX,y:titleY,
         font:recipe.headingFont, size:recipe.headingFont === 'Press Start 2P' ? 48 :
           (titleX < 40 || titleX > 60 ? 60 : 74),
-        color:recipe.foreground,
+        color:recipe.foreground,case:finishes.headline.case,
+        stylePresetId:finishes.headline.id,finish:{...finishes.headline.finish},
         anim:{in:{type:recipe.enter,unit:'block',durMs:360},
           out:{type:'fade',unit:'block',durMs:260}} },
-      { id:'closing_line',defaultText:'Make it yours',maxChars:65,
+      { id:'closing_line',defaultText:copy.closing,maxChars:65,
         startFrame:total-outroTime,durationFrames:outroTime,
         x:titleX,y:subY,font:recipe.supportFont,size:44,color:recipe.foreground,
+        case:finishes.closing.case,stylePresetId:finishes.closing.id,
+        finish:{...finishes.closing.finish},
         anim:{in:{type:'fade',unit:'block',durMs:440},
           out:{type:'fade',unit:'block',durMs:260}} },
     ],

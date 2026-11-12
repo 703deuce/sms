@@ -41,6 +41,20 @@ describe('Batch 8 candidate-only authoring and release QA',()=>{
     expect(new Set(B8_REFERENCE_CATALOG.map(row=>row.familyId)).size).toBe(50)
     expect(B8_REFERENCE_CATALOG.every(row=>/\/template-detail\//.test(row.url))).toBe(true)
   })
+  it('authors semantic hook and closing copy for all fifty families',()=>{
+    expect(Object.keys(FACTORY_FAMILY_COPY)).toHaveLength(50)
+    for(const seed of FACTORY_FAMILY_SEEDS){
+      const copy=FACTORY_FAMILY_COPY[seed.id]
+      expect(copy?.headline,seed.id).toBeTruthy()
+      expect(copy?.closing,seed.id).toBeTruthy()
+    }
+    const rows=generateB8Candidates()
+    expect(rows.find(row=>row.id==='f01_bold')?.family.texts.map(t=>t.defaultText))
+      .toEqual(['WAIT FOR IT','THE REVEAL'])
+    expect(rows.find(row=>row.id==='f46_bold')?.family.texts.map(t=>t.defaultText))
+      .toEqual(['JUST LISTED','BOOK A TOUR'])
+    expect(rows.every(row=>row.family.texts.every(t=>Boolean(t.finish)&&Boolean(t.stylePresetId)))).toBe(true)
+  })
   it('has exactly 50 authored structural schedules and 25+15 explicit treatments',()=>{
     expect(FACTORY_FAMILY_SEEDS).toHaveLength(50)
     expect(FACTORY_TREATMENTS.filter(t=>t.kind==='core')).toHaveLength(25)
