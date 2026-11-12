@@ -2,6 +2,10 @@ import { describe,expect,it } from 'vitest'
 import { FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { BATCH9A_ANCHOR_RELEASES } from '@/lib/clips/real-video-templates/batch9a-anchors'
 import { generateB8Candidates } from '@/lib/clips/real-video-templates/b8-factory'
+import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
+import { compileTemplateWithMusic } from '@/lib/clips/real-video-templates/music-sequence'
+import { defaultEdits } from '@/lib/clips/edits'
+import { templateFrameToMs,type TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 import { BATCH9_PHASE_B_CERTIFIED_RELEASES } from '@/lib/clips/real-video-templates/batch9-phase-b-certified'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import {
@@ -44,6 +48,50 @@ describe('Batch 9 Phase B style-pack expansion gate',()=>{
     expect(rows.every(row=>row.family.slots.map(slot=>slot.durationFrames).join(',')===
       anchors.get(row.familyId)?.family.slots.map(slot=>slot.durationFrames).join(','))).toBe(true)
     expect(batch9PhaseBWorkerIds()).toEqual(rows.map(row=>row.id))
+  })
+  it('compiles all 390 variants as editable mixed-media edits with separate music',()=>{
+    const hash='b'.repeat(64)
+    const license={id:'phase_b_fixture',provenance:'first-party' as const,reference:'phase_b_fixture_v1'}
+    const rights={assetId:'phase_b_music',origin:'first-party-test',author:'Test',
+      license:'first-party',revision:'1',sha256:hash,commercialUse:true,
+      exportAllowed:true,redistributionAllowed:false,
+      verifiedDurationFrames:1800,verifiedAt:'2026-11-11'}
+    const schedule={v:1 as const,mode:'beat-time' as const,musicAssetId:'phase_b_music',
+      sha256:hash,bpm:150,confidence:'high' as const,offsetFrames:0,durationFrames:1800,
+      beats:Array.from({length:600},(_,i)=>i*3),phrases:[],protectedAnchors:[]}
+    const music:TemplateAsset={id:'phase_b_music',kind:'audio',durationFrames:1800,license}
+    for(const candidate of batch9PhaseBExpansionCandidates()){
+      expect(lintB8Legibility(candidate).filter(f=>f.severity==='block'),candidate.id).toEqual([])
+      const media:Record<string,TemplateAsset>={}
+      const family={...candidate.family,slots:candidate.family.slots.map((slot,index)=>{
+        const video=index%3===1
+        media[slot.id]=video
+          ? {id:'video_'+index,kind:'video',durationFrames:1800,license}
+          : {id:'image_'+index,kind:'image',license}
+        return video?{...slot,sourceInFrame:slot.handles?.headFrames??0}:slot
+      })}
+      const durationMs=templateFrameToMs(family.totalFrames)
+      const base=defaultEdits({clipStartMs:0,clipEndMs:durationMs})
+      const result=compileTemplateWithMusic(family,candidate.design,{
+        instanceId:'phase_b_'+candidate.id,media,music,
+        templateMusic:{v:1,rights,schedule,choice:'keep-timing'},
+      },{durationFrames:family.totalFrames,edits:{
+        ...base,trim:{in:0,out:durationMs},
+        layout:{...base.layout,mode:'full_frame'},aspectRatio:'9:16',
+        captions:{...base.captions,enabled:false},
+      }})
+      expect(result.edits.sourceSegments,candidate.id).toHaveLength(family.slots.length)
+      expect(result.edits.transitions,candidate.id).toHaveLength(family.slots.length-1)
+      expect(result.edits.videoSplits,candidate.id).toHaveLength(family.slots.length-1)
+      expect(result.edits.textItems?.length,candidate.id)
+        .toBeGreaterThanOrEqual(family.texts.length+(family.graphics?.length??0))
+      expect(result.edits.keyframes?.some(k=>k.target==='video'),candidate.id).toBe(true)
+      expect(result.edits.audio?.music,candidate.id).toMatchObject({
+        uploadId:'phase_b_music',loop:false,endMs:durationMs,
+      })
+      expect(result.edits.sources?.some(source=>source.refId.startsWith('video_')),candidate.id).toBe(true)
+      expect(result.edits.sources?.some(source=>source.refId.startsWith('image_')),candidate.id).toBe(true)
+    }
   })
   it('preselects exactly 39 independent reviews covering every non-bold treatment',()=>{
     const plan=batch9PhaseBIndependentReviewPlan()
