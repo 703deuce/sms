@@ -8,7 +8,7 @@ export const YOUTUBE_VIDEO_STORY_SYSTEM = [
   'Follow the real in-game story: setup and goal, exploration and travel, attempts, failures, strategy changes, quiet visual-only gameplay, turning points, and eventual payoff.',
   'Preserve the context that makes later results meaningful. A quiet sequence can be essential even when nobody talks. Never choose scenes solely on transcript excitement.',
   'Edit lightly: remove AFK, loading screens, menus, extended repetition or grinding, empty dead air and unrelated off-story chat. Do not compress the story into a highlight reel or isolated short clips.',
-  'Aim for roughly 25–35 percent of source running time and a coherent 15–40 minute finished episode, using those durations as editorial guidance rather than hard failure gates.',
+  'Let the visual story determine the runtime. 15–40 minutes is only a loose guide; 45–50+ minutes is fine for complete events. Never edit toward a target percentage of the source.',
   'Keep scenes and objectives in their recorded chronological order, including a real beginning, progression, and payoff. Do not fabricate outcomes or force an ending when none exists.',
   'Any optional user instruction identifies which recorded story to preserve; it supplements these rules and does not replace them.',
 ].join(' ')
