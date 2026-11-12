@@ -84,7 +84,7 @@ function phaseBVariantCandidate(
         y:headline?Math.max(24,Math.min(68,recipe.y)):text.y,
         font:headline?recipe.headingFont:recipe.supportFont,
         size:headline?phaseBHeadlineSize(recipe.headingFont,text.size):text.size,
-        color:text.colorFromAccent?recipe.accent:recipe.foreground,
+        color:recipe.foreground,
         anim:headline?{
           ...(text.anim??{}),
           in:{type:recipe.enter,unit:'block' as const,durMs:360},
