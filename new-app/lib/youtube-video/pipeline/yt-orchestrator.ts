@@ -96,6 +96,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
   const checkpoint:YtCheckpoint=args.checkpoint
     ? {...args.checkpoint,steps:[...args.checkpoint.steps],
       finished:[...args.checkpoint.finished],
+      activeWindows:args.checkpoint.activeWindows?.map(w=>({...w})),
       active:args.checkpoint.active?{...args.checkpoint.active}:null}
     : {version:1,sourcesKey:key,active:null,finished:[],steps:[]}
   if(checkpoint.version!==1||checkpoint.sourcesKey!==key)
@@ -122,21 +123,31 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     })
   }
 
-  if(!checkpoint.active&&checkpoint.finished.length<all.length){
-    const next=all[checkpoint.finished.length]!
-    checkpoint.active={...next,stage:'coarse_queue'}
+  const identity=(w:{sourceIndex:number;startMs:number;endMs:number}) =>
+    [w.sourceIndex,w.startMs,w.endMs].join(':')
+  const finishedKeys=new Set(checkpoint.finished.map(identity))
+  const activeWindows:YtActiveWindow[]=[
+    ...(checkpoint.activeWindows??(checkpoint.active?[checkpoint.active]:[])),
+  ]
+  const activeKeys=new Set(activeWindows.map(identity))
+  for(const next of all){
+    if(activeWindows.length>=4)break
+    const id=identity(next)
+    if(finishedKeys.has(id)||activeKeys.has(id))continue
+    activeWindows.push({...next,stage:'coarse_queue'})
+    activeKeys.add(id)
     log('window','start',{sourceIndex:next.sourceIndex,
-      windowIndex:checkpoint.finished.length,windowCount:all.length})
-    await persist()
-    return {done:false,checkpoint}
+      windowIndex:all.findIndex(w=>identity(w)===id),windowCount:all.length})
   }
-
-  const window=checkpoint.active
-  if(window){
-    const source=args.sources[window.sourceIndex]!
-    const ctx=makeWindowContext(args,window,checkpoint.finished.length,all.length)
-    const fields={sourceIndex:window.sourceIndex,
-      windowIndex:checkpoint.finished.length,windowCount:all.length}
+  checkpoint.active=null // upgraded legacy single-window checkpoint
+  checkpoint.activeWindows=activeWindows
+  if(activeWindows.length){
+    await Promise.all(activeWindows.map(async window=>{
+      const windowIndex=all.findIndex(w=>identity(w)===identity(window))
+      if(windowIndex<0)throw Error('yt_parallel_window_mismatch')
+      const source=args.sources[window.sourceIndex]!
+      const ctx=makeWindowContext(args,window,windowIndex,all.length)
+      const fields={sourceIndex:window.sourceIndex,windowIndex,windowCount:all.length}
     switch(window.stage){
       case 'coarse_queue':{
         log('gemini_coarse','start',fields)
@@ -156,8 +167,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         if(result.status==='pending'){
           log('gemini_coarse','waiting',fields)
           // Avoid unbounded log growth from frequent browser polling.
-          checkpoint.steps.pop()
-          return {done:false,checkpoint}
+          return
         }
         window.coarse=result.observations
         window.stage='focus_queue'
@@ -181,7 +191,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         if(!window.focusJobId)throw Error('yt_focus_job_id_missing')
         const result=await ytReadMomentsJob(window.focusJobId,
           [window.startMs,window.endMs],'focused')
-        if(result.status==='pending')return {done:false,checkpoint}
+        if(result.status==='pending')return
         window.focused=result.observations
         window.stage='story'
         log('gemini_focus','done',{...fields,count:result.observations.length})
@@ -277,13 +287,17 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           qaIssueHistory:window.qaIssueHistory??[],qaPassed:window.qaPassed===true,
         }
         checkpoint.finished.push(current)
-        checkpoint.active=null
         log('window','done',{...fields,accepted:current.cuts.length,
           rejected:current.rejected.length})
         break
       }
       default:throw Error('yt_unrecognized_stage')
     }
+
+    }))
+    const doneKeys=new Set(checkpoint.finished.map(identity))
+    checkpoint.activeWindows=activeWindows.filter(w=>!doneKeys.has(identity(w)))
+    checkpoint.finished.sort((a,b)=>a.sourceIndex-b.sourceIndex||a.startMs-b.startMs)
     await persist()
     return {done:false,checkpoint}
   }
