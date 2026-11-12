@@ -891,9 +891,16 @@ def _run_render_clip_job_body(
             intended_ms = int(render_meta.get("effective_edits_ms") or _editor_duration_ms(edits))
             bounded_out = td_path / "render_duration_bounded.mp4"
             original_out = out_mp4
-            out_mp4, observed_lengths = correct_export_overrun(
-                original_out, bounded_out, intended_ms,
-            )
+            if edits.get("youtubeLongFormAssembly"):
+                # Only YouTube episodes bypass the full-file H.264 duration guard.
+                from clips_worker.youtube_render import correct_youtube_episode_overrun
+                out_mp4, observed_lengths = correct_youtube_episode_overrun(
+                    original_out, bounded_out, intended_ms,
+                )
+            else:
+                out_mp4, observed_lengths = correct_export_overrun(
+                    original_out, bounded_out, intended_ms,
+                )
             if out_mp4 != original_out:
                 print(
                     f"[clipper:duration_guard] {json.dumps({'renderId': render_id, 'targetMs': intended_ms, 'streams': observed_lengths})}",
