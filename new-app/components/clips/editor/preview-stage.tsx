@@ -1629,7 +1629,7 @@ export function PreviewStage({
             ref={videoRefInner}
             {...mainVideoMediaProps}
                 src={videoUrl ?? undefined}
-            className={`size-full object-contain transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
+            className={`size-full ${templatePreview ? 'object-cover' : 'object-contain'} transition-opacity ${canPlay ? 'opacity-100' : 'opacity-0'}${mainHiddenByLayout}`}
             playsInline
             onCanPlay={markReady}
             onPlay={() => setPlaying(true)}
