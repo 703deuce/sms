@@ -28,8 +28,14 @@ export function ytObservations(
   for (const item of rows) {
     if (!item || typeof item !== 'object') continue
     const row = item as Record<string,unknown>
-    const startMs = Math.round(Number(row.start_ms ?? Number(row.start_s) * 1000))
-    const endMs = Math.round(Number(row.end_ms ?? Number(row.end_s) * 1000))
+    let startMs = Math.round(Number(row.start_ms ?? Number(row.start_s) * 1000))
+    let endMs = Math.round(Number(row.end_ms ?? Number(row.end_s) * 1000))
+    // Some worker revisions report positions relative to the extracted window.
+    // Translate only when the interval cannot already be an absolute source range.
+    if (range[0] > 0 && startMs < range[0] && endMs <= range[1] - range[0]) {
+      startMs += range[0]
+      endMs += range[0]
+    }
     if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs) ||
         startMs < range[0] || endMs > range[1] || endMs <= startMs) continue
     const description = String(row.what_happened ?? row.visual_action ?? row.description ?? '').trim()
@@ -99,7 +105,7 @@ export async function ytEnqueueAnalyze(input:{
 }):Promise<string>{
   const range=input.source.rangeMs
   if(!range)throw Error('yt_analysis_missing_range')
-  const jobId=['ytan',input.runId,input.projectId,range[0],range[1],input.pass].join('_')
+  const jobId=['ytgamingv2',input.runId,input.projectId,range[0],range[1],input.pass].join('_')
   await getPrisma().clipJob.upsert({
     where:{id:jobId},
     update:{},
