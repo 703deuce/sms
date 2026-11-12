@@ -113,10 +113,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     return cuts.filter(cut=>{
       if(cut.sourceId!==ctx.sourceId||cut.startMs<lastEnd||
         cut.startMs<ctx.startMs||cut.endMs>ctx.endMs||cut.endMs-cut.startMs<200)return false
-      const valid=cut.kind==='speech'
-        ?ctx.words.some(w=>Math.round(w.s*1000)===cut.startMs)&&
-          ctx.words.some(w=>Math.round(w.e*1000)===cut.endMs)
-        :cut.kind==='visual'&&ytVisualSceneCovered(ctx,cut.startMs,cut.endMs)
+      const valid=cut.kind==='visual'&&ytVisualSceneCovered(ctx,cut.startMs,cut.endMs)
       if(valid)lastEnd=cut.endMs
       return valid
     })
@@ -283,6 +280,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           coarseCount:window.coarse?.length??0,focusedCount:window.focused?.length??0,
           qaIssues:window.qaIssues,
           qaIssueHistory:window.qaIssueHistory??[],qaPassed:window.qaPassed===true,
+          observedScenes:ctx.observations,
         }
         checkpoint.finished.push(current)
         log('window','done',{...fields,accepted:current.cuts.length,
@@ -343,6 +341,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
 
   const candidates=checkpoint.finished.flatMap(w=>w.cuts)
   const approved=checkpoint.final.selectedIndices.map(i=>candidates[i]!)
+  if(approved.some(c=>c.kind!=='visual'))throw Error('yt_gaming_speech_only_cut_forbidden')
   verifyFullSourceCuts(approved,args)
   log('assembly_validation','passed',{accepted:approved.length})
   await persist()
