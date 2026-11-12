@@ -1,0 +1,193 @@
+## 22. Web/runtime logs (filtered, sanitized)
+
+```
+VOICE_V3_AGENT_CONFIG_RESOLVED {
+  booking_strategy: 'MICROSOFT_365',
+VOICE_V3_AMY_CONTEXT_COMPILED { section_count: 28 }
+VOICE_V3_ASTRA_CONTEXT_COMPILED { char_count: 11210 }
+VOICE_V3_TOOL_SURFACE_COMPILED {
+VOICE_V3_PIPELINE {
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+VOICE_V3_BOOKING_PIPELINE_ACTIVE {
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_CONTRACT_VERSIONS {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_1',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_2',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_3',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_4',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_5',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_6',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_7',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_8',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_9',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_REQUESTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_VALIDATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_10',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_11',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_REQUESTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_VALIDATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_REQUESTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_VALIDATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  request_key: 'lk_transovo-call-_[phone]_MoSPbJXesc6M|1|2026-09-21T13:00:00.000Z|2026-09-21T21:00:00.000Z|60|primary'
+FIND_AVAILABILITY_REQUIRED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+ASYNC_ACTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  action: 'FIND_AVAILABILITY',
+  attempt_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M|1|2026-09-21T13:00:00.000Z|2026-09-21T21:00:00.000Z|60|primary'
+ASYNC_ACTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  operation_id: 'find_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_1_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M|1|2026-09-21T13:00:00.000Z|2026-09-21T21:00:00.000Z|60|primary',
+  operation_type: 'FIND_AVAILABILITY',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+FIND_AVAILABILITY_DISPATCHED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  request_key: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M|1|2026-09-21T13:00:00.000Z|2026-09-21T21:00:00.000Z|60|primary',
+MICROSOFT_AVAILABILITY_REQUEST_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+MICROSOFT_AVAILABILITY_REQUEST_COMPLETED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+ASYNC_ACTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  operation_id: 'find_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_1_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M|1|2026-09-21T13:00:00.000Z|2026-09-21T21:00:00.000Z|60|primary',
+  operation_type: 'FIND_AVAILABILITY',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+ASYNC_ACTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  action: 'FIND_AVAILABILITY',
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_12',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_REQUESTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_VALIDATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+BOOKING_READY {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+BOOKING_ATTEMPT_CREATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+BOOKING_REVALIDATION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+BOOKING_REVALIDATION_PASSED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+ASYNC_ACTION_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  allowed_claims: [ 'PRESENT_AVAILABILITY', 'CLAIM_BOOKING_IN_PROGRESS' ]
+BOOKING_COMMIT_STARTED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+BOOKING_COMMIT_SENT {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+ASYNC_ACTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+MICROSOFT_EVENT_CREATED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+BOOKING_CONFIRMED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+LIVE_BOOKING_CONFIRMATION_SENT {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+VOICE_V3_PIPELINE {
+  call_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_[phone]_MoSPbJXesc6M',
+VOICE_TOOL_EXECUTION_SUCCEEDED {
+  call_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+  turn_id: 'turn_lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M_13',
+  live_session_id: 'lk_transovo-call-_+1[REDACTED]_MoSPbJXesc6M',
+
