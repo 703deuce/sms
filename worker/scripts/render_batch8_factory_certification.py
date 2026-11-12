@@ -48,7 +48,7 @@ def video_frames(path:Path)->int:
     except (TypeError,ValueError):return 0
 
 def frame_mean(path:Path,frame:int,total:int)->float:
-    sec=max(.01,min((total-2)/30.0,frame/30.0))
+    sec=max(.01,min((total-1)/30.0,frame/30.0))
     data=subprocess.check_output([
         FFMPEG,"-v","error","-ss",f"{sec:.4f}","-i",str(path),"-frames:v","1",
         "-vf","scale=48:86,format=gray","-f","rawvideo","-pix_fmt","gray","-"],
@@ -133,9 +133,13 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     info=probe(final); streams=info.get("streams",[])
     duration=float(info["format"]["duration"])
     boundaries=[int(x) for x in row["boundaries"]]
-    black=[f for f in [1,max(1,total-2),*boundaries[1:-1]] if frame_mean(final,f,total)<=8]
+    frame_count=video_frames(final)
+    black=[f for f in [1,max(1,total-1),*boundaries[1:-1]] if frame_mean(final,f,total)<=8]
     checks={
         "productionRenderEditedClip":True,
+        "expectedFrames":total,
+        "videoFrames":frame_count,
+        "frameCountExact":frame_count==total,
         "video":any(s.get("codec_type")=="video" for s in streams),
         "audio":any(s.get("codec_type")=="audio" for s in streams),
         "duration":abs(duration-total/30.0)<0.12,
@@ -146,7 +150,8 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
         "musicTrack":bool((row["edits"].get("audio") or {}).get("music")),
     }
     expected_slots=len(boundaries)-1
-    ok=(checks["video"] and checks["audio"] and checks["duration"] and not black and
+    ok=(checks["video"] and checks["audio"] and checks["duration"] and
+        checks["frameCountExact"] and not black and
         checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
@@ -183,7 +188,7 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     info=probe(final); streams=info.get("streams",[])
     duration=float(info["format"]["duration"])
     boundaries=[int(x) for x in row["boundaries"]]
-    samples=[1,max(1,total-2),*boundaries[1:-1]]
+    samples=[1,max(1,total-1),*boundaries[1:-1]]
     black=[f for f in samples if frame_mean(final,f,total)<=8]
     checks={
         "video":any(s.get("codec_type")=="video" for s in streams),
@@ -194,10 +199,12 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
         "transitions":len(row["edits"].get("transitions") or []),
         "textItems":len(row["edits"].get("textItems") or []),
         "musicTrack":bool((row["edits"].get("audio") or {}).get("music")),
-        "expectedFrames":total,"stageFrames":stage_frames,
+        "expectedFrames":total,"videoFrames":video_frames(final),"stageFrames":stage_frames,
     }
+    checks["frameCountExact"]=checks["videoFrames"]==total
     expected_slots=len(boundaries)-1
-    ok=(checks["video"] and checks["audio"] and checks["duration"] and not black and
+    ok=(checks["video"] and checks["audio"] and checks["duration"] and
+        checks["frameCountExact"] and not black and
         checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
