@@ -1,20 +1,31 @@
 #!/usr/bin/env node
 import { existsSync,mkdirSync,readFileSync,writeFileSync } from 'node:fs'
 import { dirname,resolve } from 'node:path'
-import { generateB8Candidates,type B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
+import { generateB8Candidates,type B8Candidate,type B8Evidence } from '../lib/clips/real-video-templates/b8-factory'
 import { b8ReferenceForFamily } from '../lib/clips/real-video-templates/b8-reference-catalog'
+import { batch9PhaseAAnchorCandidates,batch9PhaseBExpansionCandidates } from '../lib/clips/real-video-templates/batch9-phase-b'
 
 const args=process.argv.slice(2)
 const value=(name:string,fallback:string)=>{
   const i=args.indexOf(name)
   return i>=0&&args[i+1]?args[i+1]!:fallback
 }
-const evidencePath=resolve(process.cwd(),value('--evidence','build/real-video-templates/b8/evidence.json'))
-const out=resolve(process.cwd(),value('--out','build/real-video-templates/b8/review-workbook.html'))
+const scope=value('--scope','batch8')
+if(!['batch8','batch9a','batch9b'].includes(scope))
+  throw new Error('--scope must be batch8, batch9a, or batch9b')
+const defaults=scope==='batch8'
+  ? {evidence:'build/real-video-templates/b8/evidence.json',out:'build/real-video-templates/b8/review-workbook.html'}
+  : scope==='batch9a'
+    ? {evidence:'build/real-video-templates/b9a/evidence.json',out:'build/real-video-templates/b9a/review-workbook.html'}
+    : {evidence:'build/real-video-templates/b9b/evidence.json',out:'build/real-video-templates/b9b/review-workbook.html'}
+const evidencePath=resolve(process.cwd(),value('--evidence',defaults.evidence))
+const out=resolve(process.cwd(),value('--out',defaults.out))
+const candidates:readonly B8Candidate[]=scope==='batch8'?generateB8Candidates():
+  scope==='batch9a'?batch9PhaseAAnchorCandidates():batch9PhaseBExpansionCandidates()
 if(!existsSync(evidencePath))throw new Error('Missing machine evidence: '+evidencePath)
 const evidence=JSON.parse(readFileSync(evidencePath,'utf8')) as B8Evidence[]
 const byId=new Map(evidence.map(row=>[row.id,row]))
-const rows=generateB8Candidates().flatMap(candidate=>{
+const rows=candidates.flatMap(candidate=>{
   const e=byId.get(candidate.id)
   if(!e?.outputs?.renderMp4||e.checks?.actualWorkerRender!==true)return []
   const ref=b8ReferenceForFamily(candidate.familyId)
@@ -31,14 +42,14 @@ const rows=generateB8Candidates().flatMap(candidate=>{
 const payload=JSON.stringify(rows).replace(/</g,'\\u003c')
 const html=`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Template certification review</title>
+<title>${scope} template certification review</title>
 <style>
 body{font:14px system-ui,sans-serif;margin:0;background:#111;color:#eee}header{position:sticky;top:0;background:#181818;padding:12px;z-index:4;border-bottom:1px solid #333}
 main{display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:16px;padding:16px}.card{border:1px solid #333;border-radius:12px;padding:14px;background:#181818}
 .media{display:grid;grid-template-columns:220px 1fr;gap:14px}video{width:220px;max-height:390px;background:#000}a{color:#9cc7ff}.scores{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 label{display:grid;gap:4px}input{background:#222;color:#fff;border:1px solid #555;border-radius:6px;padding:7px}.checks{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-top:10px}.checks label{display:flex;align-items:center;gap:6px}
 .bad{color:#ff9b9b}.ok{color:#9cffb6}button{padding:9px 14px;border:0;border-radius:8px;cursor:pointer}small{color:#aaa}
-</style></head><body><header><strong>Template certification review</strong> — <span id="count"></span>
+</style></head><body><header><strong>${scope} template certification review</strong> — <span id="count"></span>
 <button id="export">Export human-reviews.json</button> <span id="status"></span></header><main id="cards"></main>
 <script id="data" type="application/json">${payload}</script><script>
 const rows=JSON.parse(document.getElementById('data').textContent);const cards=document.getElementById('cards');document.getElementById('count').textContent=rows.length+' rendered designs';
@@ -58,4 +69,4 @@ document.getElementById('export').onclick=()=>{const reviews=[];let invalid=0;fo
  const blob=new Blob([JSON.stringify({v:1,reviews},null,2)+'\\n'],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='human-reviews.json';a.click();URL.revokeObjectURL(a.href);document.getElementById('status').textContent=invalid?invalid+' rows incomplete; importer will reject them':'review file exported';};
 </script></body></html>`
 mkdirSync(dirname(out),{recursive:true});writeFileSync(out,html,'utf8')
-console.log('Wrote review workbook for '+rows.length+' actual worker renders: '+out)
+console.log('Wrote '+scope+' review workbook for '+rows.length+' exact authored worker renders: '+out)

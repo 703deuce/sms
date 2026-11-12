@@ -1,5 +1,6 @@
 import {
-  auditB8Evidence,generateB8Candidates,reportB8Quality,scoreB8Review,type B8Evidence,
+  auditB8Evidence,generateB8Candidates,reportB8Quality,scoreB8Review,
+  type B8Candidate,type B8Evidence,
 } from './b8-factory'
 import { b8ReferenceForFamily } from './b8-reference-catalog'
 
@@ -23,11 +24,13 @@ export type TemplateReviewImportResult={
 }
 const DATE=/^20\d\d-\d\d-\d\d$/
 const name=(value:string)=>value.trim().replace(/\s+/g,' ')
-export function applyTemplateHumanReviews(
+export function applyTemplateHumanReviewsForCandidates(
   existing:readonly B8Evidence[],
   reviews:readonly TemplateHumanReview[],
+  candidateRows:readonly B8Candidate[],
 ):TemplateReviewImportResult{
-  const candidates=new Map(generateB8Candidates().map(candidate=>[candidate.id,candidate]))
+  const candidates=new Map(candidateRows.map(candidate=>[candidate.id,candidate]))
+  if(candidates.size!==candidateRows.length)throw new Error('Duplicate candidate IDs in review scope')
   const evidenceById=new Map(existing.map(row=>[row.id,structuredClone(row)]))
   const seen=new Set<string>()
   const rejected:Array<{id:string;reason:string}>=[]
@@ -87,6 +90,14 @@ export function applyTemplateHumanReviews(
       if(score.score>=9&&score.minimum)evidencePassing++
     }
   }
-  const releaseEligible=reportB8Quality([...candidates.values()],evidence).released
+  const releaseEligible=candidateRows.length===2000
+    ? reportB8Quality(candidateRows,evidence).released
+    : evidencePassing
   return {evidence,reviewed,evidencePassing,releaseEligible,rejected}
+}
+export function applyTemplateHumanReviews(
+  existing:readonly B8Evidence[],
+  reviews:readonly TemplateHumanReview[],
+):TemplateReviewImportResult{
+  return applyTemplateHumanReviewsForCandidates(existing,reviews,generateB8Candidates())
 }
