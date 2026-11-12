@@ -73,6 +73,7 @@ export type YtFinishedWindow = {
   qaIssues?: string[]
   qaPassed?: boolean
   qaIssueHistory?: string[]
+  observedScenes?: YtObservation[]
 }
 
 export type YtCheckpoint = {
