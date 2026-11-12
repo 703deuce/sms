@@ -151,15 +151,37 @@ function cutFromScene(ctx:YtWindowContext,row:Record<string,unknown>):YtSelected
 }
 
 function acceptNonOverlapping(
-  candidates:YtSelectedCut[],rejected:YtCutsResult['rejected'],
+  ctx:YtWindowContext,candidates:YtSelectedCut[],rejected:YtCutsResult['rejected'],
 ):YtCutsResult{
   const cuts:YtSelectedCut[]=[]
-  // When starts coincide, the complete scene wins over any micro-beat.
   candidates.sort((a,b)=>a.startMs-b.startMs || (b.endMs-b.startMs)-(a.endMs-a.startMs))
   for(const candidate of candidates){
-    if(cuts.length && candidate.startMs<cuts[cuts.length-1]!.endMs){
+    const previous=cuts[cuts.length-1]
+    if(previous && candidate.startMs<previous.endMs){
+      // Two watch observations may describe different phases of the SAME chase.
+      // Keep the original uninterrupted frames if the union is visually grounded.
+      if(previous.kind==='visual'&&candidate.kind==='visual'&&
+         previous.sourceId===candidate.sourceId&&
+         ytVisualSceneCovered(ctx,previous.startMs,Math.max(previous.endMs,candidate.endMs))){
+        previous.endMs=Math.max(previous.endMs,candidate.endMs)
+        previous.groundedEvidence=[previous.groundedEvidence,candidate.groundedEvidence]
+          .filter(Boolean).join(' | ')
+        continue
+      }
       rejected.push({startMs:candidate.startMs,endMs:candidate.endMs,
         code:'yt_overlapping_footage'})
+      continue
+    }
+    // Rejoin sub-minute microbeats across a tiny certified gap; no blank
+    // filler is invented, the original continuous gameplay is retained.
+    if(previous&&previous.kind==='visual'&&candidate.kind==='visual'&&
+       candidate.sourceId===previous.sourceId&&
+       candidate.startMs-previous.endMs<=5000&&
+       (previous.endMs-previous.startMs<60_000||candidate.endMs-candidate.startMs<60_000)&&
+       ytVisualSceneCovered(ctx,previous.startMs,candidate.endMs)){
+      previous.endMs=candidate.endMs
+      previous.groundedEvidence=[previous.groundedEvidence,candidate.groundedEvidence]
+        .filter(Boolean).join(' | ')
       continue
     }
     cuts.push(candidate)
@@ -209,7 +231,7 @@ export async function ytSelectFootage(
   }
   // Full-screen scene spans take precedence over their contained dialog or beat markers.
   candidate.sort((a,b)=>a.startMs-b.startMs||(b.endMs-b.startMs)-(a.endMs-a.startMs))
-  const selected=acceptNonOverlapping(candidate,rejected)
+  const selected=acceptNonOverlapping(ctx,candidate,rejected)
   if(!selected.cuts.length)throw Error('yt_no_verified_footage')
   return selected
 }
