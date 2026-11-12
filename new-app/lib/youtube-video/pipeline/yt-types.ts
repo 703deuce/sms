@@ -79,6 +79,8 @@ export type YtCheckpoint = {
   version: 1
   sourcesKey: string
   active: YtActiveWindow | null
+  /** Bounded parallel per-window checkpoints; active is retained for older runs. */
+  activeWindows?: YtActiveWindow[]
   finished: YtFinishedWindow[]
   steps: YtStep[]
   final?: {
