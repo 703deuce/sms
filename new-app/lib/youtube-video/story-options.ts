@@ -2,36 +2,17 @@ import { assembledDurationMs } from '@/lib/youtube-video/assemble'
 import type { PackedEvent, PackedTranscript } from '@/lib/youtube-video/transcript-packer'
 import type { YoutubeVideoBeat, YoutubeVideoCut, YoutubeVideoOption } from '@/lib/youtube-video/types'
 
-/**
- * Content-agnostic Story prompts for the copied engine.
- * Do not mention a genre, game, or just-chatting preset. Do not assign an angle.
- */
+/** Gaming-specific long-form editorial direction. Only the YouTube engine imports this. */
 export const YOUTUBE_VIDEO_STORY_SYSTEM = [
-  'You are selecting truthful long-form story options from source material.',
-  'Look at the packed events from the entire source or sources first, then propose up to three options that the footage actually supports.',
-  'Each option needs a title, a premise, and beats. Find the premise from the source; do not invent drama and do not assign a story angle.',
-  'There is no length target. Keep what the story needs.',
-  'Return only options the recordings can support.',
+  'You are editing one chronological long-form YouTube gaming playthrough episode from a 1–3 hour stream.',
+  'Follow the real in-game story: setup and goal, exploration and travel, attempts, failures, strategy changes, quiet visual-only gameplay, turning points, and eventual payoff.',
+  'Preserve the context that makes later results meaningful. A quiet sequence can be essential even when nobody talks. Never choose scenes solely on transcript excitement.',
+  'Edit lightly: remove AFK, loading screens, menus, extended repetition or grinding, empty dead air and unrelated off-story chat. Do not compress the story into a highlight reel or isolated short clips.',
+  'Aim for roughly 25–35 percent of source running time and a coherent 15–40 minute finished episode, using those durations as editorial guidance rather than hard failure gates.',
+  'Keep scenes and objectives in their recorded chronological order, including a real beginning, progression, and payoff. Do not fabricate outcomes or force an ending when none exists.',
+  'Any optional user instruction identifies which recorded story to preserve; it supplements these rules and does not replace them.',
 ].join(' ')
 
-export function assertAgnosticPrompt(text: string): void {
-  const banned = [
-    'just_chatting_rough_cut',
-    'just chatting',
-    'irl_just_chatting',
-    'gaming-only',
-    'this is a gaming',
-    'this is a podcast',
-  ]
-  const lower = text.toLowerCase()
-  for (const phrase of banned) {
-    if (lower.includes(phrase.toLowerCase())) {
-      throw new Error(`genre_specific_prompt_forbidden:${phrase}`)
-    }
-  }
-}
-
-assertAgnosticPrompt(YOUTUBE_VIDEO_STORY_SYSTEM)
 
 function eventText(event: PackedEvent): string {
   return event.text.replace(/\s+/g, ' ').trim()
