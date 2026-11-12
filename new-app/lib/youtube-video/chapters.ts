@@ -27,14 +27,28 @@ export function planFromOption(option: YoutubeVideoOption, cuts: YoutubeVideoCut
   return { premise: option.premise, beats }
 }
 
+/** YouTube chapters describe complete scenes, not individual edit points.
+ * Start only at a scene boundary; group micro-cuts into a 3–5 minute chapter.
+ * This yields roughly 8–25 meaningful chapters per finished hour. */
 export function chaptersFromCuts(cuts: YoutubeVideoCut[], fallbackLabels: string[]): YoutubeVideoChapter[] {
   const ordered = storyCutsInEditorialOrder(cuts)
-  let at = 0
-  return ordered.map((cut, index) => {
-    const chapter = { title: cut.label || fallbackLabels[index] || `Part ${index + 1}`, startMs: at }
-    at += Math.max(0, cut.endMs - cut.startMs)
-    return chapter
-  })
+  if(!ordered.length)return []
+  const durationMs = assembledDurationMs(ordered)
+  const targetMs = Math.max(150_000, Math.min(300_000, Math.round(durationMs / Math.max(3, Math.round(durationMs / 240_000)))))
+  const minChapterMs = Math.max(10_000, Math.round(3_600_000 / 25))
+  const chapters: YoutubeVideoChapter[]=[]
+  let at=0
+  let lastChapterStart=0
+  for(const [index,cut] of ordered.entries()){
+    const title=(cut.label||fallbackLabels[index]||'Gameplay').trim().slice(0,100)
+    if(index===0 || (at-lastChapterStart>=Math.max(minChapterMs,targetMs) &&
+      durationMs-at>=10_000)){
+      chapters.push({title,startMs:at})
+      lastChapterStart=at
+    }
+    at+=Math.max(0,cut.endMs-cut.startMs)
+  }
+  return chapters
 }
 
 export function chapterTextFromChapters(chapters: YoutubeVideoChapter[], totalDurationMs: number): string {
@@ -52,7 +66,7 @@ export function formatClock(ms: number): string {
   const m = Math.floor((total % 3600) / 60)
   const s = total % 60
   const pad = (n: number) => String(n).padStart(2, '0')
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`
 }
 
 export function resultStoryFields(option: YoutubeVideoOption, cuts: YoutubeVideoCut[]) {
