@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe,expect,it } from 'vitest'
 import { summarizeB8AudioEnvelopeQA,summarizeB8FrameQA } from '@/lib/clips/real-video-templates/b8-render-qa'
 import { syncB8FamilyToMusic } from '@/lib/clips/real-video-templates/b8-music-sync'
-import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
+import { FACTORY_FAMILY_COPY,FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
 import { lintB8Legibility } from '@/lib/clips/real-video-templates/b8-legibility'
 import { B8_REFERENCE_CATALOG,b8ReferenceForFamily,validateB8ReferenceCatalog } from '@/lib/clips/real-video-templates/b8-reference-catalog'
 import { B8_TARGET,generateB8Candidates,proveB8Structure,reportB8Quality,
