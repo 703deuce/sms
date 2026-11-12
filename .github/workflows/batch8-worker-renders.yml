@@ -9,6 +9,7 @@ on:
       - "worker/scripts/render_batch8_factory_certification.py"
       - "worker/clips_worker/edits_render.py"
       - "worker/tests/test_real_video_template_sequence.py"
+      - "worker/tests/test_template_video_duration.py"
       - ".github/workflows/batch8-worker-renders.yml"
   workflow_dispatch:
 
@@ -66,8 +67,8 @@ jobs:
         with:
           name: b8-worker-contract
           path: build
-      - name: Production template sequence regression
-        run: python -m pytest -q worker/tests/test_real_video_template_sequence.py
+      - name: Exact template video clock regression
+        run: python -m pytest -q worker/tests/test_template_video_duration.py
       - name: Render one real worker design
         run: |
           python worker/scripts/render_batch8_factory_certification.py \

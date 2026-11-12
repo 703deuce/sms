@@ -13,7 +13,6 @@ from clips_worker.byo_clip_job import template_project_canceled
 from clips_worker.media_sources import apply_full_render_sources, source_transition_boundaries
 from clips_worker.motion_render import apply_motion_after_cut
 from clips_worker.text_items import apply_text_items, text_items_ass
-from clips_worker.edits_render import ensure_template_video_duration
 
 
 FFMPEG = shutil.which("ffmpeg")
@@ -213,26 +212,6 @@ def test_template_image_source_layout_exports_real_side_by_side_collage(tmp_path
     right = half_rgb(sourced, 0.5, "right")
     assert left[0] > left[2] + 80
     assert right[2] > right[0] + 80
-
-
-@pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
-def test_template_export_pads_short_video_tail_to_program_clock(tmp_path: Path) -> None:
-    short = tmp_path / "short_video_track.mp4"
-    run([
-        FFMPEG, "-y", "-v", "error",
-        "-f", "lavfi", "-i", "color=c=green:s=160x90:r=30:d=2.933333",
-        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=3",
-        "-map", "0:v:0", "-map", "1:a:0",
-        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", str(short),
-    ])
-    assert frames(short) == 88
-    assert ensure_template_video_duration(short, 3000, tmp_path) is True
-    assert frames(short) == 90
-    assert duration(short) == pytest.approx(3.0, abs=0.04)
-    streams = json.loads(run([
-        FFPROBE, "-v", "error", "-show_streams", "-of", "json", str(short),
-    ]))["streams"]
-    assert {stream["codec_type"] for stream in streams} == {"video", "audio"}
 
 
 @pytest.mark.skipif(not FFMPEG or not FFPROBE, reason="ffmpeg/ffprobe required")
