@@ -63,6 +63,25 @@ def frame_lumas(path:Path)->list[float]:
         for offset in range(0,len(data),frame_bytes)
     ]
 
+def transition_black_frames(row:dict,lumas:list[float],fps:int=30)->list[int]:
+    """Fail closed on black flashes inside authored non-black transition windows."""
+    out:set[int]=set()
+    for tr in (row.get("edits") or {}).get("transitions") or []:
+        if not isinstance(tr,dict) or tr.get("type")=="dip_black":
+            continue
+        try:
+            center=int(round(float(tr.get("srcMs"))*fps/1000.0))
+            frames=max(2,int(round(float(tr.get("durMs") or 0)*fps/1000.0)))
+        except (TypeError,ValueError):
+            continue
+        lo=max(0,center-(frames+1)//2-1)
+        hi=min(len(lumas),center+frames//2+2)
+        for frame in range(lo,hi):
+            if lumas[frame]<=8:
+                out.add(frame)
+    return sorted(out)
+
+
 def git_blob_sha(path:Path)->str:
     data=path.read_bytes()
     header=f"blob {len(data)}\0".encode()
@@ -175,6 +194,7 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     interiors=[max(a+1,min(b-2,a+(b-a)//2)) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
     samples=[1,max(1,total-1),*interiors]
     black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
+    transition_black=transition_black_frames(row,lumas)
     checks={
         "productionRenderEditedClip":True,
         "expectedFrames":total,
@@ -186,6 +206,7 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
         "audio":any(s.get("codec_type")=="audio" for s in streams),
         "duration":abs(duration-total/30.0)<0.12,
         "blackFrames":black,
+        "transitionBlackFrames":transition_black,
         "sourceSegments":len(row["edits"].get("sourceSegments") or []),
         "transitions":len(row["edits"].get("transitions") or []),
         "textItems":len(row["edits"].get("textItems") or []),
@@ -193,7 +214,7 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     }
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and
-        checks["frameCountExact"] and not black and
+        checks["frameCountExact"] and not black and not transition_black and
         checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
@@ -236,6 +257,7 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     samples=[1,max(1,total-1),*interiors]
     lumas=frame_lumas(final)
     black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
+    transition_black=transition_black_frames(row,lumas)
     checks={
         "video":any(s.get("codec_type")=="video" for s in streams),
         "audio":any(s.get("codec_type")=="audio" for s in streams),
@@ -252,7 +274,7 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     checks["frameCountExact"]=checks["videoFrames"]==total
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and
-        checks["frameCountExact"] and not black and
+        checks["frameCountExact"] and not black and not transition_black and
         checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
