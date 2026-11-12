@@ -64,10 +64,10 @@ const music: TemplateAsset = {
   license,
 }
 
-const realVideoFixture = {
-  path: 'worker/assets/smoke_deploy.mp4',
-  gitBlobSha: '97f89c62a750a42bdfdf6d424db0658b9af1f9d9',
-  provenance: 'checked-in production worker smoke asset',
+const photoManifest = {
+  path: 'worker/tests/fixtures/template_media/b8_cc0_photos.json',
+  revision: 'b8-cc0-photo-pack-v1',
+  license: 'CC0-1.0',
 } as const
 
 const designs = BATCH9A_ANCHOR_RELEASES.map((release) => {
@@ -122,7 +122,7 @@ writeFileSync(
       fps: 30,
       playW: 1080,
       playH: 1920,
-      fixture: { musicId: BATCH9A_DEFAULT_MUSIC.id, musicSha, musicFile, realVideoFixture },
+      fixture: { musicId: BATCH9A_DEFAULT_MUSIC.id, musicSha, musicFile, photoManifest },
       designs,
     },
     null,
