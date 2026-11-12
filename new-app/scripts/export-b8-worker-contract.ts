@@ -41,7 +41,7 @@ const decision:TemplateMusicDecisionV1={v:1,rights,schedule,choice:'keep-timing'
 const musicLicense={id:'b8_first_party_music_qa',provenance:'first-party' as const,
   reference:'b8_generated_cert_music_v1'}
 const mediaLicense={id:'wikimedia_cc0_photo_pack_v1',provenance:'licensed' as const,
-  reference:'CC0-1.0 https://creativecommons.org/publicdomain/zero/1.0/'}
+  reference:'wikimedia_cc0_photo_pack_v1'}
 const music:TemplateAsset={id:musicId,kind:'audio',durationFrames:1800,license:musicLicense}
 const photoManifest={
   path:'worker/tests/fixtures/template_media/b8_cc0_photos.json',
