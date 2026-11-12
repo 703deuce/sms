@@ -8,6 +8,7 @@ import type { VideoTemplateRelease } from '@/lib/clips/real-video-templates/gall
 import type { StudioDraft, StudioSlotFill } from '@/lib/clips/real-video-templates/slot-workflow'
 import type { TemplateAsset } from '@/lib/clips/real-video-templates/sequence-contract'
 import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { sourceMsAtOutput, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { UploadProgress } from '@/lib/clips/upload'
 import { TemplateTextPanel } from '@/components/clips/templates/template-text-panel'
@@ -159,6 +160,7 @@ export function VideoTemplateStudioShell(props: {
           key={previewStageKey}
           clipId={project.clipId}
           playheadEpoch={previewReloadEpoch}
+          playheadOutputMs={clockMs}
           edits={clip.edits}
           videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
           posterUrl={clip.mediaUrls.poster}
@@ -201,7 +203,12 @@ export function VideoTemplateStudioShell(props: {
           value={Math.min(clockMs, clip.edits.trim?.out ?? release.family.totalFrames * 1000 / 30)}
           onChange={e => {
             const nextMs = Number(e.target.value)
-            if (videoRef.current) videoRef.current.currentTime = nextMs / 1000
+            onClockMs(nextMs)
+            if (videoRef.current) {
+              const offset = clip.media?.offsetMs ?? 0
+              const srcMs = sourceMsAtOutput(clip.edits, nextMs)
+              videoRef.current.currentTime = videoTimeFromSourceMs(srcMs, offset)
+            }
             syncMusicPreview(nextMs, videoRef.current?.paused === false)
           }}
         />

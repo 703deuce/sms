@@ -479,7 +479,10 @@ def fit_filter(fit: str, w: int, h: int) -> str:
     if fit == "contain":
         return (f"scale={w}:{h}:force_original_aspect_ratio=decrease:force_divisible_by=2,"
                 f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1")
-    return f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+    return (
+        f"scale={w}:{h}:force_original_aspect_ratio=increase:force_divisible_by=2,"
+        f"crop={w}:{h}:(iw-ow)/2:(ih-oh)/2,setsar=1"
+    )
 
 
 def atempo_filter(rate: float) -> str:

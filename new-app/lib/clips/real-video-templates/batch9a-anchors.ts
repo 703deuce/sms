@@ -113,7 +113,7 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
         durationFrames: index === seed.frames.length - 1 ? 8 : 5,
       },
       motion: {
-        from: { x: index % 2 ? motionShift : -motionShift, scale: 100 },
+        from: { x: index % 2 ? motionShift : -motionShift, scale: motionScale },
         to: { x: index % 2 ? -motionShift : motionShift, scale: motionScale },
         ease: 'inOut',
       },

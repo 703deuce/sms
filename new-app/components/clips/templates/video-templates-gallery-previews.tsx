@@ -167,7 +167,7 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
             fetchPriority="high"
             width={posterW}
             height={posterH}
-            className={'pointer-events-none h-full w-full object-cover select-none ' +
+            className={'pointer-events-none h-full w-full object-cover select-none [image-rendering:-webkit-optimize-contrast] ' +
               (item.demoPath && playing && !reducedMotion ? 'hidden' : '')}
           />
         ) : (

@@ -46,7 +46,7 @@ import { PreviewSafeZoneOverlay } from '@/components/clips/editor/preview-safe-z
 import { STREAM_HEADLINE_BAR_FRAC } from '@/lib/clips/headline-band-layout'
 import { headlinePreviewFontFamily, nearestPipCorner, pipCornerSlotStyle } from '@/lib/clips/headline-preview-style'
 import type { ExportPlatformId } from '@/lib/clips/export-platform-presets'
-import { applyPlaybackTime, outputDurationFromEdits, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
+import { applyPlaybackTime, outputDurationFromEdits, sourceMsAtOutput, sourceMsFromVideo, videoTimeFromSourceMs } from '@/lib/clips/editor-playback'
 import { InsertPlayback } from '@/components/clips/editor/insert-playback'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import type { BrollMediaRow } from '@/lib/server/clips/broll-media'
@@ -174,6 +174,7 @@ export function PreviewStage({
   onFitPercent,
   onEditorMediaError,
   playheadEpoch,
+  playheadOutputMs,
 }: {
   clipId?: string | null
   matteMediaKind?: string | null
@@ -228,6 +229,8 @@ export function PreviewStage({
   onEditorMediaError?: () => void
   /** When this changes, rewind to edits.trim.in (template studio reload). */
   playheadEpoch?: number
+  /** Template studio: authoritative output ms while paused (source video can lag the scrubber). */
+  playheadOutputMs?: number
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -239,6 +242,8 @@ export function PreviewStage({
   const aspect = edits.aspectRatio ?? '9:16'
   const layoutMode = previewLayoutMode(edits)
   const mediaOffsetMs = media?.offsetMs ?? 0
+  const playheadOutputMsRef = useRef(playheadOutputMs)
+  playheadOutputMsRef.current = playheadOutputMs
   const mainVideoMediaProps = useMemo(() => {
     const cors = corsMediaProps(videoUrl)
     const corsOnError = cors.onError
@@ -659,6 +664,24 @@ export function PreviewStage({
   ])
 
   useEffect(() => {
+    if (playheadOutputMs == null || !edits.templateProvenance?.v) return
+    const v = videoRefInner.current
+    if (!v?.paused) return
+    const srcAt = sourceMsAtOutput(edits, playheadOutputMs)
+    const t = videoTimeFromSourceMs(srcAt, mediaOffsetMs)
+    if (!Number.isFinite(t) || t < 0) return
+    const seek = () => {
+      try {
+        if (Math.abs(v.currentTime - t) > 0.04) v.currentTime = Math.max(t, 0)
+      } catch {
+        /* metadata not ready */
+      }
+    }
+    if (v.readyState >= 1) seek()
+    else v.addEventListener('loadedmetadata', seek, { once: true })
+  }, [playheadOutputMs, edits, mediaOffsetMs, edits.templateProvenance?.v])
+
+  useEffect(() => {
     const rate = (normalizeEditSpeed(edits.speed) ?? 1) * previewRate
     const applyRate = (el: HTMLVideoElement | null) => {
       if (el) el.playbackRate = rate
@@ -686,6 +709,9 @@ export function PreviewStage({
       let src = e.trim.in
       if (v) {
         src = sourceMsFromVideo(v.currentTime, mediaOffsetMs)
+        if (e.templateProvenance?.v && v.paused && src <= e.trim.in + 80) {
+          src = e.trim.in
+        }
         if (blur && Math.abs(blur.currentTime - v.currentTime) > 0.05) {
           blur.currentTime = v.currentTime
         }
@@ -758,7 +784,12 @@ export function PreviewStage({
         sceneSrcMsRef.current = src
         setSceneSeg(segIdx)
       }
-      const out = applyPlaybackTime(src, playbackEdits).outputMs
+      let out = applyPlaybackTime(src, playbackEdits).outputMs
+      const extOut = playheadOutputMsRef.current
+      if (e.templateProvenance?.v && v?.paused && extOut != null) {
+        out = extOut
+        src = sourceMsAtOutput(e, out)
+      }
       const outSec = out / 1000
       if (out !== libassOutMsRef.current) {
         libassOutMsRef.current = out
@@ -1180,10 +1211,21 @@ export function PreviewStage({
     () => segmentLayoutAtSourceMs(edits, previewSourceMs),
     [edits, previewSourceMs],
   )
-  const activeSourceSegment = useMemo(
-    () => sourceSegmentAt(edits.sourceSegments, previewSourceMs),
-    [edits.sourceSegments, previewSourceMs],
+  const templatePreviewTb = useMemo(
+    () => (edits.templateProvenance?.v ? timebaseFor(previewEdits) : null),
+    [edits.templateProvenance?.v, previewEdits],
   )
+  const activeSourceSegment = useMemo(() => {
+    if (edits.templateProvenance?.v && templatePreviewTb) {
+      const outMs =
+        playheadOutputMs != null && !playing
+          ? playheadOutputMs
+          : applyPlaybackTime(previewSourceMs, previewEdits).outputMs
+      const srcAtOut = sourceMsAtOutput(edits, outMs)
+      return sourceSegmentAt(edits.sourceSegments, srcAtOut)
+    }
+    return sourceSegmentAt(edits.sourceSegments, previewSourceMs)
+  }, [edits, edits.sourceSegments, playheadOutputMs, playing, previewEdits, previewSourceMs, templatePreviewTb])
   const mainHiddenByLayout = segmentLayoutActive || edits.timelineLanes?.video?.hidden ? ' invisible pointer-events-none' : ''
   const facecamBox = edits.layout.facecam?.box
   const facecamGameplay = edits.layout.facecam?.gameplay

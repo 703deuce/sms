@@ -188,6 +188,7 @@ import {
   videoSplitTransitionWindows,
   videoSplitAutoCrossfadeWindows,
   transitionAtCut,
+  transitionAtSite,
   setBrollTransition,
   setCutTransition,
   type TransitionSpec,
@@ -2267,7 +2268,7 @@ export function Timeline({
   const trValue: TransitionSpec | null = (() => {
     if (!trPop) return null
     if (trPop.kind === 'cut') {
-      const t = transitionAtCut(tb.segs, edits.transitions, trPop.srcMs)
+      const t = transitionAtSite(tb, edits.videoSplits, edits.transitions, trPop.srcMs)
       return t ? { type: t.type, durMs: t.durMs } : null
     }
     const b = edits.broll?.find((x) => x.id === trPop.id)
@@ -3998,7 +3999,7 @@ export function Timeline({
                         const slots = layoutCutHandles(cutTransitionHandles.map((s) => xs(s.outputMs)))
                         return cutTransitionHandles.map((site, ci) => {
                         const slot = slots[ci]!
-                        const tr = transitionAtCut(tb.segs, edits.transitions, site.srcMs)
+                        const tr = transitionAtSite(tb, edits.videoSplits, edits.transitions, site.srcMs)
                         return (
                           <button
                             key={`cut${site.srcMs}`}

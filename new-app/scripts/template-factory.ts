@@ -377,7 +377,7 @@ function extractPoster(renderFile:string,posterFile:string,totalFrames:number,bo
   const frame=stablePosterFrame(boundaries,totalFrames)
   const at=frame/30
   const output=spawnSync('ffmpeg',['-nostdin','-y','-v','error','-ss',at.toFixed(4),
-    '-i',renderFile,'-frames:v','1','-vf','scale=720:-2:flags=lanczos',posterFile],{
+    '-i',renderFile,'-frames:v','1','-vf','scale=1080:-2:flags=lanczos',posterFile],{
       encoding:'utf8',timeout:60000,maxBuffer:1024*1024,
     })
   if(output.status!==0||!existsSync(posterFile))

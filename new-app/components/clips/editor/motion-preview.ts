@@ -432,7 +432,9 @@ export function applyMotionFrame(
   const exW = opts.exportW ?? exportW
   const exH = opts.exportH ?? exportH
   let shaderNotice: string | null = null
-  const main = mainFrame(edits, tb, outMs, opts.boxW)
+  const main = mainFrame(edits, tb, outMs, opts.boxW, 1500, {
+    suppressUpcomingPreRoll: Boolean(edits.templateProvenance?.v && !opts.playing),
+  })
   setStyle(dom.mainKf, main.kf)
   const cutHost = dom.cloneA?.parentElement ?? null
   if (main.cut) {

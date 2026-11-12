@@ -572,6 +572,24 @@ export function transitionAtCut<T extends { srcMs: number }>(
   return k > 0 ? matchTransitionsToCuts(segs, transitions, fps).get(k) : undefined
 }
 
+/** Transition at a Video-lane cut: real source joins first, then videoSplits (template multi-source). */
+export function transitionAtSite<T extends { srcMs: number; type: string; durMs: number }>(
+  tb: Timebase,
+  videoSplits: readonly number[] | undefined,
+  transitions: readonly T[] | undefined,
+  cutSrcMs: number,
+  fps = MOTION_FPS,
+): T | undefined {
+  const atJoin = transitionAtCut(tb.segs, transitions, cutSrcMs, fps)
+  if (atJoin) return atJoin
+  if (!transitions?.length) return undefined
+  const tol = cutMatchToleranceMs(fps)
+  const match = transitions.find((t) => Math.abs(t.srcMs - cutSrcMs) <= tol)
+  if (!match) return undefined
+  if (!videoSplits?.length) return match
+  return videoSplits.some((s) => Math.abs(s - cutSrcMs) <= tol) ? match : undefined
+}
+
 /**
  * Cut windows on the effective EDL. segs/starts = timebaseFor(editorPreviewEdits(...)).
  * d ≤ min(len before, len after) so neighbouring windows never overlap (each segment gives at

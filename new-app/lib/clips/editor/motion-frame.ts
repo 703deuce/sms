@@ -94,7 +94,9 @@ export function mainFrame(
   outMs: number,
   boxW: number,
   preRollMs = 1500,
+  options?: { suppressUpcomingPreRoll?: boolean },
 ): MainFrame {
+  const effectivePreRoll = options?.suppressUpcomingPreRoll ? 0 : preRollMs
   const kfMs = keyframeSampleOutMs(edits, outMs)
   const t = tracksFor(edits, 'video').length ? layerTransformAt(edits, 'video', kfMs) : IDENTITY_TRANSFORM
   // G1a: crop (element-local clip) + flip (last transform function → applied first), as the export.
@@ -136,7 +138,7 @@ export function mainFrame(
       }
       break
     }
-    if (!upcoming && w.w0Ms > outMs && w.w0Ms - outMs <= preRollMs) {
+    if (!upcoming && w.w0Ms > outMs && w.w0Ms - outMs <= effectivePreRoll) {
       upcoming = { win: w, aSrcMs: w.aEnd + (w.w0Ms - w.cutMs), bSrcMs: w.bStart + (w.w0Ms - w.cutMs) }
     }
   }
