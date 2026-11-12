@@ -45,6 +45,15 @@ const renderArgs=[
   '--shard',String(shard),'--shards',String(shards),'--production-smoke',
   ...(limit?['--limit',String(limit)]:[]),
 ]
-const rendered=spawnSync('python',renderArgs,{cwd:resolve(process.cwd(),'..'),stdio:'inherit'})
+const repoRoot=resolve(process.cwd(),'..')
+const rendered=spawnSync('python',renderArgs,{
+  cwd:repoRoot,stdio:'inherit',
+  env:{
+    ...process.env,
+    PYTHONPATH:resolve(repoRoot,'worker'),
+    CLIP_FONTS_DIR:resolve(repoRoot,'worker/v3/fonts/t6'),
+    LIBGL_ALWAYS_SOFTWARE:process.env.LIBGL_ALWAYS_SOFTWARE??'1',
+  },
+})
 if(rendered.status!==0)process.exit(rendered.status??1)
 console.log('Rendered certified-anchor-gated Phase B shard '+shard+'/'+shards+' to '+out)
