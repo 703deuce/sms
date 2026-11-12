@@ -88,12 +88,19 @@ export async function enqueueYoutubeVideoRenderOnce(a:{
   const ids=youtubeOutputIdentity(a.workspaceId,a.runId,a.optionId)
   // render/job IDs are deterministic per run+choice even when resuming a
   // pre-deterministic output clip whose project/clip IDs were random.
-  const {width,height}=exportPixelSize('16:9','720p')
+  // Use fast 854x480 for long-form by default. Site operators can opt into
+  // 720p or 1080p via YouTube-only config without altering ordinary clip exports.
+  const configured=process.env.YOUTUBE_VIDEO_EXPORT_RESOLUTION
+  const resolution: '480p'|'720p'|'1080p'=
+    configured==='720p'||configured==='1080p'?configured:'480p'
+  const {width,height}=resolution==='480p'
+    ?{width:854,height:480}:exportPixelSize('16:9',resolution)
   const composeSpec=composeSpecV1Enabled(a.workspaceId,a.projectId)
     ?resolveComposeSpec(a.edits,width,height):null
-  const hash=renderVersionHash(
-    clipRenderHashMaterial(editsVersionHash(a.edits),{composeSpec}),'16:9','720p',
-  )
+  const hash=`${renderVersionHash(
+    clipRenderHashMaterial(editsVersionHash(a.edits),{composeSpec}),'16:9',
+    resolution==='480p'?'720p':resolution,
+  )}:youtube-${resolution}`
   const filename=exportFilename(a.title)
   const expiresAt=new Date(Date.now()+7*24*60*60*1000)
   const render=await prisma.$transaction(async(tx)=>{
@@ -101,7 +108,7 @@ export async function enqueueYoutubeVideoRenderOnce(a:{
       where:{id:ids.renderId},
       create:{
         id:ids.renderId,clipId:a.clipId,workspaceId:a.workspaceId,status:'QUEUED',
-        resolution:'720p',format:'mp4',aspectRatio:'16:9',watermark:false,filename,
+        resolution,format:'mp4',aspectRatio:'16:9',watermark:false,filename,
         editsVersionHash:hash,expiresAt,outputKey:null,
       },
       update:{},
