@@ -430,9 +430,17 @@ export async function chooseYoutubeVideoOption(
     const result: YoutubeVideoResult = await traceYoutubeRunStep(runId, 'applying', () => assembleChosenOption(option, written))
     if (record.analysisState) {
       result.analysisAudit = {
+        premise: record.analysisState.final?.premise ?? option.premise,
+        needsReview: !!record.analysisState.final?.needsReview ||
+          record.analysisState.finished.some(w => w.qaPassed === false),
+        globalQaIssues: record.analysisState.final?.qaIssues ?? [],
+        globalQaIssueHistory: record.analysisState.final?.qaIssueHistory ?? [],
         steps: record.analysisState.steps,
         windows: record.analysisState.finished.map(window => ({
           sourceIndex: window.sourceIndex, startMs: window.startMs, endMs: window.endMs,
+          qaPassed: window.qaPassed,
+          qaIssues: window.qaIssues ?? [],
+          qaIssueHistory: window.qaIssueHistory ?? [],
           acceptedCuts: window.cuts.map(cut => ({
             sourceId: cut.sourceId, startMs: cut.startMs, endMs: cut.endMs,
           })), rejectedCuts: window.rejected,
