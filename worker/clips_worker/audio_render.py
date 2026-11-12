@@ -1,6 +1,8 @@
 """FFmpeg audio mix: speech + ducked music + SFX."""
 from __future__ import annotations
 
+import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -68,6 +70,83 @@ def require_template_soundtrack(music_edits: dict, music_path: Path | str | None
 
 
 MUSIC_LOOP_XFADE_S = 1.5
+
+
+def loudnorm_template_music_bed(
+    src: Path,
+    work_dir: Path,
+    *,
+    target_lufs: float = -14.0,
+    true_peak_db: float = -1.0,
+) -> Path:
+    """Two-pass EBU R128 loudness normalize template music before duck/mix."""
+    if not src.is_file():
+        return src
+    work_dir.mkdir(parents=True, exist_ok=True)
+    out = work_dir / "template_music_loudnorm.wav"
+    if out.is_file() and out.stat().st_size > 44:
+        return out
+    measure = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostats",
+            "-y",
+            "-i",
+            str(src),
+            "-af",
+            f"loudnorm=I={target_lufs}:TP={true_peak_db}:LRA=11:print_format=json",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    blob = measure.stderr or ""
+    match = re.search(r"\{[\s\S]*\}\s*$", blob.strip())
+    if not match:
+        return src
+    try:
+        stats = json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return src
+    keys = (
+        "input_i",
+        "input_tp",
+        "input_lra",
+        "input_thresh",
+        "target_offset",
+        "output_i",
+        "output_tp",
+        "output_lra",
+        "output_thresh",
+    )
+    if not all(k in stats for k in keys):
+        return src
+    norm = (
+        f"loudnorm=I={target_lufs}:TP={true_peak_db}:LRA=11:"
+        f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
+        f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
+        f"offset={stats['target_offset']}:linear=true:print_format=summary"
+    )
+    subprocess.check_call(
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-i",
+            str(src),
+            "-af",
+            norm,
+            "-ar",
+            "48000",
+            str(out),
+        ],
+    )
+    return out if out.is_file() and out.stat().st_size > 44 else src
 
 
 def prepare_looped_music_bed(

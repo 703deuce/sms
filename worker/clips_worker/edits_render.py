@@ -2081,15 +2081,23 @@ def render_edited_clip(
             )
         except (TypeError, ValueError):
             cycle_s = None
-    if music_path and music_win and music_loop:
-        from clips_worker.audio_render import prepare_looped_music_bed
+    if music_path:
         from pathlib import Path as _Path
 
-        play_s = (music_win["endMs"] - music_win["startMs"]) / 1000.0
-        filled = prepare_looped_music_bed(_Path(music_path), play_s, work_dir, cycle_s=cycle_s)
-        if filled != _Path(music_path):
-            music_path = filled
-            music_loop = False
+        from clips_worker.audio_render import loudnorm_template_music_bed, prepare_looped_music_bed
+
+        _mp = _Path(music_path)
+        if isinstance(edits.get("templateProvenance"), dict):
+            normalized = loudnorm_template_music_bed(_mp, work_dir)
+            if normalized != _mp:
+                music_path = normalized
+                _mp = normalized
+        if music_win and music_loop:
+            play_s = (music_win["endMs"] - music_win["startMs"]) / 1000.0
+            filled = prepare_looped_music_bed(_mp, play_s, work_dir, cycle_s=cycle_s)
+            if filled != _mp:
+                music_path = filled
+                music_loop = False
     studio_path = (audio_assets or {}).get("studio_path") if audio_assets else None
     studio_mix = (audio_assets or {}).get("studio_mix") if audio_assets else None
     if studio_path and studio_path.is_file() and studio_mix is not None:

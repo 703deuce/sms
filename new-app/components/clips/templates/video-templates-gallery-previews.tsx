@@ -116,9 +116,16 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
   const seconds = (item.family.totalFrames / item.family.fps).toFixed(1).replace(/\.0$/, '')
   const framePosters = media.framePosterPaths
   const col = frame % Math.max(1, media.columns)
+  const posterIndex = frame % Math.max(1, framePosters?.length ?? 0)
   const hdSrc = framePosters?.length
-    ? framePosters[frame % framePosters.length]
+    ? framePosters[posterIndex]!
     : media.posterPath ?? media.spritePath
+  const posterW = media.posterWidth ?? 1080
+  const posterSrcSet = framePosters?.length
+    ? framePosters.map(path => path + ' ' + posterW + 'w').join(', ')
+    : media.posterPath
+      ? media.posterPath + ' ' + posterW + 'w'
+      : undefined
   return (
     <div
       className={'group relative overflow-hidden bg-black ' + frameStyle.className}
@@ -143,9 +150,13 @@ export function RenderedTemplateCardPreview({ item, forcePlay }: { item: VideoTe
         {framePosters?.length || media.posterPath ? (
           <img
             src={hdSrc}
+            srcSet={posterSrcSet}
+            sizes="(max-width: 480px) 100vw, 420px"
             alt=""
             aria-hidden
             decoding="async"
+            width={posterW}
+            height={Math.round(posterW * 16 / 9)}
             className={'pointer-events-none h-full w-full object-cover select-none ' +
               (item.demoPath && playing && !reducedMotion ? 'hidden' : '')}
           />

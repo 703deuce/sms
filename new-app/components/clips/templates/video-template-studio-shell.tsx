@@ -87,11 +87,13 @@ export function VideoTemplateStudioShell(props: {
   activeSlot: VideoTemplateRelease['family']['slots'][number] | undefined
   activeFill: StudioSlotFill | undefined
   clip: {
+    clip: { editsSaveVersion: number }
     edits: ClipEditsV2
     mediaUrls: { source: string | null; proxy: string | null; poster: string | null }
     media: EditorMedia | null
     crop: { track: ComponentProps<typeof PreviewStage>['cropTrack'] }
   } | null
+  previewReloadEpoch: number
   previewFrameStyle: { aspectRatio: string; maxHeight: number; width: '100%'; maxWidth: number }
   videoRef: RefObject<HTMLVideoElement | null>
   musicAudioRef: RefObject<HTMLAudioElement | null>
@@ -113,7 +115,7 @@ export function VideoTemplateStudioShell(props: {
     librarySelection, onToggleLibrarySelect, onUpload, uploadStatus, selectedSlot, onSelectSlot,
     knownMedia, onAssignAsset, onBatchFill, onBatchFillFiles, canBatchFillFromSelection,
     uploadProgress, onCommitDraft, patchFill, onCreateHold,
-    activeSlot, activeFill, clip, previewFrameStyle, videoRef, musicAudioRef, sourceUrls,
+    activeSlot, activeFill, clip, previewReloadEpoch, previewFrameStyle, videoRef, musicAudioRef, sourceUrls,
     clockMs, onClockMs, syncMusicPreview, releaseFamilySlots, pendingMusic, onPendingMusic,
     musicMedia, musicConfig,
   } = props
@@ -124,6 +126,20 @@ export function VideoTemplateStudioShell(props: {
   const editorHref = project?.clipId && project.status === 'READY'
     ? '/app/clips/' + encodeURIComponent(project.id) + '/edit/' + encodeURIComponent(project.clipId)
     : null
+
+  const firstSegmentKey = clip?.edits.sourceSegments?.length
+    ? [...clip.edits.sourceSegments].sort((a, b) => a.startMs - b.startMs)[0]?.id ?? 'none'
+    : 'none'
+  const previewStageKey = project?.clipId
+    ? [
+        project.clipId,
+        clip?.edits.v ?? 0,
+        clip?.edits.trim?.in ?? 0,
+        clip?.clip.editsSaveVersion ?? 0,
+        firstSegmentKey,
+        previewReloadEpoch,
+      ].join(':')
+    : 'idle'
 
   const previewBlock = ready && clip && project?.clipId ? (
     <>
@@ -140,8 +156,9 @@ export function VideoTemplateStudioShell(props: {
         }}
       >
         <PreviewStage
-          key={project.clipId + ':' + clip.edits.v + ':' + (clip.edits.trim?.in ?? 0)}
+          key={previewStageKey}
           clipId={project.clipId}
+          playheadEpoch={previewReloadEpoch}
           edits={clip.edits}
           videoUrl={clip.mediaUrls.source ?? clip.mediaUrls.proxy}
           posterUrl={clip.mediaUrls.poster}

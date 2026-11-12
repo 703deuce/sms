@@ -564,7 +564,8 @@ export function compileTemplate(
   const reducedMotion = choices.accessibility?.reducedMotion === true
   const reducedFlash = choices.accessibility?.reducedFlash === true
 
-  for (const [index, slot] of family.slots.entries()) {
+  const orderedSlots = [...family.slots].sort((a, b) => a.startFrame - b.startFrame || a.ordinal - b.ordinal)
+  for (const [index, slot] of orderedSlots.entries()) {
     const asset = validateAsset(choices.media[slot.id], slot.media === 'either' ? ['image','video'] : [slot.media], slot.id)
     const inFrame = slot.sourceInFrame ?? 0
     const head = slot.handles?.headFrames ?? 0, tail = slot.handles?.tailFrames ?? 0

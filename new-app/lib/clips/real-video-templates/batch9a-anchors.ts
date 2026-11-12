@@ -8,6 +8,13 @@ type Direction = readonly [
   recipeId:string, headline:string, closing:string, description:string,
   transition:FactoryTreatmentRecipe['transition'], motionScale:number, motionShift:number, headlineSize:number
 ]
+/** Reference headline size at 1920px frame height (~9% — legible hook at 720p/1080p export). */
+const BATCH9A_HEADLINE_REF_H = 1920
+const BATCH9A_HEADLINE_FRAC = 0.09
+const batch9aHeadlinePx = (legacySize: number) =>
+  Math.round(legacySize * (BATCH9A_HEADLINE_REF_H * BATCH9A_HEADLINE_FRAC) / 76)
+const batch9aClosingPx = (legacyHeadline: number) => Math.round(44 * batch9aHeadlinePx(legacyHeadline) / 76)
+
 const DIRECTIONS: Readonly<Record<string,Direction>> = {
   f01:['magazine','WAIT FOR IT','THE REVEAL','Editorial cold-open reveal with a fast hook and clean final landing.','whip_pan',108,5,76],
   f02:['minimal','BEFORE','AFTER','Transformation-first comparison with restrained typography and a bright reveal beat.','dip_white',103,1,68],
@@ -74,6 +81,7 @@ function batch9aPreviewMedia(index: number, spriteSha: string) {
     sha256: spriteSha,
     posterPath: base + '_frame0.webp',
     framePosterPaths: [0, 1, 2, 3].map(col => base + '_frame' + col + '.webp'),
+    posterWidth: 1080,
   } as const
 }
 
@@ -93,7 +101,9 @@ const BATCH9A_PREVIEW_SPRITE_SHA = [
 const BATCH9A_PREVIEW_MEDIA = BATCH9A_PREVIEW_SPRITE_SHA.map((sha, index) => batch9aPreviewMedia(index, sha))
 
 function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRecipe, direction: Direction): TemplateFamilyV1 {
-  const [,headline,closing,,transition,motionScale,motionShift,headlineSize]=direction
+  const [,headline,closing,,transition,motionScale,motionShift,legacyHeadlineSize]=direction
+  const headlineSize = batch9aHeadlinePx(legacyHeadlineSize)
+  const closingSize = batch9aClosingPx(legacyHeadlineSize)
   const finish=TEXT_FINISHES[seed.id]
   if(!finish)throw new Error('Missing Batch 9A text finish: '+seed.id)
   let at = 0
@@ -158,7 +168,7 @@ function authorAnchorFamily(seed: FactoryFamilySeed, recipe: FactoryTreatmentRec
       {
         id:'closing_line',defaultText:closing,maxChars:44,
         startFrame:totalFrames-outroFrames,durationFrames:outroFrames,
-        x:recipe.x,y:secondaryY,font:recipe.supportFont,size:44,color:recipe.foreground,
+        x:recipe.x,y:secondaryY,font:recipe.supportFont,size:closingSize,color:recipe.foreground,
         finish:finish.closing,
         anim:{in:{type:'fade',unit:'block',durMs:440},out:{type:'fade',unit:'block',durMs:260}},
       },

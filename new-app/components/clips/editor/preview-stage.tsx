@@ -173,6 +173,7 @@ export function PreviewStage({
   onPreviewZoomChange,
   onFitPercent,
   onEditorMediaError,
+  playheadEpoch,
 }: {
   clipId?: string | null
   matteMediaKind?: string | null
@@ -225,6 +226,8 @@ export function PreviewStage({
   onPreviewZoomChange?: (zoom: PreviewZoom) => void
   onFitPercent?: (pct: number) => void
   onEditorMediaError?: () => void
+  /** When this changes, rewind to edits.trim.in (template studio reload). */
+  playheadEpoch?: number
 }) {
   const wrapRef = useRef<HTMLDivElement>(null)
   const videoRefInner = useRef<HTMLVideoElement>(null)
@@ -334,6 +337,7 @@ export function PreviewStage({
   const lastSrcMsRef = useRef<number | null>(null)
   const boundVideoRef = useRef<HTMLVideoElement | null>(null)
   const seekKeyRef = useRef<string | null>(null)
+  const playheadEpochRef = useRef<number | undefined>(playheadEpoch)
   // E3: layers driven per tick by motion-preview (keyframes + transitions).
   const underRef = useRef<HTMLDivElement>(null)
   // G4a: adjustment layers grade the main video + B-roll (wrapper filter; text stays on top).
@@ -611,8 +615,13 @@ export function PreviewStage({
     // E1fix: only a new source / trim-in rewinds to trim.in. A layout / template / band change
     // (which can remount the <video>) keeps the current playhead instead of jumping to 0:00.
     const seekKey = `${videoUrl}|${edits.trim.in}`
+    const epochBump = playheadEpoch != null && playheadEpochRef.current !== playheadEpoch
+    if (epochBump) {
+      playheadEpochRef.current = playheadEpoch
+      lastSrcMsRef.current = edits.trim.in
+    }
     const keepMs = lastSrcMsRef.current
-    const sameSource = seekKeyRef.current === seekKey
+    const sameSource = seekKeyRef.current === seekKey && !epochBump
     seekKeyRef.current = seekKey
     const seekAll = videoTimeFromSourceMs(sameSource && keepMs != null ? keepMs : edits.trim.in, mediaOffsetMs)
     const needsSeek = Boolean(v0 && Math.abs(v0.currentTime - Math.max(seekAll, 0.04)) > 0.04)
@@ -643,6 +652,7 @@ export function PreviewStage({
     mediaOffsetMs,
     layoutMode,
     headlineBandTopFrac,
+    playheadEpoch,
   ])
 
   useEffect(() => {

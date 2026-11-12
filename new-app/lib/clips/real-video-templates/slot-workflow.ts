@@ -187,14 +187,18 @@ export function materializeStudioDraft(
   if (Object.keys(draft.slots).some(id => !family.slots.some(slot => slot.id === id)))
     throw new Error('Draft has unknown slot assignments')
   const parts: Array<{ slot: TemplateSlot; asset: TemplateAsset; originalId: string }> = []
-  for (const sourceSlot of family.slots) {
+  const familySlots = [...family.slots].sort((a, b) => a.startFrame - b.startFrame || a.ordinal - b.ordinal)
+  for (const sourceSlot of familySlots) {
     const fill = draft.slots[sourceSlot.id]
     if (!fill) throw new Error(`Slot ${sourceSlot.ordinal} is empty`)
     const slot = withOverrides(sourceSlot, fill)
     for (const part of fitParts(slot, fill)) parts.push({ ...part, originalId: sourceSlot.id })
   }
   if (parts.length > 120) throw new Error('Template expands beyond 120 supported source segments')
-  const normalizedSlots = parts.map((p, i) => ({ ...p.slot, ordinal: i + 1 }))
+  const normalizedSlots = parts
+    .map((p, i) => ({ ...p.slot, ordinal: i + 1 }))
+    .sort((a, b) => a.startFrame - b.startFrame || a.ordinal - b.ordinal)
+    .map((slot, i) => ({ ...slot, ordinal: i + 1 }))
   const recolor = draft.brandColor
   if (recolor && !/^#[0-9a-fA-F]{6}$/.test(recolor)) throw new Error('Invalid brand color')
   const instancedFamily = validateTemplateFamily({ ...family, slots: normalizedSlots,

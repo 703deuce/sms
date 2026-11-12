@@ -115,6 +115,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
   const [sourceUrls, setSourceUrls] = useState<Record<string, string>>({})
   const [render, setRender] = useState<RenderJob | null>(null)
   const [clockMs, setClockMs] = useState(0)
+  const [previewReloadEpoch, setPreviewReloadEpoch] = useState(0)
   const lastClockRounded = useRef(-1)
   const [busy, setBusy] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -209,10 +210,10 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
     editsVersionRef.current = detail.clip.editsSaveVersion
     setCurrentProject({ ...value, editsSaveVersion: detail.clip.editsSaveVersion })
     const orderedSlots = [...release.family.slots].sort((a, b) => a.ordinal - b.ordinal)
-    const firstFilled = orderedSlots.find(slot => draftRef.current?.slots[slot.id])?.id
-    if (firstFilled) setSelectedSlot(firstFilled)
+    if (orderedSlots[0]?.id) setSelectedSlot(orderedSlots[0].id)
     setClockMs(0)
     lastClockRounded.current = -1
+    setPreviewReloadEpoch(epoch => epoch + 1)
     window.requestAnimationFrame(() => {
       const video = videoRef.current
       if (video) {
@@ -699,6 +700,7 @@ export function VideoTemplateStudio({ release, initialProjectId }: {
         activeSlot={activeSlot}
         activeFill={activeFill}
         clip={clip}
+        previewReloadEpoch={previewReloadEpoch}
         previewFrameStyle={previewFrameStyle}
         videoRef={videoRef}
         musicAudioRef={musicAudioRef}

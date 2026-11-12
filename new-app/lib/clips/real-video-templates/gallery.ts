@@ -23,6 +23,8 @@ export type VideoTemplateRelease = {
     /** Sharp still for the idle card; hover cycles `framePosterPaths` when set. */
     posterPath?: string
     framePosterPaths?: readonly string[]
+    /** Intrinsic width of frame posters (for srcset), e.g. 1080 for 2x 9:16 cards. */
+    posterWidth?: number
   }
   family: TemplateFamilyV1
   design: TemplateDesignV1
