@@ -4,6 +4,7 @@ export const YOUTUBE_VIDEO_STATUSES = [
   'waiting_for_source',
   'running',
   'awaiting_choice',
+  'needs_review',
   'ready',
   'failed',
   'canceled',
@@ -68,6 +69,9 @@ export type YoutubeVideoResult = {
     needsReview?: boolean
     globalQaIssues?: string[]
     globalQaIssueHistory?: string[]
+    scenes?: Array<{sourceId:string;startMs:number;endMs:number;title:string;reason:string}>
+    cutSpans?: Array<{sourceId:string;startMs:number;endMs:number;durationMs:number;category:string;reason:string;sceneContext:string}>
+    qaRevisions?: Array<{scope:string;round:number;status:string;issues:string[];explanation:string}>
     steps: import('@/lib/youtube-video/pipeline/yt-types').YtStep[]
     windows: Array<{
       sourceIndex:number;startMs:number;endMs:number
@@ -100,6 +104,7 @@ export type YoutubeVideoRunView = {
   creditsEstimated: number | null
   options: YoutubeVideoOption[] | null
   result: YoutubeVideoResult | null
+  analysisAudit?: YoutubeVideoResult['analysisAudit'] | null
 }
 
 export type YoutubeVideoWord = {
