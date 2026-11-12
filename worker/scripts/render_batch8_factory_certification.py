@@ -47,13 +47,21 @@ def video_frames(path:Path)->int:
     try:return int(raw)
     except (TypeError,ValueError):return 0
 
-def frame_mean(path:Path,frame:int,total:int)->float:
-    sec=max(.01,min((total-1)/30.0,frame/30.0))
+def frame_lumas(path:Path)->list[float]:
+    """Decode the exact output frame stream once; never infer black from an empty seek."""
+    w,h=48,86
     data=subprocess.check_output([
-        FFMPEG,"-v","error","-ss",f"{sec:.4f}","-i",str(path),"-frames:v","1",
-        "-vf","scale=48:86,format=gray","-f","rawvideo","-pix_fmt","gray","-"],
-        timeout=30)
-    return sum(data)/max(1,len(data))
+        FFMPEG,"-v","error","-i",str(path),
+        "-vf",f"scale={w}:{h},format=gray",
+        "-f","rawvideo","-pix_fmt","gray","-"],
+        timeout=60)
+    frame_bytes=w*h
+    if not data or len(data)%frame_bytes:
+        raise RuntimeError("decoded QA stream is empty or not frame-aligned")
+    return [
+        sum(data[offset:offset+frame_bytes])/frame_bytes
+        for offset in range(0,len(data),frame_bytes)
+    ]
 
 def git_blob_sha(path:Path)->str:
     data=path.read_bytes()
@@ -139,8 +147,10 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     duration=float(info["format"]["duration"])
     boundaries=[int(x) for x in row["boundaries"]]
     frame_count=video_frames(final)
+    lumas=frame_lumas(final)
     interiors=[max(a+1,min(b-2,a+(b-a)//2)) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
-    black=[f for f in [1,max(1,total-1),*interiors] if frame_mean(final,f,total)<=8]
+    samples=[1,max(1,total-1),*interiors]
+    black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
     checks={
         "productionRenderEditedClip":True,
         "expectedFrames":total,
@@ -200,7 +210,8 @@ def render(row:dict,out_root:Path,media:dict[str,Path],music:Path,cache:dict[int
     boundaries=[int(x) for x in row["boundaries"]]
     interiors=[max(a+1,min(b-2,a+(b-a)//2)) for a,b in zip(boundaries,boundaries[1:]) if b-a>=3]
     samples=[1,max(1,total-1),*interiors]
-    black=[f for f in samples if frame_mean(final,f,total)<=8]
+    lumas=frame_lumas(final)
+    black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
     checks={
         "video":any(s.get("codec_type")=="video" for s in streams),
         "audio":any(s.get("codec_type")=="audio" for s in streams),
