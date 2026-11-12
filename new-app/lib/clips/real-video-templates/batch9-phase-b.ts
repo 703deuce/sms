@@ -1,13 +1,32 @@
+import { createHash } from 'node:crypto'
 import { FACTORY_FAMILY_SEEDS,FACTORY_TREATMENTS } from './b8-authoring-catalog'
+import { BATCH9A_ANCHOR_RELEASES } from './batch9a-anchors'
 import type { VideoTemplateRelease } from './gallery'
 import {
   auditB8Evidence,generateB8Candidates,scoreB8Review,
   type B8Candidate,type B8Evidence,
 } from './b8-factory'
 
-export const BATCH9_PHASE_A_ANCHORS=FACTORY_FAMILY_SEEDS.slice(0,10)
-  .map(family=>family.id+'_bold') as readonly string[]
+export const BATCH9_PHASE_A_ANCHORS=BATCH9A_ANCHOR_RELEASES.map(release=>release.id) as readonly string[]
 export const BATCH9_PHASE_B_VARIANT_TARGET=390 as const
+const phaseHash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex')
+
+export function batch9PhaseAAnchorCandidates():readonly B8Candidate[]{
+  if(BATCH9A_ANCHOR_RELEASES.length!==10)
+    throw new Error('Batch 9 Phase A must contain exactly ten live anchors')
+  return BATCH9A_ANCHOR_RELEASES.map(release=>({
+    id:release.id,
+    familyId:release.family.familyId,
+    treatmentId:'bold',
+    status:'draft' as const,
+    authoringOrigin:'canonical' as const,
+    authoredDimensions:[...release.authoredDimensions],
+    family:release.family,
+    design:release.design,
+    fingerprint:phaseHash([release.family.slots,release.family.texts,release.family.graphics]),
+    definitionHash:phaseHash(['batch9a-live-anchor-v1',release.family,release.design]),
+  }))
+}
 
 export type Batch9PhaseAStatus={
   ready:boolean
@@ -15,7 +34,7 @@ export type Batch9PhaseAStatus={
 }
 export function batch9PhaseAAnchorGate(evidence:readonly B8Evidence[]):Batch9PhaseAStatus{
   const byId=new Map(evidence.map(row=>[row.id,row]))
-  const candidates=new Map(generateB8Candidates().map(candidate=>[candidate.id,candidate]))
+  const candidates=new Map(batch9PhaseAAnchorCandidates().map(candidate=>[candidate.id,candidate]))
   const blockers:Record<string,string[]>={}
   for(const id of BATCH9_PHASE_A_ANCHORS){
     const candidate=candidates.get(id)

@@ -1,10 +1,12 @@
 import { describe,expect,it } from 'vitest'
 import { FACTORY_TREATMENTS } from '@/lib/clips/real-video-templates/b8-authoring-catalog'
+import { BATCH9A_ANCHOR_RELEASES } from '@/lib/clips/real-video-templates/batch9a-anchors'
+import { generateB8Candidates } from '@/lib/clips/real-video-templates/b8-factory'
 import { BATCH9_PHASE_B_CERTIFIED_RELEASES } from '@/lib/clips/real-video-templates/batch9-phase-b-certified'
 import { FIRST_PARTY_VIDEO_TEMPLATES } from '@/lib/clips/real-video-templates/releases'
 import {
   BATCH9_PHASE_A_ANCHORS,BATCH9_PHASE_B_VARIANT_TARGET,
-  batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,batch9PhaseBIndependentReviewPlan,
+  batch9PhaseAAnchorCandidates,batch9PhaseAAnchorGate,batch9PhaseBExpansionCandidates,batch9PhaseBIndependentReviewPlan,
   batch9PhaseBReleaseGate,
   batch9PhaseBReviewedReleases,batch9PhaseBStatus,batch9PhaseBWorkerIds,
   eligibleBatch9PhaseBVariants,
@@ -19,6 +21,14 @@ describe('Batch 9 Phase B style-pack expansion gate',()=>{
     expect(phaseA.every(row=>row.certificationStatus==='preview')).toBe(true)
     expect(FIRST_PARTY_VIDEO_TEMPLATES.filter(row=>
       /^f(?:0[1-9]|10)_/.test(row.id)&&!BATCH9_PHASE_A_ANCHORS.includes(row.id))).toEqual([])
+  })
+  it('binds Phase A certification to the current live Batch 9A definitions',()=>{
+    const live=batch9PhaseAAnchorCandidates()
+    expect(live).toHaveLength(10)
+    expect(live.map(row=>row.id)).toEqual(BATCH9A_ANCHOR_RELEASES.map(row=>row.id))
+    expect(live.map(row=>row.family.revision)).toEqual(BATCH9A_ANCHOR_RELEASES.map(row=>row.family.revision))
+    const old=new Map(generateB8Candidates().map(row=>[row.id,row]))
+    expect(live.every(row=>row.definitionHash!==old.get(row.id)?.definitionHash)).toBe(true)
   })
   it('defines ten existing bold anchors and exactly 390 non-anchor variants',()=>{
     expect(BATCH9_PHASE_A_ANCHORS).toEqual(
