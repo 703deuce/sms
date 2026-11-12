@@ -389,7 +389,8 @@ function machineEvidenceBase(
   outputs:B8Evidence['outputs'],
 ):B8Evidence{
   return {
-    id:c.id,reference:{url:b8ReferenceForFamily(c.familyId).url,
+    id:c.id,definitionHash:c.definitionHash,
+    reference:{url:b8ReferenceForFamily(c.familyId).url,
       accessDate:b8ReferenceForFamily(c.familyId).accessDate,mediaKind:'photo_video'},
     fixtures:{
       images:request.footage.filter(row=>row.kind==='image').map(row=>row.id),

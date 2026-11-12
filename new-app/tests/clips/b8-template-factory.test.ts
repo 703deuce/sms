@@ -16,14 +16,16 @@ import { defaultEdits } from '@/lib/clips/edits'
 const candidates=generateB8Candidates()
 const hash='a'.repeat(64)
 function evidence(id:string):B8Evidence{
+  const candidate=candidates.find(c=>c.id===id)
   return {
-    id,reference:{url:b8ReferenceForFamily(candidates.find(c=>c.id===id)?.familyId??'f01').url,
+    id,definitionHash:candidate?.definitionHash,
+    reference:{url:b8ReferenceForFamily(candidate?.familyId??'f01').url,
       accessDate:'2026-11-11',mediaKind:'photo_video'},
     fixtures:{images:['original_image'],videos:['original_video'],licenseHashes:[hash]},
     outputs:{previewMp4:'/templates/real-preview.mp4',renderMp4:'/templates/real-render.mp4',
       poster:'/templates/real-poster.webp',previewSha256:hash,renderSha256:hash,posterSha256:hash},
-    renderTiming:{v:1,totalFrames:candidates.find(c=>c.id===id)?.family.totalFrames??210,
-      boundaries:[0,...(candidates.find(c=>c.id===id)?.family.slots.map(s=>s.startFrame+s.durationFrames)??[210])],
+    renderTiming:{v:1,totalFrames:candidate?.family.totalFrames??210,
+      boundaries:[0,...(candidate?.family.slots.map(s=>s.startFrame+s.durationFrames)??[210])],
       musicScheduleSha256:hash},
     checks:{fullFrameStructure:true,durationMatch:true,audioParity:true,beatAligned:true,
       firstLastNotBlack:true,boundariesNotBlack:true,sampledFrameParity:true,

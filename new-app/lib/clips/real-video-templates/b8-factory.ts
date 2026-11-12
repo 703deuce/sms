@@ -260,6 +260,8 @@ export type B8ReviewScores = {pacing:number;beatSemantic:number;transition:numbe
   typography:number;motion:number;color:number}
 export type B8Evidence = {
   id:string
+  /** Exact authored candidate definition that produced the machine render. */
+  definitionHash?:string
   reference:{url:string;accessDate:string;mediaKind:'short_video'|'photo_video'}
   fixtures:{images:readonly string[];videos:readonly string[];licenseHashes:readonly string[]}
   outputs:{previewMp4:string;renderMp4:string;poster:string;
@@ -294,6 +296,7 @@ export function auditB8Evidence(c:B8Candidate,e:B8Evidence|undefined):string[] {
   if(!e)return ['missing_evidence']
   const issues:string[]=[]
   if(e.id!==c.id)issues.push('design_identity_mismatch')
+  if(e.definitionHash!==c.definitionHash)issues.push('stale_or_missing_definition_hash')
   if(lintB8Legibility(c).some(finding=>finding.severity==='block'))
     issues.push('unresolved_static_legibility')
   const pinnedReference=b8ReferenceForFamily(c.familyId)

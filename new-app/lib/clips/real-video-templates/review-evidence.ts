@@ -44,6 +44,8 @@ export function applyTemplateHumanReviews(
         throw new Error('machine render evidence must exist before human review')
       if(current.checks?.actualWorkerRender!==true)
         throw new Error('human review cannot replace actual worker render proof')
+      if(current.definitionHash!==candidate.definitionHash)
+        throw new Error('machine render evidence is stale for the current authored definition')
       const reviewer=name(raw.reviewer??'')
       if(reviewer.length<2)throw new Error('reviewer identity required')
       if(!DATE.test(raw.reviewDate??''))throw new Error('review date must be YYYY-MM-DD')
