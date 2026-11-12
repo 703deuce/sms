@@ -4,6 +4,7 @@ on:
   push:
     branches: [master]
     paths:
+      - "new-app/lib/clips/real-video-templates/batch9a-anchors.ts"
       - "new-app/scripts/export-batch9a-anchor-gallery-contract.ts"
       - "worker/scripts/extract_batch9a_anchor_gallery_posters.py"
       - "worker/tests/fixtures/template_media/b8_cc0_photos.json"
