@@ -29,9 +29,10 @@ export async function ytRunStoryFinisher(
     {keepIndices:{type:'array',minItems:1,maxItems:cuts.length,items:int},
       genuineEnding:{type:'boolean'},endingEvidence:stringType()},
     ['keepIndices','genuineEnding','endingEvidence'])
-  const finalWindow=ctx.windowCount==null||ctx.windowIndex==null||ctx.windowIndex===ctx.windowCount-1
-  if((finalWindow&&raw.genuineEnding!==true) || !Array.isArray(raw.keepIndices) || !raw.keepIndices.length)
-    throw Error('yt_finisher_ending_unverified')
+  // An unverified ending is a QA issue to revise, not a reason to abandon
+  // the entire episode before its two review rounds can run.
+  if(!Array.isArray(raw.keepIndices) || !raw.keepIndices.length)
+    throw Error('yt_finisher_missing_selection')
   const kept:YtSelectedCut[]=[]
   let previous=-1
   for(const index of raw.keepIndices){
