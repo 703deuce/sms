@@ -219,8 +219,8 @@ export async function ytDialoguePictureReview(
 ):Promise<YtCutsResult>{
   const joined=cuts.map((cut,index)=>({
     index,startMs:cut.startMs,endMs:cut.endMs,kind:cut.kind,beat:cut.beat,
-    dialogue:cut.kind==='speech'?ctx.words.filter(w=>
-      w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
+    dialogue:ctx.words.filter(w=>
+      w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '),
   }))
   const raw=await ytStructuredDecision('yt_submit_dialogue_picture',
     'DIALOGUE/PICTURE: Validate complete on-screen action and visual cause → resolution before dialogue. Do not trim a chase, fight, heist or escape mid-action. Merge naturally continuous footage and keep significant quiet gameplay. Check every scene join and incomplete thought. Return ONLY safe trims to existing passages by exact original word IDs for spoken footage; do not introduce new footage, alter story order, trim away a setup or payoff, or remove visual-only actions. Use light trims only; empty adjustments means no edits needed.',
