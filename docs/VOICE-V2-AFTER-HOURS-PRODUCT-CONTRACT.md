@@ -1,8 +1,10 @@
 # Voice V2 after-hours product contract
 
-**Status:** Permanent source of truth for the Voice V2 after-hours product.  
+**Status:** Permanent source of truth for the Voice V2 after-hours product **architecture**.  
 **Audience:** Cloud agents, implementers, certification.  
 **Rule:** Consult this document before any Voice V2 feature work. Do not treat as temporary notes. Do not redesign the product while applying this contract.
+
+**Functional acceptance (V1 complete):** `docs/TRANSOVO-AFTER-HOURS-AI-RECEPTIONIST-MASTER-ACCEPTANCE-CHECKLIST.md` — master checklist; items are ✅ only when end-to-end proven on Voice V3, not when wizard/compiler alone.
 
 Related operational handoff: `docs/VOICE-V2-CLOUD-AGENT-HANDOFF.md` · Deploy workflow: `docs/CURSOR-CLOUD-COOLIFY-DEPLOYMENT.md`
 

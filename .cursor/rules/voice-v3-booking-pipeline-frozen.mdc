@@ -1,0 +1,34 @@
+---
+description: MANDATORY — Frozen Voice V3 PSTN Microsoft booking pipeline. Read before FIND/BOOK, scheduling tools, book-dispatch, wizard PSTN accept, or calendar/microsoft changes.
+globs:
+  - src/lib/voice-v3/calendar/**
+  - src/lib/voice-v3/tools/**
+  - src/lib/voice-v3-basic/**
+  - src/lib/voice-v3/config/**
+  - src/lib/voice-v3/state/call-runtime.ts
+  - src/lib/voice-v3/state/call-rules.ts
+  - src/lib/voice-v3/frozen-booking-pipeline.ts
+  - docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md
+alwaysApply: false
+---
+
+# MANDATORY: Voice V3 PSTN booking pipeline (FROZEN)
+
+**Source of truth:** `docs/VOICE-V3-PSTN-BOOKING-PIPELINE-FROZEN.md`  
+**Constants:** `src/lib/voice-v3/frozen-booking-pipeline.ts` (`voice_v3_pstn_booking_microsoft_v1`)
+
+## When this rule activates
+
+Before **any** change to Voice V3 PSTN **booking**: `set_scheduling_preference`, `find_availability`, `book_appointment`, `book-dispatch`, `find-dispatch`, Microsoft calendar create/find, PSTN Live accept config, or scheduling normalizer used by FIND.
+
+## Hard requirements
+
+1. **One pipeline** — PSTN books only through OpenAI Live + Astra tools → `executeVoiceTool` → `src/lib/voice-v3/calendar/*`. No Voice V2 Telnyx FIND/BOOK webhooks, no `book_offered_slot`, no `emit_caller_meaning`.
+2. **Wizard vs engine** — Wizard may change business copy and intake field definitions; **do not** change tool contracts or BOOK revalidation/commit without recert.
+3. **Isolation** — Do not import MCTB voice, mass-SMS, or Voice V2 certified pipelines into voice-v3 calendar code. `pipeline-boundary.ts` markers are binding.
+4. **Recert gate** — After behavioral changes: run `npm run verify:voice-v3-booking-pipeline-frozen`, PSTN book on ws_1 reference line, bump `VOICE_V3_BOOKING_FROZEN_REVISION` + baseline git in `frozen-booking-pipeline.ts`, update frozen doc.
+
+## Verification
+
+- `npm run test:voice-v3-booking-pipeline-frozen-contract`
+- `npm run verify:voice-v3-booking-pipeline-frozen`
