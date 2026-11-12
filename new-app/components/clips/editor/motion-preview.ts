@@ -401,8 +401,15 @@ function drawShaderTransition(
   if (urlB && TransitionGL.corsOk(vb!) === 'pending') return null
   if (urlA && TransitionGL.corsOk(va!) === 'no') return 'CORS'
   if (urlB && TransitionGL.corsOk(vb!) === 'no') return 'CORS'
-  const snapA = snapshotClone(aHost, w, h, lookA, gradedA)
-  const snapB = snapshotClone(bHost, w, h, lookB, gradedB)
+  let snapA: HTMLCanvasElement | null = null
+  let snapB: HTMLCanvasElement | null = null
+  try {
+    snapA = snapshotClone(aHost, w, h, lookA, gradedA)
+    snapB = snapshotClone(bHost, w, h, lookB, gradedB)
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'SecurityError') return 'CORS'
+    return e instanceof Error ? e.message : 'snapshot failed'
+  }
   if (!snapA || !snapB) return 'not ready'
   const gl = TransitionGL.get()
   if (!gl || !TransitionGL.ok(shader.type)) {
