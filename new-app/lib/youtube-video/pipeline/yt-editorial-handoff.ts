@@ -122,6 +122,34 @@ function cutFromVisual(
     kind:'visual',...(groundedEvidence?{groundedEvidence}:{})}
 }
 
+/** Visual scene endpoints, not transcript lines, authorize long action ranges.
+ * The watched observations must cover the scene without an unobserved >20s hole. */
+export function ytVisualSceneCovered(ctx:YtWindowContext,startMs:number,endMs:number):boolean{
+  if(startMs<ctx.startMs||endMs>ctx.endMs||endMs<=startMs)return false
+  const rows=ctx.observations.filter(o=>o.endMs>startMs&&o.startMs<endMs)
+    .sort((a,b)=>a.startMs-b.startMs)
+  if(!rows.length || rows[0]!.startMs>startMs+2000)return false
+  let covered=rows[0]!.endMs
+  for(const row of rows.slice(1)){
+    if(row.startMs>covered+20_000)return false
+    covered=Math.max(covered,row.endMs)
+  }
+  return covered>=endMs-2000
+}
+
+function cutFromScene(ctx:YtWindowContext,row:Record<string,unknown>):YtSelectedCut|null{
+  const startMs=Number(row.startMs),endMs=Number(row.endMs)
+  if(!Number.isSafeInteger(startMs)||!Number.isSafeInteger(endMs)||
+     !ytVisualSceneCovered(ctx,startMs,endMs))return null
+  const observations=ctx.observations.filter(o=>o.endMs>startMs&&o.startMs<endMs)
+  const beat=String(row.beat??'Gameplay scene').slice(0,140)
+  return {
+    sourceId:ctx.sourceId,startMs,endMs,beat,label:beat,kind:'visual',
+    reason:String(row.reason??'Complete visually observed game scene').slice(0,500),
+    groundedEvidence:observations.map(o=>o.description).join(' | ').slice(0,1800),
+  }
+}
+
 function acceptNonOverlapping(
   candidates:YtSelectedCut[],rejected:YtCutsResult['rejected'],
 ):YtCutsResult{
@@ -145,16 +173,25 @@ export async function ytSelectFootage(
     'FOOTAGE: BUILD COMPLETE SCENES FROM ON-SCREEN ACTION FIRST. Select continuous observed visual sequences by observation IDs and their original start/end timestamps; preserve 45–60 second or longer scenes where source evidence supports them. Keep a pursuit until escaped/caught, a fight until won/lost, and a mission until completion/failure. Avoid clips made of transcript snippets. Choose spoken passages by ZERO-BASED word IDs only for indispensable RP dialogue not otherwise covered by visual sequences. Use observed visual-only events by observationId even if nobody speaks. Preserve actual scene order; do not force an episode ending in a non-final window. Retain complete gameplay scenes with their necessary setup and consequences, including meaningful silent gameplay; do not reduce this to a highlight reel. Lightly remove only AFK, loading, menus, repetitive grinding and off-story chat. Across the source aim for 25–35% retained with a 15–40 minute episode. Every interval must be inside this window.',
     {...evidenceRows(ctx),outline},
     {
+      scenes:{type:'array',maxItems:50,items:{type:'object',additionalProperties:false,
+        properties:{startMs:intField,endMs:intField,beat:stringField,reason:stringField},
+        required:['startMs','endMs','beat','reason']}},
       speech:{type:'array',maxItems:80,items:{type:'object',additionalProperties:false,
         properties:{firstWordId:intField,lastWordId:intField,beat:stringField,reason:stringField},
         required:['firstWordId','lastWordId','beat','reason']}},
       visual:{type:'array',maxItems:60,items:{type:'object',additionalProperties:false,
         properties:{observationId:intField,startMs:intField,endMs:intField,beat:stringField,reason:stringField},
         required:['observationId','startMs','endMs','beat','reason']}},
-    },['speech','visual'])
-  if(!Array.isArray(raw.speech)||!Array.isArray(raw.visual))throw Error('yt_footage_missing_arrays')
+    },['scenes','speech','visual'])
+  if(!Array.isArray(raw.scenes)||!Array.isArray(raw.speech)||!Array.isArray(raw.visual))throw Error('yt_footage_missing_arrays')
   const candidate:YtSelectedCut[]=[]
   const rejected:YtCutsResult['rejected']=[]
+  for(const [i,row] of raw.scenes.slice(0,50).entries()){
+    const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
+    const cut=cutFromScene(ctx,obj)
+    if(cut)candidate.push(cut)
+    else rejected.push({startMs:i,endMs:i,code:'yt_scene_visual_coverage_missing'})
+  }
   for(const [i,row] of raw.speech.slice(0,80).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromWords(ctx,obj.firstWordId,obj.lastWordId,String(obj.beat??''),String(obj.reason??''))
@@ -168,6 +205,8 @@ export async function ytSelectFootage(
     if(cut)candidate.push(cut)
     else rejected.push({startMs:i,endMs:i,code:'yt_visual_evidence_invalid'})
   }
+  // Full-screen scene spans take precedence over their contained dialog or beat markers.
+  candidate.sort((a,b)=>a.startMs-b.startMs||(b.endMs-b.startMs)-(a.endMs-a.startMs))
   const selected=acceptNonOverlapping(candidate,rejected)
   if(!selected.cuts.length)throw Error('yt_no_verified_footage')
   return selected
