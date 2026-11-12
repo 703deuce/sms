@@ -1,0 +1,105 @@
+name: Batch 9A anchor certification
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "new-app/lib/clips/real-video-templates/batch9a-anchors.ts"
+      - "new-app/scripts/export-batch9a-worker-contract.ts"
+      - "worker/scripts/render_batch8_factory_certification.py"
+      - "worker/clips_worker/edits_render.py"
+      - "worker/clips_worker/media_sources.py"
+      - "worker/clips_worker/motion_render.py"
+      - "worker/clips_worker/shader_transitions.py"
+      - "worker/clips_worker/shaders/**"
+      - "worker/clips_worker/text_items.py"
+      - "worker/clips_worker/audio_render.py"
+      - "worker/tests/fixtures/template_media/b8_cc0_photos.json"
+      - ".github/workflows/batch9a-anchor-certification.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: batch9a-anchor-certification-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 12.3.4 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: new-app
+      - name: Compile exact live Batch 9A worker contract
+        run: npx tsx scripts/export-batch9a-worker-contract.ts ../build/b9a-worker-contract.json
+        working-directory: new-app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b9a-worker-contract
+          path: |
+            build/b9a-worker-contract.json
+            build/b9a-cert-music.wav
+          retention-days: 14
+
+  render:
+    needs: contract
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: worker
+      CLIP_FONTS_DIR: ${{ github.workspace }}/worker/v3/fonts/t6
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install production render dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libegl1 libgl1-mesa-dri mesa-utils
+          python -m pip install --quiet pytest moderngl glcontext pillow 'numpy==1.26.4' 'boto3>=1.34.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: b9a-worker-contract
+          path: build
+      - name: Render all ten live anchors through production orchestration
+        run: |
+          python worker/scripts/render_batch8_factory_certification.py \
+            --contract build/b9a-worker-contract.json \
+            --music build/b9a-cert-music.wav \
+            --out build/b9a-worker-renders \
+            --shard 0 --shards 1 \
+            --ids f01_bold,f02_bold,f03_bold,f04_bold,f05_bold,f06_bold,f07_bold,f08_bold,f09_bold,f10_bold \
+            --production-smoke
+      - name: Require exact ten-anchor production pass
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          path=Path("build/b9a-worker-renders/manifest.json")
+          data=json.loads(path.read_text())
+          expected={f"f{i:02d}_bold" for i in range(1,11)}
+          rows=data.get("results") or []
+          ids={str(row.get("id")) for row in rows}
+          if data.get("expected")!=10 or data.get("passed")!=10 or data.get("failed")!=0:
+              raise SystemExit(f"Batch 9A production render incomplete: {data}")
+          if ids!=expected or any(not row.get("ok") for row in rows):
+              raise SystemExit(f"Batch 9A exact anchor set mismatch: {sorted(ids)}")
+          bad={row["id"]:row.get("checks",{}).get("transitionBlackFrames")
+               for row in rows if row.get("checks",{}).get("transitionBlackFrames")}
+          if bad:
+              raise SystemExit(f"Black transition frames detected: {bad}")
+          print(json.dumps({"anchors":10,"passed":10,"transitionBlackFrames":0},indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: b9a-worker-renders
+          path: build/b9a-worker-renders
+          compression-level: 1
+          retention-days: 30
