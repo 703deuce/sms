@@ -215,9 +215,9 @@ export async function ytQaWholeSourceStory(
       })),
       windowOutlines:windows.map(w=>w.outline),
     },
-    {pass:{type:'boolean'},issueCodes:{type:'array',items:{type:'string'},maxItems:30}},
-    ['pass','issueCodes'])
-  return {pass:raw.pass===true,issues:Array.isArray(raw.issueCodes)
-    ?raw.issueCodes.filter((v):v is string=>typeof v==='string').slice(0,30)
+    {pass:{type:'boolean'},issues:{type:'array',items:{type:'string'},maxItems:40}},
+    ['pass','issues'])
+  return {pass:raw.pass===true,issues:Array.isArray(raw.issues)
+    ?raw.issues.filter((v):v is string=>typeof v==='string').slice(0,40)
     :[]}
 }
