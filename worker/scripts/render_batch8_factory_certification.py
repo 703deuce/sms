@@ -82,6 +82,23 @@ def transition_black_frames(row:dict,lumas:list[float],fps:int=30)->list[int]:
     return sorted(out)
 
 
+def frame_edge_means(path:Path,frame:int=1)->dict[str,float]:
+    """Detect contain-style black bars in a frame that should be cover-filled."""
+    w,h=48,86
+    data=subprocess.check_output([
+        FFMPEG,"-v","error","-i",str(path),
+        "-vf",f"select='eq(n,{frame})',scale={w}:{h},format=gray",
+        "-frames:v","1","-f","rawvideo","-pix_fmt","gray","-"],
+        timeout=30)
+    if len(data)!=w*h:
+        raise RuntimeError("edge QA frame missing")
+    top=sum(data[:w])/w
+    bottom=sum(data[(h-1)*w:h*w])/w
+    left=sum(data[y*w] for y in range(h))/h
+    right=sum(data[y*w+w-1] for y in range(h))/h
+    return {"top":top,"bottom":bottom,"left":left,"right":right}
+
+
 def git_blob_sha(path:Path)->str:
     data=path.read_bytes()
     header=f"blob {len(data)}\0".encode()
@@ -195,6 +212,9 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     samples=[1,max(1,total-1),*interiors]
     black=[frame for frame in samples if frame>=len(lumas) or lumas[frame]<=8]
     transition_black=transition_black_frames(row,lumas)
+    edge_means=frame_edge_means(final)
+    edge_black_bars=((edge_means["top"]<=8 and edge_means["bottom"]<=8) or
+                     (edge_means["left"]<=8 and edge_means["right"]<=8))
     checks={
         "productionRenderEditedClip":True,
         "expectedFrames":total,
@@ -207,6 +227,8 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
         "duration":abs(duration-total/30.0)<0.12,
         "blackFrames":black,
         "transitionBlackFrames":transition_black,
+        "edgeMeans":{k:round(v,2) for k,v in edge_means.items()},
+        "edgeBlackBars":edge_black_bars,
         "sourceSegments":len(row["edits"].get("sourceSegments") or []),
         "transitions":len(row["edits"].get("transitions") or []),
         "textItems":len(row["edits"].get("textItems") or []),
@@ -215,7 +237,7 @@ def render_production_smoke(row:dict,out_root:Path,media:dict[str,Path],music:Pa
     expected_slots=len(boundaries)-1
     ok=(checks["video"] and checks["audio"] and checks["duration"] and
         checks["frameCountExact"] and not black and not transition_black and
-        checks["sourceSegments"]==expected_slots and
+        not edge_black_bars and checks["sourceSegments"]==expected_slots and
         checks["transitions"]==max(0,expected_slots-1) and
         checks["textItems"]>=2 and checks["musicTrack"])
     return {"id":did,"definitionHash":row["definitionHash"],"ok":ok,
