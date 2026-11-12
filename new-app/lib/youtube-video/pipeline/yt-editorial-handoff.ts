@@ -192,18 +192,19 @@ export async function ytSelectFootage(
     if(cut)candidate.push(cut)
     else rejected.push({startMs:i,endMs:i,code:'yt_scene_visual_coverage_missing'})
   }
+  const sceneCandidates=[...candidate]
   for(const [i,row] of raw.speech.slice(0,80).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromWords(ctx,obj.firstWordId,obj.lastWordId,String(obj.beat??''),String(obj.reason??''))
-    if(cut)candidate.push(cut)
-    else rejected.push({startMs:i,endMs:i,code:'yt_invalid_word_ids'})
+    if(cut && !sceneCandidates.some(scene=>scene.endMs>cut.startMs&&scene.startMs<cut.endMs))candidate.push(cut)
+    else if(!cut) rejected.push({startMs:i,endMs:i,code:'yt_invalid_word_ids'})
   }
   for(const [i,row] of raw.visual.slice(0,60).entries()){
     const obj=row&&typeof row==='object'?row as Record<string,unknown>:{}
     const cut=cutFromVisual(ctx,obj.observationId,obj.startMs,obj.endMs,
       String(obj.beat??''),String(obj.reason??''))
-    if(cut)candidate.push(cut)
-    else rejected.push({startMs:i,endMs:i,code:'yt_visual_evidence_invalid'})
+    if(cut && !sceneCandidates.some(scene=>scene.endMs>cut.startMs&&scene.startMs<cut.endMs))candidate.push(cut)
+    else if(!cut) rejected.push({startMs:i,endMs:i,code:'yt_visual_evidence_invalid'})
   }
   // Full-screen scene spans take precedence over their contained dialog or beat markers.
   candidate.sort((a,b)=>a.startMs-b.startMs||(b.endMs-b.startMs)-(a.endMs-a.startMs))
