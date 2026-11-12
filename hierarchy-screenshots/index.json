@@ -1,0 +1,525 @@
+{
+  "base": "http://localhost:3000",
+  "results": [
+    {
+      "group": "inbox",
+      "label": "Mine",
+      "path": "/inbox/mine",
+      "file": "inbox/01__inbox__mine.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "inbox",
+      "label": "Unassigned",
+      "path": "/inbox/unassigned",
+      "file": "inbox/02__inbox__unassigned.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "inbox",
+      "label": "Archived",
+      "path": "/inbox/archived",
+      "file": "inbox/03__inbox__archived.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "inbox",
+      "label": "Saved replies",
+      "path": "/inbox/saved-replies",
+      "file": "inbox/04__inbox__saved-replies.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "send",
+      "label": "Quick text",
+      "path": "/send/quick",
+      "file": "send/05__send__quick.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "send",
+      "label": "Send test",
+      "path": "/send/test",
+      "file": "send/06__send__test.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Lists",
+      "path": "/contacts/lists",
+      "file": "contacts/07__contacts__lists.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Segments",
+      "path": "/contacts/segments",
+      "file": "contacts/08__contacts__segments.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Tags",
+      "path": "/contacts/tags",
+      "file": "contacts/09__contacts__tags.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Imports",
+      "path": "/contacts/imports",
+      "file": "contacts/10__contacts__imports.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Custom fields",
+      "path": "/contacts/fields",
+      "file": "contacts/11__contacts__fields.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Unsubscribed",
+      "path": "/contacts/unsubscribed",
+      "file": "contacts/12__contacts__unsubscribed.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Blocked",
+      "path": "/contacts/blocked",
+      "file": "contacts/13__contacts__blocked.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Invalid",
+      "path": "/contacts/invalid",
+      "file": "contacts/14__contacts__invalid.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Drafts",
+      "path": "/campaigns/drafts",
+      "file": "campaigns/15__campaigns__drafts.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Scheduled",
+      "path": "/campaigns/scheduled",
+      "file": "campaigns/16__campaigns__scheduled.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Calendar",
+      "path": "/campaigns/calendar",
+      "file": "campaigns/17__campaigns__calendar.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Completed",
+      "path": "/campaigns/completed",
+      "file": "campaigns/18__campaigns__completed.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Failed",
+      "path": "/campaigns/failed",
+      "file": "campaigns/19__campaigns__failed.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Recurring",
+      "path": "/campaigns/recurring",
+      "file": "campaigns/20__campaigns__recurring.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "automations",
+      "label": "New flow",
+      "path": "/automations/new",
+      "file": "automations/21__automations__new.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "automations",
+      "label": "Templates",
+      "path": "/automations/templates",
+      "file": "automations/22__automations__templates.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "automations",
+      "label": "Logs",
+      "path": "/automations/logs",
+      "file": "automations/23__automations__logs.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "templates",
+      "label": "Create new",
+      "path": "/templates/new",
+      "file": "templates/24__templates__new.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "templates",
+      "label": "AI generator",
+      "path": "/templates/ai",
+      "file": "templates/25__templates__ai.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "grow",
+      "label": "Keywords",
+      "path": "/grow/keywords",
+      "file": "grow/26__grow__keywords.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "grow",
+      "label": "Forms",
+      "path": "/grow/forms",
+      "file": "grow/27__grow__forms.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "grow",
+      "label": "QR codes",
+      "path": "/grow/qr-codes",
+      "file": "grow/28__grow__qr-codes.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "grow",
+      "label": "Signup pages",
+      "path": "/grow/pages",
+      "file": "grow/29__grow__pages.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "grow",
+      "label": "Sources",
+      "path": "/grow/sources",
+      "file": "grow/30__grow__sources.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Campaigns",
+      "path": "/reports/campaigns",
+      "file": "reports/31__reports__campaigns.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Messages",
+      "path": "/reports/messages",
+      "file": "reports/32__reports__messages.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Contacts",
+      "path": "/reports/contacts",
+      "file": "reports/33__reports__contacts.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Inbox",
+      "path": "/reports/inbox",
+      "file": "reports/34__reports__inbox.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Automations",
+      "path": "/reports/automations",
+      "file": "reports/35__reports__automations.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Links",
+      "path": "/reports/links",
+      "file": "reports/36__reports__links.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Usage",
+      "path": "/reports/usage",
+      "file": "reports/37__reports__usage.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "reports",
+      "label": "Audit log",
+      "path": "/reports/audit-log",
+      "file": "reports/38__reports__audit-log.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "numbers",
+      "label": "Buy",
+      "path": "/numbers/buy",
+      "file": "numbers/39__numbers__buy.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "numbers",
+      "label": "Port",
+      "path": "/numbers/port",
+      "file": "numbers/40__numbers__port.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "numbers",
+      "label": "Sender pools",
+      "path": "/numbers/pools",
+      "file": "numbers/41__numbers__pools.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Business",
+      "path": "/compliance/business",
+      "file": "compliance/42__compliance__business.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Brand",
+      "path": "/compliance/brand",
+      "file": "compliance/43__compliance__brand.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Campaign",
+      "path": "/compliance/campaign",
+      "file": "compliance/44__compliance__campaign.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Readiness",
+      "path": "/compliance/check",
+      "file": "compliance/45__compliance__check.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Consent",
+      "path": "/compliance/consent",
+      "file": "compliance/46__compliance__consent.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Suppression",
+      "path": "/compliance/suppression",
+      "file": "compliance/47__compliance__suppression.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "compliance",
+      "label": "Events",
+      "path": "/compliance/events",
+      "file": "compliance/48__compliance__events.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "integrations",
+      "label": "API",
+      "path": "/integrations/api",
+      "file": "integrations/49__integrations__api.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "integrations",
+      "label": "Webhooks",
+      "path": "/integrations/webhooks",
+      "file": "integrations/50__integrations__webhooks.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "integrations",
+      "label": "Developer logs",
+      "path": "/integrations/logs",
+      "file": "integrations/51__integrations__logs.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Messaging",
+      "path": "/settings/messaging",
+      "file": "settings/52__settings__messaging.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Users",
+      "path": "/settings/users",
+      "file": "settings/53__settings__users.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Workspaces",
+      "path": "/settings/workspaces",
+      "file": "settings/54__settings__workspaces.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Notifications",
+      "path": "/settings/notifications",
+      "file": "settings/55__settings__notifications.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Billing",
+      "path": "/settings/billing",
+      "file": "settings/56__settings__billing.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Limits",
+      "path": "/settings/limits",
+      "file": "settings/57__settings__limits.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Security",
+      "path": "/settings/security",
+      "file": "settings/58__settings__security.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Branding",
+      "path": "/settings/branding",
+      "file": "settings/59__settings__branding.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "settings",
+      "label": "Data",
+      "path": "/settings/data",
+      "file": "settings/60__settings__data.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "misc",
+      "label": "Getting started",
+      "path": "/getting-started",
+      "file": "misc/61__getting-started.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "contacts",
+      "label": "Contact detail",
+      "path": "/contacts/c_1",
+      "file": "contacts/62__contacts__c_1.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "campaigns",
+      "label": "Campaign detail",
+      "path": "/campaigns/camp_1",
+      "file": "campaigns/63__campaigns__camp_1.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "automations",
+      "label": "Flow detail",
+      "path": "/automations/auto_1",
+      "file": "automations/64__automations__auto_1.png",
+      "status": 200,
+      "ok": true
+    },
+    {
+      "group": "numbers",
+      "label": "Number detail",
+      "path": "/numbers/pn_1",
+      "file": "numbers/65__numbers__pn_1.png",
+      "status": 200,
+      "ok": true
+    }
+  ]
+}
