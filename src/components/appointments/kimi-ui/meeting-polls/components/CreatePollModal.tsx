@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Modal, Button, Input, Label, Select } from "./ui";
-import { MeetingPoll } from "../types";
+import type { MeetingPollUi } from "@/lib/appointments/meeting-polls-present";
 
 type DraftOption = { date: string; time: string };
 
@@ -20,7 +20,7 @@ export function CreatePollModal({
   onCreate,
 }: {
   onClose: () => void;
-  onCreate: (poll: MeetingPoll) => void;
+  onCreate: (poll: MeetingPollUi) => void;
 }) {
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("30");
@@ -43,18 +43,25 @@ export function CreatePollModal({
     options.length >= 2 &&
     options.every((o) => o.date && o.time);
 
-  async function submit() {
+  function submit() {
     if (!canSubmit) {
       setError("Add a title and at least two time options.");
       return;
     }
     setSaving(true);
     setError("");
-    // Simulate POST /api/appointments/meeting-polls
-    await new Promise((r) => setTimeout(r, 600));
     const durMs = Number(duration) * 60000;
-    const poll: MeetingPoll = {
-      id: `poll_${Math.random().toString(36).slice(2, 8)}`,
+    const pollOptions = options.map((o, i) => {
+      const start = new Date(`${o.date}T${o.time}:00`);
+      return {
+        id: `new_o${i}`,
+        startsAt: start.toISOString(),
+        endsAt: new Date(start.getTime() + durMs).toISOString(),
+        votes: 0,
+      };
+    });
+    onCreate({
+      id: "",
       title: title.trim(),
       status: "open",
       createdAt: new Date().toISOString(),
@@ -64,114 +71,73 @@ export function CreatePollModal({
       organizer: "You",
       invitees: 0,
       responded: 0,
-      shareUrl: `https://book.transovo.com/p/${title.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32)}`,
-      options: options.map((o, i) => {
-        const start = new Date(`${o.date}T${o.time}:00`);
-        return {
-          id: `new_o${i}`,
-          startsAt: start.toISOString(),
-          endsAt: new Date(start.getTime() + durMs).toISOString(),
-          votes: 0,
-        };
-      }),
-    };
+      shareUrl: "",
+      options: pollOptions,
+    });
     setSaving(false);
-    onCreate(poll);
   }
 
   return (
-    <Modal
-      title="New meeting poll"
-      subtitle="Propose a few times and let invitees vote on what works best."
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={submit} disabled={!title.trim() || saving}>
+    <Modal title="Create meeting poll" onClose={onClose}>
+      <div className="stack" style={{ gap: 16 }}>
+        <div>
+          <Label htmlFor="poll-title">Poll title</Label>
+          <Input
+            id="poll-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Project kickoff"
+          />
+        </div>
+
+        <div className="field-grid">
+          <div>
+            <Label htmlFor="poll-duration">Duration (minutes)</Label>
+            <Select id="poll-duration" value={duration} onChange={(e) => setDuration(e.target.value)}>
+              {["15", "30", "45", "60", "90"].map((m) => (
+                <option key={m} value={m}>{m} min</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <Label htmlFor="poll-location">Meeting method</Label>
+            <Select id="poll-location" value={location} onChange={(e) => setLocation(e.target.value)}>
+              {["Zoom", "Google Meet", "Microsoft Teams", "Transovo Video", "In person", "Phone"].map((l) => (
+                <option key={l} value={l}>{l}</option>
+              ))}
+            </Select>
+          </div>
+        </div>
+
+        <div>
+          <Label>Proposed times</Label>
+          <div className="stack" style={{ gap: 8, marginTop: 8 }}>
+            {options.map((o, i) => (
+              <div key={i} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <Input type="date" value={o.date} onChange={(e) => updateOption(i, { date: e.target.value })} aria-label={`Date option ${i + 1}`} />
+                <Input type="time" value={o.time} onChange={(e) => updateOption(i, { time: e.target.value })} aria-label={`Time option ${i + 1}`} />
+                {options.length > 2 && (
+                  <button type="button" className="btn btn-ghost btn-sm btn-icon" onClick={() => removeOption(i)} aria-label={`Remove option ${i + 1}`}>
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          <Button variant="outline" size="sm" style={{ marginTop: 8 }} onClick={() => setOptions((opts) => [...opts, defaultOption(opts.length + 1, 10)])}>
+            <Plus size={14} /> Add time
+          </Button>
+        </div>
+
+        {error ? <p className="field-error" role="alert">{error}</p> : null}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={submit} disabled={!canSubmit || saving}>
             {saving ? "Creating…" : "Create poll"}
           </Button>
-        </>
-      }
-    >
-      <div className="field">
-        <Label htmlFor="poll-title">Poll title</Label>
-        <Input
-          id="poll-title"
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="e.g. Team sync times"
-        />
-      </div>
-
-      <div className="field-row">
-        <div className="field">
-          <Label htmlFor="poll-duration">Duration</Label>
-          <Select id="poll-duration" value={duration} onChange={(e) => setDuration(e.target.value)}>
-            <option value="15">15 minutes</option>
-            <option value="30">30 minutes</option>
-            <option value="45">45 minutes</option>
-            <option value="60">1 hour</option>
-          </Select>
-        </div>
-        <div className="field">
-          <Label htmlFor="poll-location">Location</Label>
-          <Select id="poll-location" value={location} onChange={(e) => setLocation(e.target.value)}>
-            <option>Zoom</option>
-            <option>Google Meet</option>
-            <option>Microsoft Teams</option>
-            <option>Phone call</option>
-            <option>In person</option>
-          </Select>
         </div>
       </div>
-
-      <div className="field">
-        <Label>Time options</Label>
-        <p className="hint" style={{ margin: "-2px 0 10px" }}>
-          Add at least two proposed times. Times are shown in your workspace timezone (Eastern Time).
-        </p>
-        {options.map((o, i) => (
-          <div className="option-row" key={i}>
-            <Input
-              type="date"
-              aria-label={`Option ${i + 1} date`}
-              value={o.date}
-              onChange={(e) => updateOption(i, { date: e.target.value })}
-            />
-            <Input
-              type="time"
-              aria-label={`Option ${i + 1} start time`}
-              value={o.time}
-              onChange={(e) => updateOption(i, { time: e.target.value })}
-            />
-            <button
-              className="icon-btn"
-              aria-label={`Remove option ${i + 1}`}
-              onClick={() => removeOption(i)}
-              disabled={options.length <= 2}
-            >
-              <Trash2 size={15} />
-            </button>
-          </div>
-        ))}
-        <button
-          type="button"
-          className="add-option"
-          onClick={() => setOptions((opts) => [...opts, defaultOption(opts.length + 2, 9 + opts.length)])}
-        >
-          <Plus size={14} /> Add another time
-        </button>
-      </div>
-
-      {error && (
-        <div className="alert alert-error" role="alert">
-          <div>
-            <div className="alert-title">Couldn't create poll</div>
-            {error}
-          </div>
-        </div>
-      )}
     </Modal>
   );
 }

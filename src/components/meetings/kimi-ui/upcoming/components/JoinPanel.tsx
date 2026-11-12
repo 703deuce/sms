@@ -1,4 +1,5 @@
 import { Mic, MicOff, Video, VideoOff, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   formatMeetingDate,
@@ -16,6 +17,7 @@ type Props = {
  * video meetings (appt-video-panel / meetings-host-join).
  */
 export default function JoinPanel({ session, onClose }: Props) {
+  const router = useRouter();
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [joining, setJoining] = useState(false);
@@ -37,11 +39,15 @@ export default function JoinPanel({ session, onClose }: Props) {
 
   function join() {
     setJoining(true);
-    // Mock: POST join → navigate into the video room
-    setTimeout(() => {
-      setJoining(false);
-      onClose();
-    }, 900);
+    const target =
+      session.hostJoinUrl ||
+      (session.appointmentId ? `/appointments/${session.appointmentId}/video/host` : session.meetingUrl);
+    if (target.startsWith("http")) {
+      window.location.href = target;
+      return;
+    }
+    router.push(target);
+    onClose();
   }
 
   return (

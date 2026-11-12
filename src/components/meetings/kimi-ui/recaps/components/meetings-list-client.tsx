@@ -35,10 +35,9 @@ export function MeetingsListClient() {
   const [sharedTokens, setSharedTokens] = useState<Record<string, string | null>>({});
   const [triggersDismissed, setTriggersDismissed] = useState(false);
 
-  // Simulated fetch: mirrors GET /api/meetings?filter={filter}&source=external
   useEffect(() => {
     setState("loading");
-    fetch(`/api/meetings?filter=${filter}&source=external`)
+    fetch(`/api/meetings?filter=${filter}&source=all`)
       .then((r) => r.json())
       .then((json) => {
         const data = (json.data?.sessions || []) as MeetingRow[];
@@ -113,7 +112,7 @@ export function MeetingsListClient() {
             Recaps
           </h1>
           <p className="text-muted" style={{ margin: "6px 0 0", fontSize: 14, maxWidth: 520 }}>
-            AI Notetaker history — recordings, transcripts, recaps, and action items from your meetings.
+            Review notes, transcripts, and recordings from completed meetings.
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

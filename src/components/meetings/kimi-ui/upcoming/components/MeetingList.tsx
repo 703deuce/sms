@@ -35,9 +35,11 @@ function PlatformIcon({ platform }: { platform: string }) {
 export function UpcomingList({
   sessions,
   onJoin,
+  emptyHelper = "Scheduled meetings will appear here.",
 }: {
   sessions: UpcomingSession[];
   onJoin: (session: UpcomingSession) => void;
+  emptyHelper?: string;
 }) {
   if (!sessions.length) {
     return (
@@ -52,7 +54,7 @@ export function UpcomingList({
             margin: "6px 0 0",
           }}
         >
-          Meetings with the notetaker scheduled will appear here.
+          {emptyHelper}
         </p>
       </div>
     );
@@ -96,26 +98,32 @@ export function UpcomingList({
                 <button
                   className="btn btn-primary btn-sm"
                   onClick={() => onJoin(s)}
-                  aria-label={`Join video for ${s.title || "meeting"}`}
+                  aria-label={`Join meeting for ${s.title || "meeting"}`}
                 >
                   <Video size={13} />
-                  Join
+                  Join meeting
                 </button>
-              ) : (
+              ) : s.meetingUrl ? (
                 <a
                   href={s.meetingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  aria-label={`Open meeting link for ${s.title || "meeting"}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    color: "var(--muted-foreground)",
-                  }}
+                  className="btn btn-primary btn-sm"
+                  aria-label={`Join meeting for ${s.title || "meeting"}`}
+                  style={{ textDecoration: "none" }}
                 >
-                  <ExternalLink size={15} />
+                  Join meeting
                 </a>
-              )}
+              ) : null}
+              {s.appointmentId ? (
+                <a
+                  href={`/appointments/${s.appointmentId}`}
+                  className="btn btn-outline btn-sm"
+                  style={{ textDecoration: "none" }}
+                >
+                  View appointment
+                </a>
+              ) : null}
             </div>
           </div>
         );

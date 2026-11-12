@@ -292,8 +292,14 @@ export default function NotetakerSettings() {
           </div>
         </div>
 
+        {/* Meetings settings subnav */}
+        <nav className="tv-anchor-nav" aria-label="Meetings settings">
+          <span className="active" aria-current="page">AI Notetaker</span>
+          <a href="/settings/transovo-video">Transovo Video</a>
+        </nav>
+
         {/* Anchor nav */}
-        <nav className="tv-anchor-nav" aria-label="Settings sections">
+        <nav className="tv-anchor-nav" aria-label="Settings sections" style={{ marginTop: 12 }}>
           <a href="#general" className="active">General</a>
           <a href="#capture">Capture & recap</a>
           <a href="#notifications">Notifications & sharing</a>

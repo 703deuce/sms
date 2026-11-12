@@ -1,14 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ExternalLink, Copy, Check, MoreHorizontal, Trash2 } from "lucide-react";
 import type { TeamBookingPage, SchedulingGroup, BookingTypeLite } from "../types";
-import { WORKSPACE_ORIGIN, WORKSPACE_SLUG } from "../types";
 
 export function PageCard({
-  page, groups, types, onChange, onBlurSave, onToggleActive, onDelete, showUrl,
+  page, groups, types, workspaceSlug, onChange, onBlurSave, onToggleActive, onDelete, showUrl,
 }: {
   page: TeamBookingPage;
   groups: SchedulingGroup[];
   types: BookingTypeLite[];
+  workspaceSlug: string;
   onChange: (next: TeamBookingPage) => void;
   onBlurSave: () => void;
   onToggleActive: () => void;
@@ -18,7 +18,8 @@ export function PageCard({
   const [copied, setCopied] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-  const url = `${WORKSPACE_ORIGIN}/team/${WORKSPACE_SLUG}/${page.slug}`;
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const url = workspaceSlug ? `${origin}/team/${workspaceSlug}/${page.slug}` : "";
 
   useEffect(() => {
     function onDoc(e: MouseEvent) {
@@ -29,6 +30,7 @@ export function PageCard({
   }, [menuOpen]);
 
   function copy() {
+    if (!url) return;
     navigator.clipboard?.writeText(url).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
@@ -166,7 +168,7 @@ export function PageCard({
         marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)",
         display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
       }}>
-        {showUrl && (
+        {showUrl && url && (
           <code style={{
             fontSize: 12, background: "var(--muted)", borderRadius: 6,
             padding: "5px 9px", color: "var(--fg-muted)",
@@ -175,12 +177,20 @@ export function PageCard({
             {url}
           </code>
         )}
-        <button className="btn btn-outline btn-sm" onClick={copy}>
-          {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy link"}
-        </button>
-        <a className="btn btn-outline btn-sm" href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
-          <ExternalLink size={13} /> Preview
-        </a>
+        {url ? (
+          <>
+            <button className="btn btn-outline btn-sm" onClick={copy}>
+              {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? "Copied" : "Copy link"}
+            </button>
+            <a className="btn btn-outline btn-sm" href={url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>
+              <ExternalLink size={13} /> Preview
+            </a>
+          </>
+        ) : (
+          <span className="hint" style={{ fontSize: 12, color: "var(--warning)" }}>
+            Set a workspace slug in Settings → Business to enable the public link.
+          </span>
+        )}
         <div style={{ flex: 1 }} />
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>

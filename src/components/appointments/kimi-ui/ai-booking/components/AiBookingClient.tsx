@@ -124,9 +124,9 @@ export function AiBookingClient() {
             scheduling engine — never by the model.
           </p>
         </div>
-        <span className="chip chip-success" style={{ marginTop: 6 }}>
+        <span className="chip chip-success" style={{ marginTop: 6 }} title="AI booking uses the scheduling engine for availability and booking">
           <span className="dot" />
-          Assistant active
+          Channels configurable below
         </span>
       </div>
 
