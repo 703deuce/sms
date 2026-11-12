@@ -56,6 +56,7 @@ function evidenceRows(ctx:YtWindowContext){
       tier:m.tier,
     })),
     ...(ctx.instruction?.trim() ? {storyToPreserve:ctx.instruction.trim()} : {}),
+    ...(ctx.qaIssues?.length ? {previousQaRejections:ctx.qaIssues} : {}),
   }
 }
 
