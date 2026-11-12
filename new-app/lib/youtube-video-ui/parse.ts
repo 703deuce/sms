@@ -129,6 +129,9 @@ function parseResult(raw: Record<string, unknown>, fallback: Record<string, unkn
     plan,
     chapters,
     chapterText: str(resultRaw.chapterText) ?? str(chapterSource.chapterText) ?? '',
+    ...(isRecord(resultRaw.analysisAudit)
+      ? { analysisAudit: resultRaw.analysisAudit as YoutubeVideoResult['analysisAudit'] }
+      : {}),
   }
 }
 
