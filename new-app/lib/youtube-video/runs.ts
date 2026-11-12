@@ -384,6 +384,14 @@ export async function getYoutubeVideoRun(
       })
     }
   }
+  // A signed-download refresh can fail independently of playback.
+  // Keep the authenticated site player usable for an already READY MP4.
+  if(advanced.status==='ready' && advanced.result?.renderId){
+    return view({...advanced,result:{
+      ...advanced.result,
+      playbackUrl:`/api/youtube-video/runs/${encodeURIComponent(runId)}/playback`,
+    }})
+  }
   return view(advanced)
 }
 
