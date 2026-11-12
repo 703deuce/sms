@@ -349,16 +349,21 @@ export async function createYoutubeVideoRun(
     createdById, createdAt: now, updatedAt: now,
   }
   const created = await traceYoutubeRunStep(record.id, 'run_create', () => deps.store.create(record), { sourceCount: input.sources.length })
+  // With the independent driver installed, web POST returns immediately.
+  // The driver advances importing, planning, and rendering asynchronously.
+  if(process.env.YOUTUBE_VIDEO_DRIVER_TOKEN || process.env.CRON_SECRET)
+    return {view:view(created),created:true}
   return { view: view(await advanceRun(created, deps, true)), created: true }
 }
 
 export async function getYoutubeVideoRun(
   workspaceId: string, runId: string, deps: YoutubeVideoRunDeps,
+  advance = true,
 ): Promise<YoutubeVideoRunView> {
   const record = await traceYoutubeRunStep(runId, 'poll_read', () => deps.store.get(workspaceId, runId))
   if (!record) throw new YoutubeVideoError('not_found', 'Run not found', 404)
   youtubeRunEvent(runId, 'poll_decision', 'read', { status: record.status })
-  const advanced = await advanceRun(record, deps)
+  const advanced = advance ? await advanceRun(record, deps) : record
   youtubeRunEvent(runId, 'poll_decision', 'return', { status: advanced.status })
   // Refresh expired browser signed URLs even for already-finished runs.
   if (advanced.status === 'ready' && advanced.result?.renderId && deps.resolveRender) {
