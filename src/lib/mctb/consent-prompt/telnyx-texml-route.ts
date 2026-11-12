@@ -44,6 +44,11 @@ export async function ensureMctb571ConsentTexmlApplication(): Promise<string> {
           voice_url: voiceUrl,
           voice_method: "POST",
           active: true,
+          // Carrier forwards (AT&T Diversion) cancel in ~1–2s — must not wait on slow voice_url.
+          first_command_timeout: true,
+          first_command_timeout_secs: 5,
+          anchorsite_override:
+            process.env.MCTB_TEXML_ANCHORSITE?.trim() || "Ashburn, VA",
           ...texmlStatusCallbackBody(),
         },
       });
@@ -70,6 +75,10 @@ export async function ensureMctb571ConsentTexmlApplication(): Promise<string> {
       voice_url: voiceUrl,
       voice_method: "POST",
       active: true,
+      first_command_timeout: true,
+      first_command_timeout_secs: 5,
+      anchorsite_override:
+        process.env.MCTB_TEXML_ANCHORSITE?.trim() || "Ashburn, VA",
       ...texmlStatusCallbackBody(),
     },
   });
