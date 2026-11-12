@@ -64,6 +64,9 @@ function phaseBVariantCandidate(
   anchor:VideoTemplateRelease,recipe:FactoryTreatmentRecipe,
 ):B8Candidate{
   const last=anchor.family.slots.length-1
+  // Compress extreme editorial placements toward center for large CapCut-scale
+  // hooks while preserving a clearly visible left/right treatment difference.
+  const textX=Math.round(50+(recipe.x-50)*0.55)
   const family=validateTemplateFamily({
     ...anchor.family,
     revision:anchor.family.revision+1,
@@ -80,7 +83,7 @@ function phaseBVariantCandidate(
       const headline=text.id==='headline'
       return {
         ...text,
-        x:recipe.x,
+        x:textX,
         y:headline?Math.max(24,Math.min(68,recipe.y)):text.y,
         font:headline?recipe.headingFont:recipe.supportFont,
         size:headline?phaseBHeadlineSize(recipe.headingFont,text.size):text.size,
