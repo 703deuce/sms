@@ -50,6 +50,16 @@ def test_source_hygiene():
     assert (SHADER_DIR / "NOTICE.md").is_file()
 
 
+def test_fullscreen_quad_is_two_complete_triangles():
+    from clips_worker.shader_transitions import FULLSCREEN_QUAD
+
+    points = tuple(zip(FULLSCREEN_QUAD[0::2], FULLSCREEN_QUAD[1::2]))
+    assert points == (
+        (-1.0, -1.0), (1.0, -1.0), (-1.0, 1.0),
+        (-1.0, 1.0), (1.0, -1.0), (1.0, 1.0),
+    )
+
+
 def test_flip_gl_rgb24_bottom_up():
     from clips_worker.shader_transitions import ShaderRenderError, _flip_gl_rgb24_bottom_up
 
