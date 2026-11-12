@@ -15,8 +15,8 @@ export async function ytRunStoryFinisher(
   const candidateScenes=cuts.map((cut,index)=>({
     index,sourceId:cut.sourceId,kind:cut.kind,
     startMs:cut.startMs,endMs:cut.endMs,beat:cut.beat,
-    spokenWords:cut.kind==='speech'?ctx.words.filter(w=>
-      w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '):null,
+    spokenWords:ctx.words.filter(w=>
+      w.e*1000>cut.startMs&&w.s*1000<cut.endMs).map(w=>w.w).join(' '),
     visualEvidence:cut.kind==='visual'
       ?ctx.observations.filter(m=>m.endMs>cut.startMs&&m.startMs<cut.endMs)
         .map(m=>m.description).slice(0,3):[],
