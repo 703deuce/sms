@@ -76,7 +76,9 @@
     "typecheck:templates:review": "bash scripts/typecheck-template-review-evidence.sh",
     "test:templates:review": "vitest run tests/clips/template-review-evidence.test.ts",
     "templates:review-workbook": "npx tsx scripts/template-review-workbook.ts",
-    "templates:b9:phase-b:render": "npx tsx scripts/batch9-phase-b-render.ts"
+    "templates:b9:phase-b:render": "npx tsx scripts/batch9-phase-b-render.ts",
+    "templates:b9:gallery-contract": "npx tsx scripts/export-batch9a-anchor-gallery-contract.ts",
+    "templates:b9:gallery-posters": "python ../worker/scripts/extract_batch9a_anchor_gallery_posters.py --contract ../build/batch9a-anchor-gallery-contract.json"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1156.0",
