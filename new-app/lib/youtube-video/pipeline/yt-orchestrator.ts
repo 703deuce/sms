@@ -65,6 +65,7 @@ function makeWindowContext(args:YtPlanArgs,active:YtActiveWindow,windowIndex:num
       w.s*1000<active.endMs).map(w=>({w:w.w,s:w.s,e:w.e})),
     observations:[...(active.coarse??[]),...(active.focused??[])],
     instruction:args.instruction,
+    qaIssues:active.qaIssues??[],
   }
 }
 
@@ -224,9 +225,12 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           window.stage='qa'
           log('specialist_finisher','done',{...fields,count:window.cuts.length})
         }catch(error){
-          if(!window.qaRevisionAttempted)throw error
+          if((window.qaRevisionCount??0)<2)throw error
           window.cuts=grounded(ctx,window.cuts)
           if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
+          window.qaPassed=false
+          window.qaIssues=[...(window.qaIssues??[]),`Finisher failed: ${ytErrorCode(error)}`]
+          window.qaIssueHistory=[...(window.qaIssueHistory??[]),`Finisher failed: ${ytErrorCode(error)}`]
           window.stage='commit'
           log('specialist_qa','window_qa_soft_fail',{...fields,code:ytErrorCode(error),
             accepted:window.cuts.length,issues:window.qaIssues})
@@ -238,20 +242,27 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         log('specialist_qa','start',fields)
         const review=await ytQualityReview(ctx,window.outline,window.cuts)
         if(review.pass){
+          window.qaPassed=true
           window.stage='commit'
           log('specialist_qa','passed',fields)
-        }else if(!window.qaRevisionAttempted){
-          window.qaRevisionAttempted=true
-          window.qaIssues=review.issues
-          window.stage='finisher'
-          log('specialist_qa','revision_requested',{...fields,code:'yt_qa_revision'})
         }else{
+          window.qaPassed=false
           window.qaIssues=review.issues
-          window.cuts=grounded(ctx,window.cuts)
-          if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
-          window.stage='commit'
-          log('specialist_qa','window_qa_soft_fail',{...fields,accepted:window.cuts.length,
-            code:'yt_qa_rejected_story',issues:review.issues})
+          window.qaIssueHistory=[...(window.qaIssueHistory??[]),...review.issues]
+          if((window.qaRevisionCount??0)<2){
+            window.qaRevisionCount=(window.qaRevisionCount??0)+1
+            window.qaRevisionAttempted=true
+            // Replan from the screen with the actual QA report, not only trim existing cuts.
+            window.stage='story'
+            log('specialist_qa','revision_requested',{...fields,
+              count:window.qaRevisionCount,issues:review.issues})
+          }else{
+            window.cuts=grounded(ctx,window.cuts)
+            if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
+            window.stage='commit'
+            log('specialist_qa','window_needs_review',{...fields,
+              code:'yt_qa_rejected_story',issues:review.issues})
+          }
         }
         break
       }
@@ -263,6 +274,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           rejected:window.rejected??[],
           coarseCount:window.coarse?.length??0,focusedCount:window.focused?.length??0,
           qaIssues:window.qaIssues,
+          qaIssueHistory:window.qaIssueHistory??[],qaPassed:window.qaPassed===true,
         }
         checkpoint.finished.push(current)
         checkpoint.active=null
@@ -291,30 +303,27 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     const review=await ytQaWholeSourceStory(checkpoint.finished,{
       ...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[],
     })
-    if(!review.pass){
-      log('global_qa','revision_requested',{count:review.issues.length,
-        windowCount:all.length})
-      try{
-        const revised=await ytFinishWholeSourceStory(checkpoint.finished,{
-          issues:review.issues,previousSelection:{
-            ...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[],
-          },
-        })
-        const second=await ytQaWholeSourceStory(checkpoint.finished,revised)
-        checkpoint.final={...revised,qaPassed:true}
-        log('global_qa',second.pass?'passed':'global_qa_soft_fail',{
-          count:second.issues.length,windowCount:all.length,
-          ...(second.pass?{}:{code:'yt_global_qa_rejected',issues:second.issues}),
-        })
-      }catch(error){
-        checkpoint.final.qaPassed=true
-        log('global_qa','global_qa_soft_fail',{code:ytErrorCode(error),
-          windowCount:all.length})
-      }
-    }else{
+    if(review.pass){
       checkpoint.final.qaPassed=true
-      log('global_qa','passed',{count:checkpoint.final.selectedIndices.length,
-        windowCount:all.length})
+      log('global_qa','passed',{windowCount:all.length})
+    }else{
+      checkpoint.final.qaIssues=review.issues
+      checkpoint.final.qaIssueHistory=[...(checkpoint.final.qaIssueHistory??[]),...review.issues]
+      if((checkpoint.final.qaRevisionCount??0)<2){
+        const prior={...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[]}
+        const revised=await ytFinishWholeSourceStory(checkpoint.finished,{
+          issues:review.issues,previousSelection:prior,
+        })
+        checkpoint.final={...checkpoint.final,...revised,
+          qaPassed:false,qaRevisionCount:(checkpoint.final.qaRevisionCount??0)+1}
+        log('global_qa','revision_requested',{issues:review.issues,
+          count:checkpoint.final.qaRevisionCount,windowCount:all.length})
+      }else{
+        checkpoint.final.qaPassed=true
+        checkpoint.final.needsReview=true
+        log('global_qa','needs_review',{issues:review.issues,
+          windowCount:all.length,code:'yt_global_qa_rejected'})
+      }
     }
     await persist()
     return {done:false,checkpoint}
