@@ -110,7 +110,7 @@ export function assembleChosenOption(
     clipId: clip.clipId,
     projectId: clip.projectId,
     renderId: clip.renderId ?? null,
-    editorUrl: `/app/clips/${clip.projectId}/edit/${clip.clipId}?layoutView=script`,
+    editorUrl: `/app/youtube-video/edit/${clip.projectId}/${clip.clipId}`,
     durationMs,
     durationSeconds: Math.round(durationMs / 1000),
     playbackUrl: media?.playbackUrl ?? null,
