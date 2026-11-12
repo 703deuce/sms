@@ -198,5 +198,9 @@ def run_analyze_payload(
     else:
         duration_s = max(1, int((sources[0].get("durationMs") or 60_000) // 1000))
     if mode != "visual_detail":
-        moments, _stats = validate_and_normalize_moments(moments, duration_s=duration_s)
+        # YouTube gaming observations are long story beats, not capped 45s clips.
+        youtube_gaming = bool(visual and str(visual.get('transcriptText') or '').lstrip().startswith('YOUTUBE GAMING EPISODE WATCHER'))
+        moments, _stats = validate_and_normalize_moments(
+            moments, duration_s=duration_s, allow_long_gaming=youtube_gaming,
+        )
     return {"moments": moments, "meta": meta_agg}
