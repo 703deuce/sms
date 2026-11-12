@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { ytStructuredDecision } from '@/lib/youtube-video/pipeline/yt-editorial-handoff'
+import { YT_GAMING_RULEBOOK } from '@/lib/youtube-video/pipeline/yt-gaming-rulebook'
 import type { YtOutline, YtSelectedCut, YtWindowContext, YtFinishedWindow } from '@/lib/youtube-video/pipeline/yt-types'
 
 const int={type:'integer',minimum:0}
@@ -21,7 +22,7 @@ export async function ytRunStoryFinisher(
         .map(m=>m.description).slice(0,3):[],
   }))
   const raw=await ytStructuredDecision('yt_submit_long_form_finish',
-    'STORY FINISHER: This is window '+String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+' of one longer episode. Keep setups, goals, travel, attempts, failures, strategy changes, quiet gameplay and payoff; light trims only for AFK, loading, menus, repetition or off-story chat. Do not make a highlight reel. Target about 25–35% of source runtime and one 15–40 minute episode globally as soft guidance. Return ascending existing candidate indices only; never invent or expand footage. Maintain real continuity. Only the first window needs the opening; ONLY the last window needs a genuine episode ending. Address the supplied QA revision issues if any.',
+    'STORY FINISHER: This is window '+String((ctx.windowIndex??0)+1)+' of '+String(ctx.windowCount??1)+' of one longer episode. Keep setups, goals, travel, attempts, failures, strategy changes, quiet gameplay and payoff; light trims only for AFK, loading, menus, repetition or off-story chat. Do not make a highlight reel. Target about 25–35% of source runtime and one 15–40 minute episode globally as soft guidance. Return ascending existing candidate indices only; never invent or expand footage. Maintain real continuity. Only the first window needs the opening; ONLY the last window needs a genuine episode ending. Preserve complete visual scenes, preferably 45–60s or longer, and reject transcript-line cutting. Follow these gaming rules: '+YT_GAMING_RULEBOOK+'  Address the supplied QA revision issues if any.',
     {outline,qaRevisionIssues:issues,candidateScenes,fullOriginalTranscript:ctx.words.map((w,i)=>[
       i,Math.round(w.s*1000),Math.round(w.e*1000),w.w,
     ])},
@@ -154,7 +155,7 @@ export async function ytFinishWholeSourceStory(
   const all=windows.flatMap(window=>window.cuts)
   if(!all.length||windows.some(w=>!w.cuts.length))throw Error('yt_global_no_candidates')
   const raw=await ytStructuredDecision('yt_submit_global_story',
-    'GLOBAL LONG-FORM STORY: Use vetted footage from EVERY processed window, beginning, middle, and end. Aim for one complete 15–40 minute gaming episode retaining roughly 25–35% of original material, without a hard duration cutoff. Retain necessary scenes from each window: setup, goals, travel, attempts, setbacks, strategy changes, quiet visual gameplay, turning points and payoff. Remove only off-story or repetitive stretches; do not collapse into highlights. Keep scenes in ascending original source order. Every selected scene needs an informative, CONTENT-BASED chapter title rather than Premise, Beat N, Opening, Payoff, or Part N. If revision issues are supplied, address them using the same vetted evidence. Never invent scenes.',
+    'GLOBAL LONG-FORM STORY: Use vetted footage from EVERY processed window, beginning, middle, and end. Aim for one complete 15–40 minute gaming episode retaining roughly 25–35% of original material, without a hard duration cutoff. Retain necessary scenes from each window: setup, goals, travel, attempts, setbacks, strategy changes, quiet visual gameplay, turning points and payoff. Remove only off-story or repetitive stretches; do not collapse into highlights. Keep scenes in ascending original source order. Every selected scene needs an informative, CONTENT-BASED chapter title rather than Premise, Beat N, Opening, Payoff, or Part N. If revision issues are supplied, address EACH exact issue with source-grounded fixes; no silent acceptance. Never invent scenes. Apply this rulebook: '+YT_GAMING_RULEBOOK+' ',
     {
       windowOutlines:windows.map((w,windowIndex)=>({
         windowIndex,sourceIndex:w.sourceIndex,rangeMs:[w.startMs,w.endMs],
@@ -196,7 +197,7 @@ export async function ytFinishWholeSourceStory(
   const selectedIndices=[...covered].sort((a,b)=>a-b)
   const windowTitles=windows.flatMap(w=>w.cuts.map(()=>w.outline.title))
   const chapterTitles=await repairChapterTitles(selectedIndices,all,windowTitles,suppliedByIndex)
-  return {title:raw.title.slice(0,110),premise:raw.premise.slice(0,450),
+  return {title:raw.title.slice(0,110),premise:raw.premise,
     selectedIndices,chapterTitles}
 }
 
@@ -206,7 +207,7 @@ export async function ytQaWholeSourceStory(
   const all=windows.flatMap(w=>w.cuts)
   const chosen=selection.selectedIndices.map(i=>all[i]!)
   const raw=await ytStructuredDecision('yt_submit_global_qa',
-    'FINAL GLOBAL QA: Check this ONE chronological full-episode story for truthful opening, development, and recorded ending, joins across windows and accurate chapter titles. Check that episode length is approximately 15–40 minutes and retained footage is roughly 25–35% of the source as soft editorial targets, not hard rejection conditions. Check that no critical setup, failure, quiet gameplay transition, strategy change or payoff is missing; do not approve a highlights-only cut. Return issue codes if any problem.',
+    'FINAL GLOBAL QA: Check this ONE chronological full-episode story for truthful opening, development, and recorded ending, joins across windows and accurate chapter titles. Check that episode length is approximately 15–40 minutes and retained footage is roughly 25–35% of the source as soft editorial targets, not hard rejection conditions. Check that no critical setup, failure, quiet gameplay transition, strategy change or payoff is missing; do not approve a highlights-only cut. Reject broken mission, chase, fight or escape boundaries and chapter-per-cut fragmentation. Give full issue explanations with evidence and specific repair, not codes. Apply this rulebook: '+YT_GAMING_RULEBOOK+' ',
     {title:selection.title,premise:selection.premise,
       scenes:chosen.map((c,i)=>({
         i,sourceId:c.sourceId,kind:c.kind,startMs:c.startMs,endMs:c.endMs,
@@ -214,9 +215,9 @@ export async function ytQaWholeSourceStory(
       })),
       windowOutlines:windows.map(w=>w.outline),
     },
-    {pass:{type:'boolean'},issueCodes:{type:'array',items:{type:'string'},maxItems:10}},
+    {pass:{type:'boolean'},issueCodes:{type:'array',items:{type:'string'},maxItems:30}},
     ['pass','issueCodes'])
   return {pass:raw.pass===true,issues:Array.isArray(raw.issueCodes)
-    ?raw.issueCodes.filter((v):v is string=>typeof v==='string').slice(0,10).map(v=>v.slice(0,240))
+    ?raw.issueCodes.filter((v):v is string=>typeof v==='string').slice(0,30)
     :[]}
 }
