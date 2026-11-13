@@ -10,6 +10,12 @@ import type { YoutubeVideoSource } from '../../lib/youtube-video/types'
 import { useYoutubeVideo } from './use-youtube-video'
 import type { CreateYoutubeVideoControllerOptions } from '../../lib/youtube-video-ui/controller'
 
+function formatSourceTime(ms:number):string {
+  const total=Math.floor(Math.max(0,ms)/1000)
+  return [Math.floor(total/3600),Math.floor(total%3600/60),total%60]
+    .map(n=>String(n).padStart(2,'0')).join(':')
+}
+
 type PendingFile = { key: string; file: File }
 
 const VIDEO_FILE_EXT = /\.(?:mp4|mov|m4v|webm|mkv|avi|mpeg|mpg|3gp|ts)$/i
@@ -149,6 +155,8 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
   const run = state.run
   const result = run?.result ?? null
   const showResult = run?.status === 'ready' && result
+  const editorialAudit = run?.analysisAudit ?? result?.analysisAudit ?? null
+  const canRenderAnyway = run?.status === 'needs_review'
   const options = run?.options ?? []
 
   return (
@@ -345,6 +353,83 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
             >
               Retry
             </button>
+          </section>
+        )}
+
+        {run && editorialAudit && (run.status==='needs_review' || run.status==='ready') && (
+          <section className="rounded-xl border border-border bg-card p-4" data-testid="youtube-story-edit-decisions">
+            <details open={run.status==='needs_review'}>
+              <summary className="cursor-pointer text-base font-semibold">Story &amp; edit decisions</summary>
+              <div className="mt-4 space-y-5 text-sm">
+                <div>
+                  <h3 className="mb-1 font-semibold">The story</h3>
+                  <p className="whitespace-pre-wrap text-muted-foreground">{editorialAudit.premise}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">These are source recording times, not finished-video times.</p>
+                  <ol className="mt-2 space-y-2">
+                    {(editorialAudit.scenes??[]).map((scene,index)=>(
+                      <li className="rounded-lg border border-border p-2" key={index}>
+                        <p className="font-medium">{index+1}. {scene.title}</p>
+                        <p className="text-xs text-muted-foreground">Source {scene.sourceId} · {formatSourceTime(scene.startMs)}–{formatSourceTime(scene.endMs)}</p>
+                        <p className="mt-1 whitespace-pre-wrap">{scene.reason}</p>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+                <div>
+                  <h3 className="mb-1 font-semibold">What it cut</h3>
+                  <p className="text-xs text-muted-foreground">Source footage omitted from the final story. Unrecorded reasons are labeled explicitly.</p>
+                  <div className="mt-2 max-h-[440px] space-y-2 overflow-y-auto">
+                    {(editorialAudit.cutSpans??[]).map((cut,index)=>(
+                      <div key={index} className="rounded-lg border border-border p-2">
+                        <p className="font-medium">{cut.category} · {formatSourceTime(cut.startMs)}–{formatSourceTime(cut.endMs)} ({formatSourceTime(cut.durationMs)})</p>
+                        <p className="text-xs text-muted-foreground">{cut.sceneContext} · Source {cut.sourceId}</p>
+                        <p className="mt-1 whitespace-pre-wrap">{cut.reason}</p>
+                      </div>
+                    ))}
+                    {!editorialAudit.cutSpans?.length && <p>No omitted source spans were recorded.</p>}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="mb-1 font-semibold">QA decisions and revision rounds</h3>
+                  {(editorialAudit.qaRevisions??[]).map((round,index)=>(
+                    <div key={index} className="mt-2 rounded-lg border border-border p-2">
+                      <p className="font-medium">{round.scope} · Round {round.round+1} · {round.status}</p>
+                      <p className="text-xs text-muted-foreground">{round.explanation}</p>
+                      <ul className="mt-1 list-disc space-y-1 pl-5">
+                        {round.issues.map((issue,i)=><li key={i} className="whitespace-pre-wrap">{issue}</li>)}
+                      </ul>
+                    </div>
+                  ))}
+                  {(editorialAudit.windows??[]).map((window,index)=>(
+                    <details key={index} className="mt-2 rounded-lg border border-border p-2">
+                      <summary className="cursor-pointer font-medium">Window {index+1} · {window.qaPassed===true?'Passed':'Needs review'} · {formatSourceTime(window.startMs)}–{formatSourceTime(window.endMs)}</summary>
+                      <ul className="mt-2 list-disc space-y-1 pl-5">
+                        {(window.qaIssues??[]).map((issue,i)=><li key={i} className="whitespace-pre-wrap">{issue}</li>)}
+                      </ul>
+                    </details>
+                  ))}
+                  {!!editorialAudit.globalQaIssues?.length && (
+                    <div className="mt-2 rounded-lg border border-border p-2">
+                      <strong>Unresolved global QA</strong>
+                      <ul className="mt-1 list-disc space-y-1 pl-5">
+                        {editorialAudit.globalQaIssues.map((issue,i)=><li key={i} className="whitespace-pre-wrap">{issue}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </details>
+            {canRenderAnyway && (
+              <div className="mt-4 border-t border-border pt-4" role="alert">
+                <p className="mb-3 text-sm font-medium">Needs review — QA rejected this edit after two revision rounds. Nothing has been sent to render.</p>
+                {state.chooseError && <p className="mb-2 text-sm text-destructive">{state.chooseError}</p>}
+                <button type="button" data-testid="youtube-render-anyway"
+                  disabled={busy} onClick={()=>void controller.renderAnyway()}
+                  className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                  Render anyway
+                </button>
+              </div>
+            )}
           </section>
         )}
 
