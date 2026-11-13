@@ -9,6 +9,7 @@ export type YoutubeVideoPhase =
   | 'submitting'
   | 'polling'
   | 'awaiting_choice'
+  | 'needs_review'
   | 'choosing'
   | 'reverting'
   | 'ready'
@@ -55,11 +56,12 @@ function phaseFromRun(run: YoutubeVideoRunView | null, fallback: YoutubeVideoPha
   if (run.status === 'ready') return 'ready'
   if (run.status === 'failed' || run.status === 'canceled') return 'failed'
   if (run.status === 'awaiting_choice') return 'awaiting_choice'
+  if (run.status === 'needs_review') return 'needs_review'
   return 'polling'
 }
 
 function settled(run: YoutubeVideoRunView | null): boolean {
-  return !!run && (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled' || run.status === 'awaiting_choice')
+  return !!run && (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled' || run.status === 'awaiting_choice' || run.status === 'needs_review')
 }
 
 const MAX_RECONNECT_GET_ATTEMPTS = 3
@@ -89,6 +91,7 @@ export type YoutubeVideoController = {
   submit: (input?: { sources?: YoutubeVideoSource[]; title?: string }) => Promise<void>
   retry: () => Promise<void>
   choose: (optionId: string) => Promise<void>
+  renderAnyway: () => Promise<void>
   refresh: () => Promise<void>
   restoreRun: (runId: string) => Promise<void>
   requestRevert: () => void
@@ -174,7 +177,7 @@ export function createYoutubeVideoController(
     emit({ phase: 'polling', submitLocked: false })
     while (!disposed && gen === generation) {
       const run = state.run
-      if (run && (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled' || (stopOnChoice && run.status === 'awaiting_choice'))) {
+      if (run && (run.status === 'ready' || run.status === 'failed' || run.status === 'canceled' || (stopOnChoice && (run.status === 'awaiting_choice' || run.status === 'needs_review')))) {
         emit({
           phase: phaseFromRun(run, 'polling'),
           run,
@@ -337,6 +340,24 @@ export function createYoutubeVideoController(
           }
         }
         emit({ submitLocked: false, phase: 'awaiting_choice', chooseError: toError(e).message })
+      }
+    },
+    async renderAnyway() {
+      const runId=state.run?.runId
+      if(!runId||state.run?.status!=='needs_review'||state.submitLocked)return
+      const gen=generation
+      emit({phase:'choosing',submitLocked:true,chooseError:null})
+      try{
+        const response=await client.renderAnyway(runId)
+        if(disposed||gen!==generation)return
+        // Follow-up GET fetches the complete persisted run, not the minimal POST reply.
+        const current=await getRunWithRecovery(runId,gen,'choice')
+        if(!current||disposed||gen!==generation)return
+        emit({run:current,submitLocked:false,phase:phaseFromRun(current,'polling')})
+        if(!settled(current))await pollUntilSettled(runId,gen,false)
+      }catch(error){
+        if(disposed||gen!==generation)return
+        emit({phase:'needs_review',submitLocked:false,chooseError:toError(error).message})
       }
     },
     async restoreRun(runId) {
