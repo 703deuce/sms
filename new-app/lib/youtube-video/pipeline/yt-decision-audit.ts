@@ -1,4 +1,4 @@
-import type { YtCheckpoint, YtFinishedWindow, YtSelectedCut, YtStep } from './yt-types'
+import type { YtCheckpoint, YtFinishedWindow } from './yt-types'
 import type { YoutubeVideoOption, YoutubeVideoResult } from '@/lib/youtube-video/types'
 
 type Audit = NonNullable<YoutubeVideoResult['analysisAudit']>
@@ -52,16 +52,22 @@ export function ytBuildDecisionAudit(
       position=Math.max(position,span.endMs)
     }
   }
-  const revisionSteps:NonNullable<Audit['qaRevisions']>=checkpoint.steps.filter(
-    step=>step.event==='revision_requested'||step.event==='window_needs_review'||
-      step.event==='needs_review',
-  ).map((step:YtStep)=>({
-    scope:step.windowIndex==null?'Global episode':`Window ${step.windowIndex+1}`,
-    round:step.count??0,status:step.event,issues:step.issues??[],
-    explanation:step.event==='revision_requested'
-      ?'The rejected edit was sent for another editorial pass using the QA findings.'
-      :'These issues remained unresolved after the allowed revision rounds.'
-  }))
+  const revisionSteps:NonNullable<Audit['qaRevisions']>=[
+    ...checkpoint.finished.flatMap((window,index)=>(window.qaRounds??[]).map(round=>({
+      scope:`Window ${index+1}`,round:round.round,status:round.resolution,
+      issues:round.issues,
+      explanation:round.resolution==='Passed after revision'
+        ?'This window passed QA after the changes in its revision rounds.'
+        :'The next editorial pass was instructed to fix the identified missing or broken story evidence.',
+    }))),
+    ...(checkpoint.final?.qaRounds??[]).map(round=>({
+      scope:'Global episode',round:round.round,status:round.resolution,
+      issues:round.issues,
+      explanation:round.resolution==='Passed after revision'
+        ?'The combined story passed global QA after revision.'
+        :'Global story selection was revised using these full QA explanations.',
+    })),
+  ]
   return {
     premise:checkpoint.final?.premise??option.premise,
     needsReview:!!checkpoint.final?.needsReview||checkpoint.finished.some(w=>w.qaPassed===false),
