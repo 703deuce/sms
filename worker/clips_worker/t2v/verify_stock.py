@@ -65,10 +65,15 @@ Clip length: {clip_s:.1f} s. The shot on screen needs about {need_s:.1f} s.
 Return JSON:
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
-- matches: true only if a viewer would see the thing the narration talks about (or a directly
-  relevant, visually honest depiction of it). Generic or loosely related footage is false.
-  Text, logos or watermarks dominating the frame, or the wrong subject/era/place, is false.
-- score: 0-10 visual relevance to the narration and intended shot (10 = exactly it).
+- matches: true if a professional editor would honestly put this clip under that line as B-roll:
+  the clip clearly shows the narration's subject (or a directly relevant, visually honest depiction
+  of it). It does NOT need every detail of the intended shot: time of day, weather, exact camera
+  move, setting or extra people are nice-to-have, not requirements. When the subject looks like an
+  ordinary thing (an electric car looks like any modern car), a clean, modern example counts unless
+  something on screen contradicts the line. False when the main subject is wrong or unrelated, the
+  footage is too dark/blurry to read, or text, logos or watermarks dominate the frame.
+- score: 0-10 how well it illustrates the line. 9-10 = exactly the subject and action; 7-8 = clearly
+  the right subject, usable as-is; 5-6 = related but weak; 0-4 = wrong or unusable.
 - in_s, out_s: the best continuous window inside the clip to use, where the relevant subject or
   action is clearly visible and the framing is good. Prefer a window of at least {need_s:.1f} s
   when the clip allows; use the whole clip if it is all usable. 0 <= in_s < out_s <= {clip_s:.1f}.
