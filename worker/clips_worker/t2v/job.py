@@ -28,8 +28,11 @@ _PIPELINE_SHORT_SIDE = {"480p": 480, "720p": 720}
 
 
 def _pipeline_canvas(document: dict, aspect: str, w: int, h: int) -> tuple[int, int]:
+    # Only an explicit assembleResolution shrinks the assembled source. renderResolution is the export
+    # size: the composition export expects the standard-size source (an 854x480 source came out
+    # zoomed/stretched through the shared speakercrop path), so 480p is applied at export only.
     run = document.get("autobuild") or {}
-    short = _PIPELINE_SHORT_SIDE.get(str(run.get("renderResolution") or ""))
+    short = _PIPELINE_SHORT_SIDE.get(str(run.get("assembleResolution") or ""))
     if not short:
         return w, h
     if short == 480 and aspect == "16:9":

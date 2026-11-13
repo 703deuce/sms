@@ -24,5 +24,7 @@ def test_preview_hosts_allowlisted():
 
 
 def test_pipeline_canvas_only_when_requested():
-    assert _pipeline_canvas({"autobuild": {"renderResolution": "480p"}}, "16:9", 1920, 1080) == (854, 480)
+    assert _pipeline_canvas({"autobuild": {"assembleResolution": "480p"}}, "16:9", 1920, 1080) == (854, 480)
+    # Export resolution alone must not shrink the assembled source.
+    assert _pipeline_canvas({"autobuild": {"renderResolution": "480p"}}, "16:9", 1920, 1080) == (1920, 1080)
     assert _pipeline_canvas({}, "16:9", 1920, 1080) == (1920, 1080)
