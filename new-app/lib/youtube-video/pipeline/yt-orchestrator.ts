@@ -119,6 +119,13 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     })
   }
 
+  const rangeSummary=(before:number[][],after:number[][]):string=>{
+    const beforeKeys=new Set(before.map(([a,b])=>a+':'+b))
+    const afterKeys=new Set(after.map(([a,b])=>a+':'+b))
+    const removed=before.filter(([a,b])=>!afterKeys.has(a+':'+b)).length
+    const added=after.filter(([a,b])=>!beforeKeys.has(a+':'+b)).length
+    return `${removed} previous scene ranges removed or changed; ${added} scene ranges added or changed; ${after.length} scenes in revised selection.`
+  }
   const identity=(w:{sourceIndex:number;startMs:number;endMs:number}) =>
     [w.sourceIndex,w.startMs,w.endMs].join(':')
   const finishedKeys=new Set(checkpoint.finished.map(identity))
@@ -245,6 +252,11 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
       case 'qa':{
         if(!window.outline||!window.cuts)throw Error('yt_footage_missing')
         log('specialist_qa','start',fields)
+        const previousRound=window.qaRounds?.[window.qaRounds.length-1]
+        if(previousRound && previousRound.beforeRanges && !previousRound.revisionChanges){
+          previousRound.revisionChanges=rangeSummary(previousRound.beforeRanges,
+            window.cuts.map(c=>[c.startMs,c.endMs]))
+        }
         const review=await ytQualityReview(ctx,window.outline,window.cuts)
         if(review.pass){
           window.qaPassed=true
@@ -255,7 +267,8 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           window.qaPassed=false
           window.qaIssues=review.issues
           window.qaIssueHistory=[...(window.qaIssueHistory??[]),...review.issues]
-          window.qaRounds=[...(window.qaRounds??[]),{round:window.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested'}]
+          window.qaRounds=[...(window.qaRounds??[]),{round:window.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested',
+            beforeRanges:window.cuts.map(c=>[c.startMs,c.endMs])}]
           if((window.qaRevisionCount??0)<2){
             window.qaRevisionCount=(window.qaRevisionCount??0)+1
             window.qaRevisionAttempted=true
@@ -314,6 +327,12 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
   if(!checkpoint.final.qaPassed){
     log('global_qa','start',{count:checkpoint.final.selectedIndices.length,
       windowCount:all.length})
+    const previousGlobalRound=checkpoint.final.qaRounds?.[checkpoint.final.qaRounds.length-1]
+    if(previousGlobalRound?.beforeRanges && !previousGlobalRound.revisionChanges){
+      const allCuts=checkpoint.finished.flatMap(w=>w.cuts)
+      previousGlobalRound.revisionChanges=rangeSummary(previousGlobalRound.beforeRanges,
+        checkpoint.final.selectedIndices.map(i=>[allCuts[i]!.startMs,allCuts[i]!.endMs]))
+    }
     const review=await ytQaWholeSourceStory(checkpoint.finished,{
       ...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[],
     })
@@ -324,7 +343,11 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     }else{
       checkpoint.final.qaIssues=review.issues
       checkpoint.final.qaIssueHistory=[...(checkpoint.final.qaIssueHistory??[]),...review.issues]
-      checkpoint.final.qaRounds=[...(checkpoint.final.qaRounds??[]),{round:checkpoint.final.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested'}]
+      checkpoint.final.qaRounds=[...(checkpoint.final.qaRounds??[]),{round:checkpoint.final.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested',
+        beforeRanges:checkpoint.final.selectedIndices.map(i=>{
+          const c=checkpoint.finished.flatMap(w=>w.cuts)[i]!
+          return [c.startMs,c.endMs]
+        })}]
       if((checkpoint.final.qaRevisionCount??0)<2){
         const prior={...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[]}
         const revised=await ytFinishWholeSourceStory(checkpoint.finished,{
