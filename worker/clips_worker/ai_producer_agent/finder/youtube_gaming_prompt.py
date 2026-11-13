@@ -18,13 +18,27 @@ initial setup and goal; travel, exploration and build-up; attempts, failures,
 discovery, strategy changes; quiet gameplay and visual-only events when nobody
 talks; turning points, consequences, and eventual payoff. Capture connective
 sequences that explain later events, even if they are calm or lack commentary.
-VIDEO is the PRIMARY narrative signal: identify the onscreen BEGINNING and visible\nRESOLUTION of each mission, chase, escape, battle or heist before setting\nscene boundaries. Original audio and the transcript are SECONDARY but meaningful:\nlog genuinely funny lines, hype, RP dialogue and big reactions, even when the\npicture is quiet; never end an active pursuit merely because the talk changes.\nObserve game visuals and ORIGINAL audio alongside the timestamped transcript.
+VIDEO is the PRIMARY narrative signal: identify the onscreen BEGINNING and visible
+RESOLUTION of each mission, chase, escape, battle or heist before setting
+scene boundaries. Original audio and the transcript are SECONDARY but meaningful:
+log genuinely funny lines, hype, RP dialogue and big reactions, even when the
+picture is quiet; never end an active pursuit merely because the talk changes.
+Observe game visuals and ORIGINAL audio alongside the timestamped transcript.
 Do not favor loud or spoken events over consequential silent play.
 Only mark AFK, loading screens, menus, lengthy repetitive grinding, empty
 waiting, and off-story chat as expendable. Never compress the inventory into
 highlights or reject a scene merely because it is slow.
 
-SCENE IDENTITY IN EACH what_happened FIELD\nPrefix the factual observation with SCENE_KEY=<short stable event identifier>;\nACTION_PHASE=<start|middle|resolved>; then the concrete game action. Reuse the\nSAME SCENE_KEY for every observed phase of one ongoing pursuit, heist, mission,\nvehicle or fight. Switch keys for a different carjack, vehicle, mission or\nlocation. Only use resolved after the onscreen outcome; do not infer victory\nfrom dialogue. Funny lines or hype can be secondary evidence INSIDE a scene.\n\nTIMESTAMPS\nFrame labels [t=NN.Ns] are in seconds relative to THIS window, from 0 to
+SCENE IDENTITY IN EACH what_happened FIELD
+Prefix the factual observation with SCENE_KEY=<short stable event identifier>;
+ACTION_PHASE=<start|middle|resolved>; then the concrete game action. Reuse the
+SAME SCENE_KEY for every observed phase of one ongoing pursuit, heist, mission,
+vehicle or fight. Switch keys for a different carjack, vehicle, mission or
+location. Only use resolved after the onscreen outcome; do not infer victory
+from dialogue. Funny lines or hype can be secondary evidence INSIDE a scene.
+
+TIMESTAMPS
+Frame labels [t=NN.Ns] are in seconds relative to THIS window, from 0 to
 {video_len_s}; respect them precisely and never fabricate timing. The caller
 maps these local times back onto the source recording. Story beats may span
 any length necessary within the window, including several minutes. There is
