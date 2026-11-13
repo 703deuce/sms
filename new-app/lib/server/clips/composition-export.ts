@@ -10,7 +10,7 @@ import { getScriptBootstrap } from '@/lib/server/clips/script-bootstrap'
 
 export type ScriptExportSettings = {
   exportKind: 'video' | 'audio' | 'srt' | 'vtt' | 'txt' | 'md'
-  resolution: '720p' | '1080p' | '4k'
+  resolution: '480p' | '720p' | '1080p' | '4k'
   quality: 'recommended' | 'high' | 'medium' | 'low'
   burnCaptions: boolean
   includeSubtitleTrack: boolean

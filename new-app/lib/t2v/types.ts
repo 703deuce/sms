@@ -1,3 +1,5 @@
+import type { T2vPipelineRun } from '@/lib/t2v/pipeline/t2v-types'
+
 /**
  * T2V draft document (authoring truth for the storyboard editor). Stored in T2vDraft.document.
  */
@@ -86,7 +88,7 @@ export type T2vDraftV1 = {
   source: { kind: T2vSourceKind; prompt?: string; script?: string; url?: string; uploadId?: string }
   settings: {
     aspect: T2vAspect
-    targetDurationS: 30 | 60 | 90 | 120 | 180 | null
+    targetDurationS: 30 | 45 | 60 | 90 | 120 | 180 | 240 | 300 | null
     language: string
     tone: 'friendly' | 'professional' | 'energetic' | 'calm' | 'inspirational' | 'humorous'
     audience?: string
@@ -124,6 +126,8 @@ export type T2vDraftV1 = {
   } | null
   scenes: T2vScene[]
   nextSlot: number
+  /** Prompt-to-Video one-click pipeline run record (absent for manually built drafts). */
+  autobuild?: T2vPipelineRun
 }
 
 export const T2V_WORD_BLOCK = 10_000

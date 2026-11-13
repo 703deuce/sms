@@ -1,0 +1,156 @@
+import 'server-only'
+import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
+import type { StockCandidate } from '@/lib/server/t2v/stock-match'
+import { logT2v } from '@/lib/server/t2v/log'
+import type { T2vDraftV1, T2vScene, T2vSceneMedia } from '@/lib/t2v/types'
+import type {
+  T2vFootageCandidate,
+  T2vNarrationSegment,
+  T2vPipelineRun,
+  T2vPlannedShot,
+  T2vShotResult,
+  T2vStoryPlan,
+} from '@/lib/t2v/pipeline/t2v-types'
+import { T2V_END_CARD_S } from '@/lib/server/t2v/pipeline/t2v-story-agent'
+
+const TITLE_CARD_COLOR = '#0f1115'
+
+function stockCandidateFrom(c: T2vFootageCandidate): StockCandidate {
+  return {
+    provider: c.provider,
+    providerId: c.providerId,
+    width: c.width,
+    height: c.height,
+    durationS: c.durationS,
+    thumbUrl: c.thumbUrl,
+    previewUrl: c.previewUrl,
+    srcUrl: c.srcUrl,
+    pageUrl: c.pageUrl,
+    author: c.author,
+    tags: c.tags,
+    score: 0,
+  }
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length)
+  let next = 0
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++
+        out[i] = await fn(items[i]!, i)
+      }
+    }),
+  )
+  return out
+}
+
+function titleCard(): T2vSceneMedia {
+  return { provider: 'color', kind: 'color', color: TITLE_CARD_COLOR }
+}
+
+/**
+ * Finisher: turns verified shots into a real T2V draft edit (the same document the storyboard
+ * editor, T2V_ASSEMBLE worker and composition export already understand).
+ * - verified stock clip trimmed to the reviewer's in-point; audio is never used (-an in assemble)
+ * - honest title card when no footage passed review
+ * - hard cuts inside a segment, dissolves between segments, opening title, closing end card
+ */
+export async function t2vFinisher(input: {
+  workspaceId: string
+  doc: T2vDraftV1
+  run: T2vPipelineRun
+  story: T2vStoryPlan
+  segments: T2vNarrationSegment[]
+  shots: T2vPlannedShot[]
+  results: T2vShotResult[]
+  candidates: Record<string, T2vFootageCandidate[]>
+}): Promise<{ scenes: T2vScene[]; results: T2vShotResult[] }> {
+  const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
+  const media = await mapLimit(input.shots, 3, async (shot) => {
+    const r = byScene.get(shot.sceneId)
+    const pick = r?.chosen
+    if (!pick) return null
+    const cand = (input.candidates[shot.sceneId] ?? []).find((c) => c.providerId === pick.providerId)
+    if (!cand) return null
+    try {
+      const asset = await ensureT2vStockAsset(input.workspaceId, stockCandidateFrom(cand))
+      const m: T2vSceneMedia = {
+        provider: cand.provider,
+        kind: 'video',
+        assetId: asset.id,
+        providerId: cand.providerId,
+        thumbUrl: cand.thumbUrl,
+        previewUrl: cand.previewUrl,
+        width: cand.width,
+        height: cand.height,
+        durationMs: Math.round(cand.durationS * 1000),
+        srcInMs: Math.round(Math.max(0, pick.inS) * 1000),
+        focalX: 0.5,
+        focalY: 0.5,
+        attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
+        query: cand.query,
+      }
+      return m
+    } catch (err) {
+      logT2v('pipeline-finisher', 'stock ingest failed', {
+        sceneId: shot.sceneId,
+        providerId: cand.providerId,
+        error: err instanceof Error ? err.message : 'error',
+      })
+      return null
+    }
+  })
+
+  const scenes: T2vScene[] = []
+  const results: T2vShotResult[] = []
+  input.shots.forEach((shot, i) => {
+    const next = input.shots[i + 1]
+    const segmentEnd = !next || next.segmentId !== shot.segmentId
+    const m = media[i]
+    const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
+    results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
+    const texts: T2vScene['texts'] = []
+    if (i === 0) {
+      texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
+    } else if (!m) {
+      const label = shot.onScreenText || shot.intent.split(/\s+/).slice(0, 6).join(' ')
+      texts.push({ id: `t_card_${i}`, kind: 'title', text: label, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
+    } else if (shot.onScreenText) {
+      texts.push({ id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' })
+    }
+    scenes.push({
+      id: shot.sceneId,
+      slot: i,
+      narration: shot.narration,
+      onScreenText: shot.onScreenText,
+      keywords: shot.queries[0]?.toLowerCase().split(/\s+/).slice(0, 6) ?? [],
+      visualQuery: shot.queries[0] ?? shot.intent,
+      media: m ?? titleCard(),
+      minDurMs: 1800,
+      padMs: segmentEnd ? 450 : 120,
+      // Transition on a scene = how it leaves into the next one (assemble.py xfade order).
+      transition: !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut',
+      transitionMs: segmentEnd ? 450 : 0,
+      texts,
+    })
+  })
+  // Closing end card: title on black, no narration.
+  const endSlot = scenes.length
+  scenes.push({
+    id: `sc_end_${Math.random().toString(36).slice(2, 8)}`,
+    slot: endSlot,
+    narration: '',
+    keywords: [],
+    visualQuery: '',
+    media: { provider: 'color', kind: 'color', color: '#000000' },
+    minDurMs: Math.round(T2V_END_CARD_S * 1000),
+    padMs: 0,
+    transition: 'cut',
+    transitionMs: 0,
+    texts: [{ id: 't_end', kind: 'title', text: input.story.title, startMs: 200, endMs: Math.round(T2V_END_CARD_S * 1000), animation: 'fade' }],
+  })
+  if (scenes.length >= 2) scenes[scenes.length - 2]!.transitionMs = 600
+  return { scenes, results }
+}
