@@ -395,6 +395,7 @@ export function YoutubeVideoPage(opts: CreateYoutubeVideoControllerOptions = {})
                     <div key={index} className="mt-2 rounded-lg border border-border p-2">
                       <p className="font-medium">{round.scope} · Round {round.round+1} · {round.status}</p>
                       <p className="text-xs text-muted-foreground">{round.explanation}</p>
+                      {round.changes && <p className="mt-1 text-xs font-medium">Changes made: {round.changes}</p>}
                       <ul className="mt-1 list-disc space-y-1 pl-5">
                         {round.issues.map((issue,i)=><li key={i} className="whitespace-pre-wrap">{issue}</li>)}
                       </ul>
