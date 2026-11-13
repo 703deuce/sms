@@ -348,7 +348,7 @@ export function createYoutubeVideoController(
       const gen=generation
       emit({phase:'choosing',submitLocked:true,chooseError:null})
       try{
-        const response=await client.renderAnyway(runId)
+        await client.renderAnyway(runId)
         if(disposed||gen!==generation)return
         // Follow-up GET fetches the complete persisted run, not the minimal POST reply.
         const current=await getRunWithRecovery(runId,gen,'choice')
