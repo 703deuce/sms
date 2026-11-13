@@ -39,6 +39,17 @@ describe('YouTube-only gaming scene coverage',()=>{
     expect(result.cuts).toHaveLength(1)
     expect(result.cuts[0]).toMatchObject({startMs:0,endMs:155_000})
   })
+  it('bridges a 30-second unobserved hole between same-identity chase observations',()=>{
+    const evidence=[
+      observe(0,60_000,'chase_same_car','start'),
+      observe(90_000,155_000,'chase_same_car','resolved'),
+    ]
+    const result=ytResolveVisualScenes(ctx(evidence),[
+      cut(0,60_000,'visual'),cut(90_000,155_000,'visual'),
+    ])
+    expect(result.cuts).toHaveLength(1)
+    expect(result.cuts[0]).toMatchObject({startMs:0,endMs:155_000})
+  })
   it('does not splice unrelated carjackings even when their times overlap',()=>{
     const evidence=[
       observe(0,60_000,'vehicle_a_carjack','resolved'),
