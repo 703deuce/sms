@@ -6,6 +6,7 @@ export type YoutubeVideoClient = {
   createRun: (body: YoutubeVideoCreateInput, idempotencyKey?: string) => Promise<YoutubeVideoRunView>
   getRun: (runId: string) => Promise<YoutubeVideoRunView>
   chooseOption: (runId: string, optionId: string) => Promise<YoutubeVideoRunView>
+  renderAnyway: (runId: string) => Promise<YoutubeVideoRunView>
   revertRun: (runId: string) => Promise<YoutubeVideoRunView>
 }
 
@@ -64,6 +65,12 @@ export function createYoutubeVideoClient(opts: { fetch?: typeof fetch } = {}): Y
         if (e instanceof YoutubeVideoHttpError && e.status === 409) throw e
         throw e
       }
+    },
+    async renderAnyway(runId) {
+      return parseYoutubeVideoRun(await request(
+        `/api/youtube-video/${encodeURIComponent(runId)}/render-anyway`,
+        {method:'POST'},
+      ))
     },
     async revertRun(runId) {
       return parseYoutubeVideoRun(await request(YOUTUBE_VIDEO_PATHS.revert(runId), { method: 'POST' }))
