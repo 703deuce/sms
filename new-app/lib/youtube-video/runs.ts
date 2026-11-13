@@ -259,8 +259,9 @@ async function advanceRun(
       } catch (error) {
         const code=ytErrorCode(error)
         const checkpoint=current.analysisState
-        const longSource=ingested.some(source=>source.durationMs>20*60_000)
-        if(longSource){
+        // Gaming is always screen-first, even for clips under 20 minutes.
+        // Never downgrade a failed multimodal pipeline to transcript-only options.
+        {
           const stage=checkpoint?.active?.stage??
             (checkpoint?.final?.qaPassed?'assembly_validation':
               checkpoint?.final?'global_qa':'global_story')
@@ -289,13 +290,7 @@ async function advanceRun(
             500,
           ))
         }
-        if(checkpoint){
-          ytLog(current.id,checkpoint,'isolated_long_form','transcript_only_fallback',{code})
-          current=await deps.store.update(current.workspaceId,current.id,{
-            analysisState:checkpoint,status:'running',stage:'planning',progressPercent:55,
-          })
-        }
-        youtubeRunEvent(current.id,'isolated_long_form','transcript_only_fallback',{reason:code})
+
       } finally {
         if (timer) clearInterval(timer)
       }
