@@ -73,7 +73,7 @@ export type YtFinishedWindow = {
   focusedCount: number
   qaIssues?: string[]
   qaPassed?: boolean
-  qaRounds?: Array<{round:number;issues:string[];resolution:string}>
+  qaRounds?: Array<{round:number;issues:string[];resolution:string;beforeRanges?:number[][];revisionChanges?:string}>
   qaIssueHistory?: string[]
   observedScenes?: YtObservation[]
 }
@@ -93,7 +93,7 @@ export type YtCheckpoint = {
     chapterTitles?: string[]
     qaPassed: boolean
     qaRevisionCount?: number
-    qaRounds?: Array<{round:number;issues:string[];resolution:string}>
+    qaRounds?: Array<{round:number;issues:string[];resolution:string;beforeRanges?:number[][];revisionChanges?:string}>
     qaIssues?: string[]
     qaIssueHistory?: string[]
     needsReview?: boolean
