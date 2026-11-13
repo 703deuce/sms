@@ -260,7 +260,8 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         const review=await ytQualityReview(ctx,window.outline,window.cuts)
         if(review.pass){
           window.qaPassed=true
-          window.qaRounds=(window.qaRounds??[]).map(round=>({...round,resolution:'Passed after revision'}))
+          window.qaRounds=(window.qaRounds??[]).map((round,i,all)=>
+            i===all.length-1?{...round,resolution:'Revision accepted by QA'}:round)
           window.stage='commit'
           log('specialist_qa','passed',fields)
         }else{
@@ -279,7 +280,8 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           }else{
             window.cuts=grounded(ctx,window.cuts)
             if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
-            window.qaRounds=(window.qaRounds??[]).map(round=>({...round,resolution:'Unresolved — owner approval needed'}))
+            window.qaRounds=(window.qaRounds??[]).map((round,i,all)=>
+              i===all.length-1?{...round,resolution:'Unresolved — owner approval needed'}:round)
             window.stage='commit'
             log('specialist_qa','window_needs_review',{...fields,
               code:'yt_qa_rejected_story',issues:review.issues})
@@ -338,7 +340,8 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     })
     if(review.pass){
       checkpoint.final.qaPassed=true
-      checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map(round=>({...round,resolution:'Passed after revision'}))
+      checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map((round,i,all)=>
+        i===all.length-1?{...round,resolution:'Revision accepted by QA'}:round)
       log('global_qa','passed',{windowCount:all.length})
     }else{
       checkpoint.final.qaIssues=review.issues
@@ -360,7 +363,8 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
       }else{
         checkpoint.final.qaPassed=true
         checkpoint.final.needsReview=true
-        checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map(round=>({...round,resolution:'Unresolved — owner approval needed'}))
+        checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map((round,i,all)=>
+          i===all.length-1?{...round,resolution:'Unresolved — owner approval needed'}:round)
         log('global_qa','needs_review',{issues:review.issues,
           windowCount:all.length,code:'yt_global_qa_rejected'})
       }
