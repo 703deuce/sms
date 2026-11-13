@@ -71,7 +71,7 @@ export type YoutubeVideoResult = {
     globalQaIssueHistory?: string[]
     scenes?: Array<{sourceId:string;startMs:number;endMs:number;title:string;reason:string}>
     cutSpans?: Array<{sourceId:string;startMs:number;endMs:number;durationMs:number;category:string;reason:string;sceneContext:string}>
-    qaRevisions?: Array<{scope:string;round:number;status:string;issues:string[];explanation:string}>
+    qaRevisions?: Array<{scope:string;round:number;status:string;issues:string[];explanation:string;changes?:string}>
     steps: import('@/lib/youtube-video/pipeline/yt-types').YtStep[]
     windows: Array<{
       sourceIndex:number;startMs:number;endMs:number
