@@ -57,7 +57,7 @@ export function ytBuildDecisionAudit(
       scope:`Window ${index+1}`,round:round.round,status:round.resolution,
       changes:round.revisionChanges,
       issues:round.issues,
-      explanation:round.resolution==='Passed after revision'
+      explanation:round.resolution==='Revision accepted by QA'
         ?'This window passed QA after the changes in its revision rounds.'
         :'The next editorial pass was instructed to fix the identified missing or broken story evidence.',
     }))),
@@ -65,7 +65,7 @@ export function ytBuildDecisionAudit(
       scope:'Global episode',round:round.round,status:round.resolution,
       changes:round.revisionChanges,
       issues:round.issues,
-      explanation:round.resolution==='Passed after revision'
+      explanation:round.resolution==='Revision accepted by QA'
         ?'The combined story passed global QA after revision.'
         :'Global story selection was revised using these full QA explanations.',
     })),
