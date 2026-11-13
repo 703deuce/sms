@@ -24,6 +24,7 @@ export function statusLabel(status: YoutubeVideoStatus | string): string {
   if (status === 'waiting_for_source') return 'Transcribing source'
   if (status === 'running') return 'Generating'
   if (status === 'awaiting_choice') return 'Choose a story'
+  if (status === 'needs_review') return 'Needs review — render requires approval'
   if (status === 'ready') return 'Ready'
   if (status === 'failed') return 'Failed'
   if (status === 'canceled') return 'Canceled'
