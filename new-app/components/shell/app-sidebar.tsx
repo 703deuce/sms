@@ -109,9 +109,11 @@ function NavItemRow({ item, active }: { item: SidebarNavItem; active: boolean })
 
 export function AppSidebar({
   recordingNavEnabled = false,
+  t2vNavEnabled = false,
   collapsible = 'icon',
 }: {
   recordingNavEnabled?: boolean
+  t2vNavEnabled?: boolean
   /** TIMELINE_LAYOUT5: 'offcanvas' on the clip editor = no icon column; the editor's menu button slides it in. */
   collapsible?: 'icon' | 'offcanvas'
 }) {
@@ -121,7 +123,7 @@ export function AppSidebar({
   const recordingEnabledClient = useRecordingEnabled()
   const soloRecordingEnabled = useSoloRecordingEnabled()
   const recordingEnabled = recordingNavEnabled || recordingEnabledClient
-  const t2vEnabled = isT2vFeatureEnabled()
+  const t2vEnabled = t2vNavEnabled || isT2vFeatureEnabled()
   const scriptEditorEnabled = isScriptEditorEnabled()
 
   useEffect(() => {

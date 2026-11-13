@@ -21,11 +21,14 @@ export function AppShell({
   initialShellContext = null,
   defaultSidebarOpen = true,
   recordingNavEnabled = false,
+  t2vNavEnabled = false,
 }: {
   children: React.ReactNode
   initialShellContext?: PersistedShellContext | null
   defaultSidebarOpen?: boolean
   recordingNavEnabled?: boolean
+  /** Server-evaluated AI Video flag (runtime env), so nav does not depend on build-time NEXT_PUBLIC_*. */
+  t2vNavEnabled?: boolean
 }) {
   const pathname = usePathname()
   const narrow = useSyncExternalStore(
@@ -77,6 +80,7 @@ export function AppShell({
             </a>
             <AppSidebar
               recordingNavEnabled={recordingNavEnabled}
+              t2vNavEnabled={t2vNavEnabled}
               collapsible={isClipEditorPath(pathname ?? '') ? 'offcanvas' : 'icon'}
             />
             <SidebarInset className="min-w-0 bg-background has-[main[data-immersive]]:h-dvh has-[main[data-immersive]]:overflow-hidden">

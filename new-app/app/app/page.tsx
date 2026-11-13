@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles, Megaphone } from 'lucide-react'
+import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles, Megaphone, Film } from 'lucide-react'
+import { isT2vFeatureEnabled } from '../../lib/server/clips/feature-gates'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -22,7 +23,7 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
-  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', 'captions', 'ai-studio', 'ad-studio'] })
+  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', ...(isT2vFeatureEnabled() ? ['text-to-video'] : []), 'captions', 'ai-studio', 'ad-studio'] })
   return (
     <Page>
       <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
@@ -48,6 +49,15 @@ export default async function AppDashboardPage() {
           description="Turn your footage into a complete YouTube video."
           testId="app-launcher-youtube-video"
         />
+        {isT2vFeatureEnabled() ? (
+          <LauncherCard
+            href="/app/ai-video/new"
+            icon={Film}
+            title="Text to Video"
+            description="Type an idea. Get a narrated video with real stock footage."
+            testId="app-launcher-text-to-video"
+          />
+        ) : null}
         <LauncherCard
           href="/app/captions"
           icon={Captions}

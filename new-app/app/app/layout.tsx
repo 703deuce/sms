@@ -1,6 +1,6 @@
 import { cookies } from 'next/headers'
 import { AppShell } from '@/components/shell/app-shell'
-import { isRecordingFeatureEnabled } from '@/lib/server/clips/feature-gates'
+import { isRecordingFeatureEnabled, isT2vFeatureEnabled } from '@/lib/server/clips/feature-gates'
 import type { PersistedShellContext } from '@/lib/nav-shell-context'
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -14,6 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       initialShellContext={initialShellContext}
       defaultSidebarOpen={defaultSidebarOpen}
       recordingNavEnabled={isRecordingFeatureEnabled()}
+      t2vNavEnabled={isT2vFeatureEnabled()}
     >
       {children}
     </AppShell>
