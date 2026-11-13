@@ -56,6 +56,7 @@ export type YtActiveWindow = {
   rejected?: Array<{ startMs: number; endMs: number; code: string }>
   qaRevisionAttempted?: boolean
   qaRevisionCount?: number
+  qaRounds?: Array<{round:number;issues:string[];resolution:string}>
   qaPassed?: boolean
   qaIssueHistory?: string[]
   qaIssues?: string[]
@@ -72,6 +73,7 @@ export type YtFinishedWindow = {
   focusedCount: number
   qaIssues?: string[]
   qaPassed?: boolean
+  qaRounds?: Array<{round:number;issues:string[];resolution:string}>
   qaIssueHistory?: string[]
   observedScenes?: YtObservation[]
 }
@@ -91,6 +93,7 @@ export type YtCheckpoint = {
     chapterTitles?: string[]
     qaPassed: boolean
     qaRevisionCount?: number
+    qaRounds?: Array<{round:number;issues:string[];resolution:string}>
     qaIssues?: string[]
     qaIssueHistory?: string[]
     needsReview?: boolean
