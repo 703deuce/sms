@@ -55,6 +55,7 @@ export function ytBuildDecisionAudit(
   const revisionSteps:NonNullable<Audit['qaRevisions']>=[
     ...checkpoint.finished.flatMap((window,index)=>(window.qaRounds??[]).map(round=>({
       scope:`Window ${index+1}`,round:round.round,status:round.resolution,
+      changes:round.revisionChanges,
       issues:round.issues,
       explanation:round.resolution==='Passed after revision'
         ?'This window passed QA after the changes in its revision rounds.'
@@ -62,6 +63,7 @@ export function ytBuildDecisionAudit(
     }))),
     ...(checkpoint.final?.qaRounds??[]).map(round=>({
       scope:'Global episode',round:round.round,status:round.resolution,
+      changes:round.revisionChanges,
       issues:round.issues,
       explanation:round.resolution==='Passed after revision'
         ?'The combined story passed global QA after revision.'
