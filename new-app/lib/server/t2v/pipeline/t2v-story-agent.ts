@@ -1,5 +1,5 @@
 import 'server-only'
-import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vNarrationSegment, T2vPipelineStyle, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
 /** Words per second used for planning only. Actual ElevenLabs audio timing drives the edit. */
@@ -43,7 +43,7 @@ export async function t2vStoryAgent(input: {
     `Style: ${STYLE_GUIDE[input.style]}`,
     `Target runtime: about ${input.durationS} seconds.`,
   ].join('\n')
-  const out = await openAiJsonResponse<Partial<T2vStoryPlan>>(STORY_SYSTEM, user)
+  const out = await t2vLlmJson<Partial<T2vStoryPlan>>(STORY_SYSTEM, user)
   const keyPoints = (Array.isArray(out.keyPoints) ? out.keyPoints : []).map((k) => String(k).trim()).filter(Boolean)
   if (!keyPoints.length) throw new Error('t2v_story_empty')
   return {
@@ -87,7 +87,7 @@ export async function t2vScriptAgent(input: {
     `Story plan: ${JSON.stringify(input.story)}`,
     `Word budget: ${budget} words total (~${input.durationS - T2V_END_CARD_S}s of narration).`,
   ].join('\n')
-  const out = await openAiJsonResponse<{ segments?: Array<Record<string, unknown>> }>(SCRIPT_SYSTEM, user)
+  const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(SCRIPT_SYSTEM, user)
   const segs = (Array.isArray(out.segments) ? out.segments : [])
     .map((s, i) => ({
       id: `seg_${i + 1}`,

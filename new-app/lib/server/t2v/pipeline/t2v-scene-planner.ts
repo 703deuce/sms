@@ -1,5 +1,5 @@
 import 'server-only'
-import { openAiJsonResponse } from '@/lib/server/ai/openai-json'
+import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vNarrationSegment, T2vPlannedShot, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 import { T2V_PLAN_WORDS_PER_S } from '@/lib/server/t2v/pipeline/t2v-story-agent'
 
@@ -56,7 +56,7 @@ export async function t2vScenePlanner(input: {
     )}`,
     `Sentences (one shot each): ${JSON.stringify(rows)}`,
   ].join('\n')
-  const out = await openAiJsonResponse<{ shots?: Array<Record<string, unknown>> }>(PLANNER_SYSTEM, user)
+  const out = await t2vLlmJson<{ shots?: Array<Record<string, unknown>> }>(PLANNER_SYSTEM, user)
   const byIndex = new Map<number, Record<string, unknown>>()
   for (const s of Array.isArray(out.shots) ? out.shots : []) byIndex.set(Number(s.index), s)
   const topic = (input.story.topic || input.story.title).toLowerCase()

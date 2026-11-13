@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/server/ai/openai-json', () => ({ openAiJsonResponse: vi.fn() }))
+vi.mock('@/lib/server/t2v/pipeline/t2v-llm', () => ({ t2vLlmJson: vi.fn() }))
 
 import { estimateNeedS, splitSentences } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { wordBudget } from '@/lib/server/t2v/pipeline/t2v-story-agent'

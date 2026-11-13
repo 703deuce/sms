@@ -193,7 +193,11 @@ export function T2vPromptToVideo() {
                 key={d}
                 type="button"
                 onClick={() => setDurationS(d)}
-                className={cn('rounded-full border px-3 py-1 text-sm', durationS === d ? 'border-primary bg-primary/10' : 'border-border')}
+                aria-pressed={durationS === d}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-sm',
+                  durationS === d ? 'border-primary bg-primary text-primary-foreground' : 'border-border',
+                )}
               >
                 {durationLabel(d)}
               </button>
@@ -244,9 +248,10 @@ export function T2vPromptToVideo() {
                 key={n.voiceId}
                 type="button"
                 onClick={() => setVoiceId(n.voiceId)}
+                aria-pressed={voiceId === n.voiceId}
                 className={cn(
                   'rounded-lg border px-3 py-2 text-left text-sm',
-                  voiceId === n.voiceId ? 'border-primary bg-primary/10' : 'border-border',
+                  voiceId === n.voiceId ? 'border-primary bg-primary/10 ring-2 ring-primary' : 'border-border',
                 )}
               >
                 <span className="font-medium">{n.name}</span>
