@@ -248,12 +248,14 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
         const review=await ytQualityReview(ctx,window.outline,window.cuts)
         if(review.pass){
           window.qaPassed=true
+          window.qaRounds=(window.qaRounds??[]).map(round=>({...round,resolution:'Passed after revision'}))
           window.stage='commit'
           log('specialist_qa','passed',fields)
         }else{
           window.qaPassed=false
           window.qaIssues=review.issues
           window.qaIssueHistory=[...(window.qaIssueHistory??[]),...review.issues]
+          window.qaRounds=[...(window.qaRounds??[]),{round:window.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested'}]
           if((window.qaRevisionCount??0)<2){
             window.qaRevisionCount=(window.qaRevisionCount??0)+1
             window.qaRevisionAttempted=true
@@ -264,6 +266,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           }else{
             window.cuts=grounded(ctx,window.cuts)
             if(!window.cuts.length)throw Error('yt_no_grounded_window_cuts')
+            window.qaRounds=(window.qaRounds??[]).map(round=>({...round,resolution:'Unresolved — owner approval needed'}))
             window.stage='commit'
             log('specialist_qa','window_needs_review',{...fields,
               code:'yt_qa_rejected_story',issues:review.issues})
@@ -280,6 +283,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
           coarseCount:window.coarse?.length??0,focusedCount:window.focused?.length??0,
           qaIssues:window.qaIssues,
           qaIssueHistory:window.qaIssueHistory??[],qaPassed:window.qaPassed===true,
+          qaRounds:window.qaRounds??[],
           observedScenes:ctx.observations,
         }
         checkpoint.finished.push(current)
@@ -315,10 +319,12 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
     })
     if(review.pass){
       checkpoint.final.qaPassed=true
+      checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map(round=>({...round,resolution:'Passed after revision'}))
       log('global_qa','passed',{windowCount:all.length})
     }else{
       checkpoint.final.qaIssues=review.issues
       checkpoint.final.qaIssueHistory=[...(checkpoint.final.qaIssueHistory??[]),...review.issues]
+      checkpoint.final.qaRounds=[...(checkpoint.final.qaRounds??[]),{round:checkpoint.final.qaRevisionCount??0,issues:review.issues,resolution:'Rejected; revision requested'}]
       if((checkpoint.final.qaRevisionCount??0)<2){
         const prior={...checkpoint.final,chapterTitles:checkpoint.final.chapterTitles??[]}
         const revised=await ytFinishWholeSourceStory(checkpoint.finished,{
@@ -331,6 +337,7 @@ export async function ytAdvanceLongForm(args:YtPlanArgs):Promise<YtProgress>{
       }else{
         checkpoint.final.qaPassed=true
         checkpoint.final.needsReview=true
+        checkpoint.final.qaRounds=(checkpoint.final.qaRounds??[]).map(round=>({...round,resolution:'Unresolved — owner approval needed'}))
         log('global_qa','needs_review',{issues:review.issues,
           windowCount:all.length,code:'yt_global_qa_rejected'})
       }
