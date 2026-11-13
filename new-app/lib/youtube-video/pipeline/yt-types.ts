@@ -56,7 +56,7 @@ export type YtActiveWindow = {
   rejected?: Array<{ startMs: number; endMs: number; code: string }>
   qaRevisionAttempted?: boolean
   qaRevisionCount?: number
-  qaRounds?: Array<{round:number;issues:string[];resolution:string}>
+  qaRounds?: Array<{round:number;issues:string[];resolution:string;beforeRanges?:number[][];revisionChanges?:string}>
   qaPassed?: boolean
   qaIssueHistory?: string[]
   qaIssues?: string[]
