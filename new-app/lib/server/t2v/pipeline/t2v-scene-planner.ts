@@ -26,12 +26,14 @@ const PLANNER_SYSTEM = `You are the Scene Planner for an automatic stock-footage
 Every narration sentence gets exactly ONE stock video shot. The script drives the visuals.
 Return ONLY JSON: {"shots": [{"index": number, "intent": string, "queries": string[], "onScreenText": string}]}
 Rules for each shot:
-- intent: one literal sentence describing exactly what the camera should show while that sentence
-  is spoken (subject + action + setting). Be specific: "close-up of an EV charging connector being
-  plugged into a car", not "electric vehicles".
-- queries: exactly 3 stock-video search phrases, most specific first, 2-6 words each, only visible
-  nouns/verbs/places (no abstract words like concept, future, innovation, success, growth).
-  Query 3 is a broader but still on-topic fallback.
+- intent: one plain sentence describing what generic stock B-roll should show while that sentence is
+  spoken (subject + action, optional setting). Keep it achievable with common stock footage: do not
+  require a time of day, weather, specific brand, specific people, or several things happening at once
+  unless the narration itself depends on it.
+- queries: exactly 3 stock-video search phrases of 1-3 common words each, using the concrete nouns a stock
+  site would tag the clip with (e.g. "electric car charging", "charging station", "car highway").
+  Query 1 is the most specific, query 3 a broader on-topic fallback (e.g. "electric car", "city traffic").
+  Never use abstract words (concept, future, innovation, appeal, growth, choice) or verbs like "pulls in".
 - Plan visual variety: neighbouring shots should show different subjects, framings (aerial, wide,
   close-up, people, detail) and settings. Never plan the same visual twice in a row.
 - onScreenText: "" for almost every shot; at most 3 shots in the whole video may carry a 2-5 word
