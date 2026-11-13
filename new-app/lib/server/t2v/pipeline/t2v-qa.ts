@@ -23,11 +23,12 @@ export function t2vQaPlan(input: { run: T2vPipelineRun; scenes: T2vScene[]; resu
     detail: `${segs.length} narration segments (${segs.map((s) => s.purpose).join(' → ').slice(0, 300)})`,
   })
   const stock = input.results.filter((r) => r.outcome === 'stock').length
+  const held = input.results.filter((r) => r.outcome === 'held').length
   const cards = input.results.filter((r) => r.outcome === 'title_card').length
   checks.push({
     id: 'visual_coverage',
     ok: cards <= Math.max(1, Math.round(input.results.length * 0.2)),
-    detail: `${stock} verified stock shots, ${cards} title cards`,
+    detail: `${stock} verified stock shots, ${held} lines held on the previous clip, ${cards} title cards`,
   })
   const weak = input.results.filter((r) => r.chosen?.verdict === 'weak_match').length
   checks.push({ id: 'visual_relevance', ok: weak <= Math.round(input.results.length * 0.3), detail: `${weak} weak matches` })

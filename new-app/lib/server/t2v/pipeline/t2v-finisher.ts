@@ -105,11 +105,31 @@ export async function t2vFinisher(input: {
 
   const scenes: T2vScene[] = []
   const results: T2vShotResult[] = []
+  // Spoken ms already riding on the last emitted scene's clip (for holding it under a later line).
+  let lastNeedMs = 0
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
     const m = media[i]
     const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
+    const needMs = Math.round(shot.needS * 1000)
+    // No clip passed review: keep the previous verified clip running under this line when it is in
+    // the same segment and has enough unused footage — a held shot reads better than a dark card.
+    const prev = scenes[scenes.length - 1]
+    const prevShot = input.shots[i - 1]
+    if (!m && prev && prevShot && prevShot.segmentId === shot.segmentId && prev.media.kind === 'video') {
+      const left = (prev.media.durationMs ?? 0) - (prev.media.srcInMs ?? 0)
+      if (left >= lastNeedMs + needMs + 600) {
+        prev.narration = `${prev.narration} ${shot.narration}`
+        prev.padMs = segmentEnd ? 450 : 120
+        prev.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'
+        prev.transitionMs = segmentEnd ? 450 : 0
+        lastNeedMs += needMs
+        results.push({ ...r, outcome: 'held' })
+        return
+      }
+    }
+    lastNeedMs = needMs
     results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
     const texts: T2vScene['texts'] = []
     if (i === 0) {
@@ -119,7 +139,7 @@ export async function t2vFinisher(input: {
       // (never the shot intent — that is a long camera note, not on-screen copy).
       const seg = input.segments.find((x) => x.id === shot.segmentId)
       const heading = (shot.onScreenText || seg?.purpose || '').split(/\s+/).slice(0, 5).join(' ')
-      const prevSameSegCard = i > 0 && input.shots[i - 1]!.segmentId === shot.segmentId && !media[i - 1]
+      const prevSameSegCard = i > 0 && input.shots[i - 1]!.segmentId === shot.segmentId && scenes[scenes.length - 1]?.media.kind === 'color'
       if (heading && !prevSameSegCard) {
         texts.push({ id: `t_card_${i}`, kind: 'title', text: heading, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
       }

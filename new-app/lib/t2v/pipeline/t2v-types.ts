@@ -115,7 +115,8 @@ export type T2vShotResult = {
   chosen: T2vVerifiedPick | null
   evaluated: Array<Partial<T2vVerifiedPick> & { providerId: string; error?: string }>
   /** What the edit uses: verified stock or an honest title card. */
-  outcome?: 'stock' | 'title_card'
+  /** held = no clip passed review, so the previous verified clip keeps running under this line. */
+  outcome?: 'stock' | 'held' | 'title_card'
 }
 
 export type T2vQaReport = {
