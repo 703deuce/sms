@@ -42,6 +42,7 @@ export type YoutubeVideoRunStore = {
   heartbeatPlanning?: (workspaceId: string, id: string) => Promise<boolean>
   /** Atomic first choice prevents concurrent HTTP requests creating two clips. */
   claimAssemblyChoice?: (workspaceId: string, id: string, chosenOptionId: string) => Promise<boolean>
+  claimReviewAssembly?: (workspaceId: string, id: string, chosenOptionId: string) => Promise<boolean>
   claimAssembling?: (workspaceId: string, id: string, chosenOptionId: string, staleBeforeIso: string) => Promise<boolean>
   heartbeatAssembling?: (workspaceId: string, id: string) => Promise<boolean>
 }
@@ -98,6 +99,13 @@ export function memoryYoutubeVideoStore(): YoutubeVideoRunStore {
     async claimAssemblyChoice(workspaceId,id,chosenOptionId) {
       const current=rows.get(key(workspaceId,id))
       if(!current||current.status!=='awaiting_choice'||current.chosenOptionId!==null)return false
+      rows.set(key(workspaceId,id),{...current,chosenOptionId,
+        status:'running',stage:'assembling',progressPercent:80,updatedAt:new Date().toISOString()})
+      return true
+    },
+    async claimReviewAssembly(workspaceId,id,chosenOptionId) {
+      const current=rows.get(key(workspaceId,id))
+      if(!current||current.status!=='needs_review'||current.chosenOptionId!==null)return false
       rows.set(key(workspaceId,id),{...current,chosenOptionId,
         status:'running',stage:'assembling',progressPercent:80,updatedAt:new Date().toISOString()})
       return true
