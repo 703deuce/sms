@@ -706,6 +706,16 @@ def handle_t2v_assemble(conn, job: dict) -> None:
 DISPATCH["T2V_ASSEMBLE"] = handle_t2v_assemble
 
 
+def handle_t2v_verify_stock(conn, job: dict) -> None:
+    """Prompt-to-Video: single-pass, visual-only Gemini check of stock candidates (marks job DONE)."""
+    from clips_worker.t2v.verify_stock import run_t2v_verify_stock_job
+
+    run_t2v_verify_stock_job(conn, job)
+
+
+DISPATCH["T2V_VERIFY_STOCK"] = handle_t2v_verify_stock
+
+
 def handle_media_sync(conn, job: dict) -> None:
     """E5: audio-sync an uploaded angle to the project's main source."""
     from clips_worker.media_sync_job import run_media_sync_job

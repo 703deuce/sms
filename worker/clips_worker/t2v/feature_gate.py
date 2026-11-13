@@ -9,6 +9,7 @@ T2V_JOB_TYPES = frozenset(
         "T2V_VOICE_CLONE",
         "T2V_SCENE_AI_IMAGE",
         "T2V_SCENE_AI_VIDEO",
+        "T2V_VERIFY_STOCK",
     }
 )
 

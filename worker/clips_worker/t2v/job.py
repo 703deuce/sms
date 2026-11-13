@@ -24,6 +24,20 @@ ASPECT_DIMS = {
 }
 
 
+_PIPELINE_SHORT_SIDE = {"480p": 480, "720p": 720}
+
+
+def _pipeline_canvas(document: dict, aspect: str, w: int, h: int) -> tuple[int, int]:
+    run = document.get("autobuild") or {}
+    short = _PIPELINE_SHORT_SIDE.get(str(run.get("renderResolution") or ""))
+    if not short:
+        return w, h
+    if short == 480 and aspect == "16:9":
+        return 854, 480
+    scale = short / min(w, h)
+    return int(round(w * scale / 2) * 2), int(round(h * scale / 2) * 2)
+
+
 def _payload(job: dict) -> dict:
     payload = job.get("payload") or {}
     if isinstance(payload, str):
@@ -125,6 +139,8 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
     project_id = project_id or db_project_id
     aspect = (document.get("settings") or {}).get("aspect", "16:9")
     w, h = ASPECT_DIMS.get(aspect, ASPECT_DIMS["16:9"])
+    # Prompt-to-Video runs may request a lighter canvas (e.g. 480p for fast first tests).
+    w, h = _pipeline_canvas(document, aspect, w, h)
     voice = document.get("voice") or {}
     scenes_doc = document.get("scenes") or []
     n = len(scenes_doc)
