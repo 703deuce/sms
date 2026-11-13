@@ -50,6 +50,7 @@ export function T2vPromptToVideo() {
   const [style, setStyle] = useState<T2vPipelineStyle>('documentary')
   const [voiceId, setVoiceId] = useState(T2V_PIPELINE_DEFAULT_NARRATOR.voiceId)
   const [captions, setCaptions] = useState(true)
+  const [renderResolution, setRenderResolution] = useState<'480p' | '720p' | '1080p'>('720p')
   const [starting, setStarting] = useState(false)
   const [status, setStatus] = useState<PipelineStatus | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -85,7 +86,7 @@ export function T2vPromptToVideo() {
       const res = await fetch('/api/t2v/pipeline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim(), durationS, aspect, style, voiceId, captions }),
+        body: JSON.stringify({ prompt: prompt.trim(), durationS, aspect, style, voiceId, captions, renderResolution }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Could not start')
@@ -220,6 +221,19 @@ export function T2vPromptToVideo() {
             ]}
             value={aspect}
             onChange={(id) => setAspect(id as typeof aspect)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label>Export quality</Label>
+          <Segmented
+            aria-label="Export quality"
+            items={[
+              { id: '480p', label: '480p' },
+              { id: '720p', label: '720p' },
+              { id: '1080p', label: '1080p' },
+            ]}
+            value={renderResolution}
+            onChange={(id) => setRenderResolution(id as typeof renderResolution)}
           />
         </div>
         <div className="space-y-2">
