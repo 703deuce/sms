@@ -115,8 +115,14 @@ export async function t2vFinisher(input: {
     if (i === 0) {
       texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
     } else if (!m) {
-      const label = shot.onScreenText || shot.intent.split(/\s+/).slice(0, 6).join(' ')
-      texts.push({ id: `t_card_${i}`, kind: 'title', text: label, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
+      // No verified footage: dark card. Label it once per segment with the segment's short heading
+      // (never the shot intent — that is a long camera note, not on-screen copy).
+      const seg = input.segments.find((x) => x.id === shot.segmentId)
+      const heading = (shot.onScreenText || seg?.purpose || '').split(/\s+/).slice(0, 5).join(' ')
+      const prevSameSegCard = i > 0 && input.shots[i - 1]!.segmentId === shot.segmentId && !media[i - 1]
+      if (heading && !prevSameSegCard) {
+        texts.push({ id: `t_card_${i}`, kind: 'title', text: heading, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
+      }
     } else if (shot.onScreenText) {
       texts.push({ id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' })
     }
