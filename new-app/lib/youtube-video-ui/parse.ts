@@ -162,6 +162,9 @@ export function parseYoutubeVideoRun(input: unknown): YoutubeVideoRunView {
     creditsEstimated: num(raw.creditsEstimated) ?? num(raw.creditEstimate) ?? null,
     options: options.length ? options : null,
     result,
+    analysisAudit:isRecord(raw.analysisAudit)
+      ?raw.analysisAudit as YoutubeVideoResult['analysisAudit']
+      :result?.analysisAudit??null,
   }
 }
 
