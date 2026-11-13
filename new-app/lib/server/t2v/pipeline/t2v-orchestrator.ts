@@ -376,6 +376,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         select: { id: true },
       })
       if (!comp) return failRun(draftId, 'composition_missing_after_assemble')
+      await pinCompositionFraming(comp.id)
       const exp = await enqueueCompositionExport(row.workspaceId, comp.id, {
         exportKind: 'video',
         resolution: run.renderResolution,
@@ -424,6 +425,24 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       return
     }
   }
+}
+
+/**
+ * The assembled T2V source is already framed at the target aspect. Without an explicit reframe mode the
+ * composition export falls back to speaker_follow (face-follow crop), which zoomed and panned run 1's
+ * title cards. center_crop at the same aspect is a plain full-frame scale. Only set when absent, so a
+ * user's later choice in the editor wins.
+ */
+async function pinCompositionFraming(compositionId: string) {
+  const prisma = getPrisma()
+  const comp = await prisma.scriptComposition.findUnique({ where: { id: compositionId }, select: { document: true } })
+  const doc = (comp?.document ?? {}) as { settings?: Record<string, unknown> }
+  if (!comp || doc.settings?.reframeMode) return
+  const next = { ...doc, settings: { ...(doc.settings ?? {}), reframeMode: 'center_crop' } }
+  await prisma.scriptComposition.update({
+    where: { id: compositionId },
+    data: { document: next as unknown as Prisma.InputJsonValue, revision: { increment: 1 } },
+  })
 }
 
 export function pipelineProgress(run: T2vPipelineRun): number {
