@@ -41,7 +41,9 @@ export function ytVisualCoverage(ctx:YtWindowContext,startMs:number,endMs:number
   if(!rows.length||rows[0]!.startMs>startMs+2000)return false
   let covered=rows[0]!.endMs
   for(const row of rows.slice(1)){
-    if(row.startMs>covered+20_000)return false
+    // A continuing action with stable scene identity may have sparse observations.
+    // Never enforce the old 20-second clip-join limit on a 45-second chase gap.
+    if(row.startMs>covered+45_000)return false
     covered=Math.max(covered,row.endMs)
   }
   return covered>=endMs-2000
