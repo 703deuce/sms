@@ -71,6 +71,17 @@ const ALLOWED_NEW = {
   '/app/video-editor/[projectId]/script': { file: 'new-app/app/app/video-editor/[projectId]/script/page.tsx', redirectTo: null },
   '/app/video-editor/[projectId]/studio/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/studio/[clipId]/page.tsx', redirectTo: null },
   '/app/video-editor/new': { file: 'new-app/app/app/video-editor/new/page.tsx', redirectTo: null },
+  '/app/clips/community-templates/[publicationId]': { file: 'new-app/app/app/clips/(drive)/community-templates/[publicationId]/page.tsx', redirectTo: null },
+  '/app/clips/user-templates/[templateId]': { file: 'new-app/app/app/clips/(drive)/user-templates/[templateId]/page.tsx', redirectTo: null },
+  '/app/clips/video-templates': { file: 'new-app/app/app/clips/(drive)/video-templates/page.tsx', redirectTo: null },
+  '/app/clips/video-templates/[id]': { file: 'new-app/app/app/clips/(drive)/video-templates/[id]/page.tsx', redirectTo: null },
+  '/app/clips/video-templates/moderation': { file: 'new-app/app/app/clips/(drive)/video-templates/moderation/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/chat/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/chat/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/generate/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/generate/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/story/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/story/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/templates/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/templates/[clipId]/page.tsx', redirectTo: null },
+  '/app/video-editor/[projectId]/text/[clipId]': { file: 'new-app/app/app/video-editor/[projectId]/text/[clipId]/page.tsx', redirectTo: null },
+  '/app/youtube-video/edit/[projectId]/[clipId]': { file: 'new-app/app/app/youtube-video/edit/[projectId]/[clipId]/page.tsx', redirectTo: null },
 }
 
 const LEGACY_SLUG_REDIRECTS = {
