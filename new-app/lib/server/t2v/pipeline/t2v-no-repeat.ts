@@ -149,6 +149,8 @@ type Ev = T2vShotResult['evaluated'][number]
 type Tier = { verdict: T2vVerifiedPick['verdict']; tier: T2vPickedBy; ok: (e: Ev) => boolean }
 
 const isPhoto = (e: { kind?: string }) => e.kind === 'photo'
+/** Photos and video clips the worker's motion check found static (a frozen frame reads as a still). */
+const isStill = (e: { kind?: string; static?: boolean }) => e.kind === 'photo' || e.static === true
 /** AI B-roll test clips: only after every stock option that truly works, never as a spare or fallback. */
 const isAi = (e: { kind?: string }) => e.kind === 'ai'
 
@@ -186,6 +188,8 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     lineShows: e.lineShows,
     depicts: e.depicts,
     rawScore: e.rawScore,
+    static: e.static,
+    motion: e.motion,
     fitReasonFrom: 'verify',
     verdict,
   }
@@ -194,6 +198,20 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
 /** Relevance first (the reviewer's in-context score); readability only breaks near-ties. */
 function rank(e: Ev): number {
   return (e.score ?? 0) + 0.1 * (e.lighting ?? 5) + (e.matches ? 1 : 0)
+}
+
+/**
+ * Literal-depiction order: yes > (not judged: older answers) > partly > no. Selection ranks this BEFORE the
+ * score, so a clip that plainly shows the line (e.g. one a reimagine idea found) beats a stretched one that
+ * also "passed" (sleep sh13/sh17: thermostat / fan / open window lost to a candlelit-reading pick at 8-10).
+ */
+export function depictsRank(e: { depicts?: T2vDepicts }): number {
+  return e.depicts === 'yes' ? 3 : e.depicts === 'partly' ? 1 : e.depicts === 'no' ? 0 : 2
+}
+
+/** Selection order for one line's clips: depiction first, then score (readability breaks near-ties). */
+export function pickOrder(a: Ev, b: Ev): number {
+  return depictsRank(b) - depictsRank(a) || rank(b) - rank(a)
 }
 
 /** Best score among usable (quality-ok, placeable) stock clips and photos for one line; -1 when none. */
@@ -269,8 +287,8 @@ export function enforceNoRepeatDeterministic(
     if (dup) return `near_duplicate_of:${shots[dup[0]]?.sceneId}`
     const near = [i - 2, i - 1, i + 1, i + 2].map((k) => placed.get(k)).filter(Boolean) as T2vVerifiedPick[]
     if (near.some((p) => sameShoot(p, e))) return 'same_shoot_as_neighbour'
-    if (isPhoto(e)) {
-      const still = (k: number) => isPhoto(placed.get(k) ?? {})
+    if (isStill(e)) {
+      const still = (k: number) => isStill(placed.get(k) ?? {})
       if ((still(i - 2) && still(i - 1)) || (still(i - 1) && still(i + 1)) || (still(i + 1) && still(i + 2))) return 'third_still_in_a_row'
     }
     if (strictShoot && all.some(([, p]) => sameShoot(p, e))) return 'same_shoot_elsewhere'
@@ -285,19 +303,33 @@ export function enforceNoRepeatDeterministic(
     let chosen: T2vVerifiedPick | null = null
     let tier: T2vPickedBy | '' = ''
     // A worker best_available pick is never taken directly: only the tiers below place a clip.
-    if (r.chosen && r.chosen.verdict !== 'best_available' && free(r.chosen, true) && t2vQualityOk(r.chosen, ctx)) {
+    // The carried pick also yields to an own clip of the same or a higher tier that ranks above it (depiction
+    // first): reimagine and photo rounds add their results without a pick, so a literal clip they found must
+    // be able to replace an earlier stretched one.
+    const chosenLevel = r.chosen?.verdict === 'accepted' ? 2 : 1
+    const outranked = (c: T2vVerifiedPick) =>
+      r.evaluated.some(
+        (e) =>
+          e.providerId !== c.providerId && !isAi(e) && free(e, true) && t2vQualityOk(e, ctx) &&
+          (scored(e, ACCEPT_SCORE) && e.matches ? 2 : scored(e, USABLE_SCORE) ? 1 : 0) >= chosenLevel &&
+          pickOrder(e, c as Ev) < 0,
+      )
+    if (r.chosen && r.chosen.verdict !== 'best_available' && free(r.chosen, true) && t2vQualityOk(r.chosen, ctx) && !outranked(r.chosen)) {
       chosen = r.chosen
       tier = r.chosen.verdict === 'accepted' ? 'accepted' : 'usable'
     } else if (r.chosen) replaced++
     // Same-shoot elsewhere in the video only when the scene has no other option.
     for (const strict of [true, false]) {
       if (chosen) break
-      const all = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => rank(b) - rank(a))
+      const all = r.evaluated.filter((e) => free(e, strict)).sort(pickOrder)
       const alts = all.filter((e) => !isPhoto(e) && !isAi(e))
       const photos = all.filter(isPhoto)
       const ais = all.filter(isAi)
+      // Video first (motion), unless a photo shows the line more literally (depiction rank above the video's).
+      const literalPhoto = photos.find((e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
       for (const t of tierList) {
         const hit = alts.find(t.ok)
+        if (hit && literalPhoto && depictsRank(literalPhoto) > depictsRank(hit)) break
         if (hit) {
           chosen = toPick(hit, t.verdict)
           tier = t.tier
@@ -352,7 +384,7 @@ export function enforceNoRepeatDeterministic(
     if (!chosen) {
       // Last resort before reimagine/AI/extend-previous: an own clip the reviewer still scored
       // FILLER_MIN_SCORE+ for this line in this video, even when it fails the live-action style rule.
-      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, FILLER_MIN_SCORE)).sort((a, b) => rank(b) - rank(a))[0]
+      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, FILLER_MIN_SCORE)).sort(pickOrder)[0]
       if (any) {
         chosen = toPick(any, 'best_available')
         tier = 'last_resort'

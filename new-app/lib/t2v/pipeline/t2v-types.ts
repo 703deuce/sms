@@ -97,6 +97,8 @@ export type T2vPlannedShot = {
   wordOffset?: number
   /** Whole voice-group narration around this shot (context for split shots). */
   sentence?: string
+  /** Reimagine idea shots: the intended shot that found the candidates (sent to the checker). */
+  idea?: string
 }
 
 export type T2vFootageCandidate = {
@@ -152,6 +154,10 @@ export type T2vVerifiedPick = {
   lineShows?: string
   /** Reviewer: does `seen` literally show `lineShows`? Code caps the score: no -> 4, partly -> 6. */
   depicts?: T2vDepicts
+  /** Worker motion check: a video clip whose chosen window is a frozen frame (treated as a still, score capped). */
+  static?: boolean
+  /** Mean frame difference (0-255) across the window, information only. */
+  motion?: number
   /** The model's own score before the depiction cap (information only). */
   rawScore?: number
   /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
@@ -234,6 +240,11 @@ export type T2vPipelineRun = {
   reimagineVerifyUsed?: number
   /** Look-alike bans found by any pick pass or the finisher: carried into every later pass (never forgotten). */
   lookalikeBans?: T2vLookalikeBan[]
+  /** Verifier (Gemini watch) calls so far in this run, summed from each verify job's summary (counted once per job). */
+  verifierCalls?: number
+  verifierJobs?: string[]
+  /** Set by the operator reset tool: when this run was restarted (the status route returns it). */
+  resetAt?: string
   /** Ideas of the reimagine step in flight, per line (logged with their scores when the verify job ends). */
   reimaginePending?: T2vReimaginePending
   /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */

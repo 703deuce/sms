@@ -28,7 +28,7 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { depictsRank, enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
 import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneContext, T2V_REIMAGINE_ROUNDS, T2V_REIMAGINE_VERIFY_BUDGET, t2vReimagineAll, trimToBudget } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
@@ -362,6 +362,20 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return r
         })
       }
+      // Verifier calls per run (one Gemini watch per candidate): counted once per job, logged per job and at the end.
+      let verifierCalls = run.verifierCalls ?? 0
+      if (job?.status === 'DONE' && !(run.verifierJobs ?? []).includes(job.id)) {
+        const calls = Number(payload.summary?.geminiCalls ?? 0) || 0
+        const stage = run.aiRound === 2 ? 'ai' : (run.reimagineRound ?? 0) > 0 ? 'reimagine' : run.photoRound === 1 ? 'photo' : run.rescueRound === 1 ? 'rescue' : `search_${run.verifyRound ?? 0}`
+        verifierCalls += calls
+        logT2v('pipeline', 'verifier calls', { draftId, jobId: job.id, stage, calls, runTotal: verifierCalls })
+        await writeRun(draftId, (r) => {
+          if ((r.verifierJobs ?? []).includes(job.id)) return r
+          r.verifierCalls = (r.verifierCalls ?? 0) + calls
+          r.verifierJobs = [...(r.verifierJobs ?? []), job.id]
+          return r
+        })
+      }
       // Reimagined ideas verify under `${sceneId}~iK`; their results belong to the line itself.
       const roundResults = ((payload.results ?? []).filter(Boolean) as T2vShotResult[]).map((r) => ({ ...r, sceneId: baseSceneId(r.sceneId) }))
       // Per line, per round: ideas, queries, every candidate's score and whether the line now passes (5+).
@@ -544,7 +558,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       }
       await saveT2vDraft(row.workspaceId, draftId, fresh.revision, nextDoc)
       await prisma.t2vDraft.update({ where: { id: draftId }, data: { stage: 'pipeline:generating_narration' } })
-      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, ...stockStats })
+      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, verifierCalls, ...stockStats })
       logT2v('pipeline', 'stock success rate', { draftId, verifiedRate: stockStats.verifiedRate, stockCoverage: stockStats.stockCoverage, rounds: stockStats.rounds })
       return advanceOnce(draftId, {})
     }
@@ -682,6 +696,8 @@ async function enqueueVerify(
             sentence: ctx.sentence,
             prevNarration: ctx.prevNarration,
             nextNarration: ctx.nextNarration,
+            // Reimagine: the shot idea that found these clips (the checker requires the clip to show it too).
+            idea: s.idea ?? '',
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,
@@ -734,7 +750,8 @@ function logScenePicks(draftId: string, shots: T2vPlannedShot[], results: T2vSho
 function pickScore(r: T2vShotResult | undefined): number {
   const c = r?.chosen
   if (!c) return -1
-  return (c.verdict === 'accepted' ? 100 : c.verdict === 'weak_match' ? 50 : 0) + (c.score ?? 0)
+  // Depiction before score (same order as the pick pass): yes > not judged > partly > no.
+  return (c.verdict === 'accepted' ? 100 : c.verdict === 'weak_match' ? 50 : 0) + 11 * depictsRank(c) + (c.score ?? 0)
 }
 
 /** Keep the best pick per scene across rounds; accumulate everything the reviewer saw. */

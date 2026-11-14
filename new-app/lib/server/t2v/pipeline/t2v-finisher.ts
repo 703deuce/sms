@@ -1,5 +1,5 @@
 import 'server-only'
-import { bestStockScore, FILLER_MIN_SCORE, lookalikePairs, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, depictsRank, FILLER_MIN_SCORE, lookalikePairs, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { compactScript } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
@@ -128,7 +128,7 @@ export async function t2vFinisher(input: {
   const seqOk = (shot: T2vPlannedShot, p: T2vVerifiedPick) => {
     const i = input.shots.indexOf(shot)
     const [b, a, n] = [pickAt(i - 2), pickAt(i - 1), pickAt(i + 1)]
-    const still = (x?: T2vVerifiedPick) => x?.kind === 'photo'
+    const still = (x?: T2vVerifiedPick) => x?.kind === 'photo' || x?.static === true
     if (still(p) && still(a) && (still(b) || still(n))) return false
     return !(a && nearIdenticalShot(a, p)) && !(n && nearIdenticalShot(n, p))
   }
@@ -152,7 +152,7 @@ export async function t2vFinisher(input: {
     for (const e of (r?.evaluated ?? []).filter((e) => e.kind === 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && t2vAiAcceptable(e, qctx, bestStock)))
       list.push({ pick: evToPick(e), tier: 'ai' })
     // 1) An unused own clip the reviewer scored FILLER_MIN_SCORE+ for THIS line (live action first).
-    const own = (r?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= FILLER_MIN_SCORE).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+    const own = (r?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= FILLER_MIN_SCORE).sort((a, b) => q(b) - q(a) || depictsRank(b) - depictsRank(a) || (b.score ?? 0) - (a.score ?? 0))
     for (const e of own) list.push({ pick: evToPick(e), tier: 'fallback' })
     if (list.length) take(shot, list)
   }

@@ -299,3 +299,83 @@ def test_capped_score_handles_bad_values():
     assert vs.capped_score({"score": "12", "depicts": "No"}) == (4, 10, "no")
     assert vs.capped_score({"score": None, "depicts": "maybe"}) == (0, 0, None)
     assert vs.capped_score({"score": 7.6, "depicts": "partly"}) == (6, 8, "partly")
+
+
+# --- #1194 round 2: watched-review fixtures (VQ t2v-1192-clip-review.md, sleep t2v_cf976bf4) -----------------
+HABIT_AND_WEAK = [
+    # Lines that ask to stop a habit got a clip of the habit; a 5 'usable' pick that shows something else.
+    ("sc_10", "and set bright screens aside before bed.", "61298", 9,
+     "A bearded man in a dark room stares into a glowing smartphone.", "no"),
+    ("sc_16", "Keep the bed ready for sleep, with fewer bright lights and interruptions nearby.", "34473", 10,
+     "A person lies on a bed reading a thick book in bright daylight.", "partly"),
+    ("sc_15", "and adjust bedding until the space feels restful.", "262181", 5,
+     "A pair of hands is gently petting a dog that is lying down on a soft, patterned blanket.", "no"),
+]
+
+
+@pytest.mark.parametrize("scene,line,pid,model_score,seen,depicts", HABIT_AND_WEAK, ids=[f"{x[0]}-{x[2]}" for x in HABIT_AND_WEAK])
+def test_habit_lines_and_the_exact_5_pick_are_capped(run_job, scene, line, pid, model_score, seen, depicts):
+    ans = resp(model_score, visible=seen, reason="calm")
+    ans.update({"seen": seen, "depicts": depicts, "line_shows": "the advised action", "matches": True})
+    results, _ = run_job([{"sceneId": scene, "narration": line, "needS": 3, "candidates": [cand(pid)]}], {pid: ans})
+    ev = results[0]["evaluated"][0]
+    assert ev["score"] <= vs.DEPICTS_CAP[depicts] and ev["matches"] is False
+    if scene == "sc_15":
+        assert ev["score"] == 4 and ev["score"] < vs.USABLE_SCORE  # the exact-5 pick falls below the floor
+
+
+def test_line_shows_is_what_a_viewer_should_see_for_the_meaning():
+    p = " ".join(vs.PROMPT.split())
+    assert "what a viewer should SEE on screen for what THIS line means" in p
+    assert "the advised action or its result, not the thing to stop" in p
+    assert "the habit or act the line advises against" in p
+
+
+def test_reimagine_candidates_carry_their_intended_shot(run_job):
+    """sleep sh18: the 'slippers beside the bed' idea placed flip-flops on a marble floor."""
+    shot = {"sceneId": "sc_18~i2", "narration": "step out of bed for a little while.", "needS": 3,
+            "idea": "Show slippers set beside the bed as a person rises in the dim room", "candidates": [cand("42806")]}
+    ans = resp(9, visible="Feet in flip-flops walk across a marble floor.")
+    ans.update({"depicts": "partly", "line_shows": "a person getting out of bed"})
+    results, prompts = run_job([shot], {"42806": ans})
+    assert 'Intended shot (this clip was found for it): "Show slippers set beside the bed' in prompts["42806"]
+    assert results[0]["evaluated"][0]["score"] == 6
+    assert '"yes" also needs the clip to show that intended shot' in vs.PROMPT
+    assert "Intended shot" not in vs.script_block("", {"narration": "A line."})
+
+
+def test_depicts_ranks_before_score_in_the_worker_pick(run_job):
+    """sleep sh13: a literal 8 (depicts yes) beats a stretched 10 the model still called 'partly'... and a
+    not-judged older answer sits between."""
+    shots = [{"sceneId": "sc_13", "narration": "Make the bedroom dark, quiet, and comfortably cool.", "needS": 3,
+              "candidates": [cand("old"), cand("fan")]}]
+    old = resp(9, visible="Book pages by a candle")  # no depicts (older answer)
+    fan = resp(8, visible="A fan turning in a dim bedroom")
+    fan.update({"depicts": "yes"})
+    results, _ = run_job(shots, {"old": old, "fan": fan})
+    assert results[0]["chosen"]["providerId"] == "fan"
+
+
+def test_motion_check_flags_a_frozen_frame(tmp_path):
+    import shutil
+    import subprocess as sp
+
+    if not shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg not installed")
+    still = tmp_path / "still.mp4"
+    moving = tmp_path / "moving.mp4"
+    sp.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=4", "-vf", "trim=end_frame=1,loop=40:1:0",
+            "-t", "4", "-pix_fmt", "yuv420p", str(still)], check=True)
+    sp.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc=size=320x180:rate=4", "-t", "4", "-pix_fmt", "yuv420p", str(moving)], check=True)
+    assert vs._motion(still, 0.0, 3.5) < vs.STATIC_DIFF
+    assert vs._motion(moving, 0.0, 3.5) > vs.STATIC_DIFF
+
+
+def test_static_clip_is_capped_and_logged(run_job, monkeypatch):
+    monkeypatch.setattr(vs, "_motion", lambda *a: 0.3)
+    shots = [{"sceneId": "sc_3", "narration": "Let your morning alarm", "needS": 3, "candidates": [cand("1000")]}]
+    ans = resp(9, visible="A curtain at an open window")
+    ans.update({"depicts": "yes"})
+    results, _ = run_job(shots, {"1000": ans})
+    ev = results[0]["evaluated"][0]
+    assert ev["static"] is True and ev["motion"] == 0.3 and ev["score"] == vs.STATIC_MAX_SCORE and ev["matches"] is False

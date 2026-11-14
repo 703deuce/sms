@@ -117,7 +117,7 @@ export function sceneContext(all: Array<Pick<T2vPlannedShot, 'sceneId' | 'narrat
 export const baseSceneId = (id: string) => id.split('~')[0]!
 
 export function ideaShots(base: T2vPlannedShot, ideas: T2vShotIdea[]): T2vPlannedShot[] {
-  return ideas.map((d, k) => ({ ...base, sceneId: `${base.sceneId}~i${k}`, intent: d.intent, subject: d.mustRecognise, queries: d.queries }))
+  return ideas.map((d, k) => ({ ...base, sceneId: `${base.sceneId}~i${k}`, intent: d.intent, idea: d.intent, subject: d.mustRecognise, queries: d.queries }))
 }
 
 const clean = (q: unknown) => String(q ?? '').replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
