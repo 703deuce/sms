@@ -1,5 +1,6 @@
 import 'server-only'
 import { sameShoot } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { PACING_MAX_EQUAL_RUN, PACING_MIN_CV, pacingStats } from '@/lib/server/t2v/pipeline/t2v-pacing'
 import type { T2vScene } from '@/lib/t2v/types'
 import type { T2vPipelineRun, T2vQaReport, T2vShotResult } from '@/lib/t2v/pipeline/t2v-types'
 import { wordBudget } from '@/lib/server/t2v/pipeline/t2v-story-agent'
@@ -55,17 +56,36 @@ export function t2vQaPlan(input: { run: T2vPipelineRun; scenes: T2vScene[]; resu
   checks.push({ id: 'no_adjacent_same_shoot', ok: sameShootAdj === 0, detail: `${sameShootAdj} adjacent clips from the same shoot` })
   const ownClip = used.length
   const ownRate = input.results.length ? ownClip / input.results.length : 1
+  const est = pacingCheck(
+    'pacing_variety_plan',
+    input.run.shots?.map((s) => s.needS) ?? [],
+    'planned',
+  )
+  if (est) checks.push({ ...est, ok: true }) // estimate only; the render check decides
   checks.push({ id: 'own_clip_rate', ok: ownRate >= 0.9, detail: `${ownClip}/${input.results.length} lines with their own reviewed clip (${Math.round(ownRate * 1000) / 10}%)` })
   return { at: new Date().toISOString(), pass: checks.every((c) => c.ok), checks }
 }
 
 /** QA after render: playable export with audio, duration near target. */
+/** Fails metronomic editing: low coefficient of variation or 3+ near-equal shots in a row. */
+export function pacingCheck(id: string, lengthsS: number[], label: string): Check | null {
+  if (lengthsS.length < 4) return null
+  const st = pacingStats(lengthsS)
+  return {
+    id,
+    ok: st.cv >= PACING_MIN_CV && st.longestEqualRun < PACING_MAX_EQUAL_RUN,
+    detail: `${label} shot lengths CV ${st.cv.toFixed(2)} (min ${PACING_MIN_CV}), longest near-equal run ${st.longestEqualRun} (max ${PACING_MAX_EQUAL_RUN - 1}), mean ${st.mean.toFixed(1)} s, ${lengthsS.length} shots: ${lengthsS.map((l) => l.toFixed(1)).join(', ')}`,
+  }
+}
+
 export function t2vQaRender(input: {
   run: T2vPipelineRun
   status: string
   outputDurationMs: number | null
   sourceDurationMs: number | null
   hasOutput: boolean
+  /** Actual on-screen shot lengths (assemble job: scene starts + in-scene cuts), end card excluded. */
+  shotLengthsMs?: number[]
 }): T2vQaReport {
   const checks: Check[] = []
   checks.push({ id: 'export_ready', ok: input.status === 'READY' && input.hasOutput, detail: `render ${input.status}` })
@@ -83,5 +103,7 @@ export function t2vQaRender(input: {
       detail: `export ${(input.outputDurationMs / 1000).toFixed(1)} s vs assembled ${(input.sourceDurationMs / 1000).toFixed(1)} s`,
     })
   }
+  const pace = input.shotLengthsMs?.length ? pacingCheck('pacing_variety', input.shotLengthsMs.map((ms) => ms / 1000), 'actual') : null
+  if (pace) checks.push(pace)
   return { at: new Date().toISOString(), pass: checks.every((c) => c.ok), checks }
 }

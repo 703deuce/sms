@@ -68,6 +68,11 @@ export type T2vScene = {
   voice?: { clipId?: string; hash: string; durationMs?: number; status: 'ready' | 'pending' | 'failed' | 'stale' }
   muted?: boolean
   fineEditedAt?: string
+  /**
+   * Optional hard cuts inside the scene (Prompt-to-Video pacing): the scene's media plays until the first
+   * cut; each cut switches to its media on the pause before word `atWord` of this scene's narration.
+   */
+  cuts?: Array<{ atWord: number; media: T2vSceneMedia }>
 }
 
 export type T2vVoiceSettings = {

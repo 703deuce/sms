@@ -88,7 +88,8 @@ export async function t2vFinisher(input: {
     const r = byScene.get(shot.sceneId)
     if (r?.chosen) continue
     const best = [...(r?.evaluated ?? [])]
-      .filter((e) => !e.error && typeof e.score === 'number' && !used.has(e.providerId))
+      // Related fallback only (3+ for this line): a wrong-subject clip (capped at 2) never fills a scene.
+      .filter((e) => !e.error && typeof e.score === 'number' && e.score >= 3 && !used.has(e.providerId))
       // Never a look-alike of a shot already in the edit (hard no-repeat rule).
       .filter((e) => !usedHashes.some((h) => nearDuplicateHash(e.phash, h)))
       // Clips passing the quality rules (live action, lit, daylight for day lines, colour) first.
@@ -158,6 +159,7 @@ export async function t2vFinisher(input: {
   const results: T2vShotResult[] = []
   // Spoken ms already riding on the last emitted scene's clip (for holding it under a later line).
   let lastNeedMs = 0
+  const prevShot0 = (i: number) => input.shots[i - 1]
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
@@ -167,6 +169,32 @@ export async function t2vFinisher(input: {
     const m = isFallback ? null : fm
     const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
     const needMs = Math.round(shot.needS * 1000)
+    // A later piece of a split sentence: an in-scene hard cut on the pause before its first word (worker
+    // uses the ElevenLabs word timings). With no good clip of its own, the previous piece's shot simply
+    // continues (one continuous take, never a re-show) instead of cutting to a fallback.
+    const prevScene = scenes[scenes.length - 1]
+    if (prevScene && prevShot0(i) && shot.voiceGroup && prevShot0(i)!.voiceGroup === shot.voiceGroup) {
+      const atWord = prevScene.narration.trim().split(/\s+/).length
+      prevScene.narration = `${prevScene.narration} ${shot.narration}`
+      prevScene.padMs = segmentEnd ? 450 : 120
+      prevScene.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'
+      prevScene.transitionMs = segmentEnd ? 450 : 0
+      const cutMedia = m ?? (!isFallback ? null : fm)
+      const playing = prevScene.cuts?.[prevScene.cuts.length - 1]?.media ?? prevScene.media
+      // Continuing needs real unused footage (a looped clip would visibly repeat).
+      const footageLeft = playing.kind === 'video' ? (playing.durationMs ?? 0) - (playing.srcInMs ?? 0) : Infinity
+      const mustCut = lastNeedMs + needMs > MAX_HELD_SHOT_MS || footageLeft < lastNeedMs + needMs + 300
+      const usePiece = Boolean(m) || (Boolean(fm) && mustCut)
+      if (usePiece && cutMedia) {
+        ;(prevScene.cuts ??= []).push({ atWord, media: cutMedia })
+        lastNeedMs = needMs
+        results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId) ?? null, outcome: 'stock', pickedBy: m ? r.pickedBy ?? 'accepted' : 'fallback' })
+      } else {
+        lastNeedMs += needMs
+        results.push({ ...r, outcome: 'held', pickedBy: 'held' })
+      }
+      return
+    }
     // No clip passed review: keep the previous verified clip running under this line when it is in
     // the same segment and has enough unused footage — a held shot reads better than a dark card.
     const prev = scenes[scenes.length - 1]

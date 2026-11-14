@@ -105,6 +105,7 @@ export async function t2vScriptAgent(input: {
   let segs = toSegments(out.segments)
   if (!segs.length) throw new Error('t2v_script_empty')
   segs = await tightenToBudget(segs, budget)
+  segs = await expandToBudget(segs, budget)
   for (const s of segs) {
     s.targetSeconds = Math.round((s.narration.split(/\s+/).length / T2V_PLAN_WORDS_PER_S) * 10) / 10
   }
@@ -130,6 +131,39 @@ Rules:
 - Keep the same segments in the same order with the same purpose, meaning and ending.
 - Cut words, not ideas: drop filler, merge or shorten sentences. Keep sentences 7-18 words, natural to read aloud.
 - Total narration words MUST be at or just under the target given. Never add new facts.`
+
+const EXPAND_SYSTEM = `You lengthen a narration script for a stock-footage video so it fills its running time.
+Return ONLY JSON: {"segments": [{"purpose": string, "narration": string, "visualMeaning": string, "emotion": string}]}
+Rules:
+- Keep the same segments in the same order with the same purpose and ending.
+- Add concrete, filmable detail (what a camera would show) - a short extra sentence or a richer clause - never
+  filler, never new statistics, dates, names or quotations. Sentences 7-18 words, natural to read aloud.
+- Total narration words MUST be at or just under the target given.`
+
+/**
+ * One expansion rewrite when the script is more than 5% under budget (mirror of the tightening rewrite;
+ * a 90 s target otherwise finishes at ~85 s). Kept only if closer to budget and not over it by >10%.
+ */
+export async function expandToBudget(segs: T2vNarrationSegment[], budget: number): Promise<T2vNarrationSegment[]> {
+  const words = narrationWords(segs)
+  if (words >= budget * (1 - T2V_BUDGET_TOLERANCE)) return segs
+  try {
+    const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(
+      EXPAND_SYSTEM,
+      `Target: ${budget} words total (currently ${words}).\nScript: ${JSON.stringify(segs.map(({ purpose, narration, visualMeaning, emotion }) => ({ purpose, narration, visualMeaning, emotion })))}`,
+    )
+    const next = toSegments(out.segments)
+    const n = narrationWords(next)
+    if (next.length && n <= budget * 1.1 && Math.abs(n - budget) < Math.abs(words - budget)) {
+      logT2v('pipeline-script', 'expanded to budget', { budget, before: words, after: n })
+      return next
+    }
+    logT2v('pipeline-script', 'expansion rejected', { budget, before: words, after: n })
+  } catch (err) {
+    logT2v('pipeline-script', 'expansion failed (keeping original)', { error: err instanceof Error ? err.message : 'error' })
+  }
+  return segs
+}
 
 /**
  * One tightening rewrite when the script runs more than 5% over its word budget (a 90 s target otherwise

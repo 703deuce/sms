@@ -256,7 +256,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       return advanceOnce(draftId, {})
     }
     case 'planning_scenes': {
-      const shots = await t2vScenePlanner({ story: run.story!, segments: run.segments! })
+      const shots = await t2vScenePlanner({ story: run.story!, segments: run.segments!, style: run.style, seed: `${draftId}:${run.startedAt}` })
       const musicGenerationId = await enqueuePipelineMusic(row, run, run.story!.musicMood)
       const fresh = (await loadRow(draftId))!
       const nextDoc: T2vDraftV1 = {
@@ -429,8 +429,11 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       if (render.status !== 'READY') return
       const settings = (render.settings ?? {}) as Record<string, unknown>
       const project = await prisma.clipProject.findUnique({ where: { id: row.projectId }, select: { rangeEndMs: true } })
+      const asmJob = run.assembleJobId ? await prisma.clipJob.findUnique({ where: { id: run.assembleJobId }, select: { payload: true } }) : null
+      const asmPayload = (asmJob?.payload ?? {}) as { shotStartsMs?: number[]; assembledMs?: number }
       const qa = t2vQaRender({
         run,
+        shotLengthsMs: shotLengthsFrom(asmPayload.shotStartsMs, asmPayload.assembledMs),
         status: render.status,
         outputDurationMs: typeof settings.outputDurationMs === 'number' ? settings.outputDurationMs : null,
         sourceDurationMs: project?.rangeEndMs ?? null,
@@ -480,6 +483,7 @@ async function enqueueVerify(
           intent: s.intent,
           needS: s.needS,
           nightOk: t2vNightLine(s.narration, s.intent),
+          subject: s.subject ?? '',
           candidates: (candidates[s.sceneId] ?? []).map((c) => ({
             provider: c.provider,
             providerId: c.providerId,
@@ -542,6 +546,14 @@ async function nextSearchRound(
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
   const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt), used })
   return { jobId, tried, candidates, shots: withCands.length }
+}
+
+/** Shot lengths from the assembler's shot starts; the closing end card (last entry) is excluded. */
+export function shotLengthsFrom(starts: number[] | undefined, totalMs: number | undefined): number[] | undefined {
+  if (!starts?.length || !totalMs) return undefined
+  const sorted = [...starts].sort((a, b) => a - b)
+  const lens = sorted.map((s, i) => (sorted[i + 1] ?? totalMs) - s)
+  return lens.slice(0, -1).filter((l) => l > 0)
 }
 
 function computeStockStats(results: T2vShotResult[], round: number): NonNullable<T2vPipelineRun['stockStats']> {

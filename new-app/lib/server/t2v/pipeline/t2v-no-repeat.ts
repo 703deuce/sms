@@ -69,11 +69,38 @@ export function nearDuplicateHash(a: string[] | undefined, b: string[] | undefin
   return false
 }
 
-type ClipRef = { provider?: string; providerId: string; author?: string }
+type ClipRef = { provider?: string; providerId: string; author?: string; subject?: string }
 
+const SUBJECT_STOP = new Set(['a', 'an', 'the', 'of', 'on', 'in', 'with', 'and', 'being', 'some', 'into', 'at', 'close', 'up', 'shot'])
+function subjectWords(t: string | undefined): Set<string> {
+  return new Set(
+    (t ?? '')
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length > 1 && !SUBJECT_STOP.has(w))
+      .map((w) => w.replace(/s$/, '')),
+  )
+}
+
+/** Reviewer subjects overlap enough to read as the same thing (Jaccard >= 0.5 on content words). */
+export function similarSubject(a: string | undefined, b: string | undefined): boolean {
+  const x = subjectWords(a)
+  const y = subjectWords(b)
+  if (!x.size || !y.size) return false
+  let inter = 0
+  for (const w of x) if (y.has(w)) inter++
+  return inter / (x.size + y.size - inter) >= 0.5
+}
+
+/**
+ * Same shoot = a near-repeat for spacing: same clip, or same author with neighbouring IDs, or same author
+ * filming the same subject (e.g. two roasted-bean close-ups by one creator, IDs far apart).
+ */
 export function sameShoot(a: ClipRef, b: ClipRef): boolean {
   if (a.providerId === b.providerId) return true
   if (!a.author || a.author !== b.author || (a.provider ?? 'pixabay') !== (b.provider ?? 'pixabay')) return false
+  if (similarSubject(a.subject, b.subject)) return true
   const x = Number(a.providerId)
   const y = Number(b.providerId)
   return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= SAME_SHOOT_ID_GAP
@@ -123,9 +150,9 @@ export type NoRepeatPick = { sceneId: string; tier: string }
 export function enforceNoRepeatDeterministic(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean },
+  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
   banned: Record<string, Set<string>> = {},
-): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy> } {
+): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy>; spareRequests: Record<string, Ev[]> } {
   const ctxFor = (shot: T2vPlannedShot): T2vQualityCtx => ({
     realistic: opts.realistic,
     nightOk: t2vNightLine(shot.narration, shot.intent),
@@ -135,11 +162,12 @@ export function enforceNoRepeatDeterministic(
   const tiers: Record<string, T2vPickedBy> = {}
   const picked: T2vVerifiedPick[] = []
   let replaced = 0
+  const spareRequests: Record<string, Ev[]> = {}
   const tierList = (ctx: T2vQualityCtx): Tier[] => [
     { verdict: 'accepted', tier: 'accepted', ok: (e) => scored(e, ACCEPT_SCORE) && Boolean(e.matches) && t2vQualityOk(e, ctx) },
     { verdict: 'weak_match', tier: 'usable', ok: (e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx) },
-    { verdict: 'best_available', tier: 'fallback', ok: (e) => scored(e, LOOSE_SCORE) && t2vQualityOk(e, ctx) },
   ]
+  const fallbackTier = (ctx: T2vQualityCtx): Tier => ({ verdict: 'best_available', tier: 'fallback', ok: (e) => scored(e, LOOSE_SCORE) && t2vQualityOk(e, ctx) })
   // On-topic B-roll the reviewer rated well for some other line of this video (quality re-checked per line).
   const spares: Ev[] = []
   const seenSpare = new Set<string>()
@@ -164,7 +192,8 @@ export function enforceNoRepeatDeterministic(
       (!strictShoot || !picked.some((p) => sameShoot(p, e)))
     let chosen: T2vVerifiedPick | null = null
     let tier: T2vPickedBy | '' = ''
-    if (r.chosen && free(r.chosen, true) && t2vQualityOk(r.chosen, ctx)) {
+    // A worker fallback (3-4) is not taken directly: a re-checked spare (5+ for THIS line) beats it.
+    if (r.chosen && r.chosen.verdict !== 'best_available' && free(r.chosen, true) && t2vQualityOk(r.chosen, ctx)) {
       chosen = r.chosen
       tier = r.chosen.verdict === 'accepted' ? 'accepted' : r.chosen.verdict === 'weak_match' ? 'usable' : 'fallback'
     } else if (r.chosen) replaced++
@@ -181,10 +210,27 @@ export function enforceNoRepeatDeterministic(
         }
       }
       if (!chosen) {
-        const spare = spares.find((e) => free(e, strict) && t2vQualityOk(e, ctx))
+        // Spare = a clip reviewed for another line. Only after it was re-checked against THIS line (5+);
+        // its score becomes the score for this line, so QA judges the pick where it actually sits.
+        const lineScores = opts.spareScores?.[shot.sceneId] ?? {}
+        const spare = spares.find((e) => free(e, strict) && t2vQualityOk(e, ctx) && (lineScores[e.providerId] ?? -1) >= USABLE_SCORE)
         if (spare) {
-          chosen = toPick(spare, 'best_available')
+          const lineScore = lineScores[spare.providerId]!
+          chosen = { ...toPick(spare, 'weak_match'), score: lineScore, matches: lineScore >= ACCEPT_SCORE, reviewedForOtherLine: spare.score }
           tier = 'spare'
+        }
+      }
+      if (!chosen) {
+        const hit = alts.find(fallbackTier(ctx).ok)
+        if (hit) {
+          chosen = toPick(hit, 'best_available')
+          tier = 'fallback'
+        }
+      }
+      if (!chosen || tier === 'fallback') {
+        if (strict && !opts.spareScores) {
+          const asks = spares.filter((e) => free(e, true) && t2vQualityOk(e, ctx)).slice(0, 4)
+          if (asks.length) spareRequests[shot.sceneId] = asks
         }
       }
     }
@@ -200,7 +246,40 @@ export function enforceNoRepeatDeterministic(
     if (tier) tiers[shot.sceneId] = tier
     out[shot.sceneId] = { ...r, chosen }
   }
-  return { out, replaced, tiers }
+  return { out, replaced, tiers, spareRequests }
+}
+
+export type SpareScores = Record<string, Record<string, number>>
+
+const SPARE_SYSTEM = `You re-check stock clips for a stock-footage video. Each clip was reviewed for a DIFFERENT
+narration line; a reviewer described what it shows. Score how well it works under the NEW line given (0-10):
+7-10 clearly works; 5-6 usable; 0-4 does not work. SUBJECT RULE: the clip must show the specific subject the
+line needs (coffee cherries, not any fruit; a roaster drum, not any machine). Right action, wrong subject = 0-2.
+A mug of coffee does not illustrate harvesting, processing or roasting.
+Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "score": number}]}`
+
+/** One text-only call: score candidate spares against the line they would sit under. */
+export async function scoreSpares(
+  shots: T2vPlannedShot[],
+  requests: Record<string, Ev[]>,
+): Promise<SpareScores> {
+  const items = shots
+    .filter((s) => requests[s.sceneId]?.length)
+    .map((s) => ({
+      sceneId: s.sceneId,
+      line: s.narration,
+      subject: s.subject ?? s.intent,
+      clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.visible ?? '').slice(0, 160)}`, framing: e.framing ?? '' })),
+    }))
+  if (!items.length) return {}
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(SPARE_SYSTEM, `Lines: ${JSON.stringify(items)}`, { maxTokens: 3000 })
+  const res: SpareScores = {}
+  for (const r of Array.isArray(out.scores) ? out.scores : []) {
+    const sc = Number(r.score)
+    if (!r.sceneId || !r.providerId || !Number.isFinite(sc) || !requests[r.sceneId]?.some((e) => e.providerId === String(r.providerId))) continue
+    ;(res[r.sceneId] ??= {})[String(r.providerId)] = Math.max(0, Math.min(10, Math.round(sc)))
+  }
+  return res
 }
 
 const LOOKALIKE_SYSTEM = `You check the shot sequence of a stock-footage video for repetition. Each item is one shot,
@@ -238,10 +317,19 @@ function hasGoodAlternative(r: T2vShotResult | undefined, exceptId: string, bann
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean },
+  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
 ): Promise<{ results: Record<string, T2vShotResult>; replaced: number; lookalikeSwaps: number; varietySwaps: number; tiers: Record<string, T2vPickedBy> }> {
   const banned: Record<string, Set<string>> = {}
-  let { out, replaced, tiers } = enforceNoRepeatDeterministic(shots, results, opts, banned)
+  let { out, replaced, tiers, spareRequests } = enforceNoRepeatDeterministic(shots, results, opts, banned)
+  // Spares are re-checked against the line they would fill before any is placed.
+  let spareScores: SpareScores = {}
+  try {
+    spareScores = await scoreSpares(shots, spareRequests)
+  } catch (err) {
+    logT2v('pipeline-norepeat', 'spare re-check failed (no spares used)', { error: err instanceof Error ? err.message : 'error' })
+  }
+  opts = { ...opts, spareScores }
+  ;({ out, replaced, tiers } = enforceNoRepeatDeterministic(shots, results, opts, banned))
   let lookalikeSwaps = 0
   let varietySwaps = 0
   for (let pass = 0; pass < 3; pass++) {

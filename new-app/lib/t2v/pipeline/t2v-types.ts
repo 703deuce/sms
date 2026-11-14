@@ -82,6 +82,15 @@ export type T2vPlannedShot = {
   queries: string[]
   needS: number
   onScreenText?: string
+  /** Editorial beat (sets the shot-length range). */
+  beat?: string
+  /** The specific subject the clip must show (verifier subject rule). */
+  subject?: string
+  /** Shots sharing a voiceGroup share one narration clip; later ones are in-scene cuts at wordOffset. */
+  voiceGroup?: string
+  wordOffset?: number
+  /** Whole voice-group narration around this shot (context for split shots). */
+  sentence?: string
 }
 
 export type T2vFootageCandidate = {
@@ -123,6 +132,10 @@ export type T2vVerifiedPick = {
   timeOfDay?: string
   saturation?: number
   luma?: number
+  /** Spare picks: the score the clip got for the line it was first reviewed for (score = this line). */
+  reviewedForOtherLine?: number
+  /** Worker subject rule: false = right action, wrong subject (capped score). */
+  subjectVisible?: boolean
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
   verdict: 'accepted' | 'weak_match' | 'best_available'
 }

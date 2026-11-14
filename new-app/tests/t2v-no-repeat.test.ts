@@ -2,13 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server/t2v/pipeline/t2v-llm', () => ({ t2vLlmJson: vi.fn() }))
 vi.mock('@/lib/server/t2v/log', () => ({ logT2v: vi.fn() }))
-import { enforceNoRepeatDeterministic, nearDuplicateHash, sameShoot, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeatDeterministic, nearDuplicateHash, sameShoot, similarSubject, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 
 let h = 0
-const uniq = () => [(++h * 0x0f0f0f0f).toString(16).padStart(16, '0').slice(-16)]
-const pick = (id: string, o: Partial<{ phash: string[]; score: number; author: string; lighting: number; matches: boolean; timeOfDay: string; saturation: number; luma: number }> = {}) => ({
+// Random 64-bit hashes: two of them are within 10 bits with negligible probability.
+const uniq = () => {
+  h++
+  return [Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')]
+}
+const pick = (id: string, o: Partial<{ phash: string[]; score: number; author: string; lighting: number; matches: boolean; timeOfDay: string; saturation: number; luma: number; subject: string }> = {}) => ({
   provider: 'pixabay', providerId: id, visible: '', matches: o.matches ?? true, score: o.score ?? 8, inS: 0, outS: 4, clipS: 10,
-  style: 'live_action', lighting: o.lighting ?? 7, phash: o.phash ?? [], author: o.author, timeOfDay: o.timeOfDay, saturation: o.saturation, luma: o.luma, verdict: 'accepted' as const,
+  style: 'live_action', lighting: o.lighting ?? 7, phash: o.phash ?? [], author: o.author, timeOfDay: o.timeOfDay, saturation: o.saturation, luma: o.luma, subject: o.subject, verdict: 'accepted' as const,
 })
 const shot = (sceneId: string, narration = '') => ({ sceneId, narration, intent: '' }) as never
 const res = (sceneId: string, chosen: ReturnType<typeof pick> | null, evaluated: ReturnType<typeof pick>[] = []) => ({ sceneId, chosen, evaluated })
@@ -41,15 +45,33 @@ describe('t2v no-repeat', () => {
     expect(out.b!.chosen!.providerId).toBe('500')
     expect(tiers.b).toBe('usable')
   })
-  it('dark clips lose to lit ones; spare on-topic clip fills an empty scene', () => {
-    const { out, tiers } = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], {
+  it('dark clips lose to lit ones; a spare is only placed after a 5+ re-check against its new line', () => {
+    const data = {
       a: res('a', null, [pick('10', { lighting: 3, phash: uniq() }), pick('11', { score: 7, lighting: 8, phash: uniq() })]),
-      b: res('b', pick('20', { phash: uniq() }), [pick('20', { phash: uniq() }), pick('21', { score: 8, phash: uniq() })]),
+      b: res('b', pick('20', { phash: uniq() }), [pick('20', { phash: uniq() }), pick('21', { score: 8, phash: uniq() }), pick('22', { score: 9, phash: uniq() })]),
       c: res('c', null, [pick('30', { score: 1, phash: uniq() })]),
+    }
+    const first = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true })
+    expect(first.out.a!.chosen!.providerId).toBe('11')
+    expect(first.out.c!.chosen).toBeNull() // no unchecked spare
+    expect(first.spareRequests.c!.map((e) => e.providerId)).toEqual(['22', '21'])
+    // 22 fails the re-check for line c (mug under a harvesting line); 21 works there (6/10).
+    const second = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true, spareScores: { c: { '22': 2, '21': 6 } } })
+    expect(second.out.c!.chosen!.providerId).toBe('21')
+    expect(second.out.c!.chosen!.score).toBe(6) // scored against the line it sits under
+    expect(second.out.c!.chosen!.reviewedForOtherLine).toBe(8)
+    expect(second.tiers.c).toBe('spare')
+  })
+  it('same author + same subject counts as a near-repeat even with far-apart ids', () => {
+    expect(similarSubject('roasted coffee beans', 'Roasted coffee beans')).toBe(true)
+    expect(similarSubject('roasted coffee beans', 'coffee mug')).toBe(false)
+    expect(sameShoot({ providerId: '80138', author: 'TPMotion', subject: 'roasted coffee beans' }, { providerId: '82604', author: 'TPMotion', subject: 'roasted coffee beans' })).toBe(true)
+    const { out } = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], {
+      a: res('a', pick('80138', { author: 'TPMotion', subject: 'roasted coffee beans', phash: uniq() })),
+      b: res('b', pick('500', { phash: uniq(), subject: 'moka pot' })),
+      c: res('c', pick('82604', { author: 'TPMotion', subject: 'roasted coffee beans', phash: uniq() }), [pick('82604', { author: 'TPMotion', subject: 'roasted coffee beans', phash: uniq() }), pick('600', { score: 6, subject: 'coffee pouring', phash: uniq() })]),
     }, { realistic: true })
-    expect(out.a!.chosen!.providerId).toBe('11')
-    expect(out.c!.chosen!.providerId).toBe('21')
-    expect(tiers.c).toBe('spare')
+    expect(out.c!.chosen!.providerId).toBe('600')
   })
   it('night/dark clips only for night lines; black-and-white only when requested; records how each was picked', () => {
     const night = pick('40', { timeOfDay: 'night', luma: 0.07, phash: uniq() })
