@@ -5,9 +5,13 @@ stock candidates (Pixabay previews). For each candidate, in order, until one is 
 
 1. Download the provider preview rendition (allow-listed CDN hosts only).
 2. Strip audio and downscale with ffmpeg (stock audio is never used; voiceover replaces it).
-3. Gemini watches the muted clip ONCE (video frames only, low media resolution) and returns
-   what is actually visible, whether it illustrates the narration line, and the in/out points
-   of the usable window.
+3. Blind describe, then score (the normal case, the line's lineShows is fixed):
+   a. Gemini watches the muted clip with NO line or script context and writes a plain second-by-second
+      description (same prompt as the describe test). Cached per provider + id + rendition
+      (t2v_clip_descriptions), so each unique clip costs one call across lines, rounds and reruns.
+   b. A text-only call scores that description against the line's fixed lineShows, the full sentence,
+      neighbours and the whole script: seen, depicts, score, fit_reason, artifacts and the window.
+   Old payloads without lineShows (and T2V_BLIND_DESCRIBE=0) keep the single combined video call.
 
 No transcription, no audio analysis, no multi-pass review. Results are written into the job
 payload (``results``) and posted to ``/api/t2v/internal/pipeline-verified``.
@@ -17,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import re
 import subprocess
 import tempfile
@@ -46,6 +51,14 @@ USABLE_SCORE = 5
 NEAR_DUP_BITS = 10
 PARALLEL_SHOTS = 4
 MAX_OUTPUT_TOKENS = 2048
+# Blind describe-then-score (NEW 1). Off only for debugging; old payloads without lineShows use the old call.
+BLIND_DESCRIBE = os.environ.get("T2V_BLIND_DESCRIBE", "1").strip().lower() not in ("0", "false", "no", "off")
+DESCRIBE_MAX_TOKENS = 2048
+# Bumped when the describe prompt or the feed changes, so old cached descriptions are not reused.
+DESCRIBE_VERSION = "events-v1"
+DESCRIBE_FEED = "360p4fps-fps1-low"
+# Entry copy of the blind description (rechecks read it for the window); the cache keeps the full text.
+DESCRIBED_CHARS = 900
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -218,6 +231,400 @@ def capped_score(v: dict) -> tuple[int, int, str]:
     return min(raw, DEPICTS_CAP[d]), raw, d
 
 
+# ---- Blind describe, then score (NEW 1) -------------------------------------------------------------------
+# Step A: the describe test's prompt (describe_test.py), word for word, with NO line or script context, plus one
+# generic sentence so the description also records the style and production artifacts step B needs. The describe
+# test (t2v/describe_test/results.md) showed the LOW feed sees fine with this prompt: the known misreads came from
+# the line biasing `seen`, not from resolution.
+DESCRIBE_PROMPT = (
+    "Describe exactly what happens in this clip, second by second: who/what is visible, what they do, "
+    "the direction of any motion, colours, lighting, indoor/outdoor, time of day."
+)
+# Pass 1 is returned as timestamped events, never a whole-clip summary: pass 2 must be able to see WHEN something
+# happens (an action that starts at second 7 cannot be placed from a summary).
+DESCRIBE_EXTRA = (
+    "\nReturn JSON. events: consecutive short intervals that together cover the whole clip from 0 to its end, "
+    "each 1-3 seconds (start a new one whenever what is visible or happening changes), each with t_start and "
+    "t_end in seconds, visible (who/what is in shot), action (what they do; 'nothing' if still), motion "
+    "(direction of any movement of subjects or camera, or 'none') and lighting (brightness and colour, and "
+    "whether it is too dark or blurry to see). Also: style (live-action camera footage, animation, 3D render or "
+    "graphics) and notes (any on-screen text or watermark, green or blue screen, studio lights or film "
+    "equipment in shot, frozen frames; '' if none)."
+)
+DESCRIBE_PHOTO_PROMPT = (
+    "Describe exactly what is in this photo: who/what is visible, what they are doing, colours, lighting, "
+    "indoor/outdoor, time of day.\nReturn JSON with one event (t_start 0, t_end 0) holding visible, action, "
+    "motion ('none') and lighting. Also: style (real camera photograph, illustration, 3D render, or a cut-out on "
+    "a plain or transparent background) and notes (any on-screen text or watermark, green or blue screen, studio "
+    "lights or equipment, stretched, smeared or distorted areas; '' if none)."
+)
+OBSERVE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "events": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "t_start": {"type": "NUMBER"}, "t_end": {"type": "NUMBER"}, "visible": {"type": "STRING"},
+                    "action": {"type": "STRING"}, "motion": {"type": "STRING"}, "lighting": {"type": "STRING"},
+                },
+                "required": ["t_start", "t_end", "visible", "action", "motion", "lighting"],
+                "propertyOrdering": ["t_start", "t_end", "visible", "action", "motion", "lighting"],
+            },
+        },
+        "style": {"type": "STRING"},
+        "notes": {"type": "STRING"},
+    },
+    "required": ["events", "style", "notes"],
+    "propertyOrdering": ["events", "style", "notes"],
+}
+
+
+def norm_observation(obs: Any, clip_s: float) -> dict:
+    """Pass 1 output, cleaned: events sorted, clamped to the clip, at least one event. Locked from here on."""
+    obs = obs if isinstance(obs, dict) else {}
+    events: list[dict] = []
+    for e in obs.get("events") or []:
+        if not isinstance(e, dict):
+            continue
+        try:
+            t0, t1 = float(e.get("t_start") or 0), float(e.get("t_end") or 0)
+        except (TypeError, ValueError):
+            continue
+        t0 = max(0.0, min(t0, clip_s))
+        t1 = max(t0, min(t1, clip_s))
+        events.append({"t_start": round(t0, 2), "t_end": round(t1, 2),
+                       **{k: str(e.get(k) or "")[:200] for k in ("visible", "action", "motion", "lighting")}})
+    events.sort(key=lambda e: e["t_start"])
+    if events:
+        events[-1]["t_end"] = max(events[-1]["t_end"], round(clip_s, 2)) if clip_s else events[-1]["t_end"]
+    return {"events": events, "style": str(obs.get("style") or "")[:120], "notes": str(obs.get("notes") or "")[:300]}
+
+
+def event_line(e: dict) -> str:
+    return (f"[{e['t_start']:.1f}-{e['t_end']:.1f} s] visible: {e.get('visible', '')}; action: {e.get('action', '')}; "
+            f"motion: {e.get('motion', '')}; lighting: {e.get('lighting', '')}")
+
+
+def observation_text(obs: dict) -> str:
+    lines = [event_line(e) for e in obs.get("events") or []]
+    lines.append(f"style: {obs.get('style') or '(not said)'}")
+    lines.append(f"notes: {obs.get('notes') or '(none)'}")
+    return "\n".join(lines)
+
+
+def events_in(obs: dict, a: float, b: float) -> list[dict]:
+    """The observed events that overlap [a, b] (what depicts and the score must be judged on)."""
+    return [e for e in obs.get("events") or [] if e["t_end"] > a + 0.05 and e["t_start"] < b - 0.05]
+
+
+REJUDGE_TOL_S = 0.5
+
+
+def needs_rejudge(obs: dict, judged: tuple[float, float], played: tuple[float, float]) -> bool:
+    """The played slice reaches observed events outside pass 2's window (it was shorter than the shot): those
+    frames were never judged, so pass 2 re-judges the slice. A slice inside the window (every event in it was
+    judged as showing the line) needs no new call."""
+    inside = {id(e) for e in events_in(obs, *judged)}
+    a, b = judged
+    for e in events_in(obs, *played):
+        if id(e) in inside:
+            continue
+        # Seconds of this unjudged event that would play: a sliver under REJUDGE_TOL_S is not worth a call.
+        if min(played[1], e["t_end"]) - max(played[0], e["t_start"]) >= REJUDGE_TOL_S:
+            return True
+    return False
+
+
+def snap_to_events(obs: dict, a: float, b: float, clip_s: float) -> tuple[float, float]:
+    """Pass 2's window snapped outward to the observed event boundaries it touches (it picks FROM them)."""
+    inside = events_in(obs, a, b)
+    if not inside:
+        return a, b
+    return round(max(0.0, inside[0]["t_start"]), 2), round(min(clip_s, inside[-1]["t_end"]), 2)
+
+
+# Step B: text only. The scorer never sees the clip, so it cannot read the line into it; it judges what the
+# blind reviewer wrote. Same rubric and caps as the video prompt, plus the window and the artifacts field.
+SCORE_PROMPT = """You are the footage checker for an automatic stock-footage video editor.
+Another reviewer watched ONE short stock {media} (frames only, no audio) WITHOUT knowing what it was for and
+wrote down what it shows as timestamped events. That observation is LOCKED: you do not see the {media}, you
+cannot change or add to the observation, and you judge ONLY from it. Never assume anything it does not say,
+and never judge from what the {media} might stand for.
+
+{script_block}{media_cap} length: {clip_s:.1f} s. The shot needs about {need_s:.1f} s.
+
+Locked observation of the {media} (written before anyone knew this line):
+\"\"\"{description}\"\"\"
+
+The whole script and the moment are context: they tell you what the video is about and what a viewer of it
+expects to see. They never make a clip fit THIS line: a clip that would suit another line of the script, the
+topic or the theme in general, but does not show THIS line, is a miss here. If this line is only part of a
+sentence, read it as that whole sentence. If the line warns against doing something, a clip that shows that act
+being done does not work.
+
+Work in steps, in this order.
+1. """ + FIXED_MARKER + """: the same for every clip checked for this line.
+   Judge against it exactly as written. Never restate, widen, narrow or reinterpret it, and do not output it.
+2. in_s, out_s: {window_rule}
+3. seen: one or two plain sentences: what the observed events INSIDE that window show (people, things,
+   actions; say so when they call the picture too dark, small or unclear). Only events inside the window count;
+   what happens before in_s or after out_s is never part of this shot.
+4. depicts: do the events inside that window show line_shows, so a viewer watching this video gets it at once?
+   - "yes": it plainly shows line_shows (the same thing or action, from any angle or in any everyday situation),
+     and it would not look out of place to a viewer of this video.
+   - "partly": it shows only part of line_shows, or shows it in a way or setting a viewer would find odd.
+   - "no": it shows something else - a related object or activity, the same category, a symbol, a mood, a
+     metaphor, the result or a step only an argument connects, the habit or act the line advises against, or
+     the description is too vague or the picture too unclear to tell.
+   If an intended shot is given above, "yes" also needs the clip to show that intended shot (something merely
+   similar is "partly" at most).
+5. artifacts: what the observation reports inside that window (or in its notes): "production" (green or blue screen, studio
+   lights, stands, crew or set equipment in shot), "stretched" (stretched, squashed, smeared or distorted
+   picture), "frozen" (frozen or still frames in a video), "dark" (near-black or too dark to see), else "none".
+6. score: 0-10 for this line in this video, for that window only, based on seen and depicts, not on what the
+   clip might stand for.
+   9-10 = depicts yes and exactly right here; 7-8 = depicts yes, clearly works; 5-6 = depicts partly, usable
+   but not ideal; 0-4 = depicts no (3 or lower when the picture is too unclear to tell).
+7. fit_reason: one short sentence on why what was seen does or does not show line_shows.
+
+Return JSON:
+- in_s, out_s, seen, depicts, artifacts, score, fit_reason: as above (in that order).
+- visible: one sentence describing what is shown in the window.
+- main_subject, action: the main subject and what it is doing.
+- matches: true when depicts is "yes", score >= 7, artifacts is "none" and the window is readable.
+- subject_visible: true if what the viewer must recognise is clearly visible.
+- issues: shaky, blurry, text overlay, cut inside clip, or "".
+- style: from the observation: live_action (real camera footage or photo), animation, 3d_render,
+  motion_graphics, clip_art (illustration, cut-out or vector art) or screen_recording.
+- lighting: 0-10 how readable the subject is (information only).
+- framing: 2-5 words, shot size + subject.
+- time_of_day: day, night, dusk_dawn, or indoor (information only).
+{style_rule}"""
+
+WINDOW_RULE_VIDEO = """pick the window FROM the observed events' timestamps: the continuous run of events in
+   which line_shows is plainly visible and readable, preferably >= {need_s:.1f} s. Leave out events the
+   observation calls too dark, black, blurry or frozen, or that show something else. in_s is the t_start of the
+   first event you keep and out_s the t_end of the last; 0 <= in_s < out_s <= {clip_s:.1f}."""
+# Re-judge (the slice the edit will play differs from the window pass 2 picked): the window is given.
+WINDOW_RULE_FIXED = """the window is FIXED: in_s = {a:.1f}, out_s = {b:.1f} (the exact slice the edit plays).
+   Return those two numbers and judge only the events that overlap it."""
+WINDOW_RULE_PHOTO = "a still photo: return 0 and {need_s:.1f}."
+
+SCORE_SCHEMA: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {
+        "in_s": {"type": "NUMBER"},
+        "out_s": {"type": "NUMBER"},
+        "seen": {"type": "STRING"},
+        "depicts": {"type": "STRING", "enum": ["yes", "partly", "no"]},
+        "artifacts": {"type": "STRING", "enum": ["none", "production", "stretched", "frozen", "dark"]},
+        "score": {"type": "INTEGER"},
+        "fit_reason": {"type": "STRING"},
+        "visible": {"type": "STRING"},
+        "main_subject": {"type": "STRING"},
+        "action": {"type": "STRING"},
+        "matches": {"type": "BOOLEAN"},
+        "subject_visible": {"type": "BOOLEAN"},
+        "issues": {"type": "STRING"},
+        "style": VERIFY_SCHEMA["properties"]["style"],
+        "lighting": {"type": "INTEGER"},
+        "framing": {"type": "STRING"},
+        "time_of_day": VERIFY_SCHEMA["properties"]["time_of_day"],
+    },
+    "required": ["in_s", "out_s", "seen", "depicts", "artifacts", "score", "fit_reason", "visible", "main_subject",
+                 "action", "matches", "subject_visible", "style", "lighting", "framing", "time_of_day"],
+    "propertyOrdering": ["in_s", "out_s", "seen", "depicts", "artifacts", "score", "fit_reason", "visible",
+                         "main_subject", "action", "matches", "subject_visible", "issues", "style", "lighting",
+                         "framing", "time_of_day"],
+}
+
+# A production artifact caps the score whatever the line (generic, never a topic rule). `cutout` is set in code
+# for a photo with a transparent background (it renders with smeared edge pixels: snow #1194 L5 img_966334).
+ARTIFACT_CAP = {"production": 3, "dark": 3, "stretched": 4, "cutout": 4, "frozen": 6}
+ARTIFACTS = ("none", "production", "stretched", "frozen", "dark", "cutout")
+# Backstop: the blind description names a production artifact but the scorer said "none" (generic words only).
+_PRODUCTION_WORDS = re.compile(
+    r"\b(green[- ]screen|blue[- ]screen|chroma[- ]?key|studio (?:light|lights|lighting|equipment)|light stands?|"
+    r"softbox(?:es)?|film crew|camera crew|clapperboard|boom mic)\b",
+    re.I,
+)
+
+
+def norm_artifacts(v: Any, description: str = "") -> str:
+    a = str(v or "none").strip().lower()
+    a = a if a in ARTIFACTS else "none"
+    if a == "none" and description and _PRODUCTION_WORDS.search(description):
+        return "production"
+    return a
+
+
+def apply_artifact_cap(entry: dict) -> None:
+    """Cap the score and drop `matches` for a clip with a production artifact (logged by the caller)."""
+    cap = ARTIFACT_CAP.get(str(entry.get("artifacts") or "none"))
+    if cap is None:
+        return
+    entry["matches"] = False
+    if entry.get("score", 0) > cap:
+        entry["score"] = cap
+
+
+def play_window(a: float, b: float, clip_s: float, need_s: float) -> tuple[float, float]:
+    """The slice the edit plays for a judged window [a, b]: `need_s` seconds CENTRED in the window (a long window
+    used to play from its start: 2339's 0-35 s window played 0-3.3 s, 144635's 0-5 s window played the near-black
+    first 2.4 s), grown around the centre when the window is shorter than the need, kept inside the clip, never
+    snapped back to 0. Same rule as the web's t2vPlayStart (finisher)."""
+    clip_s = max(0.0, float(clip_s or 0))
+    need = max(0.1, float(need_s or 0))
+    if clip_s <= need:
+        return 0.0, round(clip_s, 2)
+    mid = (float(a) + float(b)) / 2
+    start = min(max(0.0, mid - need / 2), clip_s - need)
+    return round(start, 2), round(start + need, 2)
+
+
+# The slice the edit plays: the planned need plus a margin for the spoken line running longer than its estimate
+# (assembly plays voice + pad), so the rendered slice stays inside the verified window.
+PLAY_MARGIN_S = 0.3
+PLAY_MARGIN_FRAC = 0.1
+
+
+def play_need(need_s: float) -> float:
+    return round(float(need_s or 0) * (1 + PLAY_MARGIN_FRAC) + PLAY_MARGIN_S, 2)
+
+
+def _loads(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        # A plain-text description (never written by this version) becomes one event over the clip.
+        return {"events": [{"t_start": 0, "t_end": 0, "visible": str(text)[:200], "action": "", "motion": "", "lighting": ""}]}
+
+
+# Frozen segments inside a clip (V4): frame-to-frame mean luma difference (0-255, 64x36 grey at 4 fps) below
+# FROZEN_DIFF for at least FROZEN_MIN_S. Real duplicated frames sit near 0; slow but moving footage (steam,
+# drifting aerials) stays above ~0.2 on the shrunk preview (describe-test clips).
+FROZEN_DIFF = 0.1
+FROZEN_MIN_S = 1.0
+FROZEN_FPS = 4
+
+
+def frozen_spans_from_diffs(diffs: list[float], fps: int = FROZEN_FPS) -> list[tuple[float, float]]:
+    spans: list[tuple[float, float]] = []
+    start = None
+    for k, d in enumerate(list(diffs) + [999.0]):
+        if d < FROZEN_DIFF:
+            start = k if start is None else start
+            continue
+        if start is not None and (k - start) / fps >= FROZEN_MIN_S:
+            spans.append((round(start / fps, 2), round(k / fps, 2)))
+        start = None
+    return spans
+
+
+def _frozen_spans(video: Path) -> list[tuple[float, float]]:
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(video), "-vf", f"fps={FROZEN_FPS},scale=64:36:flags=area,format=gray",
+         "-f", "rawvideo", "-"],
+        capture_output=True,
+    )
+    n = 64 * 36
+    px = proc.stdout
+    if proc.returncode != 0 or len(px) < 2 * n:
+        return []
+    fr = [px[k:k + n] for k in range(0, len(px) - n + 1, n)]
+    diffs = [sum(abs(x - y) for x, y in zip(fr[i], fr[i + 1])) / n for i in range(len(fr) - 1)]
+    return frozen_spans_from_diffs(diffs)
+
+
+def frozen_overlap(spans: list[tuple[float, float]], a: float, b: float) -> float:
+    return round(sum(max(0.0, min(b, e) - max(a, s)) for s, e in spans), 2)
+
+
+# A photo with a transparent background (cut-out PNG): its hidden edge pixels show as smeared or stretched
+# edges once the alpha is dropped. Share of pixels under half opacity, 64x36.
+CUTOUT_MIN_FRAC = 0.02
+
+
+def _alpha_fraction(src: Path) -> float:
+    proc = subprocess.run(
+        ["ffmpeg", "-v", "error", "-i", str(src), "-vf", "format=rgba,alphaextract,scale=64:36,format=gray",
+         "-frames:v", "1", "-f", "rawvideo", "-"],
+        capture_output=True,
+    )
+    px = proc.stdout
+    if proc.returncode != 0 or not px:
+        return 0.0
+    return round(sum(1 for b in px if b < 128) / len(px), 3)
+
+
+def _rendition(c: dict) -> str:
+    m = re.search(r"_(tiny|small|medium|large|\d{3,4})\.(mp4|webm|jpg|jpeg|png|webp)\b", str(c.get("previewUrl") or ""), re.I)
+    return (m.group(1).lower() if m else "preview")
+
+
+def describe_key(c: dict) -> tuple[str, str, str] | None:
+    """Cache key: provider + providerId + rendition (+ feed and prompt version). AI clips are never cached (they are
+    the workspace's own generations, not public stock)."""
+    if c.get("kind") == "ai" or str(c.get("provider") or "pixabay") == "replicate" or not c.get("providerId"):
+        return None
+    kind = "photo" if c.get("kind") == "photo" else "video"
+    return (str(c.get("provider") or "pixabay"), str(c.get("providerId")), f"{kind}:{_rendition(c)}:{DESCRIBE_FEED}:{DESCRIBE_VERSION}")
+
+
+def _cache_get(conn, keys: list[tuple[str, str, str]]) -> dict[tuple[str, str, str], str]:
+    """Cached blind descriptions for these keys. A missing table (migration not applied) just means no cache."""
+    out: dict[tuple[str, str, str], str] = {}
+    if not keys:
+        return out
+    try:
+        with conn.cursor() as cur:
+            for k in range(0, len(keys), 200):
+                chunk = keys[k:k + 200]
+                cur.execute(
+                    'SELECT provider, "providerId", rendition, description FROM t2v_clip_descriptions '
+                    "WHERE (provider, \"providerId\", rendition) IN (" + ",".join(["(%s,%s,%s)"] * len(chunk)) + ")",
+                    [x for key in chunk for x in key],
+                )
+                for prov, pid, rend, desc in cur.fetchall() or []:
+                    out[(prov, pid, rend)] = desc
+        conn.commit()
+    except Exception as exc:  # noqa: BLE001 — the cache is an optimisation
+        log.warning("[t2v:verify:describe_cache] read failed: %s", str(exc)[:200])
+        conn.rollback()
+    return out
+
+
+def _cache_put(conn, key: tuple[str, str, str], description: str, model: str, tin: int, tout: int) -> None:
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                'INSERT INTO t2v_clip_descriptions (provider, "providerId", rendition, model, description, '
+                '"promptTokens", "outputTokens") VALUES (%s,%s,%s,%s,%s,%s,%s) '
+                'ON CONFLICT (provider, "providerId", rendition) DO NOTHING',
+                (*key, model, description, tin, tout),
+            )
+        conn.commit()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("[t2v:verify:describe_cache] write failed: %s", str(exc)[:200])
+        conn.rollback()
+
+
+def score_prompt(*, description: str, is_photo: bool, clip_s: float, need_s: float, block: str, style_rule: str,
+                 fixed_window: tuple[float, float] | None = None) -> str:
+    media = "photo" if is_photo else "clip"
+    if fixed_window and not is_photo:
+        rule = WINDOW_RULE_FIXED.format(a=fixed_window[0], b=fixed_window[1])
+    else:
+        rule = (WINDOW_RULE_PHOTO if is_photo else WINDOW_RULE_VIDEO).format(need_s=need_s, clip_s=clip_s)
+    return SCORE_PROMPT.format(
+        media=media, media_cap=media.capitalize(),
+        script_block=block, clip_s=clip_s, need_s=need_s, description=description.replace('"""', "'''")[:4000],
+        window_rule=rule, style_rule=style_rule,
+    )
+
+
 def _idea_line(shot: dict, q) -> str:
     """Reimagine candidates: the shot idea that found them (the clip must show the line AND this shot)."""
     idea = q(shot.get("idea"), 300)
@@ -261,6 +668,11 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
             "lighting": e.get("lighting"), "matches": e.get("matches"), "verdict": "chosen" if picked else "not_chosen",
             "lineShows": e.get("lineShows") or "", "seen": e.get("seen") or "", "depicts": e.get("depicts"),
             "rawScore": e.get("rawScore"), "reason": e.get("error") or e.get("fitReason") or "",
+            # QA/VQ: the verified playback window (depicts/score are on it), pass 2's window, the observed events
+            # inside the verified window and any artifact.
+            "window": [e.get("inS"), e.get("outS")], "judgedWindow": [e.get("judgedInS"), e.get("judgedOutS")],
+            "windowEvents": e.get("windowEvents") or [], "artifacts": e.get("artifacts"), "blind": bool(e.get("blind")),
+            "rejudged": bool(e.get("rejudged")),
         }))
     log.info("[t2v:verify:scene] %s", json.dumps({
         "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
@@ -488,9 +900,40 @@ def _model() -> str:
     return discover_video_picker_model().strip()
 
 
-def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4") -> tuple[dict, int, int]:
+def _media_part(video: Path, mime: str) -> dict:
+    return {
+        "inlineData": {"mimeType": mime, "data": base64.b64encode(video.read_bytes()).decode("ascii")},
+        **({"videoMetadata": {"fps": 1}} if mime.startswith("video/") else {}),
+    }
+
+
+def _gemini_post(model: str, parts: list[dict], gen: dict[str, Any]) -> tuple[str, int, int]:
+    """One generateContent call: (text, promptTokens, outputTokens). One transient retry (429/5xx are not
+    billed); no paid retry loops."""
     from clips_worker.gemini_vision import GEMINI_BASE, _key
 
+    m = model.lower()
+    if not (m.startswith("gemini-3.") or m.startswith("gemini-4.")):
+        gen = {**gen, "temperature": 0}
+    body = {"contents": [{"role": "user", "parts": parts}], "generationConfig": gen}
+    url = f"{GEMINI_BASE}/models/{urllib.parse.quote(model)}:generateContent"
+    last = ""
+    for attempt in range(2):
+        res = requests.post(url, params={"key": _key()}, json=body, timeout=90)
+        if res.ok:
+            data = res.json()
+            text = "".join(str(x.get("text") or "") for x in data["candidates"][0]["content"]["parts"])
+            u = data.get("usageMetadata") or {}
+            return text, int(u.get("promptTokenCount") or 0), int(u.get("candidatesTokenCount") or 0)
+        last = f"gemini_http_{res.status_code}"
+        if res.status_code not in (429, 500, 502, 503, 504) or attempt:
+            break
+        time.sleep(3)
+    raise RuntimeError(last)
+
+
+def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4") -> tuple[dict, int, int]:
+    """The combined watch-and-judge call (old payloads without lineShows, or T2V_BLIND_DESCRIBE=0)."""
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
         # The fixed-line_shows prompt gets the schema without line_shows (the checker never writes it).
@@ -499,42 +942,28 @@ def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4")
         "maxOutputTokens": MAX_OUTPUT_TOKENS,
         "mediaResolution": "MEDIA_RESOLUTION_LOW",
     }
-    m = model.lower()
-    if not (m.startswith("gemini-3.") or m.startswith("gemini-4.")):
-        gen["temperature"] = 0
-    body = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [
-                    {
-                        "inlineData": {
-                            "mimeType": mime,
-                            "data": base64.b64encode(video.read_bytes()).decode("ascii"),
-                        },
-                        **({"videoMetadata": {"fps": 1}} if mime.startswith("video/") else {}),
-                    },
-                    {"text": prompt},
-                ],
-            }
-        ],
-        "generationConfig": gen,
-    }
-    url = f"{GEMINI_BASE}/models/{urllib.parse.quote(model)}:generateContent"
-    last = ""
-    # One transient retry (429/5xx are not billed); no paid retry loops.
-    for attempt in range(2):
-        res = requests.post(url, params={"key": _key()}, json=body, timeout=90)
-        if res.ok:
-            data = res.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"]
-            u = data.get("usageMetadata") or {}
-            return json.loads(text), int(u.get("promptTokenCount") or 0), int(u.get("candidatesTokenCount") or 0)
-        last = f"gemini_http_{res.status_code}"
-        if res.status_code not in (429, 500, 502, 503, 504) or attempt:
-            break
-        time.sleep(3)
-    raise RuntimeError(last)
+    text, tin, tout = _gemini_post(model, [_media_part(video, mime), {"text": prompt}], gen)
+    return json.loads(text), tin, tout
+
+
+def _gemini_describe(model: str, video: Path, mime: str = "video/mp4") -> tuple[str, int, int]:
+    """Pass 1: the blind, timestamped observation (no narration, no expected action, no search terms) as a JSON
+    string. Same feed as the describe test: the shrunk preview, fps=1, MEDIA_RESOLUTION_LOW."""
+    prompt = DESCRIBE_PHOTO_PROMPT if mime.startswith("image/") else DESCRIBE_PROMPT + DESCRIBE_EXTRA
+    gen: dict[str, Any] = {"responseMimeType": "application/json", "responseSchema": OBSERVE_SCHEMA,
+                           "maxOutputTokens": DESCRIBE_MAX_TOKENS, "mediaResolution": "MEDIA_RESOLUTION_LOW"}
+    text, tin, tout = _gemini_post(model, [_media_part(video, mime), {"text": prompt}], gen)
+    obs = json.loads(text)
+    if not (isinstance(obs, dict) and obs.get("events")):
+        raise RuntimeError("describe_empty")
+    return json.dumps(obs), tin, tout
+
+
+def _gemini_score(model: str, prompt: str) -> tuple[dict, int, int]:
+    """Step B: text only. Scores the blind description against the fixed lineShows and the script."""
+    gen: dict[str, Any] = {"responseMimeType": "application/json", "responseSchema": SCORE_SCHEMA, "maxOutputTokens": MAX_OUTPUT_TOKENS}
+    text, tin, tout = _gemini_post(model, [{"text": prompt}], gen)
+    return json.loads(text), tin, tout
 
 
 def _clamp_window(v: dict, clip_s: float, need_s: float) -> tuple[float, float]:
@@ -585,8 +1014,14 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     used_ids: set[str] = {str(u.get("providerId")) for u in (p.get("used") or []) if u.get("providerId")}
     used_hashes: list[list[str]] = [list(u.get("phash") or []) for u in (p.get("used") or []) if u.get("phash")]
     lock = threading.Lock()
-    usage = {"in": 0, "out": 0, "calls": 0}
+    usage = {"in": 0, "out": 0, "calls": 0, "describe": 0, "score": 0, "describeHits": 0}
     evaluated_by_shot: list[list[dict]] = [[] for _ in shots]
+    # Blind descriptions already cached for these candidates (one read; the table is shared across runs).
+    describe_cache: dict[tuple[str, str, str], str] = {}
+    if BLIND_DESCRIBE:
+        keys = sorted({k for sh in shots if str(sh.get("lineShows") or "").strip()
+                       for c in (sh.get("candidates") or [])[:MAX_CANDIDATES_PER_SHOT] for k in [describe_key(c)] if k})
+        describe_cache.update(_cache_get(conn, keys))
 
     def shot_ctx(shot: dict) -> Ctx:
         return Ctx(realistic=realistic)
@@ -627,22 +1062,90 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
                     if c.get("kind") == "ai":
                         entry["kind"] = "ai"
-                prompt = (prompt_template(fixed_ls is not None) + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
-                    clip_s=clip_s,
-                    need_s=need_s,
-                    script_block=script_block(script, shot, video_understanding, topic),
-                    style_rule=style_rule,
-                )
-                v, tin, tout = _gemini_watch(model, muted, prompt, "image/jpeg" if is_photo else "video/mp4")
-                with lock:
-                    usage["in"] += tin
-                    usage["out"] += tout
-                    usage["calls"] += 1
-                a, b = (0.0, clip_s) if is_photo else _clamp_window(v, clip_s, need_s)
+                is_ai = c.get("kind") == "ai"
+                blind = BLIND_DESCRIBE and fixed_ls is not None
+                described = ""
+                if blind:
+                    if is_photo:
+                        # A cut-out PNG (transparent background) renders with smeared edges (V4).
+                        try:
+                            if _alpha_fraction(raw) >= CUTOUT_MIN_FRAC:
+                                entry["cutout"] = True
+                        except Exception:  # noqa: BLE001 — a bonus signal
+                            pass
+                    # Step A: the blind description, once per unique clip (cache across lines, rounds, reruns).
+                    key = describe_key(c)
+                    with lock:
+                        described = describe_cache.get(key) if key else None
+                    if described:
+                        with lock:
+                            usage["describeHits"] += 1
+                    else:
+                        described, tin, tout = _gemini_describe(model, muted, "image/jpeg" if is_photo else "video/mp4")
+                        with lock:
+                            usage["in"] += tin
+                            usage["out"] += tout
+                            usage["calls"] += 1
+                            usage["describe"] += 1
+                            if key:
+                                describe_cache[key] = described
+                                _cache_put(conn, key, described, model, tin, tout)
+                    # Pass 2: text only, on the LOCKED timestamped observation vs the FIXED lineShows and script.
+                    obs = norm_observation(_loads(described), clip_s)
+                    obs_text = observation_text(obs)
+                    block = script_block(script, shot, video_understanding, topic)
+
+                    def judge(fixed_window: tuple[float, float] | None = None) -> dict:
+                        prompt = score_prompt(description=obs_text, is_photo=is_photo, clip_s=clip_s, need_s=need_s,
+                                              block=block, style_rule=style_rule, fixed_window=fixed_window) + (AI_NOTE if is_ai else "")
+                        out, tin2, tout2 = _gemini_score(model, prompt)
+                        with lock:
+                            usage["in"] += tin2
+                            usage["out"] += tout2
+                            usage["calls"] += 1
+                            usage["score"] += 1
+                        return out
+
+                    v = judge()
+                else:
+                    prompt = (prompt_template(fixed_ls is not None) + (PHOTO_NOTE if is_photo else AI_NOTE if is_ai else "")).format(
+                        clip_s=clip_s,
+                        need_s=need_s,
+                        script_block=script_block(script, shot, video_understanding, topic),
+                        style_rule=style_rule,
+                    )
+                    v, tin, tout = _gemini_watch(model, muted, prompt, "image/jpeg" if is_photo else "video/mp4")
+                    with lock:
+                        usage["in"] += tin
+                        usage["out"] += tout
+                        usage["calls"] += 1
+                # The window pass 2 picked (snapped to the observed events) and the slice the edit will play
+                # (play_window: the needed length, centred in it, inside the clip). When that slice does not cover
+                # exactly the same observed events, pass 2 re-judges the slice itself (text only), so depicts and
+                # the score always describe the frames that play. inS/outS are that VERIFIED slice; the finisher
+                # and assembly play it unchanged.
+                if is_photo:
+                    ja, jb = 0.0, clip_s
+                    pa, pb = 0.0, clip_s
+                else:
+                    ja, jb = _clamp_window(v, clip_s, 0.0)
+                    if blind:
+                        ja, jb = snap_to_events(obs, ja, jb, clip_s)
+                    pa, pb = play_window(ja, jb, clip_s, play_need(need_s))
+                    if blind and needs_rejudge(obs, (ja, jb), (pa, pb)):
+                        v2 = judge((pa, pb))
+                        log.info("[t2v:verify:rejudge] %s", json.dumps({
+                            "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
+                            "judged": [ja, jb], "played": [pa, pb], "score": v.get("score"), "rescore": v2.get("score"),
+                            "depicts": v.get("depicts"), "redepicts": v2.get("depicts"),
+                        }))
+                        entry["rejudged"] = {"window": [ja, jb], "score": v.get("score"), "depicts": v.get("depicts")}
+                        v = {**v2, "in_s": pa, "out_s": pb}
                 sc, raw_score, dep = capped_score(v)
                 entry.update(
                     {
                         # What is literally on screen (written before the fit judgement); stored with fit_reason.
+                        # Blind mode: pass 2's summary of the observed events inside the verified window.
                         "seen": str(v.get("seen") or v.get("visible") or "")[:300],
                         "visible": str(v.get("visible") or v.get("seen") or "")[:300],
                         "subject": str(v.get("main_subject") or "")[:120],
@@ -656,8 +1159,11 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "matches": bool(v.get("matches")) and sc >= ACCEPT_SCORE and dep == "yes",
                         "score": sc,
                         "subjectVisible": bool(v.get("subject_visible", True)),
-                        "inS": a,
-                        "outS": b,
+                        # The verified playback window (what depicts/score were judged on) and pass 2's own window.
+                        "inS": pa,
+                        "outS": pb,
+                        "judgedInS": ja,
+                        "judgedOutS": jb,
                         "clipS": round(clip_s, 2),
                         "issues": str(v.get("issues") or "")[:200],
                         "style": str(v.get("style") or LIVE_ACTION),
@@ -667,31 +1173,58 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "fitReason": str(v.get("fit_reason") or "")[:200],
                     }
                 )
+                if blind:
+                    entry["blind"] = True
+                    # QA/VQ: the locked observation and the events inside the verified window.
+                    entry["observation"] = obs_text[:DESCRIBED_CHARS]
+                    entry["windowEvents"] = [event_line(e) for e in events_in(obs, pa, pb)][:8]
+                    art = norm_artifacts(v.get("artifacts"), obs.get("notes", "") + " " + " ".join(
+                        f"{e.get('visible', '')} {e.get('lighting', '')}" for e in events_in(obs, pa, pb)))
+                    if entry.pop("cutout", False) and art == "none":
+                        art = "cutout"
+                    entry["artifacts"] = art
+                    if art != "none":
+                        before = entry["score"]
+                        apply_artifact_cap(entry)
+                        log.info("[t2v:verify:artifact] %s", json.dumps({
+                            "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
+                            "artifacts": art, "score": before, "capped": entry["score"],
+                        }))
                 try:
-                    cs = _color_stats(muted, a, b)
+                    cs = _color_stats(muted, pa, pb)
                     if cs:
                         entry["saturation"], entry["luma"] = cs
                 except Exception:  # noqa: BLE001 — colour stats are information only
                     pass
                 if not is_photo:
                     try:
-                        mv = _motion(muted, a, b)
+                        mv = _motion(muted, pa, pb)
                     except Exception:  # noqa: BLE001 — motion is a cheap extra signal
                         mv = None
+                    try:
+                        fz = frozen_overlap(_frozen_spans(muted), pa, pb)
+                    except Exception:  # noqa: BLE001
+                        fz = 0.0
+                    if fz:
+                        entry["frozenS"] = fz
+                    # Frozen for most of the played slice (V4) counts as static too.
+                    frozen = fz >= 0.5 * max(0.1, pb - pa)
                     if mv is not None:
                         entry["motion"] = mv
-                        if mv < STATIC_DIFF:
-                            # A frozen frame placed as video: treated as a still and never an accepted pick.
-                            entry["static"] = True
-                            if entry["score"] > STATIC_MAX_SCORE:
-                                entry["score"] = STATIC_MAX_SCORE
-                            entry["matches"] = False
-                            log.info("[t2v:verify:static] %s", json.dumps({
-                                "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
-                                "motion": mv, "window": [a, b], "rawScore": entry.get("rawScore"), "score": entry["score"],
-                            }))
+                    if (mv is not None and mv < STATIC_DIFF) or frozen:
+                        # A frozen frame placed as video: treated as a still and never an accepted pick.
+                        entry["static"] = True
+                        if frozen and entry.get("artifacts") in (None, "none"):
+                            entry["artifacts"] = "frozen"
+                        if entry["score"] > STATIC_MAX_SCORE:
+                            entry["score"] = STATIC_MAX_SCORE
+                        entry["matches"] = False
+                        log.info("[t2v:verify:static] %s", json.dumps({
+                            "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
+                            "motion": mv, "frozenS": fz, "window": [pa, pb], "rawScore": entry.get("rawScore"), "score": entry["score"],
+                        }))
                 try:
-                    entry["phash"] = _dhash_frames(muted, a, b)
+                    entry["phash"] = _dhash_frames(muted, pa, pb)
                 except Exception:  # noqa: BLE001 — hash is a bonus signal
                     entry["phash"] = []
             except Exception as exc:  # noqa: BLE001 — candidate-level failure, try next
@@ -761,6 +1294,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     summary = {
         "model": model,
         "geminiCalls": usage["calls"],
+        # Blind mode: describe calls (one per unique clip not cached yet) + text score calls; both in geminiCalls.
+        "describeCalls": usage["describe"],
+        "scoreCalls": usage["score"],
+        "describeCacheHits": usage["describeHits"],
         "promptTokens": usage["in"],
         "outputTokens": usage["out"],
         "elapsedMs": int((time.time() - t0) * 1000),

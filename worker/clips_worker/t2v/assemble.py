@@ -6,9 +6,12 @@ Titles/brand hooks are applied in later pipeline stages (titles_ass, brand_conca
 from __future__ import annotations
 
 import json
+import logging
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+
+log = logging.getLogger(__name__)
 
 XFADE_TRANSITIONS = {
     "cut": None,
@@ -35,6 +38,10 @@ class SceneMedia:
     focal_y: float = 0.5
     ken_burns: str = "zoom_in"
     color: str = "0x111111"
+    # Prompt-to-Video: the verified playback window (s) the footage check judged; logged against the rendered one.
+    window_in_s: float | None = None
+    window_out_s: float | None = None
+    label: str = ""
 
 
 @dataclass
@@ -122,6 +129,60 @@ def _normalize_with_cuts(scene: Scene, out: Path, *, w: int, h: int, fps: int, l
     return out
 
 
+def render_start(src_in_s: float, src_len: float, length_s: float) -> tuple[float, bool]:
+    """(start, loop) for playing length_s from src_in_s. The verified window starts at src_in_s and plays
+    unchanged when the clip has room. When the line runs past the clip end the start moves back just enough
+    (extending around the window) instead of looping, which jumped back to second 0 mid-shot. Loops only when
+    the whole clip is shorter than the shot."""
+    start = max(0.0, float(src_in_s or 0))
+    if src_len <= 0:
+        return start, False
+    if src_len >= length_s:
+        return round(min(start, src_len - length_s), 3), False
+    return 0.0, True
+
+
+def window_report(m: SceneMedia, start: float, length_s: float, loop: bool) -> dict:
+    rendered = [round(start, 2), round(start + length_s, 2)]
+    out = {"media": m.label, "rendered": rendered, "looped": loop}
+    if m.window_in_s is not None and m.window_out_s is not None:
+        a, b = round(m.window_in_s, 2), round(m.window_out_s, 2)
+        out["verified"] = [a, b]
+        # Seconds that play outside the verified window (the line ran longer than the verified slice).
+        out["outsideS"] = round(max(0.0, a - rendered[0]) + max(0.0, rendered[1] - b), 2)
+        out["startMatches"] = abs(rendered[0] - a) < 0.05
+    return out
+
+
+def log_render_window(m: SceneMedia, start: float, length_s: float, loop: bool) -> None:
+    log.info("[t2v:assemble:window] %s", json.dumps(window_report(m, start, length_s, loop)))
+
+
+ALPHA_PIX_FMTS = ("rgba", "bgra", "argb", "abgr", "ya8", "ya16", "yuva", "pal8", "gbrap", "rgba64")
+
+
+def flatten_alpha(path: Path) -> Path:
+    """A photo with transparency (cut-out PNG) is flattened onto white first; dropping the alpha showed the
+    hidden edge colours as smeared, stretched edges (snow #1194 L5). Other images are returned as is."""
+    try:
+        fmt = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=pix_fmt", "-of", "csv=p=0", str(path)],
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except Exception:  # noqa: BLE001
+        return path
+    if not fmt.startswith(ALPHA_PIX_FMTS):
+        return path
+    out = path.with_name(f"{path.stem}_flat.png")
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(path), "-filter_complex",
+         "[0:v]format=rgba,split[fg][s];[s]drawbox=t=fill:c=white,format=rgb24[bg];[bg][fg]overlay=format=auto,format=rgb24",
+         "-frames:v", "1", str(out)],
+        capture_output=True, text=True,
+    )
+    return out if proc.returncode == 0 and out.exists() else path
+
+
 def _normalize_one(m: SceneMedia, out: Path, *, w: int, h: int, fps: int, length_s: float) -> Path:
     frames = max(1, round(length_s * fps))
     common_out = [
@@ -130,16 +191,18 @@ def _normalize_one(m: SceneMedia, out: Path, *, w: int, h: int, fps: int, length
     ]
     if m.kind == "video" and m.path:
         src_len = probe_duration(m.path)
-        loop = ["-stream_loop", "-1"] if src_len - m.src_in_s < length_s else []
+        start, loop = render_start(m.src_in_s, src_len, length_s)
+        log_render_window(m, start, length_s, loop)
         vf = f"{_cover_fit(w, h, m.focal_x, m.focal_y)},fps={fps},setsar=1"
-        run(["ffmpeg", "-y", "-v", "error", *loop, "-ss", f"{m.src_in_s:.3f}", "-i", str(m.path),
-             "-t", f"{length_s:.3f}", "-vf", vf, *common_out])
+        run(["ffmpeg", "-y", "-v", "error", *(["-stream_loop", "-1"] if loop else []), "-ss", f"{start:.3f}",
+             "-i", str(m.path), "-t", f"{length_s:.3f}", "-vf", vf, *common_out])
     elif m.kind == "image" and m.path:
         vf = (
             f"{_cover_fit(w * 2, h * 2, m.focal_x, m.focal_y)},"
             f"{_ken_burns(m.ken_burns, w, h, fps, frames)},setsar=1"
         )
-        run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(m.path), "-vf", vf, *common_out])
+        src = flatten_alpha(m.path)
+        run(["ffmpeg", "-y", "-v", "error", "-loop", "1", "-i", str(src), "-vf", vf, *common_out])
     else:
         run(["ffmpeg", "-y", "-v", "error", "-f", "lavfi", "-i",
              f"color=c={m.color}:s={w}x{h}:r={fps}:d={length_s:.3f}", *common_out])

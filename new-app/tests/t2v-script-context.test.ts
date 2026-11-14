@@ -162,7 +162,7 @@ describe('reimagine per scene (no global line cap)', () => {
   it('the orchestrator has no global line cap on reimagine and gates on the per-scene tries', () => {
     const src = readFileSync(join(__dirname, '../lib/server/t2v/pipeline/t2v-orchestrator.ts'), 'utf8')
     expect(src).not.toMatch(/T2V_REIMAGINE_MAX_SCENES|missing\.slice\(0/)
-    expect(src).toMatch(/reimagineTargets\(report\.map\(\(f\) => f\.shot\), tries\)/)
+    expect(src).toMatch(/reimagineTargets\(report\.map\(\(f\) => f\.shot\), gate\)/)
     expect(src).toMatch(/fullPass \?\? \(await enforceNoRepeat/)
     expect(src).not.toMatch(/reimagineRound \?\? 0\) < T2V_REIMAGINE_ROUNDS/)
   })

@@ -71,6 +71,10 @@ def run_job(monkeypatch):
             prompts[pid] = prompt
             return answers[pid], 100, 20
 
+        # These cases test the combined watch-and-judge call (old payloads / T2V_BLIND_DESCRIBE=0);
+        # the blind describe-then-score path has its own tests (test_t2v_blind_describe.py).
+        monkeypatch.setattr(vs, "BLIND_DESCRIBE", False)
+        monkeypatch.setattr(vs, "_frozen_spans", lambda *a: [])
         monkeypatch.setattr(vs, "_download", lambda url, dest: dest.write_bytes(b"x"))
         monkeypatch.setattr(vs, "_mute_and_shrink", lambda src, dest: dest.write_bytes(b"x"))
         monkeypatch.setattr(vs, "_shrink_photo", lambda src, dest: dest.write_bytes(b"x"))

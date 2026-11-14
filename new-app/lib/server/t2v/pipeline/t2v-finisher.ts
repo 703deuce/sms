@@ -91,6 +91,18 @@ function evToPick(e: Ev): T2vVerifiedPick {
  * - verified stock clip trimmed to the reviewer's in-point; audio is never used (-an in assemble)
  * - hard cuts inside a segment, dissolves between segments; no text cards (no opening title, no end card)
  */
+/**
+ * Where the edit plays a verified pick: exactly its verified window [inS, outS] (the worker's played slice, on
+ * which depicts and the score were judged). Only clamped to the clip itself (a clip shorter than the stored window).
+ */
+export function t2vPlaybackWindow(pick: Pick<T2vVerifiedPick, 'inS' | 'outS'>, durationS: number): { srcInMs: number; windowInMs: number; windowOutMs: number } {
+  const dur = Math.max(0, durationS || 0)
+  const len = Math.max(0, (pick.outS ?? 0) - (pick.inS ?? 0))
+  const start = Math.max(0, Math.min(pick.inS ?? 0, Math.max(0, dur - len)))
+  const end = Math.min(dur || start + len, start + len)
+  return { srcInMs: Math.round(start * 1000), windowInMs: Math.round(start * 1000), windowOutMs: Math.round(end * 1000) }
+}
+
 export async function t2vFinisher(input: {
   workspaceId: string
   doc: T2vDraftV1
@@ -233,7 +245,12 @@ export async function t2vFinisher(input: {
     for (const shot of held) {
       const h = holdOf[shot.sceneId]
       if (!h) continue
-      const holdScore = holdScores[shot.sceneId]?.[h.pick.providerId] ?? 0
+      const holdScore = holdScores[shot.sceneId]?.[h.pick.providerId]
+      // The held clip was not re-checked for this line (no answer): keep the hold, never guess it is worse.
+      if (holdScore == null) {
+        logT2v('pipeline-finisher', 'hold kept (hold not re-checked)', { sceneId: shot.sceneId, holdFrom: h.from, holdClip: h.pick.providerId })
+        continue
+      }
       const ok = okFor(shot)
       const r = byScene.get(shot.sceneId)
       // Below-floor options: this line's own reviewed clips, then clips re-checked for this line above.
@@ -322,8 +339,9 @@ export async function t2vFinisher(input: {
         ...base,
         kind: 'video',
         durationMs: Math.round(cand.durationS * 1000),
-        // Start early enough that the line fits inside the clip (spare picks were windowed for another line).
-        srcInMs: Math.round(Math.max(0, Math.min(pick.inS, cand.durationS - shot.needS - 0.3)) * 1000),
+        // The verified window plays unchanged (NEW 2: the old min(inS, duration - need - 0.3) moved late windows,
+        // and windows longer than the shot played from their start).
+        ...t2vPlaybackWindow(pick, cand.durationS),
       }
     } catch (err) {
       logT2v('pipeline-finisher', 'stock ingest failed', { sceneId: shot.sceneId, providerId: cand.providerId, error: err instanceof Error ? err.message : 'error' })

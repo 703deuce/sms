@@ -165,8 +165,19 @@ export type T2vVerifiedPick = {
   /** Worker: the line's FIXED lineShows was given (the checker judged against it and did not write its own). */
   lineShowsFixed?: boolean
   /** Reviewer: visible production artifacts (green screen/studio gear, stretched edges, frozen stretch); capped in the worker. */
-  artifacts?: 'none' | 'production' | 'stretched' | 'frozen'
-  /** Worker motion check: longest frozen stretch inside the window (s), information only. */
+  artifacts?: 'none' | 'production' | 'stretched' | 'frozen' | 'dark' | 'cutout'
+  /** Blind describe-then-score: the observation was written without the line (pass 1) and judged text-only (pass 2). */
+  blind?: boolean
+  /** Pass 1's locked, timestamped observation ("[t0-t1 s] visible; action; motion; lighting" lines). */
+  observation?: string
+  /** The observed events inside the verified window [inS, outS] (what depicts and the score were judged on). */
+  windowEvents?: string[]
+  /** Pass 2's own window (snapped to the observed events) before it became the played slice inS..outS. */
+  judgedInS?: number
+  judgedOutS?: number
+  /** Pass 2 re-judged the played slice (it covered different events than pass 2's window); the first answer. */
+  rejudged?: { window: [number, number]; score?: number; depicts?: string }
+  /** Worker motion check: frozen seconds inside the window, information only. */
   frozenS?: number
   /** Kept from the previous run's placed pick (reset --from-footage): replaced only by a clearly better clip. */
   incumbent?: boolean
@@ -259,6 +270,8 @@ export type T2vPipelineRun = {
   resetAt?: string
   /** Text re-checks (spare / cross-line / hold comparisons; one per clip and line) so far in this run. */
   recheckCalls?: number
+  /** Blind pass-1 describe calls (one per unique clip not cached yet); included in verifierCalls. */
+  describeCalls?: number
   /** Fixed lineShows were written for a frozen plan (once; never regenerated in this run). */
   lineShowsFixedAt?: string
   /** Placed picks of the previous run (kept by the reset tool): incumbents a new clip must clearly beat. */

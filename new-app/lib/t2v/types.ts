@@ -32,6 +32,10 @@ export type T2vSceneMedia = {
   height?: number
   durationMs?: number
   srcInMs?: number
+  /** Prompt-to-Video: the verified playback window (the slice depicts/score were judged on). Assembly plays
+   *  from srcInMs (= windowInMs) and logs the rendered window next to it. */
+  windowInMs?: number
+  windowOutMs?: number
   focalX?: number
   focalY?: number
   kenBurns?: T2vKenBurns

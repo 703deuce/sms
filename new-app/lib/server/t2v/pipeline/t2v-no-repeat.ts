@@ -224,6 +224,12 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     rawScore: e.rawScore,
     static: e.static,
     motion: e.motion,
+    // Blind describe-then-score: the locked observation, the events in the verified window, artifacts (QA/VQ).
+    ...(e.blind ? { blind: true, observation: e.observation, windowEvents: e.windowEvents, judgedInS: e.judgedInS, judgedOutS: e.judgedOutS } : {}),
+    ...(e.rejudged ? { rejudged: e.rejudged } : {}),
+    ...(e.artifacts ? { artifacts: e.artifacts } : {}),
+    ...(e.frozenS ? { frozenS: e.frozenS } : {}),
+    lineShowsFixed: e.lineShowsFixed,
     fitReasonFrom: 'verify',
     verdict,
   }
@@ -245,10 +251,21 @@ export function borrowedPick(e: Ev, lineScore: number, reason: string, j: SpareJ
     lineShows: j?.lineShows || shot.lineShows || shot.intent,
     lineShowsFixed: true,
     matches: lineScore >= ACCEPT_SCORE && depicts === 'yes',
+    // The re-check picked this line's window from the clip's observed events (else the original window stays).
+    ...(j?.inS != null && j?.outS != null ? t2vPlayWindowFor(j.inS, j.outS, e.clipS ?? j.outS, shot.needS) : {}),
     reviewedForOtherLine: e.score,
     fitReason: reason,
     fitReasonFrom: 'line_recheck',
   }
+}
+
+/** Same as the worker's play_need/play_window: the line's need plus a margin, centred in [a, b], inside the clip. */
+export function t2vPlayWindowFor(a: number, b: number, clipS: number, needS: number): { inS: number; outS: number } {
+  const clip = Math.max(0, clipS || 0)
+  const need = Math.max(0.1, (needS || 0) * 1.1 + 0.3)
+  if (clip <= need) return { inS: 0, outS: Math.round(clip * 100) / 100 }
+  const start = Math.min(Math.max(0, (a + b) / 2 - need / 2), clip - need)
+  return { inS: Math.round(start * 100) / 100, outS: Math.round((start + need) * 100) / 100 }
 }
 
 /** Relevance first (the reviewer's in-context score); readability only breaks near-ties. */
@@ -531,8 +548,11 @@ For each NEW line (read it inside its full sentence and next to its neighbouring
 - score: how well the clip works under the NEW line at that point of THIS video (0-10): 7-10 clearly works;
   5-6 usable; 0-4 does not work here. depicts "no" means 4 or lower; "partly" means 6 or lower.
 - reason: one short sentence on why what it shows does or does not fit the NEW line.
+- in_s, out_s: only for a clip given with timestamped "events" (a locked observation written without any
+  line): the continuous run of events in which lineShows is plainly visible, from their t_start/t_end. Judge
+  depicts and score on the events inside that window only. Omit both for a clip without events.
 Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "depicts": "yes"|"partly"|"no",
-"score": number, "reason": string}]}`
+"score": number, "reason": string, "in_s"?: number, "out_s"?: number}]}`
 
 /** One text-only call: score candidate spares against the line they would sit under. */
 export async function scoreSpares(
@@ -544,7 +564,7 @@ export async function scoreSpares(
 }
 
 /** The re-check's full judgement of a clip for the line it would sit under (stored on the pick when placed). */
-export type SpareJudgement = { depicts: T2vDepicts; rawScore: number; score: number; lineShows: string; reason: string }
+export type SpareJudgement = { depicts: T2vDepicts; rawScore: number; score: number; lineShows: string; reason: string; inS?: number; outS?: number }
 export type SpareJudgements = Record<string, Record<string, SpareJudgement>>
 
 /** Same re-check, also returning the re-check's reason per line and clip (fitReason for that line). */
@@ -566,12 +586,18 @@ export async function scoreSparesWithReasons(
       // The line's fixed lineShows (the same text the visual check used); the re-check judges against it.
       lineShows: (s.lineShows || s.intent || '').trim(),
       mustRecognise: s.subject ?? s.intent,
-      clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.seen || e.visible || '').slice(0, 160)}`, framing: e.framing ?? '' })),
+      clips: requests[s.sceneId]!.map((e) => ({
+        providerId: e.providerId,
+        shows: `${e.subject ?? ''}: ${(e.seen || e.visible || '').slice(0, 160)}`,
+        framing: e.framing ?? '',
+        // Blind-observed clips: the locked timestamped observation, so the re-check picks THIS line's window.
+        ...(e.observation ? { events: e.observation.slice(0, 700), clipS: e.clipS } : {}),
+      })),
     }))
   if (!items.length) return { scores: {}, reasons: {}, judgements: {}, asked: 0 }
   // One re-check per clip and line asked: counted into the run's verifierCalls (QA S4: 88 were not counted).
   const asked = items.reduce((n, it) => n + it.clips.length, 0)
-  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown; reason?: unknown; line_shows?: unknown; depicts?: unknown }> }>(
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown; reason?: unknown; line_shows?: unknown; depicts?: unknown; in_s?: unknown; out_s?: unknown }> }>(
     SPARE_SYSTEM,
     [
       ...(context.videoUnderstanding ? [`What this video is about: ${context.videoUnderstanding}`] : []),
@@ -603,7 +629,11 @@ export async function scoreSparesWithReasons(
     }
     ;(reasons[r.sceneId] ??= {})[id] = why
     const lineShows = items.find((it) => it.sceneId === r.sceneId)?.lineShows ?? ''
-    ;(judgements[r.sceneId] ??= {})[id] = { depicts, rawScore: raw, score, lineShows, reason: why }
+    const ev = requests[r.sceneId]!.find((x) => x.providerId === id)
+    const wa = Number(r.in_s)
+    const wb = Number(r.out_s)
+    const win = ev?.observation && Number.isFinite(wa) && Number.isFinite(wb) && wb > wa ? { inS: Math.max(0, wa), outS: Math.min(ev.clipS ?? wb, wb) } : {}
+    ;(judgements[r.sceneId] ??= {})[id] = { depicts, rawScore: raw, score, lineShows, reason: why, ...win }
     logT2v('pipeline-norepeat', 're-check', { sceneId: r.sceneId, providerId: id, lineShows: lineShows.slice(0, 80), depicts, rawScore: raw, score })
   }
   return { scores: res, reasons, judgements, asked }

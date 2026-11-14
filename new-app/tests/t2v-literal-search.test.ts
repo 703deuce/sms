@@ -66,9 +66,9 @@ describe('literal searches from lineShows (script-context pass)', () => {
     expect(rewriter).toMatch(/no broader topic B-roll/)
     expect(rewriter).not.toMatch(/broader B-roll that still fits/)
   })
-  it('the checker gets lineShows as context only (search and checker share the target)', () => {
+  it('the checker gets the line\'s FIXED lineShows (search and checker share the target)', () => {
     const orch = readFileSync(join(__dirname, '../lib/server/t2v/pipeline/t2v-orchestrator.ts'), 'utf8')
-    expect(orch).toMatch(/lineShows: s\.lineShows \?\? ''/)
+    expect(orch).toMatch(/lineShows: fixedLineShows\(all, s\)/)
   })
 })
 

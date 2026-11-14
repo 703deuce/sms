@@ -385,13 +385,19 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       // Verifier calls per run (one Gemini watch per candidate): counted once per job, logged per job and at the end.
       let verifierCalls = run.verifierCalls ?? 0
       if (job?.status === 'DONE' && !(run.verifierJobs ?? []).includes(job.id)) {
+        // Blind mode: geminiCalls = describe calls (one per clip not cached yet) + text score calls; both counted.
         const calls = Number(payload.summary?.geminiCalls ?? 0) || 0
+        const describeCalls = Number(payload.summary?.describeCalls ?? 0) || 0
         const stage = run.aiRound === 2 ? 'ai' : (run.reimagineRound ?? 0) > 0 ? 'reimagine' : run.photoRound === 1 ? 'photo' : run.rescueRound === 1 ? 'rescue' : `search_${run.verifyRound ?? 0}`
         verifierCalls += calls
-        logT2v('pipeline', 'verifier calls', { draftId, jobId: job.id, stage, calls, runTotal: verifierCalls })
+        logT2v('pipeline', 'verifier calls', {
+          draftId, jobId: job.id, stage, calls, describeCalls, scoreCalls: Number(payload.summary?.scoreCalls ?? 0) || 0,
+          describeCacheHits: Number(payload.summary?.describeCacheHits ?? 0) || 0, runTotal: verifierCalls,
+        })
         await writeRun(draftId, (r) => {
           if ((r.verifierJobs ?? []).includes(job.id)) return r
           r.verifierCalls = (r.verifierCalls ?? 0) + calls
+          if (describeCalls) r.describeCalls = (r.describeCalls ?? 0) + describeCalls
           r.verifierJobs = [...(r.verifierJobs ?? []), job.id]
           return r
         })
@@ -776,8 +782,9 @@ export const T2V_RUN_VERIFY_BUDGET = (() => {
 })()
 
 /** Stock-stage checks so far: verifier calls minus re-checks and reimagine checks. */
-export function stockVerifyUsed(run: Pick<T2vPipelineRun, 'verifierCalls' | 'recheckCalls' | 'reimagineVerifyUsed'>): number {
-  return Math.max(0, (run.verifierCalls ?? 0) - (run.recheckCalls ?? 0) - (run.reimagineVerifyUsed ?? 0))
+export function stockVerifyUsed(run: Pick<T2vPipelineRun, 'verifierCalls' | 'recheckCalls' | 'reimagineVerifyUsed' | 'describeCalls'>): number {
+  // The stock budget counts line checks; a blind describe is a one-off per unique clip (cached across runs).
+  return Math.max(0, (run.verifierCalls ?? 0) - (run.recheckCalls ?? 0) - (run.reimagineVerifyUsed ?? 0) - (run.describeCalls ?? 0))
 }
 
 /** Trim candidates to `left`, one per scene at a time (story order within each turn), so no scene starves. */
