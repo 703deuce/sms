@@ -94,6 +94,8 @@ export type T2vPlannedShot = {
 }
 
 export type T2vFootageCandidate = {
+  /** photo = still image fallback (shown with a slow Ken Burns move). Default video. */
+  kind?: 'video' | 'photo'
   provider: 'pixabay' | 'pexels'
   providerId: string
   previewUrl: string
@@ -136,6 +138,8 @@ export type T2vVerifiedPick = {
   reviewedForOtherLine?: number
   /** Worker subject rule: false = right action, wrong subject (capped score). */
   subjectVisible?: boolean
+  /** photo = still image (Ken Burns), else video. */
+  kind?: 'video' | 'photo'
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
   verdict: 'accepted' | 'weak_match' | 'best_available'
 }
@@ -155,7 +159,7 @@ export type T2vShotResult = {
   pickedBy?: T2vPickedBy
 }
 
-export type T2vPickedBy = 'accepted' | 'usable' | 'spare' | 'fallback' | 'last_resort' | 'held' | 'card'
+export type T2vPickedBy = 'accepted' | 'usable' | 'photo' | 'spare' | 'fallback' | 'last_resort' | 'held' | 'card'
 
 export type T2vQaReport = {
   at: string
@@ -182,6 +186,8 @@ export type T2vPipelineRun = {
   verifyJobId?: string
   /** Search/verify rounds done (0 = first pass). Unresolved shots get new adjacent queries each round. */
   verifyRound?: number
+  /** Photo fallback round: 1 = photo verify job in flight, 2 = done. */
+  photoRound?: number
   /** Best result per scene across all verify rounds. */
   verifyHistory?: Record<string, T2vShotResult>
   /** Every query searched per scene (so later rounds never repeat one). */

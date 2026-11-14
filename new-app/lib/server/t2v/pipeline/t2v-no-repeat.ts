@@ -109,6 +109,8 @@ export function sameShoot(a: ClipRef, b: ClipRef): boolean {
 type Ev = T2vShotResult['evaluated'][number]
 type Tier = { verdict: T2vVerifiedPick['verdict']; tier: T2vPickedBy; ok: (e: Ev) => boolean }
 
+const isPhoto = (e: { kind?: string }) => e.kind === 'photo'
+
 function scored(e: Ev, min: number): boolean {
   return !e.error && typeof e.score === 'number' && e.score >= min
 }
@@ -126,6 +128,7 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     inS: e.inS ?? 0,
     outS: e.outS ?? 0,
     clipS: e.clipS ?? 0,
+    ...(e.kind === 'photo' ? { kind: 'photo' as const } : {}),
     issues: e.issues,
     style: e.style,
     lighting: e.lighting,
@@ -173,7 +176,7 @@ export function enforceNoRepeatDeterministic(
   const seenSpare = new Set<string>()
   for (const shot of shots) {
     for (const e of results[shot.sceneId]?.evaluated ?? []) {
-      if (seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, { realistic: opts.realistic, nightOk: true, monoOk: true })) continue
+      if (isPhoto(e) || seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, { realistic: opts.realistic, nightOk: true, monoOk: true })) continue
       seenSpare.add(e.providerId)
       spares.push(e)
     }
@@ -200,13 +203,23 @@ export function enforceNoRepeatDeterministic(
     // Same-shoot elsewhere in the video only when the scene has no other option.
     for (const strict of [true, false]) {
       if (chosen) break
-      const alts = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => rank(b) - rank(a))
+      const all = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => rank(b) - rank(a))
+      const alts = all.filter((e) => !isPhoto(e))
+      const photos = all.filter(isPhoto)
       for (const t of tierList(ctx)) {
         const hit = alts.find(t.ok)
         if (hit) {
           chosen = toPick(hit, t.verdict)
           tier = t.tier
           break
+        }
+      }
+      if (!chosen) {
+        // Photo with motion: a still checked against THIS line (same subject rule, 5+), before spares.
+        const hit = photos.find((e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
+        if (hit) {
+          chosen = toPick(hit, scored(hit, ACCEPT_SCORE) && hit.matches ? 'accepted' : 'weak_match')
+          tier = 'photo'
         }
       }
       if (!chosen) {
@@ -221,7 +234,7 @@ export function enforceNoRepeatDeterministic(
         }
       }
       if (!chosen) {
-        const hit = alts.find(fallbackTier(ctx).ok)
+        const hit = alts.find(fallbackTier(ctx).ok) ?? photos.find(fallbackTier(ctx).ok)
         if (hit) {
           chosen = toPick(hit, 'best_available')
           tier = 'fallback'

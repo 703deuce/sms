@@ -252,3 +252,93 @@ export async function t2vFootageAgent(input: {
   })
   return out
 }
+
+/** Pixabay files real photos as image_type=photo; tags still catch AI/illustration uploads. */
+const NON_PHOTO_TAG = /\b(illustration|vector|clip ?art|cartoon|drawing|3d|render|rendering|cgi|ai generated|ai-generated|generated|digital art|painting|icon|infographic|watercolor|sketch)\b/i
+
+async function pixabayPhotoFetch(q: string, aspect: T2vAspect): Promise<PixHit[]> {
+  const key = process.env.PIXABAY_API_KEY?.trim()
+  if (!key) return []
+  await pixThrottle()
+  const u = new URL('https://pixabay.com/api/')
+  u.searchParams.set('key', key)
+  u.searchParams.set('q', q.slice(0, 100))
+  u.searchParams.set('image_type', 'photo')
+  u.searchParams.set('safesearch', 'true')
+  u.searchParams.set('per_page', '30')
+  u.searchParams.set('orientation', aspect === '9:16' ? 'vertical' : 'horizontal')
+  u.searchParams.set(aspect === '9:16' ? 'min_height' : 'min_width', String(MIN_SRC_WIDTH))
+  const res = await fetch(u, { signal: AbortSignal.timeout(15_000) })
+  if (res.status === 429) throw new Error('pixabay_rate_limited')
+  if (!res.ok) throw new Error(`pixabay_photo_http_${res.status}`)
+  const body = (await res.json()) as { hits?: PixHit[] }
+  return body.hits ?? []
+}
+
+export function photoFromPixabay(hit: PixHit, query: string): T2vFootageCandidate | null {
+  const src = String(hit.largeImageURL ?? hit.webformatURL ?? '')
+  const preview = String(hit.webformatURL ?? src)
+  if (!src) return null
+  return {
+    provider: 'pixabay',
+    kind: 'photo',
+    // Own ID space: Pixabay photo and video IDs overlap.
+    providerId: `img_${String(hit.id)}`,
+    previewUrl: preview,
+    // A still can fill any shot length (shown with a slow zoom/pan).
+    durationS: 60,
+    width: Number(hit.imageWidth ?? 0),
+    height: Number(hit.imageHeight ?? 0),
+    query,
+    tags: String(hit.tags ?? '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 12),
+    srcUrl: src,
+    thumbUrl: String(hit.previewURL ?? preview),
+    pageUrl: String(hit.pageURL ?? ''),
+    author: String(hit.user ?? ''),
+  }
+}
+
+export function looksNonPhoto(hit: { tags?: unknown; type?: unknown }): boolean {
+  const t = String(hit.type ?? 'photo').toLowerCase()
+  return (t !== 'photo' && t !== '') || NON_PHOTO_TAG.test(String(hit.tags ?? ''))
+}
+
+/**
+ * Photo fallback (after video rounds): Pixabay photos for the same queries, live-action photos only for
+ * realistic styles, ranked by tag overlap. <= 4 per shot go to the same visual check (subject rule).
+ */
+export async function t2vPhotoAgent(input: {
+  shots: T2vPlannedShot[]
+  aspect: T2vAspect
+  realistic?: boolean
+  exclude?: Set<string>
+}): Promise<Record<string, T2vFootageCandidate[]>> {
+  const out: Record<string, T2vFootageCandidate[]> = {}
+  for (const shot of input.shots) {
+    const pool: Array<{ c: T2vFootageCandidate; overlap: number; words: number; qi: number; rank: number }> = []
+    const queries = shot.queries.slice(0, 3)
+    for (let qi = 0; qi < queries.length; qi++) {
+      const words = queryWords(queries[qi]!)
+      if (!words.length) continue
+      try {
+        const hits = await pixabayPhotoFetch(words.join(' '), input.aspect)
+        hits.forEach((h, rank) => {
+          if (input.realistic !== false && looksNonPhoto(h)) return
+          const c = photoFromPixabay(h, queries[qi]!)
+          if (!c || input.exclude?.has(c.providerId)) return
+          pool.push({ c, overlap: tagOverlap(words, c.tags), words: words.length, qi, rank })
+        })
+      } catch (err) {
+        logT2v('pipeline-footage', 'photo search failed', { sceneId: shot.sceneId, error: err instanceof Error ? err.message : 'error' })
+      }
+    }
+    pool.sort((a, b) => b.overlap / b.words - a.overlap / a.words || a.qi - b.qi || a.rank - b.rank)
+    const seen = new Set<string>()
+    out[shot.sceneId] = pool
+      .filter((r) => r.overlap >= 1 && !seen.has(r.c.providerId) && seen.add(r.c.providerId))
+      .slice(0, 4)
+      .map((r) => r.c)
+  }
+  logT2v('pipeline-footage', 'photo candidates ready', { shots: input.shots.length, candidates: Object.values(out).reduce((n, l) => n + l.length, 0) })
+  return out
+}

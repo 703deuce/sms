@@ -176,8 +176,9 @@ def _dhash_frames(video: Path, in_s: float, out_s: float) -> list[str]:
     span = max(0.1, out_s - in_s)
     for frac in (0.25, 0.5, 0.75):
         t = in_s + span * frac
+        seek = [] if video.suffix.lower() in (".jpg", ".jpeg", ".png") else ["-ss", f"{t:.2f}"]
         proc = subprocess.run(
-            ["ffmpeg", "-v", "error", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1",
+            ["ffmpeg", "-v", "error", *seek, "-i", str(video), "-frames:v", "1",
              "-vf", "scale=9:8:flags=area,format=gray", "-f", "rawvideo", "-"],
             capture_output=True,
         )
@@ -206,8 +207,9 @@ def _color_stats(video: Path, in_s: float, out_s: float) -> tuple[float, float] 
     lums: list[float] = []
     span = max(0.1, out_s - in_s)
     for frac in (0.25, 0.5, 0.75):
+        seek = [] if video.suffix.lower() in (".jpg", ".jpeg", ".png") else ["-ss", f"{in_s + span * frac:.2f}"]
         proc = subprocess.run(
-            ["ffmpeg", "-v", "error", "-ss", f"{in_s + span * frac:.2f}", "-i", str(video), "-frames:v", "1",
+            ["ffmpeg", "-v", "error", *seek, "-i", str(video), "-frames:v", "1",
              "-vf", "scale=32:18,format=rgb24", "-f", "rawvideo", "-"],
             capture_output=True,
         )
@@ -276,6 +278,23 @@ def fallback_rank(entry: dict, ctx: Ctx) -> float:
     return s
 
 
+PHOTO_NOTE = """
+THIS IS A STILL PHOTO, not a video clip. It will be shown with a slow zoom/pan under the line.
+Judge it exactly like a clip (same subject rule). style: live_action means a real camera photograph;
+illustration, vector art, 3D render, AI-generated imagery or clip art are NOT live_action.
+For in_s/out_s return 0 and {need_s:.1f}."""
+
+
+def _shrink_photo(src: Path, dest: Path) -> None:
+    """Re-encode the photo to a small JPEG (cheap Gemini input, strips metadata)."""
+    proc = subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", str(src), "-vf", "scale='min(640,iw)':-2", "-q:v", "4", str(dest)],
+        capture_output=True, text=True,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg_photo_failed: {proc.stderr[-300:]}")
+
+
 def _probe_s(path: Path) -> float:
     try:
         out = subprocess.run(
@@ -293,7 +312,7 @@ def _model() -> str:
     return discover_video_picker_model().strip()
 
 
-def _gemini_watch(model: str, video: Path, prompt: str) -> tuple[dict, int, int]:
+def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4") -> tuple[dict, int, int]:
     from clips_worker.gemini_vision import GEMINI_BASE, _key
 
     gen: dict[str, Any] = {
@@ -312,10 +331,10 @@ def _gemini_watch(model: str, video: Path, prompt: str) -> tuple[dict, int, int]
                 "parts": [
                     {
                         "inlineData": {
-                            "mimeType": "video/mp4",
+                            "mimeType": mime,
                             "data": base64.b64encode(video.read_bytes()).decode("ascii"),
                         },
-                        "videoMetadata": {"fps": 1},
+                        **({"videoMetadata": {"fps": 1}} if mime.startswith("video/") else {}),
                     },
                     {"text": prompt},
                 ],
@@ -409,12 +428,22 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 "author": str(c.get("author") or "")[:80],
             }
             try:
-                raw = work / f"s{idx}_{c.get('providerId')}.mp4"
-                muted = work / f"s{idx}_{c.get('providerId')}_m.mp4"
-                _download(str(c.get("previewUrl") or ""), raw)
-                _mute_and_shrink(raw, muted)
-                clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
-                prompt = PROMPT.format(
+                is_photo = c.get("kind") == "photo"
+                if is_photo:
+                    # Photo fallback: a still shown with a slow Ken Burns move; any window length works.
+                    raw = work / f"s{idx}_{c.get('providerId')}.jpg"
+                    muted = work / f"s{idx}_{c.get('providerId')}_m.jpg"
+                    _download(str(c.get("previewUrl") or ""), raw)
+                    _shrink_photo(raw, muted)
+                    clip_s = max(need_s, 12.0)
+                    entry["kind"] = "photo"
+                else:
+                    raw = work / f"s{idx}_{c.get('providerId')}.mp4"
+                    muted = work / f"s{idx}_{c.get('providerId')}_m.mp4"
+                    _download(str(c.get("previewUrl") or ""), raw)
+                    _mute_and_shrink(raw, muted)
+                    clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
+                prompt = (PROMPT + (PHOTO_NOTE if is_photo else "")).format(
                     narration=str(shot.get("narration") or "")[:600].replace('"', "'"),
                     intent=str(shot.get("intent") or "")[:300].replace('"', "'"),
                     subject=str(shot.get("subject") or shot.get("intent") or "")[:120].replace('"', "'"),
@@ -423,12 +452,12 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     need_s=need_s,
                     style_rule=style_rule,
                 )
-                v, tin, tout = _gemini_watch(model, muted, prompt)
+                v, tin, tout = _gemini_watch(model, muted, prompt, "image/jpeg" if is_photo else "video/mp4")
                 with lock:
                     usage["in"] += tin
                     usage["out"] += tout
                     usage["calls"] += 1
-                a, b = _clamp_window(v, clip_s, need_s)
+                a, b = (0.0, clip_s) if is_photo else _clamp_window(v, clip_s, need_s)
                 entry.update(
                     {
                         "visible": str(v.get("visible") or "")[:300],

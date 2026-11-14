@@ -22,7 +22,7 @@ import {
 } from '@/lib/t2v/pipeline/t2v-types'
 import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-story-agent'
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
-import { queryRewrites, t2vFootageAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
+import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { enforceNoRepeat, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
@@ -299,10 +299,15 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return r
         })
       }
-      const history = mergeVerifyResults(run.verifyHistory ?? {}, (payload.results ?? []).filter(Boolean) as T2vShotResult[])
+      const roundResults = (payload.results ?? []).filter(Boolean) as T2vShotResult[]
+      // Photo-round results only add reviewed stills; the no-repeat pass decides where they go.
+      const history =
+        run.photoRound === 1
+          ? mergeVerifyResults(run.verifyHistory ?? {}, roundResults.map((r) => ({ ...r, chosen: null })))
+          : mergeVerifyResults(run.verifyHistory ?? {}, roundResults)
       const round = run.verifyRound ?? 0
       const unresolved = run.shots!.filter((sh) => history[sh.sceneId]?.chosen?.verdict !== 'accepted')
-      if (unresolved.length && round < MAX_EXTRA_VERIFY_ROUNDS) {
+      if (!run.photoRound && unresolved.length && round < MAX_EXTRA_VERIFY_ROUNDS) {
         const next = await nextSearchRound(row, run, unresolved, history, round + 1).catch((err) => {
           logT2vError('pipeline', 'search round failed', err, { draftId, round: round + 1 })
           return null
@@ -315,6 +320,31 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.queriesTried = next.tried
             r.candidates = next.candidates
             r.log.push({ stage: r.status, at: new Date().toISOString(), note: `search_round_${round + 1}:${next.shots}_shots` })
+            return r
+          })
+          return
+        }
+      }
+      // Photo fallback: after the video rounds, lines without a usable video clip get Pixabay photos
+      // (same visual check, subject rule) before re-checked spares and related fallbacks.
+      if (!run.photoRound) {
+        const weak = run.shots!.filter((sh) => {
+          const c = history[sh.sceneId]?.chosen
+          return !c || (c.verdict !== 'accepted' && c.verdict !== 'weak_match')
+        })
+        const photo = weak.length
+          ? await photoSearchRound(row, run, weak, history).catch((err) => {
+              logT2vError('pipeline', 'photo round failed', err, { draftId })
+              return null
+            })
+          : null
+        if (photo) {
+          await writeRun(draftId, (r) => {
+            r.verifyHistory = history
+            r.verifyJobId = photo.jobId
+            r.photoRound = 1
+            r.candidates = photo.candidates
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: `photo_round:${photo.shots}_shots` })
             return r
           })
           return
@@ -491,6 +521,7 @@ async function enqueueVerify(
             durationS: c.durationS,
             query: c.query,
             author: c.author,
+            kind: c.kind ?? 'video',
           })),
         })),
       } as Prisma.InputJsonValue,
@@ -546,6 +577,24 @@ async function nextSearchRound(
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
   const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt), used })
   return { jobId, tried, candidates, shots: withCands.length }
+}
+
+/** Photo fallback round: Pixabay photos for weak lines → one verify job (stills, same checks). */
+async function photoSearchRound(
+  row: Row,
+  run: T2vPipelineRun,
+  weak: NonNullable<T2vPipelineRun['shots']>,
+  history: Record<string, T2vShotResult>,
+): Promise<{ jobId: string; candidates: Record<string, T2vFootageCandidate[]>; shots: number } | null> {
+  const realistic = t2vRealisticStyle(run.style)
+  const exclude = new Set(Object.values(history).flatMap((h) => h.evaluated.map((e) => e.providerId)))
+  const found = await t2vPhotoAgent({ shots: weak, aspect: row.document.settings.aspect, realistic, exclude })
+  const withCands = weak.filter((s) => found[s.sceneId]?.length)
+  if (!withCands.length) return null
+  const candidates = { ...(run.candidates ?? {}) }
+  for (const s of withCands) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt) })
+  return { jobId, candidates, shots: withCands.length }
 }
 
 /** Shot lengths from the assembler's shot starts; the closing end card (last entry) is excluded. */

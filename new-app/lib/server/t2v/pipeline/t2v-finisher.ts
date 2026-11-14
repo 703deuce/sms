@@ -4,7 +4,7 @@ import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 import { logT2v } from '@/lib/server/t2v/log'
-import type { T2vDraftV1, T2vScene, T2vSceneMedia } from '@/lib/t2v/types'
+import type { T2vDraftV1, T2vKenBurns, T2vScene, T2vSceneMedia } from '@/lib/t2v/types'
 import type {
   T2vFootageCandidate,
   T2vVerifiedPick,
@@ -32,8 +32,12 @@ function stockCandidateFrom(c: T2vFootageCandidate): StockCandidate {
     author: c.author,
     tags: c.tags,
     score: 0,
+    ...(c.kind === 'photo' ? { stockKind: 'photo' as const } : {}),
   }
 }
+
+/** Ken Burns moves for photo shots, cycled so consecutive stills never move the same way. */
+export const PHOTO_MOVES: T2vKenBurns[] = ['zoom_in', 'pan_right', 'zoom_out', 'pan_left']
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T, i: number) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array(items.length)
@@ -114,6 +118,12 @@ export async function t2vFinisher(input: {
       verdict: 'best_available',
     })
   }
+  // Direction per photo shot, in story order (varied, never two of the same move in a row).
+  const photoMove = new Map<string, T2vKenBurns>()
+  for (const shot of input.shots) {
+    const p = byScene.get(shot.sceneId)?.chosen ?? fallback.get(shot.sceneId)
+    if (p?.kind === 'photo' || p?.providerId.startsWith('img_')) photoMove.set(shot.sceneId, PHOTO_MOVES[photoMove.size % PHOTO_MOVES.length]!)
+  }
   const media = await mapLimit(input.shots, 3, async (shot) => {
     const r = byScene.get(shot.sceneId)
     const pick = r?.chosen ?? fallback.get(shot.sceneId)
@@ -127,6 +137,24 @@ export async function t2vFinisher(input: {
     if (!cand) return null
     try {
       const asset = await ensureT2vStockAsset(input.workspaceId, stockCandidateFrom(cand))
+      if (cand.kind === 'photo') {
+        const photo: T2vSceneMedia = {
+          provider: cand.provider,
+          kind: 'image',
+          assetId: asset.id,
+          providerId: cand.providerId,
+          thumbUrl: cand.thumbUrl,
+          previewUrl: cand.previewUrl,
+          width: cand.width,
+          height: cand.height,
+          kenBurns: photoMove.get(shot.sceneId) ?? 'zoom_in',
+          focalX: 0.5,
+          focalY: 0.5,
+          attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
+          query: cand.query,
+        }
+        return photo
+      }
       const m: T2vSceneMedia = {
         provider: cand.provider,
         kind: 'video',

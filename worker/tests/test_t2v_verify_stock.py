@@ -148,3 +148,20 @@ def test_scene_with_cuts_renders_exact_length():
     assert abs(probe_duration(out) - 4.0) < 0.05
     px = subprocess.run(["ffmpeg", "-v", "error", "-ss", "2.0", "-i", str(out), "-frames:v", "1", "-vf", "scale=1:1,format=rgb24", "-f", "rawvideo", "-"], capture_output=True).stdout
     assert px[1] > 150 and px[0] < 100  # green section between the cuts
+
+
+def test_photo_prompt_and_still_frame_stats():
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from clips_worker.t2v.verify_stock import PHOTO_NOTE, PROMPT, _color_stats, _dhash_frames, _shrink_photo
+
+    out = (PROMPT + PHOTO_NOTE).format(narration="n", intent="i", subject="coffee cherries", topic="t", clip_s=12.0, need_s=4.0, style_rule="")
+    assert "STILL PHOTO" in out and "coffee cherries" in out
+    d = Path(tempfile.mkdtemp())
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=1", "-frames:v", "1", str(d / "p.jpg")], check=True)
+    _shrink_photo(d / "p.jpg", d / "p_m.jpg")
+    sat, luma = _color_stats(d / "p_m.jpg", 0, 0)
+    assert sat > 0.3 and luma > 0.2
+    assert len(_dhash_frames(d / "p_m.jpg", 0, 0)) == 3
