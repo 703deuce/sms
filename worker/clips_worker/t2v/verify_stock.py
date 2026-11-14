@@ -67,15 +67,20 @@ Clip length: {clip_s:.1f} s. The shot on screen needs about {need_s:.1f} s.
 Return JSON:
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
-- matches: true if a professional editor would honestly put this clip under that line as B-roll:
+- matches: judge "does this work in this spot?", not only an exact literal match. True if a
+  professional editor would honestly put this clip under that line as B-roll:
   the clip clearly shows the narration's subject (or a directly relevant, visually honest depiction
   of it). It does NOT need every detail of the intended shot: time of day, weather, exact camera
   move, setting or extra people are nice-to-have, not requirements. When the subject looks like an
   ordinary thing (an electric car looks like any modern car), a clean, modern example counts unless
   something on screen contradicts the line. False when the main subject is wrong or unrelated, the
   footage is too dark/blurry to read, or text, logos or watermarks dominate the frame.
-- score: 0-10 how well it illustrates the line. 9-10 = exactly the subject and action; 7-8 = clearly
-  the right subject, usable as-is; 5-6 = related but weak; 0-4 = wrong or unusable.
+  Adjacent or broader B-roll that carries the line's meaning works too (a dealership for a line about
+  sales, a charging cable for a line about home charging, modern cars in a city for a line about EVs
+  becoming common).
+- score: 0-10 how well it works in this spot. 9-10 = exactly the subject and action; 7-8 = clearly
+  works here, usable as-is (literal or a fitting adjacent visual); 5-6 = related but weak; 3-4 = loosely
+  on-topic; 0-2 = wrong or unusable.
 - in_s, out_s: the best continuous window inside the clip to use, where the relevant subject or
   action is clearly visible and the framing is good. Prefer a window of at least {need_s:.1f} s
   when the clip allows; use the whole clip if it is all usable. 0 <= in_s < out_s <= {clip_s:.1f}.
