@@ -83,17 +83,31 @@ function token(): string {
 }
 
 /** One prediction (no retry). Returns the prediction id. */
-export async function startAiClip(prompt: string, numFrames: number): Promise<string> {
-  const res = await fetch(`https://api.replicate.com/v1/models/${AI_BROLL_MODEL}/predictions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      input: { prompt, num_frames: numFrames, frames_per_second: FPS, resolution: '720p', aspect_ratio: '16:9', go_fast: true },
-    }),
-    signal: AbortSignal.timeout(30_000),
-  })
-  if (!res.ok) throw new Error(`replicate_http_${res.status}`)
-  const body = (await res.json()) as { id?: string }
+/** Wait before the next generation start (Replicate rate-limits low-credit accounts to ~6 starts/min, burst 1). */
+export const AI_START_SPACING_MS = 10_000
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/**
+ * Start one generation. A 429 means Replicate refused the request (no prediction created, nothing billed),
+ * so the SAME request is re-sent after Retry-After (max 2 more times). A created prediction is never retried.
+ */
+export async function startAiClip(prompt: string, numFrames: number, wait: (ms: number) => Promise<void> = sleep): Promise<string> {
+  let res: Response | null = null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(`https://api.replicate.com/v1/models/${AI_BROLL_MODEL}/predictions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: { prompt, num_frames: numFrames, frames_per_second: FPS, resolution: '720p', aspect_ratio: '16:9', go_fast: true },
+      }),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (res.status !== 429) break
+    const ra = Number(res.headers.get('retry-after'))
+    await wait(Math.min(15_000, Math.max(2_000, Number.isFinite(ra) && ra > 0 ? ra * 1000 : AI_START_SPACING_MS)))
+  }
+  if (!res!.ok) throw new Error(`replicate_http_${res!.status}`)
+  const body = (await res!.json()) as { id?: string }
   if (!body.id) throw new Error('replicate_no_id')
   return body.id
 }

@@ -410,7 +410,22 @@ function hasGoodAlternative(r: T2vShotResult | undefined, exceptId: string, bann
   return (r?.evaluated ?? []).some((e) => e.providerId !== exceptId && !banned?.has(e.providerId) && scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
 }
 
-/** Which position of a look-alike pair gives up its clip (see enforceNoRepeat). */
+/** Best score this scene could fall back to without `exceptId` (quality-ok, not banned); -1 when none. */
+function nextBestScore(r: T2vShotResult | undefined, exceptId: string, banned: Set<string> | undefined, ctx: T2vQualityCtx): number {
+  let best = -1
+  for (const e of r?.evaluated ?? []) {
+    if (e.providerId === exceptId || banned?.has(e.providerId) || e.error || typeof e.score !== 'number') continue
+    if (isAi(e) ? !t2vAiAcceptable(e, ctx, -1) : !t2vQualityOk(e, ctx)) continue
+    best = Math.max(best, e.score)
+  }
+  return best
+}
+
+/**
+ * Which position of a look-alike pair gives up its clip: the side that loses least, i.e. whose scene has
+ * the better next option (a scene whose only real option is this clip, e.g. a good AI clip over 1-3 stock,
+ * keeps it); then the weaker pick; then the later shot.
+ */
 export function dupLoser(
   x: { s: T2vPlannedShot; c?: T2vVerifiedPick | null },
   y: { s: T2vPlannedShot; c?: T2vVerifiedPick | null },
@@ -420,18 +435,19 @@ export function dupLoser(
   opts: { realistic: boolean; monoOk?: boolean },
   results: Record<string, T2vShotResult>,
 ): number {
-  const alt = (v: { s: T2vPlannedShot; c?: T2vVerifiedPick | null }) => {
+  const next = (v: { s: T2vPlannedShot; c?: T2vVerifiedPick | null }) => {
     const ctx = { realistic: opts.realistic, nightOk: t2vNightLine(v.s.narration, v.s.intent), monoOk: Boolean(opts.monoOk) }
-    return hasGoodAlternative(results[v.s.sceneId], v.c!.providerId, banned[v.s.sceneId], ctx)
+    return nextBestScore(results[v.s.sceneId], v.c!.providerId, banned[v.s.sceneId], ctx)
   }
-  const ax = alt(x)
-  const ay = alt(y)
-  if (ax !== ay) return ax ? px : py
+  const nx = next(x)
+  const ny = next(y)
+  if (nx !== ny) return nx > ny ? px : py
   const sx = x.c?.score ?? 0
   const sy = y.c?.score ?? 0
   if (sx !== sy) return sx < sy ? px : py
   return Math.max(px, py)
 }
+
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,

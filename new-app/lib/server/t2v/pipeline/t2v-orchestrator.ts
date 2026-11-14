@@ -29,6 +29,7 @@ import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
   AI_BROLL_EST_USD_PER_CLIP,
+  AI_START_SPACING_MS,
   AI_BROLL_MAX_CLIPS,
   AI_BROLL_MAX_NEED_S,
   aiBrollEnabled,
@@ -687,8 +688,9 @@ async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShot
   if (!needy.length) return { jobs: [] }
   const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
   const jobs: T2vAiJob[] = []
-  for (const sh of needy) {
+  for (const [k, sh] of needy.entries()) {
     const numFrames = aiFramesFor(sh.needS)
+    if (k > 0) await new Promise((r) => setTimeout(r, AI_START_SPACING_MS))
     try {
       const predictionId = await startAiClip(prompts[sh.sceneId]!, numFrames)
       jobs.push({ sceneId: sh.sceneId, predictionId, numFrames, fps: 24, prompt: prompts[sh.sceneId]!, createdAt: new Date().toISOString() })

@@ -49,3 +49,33 @@ describe('look-alike pairs drop the side that can afford it', () => {
     expect(t).toEqual(['b', 'c'])
   })
 })
+
+describe('sleep3 fix: tie on pick score keeps the scene that would lose most', () => {
+  it('AI 10 vs stock 10: the stock scene (next option 6) swaps, the AI scene (next option 2) keeps its clip', async () => {
+    let seqCalls = 0
+    llm.mockImplementation(async (system: string) => (system.includes('repetition') ? (seqCalls++ ? { pairs: [], sameKind: [] } : { pairs: [[0, 1]], sameKind: [] }) : { scores: [] }))
+    const history = {
+      a: { sceneId: 'a', chosen: null, evaluated: [ev('1', 0, { score: 10 }), ev('2', 2, { score: 4 })] },
+      b: { sceneId: 'b', chosen: null, evaluated: [ev('3', 1, { score: 2, lighting: 5 }), ev('ai_1', 3, { kind: 'ai', score: 10, provider: 'replicate' })] },
+    }
+    const r = await enforceNoRepeat([shot('a'), shot('b')], history as never, { realistic: true })
+    expect(r.results.b!.chosen!.providerId).toBe('ai_1')
+    expect(r.banned).toEqual({ a: ['1'] })
+  })
+  it('a 429 start is re-sent (nothing was created); a created prediction is returned once', async () => {
+    process.env.REPLICATE_API_TOKEN = 'test'
+    const { startAiClip } = await import('@/lib/server/t2v/pipeline/t2v-ai-broll')
+    const calls: number[] = []
+    const f = vi.fn(async () => {
+      calls.push(1)
+      return calls.length === 1 ? new Response('{}', { status: 429, headers: { 'retry-after': '1' } }) : new Response(JSON.stringify({ id: 'p1' }), { status: 201 })
+    })
+    vi.stubGlobal('fetch', f)
+    const waits: number[] = []
+    expect(await startAiClip('x', 81, async (ms) => void waits.push(ms))).toBe('p1')
+    expect(calls).toHaveLength(2)
+    expect(waits).toEqual([2000])
+    vi.unstubAllGlobals()
+    delete process.env.REPLICATE_API_TOKEN
+  })
+})
