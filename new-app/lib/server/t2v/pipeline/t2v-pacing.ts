@@ -124,101 +124,189 @@ function toK(pieces: T2vPiece[], k: number): T2vPiece[] {
   return out
 }
 
-export function planPacing(rows: T2vPacingRow[], opts: { style: T2vPipelineStyle; seed: string }): T2vPacedShot[] {
-  const rnd = seededRandom(opts.seed)
-  // Per-video tempo: the style's base +-15%, so cut patterns differ between videos.
-  const tempo = STYLE_TEMPO[opts.style] * (0.85 + 0.3 * rnd())
+const PAUSE_BEFORE = new Set(['and', 'then', 'while', 'but', 'as', 'where', 'which', 'before', 'after', 'until', 'so', 'when', 'from', 'into', 'with'])
+
+/**
+ * Natural pauses when the planner offered no pieces: after , ; : - and before linking words.
+ * Each piece >= MIN_PIECE_WORDS; up to 3 pieces, cut points nearest the even split. Pieces reuse the
+ * row's visual brief (each still gets its own distinct verified clip downstream).
+ */
+export function autoPieces(row: T2vPacingRow, maxK = MAX_PIECES): T2vPiece[] | undefined {
+  const w = words(row.narration)
+  const cands: number[] = []
+  for (let i = MIN_PIECE_WORDS; i <= w.length - MIN_PIECE_WORDS; i++) {
+    if (/[,;:\u2014-]$/.test(w[i - 1]!) || PAUSE_BEFORE.has(w[i]!.toLowerCase())) cands.push(i)
+  }
+  if (!cands.length) return undefined
+  const k = Math.min(maxK, Math.floor(w.length / MIN_PIECE_WORDS), cands.length + 1)
+  if (k < 2) return undefined
+  const cuts: number[] = []
+  for (let j = 1; j < k; j++) {
+    const ideal = (w.length * j) / k
+    const pick = cands
+      .filter((c) => c > (cuts[cuts.length - 1] ?? 0) + MIN_PIECE_WORDS - 1 && w.length - c >= MIN_PIECE_WORDS * (k - j))
+      .sort((a, b) => Math.abs(a - ideal) - Math.abs(b - ideal))[0]
+    if (pick === undefined) break
+    cuts.push(pick)
+  }
+  if (!cuts.length) return undefined
+  const bounds = [0, ...cuts, w.length]
+  return bounds.slice(0, -1).map((b, i) => ({
+    text: w.slice(b, bounds[i + 1]).join(' '),
+    intent: row.intent,
+    subject: row.subject,
+    queries: row.queries,
+  }))
+}
+
+type PlanKnobs = { holdP: number; splitP: number; detailSplitP: number; quickMergeP: number }
+
+function shotOf(rows: T2vPacingRow[], voiceGroup: string): T2vPacedShot {
+  const first = rows[0]!
+  const narration = rows.map((r) => r.narration).join(' ')
+  return {
+    segmentId: first.segmentId,
+    voiceGroup,
+    wordOffset: 0,
+    narration,
+    sentence: narration,
+    beat: first.beat,
+    intent: first.intent,
+    queries: rows.length > 1 ? [...new Set(rows.flatMap((r) => r.queries))].slice(0, 4) : first.queries,
+    subject: first.subject,
+    needS: Math.round((estimateS(narration) + 0.4) * 10) / 10,
+  }
+}
+
+function planOnce(rows: T2vPacingRow[], tempo: number, rnd: () => number, k: PlanKnobs): T2vPacedShot[] {
   const range = (b: T2vBeat): [number, number] => {
     const [lo, hi] = BEAT_RANGE_S[b] ?? BEAT_RANGE_S.detail
     return [lo * tempo, hi * tempo]
   }
-
-  // 1) Short neighbouring sentences in quick beats may share one shot (same segment, fits the range).
-  type Group = { rows: T2vPacingRow[] }
-  const groups: Group[] = []
-  for (const row of rows) {
-    const g = groups[groups.length - 1]
-    if (g && g.rows.length < 2 && g.rows[0]!.segmentId === row.segmentId && !row.onScreenText) {
-      const first = g.rows[0]!
-      const both = estimateS(first.narration) + estimateS(row.narration)
-      const [, hi] = range(first.beat)
-      const short = estimateS(first.narration) < range(first.beat)[0] && estimateS(row.narration) < 3.2
-      // Quick beats: two short lines can ride one shot. Long beats: two lines can make one long hold.
-      const quickMerge = short && QUICK.has(first.beat) && both <= Math.min(hi * 1.2, 7)
-      const holdMerge = LONG.has(first.beat) && LONG.has(row.beat) && both >= range(first.beat)[0] && both <= Math.min(hi, 10)
-      if ((quickMerge && rnd() < 0.7) || (holdMerge && rnd() < 0.5)) {
-        g.rows.push(row)
+  const out: T2vPacedShot[] = []
+  let g = 0
+  for (let i = 0; i < rows.length; ) {
+    const row = rows[i]!
+    const [lo, hi] = range(row.beat)
+    const d = estimateS(row.narration)
+    // Long beats: merge following (non-quick) lines of the same segment into one real 6-10 s hold.
+    if (LONG.has(row.beat) && rnd() < k.holdP) {
+      const group = [row]
+      let total = d
+      const want = lo + (hi - lo) * (0.35 + 0.65 * rnd())
+      while (total < want && i + group.length < rows.length) {
+        const nx = rows[i + group.length]!
+        const nd = estimateS(nx.narration)
+        if (nx.segmentId !== row.segmentId || QUICK.has(nx.beat) && nx.beat !== 'detail' || total + nd > Math.min(hi, 9.6)) break
+        group.push(nx)
+        total += nd
+      }
+      if (group.length > 1 || d >= lo * 0.9) {
+        out.push(shotOf(group, `vg_${g++}`))
+        i += group.length
         continue
       }
     }
-    groups.push({ rows: [row] })
-  }
-
-  // 2) Long sentences split into 2-3 shots at the planner's natural pauses when the beat wants quicker cuts.
-  const out: T2vPacedShot[] = []
-  groups.forEach((g, gi) => {
-    const voiceGroup = `vg_${gi}`
-    const first = g.rows[0]!
-    const narration = g.rows.map((r) => r.narration).join(' ')
-    if (g.rows.length > 1) {
-      out.push({
-        segmentId: first.segmentId,
-        voiceGroup,
-        wordOffset: 0,
-        narration,
-        sentence: narration,
-        beat: first.beat,
-        intent: first.intent,
-        queries: [...new Set(g.rows.flatMap((r) => r.queries))].slice(0, 4),
-        subject: first.subject,
-        needS: Math.round((estimateS(narration) + 0.4) * 10) / 10,
-        ...(first.onScreenText ? { onScreenText: first.onScreenText } : {}),
-      })
-      return
+    // Quick beats: two very short lines may share one shot now and then.
+    const nx = rows[i + 1]
+    if (nx && QUICK.has(row.beat) && nx.segmentId === row.segmentId && d < 2.6 && estimateS(nx.narration) < 2.6 && rnd() < k.quickMergeP) {
+      out.push(shotOf([row, nx], `vg_${g++}`))
+      i += 2
+      continue
     }
-    const d = estimateS(narration)
-    const [lo, hi] = range(first.beat)
-    const target = lo + (hi - lo) * rnd()
-    const pieces = first.pieces
-    let k = 1
-    if (pieces && pieces.length >= 2 && d > target * 1.3) {
-      k = Math.min(pieces.length, MAX_PIECES, Math.max(2, Math.round(d / target)))
+    // Steps, lists, action: cut every 2-4 s at natural pauses. Details/transitions split sometimes.
+    const quick = row.beat === 'step' || row.beat === 'list' || row.beat === 'action'
+    const pieces = row.pieces ?? autoPieces(row)
+    const splitP = quick ? k.splitP : row.beat === 'detail' || row.beat === 'transition' ? k.detailSplitP : 0
+    let kk = 1
+    if (pieces && pieces.length >= 2 && d >= 3.2 && rnd() < splitP) {
+      const target = quick ? lo + (hi - lo) * rnd() : (lo + hi) / 2
+      const maxK = Math.min(pieces.length, MAX_PIECES, Math.max(2, Math.floor(d / 1.7)))
+      // Usually the beat's target; sometimes one fewer cut, so equal-length triplets don't line up.
+      kk = Math.min(maxK, Math.max(2, Math.round(d / Math.max(1.8, target))))
+      if (kk > 2 && rnd() < 0.4) kk--
     }
-    if (k === 1) {
-      out.push({
-        segmentId: first.segmentId,
-        voiceGroup,
-        wordOffset: 0,
-        narration,
-        sentence: narration,
-        beat: first.beat,
-        intent: first.intent,
-        queries: first.queries,
-        subject: first.subject,
-        needS: Math.round((d + 0.4) * 10) / 10,
-        ...(first.onScreenText ? { onScreenText: first.onScreenText } : {}),
-      })
-      return
+    const vg = `vg_${g++}`
+    if (kk === 1) {
+      out.push(shotOf([row], vg))
+      i++
+      continue
     }
     let offset = 0
-    toK(pieces!, k).forEach((p, pi, arr) => {
+    toK(pieces!, kk).forEach((p, pi, arr) => {
       out.push({
-        segmentId: first.segmentId,
-        voiceGroup,
+        segmentId: row.segmentId,
+        voiceGroup: vg,
         wordOffset: offset,
         narration: p.text,
-        sentence: narration,
-        beat: first.beat,
-        intent: p.intent || first.intent,
-        queries: p.queries.length ? p.queries : first.queries,
-        subject: p.subject || first.subject,
+        sentence: row.narration,
+        beat: row.beat,
+        intent: p.intent || row.intent,
+        queries: p.queries.length ? p.queries : row.queries,
+        subject: p.subject || row.subject,
         needS: Math.round((estimateS(p.text) + (pi === arr.length - 1 ? 0.4 : 0.1)) * 10) / 10,
-        ...(pi === 0 && first.onScreenText ? { onScreenText: first.onScreenText } : {}),
       })
       offset += words(p.text).length
     })
-  })
+    i++
+  }
   return out
+}
+
+/** Undo one split inside a run of 3+ near-equal shots (merge a piece back into its sibling). */
+export function repairEqualRuns(shots: T2vPacedShot[]): T2vPacedShot[] {
+  const out = shots.map((x) => ({ ...x }))
+  const near = (a: number, b: number) => Math.abs(a - b) / Math.max(a, b) <= 0.15
+  for (let guard = 0; guard < 12; guard++) {
+    let start = -1
+    for (let i = 2; i < out.length; i++) {
+      if (near(out[i - 2]!.needS, out[i - 1]!.needS) && near(out[i - 1]!.needS, out[i]!.needS)) {
+        start = i - 2
+        break
+      }
+    }
+    if (start < 0) break
+    let merged = false
+    for (const j of [start + 1, start, start + 2, start + 3]) {
+      const a = out[j]
+      const b = out[j + 1]
+      if (!a || !b || a.voiceGroup !== b.voiceGroup) continue
+      out.splice(j, 2, { ...a, narration: `${a.narration} ${b.narration}`, needS: Math.round((estimateS(`${a.narration} ${b.narration}`) + (b.needS - estimateS(b.narration))) * 10) / 10 })
+      merged = true
+      break
+    }
+    if (!merged) break
+  }
+  return out
+}
+
+/** Pacing quality of a plan: passes the render QA bars with a margin. */
+function planScore(shots: T2vPacedShot[]): { ok: boolean; score: number } {
+  const st = pacingStats(shots.map((s) => s.needS))
+  const ok = st.cv >= PACING_MIN_CV + 0.04 && st.longestEqualRun < PACING_MAX_EQUAL_RUN
+  return { ok, score: Math.min(st.cv, 0.5) - 0.06 * Math.max(0, st.longestEqualRun - (PACING_MAX_EQUAL_RUN - 1)) }
+}
+
+/**
+ * Editorial plan: holds for establishing/aerial/emotional beats (merging neighbouring lines), 2-4 s cuts
+ * on steps/lists/action, details in between. The plan is re-drawn (seeded, increasingly decisive) until
+ * shot lengths vary enough (CV >= 0.34, no 3 near-equal shots in a row) before any footage search.
+ */
+export function planPacing(rows: T2vPacingRow[], opts: { style: T2vPipelineStyle; seed: string }): T2vPacedShot[] {
+  const base = seededRandom(opts.seed)
+  // Per-video tempo: the style's base +-15%, so cut patterns differ between videos.
+  const tempo = STYLE_TEMPO[opts.style] * (0.85 + 0.3 * base())
+  let best: { shots: T2vPacedShot[]; score: number } | null = null
+  for (let a = 0; a < 60; a++) {
+    const rnd = seededRandom(`${opts.seed}:${a}`)
+    const t = Math.min(1, a / 30)
+    const knobs: PlanKnobs = { holdP: 0.75 + 0.25 * t, splitP: 0.75 + 0.25 * t, detailSplitP: 0.3 + 0.3 * t, quickMergeP: 0.25 * (1 - t) }
+    const shots = repairEqualRuns(planOnce(rows, tempo, rnd, knobs))
+    const sc = planScore(shots)
+    if (sc.ok) return shots
+    if (!best || sc.score > best.score) best = { shots, score: sc.score }
+  }
+  return best!.shots
 }
 
 /** Coefficient of variation and the longest run of near-equal consecutive shot lengths. */

@@ -106,6 +106,35 @@ export function sameShoot(a: ClipRef, b: ClipRef): boolean {
   return Number.isFinite(x) && Number.isFinite(y) && Math.abs(x - y) <= SAME_SHOOT_ID_GAP
 }
 
+/** At most this many still photos in a row (photos with motion are a fallback, not the look of the edit). */
+export const MAX_CONSECUTIVE_STILLS = 2
+
+/**
+ * Near-identical neighbours: the same subject in the same framing doing the same thing (falling roasted
+ * beans twice in a row; two close-ups of cherries on a branch). Different framing or action is fine.
+ */
+export function nearIdenticalShot(
+  a: { subject?: string; framing?: string; action?: string; visible?: string },
+  b: { subject?: string; framing?: string; action?: string; visible?: string },
+): boolean {
+  if (!similarSubject(a.subject, b.subject)) return false
+  const fa = String(a.framing ?? '').toLowerCase()
+  const fb = String(b.framing ?? '').toLowerCase()
+  if (fa && fb && fa !== fb) return false
+  const aa = a.action || a.visible
+  const ab = b.action || b.visible
+  return !aa || !ab || similarSubject(aa, ab) || subjectOverlap(aa, ab) >= 0.34
+}
+
+function subjectOverlap(a: string, b: string): number {
+  const x = subjectWords(a)
+  const y = subjectWords(b)
+  if (!x.size || !y.size) return 0
+  let inter = 0
+  for (const w of x) if (y.has(w)) inter++
+  return inter / (x.size + y.size - inter)
+}
+
 type Ev = T2vShotResult['evaluated'][number]
 type Tier = { verdict: T2vVerifiedPick['verdict']; tier: T2vPickedBy; ok: (e: Ev) => boolean }
 
@@ -155,7 +184,7 @@ export function enforceNoRepeatDeterministic(
   results: Record<string, T2vShotResult>,
   opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
   banned: Record<string, Set<string>> = {},
-): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy>; spareRequests: Record<string, Ev[]> } {
+): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy>; spareRequests: Record<string, Ev[]>; banned: Record<string, Set<string>> } {
   const ctxFor = (shot: T2vPlannedShot): T2vQualityCtx => ({
     realistic: opts.realistic,
     nightOk: t2vNightLine(shot.narration, shot.intent),
@@ -187,12 +216,16 @@ export function enforceNoRepeatDeterministic(
     const r = results[shot.sceneId] ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
     const ctx = ctxFor(shot)
     const last2 = picked.slice(-2)
-    const free = (e: ClipRef & { phash?: string[] }, strictShoot: boolean) =>
+    const prevPick = picked[picked.length - 1]
+    const stillsRun = last2.length === MAX_CONSECUTIVE_STILLS && last2.every((p) => isPhoto(p))
+    const free = (e: ClipRef & { phash?: string[]; kind?: string; framing?: string; action?: string; visible?: string }, strictShoot: boolean) =>
       !banned[shot.sceneId]?.has(e.providerId) &&
       !picked.some((p) => p.providerId === e.providerId) &&
       !picked.some((p) => nearDuplicateHash(e.phash, p.phash)) &&
       !last2.some((p) => sameShoot(p, e)) &&
-      (!strictShoot || !picked.some((p) => sameShoot(p, e)))
+      !(stillsRun && isPhoto(e)) &&
+      (!strictShoot || !picked.some((p) => sameShoot(p, e))) &&
+      (!strictShoot || !prevPick || !nearIdenticalShot(prevPick, e))
     let chosen: T2vVerifiedPick | null = null
     let tier: T2vPickedBy | '' = ''
     // A worker fallback (3-4) is not taken directly: a re-checked spare (5+ for THIS line) beats it.
@@ -259,7 +292,7 @@ export function enforceNoRepeatDeterministic(
     if (tier) tiers[shot.sceneId] = tier
     out[shot.sceneId] = { ...r, chosen }
   }
-  return { out, replaced, tiers, spareRequests }
+  return { out, replaced, tiers, spareRequests, banned }
 }
 
 export type SpareScores = Record<string, Record<string, number>>
@@ -299,13 +332,15 @@ const LOOKALIKE_SYSTEM = `You check the shot sequence of a stock-footage video f
 in edit order, described by a footage reviewer.
 1. "pairs": shots ANYWHERE in the list that a viewer would feel are the same shot shown twice: same main
    subject AND same framing/shot size AND similar setting (two close-ups of a charging plug; two aerials of
-   the same kind of town; the same car at the same location from a slightly different angle).
+   the same kind of town; the same car at the same location from a slightly different angle; roasted beans
+   falling onto a pile twice; two close-ups of coffee cherries on a branch).
 2. "sameKind": CONSECUTIVE shots (positions p and p+1) that are the same kind of shot, which makes the edit
    feel monotonous: e.g. aerial town after aerial highway, traffic street after traffic highway, two static
-   product close-ups in a row. Different shot kinds (aerial vs close-up of hands vs interior) are fine.
+   product close-ups in a row, falling beans then pouring beans, a cherry-branch close-up after another
+   cherry-branch close-up. Different shot kinds (aerial vs close-up of hands vs interior) are fine.
 Return ONLY JSON: {"pairs": [[p, q], ...], "sameKind": [[p, p+1], ...]} using the "p" positions given.`
 
-async function sequenceCheck(items: Array<{ p: number; framing: string; subject: string; visible: string }>): Promise<{ dup: number[]; kind: number[] }> {
+async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: string; subject: string; visible: string }>): Promise<{ dup: number[]; kind: number[] }> {
   if (items.length < 2) return { dup: [], kind: [] }
   const out = await t2vLlmJson<{ pairs?: unknown[]; sameKind?: unknown[] }>(LOOKALIKE_SYSTEM, `Shots: ${JSON.stringify(items)}`, { maxTokens: 2000 })
   const later = (list: unknown[] | undefined, adjacentOnly: boolean) => {
@@ -331,7 +366,15 @@ export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
   opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
-): Promise<{ results: Record<string, T2vShotResult>; replaced: number; lookalikeSwaps: number; varietySwaps: number; tiers: Record<string, T2vPickedBy> }> {
+): Promise<{
+  results: Record<string, T2vShotResult>
+  replaced: number
+  lookalikeSwaps: number
+  varietySwaps: number
+  tiers: Record<string, T2vPickedBy>
+  /** Clips the sequence check removed per scene: the finisher's fallback must never put them back. */
+  banned: Record<string, string[]>
+}> {
   const banned: Record<string, Set<string>> = {}
   let { out, replaced, tiers, spareRequests } = enforceNoRepeatDeterministic(shots, results, opts, banned)
   // Spares are re-checked against the line they would fill before any is placed.
@@ -347,7 +390,7 @@ export async function enforceNoRepeat(
   let varietySwaps = 0
   for (let pass = 0; pass < 3; pass++) {
     const seq = shots.map((s) => ({ s, c: out[s.sceneId]?.chosen })).filter((x) => x.c)
-    const items = seq.map((x, p) => ({ p, framing: x.c!.framing ?? '', subject: x.c!.subject ?? '', visible: (x.c!.visible ?? '').slice(0, 160) }))
+    const items = seq.map((x, p) => ({ p, still: isPhoto(x.c!), framing: x.c!.framing ?? '', subject: x.c!.subject ?? '', visible: (x.c!.visible ?? '').slice(0, 160) }))
     let check: { dup: number[]; kind: number[] }
     try {
       check = await sequenceCheck(items)
@@ -377,5 +420,12 @@ export async function enforceNoRepeat(
     ;({ out, replaced, tiers } = enforceNoRepeatDeterministic(shots, results, opts, banned))
   }
   logT2v('pipeline-norepeat', 'done', { shots: shots.length, replaced, lookalikeSwaps, varietySwaps, tiers })
-  return { results: out, replaced, lookalikeSwaps, varietySwaps, tiers }
+  return {
+    results: out,
+    replaced,
+    lookalikeSwaps,
+    varietySwaps,
+    tiers,
+    banned: Object.fromEntries(Object.entries(banned).map(([k, v]) => [k, [...v]])),
+  }
 }

@@ -27,24 +27,26 @@ const PLANNER_SYSTEM = `You are the Scene Planner and editor for an automatic st
 The script drives the visuals. For every narration sentence return its editorial beat, the stock shot that
 illustrates it, and - for longer sentences - natural places a real editor could cut to a second or third shot.
 Return ONLY JSON: {"shots": [{"index": number, "beat": string, "intent": string, "subject": string,
-"queries": string[], "onScreenText": string, "pieces": [{"text": string, "intent": string, "subject": string,
-"queries": string[]}]}]}
+"queries": string[], "pieces": [{"text": string, "intent": string, "subject": string, "queries": string[]}]}]}
 Rules for each sentence:
 - beat: one of establishing (sets a place), aerial, emotional (a moment to feel), detail (a close look),
   step (one step of a process), list (one of several items), action (something happening fast), transition.
 - intent: one plain sentence describing what generic stock B-roll should show (subject + action, optional
   setting). Achievable with common stock footage; no time of day, weather, brand or specific people unless
   the narration depends on it.
-- subject: the SPECIFIC subject the clip must show, 1-4 words, as named in the line (e.g. "coffee cherries",
-  "coffee roaster drum", "coffee beans on drying beds") - never a generic category ("fruit", "machine").
+- subject: the SPECIFIC visible subject the clip must show, 2-6 words: the thing AND its state or setting
+  (e.g. "red coffee cherries on a branch", "hands picking coffee cherries", "coffee beans on drying beds",
+  "burlap sacks of green coffee beans", "coffee roasting drum", "espresso pouring into a cup"). Never a
+  bare generic noun ("coffee beans", "coffee", "fruit", "machine", "people"). Neighbouring shots name
+  DIFFERENT subjects.
 - queries: exactly 3 stock-video search phrases of 1-3 common words (concrete nouns a stock site would tag).
   Query 1 most specific, query 3 a broader on-topic fallback. No abstract words.
-- pieces: only for sentences of 10+ words: split the sentence into 2-3 contiguous pieces at natural pauses
+- pieces: for EVERY sentence of 8+ words that has a natural pause: split it into 2-3 contiguous pieces at pauses
   (commas, "and", "while", "then", clause boundaries). The pieces' text joined with spaces must reproduce the
   sentence EXACTLY, word for word. Each piece >= 4 words and shows a DIFFERENT visual, with its own intent,
   subject and 3 queries. Omit or use [] when the sentence reads as one continuous image.
 - Plan visual variety: neighbouring shots should differ in subject, framing and setting.
-- onScreenText: "" for almost every shot; at most 3 shots may carry a 2-5 word headline.`
+- Never put words on screen: no headlines, labels or captions of your own.`
 
 export type PlannerSentenceRow = { index: number; segmentId: string; narration: string }
 
@@ -54,6 +56,19 @@ function cleanQueries(raw: unknown, fallback: string): string[] {
     .filter((q) => q.length > 2)
   if (queries.length < 3) queries.push(fallback.slice(0, 80))
   return [...new Set(queries)].slice(0, 3)
+}
+
+/** Bare generic subjects ("coffee beans") say nothing about what the clip must show. */
+const GENERIC_SUBJECT = /^(?:(?:the|a|an|some)\s+)?(?:[\p{L}-]+\s+)?(?:beans?|coffee|fruit|machines?|people|person|workers?|things?|products?|food|drinks?|cups?|plants?|trees?|farms?|city|nature)$/iu
+
+/** Subject the verifier will insist on: the planner's when specific, else the most specific query or intent. */
+export function specificSubject(subject: string, queries: string[], intent: string): string {
+  const s = subject.replace(/\s+/g, ' ').trim().slice(0, 80)
+  const wc = s ? s.split(' ').length : 0
+  if (s && (wc >= 3 || (wc === 2 && !GENERIC_SUBJECT.test(s)))) return s
+  const q = [...queries].filter((x) => x.split(' ').length >= 2 && !GENERIC_SUBJECT.test(x)).sort((a, b) => b.split(' ').length - a.split(' ').length)[0]
+  if (q) return q.slice(0, 80)
+  return (intent.split(/[,.;]/)[0] ?? intent).trim().slice(0, 80) || s
 }
 
 function asBeat(v: unknown): T2vBeat {
@@ -68,14 +83,14 @@ export function toPacingRows(rows: PlannerSentenceRow[], shots: Array<Record<str
   return rows.map((row) => {
     const s = byIndex.get(row.index) ?? {}
     const intent = String(s.intent ?? row.narration).trim().slice(0, 300)
-    const subject = String(s.subject ?? '').trim().slice(0, 60) || intent.slice(0, 60)
-    const ost = String(s.onScreenText ?? '').trim()
+    const queries = cleanQueries(s.queries, topic)
+    const subject = specificSubject(String(s.subject ?? ''), queries, intent)
     const pieces = validPieces(
       row.narration,
       (Array.isArray(s.pieces) ? (s.pieces as Array<Record<string, unknown>>) : []).map((p) => ({
         text: String(p.text ?? '').trim(),
         intent: String(p.intent ?? '').trim().slice(0, 300),
-        subject: String(p.subject ?? '').trim().slice(0, 60),
+        subject: specificSubject(String(p.subject ?? ''), cleanQueries(p.queries, topic), String(p.intent ?? '')),
         queries: cleanQueries(p.queries, topic),
       })),
     )
@@ -85,8 +100,7 @@ export function toPacingRows(rows: PlannerSentenceRow[], shots: Array<Record<str
       beat: asBeat(s.beat),
       intent,
       subject,
-      queries: cleanQueries(s.queries, topic),
-      ...(ost && ost.split(/\s+/).length <= 6 ? { onScreenText: ost } : {}),
+      queries,
       ...(pieces ? { pieces } : {}),
     }
   })
@@ -129,6 +143,5 @@ export async function t2vScenePlanner(input: {
     voiceGroup: p.voiceGroup,
     wordOffset: p.wordOffset,
     sentence: p.sentence,
-    ...(p.onScreenText ? { onScreenText: p.onScreenText } : {}),
   }))
 }

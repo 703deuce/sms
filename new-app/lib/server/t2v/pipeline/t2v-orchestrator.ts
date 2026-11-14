@@ -24,7 +24,7 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 
@@ -302,7 +302,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       const roundResults = (payload.results ?? []).filter(Boolean) as T2vShotResult[]
       // Photo-round results only add reviewed stills; the no-repeat pass decides where they go.
       const history =
-        run.photoRound === 1
+        run.photoRound === 1 || run.rescueRound === 1
           ? mergeVerifyResults(run.verifyHistory ?? {}, roundResults.map((r) => ({ ...r, chosen: null })))
           : mergeVerifyResults(run.verifyHistory ?? {}, roundResults)
       const round = run.verifyRound ?? 0
@@ -350,6 +350,30 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return
         }
       }
+      // Related rescue: lines with nothing usable for them get one more search on the closest related
+      // subjects (video + photo, same visual check) so they are filled with real footage, never a card.
+      if (!run.rescueRound) {
+        const dry = enforceNoRepeatDeterministic(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+        const missing = run.shots!.filter((sh) => !dry.tiers[sh.sceneId] || dry.tiers[sh.sceneId] === 'last_resort')
+        const rescue = missing.length
+          ? await relatedSearchRound(row, run, missing, history).catch((err) => {
+              logT2vError('pipeline', 'related round failed', err, { draftId })
+              return null
+            })
+          : null
+        if (rescue) {
+          await writeRun(draftId, (r) => {
+            r.verifyHistory = history
+            r.verifyJobId = rescue.jobId
+            r.rescueRound = 1
+            r.queriesTried = rescue.tried
+            r.candidates = rescue.candidates
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: `related_round:${rescue.shots}_shots` })
+            return r
+          })
+          return
+        }
+      }
       const noRepeat = await enforceNoRepeat(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
       const results = run.shots!.map((sh): T2vShotResult => {
         const r = noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] }
@@ -364,6 +388,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         shots: run.shots!,
         results,
         candidates: run.candidates ?? {},
+        banned: noRepeat.banned,
       })
       const qa = t2vQaPlan({ run, scenes: fin.scenes, results: fin.results })
       const stockStats = computeStockStats(fin.results, round)
@@ -576,6 +601,38 @@ async function nextSearchRound(
     .filter((c) => c.verdict === 'accepted')
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
   const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt), used })
+  return { jobId, tried, candidates, shots: withCands.length }
+}
+
+/** Related rescue round: closest related subjects (rewriter related mode) → videos + photos → one verify job. */
+async function relatedSearchRound(
+  row: Row,
+  run: T2vPipelineRun,
+  missing: NonNullable<T2vPipelineRun['shots']>,
+  history: Record<string, T2vShotResult>,
+): Promise<{ jobId: string; tried: Record<string, string[]>; candidates: Record<string, T2vFootageCandidate[]>; shots: number } | null> {
+  const tried = { ...(run.queriesTried ?? {}) }
+  const alt = await t2vQueryRewriter({ story: run.story!, round: 4, shots: missing, tried, history, mode: 'related' })
+  const shots = missing.filter((s) => alt[s.sceneId]?.length).map((s) => ({ ...s, queries: alt[s.sceneId]! }))
+  if (!shots.length) return null
+  for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
+  const realistic = t2vRealisticStyle(run.style)
+  const reviewed = Object.values(history).flatMap((h) => h.evaluated.map((e) => e.providerId))
+  const exclude: Record<string, string[]> = {}
+  for (const s of shots) exclude[s.sceneId] = reviewed
+  const aspect = row.document.settings.aspect
+  const videos = await t2vFootageAgent({ shots, aspect, rewrite: false, exclude, realistic })
+  const photos = await t2vPhotoAgent({ shots, aspect, realistic, exclude: new Set(reviewed) })
+  const found: Record<string, T2vFootageCandidate[]> = {}
+  for (const s of shots) {
+    const list = [...(videos[s.sceneId] ?? []).slice(0, 4), ...(photos[s.sceneId] ?? []).slice(0, 3)]
+    if (list.length) found[s.sceneId] = list
+  }
+  const withCands = shots.filter((s) => found[s.sceneId]?.length)
+  if (!withCands.length) return null
+  const candidates = { ...(run.candidates ?? {}) }
+  for (const s of withCands) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt) })
   return { jobId, tried, candidates, shots: withCands.length }
 }
 

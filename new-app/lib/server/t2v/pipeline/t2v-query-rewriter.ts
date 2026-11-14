@@ -26,18 +26,28 @@ Rules:
 - Use what the reviewer actually saw in rejected clips to steer away from those results.
 Return ONLY JSON: {"shots": [{"sceneId": string, "queries": [string, string, string]}]}`
 
+const RELATED = `
+RELATED MODE (final rescue): nothing reviewed so far shows this line. Propose the CLOSEST RELATED real-world
+subjects that are filmed and photographed constantly and that a viewer would accept under the line, e.g. for
+"dried green beans travel to a roaster": "coffee roaster", "roasting coffee beans", "roastery"; for "beans are
+washed": "washing coffee beans", "coffee processing", "water hands beans". 1-3 words, still on the line's
+subject - never generic filler (no "coffee cup" under a roasting line).`
+
 export async function t2vQueryRewriter(input: {
   story: T2vStoryPlan
   round: number
   shots: T2vPlannedShot[]
   tried: Record<string, string[]>
   history: Record<string, T2vShotResult>
+  /** related = last-chance closest related subjects (video + photo search) before any fallback. */
+  mode?: 'broaden' | 'related'
 }): Promise<Record<string, string[]>> {
   if (!input.shots.length) return {}
   const rows = input.shots.map((s) => ({
     sceneId: s.sceneId,
     narration: s.narration,
     intent: s.intent,
+    subject: s.subject,
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejectedClipsShowed: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.visible)
@@ -45,7 +55,11 @@ export async function t2vQueryRewriter(input: {
       .map((e) => String(e.visible).slice(0, 90)),
   }))
   const user = [`Video topic: ${input.story.topic || input.story.title}`, `Round: ${input.round}`, `Shots: ${JSON.stringify(rows)}`].join('\n')
-  const out = await t2vLlmJson<{ shots?: Array<{ sceneId?: string; queries?: unknown[] }> }>(SYSTEM, user, { maxTokens: 4000 })
+  const out = await t2vLlmJson<{ shots?: Array<{ sceneId?: string; queries?: unknown[] }> }>(
+    input.mode === 'related' ? SYSTEM + RELATED : SYSTEM,
+    user,
+    { maxTokens: 4000 },
+  )
   const res: Record<string, string[]> = {}
   for (const s of Array.isArray(out.shots) ? out.shots : []) {
     if (!s.sceneId) continue

@@ -188,6 +188,8 @@ export type T2vPipelineRun = {
   verifyRound?: number
   /** Photo fallback round: 1 = photo verify job in flight, 2 = done. */
   photoRound?: number
+  /** Related-subject rescue round (video + photo) for lines still without footage: 1 = in flight. */
+  rescueRound?: number
   /** Best result per scene across all verify rounds. */
   verifyHistory?: Record<string, T2vShotResult>
   /** Every query searched per scene (so later rounds never repeat one). */

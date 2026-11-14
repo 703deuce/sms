@@ -21,7 +21,7 @@ describe('t2v finisher: split sentences become in-scene cuts', () => {
       { sceneId: 'a', chosen: pick('1'), evaluated: [] },
       { sceneId: 'b', chosen: pick('2'), evaluated: [] },
       { sceneId: 'c', chosen: pick('3'), evaluated: [] },
-      { sceneId: 'd', chosen: null, evaluated: [] }, // no clip: piece b/c's take continues
+      { sceneId: 'd', chosen: null, evaluated: [{ ...pick('4'), score: 3 }] }, // weak but its own: never a held repeat
     ]
     const { scenes, results: out } = await t2vFinisher({
       workspaceId: 'w',
@@ -31,12 +31,15 @@ describe('t2v finisher: split sentences become in-scene cuts', () => {
       segments: [],
       shots: shots as never,
       results: results as never,
-      candidates: { a: [cand('1')], b: [cand('2')], c: [cand('3')], d: [] },
+      candidates: { a: [cand('1')], b: [cand('2')], c: [cand('3')], d: [cand('4')] },
     })
     expect(scenes).toHaveLength(3) // 2 voice scenes + end card
     expect(scenes[1]!.narration).toBe('Workers move along the rows, picking ripe cherries by hand, while baskets slowly fill.')
-    expect(scenes[1]!.cuts).toEqual([{ atWord: 5, media: expect.objectContaining({ providerId: '3' }) }])
+    expect(scenes[1]!.cuts).toEqual([
+      { atWord: 5, media: expect.objectContaining({ providerId: '3' }) },
+      { atWord: 10, media: expect.objectContaining({ providerId: '4' }) },
+    ])
     expect(scenes[1]!.media.providerId).toBe('2')
-    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'accepted', 'accepted', 'held'])
+    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'accepted', 'accepted', 'fallback'])
   })
 })

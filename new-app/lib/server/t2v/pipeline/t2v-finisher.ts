@@ -10,6 +10,7 @@ import type {
   T2vVerifiedPick,
   T2vNarrationSegment,
   T2vPipelineRun,
+  T2vPickedBy,
   T2vPlannedShot,
   T2vShotResult,
   T2vStoryPlan,
@@ -53,18 +54,46 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T, i: number) =
   return out
 }
 
-/** Longest a single shot may stay on screen when later lines are held on it. */
-const MAX_HELD_SHOT_MS = 8000
-
 function titleCard(): T2vSceneMedia {
   return { provider: 'color', kind: 'color', color: TITLE_CARD_COLOR }
+}
+
+type Ev = T2vShotResult['evaluated'][number]
+
+function evToPick(e: Ev): T2vVerifiedPick {
+  return {
+    ...e,
+    provider: e.provider ?? 'pixabay',
+    providerId: e.providerId,
+    visible: e.visible ?? '',
+    matches: Boolean(e.matches),
+    score: e.score ?? 0,
+    inS: e.inS ?? 0,
+    outS: e.outS ?? 0,
+    clipS: e.clipS ?? 0,
+    verdict: 'best_available',
+  } as T2vVerifiedPick
+}
+
+const wordSet = (t: string) => new Set(t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2))
+
+/** How related a reviewed clip (for any line) is to this shot: subject/query word overlap with what it shows. */
+export function relatedness(shot: Pick<T2vPlannedShot, 'subject' | 'queries' | 'narration'>, e: Pick<Ev, 'subject' | 'visible'>): number {
+  const want = wordSet(`${shot.subject ?? ''} ${shot.queries.join(' ')} ${shot.narration}`)
+  const has = wordSet(`${e.subject ?? ''} ${e.visible ?? ''}`)
+  let n = 0
+  for (const w of has) if (want.has(w)) n++
+  return n
 }
 
 /**
  * Finisher: turns verified shots into a real T2V draft edit (the same document the storyboard
  * editor, T2V_ASSEMBLE worker and composition export already understand).
+ * - every shot (every split piece too) gets its own distinct reviewed clip or photo; never a held repeat
+ *   of the previous piece and never a text card: no-repeat pick → related fallback (3+ for this line,
+ *   not removed by the sequence check) → closest related clip reviewed for another line → any unused
+ *   reviewed footage for this line
  * - verified stock clip trimmed to the reviewer's in-point; audio is never used (-an in assemble)
- * - honest title card when no footage passed review
  * - hard cuts inside a segment, dissolves between segments, opening title, closing end card
  */
 export async function t2vFinisher(input: {
@@ -76,205 +105,159 @@ export async function t2vFinisher(input: {
   shots: T2vPlannedShot[]
   results: T2vShotResult[]
   candidates: Record<string, T2vFootageCandidate[]>
+  /** Clips the sequence check removed per scene (never re-placed there). */
+  banned?: Record<string, string[]>
 }): Promise<{ scenes: T2vScene[]; results: T2vShotResult[] }> {
   const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
-  // Last-resort pick per scene when nothing was chosen: the highest-scoring reviewed clip (any score),
-  // never one already used by another scene. Used only if holding the previous clip isn't possible.
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
   const usedHashes = input.results.map((r) => r.chosen?.phash).filter((h): h is string[] => Boolean(h?.length))
-  const fallback = new Map<string, T2vVerifiedPick>()
   const qctx = (shot: T2vPlannedShot) => ({
     realistic: t2vRealisticStyle(input.run.style),
     nightOk: t2vNightLine(shot.narration, shot.intent),
     monoOk: t2vMonoRequested(input.run.prompt),
   })
-  for (const shot of input.shots) {
-    const r = byScene.get(shot.sceneId)
-    if (r?.chosen) continue
-    const best = [...(r?.evaluated ?? [])]
-      // Related fallback only (3+ for this line): a wrong-subject clip (capped at 2) never fills a scene.
-      .filter((e) => !e.error && typeof e.score === 'number' && e.score >= 3 && !used.has(e.providerId))
-      // Never a look-alike of a shot already in the edit (hard no-repeat rule).
-      .filter((e) => !usedHashes.some((h) => nearDuplicateHash(e.phash, h)))
-      // Clips passing the quality rules (live action, lit, daylight for day lines, colour) first.
-      .sort((a, b) => Number(t2vQualityOk(b, qctx(shot))) - Number(t2vQualityOk(a, qctx(shot))) || (b.score ?? 0) - (a.score ?? 0))[0]
-    if (!best) continue
-    used.add(best.providerId)
-    if (best.phash?.length) usedHashes.push(best.phash)
-    fallback.set(shot.sceneId, {
-      provider: best.provider ?? 'pixabay',
-      providerId: best.providerId,
-      query: best.query,
-      visible: best.visible ?? '',
-      matches: Boolean(best.matches),
-      score: best.score ?? 0,
-      inS: best.inS ?? 0,
-      outS: best.outS ?? 0,
-      clipS: best.clipS ?? 0,
-      issues: best.issues,
-      style: best.style,
-      framing: best.framing,
-      phash: best.phash,
-      verdict: 'best_available',
-    })
+  const hasCandidate = (id: string) => Object.values(input.candidates).some((l) => l.some((c) => c.providerId === id))
+  const allEvaluated = input.results.flatMap((r) => r.evaluated ?? [])
+  // Ordered options per shot without a pick (first = placed; the rest only if ingest fails).
+  // Phase 1 gives every line its own related fallback first; phase 2 lends other lines' footage.
+  const options = new Map<string, Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>>()
+  const open = input.shots.filter((shot) => !byScene.get(shot.sceneId)?.chosen)
+  const okFor = (shot: T2vPlannedShot) => {
+    const banned = new Set(input.banned?.[shot.sceneId] ?? [])
+    return (e: Ev) =>
+      !e.error && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && !usedHashes.some((h) => nearDuplicateHash(e.phash, h))
+  }
+  const take = (shot: T2vPlannedShot, list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>) => {
+    options.set(shot.sceneId, list)
+    const top = list[0]
+    if (top) {
+      used.add(top.pick.providerId)
+      if (top.pick.phash?.length) usedHashes.push(top.pick.phash)
+    }
+  }
+  for (const shot of open) {
+    const ok = okFor(shot)
+    const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
+    // 1) Related fallback: 3+ for THIS line (wrong-subject clips are capped at 2), quality-ok first.
+    const own = (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= 3).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+    if (own.length) take(shot, own.map((e) => ({ pick: evToPick(e), tier: 'fallback' as const })))
+  }
+  for (const shot of open) {
+    if (options.get(shot.sceneId)?.length) continue
+    const ok = okFor(shot)
+    const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
+    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = []
+    const seen = new Set<string>()
+    // 2) Closest related footage reviewed for another line (on-topic 3+ there), most related first.
+    for (const e of allEvaluated
+      .filter((e) => ok(e) && (e.score ?? 0) >= 3 && relatedness(shot, e) > 0)
+      .sort((a, b) => q(b) - q(a) || relatedness(shot, b) - relatedness(shot, a) || (b.score ?? 0) - (a.score ?? 0))) {
+      if (seen.has(e.providerId)) continue
+      seen.add(e.providerId)
+      // Its score belongs to the other line: QA must not count it as checked for this one.
+      list.push({ pick: { ...evToPick(e), score: 0, matches: false, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' })
+    }
+    // 3) Anything reviewed for this line that is still unused (real footage beats a card).
+    for (const e of (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && !seen.has(e.providerId)).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0)))
+      list.push({ pick: evToPick(e), tier: 'last_resort' })
+    take(shot, list)
   }
   // Direction per photo shot, in story order (varied, never two of the same move in a row).
   const photoMove = new Map<string, T2vKenBurns>()
   for (const shot of input.shots) {
-    const p = byScene.get(shot.sceneId)?.chosen ?? fallback.get(shot.sceneId)
+    const p = byScene.get(shot.sceneId)?.chosen ?? options.get(shot.sceneId)?.[0]?.pick
     if (p?.kind === 'photo' || p?.providerId.startsWith('img_')) photoMove.set(shot.sceneId, PHOTO_MOVES[photoMove.size % PHOTO_MOVES.length]!)
   }
-  const media = await mapLimit(input.shots, 3, async (shot) => {
-    const r = byScene.get(shot.sceneId)
-    const pick = r?.chosen ?? fallback.get(shot.sceneId)
-    if (!pick) return null
-    // A spare pick may come from another scene's candidate list (on-topic B-roll reviewed for another line).
-    const cand =
-      (input.candidates[shot.sceneId] ?? []).find((c) => c.providerId === pick.providerId) ??
-      Object.values(input.candidates)
-        .flat()
-        .find((c) => c.providerId === pick.providerId)
+  const findCand = (sceneId: string, id: string) =>
+    (input.candidates[sceneId] ?? []).find((c) => c.providerId === id) ??
+    Object.values(input.candidates)
+      .flat()
+      .find((c) => c.providerId === id)
+  const ingest = async (shot: T2vPlannedShot, pick: T2vVerifiedPick): Promise<T2vSceneMedia | null> => {
+    const cand = findCand(shot.sceneId, pick.providerId)
     if (!cand) return null
     try {
       const asset = await ensureT2vStockAsset(input.workspaceId, stockCandidateFrom(cand))
-      if (cand.kind === 'photo') {
-        const photo: T2vSceneMedia = {
-          provider: cand.provider,
-          kind: 'image',
-          assetId: asset.id,
-          providerId: cand.providerId,
-          thumbUrl: cand.thumbUrl,
-          previewUrl: cand.previewUrl,
-          width: cand.width,
-          height: cand.height,
-          kenBurns: photoMove.get(shot.sceneId) ?? 'zoom_in',
-          focalX: 0.5,
-          focalY: 0.5,
-          attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
-          query: cand.query,
-        }
-        return photo
-      }
-      const m: T2vSceneMedia = {
+      const base = {
         provider: cand.provider,
-        kind: 'video',
         assetId: asset.id,
         providerId: cand.providerId,
         thumbUrl: cand.thumbUrl,
         previewUrl: cand.previewUrl,
         width: cand.width,
         height: cand.height,
-        durationMs: Math.round(cand.durationS * 1000),
-        // Start early enough that the line fits inside the clip (spare picks were windowed for another line).
-        srcInMs: Math.round(Math.max(0, Math.min(pick.inS, cand.durationS - shot.needS - 0.3)) * 1000),
         focalX: 0.5,
         focalY: 0.5,
         attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
         query: cand.query,
       }
-      return m
+      if (cand.kind === 'photo') return { ...base, kind: 'image', kenBurns: photoMove.get(shot.sceneId) ?? 'zoom_in' }
+      return {
+        ...base,
+        kind: 'video',
+        durationMs: Math.round(cand.durationS * 1000),
+        // Start early enough that the line fits inside the clip (spare picks were windowed for another line).
+        srcInMs: Math.round(Math.max(0, Math.min(pick.inS, cand.durationS - shot.needS - 0.3)) * 1000),
+      }
     } catch (err) {
-      logT2v('pipeline-finisher', 'stock ingest failed', {
-        sceneId: shot.sceneId,
-        providerId: cand.providerId,
-        error: err instanceof Error ? err.message : 'error',
-      })
+      logT2v('pipeline-finisher', 'stock ingest failed', { sceneId: shot.sceneId, providerId: cand.providerId, error: err instanceof Error ? err.message : 'error' })
       return null
     }
+  }
+  const placed = await mapLimit(input.shots, 3, async (shot) => {
+    const r = byScene.get(shot.sceneId)
+    if (r?.chosen) {
+      const m = await ingest(shot, r.chosen)
+      if (m) return { media: m, pick: r.chosen, tier: r.pickedBy ?? (r.chosen.verdict === 'accepted' ? 'accepted' : 'usable') }
+    }
+    for (const o of options.get(shot.sceneId) ?? []) {
+      if (o !== options.get(shot.sceneId)?.[0] && used.has(o.pick.providerId)) continue
+      const m = await ingest(shot, o.pick)
+      if (m) {
+        used.add(o.pick.providerId)
+        return { media: m, pick: o.pick, tier: o.tier }
+      }
+    }
+    return null
   })
 
   const scenes: T2vScene[] = []
   const results: T2vShotResult[] = []
-  // Spoken ms already riding on the last emitted scene's clip (for holding it under a later line).
-  let lastNeedMs = 0
-  const prevShot0 = (i: number) => input.shots[i - 1]
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
-    // A best-available pick is a fallback: continuing the previous shot (one continuous take) wins over it.
-    const isFallback = byScene.get(shot.sceneId)?.chosen?.verdict === 'best_available' || (!byScene.get(shot.sceneId)?.chosen && fallback.has(shot.sceneId))
-    const fm = media[i]
-    const m = isFallback ? null : fm
+    const got = placed[i]
     const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
-    const needMs = Math.round(shot.needS * 1000)
-    // A later piece of a split sentence: an in-scene hard cut on the pause before its first word (worker
-    // uses the ElevenLabs word timings). With no good clip of its own, the previous piece's shot simply
-    // continues (one continuous take, never a re-show) instead of cutting to a fallback.
     const prevScene = scenes[scenes.length - 1]
-    if (prevScene && prevShot0(i) && shot.voiceGroup && prevShot0(i)!.voiceGroup === shot.voiceGroup) {
+    const continues = Boolean(prevScene && input.shots[i - 1] && shot.voiceGroup && input.shots[i - 1]!.voiceGroup === shot.voiceGroup)
+    // Continuation (later piece of a split sentence) or nothing at all to show: ride the previous scene.
+    if (prevScene && (continues || !got)) {
       const atWord = prevScene.narration.trim().split(/\s+/).length
       prevScene.narration = `${prevScene.narration} ${shot.narration}`
       prevScene.padMs = segmentEnd ? 450 : 120
       prevScene.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'
       prevScene.transitionMs = segmentEnd ? 450 : 0
-      const cutMedia = m ?? (!isFallback ? null : fm)
-      const playing = prevScene.cuts?.[prevScene.cuts.length - 1]?.media ?? prevScene.media
-      // Continuing needs real unused footage (a looped clip would visibly repeat).
-      const footageLeft = playing.kind === 'video' ? (playing.durationMs ?? 0) - (playing.srcInMs ?? 0) : Infinity
-      const mustCut = lastNeedMs + needMs > MAX_HELD_SHOT_MS || footageLeft < lastNeedMs + needMs + 300
-      const usePiece = Boolean(m) || (Boolean(fm) && mustCut)
-      if (usePiece && cutMedia) {
-        ;(prevScene.cuts ??= []).push({ atWord, media: cutMedia })
-        lastNeedMs = needMs
-        results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId) ?? null, outcome: 'stock', pickedBy: m ? r.pickedBy ?? 'accepted' : 'fallback' })
+      if (got) {
+        // In-scene hard cut on the pause before this piece's first word (worker: ElevenLabs word timings).
+        ;(prevScene.cuts ??= []).push({ atWord, media: got.media })
+        results.push({ ...r, chosen: got.pick, outcome: 'stock', pickedBy: got.tier })
       } else {
-        lastNeedMs += needMs
+        // No reviewed footage anywhere for this line (no unused clip in the whole run).
         results.push({ ...r, outcome: 'held', pickedBy: 'held' })
       }
       return
     }
-    // No clip passed review: keep the previous verified clip running under this line when it is in
-    // the same segment and has enough unused footage — a held shot reads better than a dark card.
-    const prev = scenes[scenes.length - 1]
-    const prevShot = input.shots[i - 1]
-    if (!m && prev && prevShot && prevShot.segmentId === shot.segmentId && prev.media.kind === 'video') {
-      const left = (prev.media.durationMs ?? 0) - (prev.media.srcInMs ?? 0)
-      // A held shot never runs past ~8 s on screen: longer lines get a new distinct clip instead.
-      if (left >= lastNeedMs + needMs + 600 && lastNeedMs + needMs <= MAX_HELD_SHOT_MS) {
-        prev.narration = `${prev.narration} ${shot.narration}`
-        prev.padMs = segmentEnd ? 450 : 120
-        prev.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'
-        prev.transitionMs = segmentEnd ? 450 : 0
-        lastNeedMs += needMs
-        results.push({ ...r, outcome: 'held', pickedBy: 'held' })
-        return
-      }
-    }
-    lastNeedMs = needMs
-    if (!m && fm) {
-      // Every scene gets footage: the best-scoring reviewed clip beats a text card.
-      results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId)!, outcome: 'stock', pickedBy: r.chosen ? r.pickedBy ?? 'fallback' : 'fallback' })
-    } else {
-      results.push({ ...r, outcome: m ? 'stock' : 'title_card', pickedBy: m ? r.pickedBy ?? 'accepted' : 'card' })
-    }
-    const sceneMedia = m ?? fm
+    results.push(got ? { ...r, chosen: got.pick, outcome: 'stock', pickedBy: got.tier } : { ...r, outcome: 'title_card', pickedBy: 'card' })
     const texts: T2vScene['texts'] = []
-    if (i === 0) {
-      texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
-    } else if (!sceneMedia) {
-      // Last resort (no footage at all): plain dark card. Only designed on-screen copy may appear —
-      // never planner notes, segment labels or search queries. Captions carry the narration.
-      if (shot.onScreenText) {
-        texts.push({ id: `t_card_${i}`, kind: 'title', text: shot.onScreenText, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
-      }
-    } else if (shot.onScreenText) {
-      // Burned captions sit at the bottom centre, where a lower third would collide with them (run 2),
-      // so with captions on the headline is a short centred title that slides up instead.
-      texts.push(
-        input.doc.settings.captionsEnabled
-          ? { id: `t_hl_${i}`, kind: 'title', text: shot.onScreenText, startMs: 300, endMs: 2600, animation: 'slide_up' }
-          : { id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' },
-      )
-    }
+    if (i === 0) texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
     scenes.push({
       id: shot.sceneId,
-      slot: i,
+      slot: scenes.length,
       narration: shot.narration,
-      onScreenText: shot.onScreenText,
       keywords: shot.queries[0]?.toLowerCase().split(/\s+/).slice(0, 6) ?? [],
       visualQuery: shot.queries[0] ?? shot.intent,
-      media: sceneMedia ?? titleCard(),
-      minDurMs: 1800,
+      media: got?.media ?? titleCard(),
+      minDurMs: 1200,
       padMs: segmentEnd ? 450 : 120,
       // Transition on a scene = how it leaves into the next one (assemble.py xfade order).
       transition: !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut',
