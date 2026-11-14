@@ -698,6 +698,8 @@ async function enqueueVerify(
             nextNarration: ctx.nextNarration,
             // Reimagine: the shot idea that found these clips (the checker requires the clip to show it too).
             idea: s.idea ?? '',
+            // What the search looked for (script-context lineShows): context for the checker, which judges itself.
+            lineShows: s.lineShows ?? '',
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,

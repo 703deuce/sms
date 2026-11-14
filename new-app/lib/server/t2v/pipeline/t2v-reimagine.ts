@@ -75,7 +75,8 @@ alternative, never the act.
 Each idea:
 - intent: one plain sentence describing the shot.
 - mustRecognise: 2-5 words, the one thing the viewer must recognise (no hands or placement unless essential).
-- queries: 3 stock search phrases of 1-3 common words; never a query already tried.
+- queries: 3 stock search phrases of 2-3 common words naming the idea's visible subject plus its action or place,
+  the way a stock site tags footage (different literal phrasings); never a query already tried.
 Return ONLY JSON: {"lines": [{"sceneId": string, "ideas": [{"intent": string, "mustRecognise": string,
 "queries": string[]}]}]}`
 
@@ -141,6 +142,7 @@ export async function t2vReimagine(input: {
     previousLine: ctx.prevNarration,
     nextLine: ctx.nextNarration,
     moment: s.moment || s.intent,
+    ...(s.lineShows ? { lineShows: s.lineShows } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejected: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.seen || e.visible)

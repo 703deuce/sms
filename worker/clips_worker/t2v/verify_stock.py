@@ -138,7 +138,7 @@ This line (spoken over this shot): "{narration}"
 {sentence_line}Next line: "{next}"
 What this moment means in the video (context only): "{moment}"
 What the viewer must recognise: "{must_recognise}"
-{idea_line}"""
+{search_line}{idea_line}"""
 
 
 # The score can never be higher than the literal-depiction judgement allows: a clip that does not show the
@@ -197,6 +197,7 @@ def script_block(script: str, shot: dict, video_understanding: str = "", topic: 
         moment=q(shot.get("moment") or shot.get("intent")),
         must_recognise=q(shot.get("subject") or shot.get("intent"), 120),
         idea_line=_idea_line(shot, q),
+        search_line=(f'What the footage search looked for (context only; judge line_shows yourself): "{q(shot.get("lineShows"), 160)}"\n' if shot.get("lineShows") else ""),
     )
 
 

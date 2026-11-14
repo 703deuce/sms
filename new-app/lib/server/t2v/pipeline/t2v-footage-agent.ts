@@ -177,6 +177,26 @@ async function searchQuery(query: string, qi: number, aspect: T2vAspect, realist
   return out.filter((r) => r.overlap >= 1)
 }
 
+/**
+ * Candidate order for one shot: every query gets a turn. Full tag matches first, taken round-robin across the
+ * queries (query order, then the provider's order within a query), then partial matches the same way. Before,
+ * one query's full matches filled all 8 slots (sleep sh4: 7 of 8 from "evening routine", i.e. sunsets and a
+ * wind turbine; snow sh16: 8 of 8 from "outdoor grill"), so the more literal later queries were never seen.
+ */
+export function interleaveQueries<T extends { overlap: number; words: number; qi: number; rank: number }>(pool: T[]): T[] {
+  const out: T[] = []
+  for (const full of [true, false]) {
+    const byQuery = new Map<number, T[]>()
+    for (const r of pool) {
+      if ((r.overlap >= r.words) !== full) continue
+      ;(byQuery.get(r.qi) ?? byQuery.set(r.qi, []).get(r.qi)!).push(r)
+    }
+    const lists = [...byQuery.entries()].sort((a, b) => a[0] - b[0]).map(([, l]) => l.sort((a, b) => b.overlap / b.words - a.overlap / a.words || a.rank - b.rank))
+    for (let k = 0; lists.some((l) => k < l.length); k++) for (const l of lists) if (l[k]) out.push(l[k]!)
+  }
+  return out
+}
+
 /** Planner queries plus broader rewrites (2-word cores, then the video topic) — de-duplicated, bounded. */
 export function queryRewrites(queries: string[], topic: string): string[] {
   const out: string[] = []
@@ -225,9 +245,7 @@ export async function t2vFootageAgent(input: {
         logT2v('pipeline-footage', 'search failed', { sceneId: shot.sceneId, error: err instanceof Error ? err.message : 'error' })
       }
     }
-    const usable = pool.filter((r) => !skip.has(r.c.providerId) && r.c.durationS >= shot.needS + 0.3 && r.c.durationS <= 75 && orientationOk(r.c, input.aspect))
-    // Full tag match beats partial; earlier (more specific) queries beat later; then provider order.
-    usable.sort((a, b) => b.overlap / b.words - a.overlap / a.words || a.qi - b.qi || a.rank - b.rank)
+    const usable = interleaveQueries(pool.filter((r) => !skip.has(r.c.providerId) && r.c.durationS >= shot.needS + 0.3 && r.c.durationS <= 75 && orientationOk(r.c, input.aspect)))
     const picks: T2vFootageCandidate[] = []
     const seen = new Set<string>()
     const pushFrom = (list: Ranked[]) => {
@@ -238,9 +256,11 @@ export async function t2vFootageAgent(input: {
         picks.push(r.c)
       }
     }
-    // Prefer clips no earlier shot leads with, then allow shared ones (the verifier dedupes accepted picks).
-    pushFrom(usable.filter((r) => !usedFirst.has(`${r.c.provider}:${r.c.providerId}`)))
     pushFrom(usable)
+    // A clip an earlier shot leads with does not lead here too, but it stays in this shot's list: dropping it
+    // cost sleep sh12 its best literal clip (44082, phone on a charger, led sh10 and fell off sh12's 8 slots).
+    const lead = picks.findIndex((c) => !usedFirst.has(`${c.provider}:${c.providerId}`))
+    if (lead > 0) picks.unshift(...picks.splice(lead, 1))
     if (picks[0]) usedFirst.add(`${picks[0].provider}:${picks[0].providerId}`)
     out[shot.sceneId] = picks
   }

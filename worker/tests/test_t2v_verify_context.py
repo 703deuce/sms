@@ -379,3 +379,10 @@ def test_static_clip_is_capped_and_logged(run_job, monkeypatch):
     results, _ = run_job(shots, {"1000": ans})
     ev = results[0]["evaluated"][0]
     assert ev["static"] is True and ev["motion"] == 0.3 and ev["score"] == vs.STATIC_MAX_SCORE and ev["matches"] is False
+
+
+def test_search_target_is_context_only():
+    """Script-context lineShows (what the search looked for) reaches the checker as context; it still judges itself."""
+    block = vs.script_block("", {"narration": "Charge your phone across the room.", "lineShows": "A phone charging on a surface away from the bed."})
+    assert 'What the footage search looked for (context only; judge line_shows yourself): "A phone charging on a surface away from the bed."' in block
+    assert "footage search looked for" not in vs.script_block("", {"narration": "A line."})

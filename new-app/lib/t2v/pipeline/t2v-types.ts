@@ -92,6 +92,8 @@ export type T2vPlannedShot = {
   moment?: string
   /** Script-context pass: ways an editor could show the moment (most direct first). */
   showIdeas?: string[]
+  /** Script-context pass: what a viewer should literally see for this line's meaning (drives the searches). */
+  lineShows?: string
   /** Shots sharing a voiceGroup share one narration clip; later ones are in-scene cuts at wordOffset. */
   voiceGroup?: string
   wordOffset?: number
