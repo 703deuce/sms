@@ -226,7 +226,7 @@ def capped_score(v: dict) -> tuple[int, int, str]:
     except (TypeError, ValueError):
         raw = 0
     if depicts_word(v.get("depicts")) is None:
-        log.info("[t2v:verify:depicts_unknown] %s", json.dumps({"depicts": str(v.get("depicts"))[:40], "rawScore": raw, "treatedAs": "no"}))
+        print("[t2v:verify:depicts_unknown]", json.dumps({"depicts": str(v.get("depicts"))[:40], "rawScore": raw, "treatedAs": "no"}), flush=True)
     d = norm_depicts(v.get("depicts"))
     return min(raw, DEPICTS_CAP[d]), raw, d
 
@@ -662,7 +662,7 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
     """Per-scene log (no URLs): every candidate with score, verdict and reason, plus the top-K."""
     for e in ev:
         picked = bool(chosen and e.get("providerId") == chosen.get("providerId"))
-        log.info("[t2v:verify:candidate] %s", json.dumps({
+        print("[t2v:verify:candidate]", json.dumps({
             "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
             "candidateId": e.get("providerId"), "kind": e.get("kind") or "video", "score": e.get("score"),
             "lighting": e.get("lighting"), "matches": e.get("matches"), "verdict": "chosen" if picked else "not_chosen",
@@ -673,8 +673,8 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
             "window": [e.get("inS"), e.get("outS")], "judgedWindow": [e.get("judgedInS"), e.get("judgedOutS")],
             "windowEvents": e.get("windowEvents") or [], "artifacts": e.get("artifacts"), "blind": bool(e.get("blind")),
             "rejudged": bool(e.get("rejudged")),
-        }))
-    log.info("[t2v:verify:scene] %s", json.dumps({
+        }), flush=True)
+    print("[t2v:verify:scene]", json.dumps({
         "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
         "candidates": len(ev), "candidateId": chosen.get("providerId") if chosen else None,
         "score": chosen.get("score") if chosen else None, "verdict": chosen.get("verdict") if chosen else "none",
@@ -682,7 +682,7 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
             {"candidateId": e.get("providerId"), "score": e.get("score"), "lighting": e.get("lighting")}
             for e in sorted((e for e in ev if not e.get("error")), key=lambda e: (-int(e.get("score", 0)), -int(e.get("lighting", 5))))[:5]
         ],
-    }))
+    }), flush=True)
 
 
 def _payload(job: dict) -> dict:
@@ -1031,7 +1031,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
         # The line's fixed line_shows (same for every candidate and every round); None only for old payloads.
         fixed_ls = str(shot.get("lineShows") or "").strip()[:200] or None
         if fixed_ls is None:
-            log.info("[t2v:verify:line_shows_missing] %s", json.dumps({"draftId": draft_id, "sceneId": shot.get("sceneId")}))
+            print("[t2v:verify:line_shows_missing]", json.dumps({"draftId": draft_id, "sceneId": shot.get("sceneId")}), flush=True)
         ctx = shot_ctx(shot)
         evaluated = evaluated_by_shot[idx]
         passing = 0
@@ -1134,11 +1134,11 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     pa, pb = play_window(ja, jb, clip_s, play_need(need_s))
                     if blind and needs_rejudge(obs, (ja, jb), (pa, pb)):
                         v2 = judge((pa, pb))
-                        log.info("[t2v:verify:rejudge] %s", json.dumps({
+                        print("[t2v:verify:rejudge]", json.dumps({
                             "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
                             "judged": [ja, jb], "played": [pa, pb], "score": v.get("score"), "rescore": v2.get("score"),
                             "depicts": v.get("depicts"), "redepicts": v2.get("depicts"),
-                        }))
+                        }), flush=True)
                         entry["rejudged"] = {"window": [ja, jb], "score": v.get("score"), "depicts": v.get("depicts")}
                         v = {**v2, "in_s": pa, "out_s": pb}
                 sc, raw_score, dep = capped_score(v)
@@ -1186,10 +1186,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     if art != "none":
                         before = entry["score"]
                         apply_artifact_cap(entry)
-                        log.info("[t2v:verify:artifact] %s", json.dumps({
+                        print("[t2v:verify:artifact]", json.dumps({
                             "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
                             "artifacts": art, "score": before, "capped": entry["score"],
-                        }))
+                        }), flush=True)
                 try:
                     cs = _color_stats(muted, pa, pb)
                     if cs:
@@ -1219,10 +1219,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         if entry["score"] > STATIC_MAX_SCORE:
                             entry["score"] = STATIC_MAX_SCORE
                         entry["matches"] = False
-                        log.info("[t2v:verify:static] %s", json.dumps({
+                        print("[t2v:verify:static]", json.dumps({
                             "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
                             "motion": mv, "frozenS": fz, "window": [pa, pb], "rawScore": entry.get("rawScore"), "score": entry["score"],
-                        }))
+                        }), flush=True)
                 try:
                     entry["phash"] = _dhash_frames(muted, pa, pb)
                 except Exception:  # noqa: BLE001 — hash is a bonus signal

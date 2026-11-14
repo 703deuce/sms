@@ -155,7 +155,7 @@ def window_report(m: SceneMedia, start: float, length_s: float, loop: bool) -> d
 
 
 def log_render_window(m: SceneMedia, start: float, length_s: float, loop: bool) -> None:
-    log.info("[t2v:assemble:window] %s", json.dumps(window_report(m, start, length_s, loop)))
+    print("[t2v:assemble:window]", json.dumps(window_report(m, start, length_s, loop)), flush=True)
 
 
 ALPHA_PIX_FMTS = ("rgba", "bgra", "argb", "abgr", "ya8", "ya16", "yuva", "pal8", "gbrap", "rgba64")
