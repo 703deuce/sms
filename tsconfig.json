@@ -44,6 +44,7 @@
     "voice-runtime",
     ".next/dev",
     "src/kimi-drafts/**",
-    "src/features/**/fixtures/**"
+    "src/features/**/fixtures/**",
+    "docs/**"
   ]
 }
