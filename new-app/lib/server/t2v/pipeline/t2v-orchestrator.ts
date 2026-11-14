@@ -16,10 +16,12 @@ import {
   type T2vPipelineStatus,
   type T2vPipelineStyle,
   type T2vShotResult,
+  type T2vFootageCandidate,
 } from '@/lib/t2v/pipeline/t2v-types'
 import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-story-agent'
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
-import { t2vFootageAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
+import { queryRewrites, t2vFootageAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
+import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 
@@ -37,6 +39,8 @@ const DRIVER_MAX_MS = 60 * 60_000
 const MUSIC_WAIT_MS = 5 * 60_000
 const WEB_STAGES: T2vPipelineStatus[] = ['writing_script', 'planning_scenes', 'finding_footage']
 const MAX_RESUMES = 1
+/** Extra search rounds (new adjacent queries) for shots where nothing passed review. */
+const MAX_EXTRA_VERIFY_ROUNDS = 2
 
 const drivers = new Map<string, { timer: ReturnType<typeof setInterval>; startedAt: number }>()
 const advancing = new Set<string>()
@@ -267,49 +271,52 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       return advanceOnce(draftId, {})
     }
     case 'finding_footage': {
-      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic: run.story?.topic || run.story?.title || '' })
-      const jobId = createId('job')
-      await prisma.clipJob.create({
-        data: {
-          id: jobId,
-          projectId: row.projectId,
-          type: 'T2V_VERIFY_STOCK',
-          status: 'QUEUED',
-          maxAttempts: 1,
-          payload: {
-            draftId,
-            workspaceId: row.workspaceId,
-            projectId: row.projectId,
-            topic: run.story?.topic || run.story?.title || '',
-            shots: run.shots!.map((s) => ({
-              sceneId: s.sceneId,
-              narration: s.narration,
-              intent: s.intent,
-              needS: s.needS,
-              candidates: (candidates[s.sceneId] ?? []).map((c) => ({
-                provider: c.provider,
-                providerId: c.providerId,
-                previewUrl: c.previewUrl,
-                durationS: c.durationS,
-                query: c.query,
-              })),
-            })),
-          } as Prisma.InputJsonValue,
-        },
-      })
+      const topic = run.story?.topic || run.story?.title || ''
+      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic })
+      const jobId = await enqueueVerify(row, topic, run.shots!, candidates)
+      const tried: Record<string, string[]> = {}
+      for (const sh of run.shots!) tried[sh.sceneId] = queryRewrites(sh.queries, topic)
       await setStage(draftId, 'finding_footage', 'verifying_footage', (r) => {
         r.candidates = candidates
         r.verifyJobId = jobId
+        r.verifyRound = 0
+        r.queriesTried = tried
       })
       return
     }
     case 'verifying_footage': {
       const job = run.verifyJobId ? await prisma.clipJob.findUnique({ where: { id: run.verifyJobId } }) : null
-      if (!job) return failRun(draftId, 'verify_job_missing')
-      if (job.status === 'FAILED') return failRun(draftId, `verify_failed:${(job.error ?? '').slice(0, 120)}`)
-      if (job.status !== 'DONE') return
-      const payload = job.payload as { results?: T2vShotResult[]; summary?: Record<string, number | string> }
-      const results = (payload.results ?? []).filter(Boolean) as T2vShotResult[]
+      if (job && job.status !== 'DONE' && job.status !== 'FAILED') return
+      // A missing/failed verify job never stalls the run: carry on with what earlier rounds found.
+      const payload = (job?.status === 'DONE' ? job.payload : {}) as { results?: T2vShotResult[]; summary?: Record<string, number | string> }
+      if (!job || job.status === 'FAILED') {
+        await writeRun(draftId, (r) => {
+          r.log.push({ stage: r.status, at: new Date().toISOString(), note: `verify_job_${job ? 'failed' : 'missing'}:${(job?.error ?? '').slice(0, 100)}` })
+          return r
+        })
+      }
+      const history = mergeVerifyResults(run.verifyHistory ?? {}, (payload.results ?? []).filter(Boolean) as T2vShotResult[])
+      const round = run.verifyRound ?? 0
+      const unresolved = run.shots!.filter((sh) => history[sh.sceneId]?.chosen?.verdict !== 'accepted')
+      if (unresolved.length && round < MAX_EXTRA_VERIFY_ROUNDS) {
+        const next = await nextSearchRound(row, run, unresolved, history, round + 1).catch((err) => {
+          logT2vError('pipeline', 'search round failed', err, { draftId, round: round + 1 })
+          return null
+        })
+        if (next) {
+          await writeRun(draftId, (r) => {
+            r.verifyHistory = history
+            r.verifyJobId = next.jobId
+            r.verifyRound = round + 1
+            r.queriesTried = next.tried
+            r.candidates = next.candidates
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: `search_round_${round + 1}:${next.shots}_shots` })
+            return r
+          })
+          return
+        }
+      }
+      const results = run.shots!.map((sh) => history[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] })
       const fin = await t2vFinisher({
         workspaceId: row.workspaceId,
         doc,
@@ -321,20 +328,29 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         candidates: run.candidates ?? {},
       })
       const qa = t2vQaPlan({ run, scenes: fin.scenes, results: fin.results })
+      const stockStats = computeStockStats(fin.results, round)
       const fresh = (await loadRow(draftId))!
       const nextDoc: T2vDraftV1 = {
         ...fresh.document,
         scenes: fin.scenes,
         nextSlot: fin.scenes.length,
         autobuild: moveTo(
-          { ...fresh.document.autobuild!, results: fin.results, verifySummary: payload.summary, qa: [...(fresh.document.autobuild!.qa ?? []), qa] },
+          {
+            ...fresh.document.autobuild!,
+            results: fin.results,
+            verifyHistory: undefined,
+            verifySummary: payload.summary,
+            stockStats,
+            qa: [...(fresh.document.autobuild!.qa ?? []), qa],
+          },
           'verifying_footage',
           'generating_narration',
         ),
       }
       await saveT2vDraft(row.workspaceId, draftId, fresh.revision, nextDoc)
       await prisma.t2vDraft.update({ where: { id: draftId }, data: { stage: 'pipeline:generating_narration' } })
-      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, ...payload.summary })
+      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, ...stockStats })
+      logT2v('pipeline', 'stock success rate', { draftId, verifiedRate: stockStats.verifiedRate, stockCoverage: stockStats.stockCoverage, rounds: stockStats.rounds })
       return advanceOnce(draftId, {})
     }
     case 'generating_narration':
@@ -424,6 +440,108 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       stopDriver(draftId)
       return
     }
+  }
+}
+
+async function enqueueVerify(
+  row: Row,
+  topic: string,
+  shots: NonNullable<T2vPipelineRun['shots']>,
+  candidates: Record<string, T2vFootageCandidate[]>,
+): Promise<string> {
+  const jobId = createId('job')
+  await getPrisma().clipJob.create({
+    data: {
+      id: jobId,
+      projectId: row.projectId,
+      type: 'T2V_VERIFY_STOCK',
+      status: 'QUEUED',
+      maxAttempts: 1,
+      payload: {
+        draftId: row.id,
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        topic,
+        shots: shots.map((s) => ({
+          sceneId: s.sceneId,
+          narration: s.narration,
+          intent: s.intent,
+          needS: s.needS,
+          candidates: (candidates[s.sceneId] ?? []).map((c) => ({
+            provider: c.provider,
+            providerId: c.providerId,
+            previewUrl: c.previewUrl,
+            durationS: c.durationS,
+            query: c.query,
+          })),
+        })),
+      } as Prisma.InputJsonValue,
+    },
+  })
+  return jobId
+}
+
+function pickScore(r: T2vShotResult | undefined): number {
+  const c = r?.chosen
+  if (!c) return -1
+  return (c.verdict === 'accepted' ? 100 : c.verdict === 'weak_match' ? 50 : 0) + (c.score ?? 0)
+}
+
+/** Keep the best pick per scene across rounds; accumulate everything the reviewer saw. */
+export function mergeVerifyResults(prev: Record<string, T2vShotResult>, round: T2vShotResult[]): Record<string, T2vShotResult> {
+  const out: Record<string, T2vShotResult> = { ...prev }
+  for (const r of round) {
+    const old = out[r.sceneId]
+    const evaluated = [...(old?.evaluated ?? []), ...(r.evaluated ?? [])]
+    const best = pickScore(r) > pickScore(old) ? r.chosen : old?.chosen ?? null
+    out[r.sceneId] = { sceneId: r.sceneId, chosen: best, evaluated }
+  }
+  return out
+}
+
+/** New adjacent queries for unresolved shots → fresh candidates (never re-reviewing a clip) → verify job. */
+async function nextSearchRound(
+  row: Row,
+  run: T2vPipelineRun,
+  unresolved: NonNullable<T2vPipelineRun['shots']>,
+  history: Record<string, T2vShotResult>,
+  round: number,
+): Promise<{ jobId: string; tried: Record<string, string[]>; candidates: Record<string, T2vFootageCandidate[]>; shots: number } | null> {
+  const tried = { ...(run.queriesTried ?? {}) }
+  const alt = await t2vQueryRewriter({ story: run.story!, round, shots: unresolved, tried, history })
+  const shots = unresolved.filter((s) => alt[s.sceneId]?.length).map((s) => ({ ...s, queries: alt[s.sceneId]! }))
+  if (!shots.length) return null
+  const exclude: Record<string, string[]> = {}
+  for (const s of shots) exclude[s.sceneId] = (history[s.sceneId]?.evaluated ?? []).map((e) => e.providerId)
+  const found = await t2vFootageAgent({ shots, aspect: row.document.settings.aspect, rewrite: false, exclude })
+  const withCands = shots.filter((s) => found[s.sceneId]?.length)
+  for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
+  if (!withCands.length) return null
+  // Candidates map keeps every round's clips so the finisher can ingest whichever pick wins.
+  const candidates = { ...(run.candidates ?? {}) }
+  for (const s of withCands) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found)
+  return { jobId, tried, candidates, shots: withCands.length }
+}
+
+function computeStockStats(results: T2vShotResult[], round: number): NonNullable<T2vPipelineRun['stockStats']> {
+  const n = results.length || 1
+  const count = (f: (r: T2vShotResult) => boolean) => results.filter(f).length
+  const accepted = count((r) => r.outcome === 'stock' && r.chosen?.verdict === 'accepted')
+  const weak = count((r) => r.outcome === 'stock' && r.chosen?.verdict === 'weak_match')
+  const bestAvailable = count((r) => r.outcome === 'stock' && r.chosen?.verdict === 'best_available')
+  const held = count((r) => r.outcome === 'held')
+  const titleCards = count((r) => r.outcome === 'title_card')
+  return {
+    shots: results.length,
+    accepted,
+    weak,
+    bestAvailable,
+    held,
+    titleCards,
+    verifiedRate: Math.round((accepted / n) * 1000) / 10,
+    stockCoverage: Math.round(((n - titleCards) / n) * 1000) / 10,
+    rounds: round + 1,
   }
 }
 

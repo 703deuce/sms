@@ -179,6 +179,10 @@ export async function t2vFootageAgent(input: {
   shots: T2vPlannedShot[]
   aspect: T2vAspect
   topic?: string
+  /** Later rounds pass the rewriter's queries as-is (no extra rewrites). */
+  rewrite?: boolean
+  /** providerIds already reviewed for a scene — never send them to the reviewer again. */
+  exclude?: Record<string, string[]>
 }): Promise<Record<string, T2vFootageCandidate[]>> {
   const usePexels = pexelsConfigured()
   const out: Record<string, T2vFootageCandidate[]> = {}
@@ -186,7 +190,8 @@ export async function t2vFootageAgent(input: {
   let searches = 0
   for (const shot of input.shots) {
     const pool: Ranked[] = []
-    const queries = queryRewrites(shot.queries, input.topic ?? '')
+    const queries = input.rewrite === false ? shot.queries.slice(0, MAX_QUERIES_PER_SHOT) : queryRewrites(shot.queries, input.topic ?? '')
+    const skip = new Set(input.exclude?.[shot.sceneId] ?? [])
     for (let qi = 0; qi < queries.length; qi++) {
       const query = queries[qi]!
       try {
@@ -200,7 +205,7 @@ export async function t2vFootageAgent(input: {
         logT2v('pipeline-footage', 'search failed', { sceneId: shot.sceneId, error: err instanceof Error ? err.message : 'error' })
       }
     }
-    const usable = pool.filter((r) => r.c.durationS >= shot.needS + 0.3 && r.c.durationS <= 75 && orientationOk(r.c, input.aspect))
+    const usable = pool.filter((r) => !skip.has(r.c.providerId) && r.c.durationS >= shot.needS + 0.3 && r.c.durationS <= 75 && orientationOk(r.c, input.aspect))
     // Full tag match beats partial; earlier (more specific) queries beat later; then provider order.
     usable.sort((a, b) => b.overlap / b.words - a.overlap / a.words || a.qi - b.qi || a.rank - b.rank)
     const picks: T2vFootageCandidate[] = []

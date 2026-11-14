@@ -143,6 +143,14 @@ export type T2vPipelineRun = {
   shots?: T2vPlannedShot[]
   candidates?: Record<string, T2vFootageCandidate[]>
   verifyJobId?: string
+  /** Search/verify rounds done (0 = first pass). Unresolved shots get new adjacent queries each round. */
+  verifyRound?: number
+  /** Best result per scene across all verify rounds. */
+  verifyHistory?: Record<string, T2vShotResult>
+  /** Every query searched per scene (so later rounds never repeat one). */
+  queriesTried?: Record<string, string[]>
+  /** Per-run stock success metrics (tracked so a later AI-generation fallback stays a small minority). */
+  stockStats?: { shots: number; accepted: number; weak: number; bestAvailable: number; held: number; titleCards: number; verifiedRate: number; stockCoverage: number; rounds: number }
   verifySummary?: Record<string, number | string>
   results?: T2vShotResult[]
   musicGenerationId?: string

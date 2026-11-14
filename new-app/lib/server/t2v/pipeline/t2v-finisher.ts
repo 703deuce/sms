@@ -5,6 +5,7 @@ import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vDraftV1, T2vScene, T2vSceneMedia } from '@/lib/t2v/types'
 import type {
   T2vFootageCandidate,
+  T2vVerifiedPick,
   T2vNarrationSegment,
   T2vPipelineRun,
   T2vPlannedShot,
@@ -68,9 +69,35 @@ export async function t2vFinisher(input: {
   candidates: Record<string, T2vFootageCandidate[]>
 }): Promise<{ scenes: T2vScene[]; results: T2vShotResult[] }> {
   const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
+  // Last-resort pick per scene when nothing was chosen: the highest-scoring reviewed clip (any score),
+  // never one already used by another scene. Used only if holding the previous clip isn't possible.
+  const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
+  const fallback = new Map<string, T2vVerifiedPick>()
+  for (const shot of input.shots) {
+    const r = byScene.get(shot.sceneId)
+    if (r?.chosen) continue
+    const best = [...(r?.evaluated ?? [])]
+      .filter((e) => !e.error && typeof e.score === 'number' && !used.has(e.providerId))
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]
+    if (!best) continue
+    used.add(best.providerId)
+    fallback.set(shot.sceneId, {
+      provider: best.provider ?? 'pixabay',
+      providerId: best.providerId,
+      query: best.query,
+      visible: best.visible ?? '',
+      matches: Boolean(best.matches),
+      score: best.score ?? 0,
+      inS: best.inS ?? 0,
+      outS: best.outS ?? 0,
+      clipS: best.clipS ?? 0,
+      issues: best.issues,
+      verdict: 'best_available',
+    })
+  }
   const media = await mapLimit(input.shots, 3, async (shot) => {
     const r = byScene.get(shot.sceneId)
-    const pick = r?.chosen
+    const pick = r?.chosen ?? fallback.get(shot.sceneId)
     if (!pick) return null
     const cand = (input.candidates[shot.sceneId] ?? []).find((c) => c.providerId === pick.providerId)
     if (!cand) return null
@@ -110,7 +137,9 @@ export async function t2vFinisher(input: {
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
-    const m = media[i]
+    const isFallback = !byScene.get(shot.sceneId)?.chosen && fallback.has(shot.sceneId)
+    const fm = media[i]
+    const m = isFallback ? null : fm
     const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
     const needMs = Math.round(shot.needS * 1000)
     // No clip passed review: keep the previous verified clip running under this line when it is in
@@ -130,18 +159,21 @@ export async function t2vFinisher(input: {
       }
     }
     lastNeedMs = needMs
-    results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
+    if (!m && fm) {
+      // Every scene gets footage: the best-scoring reviewed clip beats a text card.
+      results.push({ ...r, chosen: fallback.get(shot.sceneId)!, outcome: 'stock' })
+    } else {
+      results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
+    }
+    const sceneMedia = m ?? fm
     const texts: T2vScene['texts'] = []
     if (i === 0) {
       texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
-    } else if (!m) {
-      // No verified footage: dark card. Label it once per segment with the segment's short heading
-      // (never the shot intent — that is a long camera note, not on-screen copy).
-      const seg = input.segments.find((x) => x.id === shot.segmentId)
-      const heading = (shot.onScreenText || seg?.purpose || '').split(/\s+/).slice(0, 5).join(' ')
-      const prevSameSegCard = i > 0 && input.shots[i - 1]!.segmentId === shot.segmentId && scenes[scenes.length - 1]?.media.kind === 'color'
-      if (heading && !prevSameSegCard) {
-        texts.push({ id: `t_card_${i}`, kind: 'title', text: heading, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
+    } else if (!sceneMedia) {
+      // Last resort (no footage at all): plain dark card. Only designed on-screen copy may appear —
+      // never planner notes, segment labels or search queries. Captions carry the narration.
+      if (shot.onScreenText) {
+        texts.push({ id: `t_card_${i}`, kind: 'title', text: shot.onScreenText, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
       }
     } else if (shot.onScreenText) {
       texts.push({ id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' })
@@ -153,7 +185,7 @@ export async function t2vFinisher(input: {
       onScreenText: shot.onScreenText,
       keywords: shot.queries[0]?.toLowerCase().split(/\s+/).slice(0, 6) ?? [],
       visualQuery: shot.queries[0] ?? shot.intent,
-      media: m ?? titleCard(),
+      media: sceneMedia ?? titleCard(),
       minDurMs: 1800,
       padMs: segmentEnd ? 450 : 120,
       // Transition on a scene = how it leaves into the next one (assemble.py xfade order).
