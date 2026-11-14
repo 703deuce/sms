@@ -6,6 +6,7 @@ import { verifyWorkerHmac } from '@/lib/server/clips/worker-auth'
 import { getPrisma } from '@/lib/server/db'
 import { shouldHookAutoStartUnified } from '@/lib/streamer/auto-start-unified'
 import { getClipStorage } from '@/lib/storage'
+import { scheduleUnifiedAutoStart } from '@/lib/server/clips/progress-auto-start'
 
 export const runtime = 'nodejs'
 export const maxDuration = 30
@@ -33,12 +34,15 @@ const schema = z.object({
 })
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const startedAt = Date.now()
   const raw = await request.text()
   if (!verifyWorkerHmac(request, raw)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+  let jobIdForLog: string | undefined
   try {
     const { id: jobId } = await ctx.params
+    jobIdForLog = jobId
     const body = schema.parse(JSON.parse(raw))
     const prisma = getPrisma()
     const job = await prisma.clipJob.findUnique({
@@ -61,6 +65,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         status: job.status,
         lockedBy: job.lockedBy,
         workerId: body.workerId ?? null,
+        latencyMs: Date.now() - startedAt,
       })
       return NextResponse.json({ data: { ok: true, ignored: 'stale_worker' } })
     }
@@ -115,16 +120,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
 
     console.info('[clipper:progress] db_apply_complete', { jobId, stage: body.stage })
 
-    if(shouldHookAutoStartUnified(job.type, body.projectStatus, body.jobStatus)){
-      try{
-        const {maybeAutoStartUploadAgentBatch}=await import('@/lib/server/streamer/agent-batch')
-        await maybeAutoStartUploadAgentBatch(job.projectId)
-      }catch(error){
-        console.error('[clipper:agent] auto_start_hook_failed',{projectId:job.projectId,error:String(error)})
-      }
-    }
+    // Heavy follow-ups run after the status update committed and never delay the ack.
+    const autoStart = shouldHookAutoStartUnified(job.type, body.projectStatus, body.jobStatus)
+    if (autoStart) scheduleUnifiedAutoStart(job.projectId, jobId)
+    console.info('[clipper:progress] ack', {
+      jobId,
+      projectId: job.projectId,
+      stage: body.stage,
+      jobStatus: body.jobStatus,
+      projectStatus: body.projectStatus,
+      autoStartScheduled: autoStart,
+      latencyMs: Date.now() - startedAt,
+    })
     return NextResponse.json({ data: { ok: true } })
   } catch (err) {
+    console.warn('[clipper:progress] error', {
+      jobId: jobIdForLog,
+      error: String(err).slice(0, 300),
+      latencyMs: Date.now() - startedAt,
+    })
     return jsonError(err, 400)
   }
 }

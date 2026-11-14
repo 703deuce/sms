@@ -45,6 +45,14 @@ def unbind_job_connection(token) -> None:
     _active_job_connection.reset(token)
 
 
+def bound_job_connection(job_id: str):
+    """The connection bound for ``job_id`` in this context, or None (other job / thread)."""
+    active = _active_job_connection.get()
+    if active is None or active[0] != job_id:
+        return None
+    return active[1]
+
+
 def commit_before_progress(job_id: str, stage: str | None = None) -> None:
     """End any pending SQL transaction before blocking on a website callback.
 
