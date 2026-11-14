@@ -16,6 +16,7 @@ TARBALL="/tmp/worker-${REF//\//_}.tgz"
 WORKER_PREWAIT_MAX_SEC="${WORKER_PREWAIT_MAX_SEC:-0}"
 WORKER_DRAIN_TIMEOUT_SEC="${WORKER_DRAIN_TIMEOUT_SEC:-300}"
 WORKER_ONLY="${WORKER_ONLY:-both}"
+WORKER_ROLLOUT_MAX_SEC="${WORKER_ROLLOUT_MAX_SEC:-2700}"  # local waiter gives up (rc 124, unit left running) after this
 
 case "${WORKER_ONLY}" in
   clips-worker|clips-worker-stream|both) ;;
@@ -77,6 +78,7 @@ WORKER_DRAIN_TIMEOUT_SEC=$(printf '%q' "${WORKER_DRAIN_TIMEOUT_SEC}")
 WORKER_ONLY=$(printf '%q' "${WORKER_ONLY}")
 REQUIRED_ENV_KEYS=( ${REQUIRED_ENV_KEYS[*]} )
 trap 'echo \$? > $(printf '%q' "${REMOTE_RC}")' EXIT
+trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 PREAMBLE
   cat <<'REMOTE'
 disk_pct=$(df / --output=pcent | tail -1 | tr -dc '0-9')
@@ -311,7 +313,8 @@ ssh "$HOST" "sudo bash -c '
 
 wait_for_remote_unit() {
   local host="$1" unit="$2" log="$3"
-  local pos=0 state="" status="" tmp chunk_bytes ssh_fail=0
+  local pos=0 state="" status="" tmp chunk_bytes ssh_fail=0 dead_seen=0
+  local max_sec="${WORKER_ROLLOUT_MAX_SEC}" start_ts=$SECONDS
   tmp="$(mktemp)"
   echo "[deploy-worker] polling ${unit}; tailing ${log}"
   while true; do
@@ -335,10 +338,30 @@ wait_for_remote_unit() {
       fi
       break
     fi
-    state=$(ssh "$host" "sudo systemctl show -p SubState --value $(printf '%q' "$unit") 2>/dev/null" || true)
+    # An unknown/unloaded unit reports SubState=dead; an SSH drop must not look like that.
+    if ! state=$(ssh "$host" "sudo systemctl show -p SubState --value $(printf '%q' "$unit") 2>/dev/null"); then
+      state="ssh-fail"
+    fi
     if [ "$state" = failed ]; then
       status=1
       break
+    fi
+    # SIGKILL / reboot / --collect unload: unit gone or dead with no rc file. Require two
+    # consecutive sightings so the brief pre-start window after --no-block isn't misread.
+    if [ "$state" = dead ]; then
+      dead_seen=$((dead_seen + 1))
+      if [ "$dead_seen" -ge 2 ]; then
+        echo "[deploy-worker] ${unit} is dead/unloaded with no rc file; treating as failed" >&2
+        status=1
+        break
+      fi
+    else
+      dead_seen=0
+    fi
+    if [ $((SECONDS - start_ts)) -ge "$max_sec" ]; then
+      echo "[deploy-worker] ${unit} still not finished after ${max_sec}s (WORKER_ROLLOUT_MAX_SEC); giving up locally. Check ${log} on the server." >&2
+      rm -f "$tmp"
+      return 124
     fi
     sleep 3
   done
