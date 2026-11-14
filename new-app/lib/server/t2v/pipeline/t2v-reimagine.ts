@@ -1,20 +1,27 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
-import type { T2vPlannedShot, T2vShotResult, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
+import { logT2v } from '@/lib/server/t2v/log'
+import { FILLER_MIN_SCORE } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import type { T2vPlannedShot, T2vReimagineLogEntry, T2vReimaginePending, T2vShotResult, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
 /**
  * REIMAGINE (Prompt-to-Video only). When search + verify found no good stock clip for a line, the LLM reads
  * the whole script, the line and what was tried (queries, what the reviewer saw and why it failed) and
  * proposes alternative shot ideas that carry the same moment or theme. Each idea is searched and verified
- * like a normal shot. Bounded: at most T2V_REIMAGINE_ROUNDS rounds (default and max 2), one LLM call per round,
- * at most T2V_REIMAGINE_MAX_SCENES lines and T2V_REIMAGINE_IDEAS ideas per line per round; no retries.
+ * like a normal shot.
+ *
+ * PER SCENE: every line where no candidate reaches FILLER_MIN_SCORE (5/10) gets its own reimagine rounds,
+ * at most T2V_REIMAGINE_ROUNDS per line (default and max 2), T2V_REIMAGINE_IDEAS ideas per line per round.
+ * There is no cap on how many lines are reimagined: a round's lines are batched T2V_REIMAGINE_BATCH per LLM
+ * call (calls run together), so every failing line is included. No retries of a failed call.
  */
 function envInt(name: string, fallback: number, max: number): number {
   const v = Number.parseInt(process.env[name] ?? '', 10)
   return Number.isFinite(v) && v >= 0 ? Math.min(v, max) : fallback
 }
 export const T2V_REIMAGINE_ROUNDS = envInt('T2V_REIMAGINE_ROUNDS', 2, 2)
-export const T2V_REIMAGINE_MAX_SCENES = envInt('T2V_REIMAGINE_MAX_SCENES', 10, 30)
+/** Lines per reimagine LLM call (keeps each answer inside its token budget); NOT a cap on lines. */
+export const T2V_REIMAGINE_BATCH = Math.max(1, envInt('T2V_REIMAGINE_BATCH', 8, 15))
 export const T2V_REIMAGINE_IDEAS = envInt('T2V_REIMAGINE_IDEAS', 3, 3)
 
 export type T2vShotIdea = { intent: string; mustRecognise: string; queries: string[] }
@@ -99,4 +106,55 @@ export async function t2vReimagine(input: {
     if (ideas.length) res[l.sceneId] = ideas
   }
   return res
+}
+
+/** Lines that still get a reimagine round: failing now and fewer than `maxRounds` rounds done for that line. */
+export function reimagineTargets<T extends { sceneId: string }>(failing: T[], tries: Record<string, number>, maxRounds = T2V_REIMAGINE_ROUNDS): T[] {
+  return failing.filter((s) => (tries[s.sceneId] ?? 0) < maxRounds)
+}
+
+/**
+ * Every target line gets ideas: targets are split into batches of T2V_REIMAGINE_BATCH, one LLM call each,
+ * run together. A failed batch only leaves its own lines without ideas this round (logged, never retried).
+ */
+export async function t2vReimagineAll(input: Parameters<typeof t2vReimagine>[0], batch = T2V_REIMAGINE_BATCH): Promise<Record<string, T2vShotIdea[]>> {
+  const chunks: T2vPlannedShot[][] = []
+  for (let i = 0; i < input.targets.length; i += batch) chunks.push(input.targets.slice(i, i + batch))
+  const settled = await Promise.allSettled(chunks.map((targets) => t2vReimagine({ ...input, targets })))
+  const out: Record<string, T2vShotIdea[]> = {}
+  settled.forEach((r, k) => {
+    if (r.status === 'fulfilled') Object.assign(out, r.value)
+    else logT2v('pipeline-reimagine', 'batch failed', { sceneIds: chunks[k]!.map((s) => s.sceneId), error: r.reason instanceof Error ? r.reason.message.slice(0, 200) : 'error' })
+  })
+  return out
+}
+
+/**
+ * One log entry per line per round: the ideas (intent + queries), every candidate the reviewer scored for
+ * each idea, the best score and whether the line now has a clip at FILLER_MIN_SCORE+ from this round.
+ * Idea results arrive under `${sceneId}~i${k}`; k is the idea index in `pending`.
+ */
+export function reimagineOutcomes(pending: T2vReimaginePending, results: T2vShotResult[]): T2vReimagineLogEntry[] {
+  const byId = new Map((results ?? []).filter(Boolean).map((r) => [r.sceneId, r]))
+  return Object.entries(pending).map(([sceneId, p]) => {
+    let best: number | null = null
+    const ideas = p.ideas.map((d, k) => {
+      const ev = byId.get(`${sceneId}~i${k}`)?.evaluated ?? []
+      const candidates = ev
+        .filter((e) => e.providerId && e.providerId !== '-')
+        .map((e) => {
+          const score = !e.error && typeof e.score === 'number' ? e.score : null
+          if (score !== null && (best === null || score > best)) best = score
+          return { providerId: e.providerId, score }
+        })
+      return { idea: `${sceneId}~i${k}`, intent: d.intent, queries: d.queries, candidates }
+    })
+    const passed = best !== null && best >= FILLER_MIN_SCORE
+    const note = !p.ideas.length ? 'no_ideas' : ideas.every((d) => !d.candidates.length) ? 'no_candidates' : undefined
+    return { sceneId, round: p.round, ideas, bestScore: best, passed, ...(note ? { note } : {}) }
+  })
+}
+
+export function logReimagineOutcomes(draftId: string, entries: T2vReimagineLogEntry[]) {
+  for (const e of entries) logT2v('pipeline-reimagine', 'round', { draftId, ...e })
 }

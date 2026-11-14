@@ -6,7 +6,7 @@ vi.mock('@/lib/server/t2v/pipeline/t2v-llm', () => ({ t2vLlmJson: vi.fn() }))
 vi.mock('@/lib/server/t2v/log', () => ({ logT2v: vi.fn(), logT2vError: vi.fn() }))
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { applyScriptContext, SCRIPT_CONTEXT_SYSTEM, t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
-import { baseSceneId, ideaShots, REIMAGINE_SYSTEM, T2V_REIMAGINE_ROUNDS, t2vReimagine } from '@/lib/server/t2v/pipeline/t2v-reimagine'
+import { baseSceneId, ideaShots, REIMAGINE_SYSTEM, reimagineOutcomes, reimagineTargets, T2V_REIMAGINE_BATCH, T2V_REIMAGINE_ROUNDS, t2vReimagine, t2vReimagineAll } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { SPARE_SYSTEM } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 
 const llm = vi.mocked(t2vLlmJson)
@@ -78,6 +78,92 @@ describe('reimagine (replaces the related round)', () => {
     expect(shots.every((s) => (s as { narration: string; moment: string }).narration === 'Cars scream down the straight at full speed.' && (s as { moment: string }).moment === 'The peak of the race.')).toBe(true)
     expect(baseSceneId('sc_1~i1')).toBe('sc_1')
     expect(T2V_REIMAGINE_ROUNDS).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('reimagine per scene (no global line cap)', () => {
+  // Braces: a function returned from beforeEach is run as a cleanup hook (the mock itself here).
+  beforeEach(() => {
+    llm.mockReset()
+  })
+  const idea = (n: string) => ({ intent: `Another angle ${n}.`, mustRecognise: `thing ${n}`, queries: [`query ${n}`] })
+  it('12+ failing scenes ALL get a reimagine round (batched calls, every line included)', async () => {
+    const all = Array.from({ length: 23 }, (_, i) => shot(`sc_${i}`, `Line ${i}.`))
+    const failing = all.slice(0, 14) // 14 lines with nothing at 5/10+
+    // Echo back ideas for whatever lines each call was given.
+    llm.mockImplementation((async (_sys: string, user: string) => {
+      const lines = JSON.parse(user.split('Lines: ')[1]!) as Array<{ sceneId: string }>
+      return { lines: lines.map((l) => ({ sceneId: l.sceneId, ideas: [idea(l.sceneId)] })) }
+    }) as never)
+    const targets = reimagineTargets(failing, {})
+    expect(targets).toHaveLength(14)
+    const ideas = await t2vReimagineAll({ story: { title: 'T' } as never, allShots: all, targets, tried: {}, history: {} })
+    expect(Object.keys(ideas).sort()).toEqual(failing.map((s) => (s as { sceneId: string }).sceneId).sort())
+    expect(llm).toHaveBeenCalledTimes(Math.ceil(14 / T2V_REIMAGINE_BATCH))
+    const sent = llm.mock.calls.flatMap((c) => (JSON.parse(String(c[1]).split('Lines: ')[1]!) as Array<{ sceneId: string }>).map((l) => l.sceneId))
+    expect(sent.sort()).toEqual(failing.map((s) => (s as { sceneId: string }).sceneId).sort())
+  })
+  it('a failed batch only costs its own lines this round (no retry); other batches still get ideas', async () => {
+    const all = Array.from({ length: 12 }, (_, i) => shot(`sc_${i}`, `Line ${i}.`))
+    llm.mockRejectedValueOnce(new Error('down')).mockImplementation((async (_sys: string, user: string) => {
+      const lines = JSON.parse(user.split('Lines: ')[1]!) as Array<{ sceneId: string }>
+      return { lines: lines.map((l) => ({ sceneId: l.sceneId, ideas: [idea(l.sceneId)] })) }
+    }) as never)
+    const ideas = await t2vReimagineAll({ story: { title: 'T' } as never, allShots: all, targets: all, tried: {}, history: {} }, 6)
+    expect(llm).toHaveBeenCalledTimes(2)
+    expect(Object.keys(ideas)).toHaveLength(6)
+  })
+  it('a scene stops after the per-scene round limit; others keep their own rounds', () => {
+    const a = shot('sc_a', 'A.')
+    const b = shot('sc_b', 'B.')
+    const c = shot('sc_c', 'C.')
+    expect(T2V_REIMAGINE_ROUNDS).toBe(2)
+    const tries: Record<string, number> = {}
+    // Simulate steps: a and b keep failing, c fails only from step 2 on.
+    const steps: string[][] = []
+    for (let step = 0; step < 6; step++) {
+      const failing = step === 0 ? [a, b] : [a, b, c]
+      const t = reimagineTargets(failing, tries)
+      if (!t.length) break
+      steps.push(t.map((s) => (s as { sceneId: string }).sceneId))
+      for (const s of t) tries[(s as { sceneId: string }).sceneId] = (tries[(s as { sceneId: string }).sceneId] ?? 0) + 1
+    }
+    expect(steps).toEqual([['sc_a', 'sc_b'], ['sc_a', 'sc_b', 'sc_c'], ['sc_c']])
+    expect(tries).toEqual({ sc_a: 2, sc_b: 2, sc_c: 2 })
+    expect(reimagineTargets([a, b, c], tries)).toEqual([])
+  })
+  it('logs each round per scene: idea text, queries, candidate ids + scores, passed at 5+', () => {
+    const pending = {
+      sc_1: { round: 1, ideas: [{ intent: 'Pit crew changes tyres.', queries: ['pit stop'] }, { intent: 'Crowd cheers.', queries: ['grandstand crowd'] }] },
+      sc_2: { round: 2, ideas: [{ intent: 'Helmet on.', queries: ['driver helmet'] }] },
+      sc_3: { round: 1, ideas: [] },
+    }
+    const results = [
+      { sceneId: 'sc_1~i0', chosen: null, evaluated: [{ providerId: '11', score: 3 }, { providerId: '12', score: 6 }] },
+      { sceneId: 'sc_1~i1', chosen: null, evaluated: [{ providerId: '13', error: 'download_failed' }] },
+      { sceneId: 'sc_2~i0', chosen: null, evaluated: [{ providerId: '21', score: 4 }] },
+    ]
+    const out = reimagineOutcomes(pending, results as never)
+    expect(out).toEqual([
+      {
+        sceneId: 'sc_1',
+        round: 1,
+        ideas: [
+          { idea: 'sc_1~i0', intent: 'Pit crew changes tyres.', queries: ['pit stop'], candidates: [{ providerId: '11', score: 3 }, { providerId: '12', score: 6 }] },
+          { idea: 'sc_1~i1', intent: 'Crowd cheers.', queries: ['grandstand crowd'], candidates: [{ providerId: '13', score: null }] },
+        ],
+        bestScore: 6,
+        passed: true,
+      },
+      { sceneId: 'sc_2', round: 2, ideas: [{ idea: 'sc_2~i0', intent: 'Helmet on.', queries: ['driver helmet'], candidates: [{ providerId: '21', score: 4 }] }], bestScore: 4, passed: false },
+      { sceneId: 'sc_3', round: 1, ideas: [], bestScore: null, passed: false, note: 'no_ideas' },
+    ])
+  })
+  it('the orchestrator has no global line cap on reimagine and gates on the per-scene tries', () => {
+    const src = readFileSync(join(__dirname, '../lib/server/t2v/pipeline/t2v-orchestrator.ts'), 'utf8')
+    expect(src).not.toMatch(/T2V_REIMAGINE_MAX_SCENES|missing\.slice\(0/)
+    expect(src).toMatch(/reimagineTargets\(failing, tries\)/)
+    expect(src).not.toMatch(/reimagineRound \?\? 0\) < T2V_REIMAGINE_ROUNDS/)
   })
 })
 
