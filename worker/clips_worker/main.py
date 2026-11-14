@@ -799,7 +799,27 @@ log("[ad-studio:worker] dispatch_registered type=AD_STUDIO_RUN")
 
 
 
+def _enable_t2v_info_logs() -> None:
+    """Emit INFO from clips_worker.t2v.* (verify/assemble diagnostics, no URLs) to stdout.
+
+    The worker has no root logging config, so log.info() lines were dropped in prod. Scoped to the
+    T2V package on purpose: enabling root INFO would surface third-party loggers that can include URLs.
+    """
+    import logging
+
+    t2v_log = logging.getLogger("clips_worker.t2v")
+    if any(getattr(h, "_transovo_t2v", False) for h in t2v_log.handlers):
+        return
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    handler._transovo_t2v = True  # type: ignore[attr-defined]
+    t2v_log.addHandler(handler)
+    t2v_log.setLevel(logging.INFO)
+    t2v_log.propagate = False
+
+
 def main() -> None:
+    _enable_t2v_info_logs()
     from clips_worker.startup_check import validate_worker_env
     from clips_worker.worker_drain import drain_requested, install_drain_handlers
 
