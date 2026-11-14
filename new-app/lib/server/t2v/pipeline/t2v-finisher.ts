@@ -1,5 +1,5 @@
 import 'server-only'
-import { bestStockScore, FILLER_MIN_SCORE, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, depictsRank, FILLER_MIN_SCORE, lookalikePairs, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { compactScript } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
@@ -8,6 +8,7 @@ import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vDraftV1, T2vKenBurns, T2vScene, T2vSceneMedia } from '@/lib/t2v/types'
 import type {
   T2vFootageCandidate,
+  T2vLookalikeBan,
   T2vVerifiedPick,
   T2vNarrationSegment,
   T2vPipelineRun,
@@ -99,7 +100,11 @@ export async function t2vFinisher(input: {
   candidates: Record<string, T2vFootageCandidate[]>
   /** Clips the sequence check removed per scene (never re-placed there). */
   banned?: Record<string, string[]>
-}): Promise<{ scenes: T2vScene[]; results: T2vShotResult[] }> {
+  /** Look-alike bans carried on the run (never placed on any line). */
+  lookalikeBans?: T2vLookalikeBan[]
+}): Promise<{ scenes: T2vScene[]; results: T2vShotResult[]; lookalikeBans: T2vLookalikeBan[] }> {
+  const bannedAll = new Set((input.lookalikeBans ?? []).map((b) => b.providerId))
+  const newBans: T2vLookalikeBan[] = []
   const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
   const usedHashes = input.results.map((r) => r.chosen?.phash).filter((h): h is string[] => Boolean(h?.length))
@@ -111,7 +116,7 @@ export async function t2vFinisher(input: {
   const options = new Map<string, Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>>()
   const open = input.shots.filter((shot) => !byScene.get(shot.sceneId)?.chosen)
   const okFor = (shot: T2vPlannedShot) => {
-    const banned = new Set(input.banned?.[shot.sceneId] ?? [])
+    const banned = new Set([...(input.banned?.[shot.sceneId] ?? []), ...bannedAll])
     return (e: Ev) =>
       !e.error && e.kind !== 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && !usedHashes.some((h) => nearDuplicateHash(e.phash, h))
   }
@@ -123,7 +128,7 @@ export async function t2vFinisher(input: {
   const seqOk = (shot: T2vPlannedShot, p: T2vVerifiedPick) => {
     const i = input.shots.indexOf(shot)
     const [b, a, n] = [pickAt(i - 2), pickAt(i - 1), pickAt(i + 1)]
-    const still = (x?: T2vVerifiedPick) => x?.kind === 'photo'
+    const still = (x?: T2vVerifiedPick) => x?.kind === 'photo' || x?.static === true
     if (still(p) && still(a) && (still(b) || still(n))) return false
     return !(a && nearIdenticalShot(a, p)) && !(n && nearIdenticalShot(n, p))
   }
@@ -142,12 +147,12 @@ export async function t2vFinisher(input: {
     const r = byScene.get(shot.sceneId)
     const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = []
     // 0) A good AI clip for this line (same acceptance as the no-repeat pass) beats any filler.
-    const banned = new Set(input.banned?.[shot.sceneId] ?? [])
+    const banned = new Set([...(input.banned?.[shot.sceneId] ?? []), ...bannedAll])
     const bestStock = bestStockScore(r, qctx, (e) => !used.has(e.providerId))
     for (const e of (r?.evaluated ?? []).filter((e) => e.kind === 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && t2vAiAcceptable(e, qctx, bestStock)))
       list.push({ pick: evToPick(e), tier: 'ai' })
     // 1) An unused own clip the reviewer scored FILLER_MIN_SCORE+ for THIS line (live action first).
-    const own = (r?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= FILLER_MIN_SCORE).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+    const own = (r?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= FILLER_MIN_SCORE).sort((a, b) => q(b) - q(a) || depictsRank(b) - depictsRank(a) || (b.score ?? 0) - (a.score ?? 0))
     for (const e of own) list.push({ pick: evToPick(e), tier: 'fallback' })
     if (list.length) take(shot, list)
   }
@@ -189,6 +194,41 @@ export async function t2vFinisher(input: {
       }))
     if (!cross.length) logT2v('pipeline-finisher', 'no option at the floor, extending the previous shot', { sceneId: shot.sceneId, floor: FILLER_MIN_SCORE })
     take(shot, cross)
+  }
+  // The finisher's own placements get the same look-alike check as the pick pass (not only id/phash matches):
+  // a placement that looks like another shot in the edit gives way to its next option, and the clip is banned
+  // for the whole run. Placements from the pick pass were already checked there and never give way here.
+  const own = (sceneId: string) => !byScene.get(sceneId)?.chosen && Boolean(options.get(sceneId)?.length)
+  for (let pass = 0; pass < 2 && input.shots.some((s) => own(s.sceneId)); pass++) {
+    const seq = input.shots.map((s, i) => ({ s, c: pickAt(i) })).filter((x): x is { s: T2vPlannedShot; c: T2vVerifiedPick } => Boolean(x.c))
+    const items = seq.map((x, p) => ({ p, still: x.c.kind === 'photo', framing: x.c.framing ?? '', subject: x.c.subject ?? '', visible: (x.c.seen || x.c.visible || '').slice(0, 160) }))
+    let pairs: Array<[number, number]>
+    try {
+      pairs = items.length >= 2 ? await lookalikePairs(items) : []
+    } catch (err) {
+      logT2v('pipeline-finisher', 'look-alike check failed (id/phash rules still applied)', { error: err instanceof Error ? err.message : 'error' })
+      break
+    }
+    let changed = false
+    for (const [a, b] of pairs) {
+      const x = seq[a]
+      const y = seq[b]
+      if (!x || !y) continue
+      // The later finisher placement gives way (the pick pass's choices stand).
+      const loser = [y, x].find((v) => own(v.s.sceneId) && options.get(v.s.sceneId)?.[0]?.pick.providerId === v.c.providerId)
+      if (!loser || bannedAll.has(loser.c.providerId)) continue
+      const twin = loser === x ? y : x
+      bannedAll.add(loser.c.providerId)
+      newBans.push({ providerId: loser.c.providerId, of: twin.c.providerId, sceneId: loser.s.sceneId, source: 'finisher', at: new Date().toISOString() })
+      logT2v('pipeline-finisher', 'ban', { sceneId: loser.s.sceneId, providerId: loser.c.providerId, reason: `lookalike_of:${twin.s.sceneId}:${twin.c.providerId}` })
+      // Next options only if no other line took them meanwhile (a clip never shows twice).
+      const rest = (options.get(loser.s.sceneId) ?? []).filter((o) => !bannedAll.has(o.pick.providerId) && !used.has(o.pick.providerId))
+      options.set(loser.s.sceneId, rest)
+      if (rest[0]) used.add(rest[0].pick.providerId)
+      else logT2v('pipeline-finisher', 'no option at the floor, extending the previous shot', { sceneId: loser.s.sceneId, floor: FILLER_MIN_SCORE, after: 'lookalike_ban' })
+      changed = true
+    }
+    if (!changed) break
   }
   // Direction per photo shot, in story order (varied, never two of the same move in a row).
   const photoMove = new Map<string, T2vKenBurns>()
@@ -252,6 +292,9 @@ export async function t2vFinisher(input: {
 
   const scenes: T2vScene[] = []
   const results: T2vShotResult[] = []
+  // Opening lines with nothing to show (no previous shot to extend) ride FORWARD on the first shot that has
+  // footage, instead of a black title card (consistent with the title/end-card removal).
+  let lead: string[] = []
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
@@ -276,12 +319,20 @@ export async function t2vFinisher(input: {
       }
       return
     }
+    if (!got && !prevScene && input.shots.slice(i + 1).some((_, k) => placed[i + 1 + k])) {
+      lead.push(shot.narration)
+      results.push({ ...r, outcome: 'held', pickedBy: 'held' })
+      logT2v('pipeline-finisher', 'opening line has no clip at the floor, holding forward on the next shot', { sceneId: shot.sceneId, floor: FILLER_MIN_SCORE })
+      return
+    }
     results.push(got ? { ...r, chosen: got.pick, outcome: 'stock', pickedBy: got.tier } : { ...r, outcome: 'title_card', pickedBy: 'card' })
     const texts: T2vScene['texts'] = []
+    const narration = lead.length ? `${lead.join(' ')} ${shot.narration}` : shot.narration
+    lead = []
     scenes.push({
       id: shot.sceneId,
       slot: scenes.length,
-      narration: shot.narration,
+      narration,
       keywords: shot.queries[0]?.toLowerCase().split(/\s+/).slice(0, 6) ?? [],
       visualQuery: shot.queries[0] ?? shot.intent,
       media: got?.media ?? titleCard(),
@@ -295,5 +346,6 @@ export async function t2vFinisher(input: {
   })
   // The last shot fades to black on its own (no end card after it).
   if (scenes.length) scenes[scenes.length - 1]!.transitionMs = 600
-  return { scenes, results }
+  // Carried bans plus the finisher's own: the caller stores the whole list on the run.
+  return { scenes, results, lookalikeBans: [...(input.lookalikeBans ?? []), ...newBans] }
 }

@@ -92,11 +92,15 @@ export type T2vPlannedShot = {
   moment?: string
   /** Script-context pass: ways an editor could show the moment (most direct first). */
   showIdeas?: string[]
+  /** Script-context pass: what a viewer should literally see for this line's meaning (drives the searches). */
+  lineShows?: string
   /** Shots sharing a voiceGroup share one narration clip; later ones are in-scene cuts at wordOffset. */
   voiceGroup?: string
   wordOffset?: number
   /** Whole voice-group narration around this shot (context for split shots). */
   sentence?: string
+  /** Reimagine idea shots: the intended shot that found the candidates (sent to the checker). */
+  idea?: string
 }
 
 export type T2vFootageCandidate = {
@@ -148,6 +152,16 @@ export type T2vVerifiedPick = {
   fitReason?: string
   /** Reviewer: what is literally on screen, written before the fit judgement (score and fitReason build on it). */
   seen?: string
+  /** Reviewer: the concrete thing or action this line is about, in a few words (from the line in its sentence). */
+  lineShows?: string
+  /** Reviewer: does `seen` literally show `lineShows`? Code caps the score: no -> 4, partly -> 6. */
+  depicts?: T2vDepicts
+  /** Worker motion check: a video clip whose chosen window is a frozen frame (treated as a still, score capped). */
+  static?: boolean
+  /** Mean frame difference (0-255) across the window, information only. */
+  motion?: number
+  /** The model's own score before the depiction cap (information only). */
+  rawScore?: number
   /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
   fitReasonFrom?: 'verify' | 'line_recheck'
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
@@ -172,6 +186,12 @@ export type T2vShotResult = {
 }
 
 export type T2vPickedBy = 'accepted' | 'usable' | 'photo' | 'spare' | 'ai' | 'fallback' | 'last_resort' | 'held' | 'card'
+
+/** A clip the sequence check found to be a look-alike of another placed clip: never placed again in this run. */
+export type T2vLookalikeBan = { providerId: string; of: string; sceneId: string; source: 'pick_pass' | 'finisher'; at: string }
+
+/** Literal-depiction judgement: does what is on screen show what the line is about (yes / partly / no). */
+export type T2vDepicts = 'yes' | 'partly' | 'no'
 
 export type T2vReimaginePending = Record<string, { round: number; ideas: Array<{ intent: string; queries: string[] }> }>
 
@@ -218,6 +238,15 @@ export type T2vPipelineRun = {
   reimagineRound?: number
   /** Reimagine rounds done per line (each line max T2V_REIMAGINE_ROUNDS). */
   reimagineTries?: Record<string, number>
+  /** Candidates sent to verify by reimagine steps in this run (budget T2V_REIMAGINE_VERIFY_BUDGET). */
+  reimagineVerifyUsed?: number
+  /** Look-alike bans found by any pick pass or the finisher: carried into every later pass (never forgotten). */
+  lookalikeBans?: T2vLookalikeBan[]
+  /** Verifier (Gemini watch) calls so far in this run, summed from each verify job's summary (counted once per job). */
+  verifierCalls?: number
+  verifierJobs?: string[]
+  /** Set by the operator reset tool: when this run was restarted (the status route returns it). */
+  resetAt?: string
   /** Ideas of the reimagine step in flight, per line (logged with their scores when the verify job ends). */
   reimaginePending?: T2vReimaginePending
   /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */

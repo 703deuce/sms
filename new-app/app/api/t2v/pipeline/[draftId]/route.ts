@@ -43,7 +43,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ draftId: s
       run = (row.document as T2vDraftV1).autobuild!
     }
     let video: { status: string; progress: number | null; downloadUrl: string | null; outputDurationMs: number | null } | null = null
-    if (run.renderId && run.compositionId) {
+    // The video belongs to THIS run only once it is being rendered or done (a reset run never shows the old file).
+    if (run.renderId && run.compositionId && (run.status === 'editing_video' || run.status === 'done')) {
       const render = await prisma.scriptCompositionRender.findUnique({ where: { id: run.renderId } })
       if (render) {
         const settings = (render.settings ?? {}) as Record<string, unknown>
@@ -68,21 +69,28 @@ export async function GET(_request: Request, ctx: { params: Promise<{ draftId: s
     }))
     const { candidates: _c, ...runLite } = run
     void _c
-    return NextResponse.json({
-      data: {
-        draftId,
-        projectId: row.projectId,
-        title: (row.document as T2vDraftV1).title,
-        status: run.status,
-        error: run.error ?? null,
-        progress: pipelineProgress(run),
-        assembleStage: row.stage,
-        assembleProgress: row.progress,
-        stages,
-        run: runLite,
-        video,
+    return NextResponse.json(
+      {
+        data: {
+          draftId,
+          revision: row.revision,
+          runStartedAt: run.startedAt ?? null,
+          resetAt: run.resetAt ?? null,
+          projectId: row.projectId,
+          title: (row.document as T2vDraftV1).title,
+          status: run.status,
+          error: run.error ?? null,
+          progress: pipelineProgress(run),
+          assembleStage: row.stage,
+          assembleProgress: row.progress,
+          stages,
+          run: runLite,
+          video,
+        },
       },
-    })
+      // Status polls are never served from a cache (a stale `done` after a reset would hand out an old video).
+      { headers: { 'Cache-Control': 'no-store, max-age=0' } },
+    )
   } catch (err) {
     return jsonError(err, 500)
   }

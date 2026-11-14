@@ -23,17 +23,50 @@ export const T2V_REIMAGINE_ROUNDS = envInt('T2V_REIMAGINE_ROUNDS', 2, 2)
 /** Lines per reimagine LLM call (keeps each answer inside its token budget); NOT a cap on lines. */
 export const T2V_REIMAGINE_BATCH = Math.max(1, envInt('T2V_REIMAGINE_BATCH', 8, 15))
 export const T2V_REIMAGINE_IDEAS = envInt('T2V_REIMAGINE_IDEAS', 3, 3)
+/**
+ * Per-run budget for reimagine: candidates sent to verify by all reimagine steps together (each is one Gemini
+ * watch). Lines are served in story order; when the budget is spent the remaining lines fall through (logged).
+ */
+export const T2V_REIMAGINE_VERIFY_BUDGET = envInt('T2V_REIMAGINE_VERIFY_BUDGET', 90, 400)
+
+/** Trim a reimagine step's candidates (story order) to what is left of the run's budget. */
+export function trimToBudget<S extends { sceneId: string }, C>(
+  shots: S[],
+  found: Record<string, C[]>,
+  left: number,
+): { shots: S[]; found: Record<string, C[]>; used: number; dropped: string[] } {
+  const out: Record<string, C[]> = {}
+  const kept: S[] = []
+  const dropped: string[] = []
+  let used = 0
+  for (const s of shots) {
+    const list = found[s.sceneId] ?? []
+    if (!list.length) continue
+    const room = Math.max(0, left - used)
+    if (!room) {
+      dropped.push(s.sceneId)
+      continue
+    }
+    out[s.sceneId] = list.slice(0, room)
+    used += out[s.sceneId]!.length
+    kept.push(s)
+  }
+  return { shots: kept, found: out, used, dropped }
+}
 
 export type T2vShotIdea = { intent: string; mustRecognise: string; queries: string[] }
 
 export const REIMAGINE_SYSTEM = `You help the editor of a stock-footage video. For each line below, nothing found so far fits. Read the whole
 script first so you understand the video and what each line's moment needs to say.
 
-For each line propose 3 ALTERNATIVE shots that carry the same moment in a different way and that are filmed
-constantly as stock footage. Think like an editor who cannot get the literal shot: show a related part of the
-same activity, its result, its setting, its tools, the person's reaction, or a detail that implies it. Example
-of the thinking (not a rule): a line about racing with no raceway footage -> a pit-stop crew changing tyres,
-a driver pulling on a helmet, a close-up of a revving tachometer.
+For each line propose 3 ALTERNATIVE shots that directly SHOW what this line is about (read it inside its full
+sentence), filmed in a different, literal way that is common in stock footage: another angle, a closer or wider
+shot, another everyday situation where the same thing or action is plainly visible, or the concrete step of it
+that a viewer would recognise at once. The footage checker only passes a clip when a viewer watching this
+video would immediately see the line in it: a symbol, a metaphor, a mood, a related theme or something that only
+implies the line will be rejected, so do not propose those. Example of the thinking (not a rule): a line about
+racing with no raceway footage -> cars passing a corner of a race track from the stands, an onboard view of a
+race car on the track, a close-up of race tyres on the track.
 
 Use what was tried and why the reviewer rejected it (fit_reason) to avoid the same dead ends. Never propose
 something that would look out of place in this video, and if the line warns against an act, show the safe
@@ -42,7 +75,8 @@ alternative, never the act.
 Each idea:
 - intent: one plain sentence describing the shot.
 - mustRecognise: 2-5 words, the one thing the viewer must recognise (no hands or placement unless essential).
-- queries: 3 stock search phrases of 1-3 common words; never a query already tried.
+- queries: 3 stock search phrases of 2-3 common words naming the idea's visible subject plus its action or place,
+  the way a stock site tags footage (different literal phrasings); never a query already tried.
 Return ONLY JSON: {"lines": [{"sceneId": string, "ideas": [{"intent": string, "mustRecognise": string,
 "queries": string[]}]}]}`
 
@@ -84,7 +118,7 @@ export function sceneContext(all: Array<Pick<T2vPlannedShot, 'sceneId' | 'narrat
 export const baseSceneId = (id: string) => id.split('~')[0]!
 
 export function ideaShots(base: T2vPlannedShot, ideas: T2vShotIdea[]): T2vPlannedShot[] {
-  return ideas.map((d, k) => ({ ...base, sceneId: `${base.sceneId}~i${k}`, intent: d.intent, subject: d.mustRecognise, queries: d.queries }))
+  return ideas.map((d, k) => ({ ...base, sceneId: `${base.sceneId}~i${k}`, intent: d.intent, idea: d.intent, subject: d.mustRecognise, queries: d.queries }))
 }
 
 const clean = (q: unknown) => String(q ?? '').replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 60)
@@ -108,6 +142,7 @@ export async function t2vReimagine(input: {
     previousLine: ctx.prevNarration,
     nextLine: ctx.nextNarration,
     moment: s.moment || s.intent,
+    ...(s.lineShows ? { lineShows: s.lineShows } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejected: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.seen || e.visible)

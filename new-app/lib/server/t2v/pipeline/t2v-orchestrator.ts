@@ -8,6 +8,7 @@ import { defaultT2vDraft } from '@/lib/t2v/defaults'
 import { DEFAULT_T2V_VOICE } from '@/lib/t2v/voice-defaults'
 import { logT2v, logT2vError } from '@/lib/server/t2v/log'
 import type { T2vAspect, T2vDraftV1 } from '@/lib/t2v/types'
+import type { T2vLookalikeBan } from '@/lib/t2v/pipeline/t2v-types'
 import {
   T2V_PIPELINE_DEFAULT_NARRATOR,
   T2V_PIPELINE_NARRATORS,
@@ -27,9 +28,9 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { depictsRank, enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
-import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneContext, T2V_REIMAGINE_ROUNDS, t2vReimagineAll } from '@/lib/server/t2v/pipeline/t2v-reimagine'
+import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneContext, T2V_REIMAGINE_ROUNDS, T2V_REIMAGINE_VERIFY_BUDGET, t2vReimagineAll, trimToBudget } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -361,6 +362,20 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return r
         })
       }
+      // Verifier calls per run (one Gemini watch per candidate): counted once per job, logged per job and at the end.
+      let verifierCalls = run.verifierCalls ?? 0
+      if (job?.status === 'DONE' && !(run.verifierJobs ?? []).includes(job.id)) {
+        const calls = Number(payload.summary?.geminiCalls ?? 0) || 0
+        const stage = run.aiRound === 2 ? 'ai' : (run.reimagineRound ?? 0) > 0 ? 'reimagine' : run.photoRound === 1 ? 'photo' : run.rescueRound === 1 ? 'rescue' : `search_${run.verifyRound ?? 0}`
+        verifierCalls += calls
+        logT2v('pipeline', 'verifier calls', { draftId, jobId: job.id, stage, calls, runTotal: verifierCalls })
+        await writeRun(draftId, (r) => {
+          if ((r.verifierJobs ?? []).includes(job.id)) return r
+          r.verifierCalls = (r.verifierCalls ?? 0) + calls
+          r.verifierJobs = [...(r.verifierJobs ?? []), job.id]
+          return r
+        })
+      }
       // Reimagined ideas verify under `${sceneId}~iK`; their results belong to the line itself.
       const roundResults = ((payload.results ?? []).filter(Boolean) as T2vShotResult[]).map((r) => ({ ...r, sceneId: baseSceneId(r.sceneId) }))
       // Per line, per round: ideas, queries, every candidate's score and whether the line now passes (5+).
@@ -455,8 +470,12 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.reimagineRound = step
             const t = { ...(r.reimagineTries ?? {}) }
             // A thrown round (search/LLM error) ends reimagine for its lines: no paid automatic retries.
-            for (const s of targets) t[s.sceneId] = next ? (tries[s.sceneId] ?? 0) + 1 : T2V_REIMAGINE_ROUNDS
+            for (const s of targets) t[s.sceneId] = next && !next.budgetHit ? (tries[s.sceneId] ?? 0) + 1 : T2V_REIMAGINE_ROUNDS
             r.reimagineTries = t
+            // Look-alike bans of this pass are kept on the run: the next pass (after the reimagine verify) is a
+            // fresh model call that may not flag the same pair again (snow 44082 came back on sc_19).
+            r.lookalikeBans = fullPass!.lookalikeBans
+            if (next) r.reimagineVerifyUsed = (r.reimagineVerifyUsed ?? 0) + next.verifyUsed
             r.verifyJobId = next?.jobId ?? undefined
             r.reimaginePending = next?.jobId ? next.pending : undefined
             if (settled.length) r.reimagineLog = [...(r.reimagineLog ?? []), ...settled]
@@ -488,6 +507,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.verifyHistory = history
             r.aiRound = 1
             r.aiJobs = started.jobs
+            if (started.lookalikeBans) r.lookalikeBans = started.lookalikeBans
             // AI runs after every stock round; never go back to them afterwards.
             r.photoRound ??= 2
             r.log.push({ stage: r.status, at: new Date().toISOString(), note: `ai_broll_start:${started.jobs.map((j) => j.sceneId).join(',')}` })
@@ -512,6 +532,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         results,
         candidates: run.candidates ?? {},
         banned: noRepeat.banned,
+        lookalikeBans: noRepeat.lookalikeBans,
       })
       logScenePicks(draftId, run.shots!, fin.results)
       const qa = t2vQaPlan({ run, scenes: fin.scenes, results: fin.results })
@@ -525,6 +546,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           {
             ...fresh.document.autobuild!,
             results: fin.results,
+            lookalikeBans: fin.lookalikeBans,
             verifyHistory: undefined,
             verifySummary: payload.summary,
             stockStats,
@@ -536,7 +558,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       }
       await saveT2vDraft(row.workspaceId, draftId, fresh.revision, nextDoc)
       await prisma.t2vDraft.update({ where: { id: draftId }, data: { stage: 'pipeline:generating_narration' } })
-      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, ...stockStats })
+      logT2v('pipeline', 'edit built', { draftId, scenes: fin.scenes.length, qaPass: qa.pass, verifierCalls, ...stockStats })
       logT2v('pipeline', 'stock success rate', { draftId, verifiedRate: stockStats.verifiedRate, stockCoverage: stockStats.stockCoverage, rounds: stockStats.rounds })
       return advanceOnce(draftId, {})
     }
@@ -674,6 +696,10 @@ async function enqueueVerify(
             sentence: ctx.sentence,
             prevNarration: ctx.prevNarration,
             nextNarration: ctx.nextNarration,
+            // Reimagine: the shot idea that found these clips (the checker requires the clip to show it too).
+            idea: s.idea ?? '',
+            // What the search looked for (script-context lineShows): context for the checker, which judges itself.
+            lineShows: s.lineShows ?? '',
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,
@@ -693,7 +719,13 @@ async function enqueueVerify(
 
 /** Options for every pick pass (dry run, no-repeat, AI targets): style plus the script for the re-checks. */
 function pickOpts(run: T2vPipelineRun) {
-  return { realistic: t2vRealisticStyle(run.style), script: compactScript(run.shots ?? []), videoUnderstanding: run.story?.videoUnderstanding }
+  return {
+    realistic: t2vRealisticStyle(run.style),
+    script: compactScript(run.shots ?? []),
+    videoUnderstanding: run.story?.videoUnderstanding,
+    // Every pass starts from the run's look-alike bans (pick passes, AI step, finisher).
+    lookalikeBans: run.lookalikeBans ?? [],
+  }
 }
 
 /** Per-scene pick log (no URLs): line, tier, clip, score and the reviewer's own words. */
@@ -720,7 +752,8 @@ function logScenePicks(draftId: string, shots: T2vPlannedShot[], results: T2vSho
 function pickScore(r: T2vShotResult | undefined): number {
   const c = r?.chosen
   if (!c) return -1
-  return (c.verdict === 'accepted' ? 100 : c.verdict === 'weak_match' ? 50 : 0) + (c.score ?? 0)
+  // Depiction before score (same order as the pick pass): yes > not judged > partly > no.
+  return (c.verdict === 'accepted' ? 100 : c.verdict === 'weak_match' ? 50 : 0) + 11 * depictsRank(c) + (c.score ?? 0)
 }
 
 /** Keep the best pick per scene across rounds; accumulate everything the reviewer saw. */
@@ -776,14 +809,14 @@ async function claimAiStep(draftId: string): Promise<boolean> {
 }
 
 /** Start one generation per target scene (aiBrollTargets: weakest first, max 3); no retries. */
-async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[] }> {
+async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[]; lookalikeBans?: T2vLookalikeBan[] }> {
   const opts = pickOpts(run)
   // Predict with the same full pass the edit uses (spares + sequence check), so the clips go where the
   // final picks would really be weakest (the dry pass misses look-alike swaps).
   const full = await enforceNoRepeat(run.shots!, history, opts).catch(() => undefined)
   const predicted = full ? { out: full.results, tiers: full.tiers } : undefined
   const needy = aiBrollTargets(run.shots!, history, opts, predicted)
-  if (!needy.length) return { jobs: [] }
+  if (!needy.length) return { jobs: [], lookalikeBans: full?.lookalikeBans }
   const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
   const jobs: T2vAiJob[] = []
   for (const [k, sh] of needy.entries()) {
@@ -796,7 +829,7 @@ async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShot
       logT2v('pipeline-ai', 'generation not started', { sceneId: sh.sceneId, error: err instanceof Error ? err.message : 'error' })
     }
   }
-  return { jobs }
+  return { jobs, lookalikeBans: full?.lookalikeBans }
 }
 
 /** Poll the generations; when all settle (or 8 min pass), enqueue one verify job for the finished clips. */
@@ -860,8 +893,18 @@ async function reimagineRound(
   ideas: number
   pending: T2vReimaginePending
   settledNow: T2vReimagineLogEntry[]
+  verifyUsed: number
+  budgetHit?: boolean
 }> {
   const tried = { ...(run.queriesTried ?? {}) }
+  const left = Math.max(0, T2V_REIMAGINE_VERIFY_BUDGET - (run.reimagineVerifyUsed ?? 0))
+  if (!left) {
+    // Budget spent: no idea call, no search, no verify; these lines fall through to AI / extend-previous.
+    logT2v('pipeline-reimagine', 'budget hit', { draftId: row.id, budget: T2V_REIMAGINE_VERIFY_BUDGET, used: run.reimagineVerifyUsed ?? 0, lines: targets.map((s) => s.sceneId) })
+    const none: T2vReimaginePending = {}
+    for (const s of targets) none[s.sceneId] = { round: (tries[s.sceneId] ?? 0) + 1, ideas: [] }
+    return { jobId: null, tried, candidates: run.candidates ?? {}, shots: 0, ideas: 0, pending: {}, settledNow: reimagineOutcomes(none, []), verifyUsed: 0, budgetHit: true }
+  }
   const roundOf = (sceneId: string) => (tries[sceneId] ?? 0) + 1
   const ideas = await t2vReimagineAll({ story: run.story!, allShots: run.shots!, targets, tried, history })
   const plan: T2vReimaginePending = {}
@@ -887,7 +930,13 @@ async function reimagineRound(
       if (list.length) found[s.sceneId] = list
     }
   }
-  const withCands = shots.filter((s) => found[s.sceneId]?.length)
+  // Run budget: candidates in story order up to what is left; the rest of this step is dropped (logged).
+  const budgeted = trimToBudget(shots, found, left)
+  if (budgeted.dropped.length)
+    logT2v('pipeline-reimagine', 'budget hit', { draftId: row.id, budget: T2V_REIMAGINE_VERIFY_BUDGET, used: (run.reimagineVerifyUsed ?? 0) + budgeted.used, droppedIdeas: budgeted.dropped })
+  for (const k of Object.keys(found)) if (!budgeted.found[k]) delete found[k]
+  Object.assign(found, budgeted.found)
+  const withCands = budgeted.shots
   const linesWithCands = new Set(withCands.map((s) => baseSceneId(s.sceneId)))
   const pending: T2vReimaginePending = {}
   const nothing: T2vReimaginePending = {}
@@ -902,7 +951,7 @@ async function reimagineRound(
   const jobId = withCands.length
     ? await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic: t2vRealisticStyle(run.style) })
     : null
-  return { jobId, tried, candidates, shots: linesWithCands.size, ideas: withCands.length, pending, settledNow }
+  return { jobId, tried, candidates, shots: linesWithCands.size, ideas: withCands.length, pending, settledNow, verifyUsed: budgeted.used }
 }
 
 /** Photo fallback round: Pixabay photos for weak lines → one verify job (stills, same checks). */

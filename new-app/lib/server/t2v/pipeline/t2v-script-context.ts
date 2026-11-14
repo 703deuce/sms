@@ -15,7 +15,8 @@ footage team so every shot fits this video and this moment in it.
 
 Return ONLY JSON:
 {"videoUnderstanding": string,
- "lines": [{"lineNo": number, "moment": string, "mustRecognise": string, "showIdeas": string[]}]}
+ "lines": [{"lineNo": number, "moment": string, "lineShows": string, "mustRecognise": string, "showIdeas": string[],
+   "searches": string[]}]}
 
 - videoUnderstanding: 2-4 plain sentences in your own words: what this video is about, who is watching and
   what situation they are in, and what the footage should feel like overall. Describe only what the script
@@ -23,11 +24,23 @@ Return ONLY JSON:
 - moment (per line): one sentence on what THIS line means at THIS point of the video, read together with
   the lines before and after it (what the viewer is doing, where they are, what they should feel). If a line
   deliberately moves somewhere new, say so.
+- lineShows: in a few plain words, what a viewer should literally SEE on screen for what THIS line means (if
+  the line is part of a sentence, read the whole sentence but describe THIS part): the visible thing plus the
+  action the line asks for or describes, or its result. When the line advises stopping, avoiding or reducing
+  something, lineShows is the advised action or its result, not the thing to stop. When the line names
+  something abstract (a routine, a habit, a plan, a feeling), lineShows is ONE concrete everyday example of it
+  that a viewer would recognise at a glance.
 - mustRecognise: 2-5 words naming the one thing a viewer must be able to recognise on screen for the shot to
   work (an object, place or activity). Do not add hands, people, camera angles or placement unless the line
   is about them.
 - showIdeas: 3 different ways a real editor could show this moment with common stock footage, most direct
   first, then a less literal one that still clearly carries the same moment. Each 4-12 words.
+- searches: 4 short stock-video search queries for lineShows, the way a stock site tags footage: usually 2
+  words, 3 at most: the main visible object or subject plus its action or place (e.g. "locking door",
+  "opening window", "watering plants"). Every query names the object the line is about; do not spend words on
+  who does it (person, woman), on filler or on mood. Each query a DIFFERENT literal phrasing: another
+  everyday word for the object, the action, or its visible result. Where the video's setting would be visible
+  in the shot, one query may name it.
 - If a line says NOT to do something, the ideas must show the safe alternative, never the warned-against act.`
 
 const clean = (v: unknown, n: number) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
@@ -48,14 +61,21 @@ export function applyScriptContext(
     const moment = clean(l.moment, 400)
     const must = clean(l.mustRecognise, 80)
     const ideas = (Array.isArray(l.showIdeas) ? l.showIdeas : []).map((x) => clean(x, 120)).filter(Boolean).slice(0, 3)
-    // The planner's queries are still searched first; the two most direct ideas seed extra queries.
-    const seeds = ideas.slice(0, 2).map(cleanQuery).filter((q) => q.length > 2)
+    const lineShows = clean(l.lineShows, 160)
+    // Literal keyword searches for what the viewer should see go FIRST (search and checker share the target);
+    // the planner's queries follow. Long sentence-like ideas are not searched (Pixabay tags are 1-3 words).
+    const searches = (Array.isArray(l.searches) ? l.searches : [])
+      .map((x) => cleanQuery(String(x ?? '')).toLowerCase())
+      .filter((q) => q.length > 2 && q.split(' ').length <= 4)
+      .slice(0, 4)
+    const seeds = searches.length ? [] : ideas.slice(0, 2).map(cleanQuery).filter((q) => q.length > 2)
     return {
       ...s,
       ...(moment ? { moment } : {}),
+      ...(lineShows ? { lineShows } : {}),
       ...(must ? { subject: must } : {}),
       ...(ideas.length ? { showIdeas: ideas } : {}),
-      queries: [...new Set([...s.queries, ...seeds])],
+      queries: [...new Set([...searches, ...s.queries, ...seeds])],
     }
   })
   return { videoUnderstanding: clean(out.videoUnderstanding, 1200), shots: next }
