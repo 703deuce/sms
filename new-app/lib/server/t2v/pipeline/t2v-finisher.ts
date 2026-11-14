@@ -1,5 +1,5 @@
 import 'server-only'
-import { nearDuplicateHash, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { nearDuplicateHash, scoreSpares, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
@@ -78,11 +78,16 @@ function evToPick(e: Ev): T2vVerifiedPick {
 const wordSet = (t: string) => new Set(t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2))
 
 /** How related a reviewed clip (for any line) is to this shot: subject/query word overlap with what it shows. */
-export function relatedness(shot: Pick<T2vPlannedShot, 'subject' | 'queries' | 'narration'>, e: Pick<Ev, 'subject' | 'visible'>): number {
+export function relatedness(
+  shot: Pick<T2vPlannedShot, 'subject' | 'queries' | 'narration'>,
+  e: Pick<Ev, 'subject' | 'visible'>,
+  topicWords: Set<string> = new Set(),
+): number {
+  // Topic words ("coffee") match every clip of the video, so they say nothing about this line.
   const want = wordSet(`${shot.subject ?? ''} ${shot.queries.join(' ')} ${shot.narration}`)
   const has = wordSet(`${e.subject ?? ''} ${e.visible ?? ''}`)
   let n = 0
-  for (const w of has) if (want.has(w)) n++
+  for (const w of has) if (want.has(w) && !topicWords.has(w)) n++
   return n
 }
 
@@ -125,7 +130,7 @@ export async function t2vFinisher(input: {
   const okFor = (shot: T2vPlannedShot) => {
     const banned = new Set(input.banned?.[shot.sceneId] ?? [])
     return (e: Ev) =>
-      !e.error && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && !usedHashes.some((h) => nearDuplicateHash(e.phash, h))
+      !e.error && e.kind !== 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && !usedHashes.some((h) => nearDuplicateHash(e.phash, h))
   }
   const take = (shot: T2vPlannedShot, list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>) => {
     options.set(shot.sceneId, list)
@@ -142,20 +147,39 @@ export async function t2vFinisher(input: {
     const own = (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= 3).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
     if (own.length) take(shot, own.map((e) => ({ pick: evToPick(e), tier: 'fallback' as const })))
   }
+  // 2) Closest related footage reviewed for another line: shortlist by subject overlap (topic words
+  // ignored), then ONE text-only re-check scores each against the line it would sit under.
+  const topicWords = wordSet(`${input.story.topic ?? ''} ${input.story.title ?? ''}`)
+  const shortlist: Record<string, Ev[]> = {}
+  for (const shot of open) {
+    if (options.get(shot.sceneId)?.length) continue
+    const ok = okFor(shot)
+    const seen = new Set<string>()
+    shortlist[shot.sceneId] = allEvaluated
+      .filter((e) => ok(e) && (e.score ?? 0) >= 3 && t2vQualityOk(e, qctx(shot)) && relatedness(shot, e, topicWords) > 0)
+      .sort((a, b) => relatedness(shot, b, topicWords) - relatedness(shot, a, topicWords) || (b.score ?? 0) - (a.score ?? 0))
+      .filter((e) => !seen.has(e.providerId) && seen.add(e.providerId))
+      .slice(0, 5)
+  }
+  let lineScores: Record<string, Record<string, number>> = {}
+  if (Object.values(shortlist).some((l) => l.length)) {
+    try {
+      lineScores = await scoreSpares(open, shortlist)
+    } catch (err) {
+      logT2v('pipeline-finisher', 'related re-check failed', { error: err instanceof Error ? err.message : 'error' })
+    }
+  }
   for (const shot of open) {
     if (options.get(shot.sceneId)?.length) continue
     const ok = okFor(shot)
     const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
     const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = []
     const seen = new Set<string>()
-    // 2) Closest related footage reviewed for another line (on-topic 3+ there), most related first.
-    for (const e of allEvaluated
-      .filter((e) => ok(e) && (e.score ?? 0) >= 3 && relatedness(shot, e) > 0)
-      .sort((a, b) => q(b) - q(a) || relatedness(shot, b) - relatedness(shot, a) || (b.score ?? 0) - (a.score ?? 0))) {
-      if (seen.has(e.providerId)) continue
+    const ls = lineScores[shot.sceneId] ?? {}
+    for (const e of (shortlist[shot.sceneId] ?? []).filter(ok).sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))) {
       seen.add(e.providerId)
-      // Its score belongs to the other line: QA must not count it as checked for this one.
-      list.push({ pick: { ...evToPick(e), score: 0, matches: false, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' })
+      // Score = the re-check for THIS line (0 when not re-checked), so QA judges it where it sits.
+      list.push({ pick: { ...evToPick(e), score: ls[e.providerId] ?? 0, matches: (ls[e.providerId] ?? 0) >= 7, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' })
     }
     // 3) Anything reviewed for this line that is still unused (real footage beats a card).
     for (const e of (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && !seen.has(e.providerId)).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0)))
@@ -178,8 +202,9 @@ export async function t2vFinisher(input: {
     if (!cand) return null
     try {
       const asset = await ensureT2vStockAsset(input.workspaceId, stockCandidateFrom(cand))
+      const stock = cand.provider !== 'replicate'
       const base = {
-        provider: cand.provider,
+        provider: stock ? (cand.provider as 'pixabay' | 'pexels') : ('ai_video' as const),
         assetId: asset.id,
         providerId: cand.providerId,
         thumbUrl: cand.thumbUrl,
@@ -188,7 +213,7 @@ export async function t2vFinisher(input: {
         height: cand.height,
         focalX: 0.5,
         focalY: 0.5,
-        attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
+        ...(stock ? { attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider as 'pixabay' | 'pexels' } } : {}),
         query: cand.query,
       }
       if (cand.kind === 'photo') return { ...base, kind: 'image', kenBurns: photoMove.get(shot.sceneId) ?? 'zoom_in' }

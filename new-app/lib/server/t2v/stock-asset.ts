@@ -12,6 +12,8 @@ const ALLOWED_STOCK_HOST_SUFFIXES = [
   'vimeo.com',
   'cdn.pixabay.com',
   'pixabay.com',
+  // T2V AI B-roll test clips (Replicate output delivery).
+  'replicate.delivery',
 ] as const
 
 const MAX_REDIRECTS = 5

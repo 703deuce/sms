@@ -32,7 +32,7 @@ import requests
 
 log = logging.getLogger(__name__)
 
-ALLOWED_HOST_SUFFIXES = ("cdn.pixabay.com", "pixabay.com", "videos.pexels.com", "pexels.com", "player.vimeo.com")
+ALLOWED_HOST_SUFFIXES = ("cdn.pixabay.com", "pixabay.com", "videos.pexels.com", "pexels.com", "player.vimeo.com", "replicate.delivery")
 ACCEPT_SCORE = 7
 MAX_CANDIDATES_PER_SHOT = 8
 # When nothing passes, use the best-scoring clip that is at least loosely on-topic rather than a text card.
@@ -285,6 +285,12 @@ illustration, vector art, 3D render, AI-generated imagery or clip art are NOT li
 For in_s/out_s return 0 and {need_s:.1f}."""
 
 
+AI_NOTE = """
+THIS CLIP IS AI-GENERATED (a test B-roll option). Judge it exactly like stock (same subject rule).
+style: live_action only if it would pass as real camera footage next to stock clips; visible AI artefacts
+(melting shapes, warped hands or objects, morphing, impossible physics, garbled text) mean style "3d_render" and score <= 4."""
+
+
 def _shrink_photo(src: Path, dest: Path) -> None:
     """Re-encode the photo to a small JPEG (cheap Gemini input, strips metadata)."""
     proc = subprocess.run(
@@ -443,7 +449,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     _download(str(c.get("previewUrl") or ""), raw)
                     _mute_and_shrink(raw, muted)
                     clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
-                prompt = (PROMPT + (PHOTO_NOTE if is_photo else "")).format(
+                    if c.get("kind") == "ai":
+                        entry["kind"] = "ai"
+                prompt = (PROMPT + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
                     narration=str(shot.get("narration") or "")[:600].replace('"', "'"),
                     intent=str(shot.get("intent") or "")[:300].replace('"', "'"),
                     subject=str(shot.get("subject") or shot.get("intent") or "")[:120].replace('"', "'"),

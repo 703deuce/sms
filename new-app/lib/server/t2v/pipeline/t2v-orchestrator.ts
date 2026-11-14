@@ -27,6 +27,18 @@ import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
+import {
+  AI_BROLL_EST_USD_PER_CLIP,
+  AI_BROLL_MAX_CLIPS,
+  AI_BROLL_MAX_NEED_S,
+  aiBrollEnabled,
+  aiBrollPrompts,
+  aiCandidate,
+  aiFramesFor,
+  pollAiClip,
+  startAiClip,
+  type T2vAiJob,
+} from '@/lib/server/t2v/pipeline/t2v-ai-broll'
 
 /**
  * Prompt-to-Video orchestrator (Text-to-Video's own pipeline; nothing shared with the YouTube maker).
@@ -289,6 +301,29 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       return
     }
     case 'verifying_footage': {
+      // AI B-roll test: wait for the generations, then send the finished clips to the same visual check.
+      if (run.aiRound === 1) {
+        const step = await aiBrollPoll(row, run)
+        await writeRun(draftId, (r) => {
+          r.aiJobs = step.jobs
+          r.aiCostUsd = step.costUsd
+          if (step.jobId) {
+            r.verifyJobId = step.jobId
+            r.candidates = step.candidates
+          }
+          if (step.done) {
+            r.aiRound = 2
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: `ai_broll:${step.ok}_clips_ok:$${step.costUsd.toFixed(3)}` })
+            // No clip to check: hand straight back to the finisher with the stock picks.
+            if (!step.jobId) r.verifyJobId = undefined
+          }
+          return r
+        })
+        if (!step.done) return
+        if (step.jobId) return
+        // Fall through on the next tick with stock only (no verify job).
+        return advanceOnce(draftId, {})
+      }
       const job = run.verifyJobId ? await prisma.clipJob.findUnique({ where: { id: run.verifyJobId } }) : null
       if (job && job.status !== 'DONE' && job.status !== 'FAILED') return
       // A missing/failed verify job never stalls the run: carry on with what earlier rounds found.
@@ -302,7 +337,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       const roundResults = (payload.results ?? []).filter(Boolean) as T2vShotResult[]
       // Photo-round results only add reviewed stills; the no-repeat pass decides where they go.
       const history =
-        run.photoRound === 1 || run.rescueRound === 1
+        run.photoRound === 1 || run.rescueRound === 1 || run.aiRound === 2
           ? mergeVerifyResults(run.verifyHistory ?? {}, roundResults.map((r) => ({ ...r, chosen: null })))
           : mergeVerifyResults(run.verifyHistory ?? {}, roundResults)
       const round = run.verifyRound ?? 0
@@ -369,6 +404,30 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.queriesTried = rescue.tried
             r.candidates = rescue.candidates
             r.log.push({ stage: r.status, at: new Date().toISOString(), note: `related_round:${rescue.shots}_shots` })
+            return r
+          })
+          return
+        }
+      }
+      // AI B-roll test (flag/per-run opt-in only): lines where stock is way off after every stock round.
+      if (aiBrollEnabled(run) && run.aiRound === 0.5) {
+        // Another tick claimed the AI step and is starting the generations: wait (3 min safety valve).
+        if (Date.now() - Date.parse(run.aiClaimAt ?? '') < 3 * 60_000) return
+      }
+      if (aiBrollEnabled(run) && !run.aiRound && (await claimAiStep(draftId))) {
+        const started = await aiBrollStart(run, history).catch((err) => {
+          logT2vError('pipeline', 'ai broll start failed', err, { draftId })
+          return null
+        })
+        if (started?.jobs.length) {
+          await writeRun(draftId, (r) => {
+            r.verifyHistory = history
+            r.aiRound = 1
+            r.aiJobs = started.jobs
+            // AI runs after every stock round; never go back to them afterwards.
+            r.photoRound ??= 2
+            r.rescueRound ??= 2
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: `ai_broll_start:${started.jobs.map((j) => j.sceneId).join(',')}` })
             return r
           })
           return
@@ -602,6 +661,87 @@ async function nextSearchRound(
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
   const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt), used })
   return { jobId, tried, candidates, shots: withCands.length }
+}
+
+/** Atomic claim so two concurrent ticks can never both start paid generations. */
+async function claimAiStep(draftId: string): Promise<boolean> {
+  const n = await getPrisma().$executeRaw`
+    UPDATE t2v_drafts
+    SET document = jsonb_set(jsonb_set(document::jsonb, '{autobuild,aiRound}', '0.5'::jsonb), '{autobuild,aiClaimAt}', to_jsonb(${new Date().toISOString()}::text))
+    WHERE id = ${draftId} AND NOT ((document::jsonb -> 'autobuild') ? 'aiRound')`
+  return n === 1
+}
+
+/**
+ * Pick at most 3 lines whose stock is way off (no pick, or only a fallback/last-resort after every stock
+ * and photo round), short enough for a 3-5 s clip; start one generation each (no retries).
+ */
+async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[] }> {
+  const opts = { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) }
+  const dry = enforceNoRepeatDeterministic(run.shots!, history, opts)
+  const needy = run
+    .shots!.filter((sh) => {
+      const t = dry.tiers[sh.sceneId]
+      return (!t || t === 'fallback' || t === 'last_resort') && sh.needS <= AI_BROLL_MAX_NEED_S
+    })
+    .map((sh) => ({ sh, score: dry.out[sh.sceneId]?.chosen?.score ?? -1 }))
+    .sort((a, b) => a.score - b.score)
+    .slice(0, AI_BROLL_MAX_CLIPS)
+    .map((x) => x.sh)
+  if (!needy.length) return { jobs: [] }
+  const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
+  const jobs: T2vAiJob[] = []
+  for (const sh of needy) {
+    const numFrames = aiFramesFor(sh.needS)
+    try {
+      const predictionId = await startAiClip(prompts[sh.sceneId]!, numFrames)
+      jobs.push({ sceneId: sh.sceneId, predictionId, numFrames, fps: 24, prompt: prompts[sh.sceneId]!, createdAt: new Date().toISOString() })
+    } catch (err) {
+      logT2v('pipeline-ai', 'generation not started', { sceneId: sh.sceneId, error: err instanceof Error ? err.message : 'error' })
+    }
+  }
+  return { jobs }
+}
+
+/** Poll the generations; when all settle (or 8 min pass), enqueue one verify job for the finished clips. */
+async function aiBrollPoll(
+  row: Row,
+  run: T2vPipelineRun,
+): Promise<{ done: boolean; jobs: T2vAiJob[]; costUsd: number; ok: number; jobId?: string; candidates?: Record<string, T2vFootageCandidate[]> }> {
+  const jobs = [...(run.aiJobs ?? [])]
+  const urls: Record<string, string> = {}
+  for (const j of jobs) {
+    if (j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled') continue
+    const p = await pollAiClip(j.predictionId).catch(() => ({ status: 'unknown' as string, outputUrl: undefined, predictTimeS: undefined, error: 'poll_failed' }))
+    j.status = p.status
+    if (p.predictTimeS !== undefined) j.predictTimeS = p.predictTimeS
+    if (p.error) j.error = p.error
+    if (p.status === 'succeeded' && p.outputUrl) urls[j.sceneId] = p.outputUrl
+    if (p.status === 'succeeded' || p.status === 'failed') {
+      j.estCostUsd = p.status === 'succeeded' ? AI_BROLL_EST_USD_PER_CLIP : 0
+      logT2v('pipeline-ai', 'clip settled', { sceneId: j.sceneId, status: p.status, numFrames: j.numFrames, predictTimeS: p.predictTimeS, estCostUsd: j.estCostUsd })
+    }
+  }
+  const costUsd = Math.round(jobs.reduce((n, j) => n + (j.estCostUsd ?? 0), 0) * 1000) / 1000
+  const oldest = Math.min(...jobs.map((j) => Date.parse(j.createdAt)))
+  const pending = jobs.filter((j) => j.status !== 'succeeded' && j.status !== 'failed' && j.status !== 'canceled')
+  if (pending.length && Date.now() - oldest < 8 * 60_000) return { done: false, jobs, costUsd, ok: 0 }
+  // Succeeded earlier polls lost their URL in this tick: re-read them (cheap GET, not a paid retry).
+  for (const j of jobs) {
+    if (j.status === 'succeeded' && !urls[j.sceneId]) {
+      const p = await pollAiClip(j.predictionId).catch(() => null)
+      if (p?.outputUrl) urls[j.sceneId] = p.outputUrl
+    }
+  }
+  logT2v('pipeline-ai', 'run total', { draftId: row.id, clips: jobs.length, succeeded: Object.keys(urls).length, estCostUsd: costUsd })
+  const found: Record<string, T2vFootageCandidate[]> = {}
+  for (const j of jobs) if (urls[j.sceneId]) found[j.sceneId] = [aiCandidate(j as T2vAiJob, urls[j.sceneId]!)]
+  const shots = run.shots!.filter((s) => found[s.sceneId])
+  if (!shots.length) return { done: true, jobs, costUsd, ok: 0 }
+  const candidates = { ...(run.candidates ?? {}) }
+  for (const s of shots) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', shots, found, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+  return { done: true, jobs, costUsd, ok: shots.length, jobId, candidates }
 }
 
 /** Related rescue round: closest related subjects (rewriter related mode) → videos + photos → one verify job. */

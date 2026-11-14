@@ -139,6 +139,8 @@ type Ev = T2vShotResult['evaluated'][number]
 type Tier = { verdict: T2vVerifiedPick['verdict']; tier: T2vPickedBy; ok: (e: Ev) => boolean }
 
 const isPhoto = (e: { kind?: string }) => e.kind === 'photo'
+/** AI B-roll test clips: only after every stock option that truly works, never as a spare or fallback. */
+const isAi = (e: { kind?: string }) => e.kind === 'ai'
 
 function scored(e: Ev, min: number): boolean {
   return !e.error && typeof e.score === 'number' && e.score >= min
@@ -157,7 +159,7 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     inS: e.inS ?? 0,
     outS: e.outS ?? 0,
     clipS: e.clipS ?? 0,
-    ...(e.kind === 'photo' ? { kind: 'photo' as const } : {}),
+    ...(e.kind === 'photo' || e.kind === 'ai' ? { kind: e.kind } : {}),
     issues: e.issues,
     style: e.style,
     lighting: e.lighting,
@@ -205,7 +207,7 @@ export function enforceNoRepeatDeterministic(
   const seenSpare = new Set<string>()
   for (const shot of shots) {
     for (const e of results[shot.sceneId]?.evaluated ?? []) {
-      if (isPhoto(e) || seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, { realistic: opts.realistic, nightOk: true, monoOk: true })) continue
+      if (isPhoto(e) || isAi(e) || seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, { realistic: opts.realistic, nightOk: true, monoOk: true })) continue
       seenSpare.add(e.providerId)
       spares.push(e)
     }
@@ -237,8 +239,9 @@ export function enforceNoRepeatDeterministic(
     for (const strict of [true, false]) {
       if (chosen) break
       const all = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => rank(b) - rank(a))
-      const alts = all.filter((e) => !isPhoto(e))
+      const alts = all.filter((e) => !isPhoto(e) && !isAi(e))
       const photos = all.filter(isPhoto)
+      const ais = all.filter(isAi)
       for (const t of tierList(ctx)) {
         const hit = alts.find(t.ok)
         if (hit) {
@@ -267,6 +270,14 @@ export function enforceNoRepeatDeterministic(
         }
       }
       if (!chosen) {
+        // AI test clip: stock was way off; the generated clip passed the same check for THIS line (5+).
+        const hit = ais.find((e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
+        if (hit) {
+          chosen = toPick(hit, scored(hit, ACCEPT_SCORE) && hit.matches ? 'accepted' : 'weak_match')
+          tier = 'ai'
+        }
+      }
+      if (!chosen) {
         const hit = alts.find(fallbackTier(ctx).ok) ?? photos.find(fallbackTier(ctx).ok)
         if (hit) {
           chosen = toPick(hit, 'best_available')
@@ -282,7 +293,7 @@ export function enforceNoRepeatDeterministic(
     }
     if (!chosen) {
       // Last resort before an empty scene: any loosely on-topic clip, even dim or stylised.
-      const any = r.evaluated.filter((e) => free(e, false) && scored(e, LOOSE_SCORE)).sort((a, b) => rank(b) - rank(a))[0]
+      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE)).sort((a, b) => rank(b) - rank(a))[0]
       if (any) {
         chosen = toPick(any, 'best_available')
         tier = 'last_resort'

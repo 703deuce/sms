@@ -17,7 +17,7 @@ import { batchStockVisionPick, type StockVisionBatchMetrics } from '@/lib/server
 import { narrationVisualFallback, normalizeVisualQuery } from '@/lib/server/t2v/visual-query'
 
 export type StockCandidate = {
-  provider: 'pixabay' | 'pexels' | 'pexels_photo'
+  provider: 'pixabay' | 'pexels' | 'pexels_photo' | 'replicate'
   providerId: string
   width: number
   height: number
