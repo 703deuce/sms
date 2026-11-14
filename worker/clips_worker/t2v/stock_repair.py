@@ -79,12 +79,9 @@ def repair_stock_asset(
             asset_id,
         )
         return False
-    log.info(
-        "[t2v:stock] repair re-upload provider=%s providerId=%s storageKey=%s assetId=%s",
-        provider,
-        provider_id,
-        storage_key,
-        asset_id,
+    print(
+        f"[t2v:stock] repair re-upload provider={provider} providerId={provider_id} storageKey={storage_key} assetId={asset_id}",
+        flush=True,
     )
     req = urllib.request.Request(src_url, headers={"User-Agent": "transovo-t2v-worker/1"})
     with urllib.request.urlopen(req, timeout=120) as resp:

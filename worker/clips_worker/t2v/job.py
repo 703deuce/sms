@@ -109,11 +109,7 @@ def _fetch_media(conn, media: dict | None, work: Path, idx: int, workspace_id: s
             )
             if repair_stock_asset(conn, key_s, str(asset_id) if asset_id else None):
                 download_object(key_s, dest)
-                log.info(
-                    "[t2v:stock] assemble media repaired sceneIdx=%s storageKey=%s",
-                    idx,
-                    key_s,
-                )
+                print(f"[t2v:stock] assemble media repaired sceneIdx={idx} storageKey={key_s}", flush=True)
                 return dest
             raise RuntimeError(f"scene_media_{idx}_stock_object_missing:{key_s}") from exc
         raise
@@ -320,26 +316,28 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
         probed_ms = probe_duration_ms(final)
         duration_ms = max(int(asm["durationMs"]), probed_ms)
         if probed_ms > int(asm["durationMs"]):
-            log.info(
+            print(
                 "[t2v:assemble] duration from probe exceeds scene sum",
-                extra={
+                json.dumps({
                     "draftId": draft_id,
                     "jobId": job["id"],
                     "asmDurationMs": asm["durationMs"],
                     "probedMs": probed_ms,
-                },
+                }),
+                flush=True,
             )
         if all_words:
             last_end_ms = round(max(w.get("e", 0) for w in all_words) * 1000)
             if last_end_ms < duration_ms:
-                log.info(
+                print(
                     "[t2v:assemble] transcript ends before file duration",
-                    extra={
+                    json.dumps({
                         "draftId": draft_id,
                         "jobId": job["id"],
                         "lastWordEndMs": last_end_ms,
                         "durationMs": duration_ms,
-                    },
+                    }),
+                    flush=True,
                 )
 
         # Actual on-screen shot starts (scene starts + in-scene cuts), for the pacing QA.

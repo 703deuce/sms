@@ -310,13 +310,13 @@ def test_capped_score_handles_bad_values():
     assert vs.capped_score({"score": 7.6, "depicts": "partly"}) == (6, 8, "partly")
 
 
-def test_depicts_spellings_normalise_and_unknown_fails_closed(caplog):
+def test_depicts_spellings_normalise_and_unknown_fails_closed(capsys):
     for raw, want in [("Partially.", "partly"), ("partial", "partly"), ("No.", "no"), (" YES ", "yes"), ("Yes, clearly", "yes"),
                       ("maybe", "no"), ("", "no"), (None, "no"), ("unclear", "no")]:
         assert vs.norm_depicts(raw) == want, raw
-    with caplog.at_level("INFO"):
-        assert vs.capped_score({"score": 9, "depicts": "unclear"}) == (4, 9, "no")
-    assert "[t2v:verify:depicts_unknown]" in caplog.text
+    assert vs.capped_score({"score": 9, "depicts": "unclear"}) == (4, 9, "no")
+    # Printed (the worker has no logging setup, so log.info lines were dropped).
+    assert "[t2v:verify:depicts_unknown]" in capsys.readouterr().out
     assert vs.capped_score({"score": 9, "depicts": "Partially."}) == (6, 9, "partly")
 
 

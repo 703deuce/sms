@@ -1,6 +1,6 @@
 """Operator tool: re-run a T2V draft's autobuild (internal QA only; run inside clips-worker with DATABASE_URL set).
 
-  python t2v_reset_run.py <draftId> [ai] [--from-footage]
+  python t2v_reset_run.py <draftId> [ai] [--from-footage] [--no-incumbents]
 
 Default: full re-run from `queued` (new script, new plan).
 --from-footage: restart at `finding_footage` with the script and scene plan FROZEN (story, segments, shots,
@@ -13,15 +13,24 @@ Both modes also clear the previous output so no poll can read it as the new run'
 --from-footage also keeps the previous run's placed picks as `priorPicks` (score, depicts and the candidate
   record per line; an older prior pick is kept for a line the last run held). The next run re-verifies them
   under the fixed lineShows and keeps one unless a new clip is clearly better (incumbents).
+--no-incumbents: clean slate (use with --from-footage for a rerun that must not be seeded by an earlier run's
+  picks). No priorPicks are carried (neither the last run's placed picks nor older prior picks), so there are no
+  incumbents; every per-run pick state is dropped too: look-alike bans, verify history, hold/re-check state and
+  the candidate lists. Only the frozen script and plan (story, segments, shots, music) are kept. The blind
+  pass-1 observation cache (t2v_clip_descriptions) is kept: it describes what a clip shows, never how it scored.
+  A full re-run (no --from-footage) never carries picks, so the flag changes nothing there.
 `ai`: also opt this run into the AI b-roll test step (paid; only when explicitly approved). Without `ai` the
   run is always written with aiBroll=false (an older run's aiBroll=true is never carried over).
 """
 import os, json, psycopg2, datetime, sys
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
-DID = args[0] if args else sys.exit("usage: t2v_reset_run.py <draftId> [ai] [--from-footage]")
+DID = args[0] if args else sys.exit("usage: t2v_reset_run.py <draftId> [ai] [--from-footage] [--no-incumbents]")
 AI = "ai" in args[1:]
 FROM_FOOTAGE = "--from-footage" in sys.argv[1:]
+NO_INCUMBENTS = "--no-incumbents" in sys.argv[1:]
+unknown = [a for a in sys.argv[1:] if a.startswith("--") and a not in ("--from-footage", "--no-incumbents")]
+if unknown: sys.exit(f"unknown option {' '.join(unknown)}")
 
 c = psycopg2.connect(os.environ["DATABASE_URL"]); cur = c.cursor()
 cur.execute("select document from t2v_drafts where id=%s for update", (DID,))
@@ -38,10 +47,10 @@ if FROM_FOOTAGE:
     keep_keys = ("v", "prompt", "style", "durationS", "renderResolution", "startedAt",
                  "story", "segments", "shots", "musicGenerationId")
     keep = {k: ab[k] for k in keep_keys if k in ab}
-    # Incumbents: the previous run's placed picks (never cleared by a --from-footage reset).
-    prior = dict(ab.get("priorPicks") or {})
+    # Incumbents: the previous run's placed picks (kept by a --from-footage reset unless --no-incumbents).
+    prior = {} if NO_INCUMBENTS else dict(ab.get("priorPicks") or {})
     cands = ab.get("candidates") or {}
-    for r in ab.get("results") or []:
+    for r in ([] if NO_INCUMBENTS else (ab.get("results") or [])):
         ch = (r or {}).get("chosen") or {}
         pid = ch.get("providerId")
         if not pid or (r.get("outcome") not in (None, "stock")):
@@ -55,6 +64,8 @@ if FROM_FOOTAGE:
     if prior:
         keep["priorPicks"] = prior
     status, completed, note = "finding_footage", ["writing_script", "planning_scenes"], "operator restart at finding_footage (script + plan frozen)"
+    if NO_INCUMBENTS:
+        note += ", clean slate (no incumbents / prior picks / bans)"
 else:
     keep = {k: ab[k] for k in ("v", "prompt", "style", "durationS", "renderResolution", "startedAt") if k in ab}
     status, completed, note = "queued", [], "operator full re-run"
@@ -72,7 +83,13 @@ d["scenes"] = []
 d["nextSlot"] = 0
 for k in ("renderId", "compositionId", "results", "qa", "stockStats", "assembleJobId"):
     d["autobuild"].pop(k, None)
+if NO_INCUMBENTS:
+    # Belt and braces: nothing seeded from earlier picks may survive (keep_keys already leaves these out).
+    for k in ("priorPicks", "lookalikeBans", "verifyHistory", "candidates", "reimagineLog", "reimaginePending",
+              "reimagineTries", "reimagineScenes", "queriesTried", "lineShowsFixedAt"):
+        d["autobuild"].pop(k, None)
 cur.execute("update t2v_drafts set document=%s, status='AUTOBUILDING', stage=%s, error=NULL, progress=0, "
             "\"assembledRevision\"=NULL, revision=revision+1, \"updatedAt\"=now() where id=%s",
             (json.dumps(d), f"pipeline:{status}", DID))
-c.commit(); print("reset ok", DID, status)
+c.commit(); print("reset ok", DID, status, "clean slate (no incumbents)" if NO_INCUMBENTS else
+                  f"priorPicks={len(d['autobuild'].get('priorPicks') or {})}")
