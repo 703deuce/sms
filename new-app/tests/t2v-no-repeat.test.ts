@@ -54,8 +54,9 @@ describe('t2v no-repeat', () => {
     const first = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true })
     expect(first.out.a!.chosen!.providerId).toBe('10')
     expect(first.out.c!.chosen).toBeNull() // no unchecked spare
-    // c has no passing clip, so it picks first (scarcest) and every spare is still free to ask about.
-    expect(first.spareRequests.c!.map((e) => e.providerId)).toEqual(['22', '20', '21', '10'])
+    // c has no passing clip, so it picks first (scarcest). It never asks for a clip another unplaced line
+    // claims (its own best, QA S1): 22 is b's best and 10 is a's, so only 20, 21 and 11 are asked about.
+    expect(first.spareRequests.c!.map((e) => e.providerId)).toEqual(['20', '21', '11'])
     // 22 fails the re-check for line c (mug under a harvesting line); 21 works there (6/10).
     const second = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true, spareScores: { c: { '22': 2, '21': 6 } } })
     expect(second.out.c!.chosen!.providerId).toBe('21')

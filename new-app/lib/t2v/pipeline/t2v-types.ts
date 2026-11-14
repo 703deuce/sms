@@ -162,6 +162,27 @@ export type T2vVerifiedPick = {
   motion?: number
   /** The model's own score before the depiction cap (information only). */
   rawScore?: number
+  /** Worker: the line's FIXED lineShows was given (the checker judged against it and did not write its own). */
+  lineShowsFixed?: boolean
+  /** Reviewer: visible production artifacts (green screen/studio gear, stretched edges, frozen stretch); capped in the worker. */
+  artifacts?: 'none' | 'production' | 'stretched' | 'frozen' | 'dark' | 'cutout'
+  /** Blind describe-then-score: the observation was written without the line (pass 1) and judged text-only (pass 2). */
+  blind?: boolean
+  /** Pass 1's locked, timestamped observation ("[t0-t1 s] visible; action; motion; lighting" lines). */
+  observation?: string
+  /** The observed events inside the verified window [inS, outS] (what depicts and the score were judged on). */
+  windowEvents?: string[]
+  /** Pass 2's own window (snapped to the observed events) before it became the played slice inS..outS. */
+  judgedInS?: number
+  judgedOutS?: number
+  /** Pass 2 re-judged the played slice (it covered different events than pass 2's window); the first answer. */
+  rejudged?: { window: [number, number]; score?: number; depicts?: string }
+  /** Worker motion check: frozen seconds inside the window, information only. */
+  frozenS?: number
+  /** Kept from the previous run's placed pick (reset --from-footage): replaced only by a clearly better clip. */
+  incumbent?: boolean
+  /** Hold fallback: placed below the floor because it beat what holding the previous shot would show. */
+  beatsHold?: { holdScore: number; holdFrom: string }
   /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
   fitReasonFrom?: 'verify' | 'line_recheck'
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
@@ -247,6 +268,21 @@ export type T2vPipelineRun = {
   verifierJobs?: string[]
   /** Set by the operator reset tool: when this run was restarted (the status route returns it). */
   resetAt?: string
+  /** Text re-checks (spare / cross-line / hold comparisons; one per clip and line) so far in this run. */
+  recheckCalls?: number
+  /** Blind pass-1 describe calls (one per unique clip not cached yet); included in verifierCalls. */
+  describeCalls?: number
+  /** Fixed lineShows were written for a frozen plan (once; never regenerated in this run). */
+  lineShowsFixedAt?: string
+  /** Placed picks of the previous run (kept by the reset tool): incumbents a new clip must clearly beat. */
+  priorPicks?: Record<string, { providerId: string; score: number; depicts?: T2vDepicts; kind?: string; at?: string; candidate?: T2vFootageCandidate }>
+  /** Reimagine: lines whose round did not happen (budget / no ideas), not counted as rounds. */
+  reimagineSkipped?: Record<string, 'budget' | 'no_ideas'>
+  /** Scenes that have needed rework so far (the reimagine budget is sized from them) and that budget. */
+  reimagineScenes?: string[]
+  reimagineBudget?: number
+  /** Run-level verifier cap hit (T2V_RUN_VERIFY_BUDGET): what was skipped, honestly logged. */
+  verifyBudgetHit?: Array<{ stage: string; at: string; dropped: number }>
   /** Ideas of the reimagine step in flight, per line (logged with their scores when the verify job ends). */
   reimaginePending?: T2vReimaginePending
   /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */

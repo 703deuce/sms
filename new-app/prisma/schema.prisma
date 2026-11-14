@@ -9012,6 +9012,21 @@ model T2vVoiceClip {
   @@map("t2v_voice_clips")
 }
 
+/// T2V blind clip descriptions (describe-then-score): written by the clips worker, one per unique stock clip.
+model T2vClipDescription {
+  provider     String
+  providerId   String
+  rendition    String
+  model        String
+  description  String
+  promptTokens Int      @default(0)
+  outputTokens Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@id([provider, providerId, rendition])
+  @@map("t2v_clip_descriptions")
+}
+
 model T2vTemplate {
   id           String   @id
   workspaceId  String?

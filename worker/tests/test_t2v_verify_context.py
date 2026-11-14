@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -19,8 +20,10 @@ import clips_worker.internal_callback as cb_mod
 from clips_worker.t2v import verify_stock as vs
 
 
-def resp(score: int, *, reason: str = "", lighting: int = 8, tod: str = "indoor", visible: str = "", subject_visible: bool = True) -> dict:
+def resp(score: int, *, reason: str = "", lighting: int = 8, tod: str = "indoor", visible: str = "", subject_visible: bool = True, depicts: str | None = None) -> dict:
+    # The schema requires depicts; fixtures default to the depiction their score implies (unknown fails closed).
     return {
+        "depicts": depicts or ("yes" if score >= 7 else "partly" if score >= 5 else "no"),
         "visible": visible or "a clip", "main_subject": "x", "action": "y", "matches": score >= 7,
         "score": score, "fit_reason": reason, "in_s": 0, "out_s": 8, "issues": "", "style": "live_action",
         "lighting": lighting, "framing": "medium", "time_of_day": tod, "subject_visible": subject_visible,
@@ -68,6 +71,10 @@ def run_job(monkeypatch):
             prompts[pid] = prompt
             return answers[pid], 100, 20
 
+        # These cases test the combined watch-and-judge call (old payloads / T2V_BLIND_DESCRIBE=0);
+        # the blind describe-then-score path has its own tests (test_t2v_blind_describe.py).
+        monkeypatch.setattr(vs, "BLIND_DESCRIBE", False)
+        monkeypatch.setattr(vs, "_frozen_spans", lambda *a: [])
         monkeypatch.setattr(vs, "_download", lambda url, dest: dest.write_bytes(b"x"))
         monkeypatch.setattr(vs, "_mute_and_shrink", lambda src, dest: dest.write_bytes(b"x"))
         monkeypatch.setattr(vs, "_shrink_photo", lambda src, dest: dest.write_bytes(b"x"))
@@ -283,22 +290,34 @@ def test_live_rerun_misses_are_capped_by_the_depiction_call(run_job, scene, line
         assert ev["score"] < vs.USABLE_SCORE  # a miss: the web never places it, reimagine fires
 
 
-def test_depicts_yes_keeps_the_model_score_and_old_answers_are_uncapped(run_job):
+def test_depicts_yes_keeps_the_model_score_and_unknown_answers_fail_closed(run_job):
     shots = [{"sceneId": "sc_1", "narration": "A line.", "needS": 3, "candidates": [cand("a"), cand("b")]}]
     yes = resp(9, visible="It plainly shows the line")
     yes.update({"depicts": "yes", "line_shows": "the line", "seen": "It plainly shows the line"})
-    old = resp(8, visible="An old answer without depicts")
+    old = resp(8, visible="An answer without depicts")
+    old.pop("depicts")
     results, _ = run_job(shots, {"a": yes, "b": old})
     by = {e["providerId"]: e for e in results[0]["evaluated"]}
     assert by["a"]["score"] == 9 and by["a"]["matches"] is True and by["a"]["lineShows"] == "the line"
-    assert by["b"]["score"] == 8 and by["b"]["depicts"] is None
+    # Missing/unknown depicts = "no": capped at 4, never a match (QA F2: it used to keep its 8).
+    assert by["b"]["score"] == 4 and by["b"]["depicts"] == "no" and by["b"]["rawScore"] == 8 and by["b"]["matches"] is False
     assert results[0]["chosen"]["providerId"] == "a"
 
 
 def test_capped_score_handles_bad_values():
     assert vs.capped_score({"score": "12", "depicts": "No"}) == (4, 10, "no")
-    assert vs.capped_score({"score": None, "depicts": "maybe"}) == (0, 0, None)
+    assert vs.capped_score({"score": None, "depicts": "maybe"}) == (0, 0, "no")
     assert vs.capped_score({"score": 7.6, "depicts": "partly"}) == (6, 8, "partly")
+
+
+def test_depicts_spellings_normalise_and_unknown_fails_closed(caplog):
+    for raw, want in [("Partially.", "partly"), ("partial", "partly"), ("No.", "no"), (" YES ", "yes"), ("Yes, clearly", "yes"),
+                      ("maybe", "no"), ("", "no"), (None, "no"), ("unclear", "no")]:
+        assert vs.norm_depicts(raw) == want, raw
+    with caplog.at_level("INFO"):
+        assert vs.capped_score({"score": 9, "depicts": "unclear"}) == (4, 9, "no")
+    assert "[t2v:verify:depicts_unknown]" in caplog.text
+    assert vs.capped_score({"score": 9, "depicts": "Partially."}) == (6, 9, "partly")
 
 
 # --- #1194 round 2: watched-review fixtures (VQ t2v-1192-clip-review.md, sleep t2v_cf976bf4) -----------------
@@ -345,11 +364,12 @@ def test_reimagine_candidates_carry_their_intended_shot(run_job):
 
 
 def test_depicts_ranks_before_score_in_the_worker_pick(run_job):
-    """sleep sh13: a literal 8 (depicts yes) beats a stretched 10 the model still called 'partly'... and a
-    not-judged older answer sits between."""
+    """sleep sh13: a literal 8 (depicts yes) beats a stretched answer; an answer without depicts now fails
+    closed (no, capped 4) instead of ranking between."""
     shots = [{"sceneId": "sc_13", "narration": "Make the bedroom dark, quiet, and comfortably cool.", "needS": 3,
               "candidates": [cand("old"), cand("fan")]}]
-    old = resp(9, visible="Book pages by a candle")  # no depicts (older answer)
+    old = resp(9, visible="Book pages by a candle")
+    old.pop("depicts")  # no depicts answer
     fan = resp(8, visible="A fan turning in a dim bedroom")
     fan.update({"depicts": "yes"})
     results, _ = run_job(shots, {"old": old, "fan": fan})
@@ -381,8 +401,57 @@ def test_static_clip_is_capped_and_logged(run_job, monkeypatch):
     assert ev["static"] is True and ev["motion"] == 0.3 and ev["score"] == vs.STATIC_MAX_SCORE and ev["matches"] is False
 
 
-def test_search_target_is_context_only():
-    """Script-context lineShows (what the search looked for) reaches the checker as context; it still judges itself."""
+def test_fixed_line_shows_is_given_to_the_checker():
+    """The line's lineShows (written once per line by the web) is the fixed target every clip is judged against."""
     block = vs.script_block("", {"narration": "Charge your phone across the room.", "lineShows": "A phone charging on a surface away from the bed."})
-    assert 'What the footage search looked for (context only; judge line_shows yourself): "A phone charging on a surface away from the bed."' in block
-    assert "footage search looked for" not in vs.script_block("", {"narration": "A line."})
+    assert 'line_shows - what a viewer should SEE for this line (fixed for every clip of this line): "A phone charging on a surface away from the bed."' in block
+    assert "fixed for every clip" not in vs.script_block("", {"narration": "A line."})
+
+
+def test_fixed_line_shows_is_stable_across_candidates(run_job):
+    """sleep #1194 sh20: the checker wrote 40 different line_shows over 57 checks, so depicts=yes was judged against a
+    description shaped to fit each clip (a cat on a bed for 'without watching the clock'). With the line's fixed
+    line_shows, every candidate is judged against the SAME text, and whatever line_shows the model tries to return is
+    ignored."""
+    fixed = "A person settling calmly into bed without checking a clock"
+    shots = [{"sceneId": "sc_21", "narration": "without rushing or watching the clock.", "needS": 3, "lineShows": fixed,
+              "candidates": [cand("127621"), cand("34473"), cand("151295")]}]
+    cat = resp(9, visible="A long-haired cat sleeping on a bed")
+    cat.update({"line_shows": "a cat sleeping peacefully in a bedroom", "depicts": "no"})
+    reader = resp(6, visible="A woman reading in bed by a lamp", depicts="partly")
+    reader["line_shows"] = "someone relaxing in bed at night"
+    settle = resp(9, visible="A woman lies down and pulls the covers up", depicts="yes")
+    results, prompts = run_job(shots, {"127621": cat, "34473": reader, "151295": settle})
+    ev = results[0]["evaluated"]
+    assert {e["lineShows"] for e in ev} == {fixed} and all(e["lineShowsFixed"] for e in ev)
+    by = {e["providerId"]: e for e in ev}
+    assert by["127621"]["score"] == 4 and by["127621"]["depicts"] == "no"
+    assert results[0]["chosen"]["providerId"] == "151295"
+    for pid, prompt in prompts.items():
+        assert f'(fixed for every clip of this line): "{fixed}"' in prompt, pid
+        assert vs.FIXED_MARKER in prompt and "1. line_shows: in a few plain words" not in prompt
+        assert "- seen, depicts, score, fit_reason: as above" in prompt
+
+
+def test_fixed_prompt_uses_the_schema_without_line_shows(monkeypatch):
+    seen_bodies: list[dict] = []
+
+    class _Res:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": "{}"}]}}], "usageMetadata": {}}
+
+    import clips_worker.gemini_vision as gv
+    monkeypatch.setattr(gv, "_key", lambda: "k")
+    monkeypatch.setattr(vs.requests, "post", lambda url, params=None, json=None, timeout=None: seen_bodies.append(json) or _Res())
+    p = Path(tempfile.mkdtemp()) / "x.mp4"
+    p.write_bytes(b"x")
+    vs._gemini_watch("gemini-test", p, vs.prompt_template(True))
+    vs._gemini_watch("gemini-test", p, vs.prompt_template(False))
+    fixed_cfg, free_cfg = (b["generationConfig"] for b in seen_bodies)
+    assert "line_shows" not in fixed_cfg["responseSchema"]["properties"] and "line_shows" not in fixed_cfg["responseSchema"]["required"]
+    assert "line_shows" in free_cfg["responseSchema"]["properties"]
+    assert fixed_cfg["maxOutputTokens"] == vs.MAX_OUTPUT_TOKENS >= 2048
+    assert vs.prompt_template(True) != vs.PROMPT  # the step-1 swap really happened

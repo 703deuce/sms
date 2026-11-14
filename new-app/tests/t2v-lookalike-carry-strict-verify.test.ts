@@ -65,9 +65,9 @@ describe('bug A: a look-alike ban is carried across the reimagine re-run', () =>
   it('orchestrator persists the bans on the run and passes them to every pass and the finisher', () => {
     const src = readFileSync(join(__dirname, '../lib/server/t2v/pipeline/t2v-orchestrator.ts'), 'utf8')
     expect(src).toMatch(/lookalikeBans: run\.lookalikeBans \?\? \[\]/)
-    expect(src).toMatch(/r\.lookalikeBans = fullPass!\.lookalikeBans/)
+    expect(src).toMatch(/r\.lookalikeBans = mergeBans\(r\.lookalikeBans, fullPass!\.lookalikeBans\)/)
     expect(src).toMatch(/lookalikeBans: noRepeat\.lookalikeBans/)
-    expect(src).toMatch(/lookalikeBans: fin\.lookalikeBans/)
+    expect(src).toMatch(/lookalikeBans: mergeBans\(fresh\.document\.autobuild!\.lookalikeBans, fin\.lookalikeBans\)/)
   })
 })
 
@@ -94,7 +94,8 @@ describe('bug B: borrowed clips get the same literal-depiction cap', () => {
   })
   it('the re-check prompt carries the depiction call; no topic words', () => {
     expect(SPARE_SYSTEM).toContain('depicts')
-    expect(SPARE_SYSTEM).toContain('line_shows')
+    // lineShows is given per line and FIXED (the re-check never writes its own).
+    expect(SPARE_SYSTEM).toContain('lineShows (given per line, FIXED)')
     expect(SPARE_SYSTEM).not.toMatch(/bedroom|candle|battery|phone|snow|winter/i)
   })
 })

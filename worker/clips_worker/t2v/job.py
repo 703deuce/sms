@@ -143,6 +143,15 @@ def cut_offsets_from_alignment(alignment: dict | None, at_words: list[int], vo_s
     return out
 
 
+def _window_fields(m: dict, label: str) -> dict:
+    """The verified window (ms on the media doc) for the rendered-vs-verified window log."""
+    out: dict = {"label": f"{label}:{m.get('providerId') or m.get('kind') or ''}"}
+    if isinstance(m.get("windowInMs"), (int, float)) and isinstance(m.get("windowOutMs"), (int, float)):
+        out["window_in_s"] = float(m["windowInMs"]) / 1000.0
+        out["window_out_s"] = float(m["windowOutMs"]) / 1000.0
+    return out
+
+
 def _scene_cuts(conn, sc: dict, alignment: dict | None, vo_s: float, work: Path, idx: int, workspace_id: str):
     """Prompt-to-Video sub-shots: scene.cuts = [{atWord, media}] → [(offset_s, SceneMedia)] on word pauses."""
     raw = [c for c in (sc.get("cuts") or []) if isinstance(c, dict) and isinstance(c.get("atWord"), int)]
@@ -159,6 +168,7 @@ def _scene_cuts(conn, sc: dict, alignment: dict | None, vo_s: float, work: Path,
             kind=m.get("kind", "color"),
             path=path,
             src_in_s=float(m.get("srcInMs") or 0) / 1000.0,
+            **_window_fields(m, f"{sc.get('id')}/cut{k + 1}"),
             focal_x=float(m.get("focalX", 0.5)),
             focal_y=float(m.get("focalY", 0.5)),
             ken_burns=m.get("kenBurns", "zoom_in"),
@@ -257,6 +267,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                         kind=mdoc.get("kind", "color"),
                         path=media_path,
                         src_in_s=float(mdoc.get("srcInMs") or 0) / 1000.0,
+                        **_window_fields(mdoc, str(sc.get("id", idx))),
                         focal_x=float(mdoc.get("focalX", 0.5)),
                         focal_y=float(mdoc.get("focalY", 0.5)),
                         ken_burns=mdoc.get("kenBurns", "zoom_in"),

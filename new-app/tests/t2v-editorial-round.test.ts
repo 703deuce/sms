@@ -96,7 +96,7 @@ describe('t2v editorial round', () => {
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, subject: 'coffee roaster', visible: 'an industrial coffee roaster drum' }), ev('4', { score: 6, subject: 'coffee cup', visible: 'a cup of coffee' })] },
       { sceneId: 'b', chosen: null, evaluated: [] },
     ]
-    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7, reason: 'the drum line B describes' }, { sceneId: 'b', providerId: '4', score: 2, reason: 'a cup, not the drum' }] } as never)
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', depicts: 'yes', score: 7, reason: 'the drum line B describes' }, { sceneId: 'b', providerId: '4', depicts: 'no', score: 2, reason: 'a cup, not the drum' }] } as never)
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3'), cand('4')], b: [] })
     expect(out[1]!.chosen!.providerId).toBe('3')
     expect(out[1]!.chosen!.score).toBe(7)
@@ -111,7 +111,7 @@ describe('t2v editorial round', () => {
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, fitReason: 'reason for line a' })] },
       { sceneId: 'b', chosen: null, evaluated: [] },
     ]
-    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7 }] } as never)
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', depicts: 'yes', score: 7 }] } as never)
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3')], b: [] })
     expect(out[1]!.pickedBy).toBe('last_resort')
     expect(out[1]!.chosen!.fitReason).toMatch(/^\(re-check gave no reason\)/)
