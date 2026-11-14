@@ -176,7 +176,13 @@ export async function t2vFinisher(input: {
         texts.push({ id: `t_card_${i}`, kind: 'title', text: shot.onScreenText, startMs: 0, endMs: Math.round(shot.needS * 1000), animation: 'fade' })
       }
     } else if (shot.onScreenText) {
-      texts.push({ id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' })
+      // Burned captions sit at the bottom centre, where a lower third would collide with them (run 2),
+      // so with captions on the headline is a short centred title that slides up instead.
+      texts.push(
+        input.doc.settings.captionsEnabled
+          ? { id: `t_hl_${i}`, kind: 'title', text: shot.onScreenText, startMs: 300, endMs: 2600, animation: 'slide_up' }
+          : { id: `t_lt_${i}`, kind: 'lower_third', text: shot.onScreenText, startMs: 400, endMs: 3200, animation: 'slide_up' },
+      )
     }
     scenes.push({
       id: shot.sceneId,
