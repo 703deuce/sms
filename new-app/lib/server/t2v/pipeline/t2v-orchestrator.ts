@@ -17,13 +17,14 @@ import {
   type T2vPipelineStatus,
   type T2vPipelineStyle,
   type T2vShotResult,
+  type T2vPickedBy,
   type T2vFootageCandidate,
 } from '@/lib/t2v/pipeline/t2v-types'
 import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-story-agent'
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeat, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 
@@ -276,7 +277,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       const topic = run.story?.topic || run.story?.title || ''
       const realistic = t2vRealisticStyle(run.style)
       const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic, realistic })
-      const jobId = await enqueueVerify(row, topic, run.shots!, candidates, { realistic })
+      const jobId = await enqueueVerify(row, topic, run.shots!, candidates, { realistic, monoOk: t2vMonoRequested(run.prompt) })
       const tried: Record<string, string[]> = {}
       for (const sh of run.shots!) tried[sh.sceneId] = queryRewrites(sh.queries, topic)
       await setStage(draftId, 'finding_footage', 'verifying_footage', (r) => {
@@ -319,8 +320,11 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return
         }
       }
-      const noRepeat = await enforceNoRepeat(run.shots!, history, t2vRealisticStyle(run.style))
-      const results = run.shots!.map((sh) => noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] })
+      const noRepeat = await enforceNoRepeat(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+      const results = run.shots!.map((sh): T2vShotResult => {
+        const r = noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] }
+        return { ...r, pickedBy: noRepeat.tiers[sh.sceneId] }
+      })
       const fin = await t2vFinisher({
         workspaceId: row.workspaceId,
         doc,
@@ -452,7 +456,7 @@ async function enqueueVerify(
   topic: string,
   shots: NonNullable<T2vPipelineRun['shots']>,
   candidates: Record<string, T2vFootageCandidate[]>,
-  opts: { realistic: boolean; used?: Array<{ providerId: string; phash?: string[] }> },
+  opts: { realistic: boolean; monoOk?: boolean; used?: Array<{ providerId: string; phash?: string[] }> },
 ): Promise<string> {
   const jobId = createId('job')
   await getPrisma().clipJob.create({
@@ -468,12 +472,14 @@ async function enqueueVerify(
         projectId: row.projectId,
         topic,
         realistic: opts.realistic,
+        monoOk: opts.monoOk ?? false,
         used: opts.used ?? [],
         shots: shots.map((s) => ({
           sceneId: s.sceneId,
           narration: s.narration,
           intent: s.intent,
           needS: s.needS,
+          nightOk: t2vNightLine(s.narration, s.intent),
           candidates: (candidates[s.sceneId] ?? []).map((c) => ({
             provider: c.provider,
             providerId: c.providerId,
@@ -534,7 +540,7 @@ async function nextSearchRound(
     .filter((c): c is NonNullable<typeof c> => Boolean(c))
     .filter((c) => c.verdict === 'accepted')
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
-  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, used })
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, monoOk: t2vMonoRequested(run.prompt), used })
   return { jobId, tried, candidates, shots: withCands.length }
 }
 
@@ -556,6 +562,10 @@ function computeStockStats(results: T2vShotResult[], round: number): NonNullable
     verifiedRate: Math.round((accepted / n) * 1000) / 10,
     // Lines with their own reviewed clip (any verdict), i.e. not held on the previous shot or a card.
     ownClipRate: Math.round(((accepted + weak + bestAvailable) / n) * 1000) / 10,
+    pickedBy: results.reduce<Partial<Record<T2vPickedBy, number>>>((acc, r) => {
+      if (r.pickedBy) acc[r.pickedBy] = (acc[r.pickedBy] ?? 0) + 1
+      return acc
+    }, {}),
     stockCoverage: Math.round(((n - titleCards) / n) * 1000) / 10,
     rounds: round + 1,
   }

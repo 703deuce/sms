@@ -1,5 +1,6 @@
 import 'server-only'
-import { nearDuplicateHash } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { nearDuplicateHash, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 import { logT2v } from '@/lib/server/t2v/log'
@@ -78,6 +79,11 @@ export async function t2vFinisher(input: {
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
   const usedHashes = input.results.map((r) => r.chosen?.phash).filter((h): h is string[] => Boolean(h?.length))
   const fallback = new Map<string, T2vVerifiedPick>()
+  const qctx = (shot: T2vPlannedShot) => ({
+    realistic: t2vRealisticStyle(input.run.style),
+    nightOk: t2vNightLine(shot.narration, shot.intent),
+    monoOk: t2vMonoRequested(input.run.prompt),
+  })
   for (const shot of input.shots) {
     const r = byScene.get(shot.sceneId)
     if (r?.chosen) continue
@@ -85,7 +91,8 @@ export async function t2vFinisher(input: {
       .filter((e) => !e.error && typeof e.score === 'number' && !used.has(e.providerId))
       // Never a look-alike of a shot already in the edit (hard no-repeat rule).
       .filter((e) => !usedHashes.some((h) => nearDuplicateHash(e.phash, h)))
-      .sort((a, b) => Number(b.style === 'live_action') - Number(a.style === 'live_action') || (b.score ?? 0) - (a.score ?? 0))[0]
+      // Clips passing the quality rules (live action, lit, daylight for day lines, colour) first.
+      .sort((a, b) => Number(t2vQualityOk(b, qctx(shot))) - Number(t2vQualityOk(a, qctx(shot))) || (b.score ?? 0) - (a.score ?? 0))[0]
     if (!best) continue
     used.add(best.providerId)
     if (best.phash?.length) usedHashes.push(best.phash)
@@ -173,16 +180,16 @@ export async function t2vFinisher(input: {
         prev.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'
         prev.transitionMs = segmentEnd ? 450 : 0
         lastNeedMs += needMs
-        results.push({ ...r, outcome: 'held' })
+        results.push({ ...r, outcome: 'held', pickedBy: 'held' })
         return
       }
     }
     lastNeedMs = needMs
     if (!m && fm) {
       // Every scene gets footage: the best-scoring reviewed clip beats a text card.
-      results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId)!, outcome: 'stock' })
+      results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId)!, outcome: 'stock', pickedBy: r.chosen ? r.pickedBy ?? 'fallback' : 'fallback' })
     } else {
-      results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
+      results.push({ ...r, outcome: m ? 'stock' : 'title_card', pickedBy: m ? r.pickedBy ?? 'accepted' : 'card' })
     }
     const sceneMedia = m ?? fm
     const texts: T2vScene['texts'] = []

@@ -1,5 +1,6 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
+import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vNarrationSegment, T2vPipelineStyle, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
 /** Words per second used for planning only. Actual ElevenLabs audio timing drives the edit. */
@@ -15,8 +16,21 @@ const STYLE_GUIDE: Record<T2vPipelineStyle, string> = {
   social: 'Social: punchy, energetic, short sentences, strong hook in the first line.',
 }
 
+/**
+ * Words per second of FINISHED video (narration plus the short pauses between shots), calibrated on the
+ * Nov 13 EV runs: 226 words -> 97.9 s, 236 words -> 105.6 s (about 2.3 words/s after the end card).
+ * Used only for the script's word budget, so a 90 s target lands close to 90 s.
+ */
+export const T2V_EDIT_WORDS_PER_S = 2.3
+/** More than this over budget triggers one tightening rewrite. */
+export const T2V_BUDGET_TOLERANCE = 0.05
+
 export function wordBudget(durationS: number): number {
-  return Math.max(40, Math.round(Math.max(10, durationS - T2V_END_CARD_S) * T2V_PLAN_WORDS_PER_S))
+  return Math.max(40, Math.round(Math.max(10, durationS - T2V_END_CARD_S) * T2V_EDIT_WORDS_PER_S))
+}
+
+export function narrationWords(segs: Array<{ narration: string }>): number {
+  return segs.reduce((n, s) => n + (s.narration.trim() ? s.narration.trim().split(/\s+/).length : 0), 0)
 }
 
 const STORY_SYSTEM = `You are the Story Planner for an automatic stock-footage video maker.
@@ -71,7 +85,7 @@ Rules:
   so stock footage can illustrate it. Avoid purely abstract sentences.
 - Flow naturally between segments; no repetition; satisfying final sentence.
 - visualMeaning: what the viewer should see during this segment.
-- Total words across all narration MUST be within +-8% of the word budget.
+- Total words across all narration MUST NOT exceed the word budget; aim for 95-100% of it.
 - Do not fabricate specific statistics, dates, names or quotations.`
 
 export async function t2vScriptAgent(input: {
@@ -88,7 +102,17 @@ export async function t2vScriptAgent(input: {
     `Word budget: ${budget} words total (~${input.durationS - T2V_END_CARD_S}s of narration).`,
   ].join('\n')
   const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(SCRIPT_SYSTEM, user)
-  const segs = (Array.isArray(out.segments) ? out.segments : [])
+  let segs = toSegments(out.segments)
+  if (!segs.length) throw new Error('t2v_script_empty')
+  segs = await tightenToBudget(segs, budget)
+  for (const s of segs) {
+    s.targetSeconds = Math.round((s.narration.split(/\s+/).length / T2V_PLAN_WORDS_PER_S) * 10) / 10
+  }
+  return segs
+}
+
+function toSegments(raw: unknown): T2vNarrationSegment[] {
+  return (Array.isArray(raw) ? (raw as Array<Record<string, unknown>>) : [])
     .map((s, i) => ({
       id: `seg_${i + 1}`,
       purpose: String(s.purpose ?? '').trim().slice(0, 120),
@@ -98,9 +122,36 @@ export async function t2vScriptAgent(input: {
       targetSeconds: 0,
     }))
     .filter((s) => s.narration.length > 0)
-  if (!segs.length) throw new Error('t2v_script_empty')
-  for (const s of segs) {
-    s.targetSeconds = Math.round((s.narration.split(/\s+/).length / T2V_PLAN_WORDS_PER_S) * 10) / 10
+}
+
+const TIGHTEN_SYSTEM = `You tighten a narration script for a stock-footage video so it fits its running time.
+Return ONLY JSON: {"segments": [{"purpose": string, "narration": string, "visualMeaning": string, "emotion": string}]}
+Rules:
+- Keep the same segments in the same order with the same purpose, meaning and ending.
+- Cut words, not ideas: drop filler, merge or shorten sentences. Keep sentences 7-18 words, natural to read aloud.
+- Total narration words MUST be at or just under the target given. Never add new facts.`
+
+/**
+ * One tightening rewrite when the script runs more than 5% over its word budget (a 90 s target otherwise
+ * finishes at 100+ s). Kept only if it is closer to budget and not drastically short; never fails the run.
+ */
+export async function tightenToBudget(segs: T2vNarrationSegment[], budget: number): Promise<T2vNarrationSegment[]> {
+  const words = narrationWords(segs)
+  if (words <= budget * (1 + T2V_BUDGET_TOLERANCE)) return segs
+  try {
+    const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(
+      TIGHTEN_SYSTEM,
+      `Target: ${budget} words total (currently ${words}).\nScript: ${JSON.stringify(segs.map(({ purpose, narration, visualMeaning, emotion }) => ({ purpose, narration, visualMeaning, emotion })))}`,
+    )
+    const next = toSegments(out.segments)
+    const n = narrationWords(next)
+    if (next.length && n >= budget * 0.85 && Math.abs(n - budget) < Math.abs(words - budget)) {
+      logT2v('pipeline-script', 'tightened to budget', { budget, before: words, after: n })
+      return next
+    }
+    logT2v('pipeline-script', 'tightening rejected', { budget, before: words, after: n })
+  } catch (err) {
+    logT2v('pipeline-script', 'tightening failed (keeping original)', { error: err instanceof Error ? err.message : 'error' })
   }
   return segs
 }

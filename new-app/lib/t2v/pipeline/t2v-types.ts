@@ -119,6 +119,10 @@ export type T2vVerifiedPick = {
   phash?: string[]
   /** Stock author (same-shoot check: same author + neighbouring IDs). */
   author?: string
+  /** Reviewer's day/night call and measured frame stats (0-1) for the dark / black-and-white checks. */
+  timeOfDay?: string
+  saturation?: number
+  luma?: number
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
   verdict: 'accepted' | 'weak_match' | 'best_available'
 }
@@ -130,7 +134,15 @@ export type T2vShotResult = {
   /** What the edit uses: verified stock or an honest title card. */
   /** held = no clip passed review, so the previous verified clip keeps running under this line. */
   outcome?: 'stock' | 'held' | 'title_card'
+  /**
+   * How the scene's footage was picked: accepted (7+), usable (5-6, works for the line), spare (rated well
+   * for another line, unused), fallback (3-4 / best available), last_resort (failed quality rules),
+   * held (previous shot continues), card (no footage).
+   */
+  pickedBy?: T2vPickedBy
 }
+
+export type T2vPickedBy = 'accepted' | 'usable' | 'spare' | 'fallback' | 'last_resort' | 'held' | 'card'
 
 export type T2vQaReport = {
   at: string
@@ -162,7 +174,7 @@ export type T2vPipelineRun = {
   /** Every query searched per scene (so later rounds never repeat one). */
   queriesTried?: Record<string, string[]>
   /** Per-run stock success metrics (tracked so a later AI-generation fallback stays a small minority). */
-  stockStats?: { shots: number; accepted: number; weak: number; bestAvailable: number; held: number; titleCards: number; verifiedRate: number; ownClipRate?: number; stockCoverage: number; rounds: number }
+  stockStats?: { shots: number; accepted: number; weak: number; bestAvailable: number; held: number; titleCards: number; verifiedRate: number; ownClipRate?: number; pickedBy?: Partial<Record<T2vPickedBy, number>>; stockCoverage: number; rounds: number }
   verifySummary?: Record<string, number | string>
   results?: T2vShotResult[]
   musicGenerationId?: string

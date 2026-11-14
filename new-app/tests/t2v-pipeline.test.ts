@@ -24,7 +24,7 @@ describe('prompt-to-video scene planner helpers', () => {
   })
 
   it('budgets words for the requested runtime minus the end card', () => {
-    expect(wordBudget(90)).toBe(Math.round(87.5 * 2.45))
+    expect(wordBudget(90)).toBe(Math.round(87.5 * 2.3))
   })
 })
 
