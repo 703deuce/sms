@@ -1,0 +1,33 @@
+{
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/lib/premium-numbers/**/*.ts",
+    "src/lib/premium-numbers/**/*.tsx",
+    "src/lib/numbers/**/*.ts",
+    "src/lib/numbers/**/*.tsx",
+    "src/lib/payments/number-payment-provider.ts",
+    "src/lib/messaging/telnyx/**/*.ts",
+    "scripts/test-consumer-number-pricing.ts",
+    "scripts/test-vanity-number-scoring.ts",
+    "scripts/test-dual-provider-search.ts",
+    "scripts/test-provider-failure-acceptance.ts",
+    "scripts/test-ai-number-concierge.ts",
+    "scripts/test-ai-concierge-security.ts",
+    "scripts/test-port-simulation-harness.ts",
+    "scripts/test-number-product-lifecycle.ts",
+    "scripts/test-port-out-production.ts",
+    "scripts/test-forward-screening.ts",
+    "scripts/test-voicemail-greeting-playback.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "newui",
+    "newui2",
+    "new-app",
+    "docs",
+    "transovo-ui-blueprint",
+    "voice-runtime",
+    ".next",
+    ".next/dev"
+  ]
+}
