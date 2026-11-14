@@ -55,6 +55,21 @@ The living handoff for anyone (human or agent) testing T2V. Keep this file updat
   - **Pacing.** After the 60 planner draws, a forced fix-up merges or splits a neighbour until no 3 near-equal shots remain.
   - **Script expansion.** Per-segment word targets, then a capped mix of original and expanded segments within ±8% of budget.
   - **Create form.** "AI B-roll (Test · premium)" switch, off by default; it posts `aiBroll` to the existing per-run option.
+- Sleep re-run 3 (web 5e406926d): AI targeting picked the 3 weakest scenes, but Replicate refused 2 of the 3 starts with 429 (rate limit, nothing billed). The one clip made (sc_11, score 10, `live_action`) was dropped again in a look-alike tie: both shots scored 10, so the later shot lost. That scene ended as a dim 2/10 last resort. Pacing QA passed (CV 0.43). Cost $0.025. Files are in `t2v_sleep3/`.
+- Fix in 96a30d089:
+  - A look-alike pair now drops the side whose scene has the better next option. Ties go to the weaker pick, then to the later shot.
+  - A 429 start is re-sent after Retry-After, at most twice. Replicate created nothing, so this is not a paid retry.
+  - Generation starts are spaced 10 s apart.
+- Sleep re-run 4 (web 96a30d089; worker code unchanged since 5a52a1c06): **AI lands in the edit.**
+  - `t2v_sleep4.mp4` is 92.8 s; 215 words vs a budget of 201 (+7%, inside the ±8% cap).
+  - Pacing QA passed: CV 0.53, longest near-equal run 2.
+  - 3 clips generated, est. $0.075. 2 were placed with pickedBy `ai`:
+    - sc_3 "Let your morning alarm" at **16.7 s**: a hand silences an alarm clock (score 10).
+    - sc_9 "Lower the lights as night draws near," at **37.0 s**: a hand dims a desk lamp (score 9).
+  - The third clip (sc_7, `3d_render`, 9) lost to a 9/10 own-line stock clip. That is correct, because no 1–3 pick beat a good AI clip.
+  - About 17 of 23 shots fit.
+  - Still weak: 5 last-resort picks scoring 1–3 on lines with no AI budget left (sc_15, sc_16, sc_18, sc_20, sc_21).
+  - Files are in `t2v_sleep4/`: `ai_clip_sc_3_jj2y6i.mp4`, `ai_clip_sc_9_6uqpzl.mp4`, the side-by-sides, and `unplaced_ai_sc_7_sa9y5a.mp4`.
 
 ## Round log
 - Nov 13-14, 2026: pacing (CV 0.20 → 0.17 → 0.42 → 0.42), photo fallback, no cards, related rescue round, AI B-roll test step. Next: cross-line fallback quality, script expansion overshoot (185 → 263 rejected), and same-setup lookalikes inside split sentences.
