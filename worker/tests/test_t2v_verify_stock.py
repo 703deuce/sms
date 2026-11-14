@@ -88,7 +88,7 @@ def test_color_stats_on_synthetic_frames(tmp_path=None):
 def test_prompt_formats_with_style_rule():
     from clips_worker.t2v.verify_stock import PROMPT
 
-    out = PROMPT.format(narration="n", intent="i", topic="t", clip_s=10.0, need_s=4.0, style_rule="RULE")
+    out = PROMPT.format(narration="n", intent="i", subject="s", topic="t", clip_s=10.0, need_s=4.0, style_rule="RULE")
     assert "RULE" in out
 
 
@@ -100,3 +100,51 @@ def test_usable_tier_is_score_five_lit_live_action():
     assert not usable({**base, "score": 4}, 5, Ctx())
     assert not usable({**base, "lighting": 5}, 5, Ctx())
     assert not usable({**base, "style": "animation"}, 5, Ctx())
+
+
+def _alignment(text: str, wps: float = 2.5, gap: float = 0.2):
+    chars, starts, ends = [], [], []
+    t = 0.0
+    for wi, word in enumerate(text.split()):
+        if wi:
+            chars.append(" "); starts.append(t); ends.append(t + gap); t += gap
+        per = (1 / wps) / len(word)
+        for ch in word:
+            chars.append(ch); starts.append(t); ends.append(t + per); t += per
+    return {"characters": chars, "character_start_times_seconds": starts, "character_end_times_seconds": ends}
+
+
+def test_cut_offsets_land_in_pauses_between_words():
+    from clips_worker.t2v.job import cut_offsets_from_alignment
+    from clips_worker.t2v.tts_alignment import words_from_alignment
+
+    al = _alignment("workers move along the rows picking ripe cherries by hand every single morning")
+    words = words_from_alignment(al, offset_s=0, scene_slot=0)
+    vo_s = words[-1]["e"]
+    (off,) = cut_offsets_from_alignment(al, [6], vo_s)
+    assert words[5]["e"] <= off <= words[6]["s"]
+    # out of range / too close to the start -> no cut
+    assert cut_offsets_from_alignment(al, [0, 99, 1], vo_s) == [None, None, None]
+
+
+def test_cut_lengths_sum_exactly():
+    from clips_worker.t2v.assemble import cut_lengths
+
+    assert cut_lengths(6.0, [2.0, 4.1], 30) == [60, 63, 57]
+    assert sum(cut_lengths(5.017, [1.3], 30)) == round(5.017 * 30)
+
+
+def test_scene_with_cuts_renders_exact_length():
+    import subprocess
+    import tempfile
+    from pathlib import Path
+
+    from clips_worker.t2v.assemble import Scene, SceneMedia, normalize_scene, probe_duration
+
+    d = Path(tempfile.mkdtemp())
+    sc = Scene(id="a", dur_s=4.0, media=SceneMedia(kind="color", color="0xff0000"),
+               cuts=[(1.5, SceneMedia(kind="color", color="0x00ff00")), (3.0, SceneMedia(kind="color", color="0x0000ff"))])
+    out = normalize_scene(sc, d / "s.mp4", w=64, h=36, fps=30, length_s=4.0)
+    assert abs(probe_duration(out) - 4.0) < 0.05
+    px = subprocess.run(["ffmpeg", "-v", "error", "-ss", "2.0", "-i", str(out), "-frames:v", "1", "-vf", "scale=1:1,format=rgb24", "-f", "rawvideo", "-"], capture_output=True).stdout
+    assert px[1] > 150 and px[0] < 100  # green section between the cuts

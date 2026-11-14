@@ -46,6 +46,9 @@ class Scene:
     transition_s: float = 0.5
     vo_path: Path | None = None
     extra: dict = field(default_factory=dict)
+    # Optional hard cuts inside the scene (Prompt-to-Video pacing): (offset_s from scene start, media).
+    # The scene's own media plays until the first cut. Empty for storyboard-editor scenes (unchanged).
+    cuts: list[tuple[float, SceneMedia]] = field(default_factory=list)
 
 
 def run(cmd: list[str]) -> None:
@@ -92,8 +95,34 @@ def _ken_burns(mode: str, w: int, h: int, fps: int, frames: int) -> str:
     return f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={w}x{h}:fps={fps}"
 
 
+def cut_lengths(length_s: float, offsets: list[float], fps: int) -> list[int]:
+    """Frame counts per sub-shot for cuts at `offsets` (seconds) inside a scene of length_s; sums exactly."""
+    total = max(1, round(length_s * fps))
+    marks = [0] + [min(total - 1, max(1, round(o * fps))) for o in sorted(offsets)] + [total]
+    return [b - a for a, b in zip(marks, marks[1:]) if b - a > 0]
+
+
 def normalize_scene(scene: Scene, out: Path, *, w: int, h: int, fps: int, length_s: float) -> Path:
-    m = scene.media
+    if scene.cuts:
+        return _normalize_with_cuts(scene, out, w=w, h=h, fps=fps, length_s=length_s)
+    return _normalize_one(scene.media, out, w=w, h=h, fps=fps, length_s=length_s)
+
+
+def _normalize_with_cuts(scene: Scene, out: Path, *, w: int, h: int, fps: int, length_s: float) -> Path:
+    medias = [scene.media] + [m for _, m in sorted(scene.cuts, key=lambda c: c[0])]
+    frames = cut_lengths(length_s, [o for o, _ in scene.cuts], fps)
+    parts: list[Path] = []
+    for k, (m, n) in enumerate(zip(medias, frames)):
+        parts.append(_normalize_one(m, out.with_name(f"{out.stem}_p{k}.mp4"), w=w, h=h, fps=fps, length_s=n / fps))
+    lst = out.with_name(f"{out.stem}_parts.txt")
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts))
+    run(["ffmpeg", "-y", "-v", "error", "-f", "concat", "-safe", "0", "-i", str(lst), "-an", "-r", str(fps),
+         "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+         "-frames:v", str(sum(frames)), str(out)])
+    return out
+
+
+def _normalize_one(m: SceneMedia, out: Path, *, w: int, h: int, fps: int, length_s: float) -> Path:
     frames = max(1, round(length_s * fps))
     common_out = [
         "-an", "-r", str(fps), "-pix_fmt", "yuv420p", "-c:v", "libx264", "-preset", "veryfast",

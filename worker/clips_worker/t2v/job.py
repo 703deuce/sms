@@ -120,6 +120,53 @@ def _fetch_media(conn, media: dict | None, work: Path, idx: int, workspace_id: s
     return dest
 
 
+MIN_SUBSHOT_S = 1.2
+
+
+def cut_offsets_from_alignment(alignment: dict | None, at_words: list[int], vo_s: float) -> list[float | None]:
+    """Cut time (s from scene start) for each word index: the middle of the pause before that word,
+    so a cut never lands inside a word. None when the index is out of range or the cut would leave a
+    sub-shot shorter than MIN_SUBSHOT_S."""
+    words = words_from_alignment(alignment, offset_s=0.0, scene_slot=0) if alignment else []
+    out: list[float | None] = []
+    last = 0.0
+    for k in at_words:
+        if not (0 < k < len(words)):
+            out.append(None)
+            continue
+        t = (float(words[k - 1]["e"]) + float(words[k]["s"])) / 2
+        if t - last < MIN_SUBSHOT_S or vo_s - t < MIN_SUBSHOT_S:
+            out.append(None)
+            continue
+        out.append(round(t, 3))
+        last = t
+    return out
+
+
+def _scene_cuts(conn, sc: dict, alignment: dict | None, vo_s: float, work: Path, idx: int, workspace_id: str):
+    """Prompt-to-Video sub-shots: scene.cuts = [{atWord, media}] → [(offset_s, SceneMedia)] on word pauses."""
+    raw = [c for c in (sc.get("cuts") or []) if isinstance(c, dict) and isinstance(c.get("atWord"), int)]
+    if not raw or not alignment:
+        return []
+    offsets = cut_offsets_from_alignment(alignment, [c["atWord"] for c in raw], vo_s)
+    cuts = []
+    for k, (c, off) in enumerate(zip(raw, offsets)):
+        if off is None:
+            continue
+        m = c.get("media") or {"kind": "color"}
+        path = _fetch_media(conn, m, work, idx * 100 + k + 1, workspace_id)
+        cuts.append((off, SceneMedia(
+            kind=m.get("kind", "color"),
+            path=path,
+            src_in_s=float(m.get("srcInMs") or 0) / 1000.0,
+            focal_x=float(m.get("focalX", 0.5)),
+            focal_y=float(m.get("focalY", 0.5)),
+            ken_burns=m.get("kenBurns", "zoom_in"),
+            color=_media_color_hex(m),
+        )))
+    return cuts
+
+
 def run_t2v_assemble_job(conn, job: dict, progress) -> None:
     p = _payload(job)
     draft_id = p.get("draftId")
@@ -201,6 +248,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
 
             mdoc = sc.get("media") or {"kind": "color"}
             media_path = _fetch_media(conn, mdoc, work, idx, str(workspace_id))
+            cuts = _scene_cuts(conn, sc, alignment, vo_s, work, idx, str(workspace_id))
             scenes.append(
                 Scene(
                     id=sc.get("id", str(idx)),
@@ -217,6 +265,7 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                     transition=sc.get("transition", "fade"),
                     transition_s=float(sc.get("transitionMs") or 500) / 1000.0,
                     vo_path=vo_path,
+                    cuts=cuts,
                 )
             )
 
@@ -281,6 +330,23 @@ def run_t2v_assemble_job(conn, job: dict, progress) -> None:
                         "durationMs": duration_ms,
                     },
                 )
+
+        # Actual on-screen shot starts (scene starts + in-scene cuts), for the pacing QA.
+        shot_starts: list[int] = []
+        for k, sc_obj in enumerate(scenes):
+            st = asm["sceneStartsMs"][k]
+            shot_starts.append(st)
+            shot_starts.extend(st + round(off * 1000) for off, _ in sorted(sc_obj.cuts, key=lambda c: c[0]))
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE clip_jobs SET payload = payload || %s::jsonb WHERE id=%s",
+                    (json.dumps({"shotStartsMs": shot_starts, "assembledMs": duration_ms}), job["id"]),
+                )
+            conn.commit()
+        except Exception as exc:  # noqa: BLE001 — QA data only
+            log.warning("[t2v:assemble] shot starts not recorded: %s", exc)
+            conn.rollback()
 
         post_internal(
             "/api/t2v/internal/assembled",

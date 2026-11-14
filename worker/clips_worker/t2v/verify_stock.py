@@ -70,8 +70,9 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "lighting": {"type": "INTEGER"},
         "framing": {"type": "STRING"},
         "time_of_day": {"type": "STRING", "enum": ["day", "night", "dusk_dawn", "indoor"]},
+        "subject_visible": {"type": "BOOLEAN"},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day"],
+    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -81,8 +82,15 @@ never the clip's title or tags.
 
 Narration line (spoken over this shot): "{narration}"
 Intended shot: "{intent}"
+Required subject: "{subject}"
 Video topic: "{topic}"
 Clip length: {clip_s:.1f} s. The shot on screen needs about {need_s:.1f} s.
+
+SUBJECT RULE: the clip must show the specific subject named above (for example coffee cherries, not any
+red fruit or berry; a coffee roaster drum, not any machine; coffee beans drying on beds, not any beans).
+The right action with the wrong subject FAILS: subject_visible=false, matches=false, score at most 2.
+A different subject of the same category (apples for coffee cherries, a kettle for a roaster) is the
+wrong subject.
 
 Return JSON:
 - visible: one sentence describing what is actually shown.
@@ -111,6 +119,7 @@ Return JSON:
   backgrounds), or screen_recording.
 - lighting: 0-10 how well lit and readable the subject is (0 = too dark to read, 10 = bright, clear).
 - framing: 2-5 words, shot size + subject, e.g. "close-up charging plug", "aerial highway traffic".
+- subject_visible: true only if the required subject itself is clearly visible (see SUBJECT RULE).
 - time_of_day: day, night (dark sky / street lights / headlights in darkness), dusk_dawn, or indoor.
 {style_rule}"""
 
@@ -408,6 +417,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 prompt = PROMPT.format(
                     narration=str(shot.get("narration") or "")[:600].replace('"', "'"),
                     intent=str(shot.get("intent") or "")[:300].replace('"', "'"),
+                    subject=str(shot.get("subject") or shot.get("intent") or "")[:120].replace('"', "'"),
                     topic=topic.replace('"', "'"),
                     clip_s=clip_s,
                     need_s=need_s,
@@ -424,8 +434,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "visible": str(v.get("visible") or "")[:300],
                         "subject": str(v.get("main_subject") or "")[:120],
                         "action": str(v.get("action") or "")[:120],
-                        "matches": bool(v.get("matches")),
-                        "score": int(v.get("score") or 0),
+                        "matches": bool(v.get("matches")) and bool(v.get("subject_visible", True)),
+                        # Wrong subject (right action) fails: capped below the fallback bar.
+                        "score": int(v.get("score") or 0) if v.get("subject_visible", True) else min(int(v.get("score") or 0), 2),
+                        "subjectVisible": bool(v.get("subject_visible", True)),
                         "inS": a,
                         "outS": b,
                         "clipS": round(clip_s, 2),
