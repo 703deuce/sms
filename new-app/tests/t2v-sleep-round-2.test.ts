@@ -31,7 +31,8 @@ describe('look-alike pairs drop the side that can afford it', () => {
       b: { sceneId: 'b', chosen: null, evaluated: [ev('2', 1, { score: 9 })] },
     }
     const r = await enforceNoRepeat([shot('a'), shot('b')], history as never, { realistic: true })
-    expect(r.banned).toEqual({ a: ['1'] })
+    // A look-alike ban holds for every line (the clip is the same shot wherever it sits).
+    expect(r.banned).toEqual({ a: ['1'], b: ['1'] })
     expect(r.results.b!.chosen!.providerId).toBe('2')
   })
   it('AI targets follow the full pass: a scene the sequence check emptied is targeted first', () => {
@@ -60,7 +61,8 @@ describe('sleep3 fix: tie on pick score keeps the scene that would lose most', (
     }
     const r = await enforceNoRepeat([shot('a'), shot('b')], history as never, { realistic: true })
     expect(r.results.b!.chosen!.providerId).toBe('ai_1')
-    expect(r.banned).toEqual({ a: ['1'] })
+    // A look-alike ban holds for every line (the clip is the same shot wherever it sits).
+    expect(r.banned).toEqual({ a: ['1'], b: ['1'] })
   })
   it('a 429 start is re-sent (nothing was created); a created prediction is returned once', async () => {
     process.env.REPLICATE_API_TOKEN = 'test'

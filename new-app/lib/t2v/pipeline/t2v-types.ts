@@ -146,6 +146,10 @@ export type T2vVerifiedPick = {
   subjectVisible?: boolean
   /** Reviewer's own words on why the clip does or does not fit here (whole-script judgement). */
   fitReason?: string
+  /** Reviewer: what is literally on screen, written before the fit judgement (score and fitReason build on it). */
+  seen?: string
+  /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
+  fitReasonFrom?: 'verify' | 'line_recheck'
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
   kind?: 'video' | 'photo' | 'ai'
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
@@ -218,8 +222,6 @@ export type T2vPipelineRun = {
   reimaginePending?: T2vReimaginePending
   /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */
   reimagineLog?: T2vReimagineLogEntry[]
-  /** Set once the AI step starts: no more reimagine rounds afterwards. */
-  reimagineDone?: boolean
   /** AI B-roll test (off by default): per-run opt-in; 1 = generating, 2 = verify job in flight / done. */
   aiBroll?: boolean
   aiRound?: number

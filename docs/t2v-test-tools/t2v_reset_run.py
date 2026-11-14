@@ -6,13 +6,14 @@ Default: full re-run from `queued` (new script, new plan).
 --from-footage: restart at `finding_footage` with the script and scene plan FROZEN (story, segments, shots,
   music kept); every footage/verify/pick/AI/QA field is cleared, so old-vs-new matching can be compared on the
   same script. A plan made before the script-context pass gets its moments added once on the first tick.
-`ai`: also opt this run into the AI b-roll test step (paid; only when explicitly approved).
+`ai`: also opt this run into the AI b-roll test step (paid; only when explicitly approved). Without `ai` the
+  run is always written with aiBroll=false (an older run's aiBroll=true is never carried over).
 """
 import os, json, psycopg2, datetime, sys
 
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 DID = args[0] if args else sys.exit("usage: t2v_reset_run.py <draftId> [ai] [--from-footage]")
-AI = len(args) > 1 and args[1] == "ai"
+AI = "ai" in args[1:]
 FROM_FOOTAGE = "--from-footage" in sys.argv[1:]
 
 c = psycopg2.connect(os.environ["DATABASE_URL"]); cur = c.cursor()
@@ -26,16 +27,19 @@ prev_log = ab.get("log") or []
 if FROM_FOOTAGE:
     missing = [k for k in ("story", "segments", "shots") if not ab.get(k)]
     if missing: sys.exit(f"cannot freeze: autobuild has no {', '.join(missing)}; use a full re-run")
-    keep_keys = ("v", "prompt", "style", "durationS", "renderResolution", "startedAt", "aiBroll",
+    # aiBroll is NOT carried over: paid AI b-roll only when `ai` is passed for this reset.
+    keep_keys = ("v", "prompt", "style", "durationS", "renderResolution", "startedAt",
                  "story", "segments", "shots", "musicGenerationId")
     keep = {k: ab[k] for k in keep_keys if k in ab}
     status, completed, note = "finding_footage", ["writing_script", "planning_scenes"], "operator restart at finding_footage (script + plan frozen)"
 else:
     keep = {k: ab[k] for k in ("v", "prompt", "style", "durationS", "renderResolution", "startedAt") if k in ab}
     status, completed, note = "queued", [], "operator full re-run"
+keep["aiBroll"] = AI
 if AI:
-    keep["aiBroll"] = True
     note += " + AI b-roll test (per-run aiBroll)"
+else:
+    note += " (aiBroll=false)"
 keep.update({"status": status, "completed": completed, "resumes": 0,
              "log": prev_log + [{"stage": status, "at": now, "note": note}]})
 d["autobuild"] = keep

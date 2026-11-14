@@ -96,11 +96,24 @@ describe('t2v editorial round', () => {
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, subject: 'coffee roaster', visible: 'an industrial coffee roaster drum' }), ev('4', { score: 6, subject: 'coffee cup', visible: 'a cup of coffee' })] },
       { sceneId: 'b', chosen: null, evaluated: [] },
     ]
-    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7 }, { sceneId: 'b', providerId: '4', score: 2 }] } as never)
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7, reason: 'the drum line B describes' }, { sceneId: 'b', providerId: '4', score: 2, reason: 'a cup, not the drum' }] } as never)
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3'), cand('4')], b: [] })
     expect(out[1]!.chosen!.providerId).toBe('3')
     expect(out[1]!.chosen!.score).toBe(7)
     expect(out[1]!.pickedBy).toBe('last_resort')
+    // fit_reason is the re-check for line b, never clip 3's verify reason for line a (sleep sh16 bug).
+    expect(out[1]!.chosen!.fitReason).toBe('the drum line B describes')
+    expect(out[1]!.chosen!.fitReasonFrom).toBe('line_recheck')
+  })
+  it('a cross-line clip the re-check gave no reason for is not placed (the line extends instead)', async () => {
+    const shots = [shot('a', 'Beans tumble in the roaster.', 'vg_0'), shot('b', 'The roaster drum glows with heat.', 'vg_1')]
+    const results = [
+      { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, fitReason: 'reason for line a' })] },
+      { sceneId: 'b', chosen: null, evaluated: [] },
+    ]
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7 }] } as never)
+    const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3')], b: [] })
+    expect(out[1]!.pickedBy).toBe('held')
   })
   it('at most 2 stills in a row; no near-identical neighbours', () => {
     const s = (id: string) => ({ sceneId: id, narration: '', intent: '' }) as never

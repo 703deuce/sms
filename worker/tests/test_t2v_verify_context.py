@@ -183,3 +183,56 @@ def test_prompts_and_rules_have_no_topic_words_or_time_rules():
     src = inspect.getsource(vs)
     for gone in ("NIGHT_WORDS", "MONO_WORDS", "MIN_LIGHTING", "MIN_LUMA", "MIN_SATURATION", "night_line", "night_ok", "mono_ok"):
         assert gone not in src, gone
+
+
+def test_seen_is_described_first_and_stored_with_fit_reason(run_job):
+    """Snow sc_3: a phone on a charger scored 8 as a 'metaphor' for flashlights and batteries. The checker now
+    writes what is literally on screen (seen) first and scores from that; seen is stored beside fit_reason."""
+    props = vs.VERIFY_SCHEMA["properties"]
+    assert "seen" in props and "seen" in vs.VERIFY_SCHEMA["required"]
+    order = vs.VERIFY_SCHEMA["propertyOrdering"]
+    assert order[0] == "seen" and order.index("seen") < order.index("fit_reason") < order.index("score")
+    assert sorted(order) == sorted(props)  # Gemini needs every property listed
+    p = vs.PROMPT
+    assert p.index("- seen:") < p.index("- visible:") < p.index("- score:")
+    assert "Base the score and\n   fit_reason on seen" in p and "metaphor" in p
+    shots = [{"sceneId": "sc_3", "narration": "flashlights, and spare batteries.", "needS": 3, "candidates": [cand("8501")]}]
+    ans = resp(3, visible="A phone placed on a wireless charging stand", reason="seen shows a phone charging, not flashlights or batteries")
+    ans["seen"] = "A hand puts a smartphone on a wireless charging stand next to a plant."
+    results, prompts = run_job(shots, {"8501": ans})
+    ev = results[0]["evaluated"][0]
+    assert ev["seen"] == "A hand puts a smartphone on a wireless charging stand next to a plant."
+    assert ev["fitReason"].startswith("seen shows a phone")
+    assert results[0]["chosen"] is None or results[0]["chosen"]["verdict"] == "best_available"
+    assert "seen:" in prompts["8501"]
+
+
+def test_seen_falls_back_to_visible_for_old_answers(run_job):
+    shots = [{"sceneId": "sc_1", "narration": "A line.", "needS": 3, "candidates": [cand("1")]}]
+    results, _ = run_job(shots, {"1": resp(8, visible="A kettle boiling", reason="fits")})
+    ev = results[0]["evaluated"][0]
+    assert ev["seen"] == "A kettle boiling" and ev["visible"] == "A kettle boiling"
+
+
+def test_split_scene_fragment_is_judged_with_its_full_sentence_and_neighbours(run_job):
+    """Sleep 'and adjust bedding…' was judged alone. The checker now reads the whole sentence and both
+    neighbouring lines. (VQ's 'hands smoothing a duvet in a softly lit room' is a test expectation only.)"""
+    sentence = "Draw curtains, reduce noise, and adjust bedding so the space feels restful."
+    shots = [{
+        "sceneId": "sc_15", "narration": "and adjust bedding so the space feels restful.", "sentence": sentence, "needS": 3, "lineNo": 16,
+        "prevNarration": "Draw curtains, reduce noise,", "nextNarration": "Keep the bed ready for sleep, with fewer bright lights and interruptions nearby.",
+        "candidates": [cand("duvet")],
+    }]
+    _, prompts = run_job(shots, {"duvet": resp(8, visible="Hands smooth a duvet in a softly lit room")}, SLEEP_SCRIPT, SLEEP_UNDERSTANDING)
+    p = prompts["duvet"]
+    assert f'This line is part of the sentence: "{sentence}"' in p
+    assert 'Previous line: "Draw curtains, reduce noise,"' in p and 'Next line: "Keep the bed ready' in p
+    # A whole-sentence line gets no extra sentence line.
+    assert "part of the sentence" not in vs.script_block("", {"narration": "A line.", "sentence": "A line."})
+
+
+def test_prompt_judges_as_a_viewer_and_treats_metaphor_as_a_miss():
+    p = vs.PROMPT
+    assert "the way a viewer\nwatching the whole video would" in p
+    assert "A metaphor, a symbol or a loose association is a miss, not a pass" in p
+    assert "score 4 or lower so the editor looks for another shot" in p

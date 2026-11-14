@@ -54,6 +54,32 @@ export function compactScript(shots: Array<Pick<T2vPlannedShot, 'narration'>>, m
     .slice(0, maxChars)
 }
 
+/**
+ * The full sentence a shot belongs to (split scenes: "and adjust bedding" alone reads like a keyword list).
+ * Uses the planner's `sentence`, else joins the narration of the shots sharing its voiceGroup.
+ */
+export function fullSentence(all: Array<Pick<T2vPlannedShot, 'sceneId' | 'narration' | 'voiceGroup' | 'sentence'>>, i: number): string {
+  const s = all[i]
+  if (!s) return ''
+  if (s.sentence?.trim()) return s.sentence.trim()
+  if (!s.voiceGroup) return s.narration
+  return all
+    .filter((x) => x.voiceGroup === s.voiceGroup)
+    .map((x) => x.narration.trim())
+    .join(' ')
+}
+
+/** Scene context for verify and reimagine: full sentence plus the neighbouring lines (story order). */
+export function sceneContext(all: Array<Pick<T2vPlannedShot, 'sceneId' | 'narration' | 'voiceGroup' | 'sentence'>>, sceneId: string) {
+  const i = all.findIndex((x) => x.sceneId === baseSceneId(sceneId))
+  return {
+    lineNo: i >= 0 ? i + 1 : null,
+    sentence: i >= 0 ? fullSentence(all, i) : '',
+    prevNarration: i > 0 ? all[i - 1]!.narration : '',
+    nextNarration: i >= 0 ? (all[i + 1]?.narration ?? '') : '',
+  }
+}
+
 /** Reimagined shots verify under `${sceneId}~i${k}`; results map back to the line's own scene id. */
 export const baseSceneId = (id: string) => id.split('~')[0]!
 
@@ -71,17 +97,24 @@ export async function t2vReimagine(input: {
   history: Record<string, T2vShotResult>
 }): Promise<Record<string, T2vShotIdea[]>> {
   if (!input.targets.length) return {}
-  const lines = input.targets.map((s) => ({
+  const lines = input.targets.map((s) => {
+    const ctx = sceneContext(input.allShots, s.sceneId)
+    return {
     sceneId: s.sceneId,
-    lineNo: input.allShots.findIndex((x) => x.sceneId === s.sceneId) + 1,
+    lineNo: ctx.lineNo ?? 0,
     line: s.narration,
+    // A piece of a split sentence is read with its whole sentence and neighbours, never alone.
+    ...(ctx.sentence && ctx.sentence !== s.narration ? { fullSentence: ctx.sentence } : {}),
+    previousLine: ctx.prevNarration,
+    nextLine: ctx.nextNarration,
     moment: s.moment || s.intent,
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejected: (input.history[s.sceneId]?.evaluated ?? [])
-      .filter((e) => e.visible)
+      .filter((e) => e.seen || e.visible)
       .slice(-6)
-      .map((e) => ({ showed: String(e.visible).slice(0, 100), score: e.score ?? null, why: String(e.fitReason ?? '').slice(0, 120) })),
-  }))
+      .map((e) => ({ showed: String(e.seen || e.visible).slice(0, 100), score: e.score ?? null, why: String(e.fitReason ?? '').slice(0, 120) })),
+    }
+  })
   const user = [
     `Title: ${input.story.title}`,
     `Topic: ${input.story.topic || input.story.title}`,
@@ -157,4 +190,46 @@ export function reimagineOutcomes(pending: T2vReimaginePending, results: T2vShot
 
 export function logReimagineOutcomes(draftId: string, entries: T2vReimagineLogEntry[]) {
   for (const e of entries) logT2v('pipeline-reimagine', 'round', { draftId, ...e })
+}
+
+/** One line's clip availability in the full pick pass (what the edit would really place). */
+export type T2vReimagineFailing<T> = {
+  shot: T
+  /** Own reviewed clips (no error) the reviewer scored FILLER_MIN_SCORE+ for this line. */
+  ownAt5: number
+  /** Why each of those is not available: used_by:<sceneId>, banned_by_sequence_check, or not_placeable (style/sequence rules). */
+  blocked: Array<{ providerId: string; score: number; reason: string }>
+}
+
+/**
+ * Lines with no AVAILABLE clip at FILLER_MIN_SCORE+ in the full pick pass: nothing placed, or only a
+ * last_resort (style-rule) pick. Clips taken by another line or banned as look-alikes do not count as
+ * available, so such a line is reimagined instead of silently extending the previous shot.
+ */
+export function reimagineFailing<T extends { sceneId: string }>(
+  shots: T[],
+  history: Record<string, T2vShotResult>,
+  pass: { results: Record<string, T2vShotResult>; tiers: Record<string, string>; banned: Record<string, string[]> },
+): Array<T2vReimagineFailing<T>> {
+  const owner = new Map<string, string>()
+  for (const s of shots) {
+    const id = pass.results[s.sceneId]?.chosen?.providerId
+    if (id) owner.set(id, s.sceneId)
+  }
+  const out: Array<T2vReimagineFailing<T>> = []
+  for (const s of shots) {
+    const placed = pass.results[s.sceneId]?.chosen
+    if (placed && pass.tiers[s.sceneId] !== 'last_resort') continue
+    const banned = new Set(pass.banned[s.sceneId] ?? [])
+    const own = (history[s.sceneId]?.evaluated ?? []).filter((e) => !e.error && typeof e.score === 'number' && e.score >= FILLER_MIN_SCORE)
+    const blocked = own
+      .filter((e) => e.providerId !== placed?.providerId)
+      .map((e) => {
+        const by = owner.get(e.providerId)
+        const reason = by && by !== s.sceneId ? `used_by:${by}` : banned.has(e.providerId) ? 'banned_by_sequence_check' : 'not_placeable'
+        return { providerId: e.providerId, score: e.score as number, reason }
+      })
+    out.push({ shot: s, ownAt5: own.length, blocked })
+  }
+  return out
 }

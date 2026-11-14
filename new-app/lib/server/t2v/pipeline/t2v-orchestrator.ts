@@ -27,9 +27,9 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
-import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineOutcomes, reimagineTargets, T2V_REIMAGINE_ROUNDS, t2vReimagineAll } from '@/lib/server/t2v/pipeline/t2v-reimagine'
+import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneContext, T2V_REIMAGINE_ROUNDS, t2vReimagineAll } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -364,7 +364,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       // Reimagined ideas verify under `${sceneId}~iK`; their results belong to the line itself.
       const roundResults = ((payload.results ?? []).filter(Boolean) as T2vShotResult[]).map((r) => ({ ...r, sceneId: baseSceneId(r.sceneId) }))
       // Per line, per round: ideas, queries, every candidate's score and whether the line now passes (5+).
-      if (run.reimaginePending && run.aiRound !== 2) {
+      if (run.reimaginePending) {
         const entries = reimagineOutcomes(run.reimaginePending, (payload.results ?? []) as T2vShotResult[])
         logReimagineOutcomes(draftId, entries)
         await writeRun(draftId, (r) => {
@@ -427,11 +427,20 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       // for the same moment (whole script, the moment, what was tried and why it failed), searched and verified
       // like any shot. Each line gets at most T2V_REIMAGINE_ROUNDS rounds of its own; there is no cap on how many
       // lines take part. Only lines that still fail after their rounds fall through to AI / extend-previous.
-      if (!run.rescueRound && !run.aiRound && !run.reimagineDone) {
-        const dry = enforceNoRepeatDeterministic(run.shots!, history, pickOpts(run))
-        const failing = run.shots!.filter((sh) => !dry.tiers[sh.sceneId] || dry.tiers[sh.sceneId] === 'last_resort')
+      // Availability is judged by the SAME full pick pass the edit uses (spare re-check + look-alike sequence
+      // check): a line whose 9-10 clips are all used by other lines or banned as look-alikes has no clip and is
+      // reimagined too (sleep sc_3 / sc_15). The same pass is reused for the final pick when nothing changes.
+      // It also runs after the AI clips are verified, so lines that lost their clip to a later ban still get
+      // their own remaining rounds before the finisher extends the previous shot.
+      let fullPass: Awaited<ReturnType<typeof enforceNoRepeat>> | undefined
+      if (!run.rescueRound && (!run.aiRound || run.aiRound === 2)) {
         const tries = run.reimagineTries ?? {}
-        const targets = reimagineTargets(failing, tries)
+        fullPass = await enforceNoRepeat(run.shots!, history, pickOpts(run))
+        const report = reimagineFailing(run.shots!, history, fullPass)
+        const targets = reimagineTargets(report.map((f) => f.shot), tries)
+        for (const f of report) {
+          logT2v('pipeline-reimagine', 'availability', { draftId, sceneId: f.shot.sceneId, ownAt5: f.ownAt5, blocked: f.blocked, rounds: tries[f.shot.sceneId] ?? 0, reimagine: targets.includes(f.shot) })
+        }
         if (targets.length) {
           const step = (run.reimagineRound ?? 0) + 1
           const next = await reimagineRound(row, run, targets, history, tries).catch((err) => {
@@ -481,14 +490,14 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.aiJobs = started.jobs
             // AI runs after every stock round; never go back to them afterwards.
             r.photoRound ??= 2
-            r.reimagineDone = true
             r.log.push({ stage: r.status, at: new Date().toISOString(), note: `ai_broll_start:${started.jobs.map((j) => j.sceneId).join(',')}` })
             return r
           })
           return
         }
       }
-      const noRepeat = await enforceNoRepeat(run.shots!, history, pickOpts(run))
+      // Same pass the availability check used (no second sequence check that could ban differently).
+      const noRepeat = fullPass ?? (await enforceNoRepeat(run.shots!, history, pickOpts(run)))
       const results = run.shots!.map((sh): T2vShotResult => {
         const r = noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] }
         return { ...r, pickedBy: noRepeat.tiers[sh.sceneId] }
@@ -635,7 +644,6 @@ async function enqueueVerify(
   // The checker reads the whole script, the neighbouring lines and this line's moment (story order).
   const run = row.document.autobuild
   const all = run?.shots?.length ? run.shots : shots
-  const at = (sceneId: string) => all.findIndex((x) => x.sceneId === baseSceneId(sceneId))
   await getPrisma().clipJob.create({
     data: {
       id: jobId,
@@ -653,7 +661,8 @@ async function enqueueVerify(
         script: compactScript(all),
         videoUnderstanding: run?.story?.videoUnderstanding ?? '',
         shots: shots.map((s) => {
-          const i = at(s.sceneId)
+          // Full sentence (split scenes) + neighbouring lines: the checker never reads a fragment alone.
+          const ctx = sceneContext(all, s.sceneId)
           return {
             sceneId: s.sceneId,
             narration: s.narration,
@@ -661,9 +670,10 @@ async function enqueueVerify(
             needS: s.needS,
             subject: s.subject ?? '',
             moment: s.moment ?? '',
-            lineNo: i >= 0 ? i + 1 : null,
-            prevNarration: i > 0 ? all[i - 1]!.narration : '',
-            nextNarration: i >= 0 ? (all[i + 1]?.narration ?? '') : '',
+            lineNo: ctx.lineNo,
+            sentence: ctx.sentence,
+            prevNarration: ctx.prevNarration,
+            nextNarration: ctx.nextNarration,
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,
@@ -699,6 +709,9 @@ function logScenePicks(draftId: string, shots: T2vPlannedShot[], results: T2vSho
       providerId: r?.chosen?.providerId ?? null,
       score: r?.chosen?.score ?? null,
       fitReason: r?.chosen?.fitReason ?? '',
+      fitReasonFrom: r?.chosen?.fitReasonFrom ?? (r?.chosen ? 'verify' : null),
+      seen: r?.chosen?.seen ?? r?.chosen?.visible ?? '',
+      reviewedForOtherLine: r?.chosen?.reviewedForOtherLine ?? null,
       reviewed: r?.evaluated?.length ?? 0,
     })
   })

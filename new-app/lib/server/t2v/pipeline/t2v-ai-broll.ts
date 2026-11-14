@@ -35,6 +35,8 @@ export type T2vAiJob = {
 }
 
 export function aiBrollEnabled(run: Pick<T2vPipelineRun, 'aiBroll'>): boolean {
+  // An explicit per-run aiBroll=false (operator reset without `ai`) always wins over the global test flag.
+  if (run.aiBroll === false) return false
   return process.env.T2V_AI_BROLL_TEST?.trim() === '1' || run.aiBroll === true
 }
 
