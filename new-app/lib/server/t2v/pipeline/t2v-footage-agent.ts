@@ -28,17 +28,26 @@ export function queryWords(q: string): string[] {
     .filter((w) => w.length > 1 && !STOP.has(w))
 }
 
-/** Word matches a tag when either is a prefix of the other (charging ~ charger ~ charge via 5-char stem). */
+/**
+ * Word matches a tag word when they share a stem: long words (5+ chars) by 5-char prefix (charging ~ charger),
+ * short words only exactly or as a plural (car ~ cars, never cargo/cartridge/cable car's "cable").
+ */
 function stem(w: string): string {
   return w.length > 5 ? w.slice(0, 5) : w
 }
 
+function wordHits(w: string, tagWord: string): boolean {
+  if (w.length <= 4 || tagWord.length <= 4) return tagWord === w || tagWord === `${w}s` || w === `${tagWord}s`
+  const s = stem(w)
+  const t = stem(tagWord)
+  return t.startsWith(s) || s.startsWith(t)
+}
+
 export function tagOverlap(words: string[], tags: string[]): number {
-  const tagWords = tags.flatMap((t) => t.toLowerCase().split(/[\s-]+/)).map(stem)
+  const tagWords = tags.flatMap((t) => t.toLowerCase().split(/[\s-]+/)).filter(Boolean)
   let n = 0
   for (const w of words) {
-    const s = stem(w)
-    if (w === 'ev' ? tags.some((t) => /\b(ev|e auto|electric vehicle|electric car)\b/i.test(t)) : tagWords.some((t) => t.startsWith(s) || s.startsWith(t))) n++
+    if (w === 'ev' ? tags.some((t) => /\b(ev|e auto|electric vehicle|electric car)\b/i.test(t)) : tagWords.some((t) => wordHits(w, t))) n++
   }
   return n
 }

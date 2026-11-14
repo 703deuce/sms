@@ -48,6 +48,9 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T, i: number) =
   return out
 }
 
+/** Longest a single shot may stay on screen when later lines are held on it. */
+const MAX_HELD_SHOT_MS = 8000
+
 function titleCard(): T2vSceneMedia {
   return { provider: 'color', kind: 'color', color: TITLE_CARD_COLOR }
 }
@@ -107,7 +110,12 @@ export async function t2vFinisher(input: {
     const r = byScene.get(shot.sceneId)
     const pick = r?.chosen ?? fallback.get(shot.sceneId)
     if (!pick) return null
-    const cand = (input.candidates[shot.sceneId] ?? []).find((c) => c.providerId === pick.providerId)
+    // A spare pick may come from another scene's candidate list (on-topic B-roll reviewed for another line).
+    const cand =
+      (input.candidates[shot.sceneId] ?? []).find((c) => c.providerId === pick.providerId) ??
+      Object.values(input.candidates)
+        .flat()
+        .find((c) => c.providerId === pick.providerId)
     if (!cand) return null
     try {
       const asset = await ensureT2vStockAsset(input.workspaceId, stockCandidateFrom(cand))
@@ -121,7 +129,8 @@ export async function t2vFinisher(input: {
         width: cand.width,
         height: cand.height,
         durationMs: Math.round(cand.durationS * 1000),
-        srcInMs: Math.round(Math.max(0, pick.inS) * 1000),
+        // Start early enough that the line fits inside the clip (spare picks were windowed for another line).
+        srcInMs: Math.round(Math.max(0, Math.min(pick.inS, cand.durationS - shot.needS - 0.3)) * 1000),
         focalX: 0.5,
         focalY: 0.5,
         attribution: { author: cand.author, pageUrl: cand.pageUrl, provider: cand.provider },
@@ -157,7 +166,8 @@ export async function t2vFinisher(input: {
     const prevShot = input.shots[i - 1]
     if (!m && prev && prevShot && prevShot.segmentId === shot.segmentId && prev.media.kind === 'video') {
       const left = (prev.media.durationMs ?? 0) - (prev.media.srcInMs ?? 0)
-      if (left >= lastNeedMs + needMs + 600) {
+      // A held shot never runs past ~8 s on screen: longer lines get a new distinct clip instead.
+      if (left >= lastNeedMs + needMs + 600 && lastNeedMs + needMs <= MAX_HELD_SHOT_MS) {
         prev.narration = `${prev.narration} ${shot.narration}`
         prev.padMs = segmentEnd ? 450 : 120
         prev.transition = !next ? 'fade_black' : segmentEnd ? 'dissolve' : 'cut'

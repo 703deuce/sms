@@ -17,6 +17,12 @@ Rules:
   B-roll that still fits the line's meaning and the video topic. Example for "EV sales growth":
   "car dealership", "modern car city", "charging cable".
 - Round 2+ must go broader than earlier rounds. Never reuse a tried query or a near-duplicate.
+- Round 3+ (last round): the topic-specific footage does not exist as real camera footage on Pixabay
+  (its EV/charging/dealership clips are mostly CGI). Propose 1-2 word queries for COMMON real-world B-roll
+  that still works in this spot and is filmed constantly: e.g. "car driveway", "parking garage", "city
+  street", "hands steering wheel", "family car", "suburban house", "power lines", "solar panels",
+  "highway sunset", "shopping street", "car interior", "wallet cash". Pick ones that fit the line's meaning
+  and differ from the neighbouring shots.
 - Use what the reviewer actually saw in rejected clips to steer away from those results.
 Return ONLY JSON: {"shots": [{"sceneId": string, "queries": [string, string, string]}]}`
 

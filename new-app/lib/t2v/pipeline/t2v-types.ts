@@ -117,6 +117,8 @@ export type T2vVerifiedPick = {
   framing?: string
   /** 64-bit dHash hex of 3 frames in the window (near-duplicate check). */
   phash?: string[]
+  /** Stock author (same-shoot check: same author + neighbouring IDs). */
+  author?: string
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
   verdict: 'accepted' | 'weak_match' | 'best_available'
 }
@@ -160,7 +162,7 @@ export type T2vPipelineRun = {
   /** Every query searched per scene (so later rounds never repeat one). */
   queriesTried?: Record<string, string[]>
   /** Per-run stock success metrics (tracked so a later AI-generation fallback stays a small minority). */
-  stockStats?: { shots: number; accepted: number; weak: number; bestAvailable: number; held: number; titleCards: number; verifiedRate: number; stockCoverage: number; rounds: number }
+  stockStats?: { shots: number; accepted: number; weak: number; bestAvailable: number; held: number; titleCards: number; verifiedRate: number; ownClipRate?: number; stockCoverage: number; rounds: number }
   verifySummary?: Record<string, number | string>
   results?: T2vShotResult[]
   musicGenerationId?: string

@@ -30,3 +30,12 @@ describe('t2v realistic filter', () => {
     expect(looksNonLiveAction({ type: 'film', tags: 'electric car, charging, street' })).toBe(false)
   })
 })
+
+describe('t2v tag overlap', () => {
+  it('short words match exactly (car never matches cargo/cartridge)', async () => {
+    const { tagOverlap } = await import('@/lib/server/t2v/pipeline/t2v-footage-agent')
+    expect(tagOverlap(['car'], ['cargo', 'cartridge'])).toBe(0)
+    expect(tagOverlap(['car'], ['cars', 'road'])).toBe(1)
+    expect(tagOverlap(['charging'], ['charger'])).toBe(1)
+  })
+})

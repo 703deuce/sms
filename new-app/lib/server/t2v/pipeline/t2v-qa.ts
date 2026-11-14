@@ -1,4 +1,5 @@
 import 'server-only'
+import { sameShoot } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import type { T2vScene } from '@/lib/t2v/types'
 import type { T2vPipelineRun, T2vQaReport, T2vShotResult } from '@/lib/t2v/pipeline/t2v-types'
 import { wordBudget } from '@/lib/server/t2v/pipeline/t2v-story-agent'
@@ -47,6 +48,14 @@ export function t2vQaPlan(input: { run: T2vPipelineRun; scenes: T2vScene[]; resu
     (r) => r.chosen && r.chosen.outS - r.chosen.inS + 0.05 < Math.min(r.chosen.clipS, 1.5),
   ).length
   checks.push({ id: 'usable_windows', ok: shortWindows === 0, detail: `${shortWindows} picks with < 1.5 s usable window` })
+  // Same shoot (same author, neighbouring IDs) must never sit side by side in the edit.
+  const used = input.results.filter((r) => r.outcome === 'stock' && r.chosen).map((r) => r.chosen!)
+  let sameShootAdj = 0
+  for (let i = 1; i < used.length; i++) if (sameShoot(used[i - 1]!, used[i]!)) sameShootAdj++
+  checks.push({ id: 'no_adjacent_same_shoot', ok: sameShootAdj === 0, detail: `${sameShootAdj} adjacent clips from the same shoot` })
+  const ownClip = used.length
+  const ownRate = input.results.length ? ownClip / input.results.length : 1
+  checks.push({ id: 'own_clip_rate', ok: ownRate >= 0.9, detail: `${ownClip}/${input.results.length} lines with their own reviewed clip (${Math.round(ownRate * 1000) / 10}%)` })
   return { at: new Date().toISOString(), pass: checks.every((c) => c.ok), checks }
 }
 

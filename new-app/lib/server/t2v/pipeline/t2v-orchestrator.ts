@@ -42,7 +42,7 @@ const MUSIC_WAIT_MS = 5 * 60_000
 const WEB_STAGES: T2vPipelineStatus[] = ['writing_script', 'planning_scenes', 'finding_footage']
 const MAX_RESUMES = 1
 /** Extra search rounds (new adjacent queries) for shots where nothing passed review. */
-const MAX_EXTRA_VERIFY_ROUNDS = 2
+const MAX_EXTRA_VERIFY_ROUNDS = 3
 
 const drivers = new Map<string, { timer: ReturnType<typeof setInterval>; startedAt: number }>()
 const advancing = new Set<string>()
@@ -480,6 +480,7 @@ async function enqueueVerify(
             previewUrl: c.previewUrl,
             durationS: c.durationS,
             query: c.query,
+            author: c.author,
           })),
         })),
       } as Prisma.InputJsonValue,
@@ -531,6 +532,7 @@ async function nextSearchRound(
   const used = Object.values(history)
     .map((h) => h.chosen)
     .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    .filter((c) => c.verdict === 'accepted')
     .map((c) => ({ providerId: c.providerId, phash: c.phash }))
   const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, used })
   return { jobId, tried, candidates, shots: withCands.length }
@@ -552,6 +554,8 @@ function computeStockStats(results: T2vShotResult[], round: number): NonNullable
     held,
     titleCards,
     verifiedRate: Math.round((accepted / n) * 1000) / 10,
+    // Lines with their own reviewed clip (any verdict), i.e. not held on the previous shot or a card.
+    ownClipRate: Math.round(((accepted + weak + bestAvailable) / n) * 1000) / 10,
     stockCoverage: Math.round(((n - titleCards) / n) * 1000) / 10,
     rounds: round + 1,
   }
