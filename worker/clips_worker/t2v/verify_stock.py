@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import subprocess
 import tempfile
 import threading
@@ -39,7 +40,12 @@ FALLBACK_MIN_SCORE = 3
 MAX_PREVIEW_BYTES = 40 * 1024 * 1024
 # Realistic styles (documentary etc.) accept live-action footage only.
 LIVE_ACTION = "live_action"
-MIN_LIGHTING = 5
+MIN_LIGHTING = 6
+# Measured on frames (0-1): below these a clip is too dark / black-and-white for a normal line.
+MIN_LUMA = 0.12
+MIN_SATURATION = 0.06
+NIGHT_WORDS = re.compile(r"\b(night|nights|nighttime|night-time|overnight|evening|dusk|midnight|dark|darkness|after dark|neon|moonlight|stars)\b", re.I)
+MONO_WORDS = re.compile(r"\b(black[- ]and[- ]white|b&w|monochrome|grayscale|greyscale|noir|desaturated|sepia)\b", re.I)
 # Just under the relevance bar but still works for the line: used before holding the previous shot.
 USABLE_SCORE = 5
 # dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
@@ -63,8 +69,9 @@ VERIFY_SCHEMA: dict[str, Any] = {
         },
         "lighting": {"type": "INTEGER"},
         "framing": {"type": "STRING"},
+        "time_of_day": {"type": "STRING", "enum": ["day", "night", "dusk_dawn", "indoor"]},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing"],
+    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -104,6 +111,7 @@ Return JSON:
   backgrounds), or screen_recording.
 - lighting: 0-10 how well lit and readable the subject is (0 = too dark to read, 10 = bright, clear).
 - framing: 2-5 words, shot size + subject, e.g. "close-up charging plug", "aerial highway traffic".
+- time_of_day: day, night (dark sky / street lights / headlights in darkness), dusk_dawn, or indoor.
 {style_rule}"""
 
 
@@ -183,40 +191,79 @@ def near_duplicate(a: list[str], b: list[str]) -> bool:
     return False
 
 
-def passes(entry: dict, need_s: float, realistic: bool) -> bool:
-    if entry.get("error") or "score" not in entry:
-        return False
-    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
-        return False
-    return (
-        bool(entry.get("matches"))
-        and entry["score"] >= ACCEPT_SCORE
-        and int(entry.get("lighting", 10)) >= MIN_LIGHTING
-        and (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
-    )
+def _color_stats(video: Path, in_s: float, out_s: float) -> tuple[float, float] | None:
+    """Mean HSV saturation and luma (0-1) of 3 tiny frames in the window: cheap B&W / darkness test."""
+    sats: list[float] = []
+    lums: list[float] = []
+    span = max(0.1, out_s - in_s)
+    for frac in (0.25, 0.5, 0.75):
+        proc = subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", f"{in_s + span * frac:.2f}", "-i", str(video), "-frames:v", "1",
+             "-vf", "scale=32:18,format=rgb24", "-f", "rawvideo", "-"],
+            capture_output=True,
+        )
+        px = proc.stdout
+        if proc.returncode != 0 or len(px) < 32 * 18 * 3:
+            continue
+        for k in range(0, len(px) - 2, 3):
+            r, g, b = px[k], px[k + 1], px[k + 2]
+            mx, mn = max(r, g, b), min(r, g, b)
+            sats.append((mx - mn) / mx if mx else 0.0)
+            lums.append((0.299 * r + 0.587 * g + 0.114 * b) / 255)
+    if not sats:
+        return None
+    return round(sum(sats) / len(sats), 3), round(sum(lums) / len(lums), 3)
 
 
-def usable(entry: dict, need_s: float, realistic: bool) -> bool:
-    """Second tier: live action, lit, window long enough, score 5-6 (works for the line, not perfect)."""
-    if entry.get("error") or "score" not in entry:
-        return False
-    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
-        return False
-    return (
-        entry["score"] >= USABLE_SCORE
-        and int(entry.get("lighting", 10)) >= MIN_LIGHTING
-        and (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
-    )
+class Ctx:
+    """Per-shot quality rules: live action for realistic styles, night only for night lines, colour unless
+    the request asks for black-and-white."""
+
+    def __init__(self, realistic: bool = True, night_ok: bool = False, mono_ok: bool = False):
+        self.realistic = realistic
+        self.night_ok = night_ok
+        self.mono_ok = mono_ok
 
 
-def fallback_rank(entry: dict, realistic: bool) -> float:
-    """Best-available ordering: relevance first, then lighting (brighter wins); non-live-action and dark
-    clips are a last resort."""
-    s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5))
-    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
-        s -= 20
+def night_line(*texts: str) -> bool:
+    return any(NIGHT_WORDS.search(t or "") for t in texts)
+
+
+def quality_ok(entry: dict, ctx: Ctx) -> bool:
+    if ctx.realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
+        return False
     if int(entry.get("lighting", 10)) < MIN_LIGHTING:
-        s -= 10
+        return False
+    if not ctx.night_ok and (entry.get("timeOfDay") == "night" or float(entry.get("luma", 1.0)) < MIN_LUMA):
+        return False
+    if not ctx.mono_ok and float(entry.get("saturation", 1.0)) < MIN_SATURATION:
+        return False
+    return True
+
+
+def _window_ok(entry: dict, need_s: float) -> bool:
+    return (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
+
+
+def passes(entry: dict, need_s: float, ctx: Ctx) -> bool:
+    if entry.get("error") or "score" not in entry:
+        return False
+    return bool(entry.get("matches")) and entry["score"] >= ACCEPT_SCORE and quality_ok(entry, ctx) and _window_ok(entry, need_s)
+
+
+def usable(entry: dict, need_s: float, ctx: Ctx) -> bool:
+    """Second tier: score 5-6 (works for the line, not perfect) with the same quality rules."""
+    if entry.get("error") or "score" not in entry:
+        return False
+    return entry["score"] >= USABLE_SCORE and quality_ok(entry, ctx) and _window_ok(entry, need_s)
+
+
+def fallback_rank(entry: dict, ctx: Ctx) -> float:
+    """Best-available ordering: relevance first, then brightness; clips failing the quality rules
+    (non-live, dark, night for a day line, black-and-white) are a last resort."""
+    s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5))
+    if not quality_ok(entry, ctx):
+        s -= 20
     return s
 
 
@@ -320,6 +367,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
         raise ValueError("T2V_VERIFY_STOCK payload requires draftId and workspaceId")
     model = _model()
     realistic = bool(p.get("realistic", True))
+    mono_ok = bool(p.get("monoOk", False))
     style_rule = (
         "This video uses a realistic (documentary) style: only live_action footage can match; animation, "
         "3d_render, motion_graphics, clip_art and screen_recording must have matches=false."
@@ -333,8 +381,13 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     usage = {"in": 0, "out": 0, "calls": 0}
     evaluated_by_shot: list[list[dict]] = [[] for _ in shots]
 
+    def shot_ctx(shot: dict) -> Ctx:
+        night_ok = bool(shot.get("nightOk")) or night_line(str(shot.get("narration") or ""), str(shot.get("intent") or ""))
+        return Ctx(realistic=realistic, night_ok=night_ok, mono_ok=mono_ok)
+
     def verify_shot(idx: int, shot: dict, work: Path) -> None:
         need_s = float(shot.get("needS") or 4.0)
+        ctx = shot_ctx(shot)
         evaluated = evaluated_by_shot[idx]
         passing = 0
         for c in (shot.get("candidates") or [])[:MAX_CANDIDATES_PER_SHOT]:
@@ -380,8 +433,15 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "style": str(v.get("style") or LIVE_ACTION),
                         "lighting": int(v.get("lighting") if v.get("lighting") is not None else 5),
                         "framing": str(v.get("framing") or "")[:60],
+                        "timeOfDay": str(v.get("time_of_day") or "day"),
                     }
                 )
+                try:
+                    cs = _color_stats(muted, a, b)
+                    if cs:
+                        entry["saturation"], entry["luma"] = cs
+                except Exception:  # noqa: BLE001 — colour stats are a bonus signal
+                    pass
                 try:
                     entry["phash"] = _dhash_frames(muted, a, b)
                 except Exception:  # noqa: BLE001 — hash is a bonus signal
@@ -391,7 +451,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 evaluated.append(entry)
                 continue
             evaluated.append(entry)
-            if passes(entry, need_s, realistic):
+            if passes(entry, need_s, ctx):
                 passing += 1
                 # Two passing options give the no-repeat pass a backup without reviewing everything.
                 if passing >= 2:
@@ -413,23 +473,24 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     results: list[dict] = []
     for i, shot in enumerate(shots):
         need_s = float(shot.get("needS") or 4.0)
+        ctx = shot_ctx(shot)
         ev = evaluated_by_shot[i]
 
         def free(e: dict) -> bool:
             return e["providerId"] not in used_ids and not any(near_duplicate(e.get("phash") or [], h) for h in used_hashes)
 
         chosen = None
-        for e in sorted((e for e in ev if passes(e, need_s, realistic)), key=lambda e: (-e["score"], -e.get("lighting", 5))):
+        for e in sorted((e for e in ev if passes(e, need_s, ctx)), key=lambda e: (-e["score"], -e.get("lighting", 5))):
             if free(e):
                 chosen = {**e, "verdict": "accepted"}
                 break
         if chosen is None:
-            for e in sorted((e for e in ev if usable(e, need_s, realistic)), key=lambda e: -fallback_rank(e, realistic)):
+            for e in sorted((e for e in ev if usable(e, need_s, ctx)), key=lambda e: -fallback_rank(e, ctx)):
                 if free(e):
                     chosen = {**e, "verdict": "weak_match"}
                     break
         if chosen is None:
-            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, realistic)):
+            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, ctx)):
                 if free(e):
                     chosen = {**e, "verdict": "best_available"}
                     break
