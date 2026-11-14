@@ -33,7 +33,9 @@ log = logging.getLogger(__name__)
 
 ALLOWED_HOST_SUFFIXES = ("cdn.pixabay.com", "pixabay.com", "videos.pexels.com", "pexels.com", "player.vimeo.com")
 ACCEPT_SCORE = 7
-MAX_CANDIDATES_PER_SHOT = 5
+MAX_CANDIDATES_PER_SHOT = 8
+# When nothing passes, use the best-scoring clip that is at least loosely on-topic rather than a text card.
+FALLBACK_MIN_SCORE = 3
 MAX_PREVIEW_BYTES = 40 * 1024 * 1024
 PARALLEL_SHOTS = 4
 
@@ -288,12 +290,19 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     accepted.add(key)
                 chosen = {**entry, "verdict": "accepted"}
                 break
-        if chosen is None and best is not None and best.get("matches") and best["score"] >= 5:
-            key = f"{best['provider']}:{best['providerId']}"
-            with lock:
-                if key not in accepted:
+        if chosen is None:
+            ranked = sorted((e for e in evaluated if "score" in e), key=lambda e: e["score"], reverse=True)
+            for e in ranked:
+                if e["score"] < FALLBACK_MIN_SCORE:
+                    break
+                key = f"{e['provider']}:{e['providerId']}"
+                with lock:
+                    if key in accepted:
+                        continue
                     accepted.add(key)
-                    chosen = {**best, "verdict": "weak_match"}
+                verdict = "weak_match" if (e.get("matches") and e["score"] >= 5) else "best_available"
+                chosen = {**e, "verdict": verdict}
+                break
         return {"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": evaluated}
 
     t0 = time.time()
@@ -322,6 +331,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
         "elapsedMs": int((time.time() - t0) * 1000),
         "accepted": sum(1 for r in results if r and r.get("chosen") and r["chosen"].get("verdict") == "accepted"),
         "weak": sum(1 for r in results if r and r.get("chosen") and r["chosen"].get("verdict") == "weak_match"),
+        "bestAvailable": sum(1 for r in results if r and r.get("chosen") and r["chosen"].get("verdict") == "best_available"),
         "unmatched": sum(1 for r in results if not (r and r.get("chosen"))),
     }
     with conn.cursor() as cur:
