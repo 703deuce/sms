@@ -17,6 +17,11 @@ export const T2V_PIPELINE_STYLES: Array<{ id: T2vPipelineStyle; label: string }>
   { id: 'social', label: 'Social' },
 ]
 
+/** Styles that must use real live-action footage (no animation, 3D renders, motion graphics, clip-art). */
+export function t2vRealisticStyle(style: T2vPipelineStyle | string | undefined): boolean {
+  return style !== 'social'
+}
+
 /** ElevenLabs premade narrators (verified on the account). Default: American male documentary. */
 export const T2V_PIPELINE_NARRATORS: Array<{ voiceId: string; name: string; description: string }> = [
   { voiceId: 'nPczCjzI2devNBz1zQrb', name: 'Brian', description: 'American male · deep, documentary' },
@@ -107,6 +112,11 @@ export type T2vVerifiedPick = {
   outS: number
   clipS: number
   issues?: string
+  style?: string
+  lighting?: number
+  framing?: string
+  /** 64-bit dHash hex of 3 frames in the window (near-duplicate check). */
+  phash?: string[]
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
   verdict: 'accepted' | 'weak_match' | 'best_available'
 }

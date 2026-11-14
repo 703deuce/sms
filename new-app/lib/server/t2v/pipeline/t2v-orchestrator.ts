@@ -11,6 +11,7 @@ import type { T2vAspect, T2vDraftV1 } from '@/lib/t2v/types'
 import {
   T2V_PIPELINE_DEFAULT_NARRATOR,
   T2V_PIPELINE_NARRATORS,
+  t2vRealisticStyle,
   type T2vPipelineRun,
   type T2vPipelineStageId,
   type T2vPipelineStatus,
@@ -22,6 +23,7 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
+import { enforceNoRepeat } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 
@@ -272,8 +274,9 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
     }
     case 'finding_footage': {
       const topic = run.story?.topic || run.story?.title || ''
-      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic })
-      const jobId = await enqueueVerify(row, topic, run.shots!, candidates)
+      const realistic = t2vRealisticStyle(run.style)
+      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic, realistic })
+      const jobId = await enqueueVerify(row, topic, run.shots!, candidates, { realistic })
       const tried: Record<string, string[]> = {}
       for (const sh of run.shots!) tried[sh.sceneId] = queryRewrites(sh.queries, topic)
       await setStage(draftId, 'finding_footage', 'verifying_footage', (r) => {
@@ -316,7 +319,8 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return
         }
       }
-      const results = run.shots!.map((sh) => history[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] })
+      const noRepeat = await enforceNoRepeat(run.shots!, history, t2vRealisticStyle(run.style))
+      const results = run.shots!.map((sh) => noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] })
       const fin = await t2vFinisher({
         workspaceId: row.workspaceId,
         doc,
@@ -448,6 +452,7 @@ async function enqueueVerify(
   topic: string,
   shots: NonNullable<T2vPipelineRun['shots']>,
   candidates: Record<string, T2vFootageCandidate[]>,
+  opts: { realistic: boolean; used?: Array<{ providerId: string; phash?: string[] }> },
 ): Promise<string> {
   const jobId = createId('job')
   await getPrisma().clipJob.create({
@@ -462,6 +467,8 @@ async function enqueueVerify(
         workspaceId: row.workspaceId,
         projectId: row.projectId,
         topic,
+        realistic: opts.realistic,
+        used: opts.used ?? [],
         shots: shots.map((s) => ({
           sceneId: s.sceneId,
           narration: s.narration,
@@ -513,14 +520,19 @@ async function nextSearchRound(
   if (!shots.length) return null
   const exclude: Record<string, string[]> = {}
   for (const s of shots) exclude[s.sceneId] = (history[s.sceneId]?.evaluated ?? []).map((e) => e.providerId)
-  const found = await t2vFootageAgent({ shots, aspect: row.document.settings.aspect, rewrite: false, exclude })
+  const realistic = t2vRealisticStyle(run.style)
+  const found = await t2vFootageAgent({ shots, aspect: row.document.settings.aspect, rewrite: false, exclude, realistic })
   const withCands = shots.filter((s) => found[s.sceneId]?.length)
   for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
   if (!withCands.length) return null
   // Candidates map keeps every round's clips so the finisher can ingest whichever pick wins.
   const candidates = { ...(run.candidates ?? {}) }
   for (const s of withCands) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
-  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found)
+  const used = Object.values(history)
+    .map((h) => h.chosen)
+    .filter((c): c is NonNullable<typeof c> => Boolean(c))
+    .map((c) => ({ providerId: c.providerId, phash: c.phash }))
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic, used })
   return { jobId, tried, candidates, shots: withCands.length }
 }
 

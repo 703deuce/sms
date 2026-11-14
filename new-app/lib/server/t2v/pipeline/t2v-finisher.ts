@@ -1,4 +1,5 @@
 import 'server-only'
+import { nearDuplicateHash } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
 import { logT2v } from '@/lib/server/t2v/log'
@@ -72,15 +73,19 @@ export async function t2vFinisher(input: {
   // Last-resort pick per scene when nothing was chosen: the highest-scoring reviewed clip (any score),
   // never one already used by another scene. Used only if holding the previous clip isn't possible.
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
+  const usedHashes = input.results.map((r) => r.chosen?.phash).filter((h): h is string[] => Boolean(h?.length))
   const fallback = new Map<string, T2vVerifiedPick>()
   for (const shot of input.shots) {
     const r = byScene.get(shot.sceneId)
     if (r?.chosen) continue
     const best = [...(r?.evaluated ?? [])]
       .filter((e) => !e.error && typeof e.score === 'number' && !used.has(e.providerId))
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))[0]
+      // Never a look-alike of a shot already in the edit (hard no-repeat rule).
+      .filter((e) => !usedHashes.some((h) => nearDuplicateHash(e.phash, h)))
+      .sort((a, b) => Number(b.style === 'live_action') - Number(a.style === 'live_action') || (b.score ?? 0) - (a.score ?? 0))[0]
     if (!best) continue
     used.add(best.providerId)
+    if (best.phash?.length) usedHashes.push(best.phash)
     fallback.set(shot.sceneId, {
       provider: best.provider ?? 'pixabay',
       providerId: best.providerId,
@@ -92,6 +97,9 @@ export async function t2vFinisher(input: {
       outS: best.outS ?? 0,
       clipS: best.clipS ?? 0,
       issues: best.issues,
+      style: best.style,
+      framing: best.framing,
+      phash: best.phash,
       verdict: 'best_available',
     })
   }
@@ -137,7 +145,8 @@ export async function t2vFinisher(input: {
   input.shots.forEach((shot, i) => {
     const next = input.shots[i + 1]
     const segmentEnd = !next || next.segmentId !== shot.segmentId
-    const isFallback = !byScene.get(shot.sceneId)?.chosen && fallback.has(shot.sceneId)
+    // A best-available pick is a fallback: continuing the previous shot (one continuous take) wins over it.
+    const isFallback = byScene.get(shot.sceneId)?.chosen?.verdict === 'best_available' || (!byScene.get(shot.sceneId)?.chosen && fallback.has(shot.sceneId))
     const fm = media[i]
     const m = isFallback ? null : fm
     const r = byScene.get(shot.sceneId) ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
@@ -161,7 +170,7 @@ export async function t2vFinisher(input: {
     lastNeedMs = needMs
     if (!m && fm) {
       // Every scene gets footage: the best-scoring reviewed clip beats a text card.
-      results.push({ ...r, chosen: fallback.get(shot.sceneId)!, outcome: 'stock' })
+      results.push({ ...r, chosen: r.chosen ?? fallback.get(shot.sceneId)!, outcome: 'stock' })
     } else {
       results.push({ ...r, outcome: m ? 'stock' : 'title_card' })
     }

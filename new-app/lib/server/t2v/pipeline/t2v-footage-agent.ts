@@ -45,6 +45,14 @@ export function tagOverlap(words: string[], tags: string[]): number {
 
 type PixHit = Record<string, unknown>
 
+/** Pixabay files CGI/animation as type "animation"; tags catch the rest (AI imagery, icons, loops). */
+const NON_LIVE_TAG = /\b(animation|animated|anime|cartoon|3d|render|rendering|cgi|ai generated|ai-generated|generated|illustration|motion graphics?|graphic|icon|clip ?art|vector|infographic|abstract|particles|hologram|futuristic|concept car|sci-?fi)\b/i
+
+export function looksNonLiveAction(hit: { type?: unknown; tags?: unknown }): boolean {
+  if (String(hit.type ?? '').toLowerCase() === 'animation') return true
+  return NON_LIVE_TAG.test(String(hit.tags ?? ''))
+}
+
 // Pixabay allows 100 requests / 60 s per key; stay under it and reuse identical queries within a run.
 const pixCache = new Map<string, Promise<PixHit[]>>()
 const pixCalls: number[] = []
@@ -141,13 +149,14 @@ function fromShared(c: StockCandidate, query: string): T2vFootageCandidate {
 type Ranked = { c: T2vFootageCandidate; overlap: number; words: number; qi: number; rank: number }
 
 /** Rank a query's hits: tag overlap first (must be >= 1), then the provider's own order. */
-async function searchQuery(query: string, qi: number, aspect: T2vAspect): Promise<Ranked[]> {
+async function searchQuery(query: string, qi: number, aspect: T2vAspect, realistic: boolean): Promise<Ranked[]> {
   const words = queryWords(query)
   if (!words.length) return []
   const seen = new Set<string>()
   const out: Ranked[] = []
   const add = (hits: PixHit[]) => {
     hits.forEach((h, rank) => {
+      if (realistic && looksNonLiveAction(h)) return
       const c = fromPixabay(h, query)
       if (!c || seen.has(c.providerId)) return
       seen.add(c.providerId)
@@ -181,6 +190,8 @@ export async function t2vFootageAgent(input: {
   topic?: string
   /** Later rounds pass the rewriter's queries as-is (no extra rewrites). */
   rewrite?: boolean
+  /** Live-action only (documentary-like styles). */
+  realistic?: boolean
   /** providerIds already reviewed for a scene — never send them to the reviewer again. */
   exclude?: Record<string, string[]>
 }): Promise<Record<string, T2vFootageCandidate[]>> {
@@ -196,7 +207,7 @@ export async function t2vFootageAgent(input: {
       const query = queries[qi]!
       try {
         searches++
-        pool.push(...(await searchQuery(query, qi, input.aspect)))
+        pool.push(...(await searchQuery(query, qi, input.aspect, input.realistic !== false)))
         if (usePexels) {
           const px = await searchT2vStock({ query, aspect: input.aspect, sources: ['pexels'], page: 1, needMs: Math.round(shot.needS * 1000), videoTopic: '' })
           px.slice(0, 6).forEach((c, rank) => pool.push({ c: fromShared(c, query), overlap: 1, words: 1, qi, rank: rank + 50 }))

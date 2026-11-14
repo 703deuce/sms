@@ -21,3 +21,12 @@ describe('prompt-to-video footage ranking', () => {
     expect(q).toEqual(['electric car home charging', 'ev charger', 'charging cable', 'home charging', 'electric vehicle'])
   })
 })
+
+describe('t2v realistic filter', () => {
+  it('drops animation type and CGI tags', async () => {
+    const { looksNonLiveAction } = await import('@/lib/server/t2v/pipeline/t2v-footage-agent')
+    expect(looksNonLiveAction({ type: 'animation', tags: 'car' })).toBe(true)
+    expect(looksNonLiveAction({ type: 'film', tags: 'electric car, 3d, render' })).toBe(true)
+    expect(looksNonLiveAction({ type: 'film', tags: 'electric car, charging, street' })).toBe(false)
+  })
+})
