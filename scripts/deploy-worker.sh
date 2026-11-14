@@ -5,7 +5,7 @@
 # Env knobs (all optional):
 #   WORKER_ONLY=clips-worker|clips-worker-stream|both   (default: both)
 #   WORKER_PREWAIT_MAX_SEC   pre-wait for RUNNING jobs on the rolled lane(s) (default: 0, opt-in)
-#   WORKER_DRAIN_TIMEOUT_SEC SIGTERM drain per worker (default: 120)
+#   WORKER_DRAIN_TIMEOUT_SEC SIGTERM drain per worker (default: 300)
 set -euo pipefail
 
 REF="${1:-HEAD}"
@@ -14,7 +14,7 @@ REMOTE_SRC="/opt/clips-worker/src"
 REMOTE_ENV="/opt/clips-worker/worker.env"
 TARBALL="/tmp/worker-${REF//\//_}.tgz"
 WORKER_PREWAIT_MAX_SEC="${WORKER_PREWAIT_MAX_SEC:-0}"
-WORKER_DRAIN_TIMEOUT_SEC="${WORKER_DRAIN_TIMEOUT_SEC:-120}"
+WORKER_DRAIN_TIMEOUT_SEC="${WORKER_DRAIN_TIMEOUT_SEC:-300}"
 WORKER_ONLY="${WORKER_ONLY:-both}"
 
 case "${WORKER_ONLY}" in
@@ -61,6 +61,7 @@ SAFE_SHA="$(printf '%s' "${GIT_COMMIT}" | tr -c 'a-zA-Z0-9._-' '-' )"
 SHORT_SHA="$(printf '%s' "${SAFE_SHA}" | cut -c1-12)"
 REMOTE_SCRIPT="/tmp/deploy-worker-remote-${SAFE_SHA}.sh"
 REMOTE_LOG="/tmp/deploy-worker-remote-${SAFE_SHA}.log"
+REMOTE_RC="/tmp/deploy-worker-remote-${SAFE_SHA}.rc"
 UNIT="clips-worker-deploy-${SHORT_SHA}"
 
 LOCAL_REMOTE="$(mktemp /tmp/deploy-worker-remote.XXXXXX)"
@@ -75,6 +76,7 @@ WORKER_PREWAIT_MAX_SEC=$(printf '%q' "${WORKER_PREWAIT_MAX_SEC}")
 WORKER_DRAIN_TIMEOUT_SEC=$(printf '%q' "${WORKER_DRAIN_TIMEOUT_SEC}")
 WORKER_ONLY=$(printf '%q' "${WORKER_ONLY}")
 REQUIRED_ENV_KEYS=( ${REQUIRED_ENV_KEYS[*]} )
+trap 'echo \$? > $(printf '%q' "${REMOTE_RC}")' EXIT
 PREAMBLE
   cat <<'REMOTE'
 disk_pct=$(df / --output=pcent | tail -1 | tr -dc '0-9')
@@ -292,14 +294,19 @@ rm -f "${LOCAL_REMOTE}"
 echo "[deploy-worker] starting remote unit ${UNIT} (log ${REMOTE_LOG})"
 ssh "$HOST" "sudo bash -c '
   set -euo pipefail
+  st=\$(systemctl is-active ${UNIT} 2>/dev/null || true)
+  if { [ \"\$st\" = active ] || [ \"\$st\" = activating ] || [ \"\$st\" = reloading ]; } && [ ! -f ${REMOTE_RC} ]; then
+    echo \"[deploy-worker] ${UNIT} is still running (\$st); refusing to stop an in-flight rollout. Watch ${REMOTE_LOG} or stop it manually.\" >&2
+    exit 3
+  fi
+  systemctl stop ${UNIT} 2>/dev/null || true
   mv -f /tmp/deploy-worker-remote-${SAFE_SHA}.sh.in ${REMOTE_SCRIPT}
   chmod 755 ${REMOTE_SCRIPT}
-  rm -f ${REMOTE_LOG}
+  rm -f ${REMOTE_LOG} ${REMOTE_RC}
   touch ${REMOTE_LOG}
   chmod 644 ${REMOTE_LOG}
-  systemctl stop ${UNIT} 2>/dev/null || true
   systemctl reset-failed ${UNIT} 2>/dev/null || true
-  systemd-run --unit=${UNIT} --collect --remain-after-exit -p Type=oneshot -p StandardOutput=append:${REMOTE_LOG} -p StandardError=append:${REMOTE_LOG} -- /bin/bash ${REMOTE_SCRIPT}
+  systemd-run --no-block --unit=${UNIT} --collect --remain-after-exit -p Type=oneshot -p StandardOutput=append:${REMOTE_LOG} -p StandardError=append:${REMOTE_LOG} -- /bin/bash ${REMOTE_SCRIPT}
 '"
 
 wait_for_remote_unit() {
@@ -321,20 +328,22 @@ wait_for_remote_unit() {
         echo "[deploy-worker] ssh dropped while polling (attempt ${ssh_fail}); remote unit still running, retrying"
       fi
     fi
-    if state=$(ssh "$host" "sudo systemctl show -p SubState --value $(printf '%q' "$unit") 2>/dev/null"); then
-      case "$state" in
-        exited|failed|dead)
-          if ssh "$host" "sudo tail -c +$((pos + 1)) -- $(printf '%q' "$log")" >"$tmp" 2>/dev/null; then
-            cat "$tmp"
-          fi
-          break
-          ;;
-      esac
+    # Completion = the remote script's EXIT trap wrote its rc file (robust to --collect unloading the unit).
+    if status=$(ssh "$host" "sudo cat -- $(printf '%q' "$REMOTE_RC") 2>/dev/null"); then
+      if ssh "$host" "sudo tail -c +$((pos + 1)) -- $(printf '%q' "$log")" >"$tmp" 2>/dev/null; then
+        cat "$tmp"
+      fi
+      break
+    fi
+    state=$(ssh "$host" "sudo systemctl show -p SubState --value $(printf '%q' "$unit") 2>/dev/null" || true)
+    if [ "$state" = failed ]; then
+      status=1
+      break
     fi
     sleep 3
   done
   rm -f "$tmp"
-  status=$(ssh "$host" "sudo systemctl show -p ExecMainStatus --value $(printf '%q' "$unit") 2>/dev/null" || true)
+  status="$(printf '%s' "${status}" | tr -dc '0-9')"
   ssh "$host" "sudo systemctl stop $(printf '%q' "$unit") 2>/dev/null || true; sudo systemctl reset-failed $(printf '%q' "$unit") 2>/dev/null || true" || true
   if ! [[ "${status}" =~ ^[0-9]+$ ]]; then
     status=1
