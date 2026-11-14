@@ -38,34 +38,23 @@ def test_near_duplicate_hash_threshold():
     assert not near_duplicate([], ["0000000000000000"])
 
 
-def test_realistic_style_rejects_animation_and_dark():
+def test_realistic_style_rejects_animation_only():
     from clips_worker.t2v.verify_stock import Ctx, passes
 
     base = {"providerId": "1", "matches": True, "score": 8, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 7}
     assert passes(base, 5, Ctx(realistic=True))
     assert not passes({**base, "style": "3d_render"}, 5, Ctx(realistic=True))
     assert passes({**base, "style": "3d_render"}, 5, Ctx(realistic=False))
-    assert not passes({**base, "lighting": 5}, 5, Ctx())  # minimum lighting is 6
 
 
-def test_night_and_dark_only_for_night_lines():
-    from clips_worker.t2v.verify_stock import Ctx, night_line, passes
+def test_no_lighting_night_or_colour_gates():
+    """Lighting, time of day, luma and saturation are information only: the in-context score decides."""
+    from clips_worker.t2v.verify_stock import Ctx, passes, usable
 
-    base = {"providerId": "1", "matches": True, "score": 8, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 7}
-    assert not passes({**base, "timeOfDay": "night"}, 5, Ctx())
-    assert not passes({**base, "luma": 0.07}, 5, Ctx())
-    assert passes({**base, "timeOfDay": "night", "luma": 0.07}, 5, Ctx(night_ok=True))
-    assert night_line("City lights glow at night as drivers head home.")
-    assert not night_line("Drivers plug in and start the day with a full battery.")
-
-
-def test_black_and_white_rejected_unless_requested():
-    from clips_worker.t2v.verify_stock import Ctx, passes
-
-    base = {"providerId": "1", "matches": True, "score": 8, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 7}
-    assert not passes({**base, "saturation": 0.005}, 5, Ctx())
-    assert passes({**base, "saturation": 0.135}, 5, Ctx())  # snowy scene, still colour
-    assert passes({**base, "saturation": 0.005}, 5, Ctx(mono_ok=True))
+    base = {"providerId": "1", "matches": True, "score": 8, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 2}
+    assert passes({**base, "timeOfDay": "night", "luma": 0.03, "saturation": 0.01}, 5, Ctx())
+    assert usable({**base, "matches": False, "score": 5}, 5, Ctx())
+    assert not usable({**base, "matches": False, "score": 4}, 5, Ctx())
 
 
 def test_color_stats_on_synthetic_frames(tmp_path=None):
@@ -88,17 +77,16 @@ def test_color_stats_on_synthetic_frames(tmp_path=None):
 def test_prompt_formats_with_style_rule():
     from clips_worker.t2v.verify_stock import PROMPT
 
-    out = PROMPT.format(narration="n", intent="i", subject="s", topic="t", clip_s=10.0, need_s=4.0, world_block="", negation_rule="", context_rule="", style_rule="RULE")
+    out = PROMPT.format(clip_s=10.0, need_s=4.0, script_block="", style_rule="RULE")
     assert "RULE" in out
 
 
-def test_usable_tier_is_score_five_lit_live_action():
+def test_usable_tier_is_score_five_live_action():
     from clips_worker.t2v.verify_stock import Ctx, usable
 
     base = {"providerId": "1", "matches": False, "score": 5, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 6}
     assert usable(base, 5, Ctx())
     assert not usable({**base, "score": 4}, 5, Ctx())
-    assert not usable({**base, "lighting": 5}, 5, Ctx())
     assert not usable({**base, "style": "animation"}, 5, Ctx())
 
 
@@ -157,8 +145,11 @@ def test_photo_prompt_and_still_frame_stats():
 
     from clips_worker.t2v.verify_stock import PHOTO_NOTE, PROMPT, _color_stats, _dhash_frames, _shrink_photo
 
-    out = (PROMPT + PHOTO_NOTE).format(narration="n", intent="i", subject="coffee cherries", topic="t", clip_s=12.0, need_s=4.0, world_block="", negation_rule="", context_rule="", style_rule="")
-    assert "STILL PHOTO" in out and "coffee cherries" in out
+    from clips_worker.t2v.verify_stock import script_block
+
+    block = script_block("", {"narration": "n", "intent": "i", "subject": "red berries"})
+    out = (PROMPT + PHOTO_NOTE).format(clip_s=12.0, need_s=4.0, script_block=block, style_rule="")
+    assert "STILL PHOTO" in out and "red berries" in out
     d = Path(tempfile.mkdtemp())
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=1", "-frames:v", "1", str(d / "p.jpg")], check=True)
     _shrink_photo(d / "p.jpg", d / "p_m.jpg")

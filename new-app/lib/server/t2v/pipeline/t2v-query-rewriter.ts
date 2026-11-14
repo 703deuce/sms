@@ -1,44 +1,22 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vPlannedShot, T2vShotResult, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
-import { worldLine } from '@/lib/server/t2v/pipeline/t2v-context'
 
 /**
  * Query Rewriter (Prompt-to-Video only). For shots where no stock clip passed review, propose NEW search
  * queries that could serve the same spot: escalate from the literal idea to adjacent concepts and broader
  * B-roll that still carries the line's meaning. Never repeats a query already tried. One LLM call per round.
  */
-
 const SYSTEM = `You help an automatic stock-footage video editor find B-roll on Pixabay (a free stock site with
 limited, generic footage). For each shot below no clip worked yet. Propose 3 NEW search queries that could
 serve the same spot in the video.
 Rules:
-- 1-3 common words each, concrete visible things a stock site would tag (cars, road, charging cable, city,
-  dealership, factory, money, family, highway, sunset...). No abstract words.
-- Escalate: query 1 an alternative angle on the same idea, query 2 an adjacent concept, query 3 broad
-  B-roll that still fits the line's meaning and the video topic. Example for "EV sales growth":
-  "car dealership", "modern car city", "charging cable".
+- 1-3 common words each, concrete visible things a stock site would tag. No abstract words.
+- Escalate: query 1 an alternative angle on the same idea, query 2 an adjacent concept, query 3 broader
+  B-roll that still fits the line's moment in this video.
 - Round 2+ must go broader than earlier rounds. Never reuse a tried query or a near-duplicate.
-- Round 3+ (last round): the topic-specific footage does not exist as real camera footage on Pixabay
-  (its EV/charging/dealership clips are mostly CGI). Propose 1-2 word queries for COMMON real-world B-roll
-  that still works in this spot and is filmed constantly: e.g. "car driveway", "parking garage", "city
-  street", "hands steering wheel", "family car", "suburban house", "power lines", "solar panels",
-  "highway sunset", "shopping street", "car interior", "wallet cash". Pick ones that fit the line's meaning
-  and differ from the neighbouring shots.
-- Use what the reviewer actually saw in rejected clips to steer away from those results.
-- VIDEO WORLD (when given) and each shot's situation are hard context: queries stay inside the video's
-  setting, season and time of day (a winter-storm video: "snowy gutter", "frosted window", never a summer
-  garden; a sleep video: "bedside lamp night", never a sunny park).
-- negated shots warn AGAINST an action ("never bring a grill inside"): search for the safe version ("grill
-  snowy patio"), never the forbidden action's literal words ("grilling", "indoor grill").
+- Use what the reviewer actually saw in rejected clips, and why they did not fit, to steer away from those results.
 Return ONLY JSON: {"shots": [{"sceneId": string, "queries": [string, string, string]}]}`
-
-const RELATED = `
-RELATED MODE (final rescue): nothing reviewed so far shows this line. Propose the CLOSEST RELATED real-world
-subjects that are filmed and photographed constantly and that a viewer would accept under the line, e.g. for
-"dried green beans travel to a roaster": "coffee roaster", "roasting coffee beans", "roastery"; for "beans are
-washed": "washing coffee beans", "coffee processing", "water hands beans". 1-3 words, still on the line's
-subject - never generic filler (no "coffee cup" under a roasting line).`
 
 export async function t2vQueryRewriter(input: {
   story: T2vStoryPlan
@@ -46,8 +24,6 @@ export async function t2vQueryRewriter(input: {
   shots: T2vPlannedShot[]
   tried: Record<string, string[]>
   history: Record<string, T2vShotResult>
-  /** related = last-chance closest related subjects (video + photo search) before any fallback. */
-  mode?: 'broaden' | 'related'
 }): Promise<Record<string, string[]>> {
   if (!input.shots.length) return {}
   const rows = input.shots.map((s) => ({
@@ -55,17 +31,16 @@ export async function t2vQueryRewriter(input: {
     narration: s.narration,
     intent: s.intent,
     subject: s.subject,
-    ...(s.situation ? { situation: s.situation } : {}),
-    ...(s.negated ? { negated: true } : {}),
+    ...(s.moment ? { moment: s.moment } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejectedClipsShowed: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.visible)
       .slice(-4)
-      .map((e) => String(e.visible).slice(0, 90)),
+      .map((e) => `${String(e.visible).slice(0, 90)}${e.fitReason ? ` (${String(e.fitReason).slice(0, 90)})` : ''}`),
   }))
-  const user = [`Video topic: ${input.story.topic || input.story.title}`, ...(input.story.world ? [`VIDEO WORLD: ${worldLine(input.story.world)}`] : []), `Round: ${input.round}`, `Shots: ${JSON.stringify(rows)}`].join('\n')
+  const user = [`Video topic: ${input.story.topic || input.story.title}`, `Round: ${input.round}`, `Shots: ${JSON.stringify(rows)}`].join('\n')
   const out = await t2vLlmJson<{ shots?: Array<{ sceneId?: string; queries?: unknown[] }> }>(
-    input.mode === 'related' ? SYSTEM + RELATED : SYSTEM,
+    SYSTEM,
     user,
     { maxTokens: 4000 },
   )

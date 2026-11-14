@@ -1,13 +1,10 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
-import { normalizeSceneWorld, SCENE_WORLD_JSON, SCENE_WORLD_RULES } from '@/lib/server/t2v/pipeline/t2v-context'
 import type { T2vNarrationSegment, T2vPipelineStyle, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
 /** Words per second used for planning only. Actual ElevenLabs audio timing drives the edit. */
 export const T2V_PLAN_WORDS_PER_S = 2.45
-/** Seconds reserved for the closing end card (no narration). */
-export const T2V_END_CARD_S = 2.5
 
 const STYLE_GUIDE: Record<T2vPipelineStyle, string> = {
   documentary: 'Documentary: calm authority, vivid concrete imagery, measured pacing, a sense of discovery.',
@@ -27,7 +24,7 @@ export const T2V_EDIT_WORDS_PER_S = 2.3
 export const T2V_BUDGET_TOLERANCE = 0.05
 
 export function wordBudget(durationS: number): number {
-  return Math.max(40, Math.round(Math.max(10, durationS - T2V_END_CARD_S) * T2V_EDIT_WORDS_PER_S))
+  return Math.max(40, Math.round(Math.max(10, durationS) * T2V_EDIT_WORDS_PER_S))
 }
 
 export function narrationWords(segs: Array<{ narration: string }>): number {
@@ -38,8 +35,7 @@ const STORY_SYSTEM = `You are the Story Planner for an automatic stock-footage v
 Understand the user's request and plan a coherent narrative with a beginning, middle and end.
 Return ONLY JSON:
 {"title": string, "topic": string, "audience": string, "tone": string, "hook": string,
- "keyPoints": string[], "ending": string, "musicMood": string,
- ${SCENE_WORLD_JSON}}
+ "keyPoints": string[], "ending": string, "musicMood": string}
 Rules:
 - title: <= 8 words, no clickbait punctuation.
 - topic: 2-5 concrete words naming the subject (used to keep footage on topic).
@@ -47,8 +43,7 @@ Rules:
 - ending: how the video lands (conclusion or call to action).
 - musicMood: 3-8 words describing instrumental background music (no vocals).
 - Do not fabricate specific statistics, dates, names or quotations. Prefer well-established,
-  general facts; if unsure, describe trends qualitatively.
-${SCENE_WORLD_RULES}`
+  general facts; if unsure, describe trends qualitatively.`
 
 export async function t2vStoryAgent(input: {
   prompt: string
@@ -60,7 +55,7 @@ export async function t2vStoryAgent(input: {
     `Style: ${STYLE_GUIDE[input.style]}`,
     `Target runtime: about ${input.durationS} seconds.`,
   ].join('\n')
-  const out = await t2vLlmJson<Partial<Omit<T2vStoryPlan, 'world'>> & { world?: unknown }>(STORY_SYSTEM, user)
+  const out = await t2vLlmJson<Partial<T2vStoryPlan>>(STORY_SYSTEM, user)
   const keyPoints = (Array.isArray(out.keyPoints) ? out.keyPoints : []).map((k) => String(k).trim()).filter(Boolean)
   if (!keyPoints.length) throw new Error('t2v_story_empty')
   return {
@@ -73,7 +68,6 @@ export async function t2vStoryAgent(input: {
     ending: String(out.ending ?? '').trim().slice(0, 300),
     targetSeconds: input.durationS,
     musicMood: String(out.musicMood ?? 'subtle cinematic instrumental').trim().slice(0, 80),
-    world: normalizeSceneWorld(out.world, String(out.topic ?? '').trim()),
   }
 }
 
@@ -103,7 +97,7 @@ export async function t2vScriptAgent(input: {
     `Original request: ${input.prompt.slice(0, 2000)}`,
     `Style: ${STYLE_GUIDE[input.style]}`,
     `Story plan: ${JSON.stringify(input.story)}`,
-    `Word budget: ${budget} words total (~${input.durationS - T2V_END_CARD_S}s of narration).`,
+    `Word budget: ${budget} words total (~${input.durationS}s of narration).`,
   ].join('\n')
   const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(SCRIPT_SYSTEM, user)
   let segs = toSegments(out.segments)

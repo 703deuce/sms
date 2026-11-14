@@ -3,7 +3,6 @@ import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vNarrationSegment, T2vPipelineStyle, T2vPlannedShot, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 import { planPacing, T2V_BEATS, validPieces, type T2vBeat, type T2vPacingRow } from '@/lib/server/t2v/pipeline/t2v-pacing'
 import { T2V_PLAN_WORDS_PER_S } from '@/lib/server/t2v/pipeline/t2v-story-agent'
-import { worldPrompt } from '@/lib/server/t2v/pipeline/t2v-context'
 
 /** Split narration into sentences without changing a single word. */
 export function splitSentences(text: string): string[] {
@@ -28,29 +27,17 @@ const PLANNER_SYSTEM = `You are the Scene Planner and editor for an automatic st
 The script drives the visuals. For every narration sentence return its editorial beat, the stock shot that
 illustrates it, and - for longer sentences - natural places a real editor could cut to a second or third shot.
 Return ONLY JSON: {"shots": [{"index": number, "beat": string, "intent": string, "subject": string,
-"queries": string[], "situation": string, "negated": boolean, "pieces": [{"text": string, "intent": string, "subject": string, "queries": string[]}]}]}
+"queries": string[], "pieces": [{"text": string, "intent": string, "subject": string, "queries": string[]}]}]}
 Rules for each sentence:
 - beat: one of establishing (sets a place), aerial, emotional (a moment to feel), detail (a close look),
   step (one step of a process), list (one of several items), action (something happening fast), transition.
-- intent: one plain sentence describing what generic stock B-roll should show (subject + action, optional
-  setting). Achievable with common stock footage; no time of day, weather, brand or specific people unless
-  the narration depends on it.
-- subject: the SPECIFIC visible subject the clip must show, 2-6 words: the thing AND its state or setting
-  (e.g. "red coffee cherries on a branch", "hands picking coffee cherries", "coffee beans on drying beds",
-  "burlap sacks of green coffee beans", "coffee roasting drum", "espresso pouring into a cup"). Never a
-  bare generic noun ("coffee beans", "coffee", "fruit", "machine", "people"). Neighbouring shots name
-  DIFFERENT subjects.
+- intent: one plain sentence describing what stock B-roll should show for this sentence in this video.
+  Achievable with common stock footage; no brands or specific named people.
+- subject: 2-5 words naming the one thing a viewer must be able to recognise on screen for the shot to work
+  (an object, place or activity). Do not add hands, people, camera angles or placement unless the sentence is
+  about them. Neighbouring shots name DIFFERENT subjects.
 - queries: exactly 3 stock-video search phrases of 1-3 common words (concrete nouns a stock site would tag).
   Query 1 most specific, query 3 a broader on-topic fallback. No abstract words.
-- situation: what this line implies inside the VIDEO WORLD (when given), 6-20 words: where and when the
-  viewer is and what is happening (e.g. "can't sleep, get up and do something" -> "night at home, the
-  viewer leaves bed for a calm, dim indoor activity"). Intent, subject and queries must fit it and the
-  video world (setting, time, season, mood) unless the line itself says otherwise.
-- negated: true when the line warns AGAINST an action ("never bring a grill inside", "don't run the
-  generator indoors"). Then intent, subject and queries show the SAFE version (a grill standing outside in
-  the snow, a generator outdoors away from windows), never the forbidden action or its literal words.
-- Shots 1-2 establish the VIDEO WORLD: an establishing view of its setting, season and time (e.g. a snowy
-  house exterior for a winter-storm video, a dim bedroom at night for a sleep video), not a close detail.
 - pieces: for EVERY sentence of 8+ words that has a natural pause: split it into 2-3 contiguous pieces at pauses
   (commas, "and", "while", "then", clause boundaries). The pieces' text joined with spaces must reproduce the
   sentence EXACTLY, word for word. Each piece >= 4 words and shows a DIFFERENT visual, with its own intent,
@@ -68,17 +55,10 @@ function cleanQueries(raw: unknown, fallback: string): string[] {
   return [...new Set(queries)].slice(0, 3)
 }
 
-/** Bare generic subjects ("coffee beans") say nothing about what the clip must show. */
-const GENERIC_SUBJECT = /^(?:(?:the|a|an|some)\s+)?(?:[\p{L}-]+\s+)?(?:beans?|coffee|fruit|machines?|people|person|workers?|things?|products?|food|drinks?|cups?|plants?|trees?|farms?|city|nature)$/iu
-
-/** Subject the verifier will insist on: the planner's when specific, else the most specific query or intent. */
-export function specificSubject(subject: string, queries: string[], intent: string): string {
-  const s = subject.replace(/\s+/g, ' ').trim().slice(0, 80)
-  const wc = s ? s.split(' ').length : 0
-  if (s && (wc >= 3 || (wc === 2 && !GENERIC_SUBJECT.test(s)))) return s
-  const q = [...queries].filter((x) => x.split(' ').length >= 2 && !GENERIC_SUBJECT.test(x)).sort((a, b) => b.split(' ').length - a.split(' ').length)[0]
-  if (q) return q.slice(0, 80)
-  return (intent.split(/[,.;]/)[0] ?? intent).trim().slice(0, 80) || s
+/** What the viewer must recognise: the planner's subject, else the first query, else the intent's first clause. */
+function subjectOf(subject: unknown, queries: string[], intent: string): string {
+  const s = String(subject ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return s || queries[0] || (intent.split(/[,.;]/)[0] ?? intent).trim().slice(0, 80)
 }
 
 function asBeat(v: unknown): T2vBeat {
@@ -94,13 +74,13 @@ export function toPacingRows(rows: PlannerSentenceRow[], shots: Array<Record<str
     const s = byIndex.get(row.index) ?? {}
     const intent = String(s.intent ?? row.narration).trim().slice(0, 300)
     const queries = cleanQueries(s.queries, topic)
-    const subject = specificSubject(String(s.subject ?? ''), queries, intent)
+    const subject = subjectOf(s.subject, queries, intent)
     const pieces = validPieces(
       row.narration,
       (Array.isArray(s.pieces) ? (s.pieces as Array<Record<string, unknown>>) : []).map((p) => ({
         text: String(p.text ?? '').trim(),
         intent: String(p.intent ?? '').trim().slice(0, 300),
-        subject: specificSubject(String(p.subject ?? ''), cleanQueries(p.queries, topic), String(p.intent ?? '')),
+        subject: subjectOf(p.subject, cleanQueries(p.queries, topic), String(p.intent ?? '')),
         queries: cleanQueries(p.queries, topic),
       })),
     )
@@ -133,7 +113,6 @@ export async function t2vScenePlanner(input: {
   const user = [
     `Video topic: ${input.story.topic || input.story.title}`,
     `Title: ${input.story.title}`,
-    ...(input.story.world ? [`VIDEO WORLD:\n${worldPrompt(input.story.world)}`] : []),
     `Segments (purpose / what the viewer should see): ${JSON.stringify(
       input.segments.map((s) => ({ id: s.id, purpose: s.purpose, visualMeaning: s.visualMeaning })),
     )}`,
@@ -141,8 +120,6 @@ export async function t2vScenePlanner(input: {
   ].join('\n')
   const out = await t2vLlmJson<{ shots?: Array<Record<string, unknown>> }>(PLANNER_SYSTEM, user, { maxTokens: 8000 })
   const topic = (input.story.topic || input.story.title).toLowerCase()
-  const situationOf = situations(rows, Array.isArray(out.shots) ? out.shots : [])
-  const negatedOf = negations(rows, Array.isArray(out.shots) ? out.shots : [])
   const paced = planPacing(toPacingRows(rows, Array.isArray(out.shots) ? out.shots : [], topic), { style: input.style, seed: input.seed })
   return paced.map((p, i) => ({
     sceneId: `sc_${i}_${Math.random().toString(36).slice(2, 8)}`,
@@ -156,31 +133,5 @@ export async function t2vScenePlanner(input: {
     voiceGroup: p.voiceGroup,
     wordOffset: p.wordOffset,
     sentence: p.sentence,
-    ...(situationOf(p.narration) ? { situation: situationOf(p.narration) } : {}),
-    ...(negatedOf(p.narration) ? { negated: true } : {}),
   }))
-}
-
-/** Per-sentence negation flag (planner) → lookup by shot narration. */
-export function negations(rows: PlannerSentenceRow[], shots: Array<Record<string, unknown>>): (narration: string) => boolean {
-  const neg = new Set(shots.filter((s) => s.negated === true).map((s) => Number(s.index)))
-  return (narration) => {
-    const n = narration.trim()
-    const row = rows.find((r) => r.narration.includes(n) || n.includes(r.narration))
-    return Boolean(row && neg.has(row.index))
-  }
-}
-
-/** Per-sentence "implied situation" → lookup by shot narration (a piece or a merged group). */
-export function situations(rows: PlannerSentenceRow[], shots: Array<Record<string, unknown>>): (narration: string) => string {
-  const byIndex = new Map<number, string>()
-  for (const s of shots) {
-    const v = String(s.situation ?? '').replace(/\s+/g, ' ').trim().slice(0, 240)
-    if (v) byIndex.set(Number(s.index), v)
-  }
-  return (narration) => {
-    const n = narration.trim()
-    const row = rows.find((r) => r.narration.includes(n) || n.includes(r.narration))
-    return (row && byIndex.get(row.index)) || ''
-  }
 }

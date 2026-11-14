@@ -26,7 +26,7 @@ describe('t2v AI b-roll test step', () => {
     expect(c).toMatchObject({ kind: 'ai', provider: 'replicate', providerId: 'ai_p1', durationS: 3.38 })
     expect(fallbackAiPrompt({ intent: 'beans tumble in a drum', subject: 'coffee roasting drum' })).toMatch(/no text, no logos/)
   })
-  it('stock that truly works wins; AI only beats fallbacks; a failed AI clip is never used', () => {
+  it('stock that truly works wins; AI beats sub-floor stock; a failed AI clip is never used', () => {
     const data = {
       a: { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 6, matches: false }), ev('ai_1', { kind: 'ai', score: 9 })] },
       b: { sceneId: 'b', chosen: null, evaluated: [ev('2', { score: 3 }), ev('ai_2', { kind: 'ai', score: 8 })] },
@@ -35,6 +35,6 @@ describe('t2v AI b-roll test step', () => {
     const r = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data as never, { realistic: true })
     expect([r.out.a!.chosen!.providerId, r.tiers.a]).toEqual(['1', 'usable'])
     expect([r.out.b!.chosen!.providerId, r.tiers.b]).toEqual(['ai_2', 'ai'])
-    expect([r.out.c!.chosen!.providerId, r.tiers.c]).toEqual(['3', 'fallback'])
+    expect(r.out.c!.chosen).toBeNull() // 3/10 stock and a 3/10 AI clip: both below the floor
   })
 })

@@ -16,14 +16,13 @@ const shot = (id: string, needS = 3) => ({ sceneId: id, segmentId: 's1', voiceGr
 const cand = (id: string, o: Record<string, unknown> = {}) => ({ provider: 'pixabay' as const, providerId: id, previewUrl: 'p', durationS: 20, width: 1920, height: 1080, query: 'q', tags: [], srcUrl: 's', thumbUrl: 't', pageUrl: 'u', author: 'a', ...o })
 
 describe('sleep round: AI acceptance and targeting', () => {
-  const ctx = { realistic: true, nightOk: false, monoOk: false }
+  const ctx = { realistic: true }
   it('a 3d_render AI clip with content 8+ is accepted only when the best stock scores 4 or lower', () => {
     const ai = { score: 9, style: '3d_render', lighting: 8 }
     expect(t2vAiAcceptable(ai, ctx, 4)).toBe(true)
     expect(t2vAiAcceptable(ai, ctx, 5)).toBe(false)
     expect(t2vAiAcceptable({ ...ai, score: 7 }, ctx, 1)).toBe(false)
-    expect(t2vAiAcceptable({ ...ai, lighting: 3 }, ctx, 1)).toBe(false)
-    expect(t2vAiAcceptable({ score: 6, style: 'live_action', lighting: 8 }, ctx, 6)).toBe(true)
+    expect(t2vAiAcceptable({ score: 6, style: 'live_action' }, ctx, 6)).toBe(true)
   })
   it('a good AI clip beats a 1-3 last resort in the pick pass (sleep sc_5 case)', () => {
     const data = { a: { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 3 }), ev('ai_1', { kind: 'ai', score: 9, style: '3d_render' })] } }
@@ -44,31 +43,29 @@ describe('sleep round: AI acceptance and targeting', () => {
     })
     expect([out[0]!.chosen!.providerId, out[0]!.pickedBy]).toEqual(['ai_1', 'ai'])
   })
-  it('targets the weakest scenes first (empty/last resort/fallback <= 3), max 3, skips lines with 5+ stock', () => {
+  it('targets lines with nothing at the floor (no clip 5+), max 3; brightness is not a reason to pay', () => {
     const shots = ['a', 'b', 'c', 'd', 'e', 'f'].map((x) => shot(x))
     const history = {
       a: { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 8 })] }, // good
-      b: { sceneId: 'b', chosen: null, evaluated: [ev('2', { score: 3 })] }, // fallback 3
+      b: { sceneId: 'b', chosen: null, evaluated: [ev('2', { score: 3 })] }, // below the floor
       c: { sceneId: 'c', chosen: null, evaluated: [] }, // nothing
-      d: { sceneId: 'd', chosen: null, evaluated: [ev('4', { score: 4 })] }, // fallback 4: not weak enough
-      e: { sceneId: 'e', chosen: null, evaluated: [ev('5', { score: 9, lighting: 2 })] }, // dim only: weak
+      d: { sceneId: 'd', chosen: null, evaluated: [ev('4', { score: 4 })] }, // below the floor
+      e: { sceneId: 'e', chosen: null, evaluated: [ev('5', { score: 9, lighting: 2 })] }, // dim but fits: placed
       f: { sceneId: 'f', chosen: null, evaluated: [ev('6', { score: 3, matches: false })] },
     }
     const t = aiBrollTargets(shots, history as never, { realistic: true }).map((s) => (s as { sceneId: string }).sceneId)
-    expect(t).toHaveLength(3)
-    expect(t[0]).toMatch(/[ce]/)
-    expect(t).not.toContain('a')
-    expect(t).not.toContain('d')
+    expect(t).toEqual(['b', 'c', 'd'])
+    expect(t).not.toContain('e')
   })
 })
 
-describe('sleep round: lighting minimum on last-resort picks', () => {
-  it('a dim clip is not a last resort when brighter related footage exists', async () => {
+describe('sleep round: no lighting gate (a dim bedroom can be exactly right)', () => {
+  it('the best-fitting clip wins even when it is dark', async () => {
     const results = [
-      { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 9, lighting: 3 }), ev('2', { score: 4, lighting: 8 })] },
+      { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 9, lighting: 3 }), ev('2', { score: 5, lighting: 8 })] },
     ]
     const nr = enforceNoRepeatDeterministic([shot('a')], { a: results[0] } as never, { realistic: true })
-    expect(nr.out.a!.chosen?.providerId).toBe('2')
+    expect(nr.out.a!.chosen?.providerId).toBe('1')
     const { results: out } = await t2vFinisher({
       workspaceId: 'w',
       doc: { settings: {} } as never,
@@ -76,10 +73,10 @@ describe('sleep round: lighting minimum on last-resort picks', () => {
       story: { title: 'Sleep' } as never,
       segments: [],
       shots: [shot('a')],
-      results: [{ sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 9, lighting: 3 }), ev('2', { score: 3, lighting: 8 })] }] as never,
+      results: [{ sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 9, lighting: 3 }), ev('2', { score: 5, lighting: 8 })] }] as never,
       candidates: { a: [cand('1'), cand('2')] },
     })
-    expect(out[0]!.chosen!.providerId).toBe('2')
+    expect(out[0]!.chosen!.providerId).toBe('1')
   })
 })
 

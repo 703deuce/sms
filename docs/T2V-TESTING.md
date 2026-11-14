@@ -71,21 +71,17 @@ The living handoff for anyone (human or agent) testing T2V. Keep this file updat
   - Still weak: 5 last-resort picks scoring 1–3 on lines with no AI budget left (sc_15, sc_16, sc_18, sc_20, sc_21).
   - Files are in `t2v_sleep4/`: `ai_clip_sc_3_jj2y6i.mp4`, `ai_clip_sc_9_6uqpzl.mp4`, the side-by-sides, and `unplaced_ai_sc_7_sa9y5a.mp4`.
 
-## Scene world (context-aware matching)
+## Script context (PR #1190)
 
-- The story call writes a free-form **scene world** once per video (`run.world`): summary, viewer and
-  situation, setting, time of day, season, mood, plausible and implausible shots, 3 neutral fallback queries.
-  The planner adds each line's **implied situation** (`shot.situation`).
-- The world and situation feed the planner, the query rewriter, the related round (fallback queries),
-  the spare re-check and the AI b-roll prompt (no daylight default).
-- Gemini verify gets the world, the line's situation and the previous and next lines, and returns
-  `context_fit` 0-10 plus `context_reason`. Accepted picks need fit 6+. Every other pick (weak, photo,
-  spare, fallback, last resort) needs fit 5+ and lighting 6+. Nothing off-world or dim fills a slot: the
-  line rides the previous shot instead.
-- The night-word rule is only a safety net now: night footage is fine when the world fit is 6+.
-- Logs: `[t2v:verify:candidate]` and `[t2v:verify:scene]` on the worker (with top-K), and
-  `pipeline-scene` / `scene pick` on the web. Each has jobId, scene, candidate, scores, verdict and reason.
-- Nothing is cached or indexed across runs (the Pixabay licensing question is still open).
+- One LLM pass after pacing reads the whole script and writes `story.videoUnderstanding` (own words) and, per
+  shot (split pieces included), `moment`, `mustRecognise` (stored as `subject`) and `showIdeas`.
+- The Gemini verifier reads the understanding, the whole numbered script, the previous/next lines, the moment and
+  what must be recognised, and returns `fit_reason`. No night/colour/brightness gates and no season/time/setting
+  rules: the model's in-context score is the only gate. `lighting`, `time_of_day`, `subject_visible` are info only.
+- Scarcest scenes pick first (fewest passing clips; ties in story order). Unused passing clips are logged with why.
+- Reimagine (max 2 rounds, 10 lines, 3 ideas) replaces the related round: new shot ideas for lines nothing fits.
+- Floor: nothing below 5/10 is ever placed as filler; with no option at the floor the line extends the previous shot.
+- QA restart with script + plan frozen: `python docs/t2v-test-tools/t2v_reset_run.py <draftId> --from-footage`.
 
 ## Round log
 - Nov 13-14, 2026: pacing (CV 0.20 → 0.17 → 0.42 → 0.42), photo fallback, no cards, related rescue round, AI B-roll test step. Next: cross-line fallback quality, script expansion overshoot (185 → 263 rejected), and same-setup lookalikes inside split sentences.

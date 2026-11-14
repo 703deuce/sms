@@ -61,29 +61,8 @@ export type T2vStoryPlan = {
   ending: string
   targetSeconds: number
   musicMood: string
-  /** Video scene world (same LLM call; stored on the run as `world`). */
-  world?: T2vSceneWorld
-}
-
-/**
- * The visual world the whole video lives in (free-form, LLM-written once per video). Gemini verify judges
- * each candidate against it (contextFit); planner, fallbacks and AI b-roll prompts get it too.
- */
-export type T2vSceneWorld = {
-  topic: string
-  summary: string
-  viewer: string
-  situation: string
-  setting: string
-  timeOfDay: string
-  season: string
-  mood: string
-  plausible: string[]
-  implausible: string[]
-  /** Neutral on-world stock queries for the related/fallback round. */
-  fallbackQueries: string[]
-  /** 1-2 words appended to every stock search (e.g. "winter snow"); '' when the world implies none. */
-  searchTerms: string
+  /** Script-context pass: 2-4 sentences, in the model's own words, on what the whole video is about. */
+  videoUnderstanding?: string
 }
 
 /** Agent B output — narration segments with stable ids. */
@@ -107,17 +86,17 @@ export type T2vPlannedShot = {
   onScreenText?: string
   /** Editorial beat (sets the shot-length range). */
   beat?: string
-  /** The specific subject the clip must show (verifier subject rule). */
+  /** What a viewer must recognise on screen (script-context pass `mustRecognise`, else the planner's subject). */
   subject?: string
+  /** Script-context pass: what THIS line means at THIS point of the video (model's own words). */
+  moment?: string
+  /** Script-context pass: ways an editor could show the moment (most direct first). */
+  showIdeas?: string[]
   /** Shots sharing a voiceGroup share one narration clip; later ones are in-scene cuts at wordOffset. */
   voiceGroup?: string
   wordOffset?: number
   /** Whole voice-group narration around this shot (context for split shots). */
   sentence?: string
-  /** What this line implies inside the video world (planner), e.g. "night at home, a calm indoor activity". */
-  situation?: string
-  /** The line warns against an action ("never bring a grill inside"): never show the action being done. */
-  negated?: boolean
 }
 
 export type T2vFootageCandidate = {
@@ -163,11 +142,10 @@ export type T2vVerifiedPick = {
   luma?: number
   /** Spare picks: the score the clip got for the line it was first reviewed for (score = this line). */
   reviewedForOtherLine?: number
-  /** Worker subject rule: false = right action, wrong subject (capped score). */
+  /** Reviewer: is the thing the viewer must recognise clearly visible (information only). */
   subjectVisible?: boolean
-  /** Gemini 0-10: does this clip make sense here in this video (world + line situation + neighbours). */
-  contextFit?: number
-  contextReason?: string
+  /** Reviewer's own words on why the clip does or does not fit here (whole-script judgement). */
+  fitReason?: string
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
   kind?: 'video' | 'photo' | 'ai'
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
@@ -210,10 +188,6 @@ export type T2vPipelineRun = {
   log: T2vStageLog[]
   error?: string
   story?: T2vStoryPlan
-  /** Plan QA failed on visual relevance: the draft is flagged for human review (not silently shipped). */
-  review?: { needed: boolean; reason: string; at: string }
-  /** Scene world, derived once per run with the story plan. */
-  world?: T2vSceneWorld
   segments?: T2vNarrationSegment[]
   shots?: T2vPlannedShot[]
   candidates?: Record<string, T2vFootageCandidate[]>
@@ -222,8 +196,10 @@ export type T2vPipelineRun = {
   verifyRound?: number
   /** Photo fallback round: 1 = photo verify job in flight, 2 = done. */
   photoRound?: number
-  /** Related-subject rescue round (video + photo) for lines still without footage: 1 = in flight. */
+  /** Legacy (pre-reimagine runs): related-subject rescue round. */
   rescueRound?: number
+  /** Reimagine rounds started (max T2V_REIMAGINE_ROUNDS): new shot ideas for lines nothing fits. */
+  reimagineRound?: number
   /** AI B-roll test (off by default): per-run opt-in; 1 = generating, 2 = verify job in flight / done. */
   aiBroll?: boolean
   aiRound?: number
