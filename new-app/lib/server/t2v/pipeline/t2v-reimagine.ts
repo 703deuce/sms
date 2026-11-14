@@ -24,10 +24,59 @@ export const T2V_REIMAGINE_ROUNDS = envInt('T2V_REIMAGINE_ROUNDS', 2, 2)
 export const T2V_REIMAGINE_BATCH = Math.max(1, envInt('T2V_REIMAGINE_BATCH', 8, 15))
 export const T2V_REIMAGINE_IDEAS = envInt('T2V_REIMAGINE_IDEAS', 3, 3)
 /**
- * Per-run budget for reimagine: candidates sent to verify by all reimagine steps together (each is one Gemini
- * watch). Lines are served in story order; when the budget is spent the remaining lines fall through (logged).
+ * Reimagine verify budget, sized from the failing scenes (QA S3, snow #1194: a flat 90 ran out and three lines'
+ * second rounds were dropped unsearched while the log said rounds=2). Every scene under the floor is entitled to
+ * T2V_REIMAGINE_ROUNDS real rounds of T2V_REIMAGINE_PER_SCENE_ROUND checks (ideas x (3 videos + 2 photos));
+ * T2V_REIMAGINE_VERIFY_BUDGET is only the overall ceiling. Rework is NOT subject to the stock-stage run cap.
  */
-export const T2V_REIMAGINE_VERIFY_BUDGET = envInt('T2V_REIMAGINE_VERIFY_BUDGET', 90, 400)
+export const T2V_REIMAGINE_PER_SCENE_ROUND = Math.max(1, envInt('T2V_REIMAGINE_PER_SCENE_ROUND', 15, 30))
+export const T2V_REIMAGINE_VERIFY_BUDGET = envInt('T2V_REIMAGINE_VERIFY_BUDGET', 240, 600)
+
+/** The run's reimagine budget for the scenes that have needed rework so far (capped by the ceiling). */
+export function reimagineBudget(scenes: number, ceiling = T2V_REIMAGINE_VERIFY_BUDGET): number {
+  return Math.min(ceiling, scenes * T2V_REIMAGINE_ROUNDS * T2V_REIMAGINE_PER_SCENE_ROUND)
+}
+
+/**
+ * Per-scene allowance for THIS step: what is left is shared over the rounds every target scene still has (this
+ * one included), so a later round is reserved instead of being spent first-come by earlier scenes.
+ */
+export function sceneAllowance(targets: string[], tries: Record<string, number>, left: number): Record<string, number> {
+  const rounds = targets.map((id) => Math.max(1, T2V_REIMAGINE_ROUNDS - (tries[id] ?? 0)))
+  const units = rounds.reduce((n, r) => n + r, 0)
+  const unit = units ? Math.floor(left / units) : 0
+  const out: Record<string, number> = {}
+  for (const id of targets) out[id] = Math.min(T2V_REIMAGINE_PER_SCENE_ROUND, unit)
+  return out
+}
+
+/** Trim candidates per scene to its allowance, round-robin across that scene's ideas (no first-come order). */
+export function trimPerScene<S extends { sceneId: string }, C>(
+  shots: S[],
+  found: Record<string, C[]>,
+  allowance: Record<string, number>,
+  baseOf: (sceneId: string) => string,
+): { shots: S[]; found: Record<string, C[]>; used: number; dropped: string[] } {
+  const out: Record<string, C[]> = {}
+  const dropped: string[] = []
+  const byBase = new Map<string, S[]>()
+  for (const s of shots) if (found[s.sceneId]?.length) (byBase.get(baseOf(s.sceneId)) ?? byBase.set(baseOf(s.sceneId), []).get(baseOf(s.sceneId))!).push(s)
+  let used = 0
+  for (const [base, list] of byBase) {
+    let room = allowance[base] ?? 0
+    for (let k = 0; room > 0 && list.some((s) => (found[s.sceneId]?.length ?? 0) > k); k++) {
+      for (const s of list) {
+        const c = found[s.sceneId]?.[k]
+        if (c === undefined || room <= 0) continue
+        ;(out[s.sceneId] ??= []).push(c)
+        room--
+        used++
+      }
+    }
+    for (const s of list) if (!out[s.sceneId]) dropped.push(s.sceneId)
+  }
+  return { shots: shots.filter((s) => out[s.sceneId]), found: out, used, dropped }
+}
 
 /** Trim a reimagine step's candidates (story order) to what is left of the run's budget. */
 export function trimToBudget<S extends { sceneId: string }, C>(

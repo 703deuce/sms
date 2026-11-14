@@ -10,6 +10,9 @@ Both modes also clear the previous output so no poll can read it as the new run'
   (scenes), render ids (autobuild renderId/compositionId, never kept), the row's assembled revision, stage and
   progress; the revision is bumped so an in-flight save from the old state cannot overwrite the reset, and
   autobuild.resetAt is set (the status route returns it; a poller should accept `done` only with a later state).
+--from-footage also keeps the previous run's placed picks as `priorPicks` (score, depicts and the candidate
+  record per line; an older prior pick is kept for a line the last run held). The next run re-verifies them
+  under the fixed lineShows and keeps one unless a new clip is clearly better (incumbents).
 `ai`: also opt this run into the AI b-roll test step (paid; only when explicitly approved). Without `ai` the
   run is always written with aiBroll=false (an older run's aiBroll=true is never carried over).
 """
@@ -35,6 +38,22 @@ if FROM_FOOTAGE:
     keep_keys = ("v", "prompt", "style", "durationS", "renderResolution", "startedAt",
                  "story", "segments", "shots", "musicGenerationId")
     keep = {k: ab[k] for k in keep_keys if k in ab}
+    # Incumbents: the previous run's placed picks (never cleared by a --from-footage reset).
+    prior = dict(ab.get("priorPicks") or {})
+    cands = ab.get("candidates") or {}
+    for r in ab.get("results") or []:
+        ch = (r or {}).get("chosen") or {}
+        pid = ch.get("providerId")
+        if not pid or (r.get("outcome") not in (None, "stock")):
+            continue
+        cand = next((c for c in cands.get(r.get("sceneId"), []) if c.get("providerId") == pid), None) or \
+            next((c for lst in cands.values() for c in lst if c.get("providerId") == pid), None)
+        if not cand:
+            continue
+        prior[r["sceneId"]] = {"providerId": pid, "score": ch.get("score"), "depicts": ch.get("depicts"),
+                               "kind": ch.get("kind") or "video", "at": now, "candidate": cand}
+    if prior:
+        keep["priorPicks"] = prior
     status, completed, note = "finding_footage", ["writing_script", "planning_scenes"], "operator restart at finding_footage (script + plan frozen)"
 else:
     keep = {k: ab[k] for k in ("v", "prompt", "style", "durationS", "renderResolution", "startedAt") if k in ab}

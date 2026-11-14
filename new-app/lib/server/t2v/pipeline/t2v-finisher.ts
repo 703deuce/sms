@@ -1,5 +1,5 @@
 import 'server-only'
-import { bestStockScore, depictsRank, FILLER_MIN_SCORE, lookalikePairs, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, borrowedPick, depictsRank, FILLER_MIN_SCORE, lookalikePairs, lookalikeSiblings, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareJudgements, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { compactScript } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
@@ -19,6 +19,8 @@ import type {
 } from '@/lib/t2v/pipeline/t2v-types'
 
 const TITLE_CARD_COLOR = '#0f1115'
+/** Hold fallback: a below-floor option must score at least this (and more than the hold) to replace a hold. */
+export const HOLD_COMPARE_MIN = 1
 
 function stockCandidateFrom(c: T2vFootageCandidate): StockCandidate {
   return {
@@ -102,9 +104,12 @@ export async function t2vFinisher(input: {
   banned?: Record<string, string[]>
   /** Look-alike bans carried on the run (never placed on any line). */
   lookalikeBans?: T2vLookalikeBan[]
-}): Promise<{ scenes: T2vScene[]; results: T2vShotResult[]; lookalikeBans: T2vLookalikeBan[] }> {
-  const bannedAll = new Set((input.lookalikeBans ?? []).map((b) => b.providerId))
+}): Promise<{ scenes: T2vScene[]; results: T2vShotResult[]; lookalikeBans: T2vLookalikeBan[]; rechecks: number }> {
+  const allEv = input.results.flatMap((r) => r.evaluated ?? [])
+  // Banned look-alikes and their same-shoot siblings (QA F4) are never placed by the finisher.
+  const bannedAll = new Set((input.lookalikeBans ?? []).flatMap((b) => [b.providerId, ...lookalikeSiblings(b, allEv)]))
   const newBans: T2vLookalikeBan[] = []
+  let rechecks = 0
   const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
   const usedHashes = input.results.map((r) => r.chosen?.phash).filter((h): h is string[] => Boolean(h?.length))
@@ -171,9 +176,12 @@ export async function t2vFinisher(input: {
   }
   let lineScores: Record<string, Record<string, number>> = {}
   let lineReasons: SpareReasons = {}
+  let lineJudgements: SpareJudgements = {}
   if (Object.values(shortlist).some((l) => l.length)) {
     try {
-      ;({ scores: lineScores, reasons: lineReasons } = await scoreSparesWithReasons(open, shortlist, { script: compactScript(input.shots), videoUnderstanding: input.story.videoUnderstanding }))
+      let asked = 0
+      ;({ scores: lineScores, reasons: lineReasons, judgements: lineJudgements, asked } = await scoreSparesWithReasons(open, shortlist, { script: compactScript(input.shots), videoUnderstanding: input.story.videoUnderstanding }))
+      rechecks += asked
     } catch (err) {
       logT2v('pipeline-finisher', 'cross-line re-check failed', { error: err instanceof Error ? err.message : 'error' })
     }
@@ -189,11 +197,58 @@ export async function t2vFinisher(input: {
       .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= FILLER_MIN_SCORE && Boolean(lr[e.providerId]))
       .sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))
       .map((e) => ({
-        pick: { ...evToPick(e), score: ls[e.providerId]!, matches: ls[e.providerId]! >= 7, reviewedForOtherLine: e.score ?? 0, fitReason: lr[e.providerId]!, fitReasonFrom: 'line_recheck' as const },
+        // Every stored judgement (depicts, rawScore, lineShows, score, reason) is the placed line's re-check.
+        pick: { ...borrowedPick(e as Ev, ls[e.providerId]!, lr[e.providerId]!, lineJudgements[shot.sceneId]?.[e.providerId], shot), verdict: 'best_available' as const },
         tier: 'last_resort' as const,
       }))
     if (!cross.length) logT2v('pipeline-finisher', 'no option at the floor, extending the previous shot', { sceneId: shot.sceneId, floor: FILLER_MIN_SCORE })
     take(shot, cross)
+  }
+  // Hold fallback (QA V2): a line about to be held is compared against the hold itself, not against perfection.
+  // The clip it would extend is re-checked (text, its existing `seen` against THIS line's fixed lineShows); the
+  // best own or re-checked option below the floor is placed when it scores higher than the hold. One bounded text
+  // call for all held lines; logged either way.
+  const held = open.filter((s) => !options.get(s.sceneId)?.length)
+  if (held.length) {
+    const holdOf: Record<string, { pick: T2vVerifiedPick; from: string }> = {}
+    const req: Record<string, Ev[]> = {}
+    for (const shot of held) {
+      let k = input.shots.indexOf(shot) - 1
+      while (k >= 0 && !pickAt(k)) k--
+      const p = k >= 0 ? pickAt(k) : undefined
+      if (!p) continue
+      holdOf[shot.sceneId] = { pick: p, from: input.shots[k]!.sceneId }
+      req[shot.sceneId] = [{ ...p, providerId: p.providerId } as Ev]
+    }
+    let holdScores: Record<string, Record<string, number>> = {}
+    if (Object.keys(req).length) {
+      try {
+        let asked = 0
+        ;({ scores: holdScores, asked } = await scoreSparesWithReasons(held, req, { script: compactScript(input.shots), videoUnderstanding: input.story.videoUnderstanding }))
+        rechecks += asked
+      } catch (err) {
+        logT2v('pipeline-finisher', 'hold re-check failed (holding as before)', { error: err instanceof Error ? err.message : 'error' })
+      }
+    }
+    for (const shot of held) {
+      const h = holdOf[shot.sceneId]
+      if (!h) continue
+      const holdScore = holdScores[shot.sceneId]?.[h.pick.providerId] ?? 0
+      const ok = okFor(shot)
+      const r = byScene.get(shot.sceneId)
+      // Below-floor options: this line's own reviewed clips, then clips re-checked for this line above.
+      const ownBelow = (r?.evaluated ?? [])
+        .filter((e) => ok(e) && t2vQualityOk(e, qctx) && (e.score ?? 0) >= HOLD_COMPARE_MIN)
+        .map((e) => ({ pick: evToPick(e), score: e.score ?? 0 }))
+      const ls = lineScores[shot.sceneId] ?? {}
+      const crossBelow = (shortlist[shot.sceneId] ?? [])
+        .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= HOLD_COMPARE_MIN && Boolean(lineReasons[shot.sceneId]?.[e.providerId]))
+        .map((e) => ({ pick: { ...borrowedPick(e as Ev, ls[e.providerId]!, lineReasons[shot.sceneId]![e.providerId]!, lineJudgements[shot.sceneId]?.[e.providerId], shot), verdict: 'best_available' as const }, score: ls[e.providerId]! }))
+      const best = [...ownBelow, ...crossBelow].sort((a, b) => depictsRank(b.pick) - depictsRank(a.pick) || b.score - a.score)[0]
+      const beats = Boolean(best && best.score > holdScore)
+      logT2v('pipeline-finisher', 'hold compared', { sceneId: shot.sceneId, holdFrom: h.from, holdClip: h.pick.providerId, holdScore, best: best ? { providerId: best.pick.providerId, score: best.score } : null, placed: beats })
+      if (beats && best) take(shot, [{ pick: { ...best.pick, beatsHold: { holdScore, holdFrom: h.from } }, tier: 'last_resort' }])
+    }
   }
   // The finisher's own placements get the same look-alike check as the pick pass (not only id/phash matches):
   // a placement that looks like another shot in the edit gives way to its next option, and the clip is banned
@@ -201,7 +256,8 @@ export async function t2vFinisher(input: {
   const own = (sceneId: string) => !byScene.get(sceneId)?.chosen && Boolean(options.get(sceneId)?.length)
   for (let pass = 0; pass < 2 && input.shots.some((s) => own(s.sceneId)); pass++) {
     const seq = input.shots.map((s, i) => ({ s, c: pickAt(i) })).filter((x): x is { s: T2vPlannedShot; c: T2vVerifiedPick } => Boolean(x.c))
-    const items = seq.map((x, p) => ({ p, still: x.c.kind === 'photo', framing: x.c.framing ?? '', subject: x.c.subject ?? '', visible: (x.c.seen || x.c.visible || '').slice(0, 160) }))
+    // Static videos read as stills too (QA F7).
+    const items = seq.map((x, p) => ({ p, still: x.c.kind === 'photo' || x.c.static === true, framing: x.c.framing ?? '', subject: x.c.subject ?? '', visible: (x.c.seen || x.c.visible || '').slice(0, 160) }))
     let pairs: Array<[number, number]>
     try {
       pairs = items.length >= 2 ? await lookalikePairs(items) : []
@@ -218,8 +274,9 @@ export async function t2vFinisher(input: {
       const loser = [y, x].find((v) => own(v.s.sceneId) && options.get(v.s.sceneId)?.[0]?.pick.providerId === v.c.providerId)
       if (!loser || bannedAll.has(loser.c.providerId)) continue
       const twin = loser === x ? y : x
-      bannedAll.add(loser.c.providerId)
-      newBans.push({ providerId: loser.c.providerId, of: twin.c.providerId, sceneId: loser.s.sceneId, source: 'finisher', at: new Date().toISOString() })
+      const ban: T2vLookalikeBan = { providerId: loser.c.providerId, of: twin.c.providerId, sceneId: loser.s.sceneId, source: 'finisher', at: new Date().toISOString() }
+      for (const id of [loser.c.providerId, ...lookalikeSiblings(ban, allEv)]) bannedAll.add(id)
+      newBans.push(ban)
       logT2v('pipeline-finisher', 'ban', { sceneId: loser.s.sceneId, providerId: loser.c.providerId, reason: `lookalike_of:${twin.s.sceneId}:${twin.c.providerId}` })
       // Next options only if no other line took them meanwhile (a clip never shows twice).
       const rest = (options.get(loser.s.sceneId) ?? []).filter((o) => !bannedAll.has(o.pick.providerId) && !used.has(o.pick.providerId))
@@ -281,6 +338,8 @@ export async function t2vFinisher(input: {
     }
     for (const o of options.get(shot.sceneId) ?? []) {
       if (o !== options.get(shot.sceneId)?.[0] && used.has(o.pick.providerId)) continue
+      // Backup options are re-filtered against bans found after the list was built (QA F6).
+      if (bannedAll.has(o.pick.providerId)) continue
       const m = await ingest(shot, o.pick)
       if (m) {
         used.add(o.pick.providerId)
@@ -347,5 +406,5 @@ export async function t2vFinisher(input: {
   // The last shot fades to black on its own (no end card after it).
   if (scenes.length) scenes[scenes.length - 1]!.transitionMs = 600
   // Carried bans plus the finisher's own: the caller stores the whole list on the run.
-  return { scenes, results, lookalikeBans: [...(input.lookalikeBans ?? []), ...newBans] }
+  return { scenes, results, lookalikeBans: [...(input.lookalikeBans ?? []), ...newBans], rechecks }
 }

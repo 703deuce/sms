@@ -29,8 +29,8 @@ import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { depictsRank, enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
-import { t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
-import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneContext, T2V_REIMAGINE_ROUNDS, T2V_REIMAGINE_VERIFY_BUDGET, t2vReimagineAll, trimToBudget } from '@/lib/server/t2v/pipeline/t2v-reimagine'
+import { fixLineShows, t2vLineShowsOnce, t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
+import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineBudget, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneAllowance, sceneContext, T2V_REIMAGINE_ROUNDS, t2vReimagineAll, trimPerScene } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -282,7 +282,8 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       const planned = await t2vScenePlanner({ story: run.story!, segments: run.segments!, style: run.style, seed: `${draftId}:${run.startedAt}` })
       // One LLM pass over the whole paced script: the video in the model's own words, plus each shot's moment.
       const context = await t2vScriptContext(run.story!, planned)
-      const shots = context.shots
+      // Every line leaves planning with ONE fixed lineShows (the checker never writes its own per clip).
+      const shots = fixLineShows(context.shots).shots
       const musicGenerationId = await enqueuePipelineMusic(row, run, run.story!.musicMood)
       const fresh = (await loadRow(draftId))!
       const nextDoc: T2vDraftV1 = {
@@ -313,9 +314,27 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return advanceOnce(draftId, {})
         }
       }
+      // Frozen plan without lineShows: write them ONCE (persisted on the run's shots, never regenerated in this
+      // run), with each line's literal searches first, so the search and every check use the same fixed text.
+      if (run.shots?.length && !run.lineShowsFixedAt && run.shots.some((s) => !s.lineShows?.trim())) {
+        const fixed = await t2vLineShowsOnce(run.story!, run.shots)
+        await writeRun(draftId, (r) => {
+          r.shots = fixed.shots
+          r.lineShowsFixedAt = new Date().toISOString()
+          r.log.push({ stage: r.status, at: r.lineShowsFixedAt, note: `line_shows_fixed:${fixed.fromModel}_model:${fixed.fallback.length}_intent` })
+          return r
+        })
+        return advanceOnce(draftId, {})
+      }
       const topic = run.story?.topic || run.story?.title || ''
       const realistic = t2vRealisticStyle(run.style)
-      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic, realistic })
+      const found = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic, realistic })
+      // Incumbents (reset --from-footage): the previous run's placed pick is re-verified first under the fixed
+      // lineShows; the pick pass keeps it unless a new clip is clearly better.
+      const all = withIncumbents(found, run)
+      const capped = fairTrim(run.shots!.map((s) => s.sceneId), all, T2V_RUN_VERIFY_BUDGET)
+      if (capped.dropped) logT2v('pipeline', 'run verify budget hit', { draftId, stage: 'search_0', budget: T2V_RUN_VERIFY_BUDGET, used: 0, sent: capped.used, dropped: capped.dropped })
+      const candidates = capped.found
       const jobId = await enqueueVerify(row, topic, run.shots!, candidates, { realistic })
       const tried: Record<string, string[]> = {}
       for (const sh of run.shots!) tried[sh.sceneId] = queryRewrites(sh.queries, topic)
@@ -324,6 +343,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         r.verifyJobId = jobId
         r.verifyRound = 0
         r.queriesTried = tried
+        if (capped.dropped) r.verifyBudgetHit = [...(r.verifyBudgetHit ?? []), { stage: 'search_0', at: new Date().toISOString(), dropped: capped.dropped }]
       })
       return
     }
@@ -377,7 +397,10 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         })
       }
       // Reimagined ideas verify under `${sceneId}~iK`; their results belong to the line itself.
-      const roundResults = ((payload.results ?? []).filter(Boolean) as T2vShotResult[]).map((r) => ({ ...r, sceneId: baseSceneId(r.sceneId) }))
+      const roundResults = markIncumbents(
+        ((payload.results ?? []).filter(Boolean) as T2vShotResult[]).map((r) => ({ ...r, sceneId: baseSceneId(r.sceneId) })),
+        run.priorPicks,
+      )
       // Per line, per round: ideas, queries, every candidate's score and whether the line now passes (5+).
       if (run.reimaginePending) {
         const entries = reimagineOutcomes(run.reimaginePending, (payload.results ?? []) as T2vShotResult[])
@@ -448,11 +471,17 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       // It also runs after the AI clips are verified, so lines that lost their clip to a later ban still get
       // their own remaining rounds before the finisher extends the previous shot.
       let fullPass: Awaited<ReturnType<typeof enforceNoRepeat>> | undefined
+      // Text re-checks made in this tick (spares, cross-line, hold comparisons): counted in verifierCalls (QA S4).
+      let rechecksThisTick = 0
       if (!run.rescueRound && (!run.aiRound || run.aiRound === 2)) {
         const tries = run.reimagineTries ?? {}
         fullPass = await enforceNoRepeat(run.shots!, history, pickOpts(run))
+        rechecksThisTick += fullPass.rechecks
         const report = reimagineFailing(run.shots!, history, fullPass)
-        const targets = reimagineTargets(report.map((f) => f.shot), tries)
+        // A line skipped for budget or no ideas is done with reimagine (honestly logged, not counted as a round).
+        const gate = { ...tries }
+        for (const id of Object.keys(run.reimagineSkipped ?? {})) gate[id] = T2V_REIMAGINE_ROUNDS
+        const targets = reimagineTargets(report.map((f) => f.shot), gate)
         for (const f of report) {
           logT2v('pipeline-reimagine', 'availability', { draftId, sceneId: f.shot.sceneId, ownAt5: f.ownAt5, blocked: f.blocked, rounds: tries[f.shot.sceneId] ?? 0, reimagine: targets.includes(f.shot) })
         }
@@ -470,11 +499,20 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.reimagineRound = step
             const t = { ...(r.reimagineTries ?? {}) }
             // A thrown round (search/LLM error) ends reimagine for its lines: no paid automatic retries.
-            for (const s of targets) t[s.sceneId] = next && !next.budgetHit ? (tries[s.sceneId] ?? 0) + 1 : T2V_REIMAGINE_ROUNDS
+            // Only rounds that really happened count; a thrown round (search/LLM error) ends reimagine for its
+            // lines (no paid automatic retries); skipped lines are recorded with their reason.
+            if (!next) for (const s of targets) t[s.sceneId] = T2V_REIMAGINE_ROUNDS
+            else for (const id of next.counted) t[id] = (tries[id] ?? 0) + 1
             r.reimagineTries = t
+            if (next && Object.keys(next.skipped).length) r.reimagineSkipped = { ...(r.reimagineSkipped ?? {}), ...next.skipped }
+            if (next) {
+              r.reimagineScenes = next.reimagineScenes
+              r.reimagineBudget = next.budget
+            }
             // Look-alike bans of this pass are kept on the run: the next pass (after the reimagine verify) is a
             // fresh model call that may not flag the same pair again (snow 44082 came back on sc_19).
-            r.lookalikeBans = fullPass!.lookalikeBans
+            r.lookalikeBans = mergeBans(r.lookalikeBans, fullPass!.lookalikeBans)
+            addRechecks(r, rechecksThisTick)
             if (next) r.reimagineVerifyUsed = (r.reimagineVerifyUsed ?? 0) + next.verifyUsed
             r.verifyJobId = next?.jobId ?? undefined
             r.reimaginePending = next?.jobId ? next.pending : undefined
@@ -483,8 +521,9 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
               r.queriesTried = next.tried
               r.candidates = next.candidates
             }
-            const rounds = targets.map((s) => t[s.sceneId]).join(',')
-            r.log.push({ stage: r.status, at: new Date().toISOString(), note: next ? `reimagine_step_${step}:${targets.length}_lines:${next.shots}_with_clips:${next.ideas}_ideas:rounds=${rounds}` : `reimagine_step_${step}:failed:${targets.length}_lines` })
+            const rounds = targets.map((s) => t[s.sceneId] ?? 0).join(',')
+            const skippedNote = next && Object.keys(next.skipped).length ? `:skipped=${Object.entries(next.skipped).map(([k, v]) => `${k}:${v}`).join(',')}` : ''
+            r.log.push({ stage: r.status, at: new Date().toISOString(), note: next ? `reimagine_step_${step}:${targets.length}_lines:${next.shots}_with_clips:${next.ideas}_ideas:rounds=${rounds}${skippedNote}:budget=${next.budget}` : `reimagine_step_${step}:failed:${targets.length}_lines` })
             return r
           })
           if (next?.jobId) return
@@ -498,7 +537,8 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         if (Date.now() - Date.parse(run.aiClaimAt ?? '') < 3 * 60_000) return
       }
       if (aiBrollEnabled(run) && !run.aiRound && (await claimAiStep(draftId))) {
-        const started = await aiBrollStart(run, history).catch((err) => {
+        // Seed the AI step with this tick's bans too (QA F1: it started from the stale run list and overwrote it).
+        const started = await aiBrollStart({ ...run, lookalikeBans: mergeBans(run.lookalikeBans, fullPass?.lookalikeBans) }, history).catch((err) => {
           logT2vError('pipeline', 'ai broll start failed', err, { draftId })
           return null
         })
@@ -507,7 +547,8 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             r.verifyHistory = history
             r.aiRound = 1
             r.aiJobs = started.jobs
-            if (started.lookalikeBans) r.lookalikeBans = started.lookalikeBans
+            r.lookalikeBans = mergeBans(r.lookalikeBans, fullPass?.lookalikeBans, started.lookalikeBans)
+            addRechecks(r, rechecksThisTick + (started.rechecks ?? 0))
             // AI runs after every stock round; never go back to them afterwards.
             r.photoRound ??= 2
             r.log.push({ stage: r.status, at: new Date().toISOString(), note: `ai_broll_start:${started.jobs.map((j) => j.sceneId).join(',')}` })
@@ -518,6 +559,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       }
       // Same pass the availability check used (no second sequence check that could ban differently).
       const noRepeat = fullPass ?? (await enforceNoRepeat(run.shots!, history, pickOpts(run)))
+      if (!fullPass) rechecksThisTick += noRepeat.rechecks
       const results = run.shots!.map((sh): T2vShotResult => {
         const r = noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] }
         return { ...r, pickedBy: noRepeat.tiers[sh.sceneId] }
@@ -534,6 +576,8 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         banned: noRepeat.banned,
         lookalikeBans: noRepeat.lookalikeBans,
       })
+      rechecksThisTick += fin.rechecks
+      verifierCalls += rechecksThisTick
       logScenePicks(draftId, run.shots!, fin.results)
       const qa = t2vQaPlan({ run, scenes: fin.scenes, results: fin.results })
       const stockStats = computeStockStats(fin.results, round)
@@ -546,7 +590,9 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           {
             ...fresh.document.autobuild!,
             results: fin.results,
-            lookalikeBans: fin.lookalikeBans,
+            lookalikeBans: mergeBans(fresh.document.autobuild!.lookalikeBans, fin.lookalikeBans),
+            verifierCalls: (fresh.document.autobuild!.verifierCalls ?? 0) + rechecksThisTick,
+            recheckCalls: (fresh.document.autobuild!.recheckCalls ?? 0) + rechecksThisTick,
             verifyHistory: undefined,
             verifySummary: payload.summary,
             stockStats,
@@ -698,8 +744,9 @@ async function enqueueVerify(
             nextNarration: ctx.nextNarration,
             // Reimagine: the shot idea that found these clips (the checker requires the clip to show it too).
             idea: s.idea ?? '',
-            // What the search looked for (script-context lineShows): context for the checker, which judges itself.
-            lineShows: s.lineShows ?? '',
+            // The line's FIXED lineShows: every clip of this line (every round, reimagine ideas too) is judged
+            // against this same text; the checker does not write its own.
+            lineShows: fixedLineShows(all, s),
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,
@@ -715,6 +762,81 @@ async function enqueueVerify(
     },
   })
   return jobId
+}
+
+/**
+ * Run-level verifier cap for the STOCK stage (first pass, extra search rounds, photo round): QA F3 (319 / 443
+ * checks). Reimagine rework has its own per-scene budget (reimagineBudget) and is not cut by this cap, so John's
+ * rework rounds for scenes under 5 are never silently skipped. When the cap is hit the leftover lines fall
+ * through to photo / reimagine / the finisher, and the skip is logged and stored on the run.
+ */
+export const T2V_RUN_VERIFY_BUDGET = (() => {
+  const v = Number.parseInt(process.env.T2V_RUN_VERIFY_BUDGET ?? '', 10)
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 2000) : 250
+})()
+
+/** Stock-stage checks so far: verifier calls minus re-checks and reimagine checks. */
+export function stockVerifyUsed(run: Pick<T2vPipelineRun, 'verifierCalls' | 'recheckCalls' | 'reimagineVerifyUsed'>): number {
+  return Math.max(0, (run.verifierCalls ?? 0) - (run.recheckCalls ?? 0) - (run.reimagineVerifyUsed ?? 0))
+}
+
+/** Trim candidates to `left`, one per scene at a time (story order within each turn), so no scene starves. */
+export function fairTrim<C>(order: string[], found: Record<string, C[]>, left: number): { found: Record<string, C[]>; used: number; dropped: number } {
+  const out: Record<string, C[]> = {}
+  let used = 0
+  const total = order.reduce((n, id) => n + (found[id]?.length ?? 0), 0)
+  for (let k = 0; used < left && order.some((id) => (found[id]?.length ?? 0) > k); k++) {
+    for (const id of order) {
+      const c = found[id]?.[k]
+      if (c === undefined || used >= left) continue
+      ;(out[id] ??= []).push(c)
+      used++
+    }
+  }
+  return { found: out, used, dropped: total - used }
+}
+
+/** Union of ban lists (first occurrence of a providerId wins): no pass ever drops a ban another pass found. */
+export function mergeBans(...lists: Array<T2vLookalikeBan[] | undefined>): T2vLookalikeBan[] {
+  const out: T2vLookalikeBan[] = []
+  for (const l of lists) for (const b of l ?? []) if (!out.some((x) => x.providerId === b.providerId)) out.push(b)
+  return out
+}
+
+/** Add text re-checks to the run's verifier count (and the re-check count), logged. */
+function addRechecks(r: T2vPipelineRun, n: number) {
+  if (!n) return
+  r.verifierCalls = (r.verifierCalls ?? 0) + n
+  r.recheckCalls = (r.recheckCalls ?? 0) + n
+}
+
+/** Prepend each line's prior pick (if any, and not already listed) so the first verify job re-checks it. */
+export function withIncumbents(found: Record<string, T2vFootageCandidate[]>, run: Pick<T2vPipelineRun, 'priorPicks' | 'shots'>): Record<string, T2vFootageCandidate[]> {
+  const out = { ...found }
+  for (const s of run.shots ?? []) {
+    const p = run.priorPicks?.[s.sceneId]
+    if (!p?.candidate) continue
+    const list = (out[s.sceneId] ?? []).filter((c) => c.providerId !== p.providerId)
+    out[s.sceneId] = [p.candidate, ...list]
+  }
+  return out
+}
+
+/** Flag each line's re-verified prior pick as the incumbent (the pick pass keeps it unless clearly beaten). */
+export function markIncumbents(results: T2vShotResult[], prior: T2vPipelineRun['priorPicks']): T2vShotResult[] {
+  if (!prior) return results
+  return results.map((r) => {
+    const id = prior[r.sceneId]?.providerId
+    if (!id) return r
+    const mark = <T extends { providerId: string }>(e: T) => (e.providerId === id ? { ...e, incumbent: true } : e)
+    return { ...r, evaluated: (r.evaluated ?? []).map(mark), chosen: r.chosen ? mark(r.chosen) : r.chosen }
+  })
+}
+
+/** The line's fixed lineShows (idea shots `sc~iK` use their line's); the planner intent only as a last resort. */
+export function fixedLineShows(all: T2vPlannedShot[], s: T2vPlannedShot): string {
+  const base = all.find((x) => x.sceneId === baseSceneId(s.sceneId))
+  return (base?.lineShows || s.lineShows || base?.intent || s.intent || '').trim()
 }
 
 /** Options for every pick pass (dry run, no-repeat, AI targets): style plus the script for the re-checks. */
@@ -784,8 +906,9 @@ async function nextSearchRound(
   for (const s of shots) exclude[s.sceneId] = (history[s.sceneId]?.evaluated ?? []).map((e) => e.providerId)
   const realistic = t2vRealisticStyle(run.style)
   const found = await t2vFootageAgent({ shots, aspect: row.document.settings.aspect, rewrite: false, exclude, realistic })
-  const withCands = shots.filter((s) => found[s.sceneId]?.length)
   for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
+  if (!(await capToRunBudget(row.id, run, shots, found, `search_${round}`))) return null
+  const withCands = shots.filter((s) => found[s.sceneId]?.length)
   if (!withCands.length) return null
   // Candidates map keeps every round's clips so the finisher can ingest whichever pick wins.
   const candidates = { ...(run.candidates ?? {}) }
@@ -809,14 +932,14 @@ async function claimAiStep(draftId: string): Promise<boolean> {
 }
 
 /** Start one generation per target scene (aiBrollTargets: weakest first, max 3); no retries. */
-async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[]; lookalikeBans?: T2vLookalikeBan[] }> {
+async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[]; lookalikeBans?: T2vLookalikeBan[]; rechecks?: number }> {
   const opts = pickOpts(run)
   // Predict with the same full pass the edit uses (spares + sequence check), so the clips go where the
   // final picks would really be weakest (the dry pass misses look-alike swaps).
   const full = await enforceNoRepeat(run.shots!, history, opts).catch(() => undefined)
   const predicted = full ? { out: full.results, tiers: full.tiers } : undefined
   const needy = aiBrollTargets(run.shots!, history, opts, predicted)
-  if (!needy.length) return { jobs: [], lookalikeBans: full?.lookalikeBans }
+  if (!needy.length) return { jobs: [], lookalikeBans: full?.lookalikeBans, rechecks: full?.rechecks }
   const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
   const jobs: T2vAiJob[] = []
   for (const [k, sh] of needy.entries()) {
@@ -829,7 +952,7 @@ async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShot
       logT2v('pipeline-ai', 'generation not started', { sceneId: sh.sceneId, error: err instanceof Error ? err.message : 'error' })
     }
   }
-  return { jobs, lookalikeBans: full?.lookalikeBans }
+  return { jobs, lookalikeBans: full?.lookalikeBans, rechecks: full?.rechecks }
 }
 
 /** Poll the generations; when all settle (or 8 min pass), enqueue one verify job for the finished clips. */
@@ -894,25 +1017,42 @@ async function reimagineRound(
   pending: T2vReimaginePending
   settledNow: T2vReimagineLogEntry[]
   verifyUsed: number
-  budgetHit?: boolean
+  /** Lines whose round really happened (ideas searched; verified when clips were found): their tries count. */
+  counted: string[]
+  /** Lines whose round did NOT happen, with the honest reason (not counted as a round). */
+  skipped: Record<string, 'budget' | 'no_ideas'>
+  budget: number
+  reimagineScenes: string[]
 }> {
   const tried = { ...(run.queriesTried ?? {}) }
-  const left = Math.max(0, T2V_REIMAGINE_VERIFY_BUDGET - (run.reimagineVerifyUsed ?? 0))
-  if (!left) {
-    // Budget spent: no idea call, no search, no verify; these lines fall through to AI / extend-previous.
-    logT2v('pipeline-reimagine', 'budget hit', { draftId: row.id, budget: T2V_REIMAGINE_VERIFY_BUDGET, used: run.reimagineVerifyUsed ?? 0, lines: targets.map((s) => s.sceneId) })
-    const none: T2vReimaginePending = {}
-    for (const s of targets) none[s.sceneId] = { round: (tries[s.sceneId] ?? 0) + 1, ideas: [] }
-    return { jobId: null, tried, candidates: run.candidates ?? {}, shots: 0, ideas: 0, pending: {}, settledNow: reimagineOutcomes(none, []), verifyUsed: 0, budgetHit: true }
-  }
+  // Budget sized from every scene that has needed rework so far (each is entitled to its rounds).
+  const reimagineScenes = [...new Set([...(run.reimagineScenes ?? []), ...targets.map((s) => s.sceneId)])]
+  const budget = reimagineBudget(reimagineScenes.length)
+  const left = Math.max(0, budget - (run.reimagineVerifyUsed ?? 0))
+  const allowance = sceneAllowance(targets.map((s) => s.sceneId), tries, left)
+  const skipped: Record<string, 'budget' | 'no_ideas'> = {}
+  for (const s of targets) if (!allowance[s.sceneId]) skipped[s.sceneId] = 'budget'
+  const asked = targets.filter((s) => !skipped[s.sceneId])
   const roundOf = (sceneId: string) => (tries[sceneId] ?? 0) + 1
-  const ideas = await t2vReimagineAll({ story: run.story!, allShots: run.shots!, targets, tried, history })
+  const ideas = asked.length ? await t2vReimagineAll({ story: run.story!, allShots: run.shots!, targets: asked, tried, history }) : {}
+  // Zero ideas for a line (sleep sh14 round 2): re-ask ONCE in this step for just those lines; a line still
+  // without ideas is skipped honestly (no round, no budget used) instead of burning a round.
+  const empty = asked.filter((s) => !ideas[s.sceneId]?.length)
+  if (empty.length) {
+    logT2v('pipeline-reimagine', 'no ideas, asking once more', { draftId: row.id, lines: empty.map((s) => s.sceneId) })
+    const again = await t2vReimagineAll({ story: run.story!, allShots: run.shots!, targets: empty, tried, history }).catch(() => ({}) as Record<string, never>)
+    for (const s of empty) {
+      if (again[s.sceneId]?.length) ideas[s.sceneId] = again[s.sceneId]!
+      else skipped[s.sceneId] = 'no_ideas'
+    }
+  }
   const plan: T2vReimaginePending = {}
-  for (const s of targets) {
+  for (const s of asked) {
+    if (skipped[s.sceneId]) continue
     plan[s.sceneId] = { round: roundOf(s.sceneId), ideas: (ideas[s.sceneId] ?? []).map((d) => ({ intent: d.intent, queries: d.queries })) }
     logT2v('pipeline-reimagine', 'ideas', { draftId: row.id, round: roundOf(s.sceneId), sceneId: s.sceneId, ideas: (ideas[s.sceneId] ?? []).map((d) => ({ intent: d.intent, mustRecognise: d.mustRecognise, queries: d.queries })) })
   }
-  const shots = targets.flatMap((s) => (ideas[s.sceneId]?.length ? ideaShots(s, ideas[s.sceneId]!) : []))
+  const shots = asked.flatMap((s) => (!skipped[s.sceneId] && ideas[s.sceneId]?.length ? ideaShots(s, ideas[s.sceneId]!) : []))
   for (const s of shots) tried[baseSceneId(s.sceneId)] = [...(tried[baseSceneId(s.sceneId)] ?? []), ...s.queries]
   const found: Record<string, T2vFootageCandidate[]> = {}
   if (shots.length) {
@@ -930,18 +1070,24 @@ async function reimagineRound(
       if (list.length) found[s.sceneId] = list
     }
   }
-  // Run budget: candidates in story order up to what is left; the rest of this step is dropped (logged).
-  const budgeted = trimToBudget(shots, found, left)
+  // Each line's own allowance (round-robin over its ideas); nothing is dropped first-come.
+  const budgeted = trimPerScene(shots, found, allowance, baseSceneId)
   if (budgeted.dropped.length)
-    logT2v('pipeline-reimagine', 'budget hit', { draftId: row.id, budget: T2V_REIMAGINE_VERIFY_BUDGET, used: (run.reimagineVerifyUsed ?? 0) + budgeted.used, droppedIdeas: budgeted.dropped })
+    logT2v('pipeline-reimagine', 'allowance trimmed ideas', { draftId: row.id, budget, used: (run.reimagineVerifyUsed ?? 0) + budgeted.used, allowance, droppedIdeas: budgeted.dropped })
+  if (Object.keys(skipped).length) logT2v('pipeline-reimagine', 'rounds skipped (not counted)', { draftId: row.id, budget, used: run.reimagineVerifyUsed ?? 0, skipped })
   for (const k of Object.keys(found)) if (!budgeted.found[k]) delete found[k]
   Object.assign(found, budgeted.found)
   const withCands = budgeted.shots
   const linesWithCands = new Set(withCands.map((s) => baseSceneId(s.sceneId)))
   const pending: T2vReimaginePending = {}
   const nothing: T2vReimaginePending = {}
-  for (const s of targets) (linesWithCands.has(s.sceneId) ? pending : nothing)[s.sceneId] = plan[s.sceneId]!
-  const settledNow = reimagineOutcomes(nothing, [])
+  for (const s of asked) if (!skipped[s.sceneId]) (linesWithCands.has(s.sceneId) ? pending : nothing)[s.sceneId] = plan[s.sceneId]!
+  const none: T2vReimaginePending = {}
+  for (const s of targets) if (skipped[s.sceneId]) none[s.sceneId] = { round: roundOf(s.sceneId), ideas: [] }
+  const settledNow = [
+    ...reimagineOutcomes(nothing, []),
+    ...reimagineOutcomes(none, []).map((e) => ({ ...e, note: `skipped_${skipped[e.sceneId]}` })),
+  ]
   // Candidates are kept under the line's own scene id so the finisher can ingest whichever pick wins.
   const candidates = { ...(run.candidates ?? {}) }
   for (const s of withCands) {
@@ -951,7 +1097,26 @@ async function reimagineRound(
   const jobId = withCands.length
     ? await enqueueVerify(row, run.story?.topic || run.story?.title || '', withCands, found, { realistic: t2vRealisticStyle(run.style) })
     : null
-  return { jobId, tried, candidates, shots: linesWithCands.size, ideas: withCands.length, pending, settledNow, verifyUsed: budgeted.used }
+  // A round counts when the line's ideas were searched (and verified when clips were found).
+  const counted = asked.filter((s) => !skipped[s.sceneId]).map((s) => s.sceneId)
+  return { jobId, tried, candidates, shots: linesWithCands.size, ideas: withCands.length, pending, settledNow, verifyUsed: budgeted.used, counted, skipped, budget, reimagineScenes }
+}
+
+/** Trim a stock-stage round to the run cap in place; false when nothing is left to check (logged). */
+async function capToRunBudget(draftId: string, run: T2vPipelineRun, shots: T2vPlannedShot[], found: Record<string, T2vFootageCandidate[]>, stage: string): Promise<boolean> {
+  const used = stockVerifyUsed(run)
+  const left = Math.max(0, T2V_RUN_VERIFY_BUDGET - used)
+  const capped = fairTrim(shots.map((s) => s.sceneId), found, left)
+  if (capped.dropped) {
+    logT2v('pipeline', 'run verify budget hit', { draftId, stage, budget: T2V_RUN_VERIFY_BUDGET, used, sent: capped.used, dropped: capped.dropped })
+    await writeRun(draftId, (r) => {
+      r.verifyBudgetHit = [...(r.verifyBudgetHit ?? []), { stage, at: new Date().toISOString(), dropped: capped.dropped }]
+      return r
+    })
+  }
+  for (const k of Object.keys(found)) delete found[k]
+  Object.assign(found, capped.found)
+  return capped.used > 0
 }
 
 /** Photo fallback round: Pixabay photos for weak lines → one verify job (stills, same checks). */
@@ -964,6 +1129,7 @@ async function photoSearchRound(
   const realistic = t2vRealisticStyle(run.style)
   const exclude = new Set(Object.values(history).flatMap((h) => h.evaluated.map((e) => e.providerId)))
   const found = await t2vPhotoAgent({ shots: weak, aspect: row.document.settings.aspect, realistic, exclude })
+  if (!(await capToRunBudget(row.id, run, weak, found, 'photo'))) return null
   const withCands = weak.filter((s) => found[s.sceneId]?.length)
   if (!withCands.length) return null
   const candidates = { ...(run.candidates ?? {}) }

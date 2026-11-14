@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import re
 import subprocess
 import tempfile
 import threading
@@ -44,6 +45,7 @@ USABLE_SCORE = 5
 # dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
 NEAR_DUP_BITS = 10
 PARALLEL_SHOTS = 4
+MAX_OUTPUT_TOKENS = 2048
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -75,6 +77,16 @@ VERIFY_SCHEMA: dict[str, Any] = {
     # Gemini fills properties in this order: what the line needs, what is on screen, does it show it, then the
     # score and only then the reason (writing the reason first let the model argue a clip into a pass).
     "propertyOrdering": ["line_shows", "seen", "depicts", "visible", "main_subject", "action", "score", "fit_reason", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
+}
+
+# Fixed line_shows (the normal case): written ONCE per line by the web (script-context pass, or once for a frozen
+# plan) and given to every check of that line. The checker does not output it, so it cannot reshape what the line
+# needs around the clip it is watching (sleep #1194: sc_20 had 40 different line_shows over 57 checks).
+VERIFY_SCHEMA_FIXED: dict[str, Any] = {
+    "type": "OBJECT",
+    "properties": {k: v for k, v in VERIFY_SCHEMA["properties"].items() if k != "line_shows"},
+    "required": [k for k in VERIFY_SCHEMA["required"] if k != "line_shows"],
+    "propertyOrdering": [k for k in VERIFY_SCHEMA["propertyOrdering"] if k != "line_shows"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -128,6 +140,28 @@ Return JSON:
 - time_of_day: day, night, dusk_dawn, or indoor (information only).
 {style_rule}"""
 
+# Step 1 and the first return line of PROMPT when the line's line_shows is given (fixed per line).
+_STEP1_FREE = """1. line_shows: in a few plain words, what a viewer should SEE on screen for what THIS line means (read inside
+   its sentence): the action the line asks for or describes, or its result - not just the words it mentions.
+   When the line advises stopping, avoiding or reducing something, line_shows is the advised action or its
+   result, not the thing to stop.
+"""
+FIXED_MARKER = "line_shows is given above and is FIXED for this line"
+_STEP1_FIXED = """1. """ + FIXED_MARKER + """: the same for every clip checked for this line.
+   Judge against it exactly as written. Never restate, widen, narrow or reinterpret it to fit what this clip
+   shows, and do not output it.
+"""
+_RETURN_FREE = "- line_shows, seen, depicts, score, fit_reason: as above (in that order)."
+_RETURN_FIXED = "- seen, depicts, score, fit_reason: as above (in that order)."
+
+
+def prompt_template(fixed: bool) -> str:
+    """PROMPT with line_shows fixed (given by the web, judged against) or, for old payloads, written by the checker."""
+    if not fixed:
+        return PROMPT
+    return PROMPT.replace(_STEP1_FREE, _STEP1_FIXED).replace(_RETURN_FREE, _RETURN_FIXED)
+
+
 # The video context the checker reads before judging: its own-words understanding of the video (script-context
 # pass), the whole script, the neighbouring lines, this line's moment and what the viewer must recognise.
 SCRIPT_BLOCK = """What this video is about: {video_understanding}
@@ -147,9 +181,23 @@ What the viewer must recognise: "{must_recognise}"
 DEPICTS_CAP = {"yes": 10, "partly": 6, "no": 4}
 
 
-def norm_depicts(v: Any) -> str | None:
-    s = str(v or "").strip().lower()
-    return s if s in DEPICTS_CAP else None
+# Spellings of the three answers (case and punctuation are ignored). Anything else is unknown.
+_DEPICTS_WORDS = {
+    "yes": "yes", "y": "yes", "true": "yes",
+    "partly": "partly", "partially": "partly", "partial": "partly", "part": "partly", "somewhat": "partly",
+    "no": "no", "n": "no", "false": "no", "not": "no", "none": "no",
+}
+
+
+def depicts_word(v: Any) -> str | None:
+    """'Partially.', 'No.', ' YES ' -> partly / no / yes; None when it is none of them (or empty)."""
+    words = re.sub(r"[^a-z]+", " ", str(v or "").lower()).split()
+    return _DEPICTS_WORDS.get(words[0]) if words else None
+
+
+def norm_depicts(v: Any) -> str:
+    """yes / partly / no. An unknown or missing answer fails closed: 'no' (score capped at 4)."""
+    return depicts_word(v) or "no"
 
 
 def depicts_rank(e: dict) -> int:
@@ -157,15 +205,17 @@ def depicts_rank(e: dict) -> int:
     return {"yes": 3, "partly": 1, "no": 0}.get(str(e.get("depicts") or ""), 2)
 
 
-def capped_score(v: dict) -> tuple[int, int, str | None]:
-    """(score, rawScore, depicts): the model's score capped by its own depicts call. Old answers without
-    depicts keep their score (logged as uncapped by the caller)."""
+def capped_score(v: dict) -> tuple[int, int, str]:
+    """(score, rawScore, depicts): the model's score capped by its own depicts call. An unknown or missing
+    depicts answer counts as "no" (fail closed) and is logged."""
     try:
         raw = max(0, min(10, int(round(float(v.get("score") or 0)))))
     except (TypeError, ValueError):
         raw = 0
+    if depicts_word(v.get("depicts")) is None:
+        log.info("[t2v:verify:depicts_unknown] %s", json.dumps({"depicts": str(v.get("depicts"))[:40], "rawScore": raw, "treatedAs": "no"}))
     d = norm_depicts(v.get("depicts"))
-    return (min(raw, DEPICTS_CAP[d]) if d else raw), raw, d
+    return min(raw, DEPICTS_CAP[d]), raw, d
 
 
 def _idea_line(shot: dict, q) -> str:
@@ -197,7 +247,7 @@ def script_block(script: str, shot: dict, video_understanding: str = "", topic: 
         moment=q(shot.get("moment") or shot.get("intent")),
         must_recognise=q(shot.get("subject") or shot.get("intent"), 120),
         idea_line=_idea_line(shot, q),
-        search_line=(f'What the footage search looked for (context only; judge line_shows yourself): "{q(shot.get("lineShows"), 160)}"\n' if shot.get("lineShows") else ""),
+        search_line=(f'line_shows - what a viewer should SEE for this line (fixed for every clip of this line): "{q(shot.get("lineShows"), 200)}"\n' if shot.get("lineShows") else ""),
     )
 
 
@@ -443,8 +493,10 @@ def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4")
 
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
-        "responseSchema": VERIFY_SCHEMA,
-        "maxOutputTokens": 1100,
+        # The fixed-line_shows prompt gets the schema without line_shows (the checker never writes it).
+        "responseSchema": VERIFY_SCHEMA_FIXED if FIXED_MARKER in prompt else VERIFY_SCHEMA,
+        # seen + depicts + fit_reason + the window and info fields; 1100 risked truncated JSON (a wasted call).
+        "maxOutputTokens": MAX_OUTPUT_TOKENS,
         "mediaResolution": "MEDIA_RESOLUTION_LOW",
     }
     m = model.lower()
@@ -541,6 +593,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
 
     def verify_shot(idx: int, shot: dict, work: Path) -> None:
         need_s = float(shot.get("needS") or 4.0)
+        # The line's fixed line_shows (same for every candidate and every round); None only for old payloads.
+        fixed_ls = str(shot.get("lineShows") or "").strip()[:200] or None
+        if fixed_ls is None:
+            log.info("[t2v:verify:line_shows_missing] %s", json.dumps({"draftId": draft_id, "sceneId": shot.get("sceneId")}))
         ctx = shot_ctx(shot)
         evaluated = evaluated_by_shot[idx]
         passing = 0
@@ -571,7 +627,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
                     if c.get("kind") == "ai":
                         entry["kind"] = "ai"
-                prompt = (PROMPT + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
+                prompt = (prompt_template(fixed_ls is not None) + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
                     clip_s=clip_s,
                     need_s=need_s,
                     script_block=script_block(script, shot, video_understanding, topic),
@@ -593,10 +649,11 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "action": str(v.get("action") or "")[:120],
                         # The score is the model's, capped by its own literal-depiction call (DEPICTS_CAP);
                         # matches never stands below 7 or when the clip does not plainly show the line.
-                        "lineShows": str(v.get("line_shows") or "")[:120],
+                        "lineShows": fixed_ls if fixed_ls is not None else str(v.get("line_shows") or "")[:120],
+                        "lineShowsFixed": fixed_ls is not None,
                         "depicts": dep,
                         "rawScore": raw_score,
-                        "matches": bool(v.get("matches")) and sc >= ACCEPT_SCORE and dep in (None, "yes"),
+                        "matches": bool(v.get("matches")) and sc >= ACCEPT_SCORE and dep == "yes",
                         "score": sc,
                         "subjectVisible": bool(v.get("subject_visible", True)),
                         "inS": a,

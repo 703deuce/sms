@@ -74,7 +74,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ draftId: s
         data: {
           draftId,
           revision: row.revision,
-          runStartedAt: run.startedAt ?? null,
+          // After an operator reset the run starts at resetAt (startedAt is the original run's start).
+          runStartedAt: run.resetAt ?? run.startedAt ?? null,
+          originalStartedAt: run.startedAt ?? null,
           resetAt: run.resetAt ?? null,
           projectId: row.projectId,
           title: (row.document as T2vDraftV1).title,
