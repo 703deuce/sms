@@ -107,7 +107,8 @@ export type T2vVerifiedPick = {
   outS: number
   clipS: number
   issues?: string
-  verdict: 'accepted' | 'weak_match'
+  /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
+  verdict: 'accepted' | 'weak_match' | 'best_available'
 }
 
 export type T2vShotResult = {

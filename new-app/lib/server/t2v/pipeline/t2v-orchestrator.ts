@@ -267,7 +267,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       return advanceOnce(draftId, {})
     }
     case 'finding_footage': {
-      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect })
+      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic: run.story?.topic || run.story?.title || '' })
       const jobId = createId('job')
       await prisma.clipJob.create({
         data: {

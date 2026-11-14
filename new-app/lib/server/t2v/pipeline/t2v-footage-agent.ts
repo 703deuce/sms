@@ -6,7 +6,7 @@ import type { T2vAspect } from '@/lib/t2v/types'
 import type { T2vFootageCandidate, T2vPlannedShot } from '@/lib/t2v/pipeline/t2v-types'
 
 /**
- * Footage Researcher (Prompt-to-Video only). Bounded: <= 5 candidates per shot go to the visual reviewer.
+ * Footage Researcher (Prompt-to-Video only). Bounded: <= 8 candidates per shot go to the visual reviewer.
  *
  * Own Pixabay search, tuned after the first live run: the shared T2V search sends video_type=film, which
  * drops most EV/tech clips (Pixabay files many as "animation"), and Pixabay's plain multi-word search is
@@ -14,7 +14,8 @@ import type { T2vFootageCandidate, T2vPlannedShot } from '@/lib/t2v/pipeline/t2v
  * first (words joined with "+"), fall back to the loose query, and rank every hit by how many query words
  * appear in its tags, so the reviewer only sees clips whose tags actually mention the subject.
  */
-const MAX_PER_SHOT = 5
+const MAX_PER_SHOT = 8
+const MAX_QUERIES_PER_SHOT = 5
 const MIN_SRC_WIDTH = 1280
 
 const STOP = new Set(['the', 'and', 'with', 'into', 'from', 'for', 'over', 'onto', 'of', 'a', 'an', 'in', 'on', 'at', 'to', 'its', 'their'])
@@ -44,9 +45,37 @@ export function tagOverlap(words: string[], tags: string[]): number {
 
 type PixHit = Record<string, unknown>
 
-async function pixabayRaw(q: string, aspect: T2vAspect): Promise<PixHit[]> {
+// Pixabay allows 100 requests / 60 s per key; stay under it and reuse identical queries within a run.
+const pixCache = new Map<string, Promise<PixHit[]>>()
+const pixCalls: number[] = []
+async function pixThrottle() {
+  for (;;) {
+    const now = Date.now()
+    while (pixCalls.length && now - pixCalls[0]! > 60_000) pixCalls.shift()
+    if (pixCalls.length < 80) break
+    await new Promise((r) => setTimeout(r, 1500))
+  }
+  pixCalls.push(Date.now())
+}
+
+function pixabayRaw(q: string, aspect: T2vAspect): Promise<PixHit[]> {
+  const k = `${aspect}|${q}`
+  let p = pixCache.get(k)
+  if (!p) {
+    p = pixabayFetch(q, aspect).catch((err) => {
+      pixCache.delete(k)
+      throw err
+    })
+    pixCache.set(k, p)
+    if (pixCache.size > 500) pixCache.delete(pixCache.keys().next().value as string)
+  }
+  return p
+}
+
+async function pixabayFetch(q: string, aspect: T2vAspect): Promise<PixHit[]> {
   const key = process.env.PIXABAY_API_KEY?.trim()
   if (!key) return []
+  await pixThrottle()
   const u = new URL('https://pixabay.com/api/videos/')
   u.searchParams.set('key', key)
   u.searchParams.set('q', q.slice(0, 100))
@@ -130,9 +159,26 @@ async function searchQuery(query: string, qi: number, aspect: T2vAspect): Promis
   return out.filter((r) => r.overlap >= 1)
 }
 
+/** Planner queries plus broader rewrites (2-word cores, then the video topic) — de-duplicated, bounded. */
+export function queryRewrites(queries: string[], topic: string): string[] {
+  const out: string[] = []
+  const push = (q: string) => {
+    const w = queryWords(q).join(' ')
+    if (w && !out.includes(w)) out.push(w)
+  }
+  queries.forEach(push)
+  for (const q of queries) {
+    const w = queryWords(q)
+    if (w.length > 2) push(w.slice(-2).join(' '))
+  }
+  push(queryWords(topic).slice(0, 2).join(' '))
+  return out.slice(0, MAX_QUERIES_PER_SHOT)
+}
+
 export async function t2vFootageAgent(input: {
   shots: T2vPlannedShot[]
   aspect: T2vAspect
+  topic?: string
 }): Promise<Record<string, T2vFootageCandidate[]>> {
   const usePexels = pexelsConfigured()
   const out: Record<string, T2vFootageCandidate[]> = {}
@@ -140,8 +186,9 @@ export async function t2vFootageAgent(input: {
   let searches = 0
   for (const shot of input.shots) {
     const pool: Ranked[] = []
-    for (let qi = 0; qi < shot.queries.length; qi++) {
-      const query = shot.queries[qi]!
+    const queries = queryRewrites(shot.queries, input.topic ?? '')
+    for (let qi = 0; qi < queries.length; qi++) {
+      const query = queries[qi]!
       try {
         searches++
         pool.push(...(await searchQuery(query, qi, input.aspect)))

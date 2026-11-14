@@ -30,8 +30,13 @@ export function t2vQaPlan(input: { run: T2vPipelineRun; scenes: T2vScene[]; resu
     ok: cards <= Math.max(1, Math.round(input.results.length * 0.2)),
     detail: `${stock} verified stock shots, ${held} lines held on the previous clip, ${cards} title cards`,
   })
-  const weak = input.results.filter((r) => r.chosen?.verdict === 'weak_match').length
-  checks.push({ id: 'visual_relevance', ok: weak <= Math.round(input.results.length * 0.3), detail: `${weak} weak matches` })
+  const weak = input.results.filter((r) => r.chosen?.verdict === 'weak_match' || r.chosen?.verdict === 'best_available').length
+  const best = input.results.filter((r) => r.chosen?.verdict === 'best_available').length
+  checks.push({
+    id: 'visual_relevance',
+    ok: weak <= Math.round(input.results.length * 0.3),
+    detail: `${weak} below the accept bar (${best} best-available fallbacks)`,
+  })
   const ids = input.scenes.filter((s) => s.media.kind === 'video').map((s) => `${s.media.provider}:${s.media.providerId}`)
   const dupes = ids.length - new Set(ids).size
   checks.push({ id: 'no_repeated_clips', ok: dupes === 0, detail: `${dupes} repeated source clips` })
