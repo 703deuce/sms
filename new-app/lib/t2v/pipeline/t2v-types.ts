@@ -148,6 +148,12 @@ export type T2vVerifiedPick = {
   fitReason?: string
   /** Reviewer: what is literally on screen, written before the fit judgement (score and fitReason build on it). */
   seen?: string
+  /** Reviewer: the concrete thing or action this line is about, in a few words (from the line in its sentence). */
+  lineShows?: string
+  /** Reviewer: does `seen` literally show `lineShows`? Code caps the score: no -> 4, partly -> 6. */
+  depicts?: T2vDepicts
+  /** The model's own score before the depiction cap (information only). */
+  rawScore?: number
   /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
   fitReasonFrom?: 'verify' | 'line_recheck'
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
@@ -172,6 +178,12 @@ export type T2vShotResult = {
 }
 
 export type T2vPickedBy = 'accepted' | 'usable' | 'photo' | 'spare' | 'ai' | 'fallback' | 'last_resort' | 'held' | 'card'
+
+/** A clip the sequence check found to be a look-alike of another placed clip: never placed again in this run. */
+export type T2vLookalikeBan = { providerId: string; of: string; sceneId: string; source: 'pick_pass' | 'finisher'; at: string }
+
+/** Literal-depiction judgement: does what is on screen show what the line is about (yes / partly / no). */
+export type T2vDepicts = 'yes' | 'partly' | 'no'
 
 export type T2vReimaginePending = Record<string, { round: number; ideas: Array<{ intent: string; queries: string[] }> }>
 
@@ -218,6 +230,10 @@ export type T2vPipelineRun = {
   reimagineRound?: number
   /** Reimagine rounds done per line (each line max T2V_REIMAGINE_ROUNDS). */
   reimagineTries?: Record<string, number>
+  /** Candidates sent to verify by reimagine steps in this run (budget T2V_REIMAGINE_VERIFY_BUDGET). */
+  reimagineVerifyUsed?: number
+  /** Look-alike bans found by any pick pass or the finisher: carried into every later pass (never forgotten). */
+  lookalikeBans?: T2vLookalikeBan[]
   /** Ideas of the reimagine step in flight, per line (logged with their scores when the verify job ends). */
   reimaginePending?: T2vReimaginePending
   /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */

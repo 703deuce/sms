@@ -105,7 +105,7 @@ describe('t2v editorial round', () => {
     expect(out[1]!.chosen!.fitReason).toBe('the drum line B describes')
     expect(out[1]!.chosen!.fitReasonFrom).toBe('line_recheck')
   })
-  it('a cross-line clip the re-check gave no reason for is not placed (the line extends instead)', async () => {
+  it('a cross-line clip the re-check gave no reason for keeps a reason derived from what it shows (F2), never line a\'s', async () => {
     const shots = [shot('a', 'Beans tumble in the roaster.', 'vg_0'), shot('b', 'The roaster drum glows with heat.', 'vg_1')]
     const results = [
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, fitReason: 'reason for line a' })] },
@@ -113,7 +113,10 @@ describe('t2v editorial round', () => {
     ]
     vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7 }] } as never)
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3')], b: [] })
-    expect(out[1]!.pickedBy).toBe('held')
+    expect(out[1]!.pickedBy).toBe('last_resort')
+    expect(out[1]!.chosen!.fitReason).toMatch(/^\(re-check gave no reason\)/)
+    expect(out[1]!.chosen!.fitReason).not.toContain('reason for line a')
+    expect(out[1]!.chosen!.fitReasonFrom).toBe('line_recheck')
   })
   it('at most 2 stills in a row; no near-identical neighbours', () => {
     const s = (id: string) => ({ sceneId: id, narration: '', intent: '' }) as never

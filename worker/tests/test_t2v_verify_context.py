@@ -111,7 +111,7 @@ def test_sleep_prompt_carries_script_neighbours_and_moment(run_job):
     assert SLEEP_UNDERSTANDING in p
     assert "Whole script (this shot is line 3):" in p and "4. Draw curtains, reduce noise," in p
     assert 'Previous line: "Choose bedtime' in p and 'Next line: "Draw curtains' in p
-    assert 'What this moment means in the video: "The viewer prepares their bedroom for the night."' in p
+    assert 'What this moment means in the video (context only): "The viewer prepares their bedroom for the night."' in p
     assert 'What the viewer must recognise: "dark quiet bedroom"' in p
     assert "fit_reason" in p and "nice-to-have" not in p and "SUBJECT RULE" not in p
 
@@ -191,11 +191,12 @@ def test_seen_is_described_first_and_stored_with_fit_reason(run_job):
     props = vs.VERIFY_SCHEMA["properties"]
     assert "seen" in props and "seen" in vs.VERIFY_SCHEMA["required"]
     order = vs.VERIFY_SCHEMA["propertyOrdering"]
-    assert order[0] == "seen" and order.index("seen") < order.index("fit_reason") < order.index("score")
+    # line_shows -> seen -> depicts -> score -> fit_reason (the reason no longer comes before the score)
+    assert order[:3] == ["line_shows", "seen", "depicts"] and order.index("depicts") < order.index("score") < order.index("fit_reason")
     assert sorted(order) == sorted(props)  # Gemini needs every property listed
     p = vs.PROMPT
-    assert p.index("- seen:") < p.index("- visible:") < p.index("- score:")
-    assert "Base the score and\n   fit_reason on seen" in p and "metaphor" in p
+    assert p.index("1. line_shows") < p.index("2. seen") < p.index("3. depicts") < p.index("4. score") < p.index("5. fit_reason")
+    assert "based on seen and depicts, not on what the clip might stand for" in p and "metaphor" in p
     shots = [{"sceneId": "sc_3", "narration": "flashlights, and spare batteries.", "needS": 3, "candidates": [cand("8501")]}]
     ans = resp(3, visible="A phone placed on a wireless charging stand", reason="seen shows a phone charging, not flashlights or batteries")
     ans["seen"] = "A hand puts a smartphone on a wireless charging stand next to a plant."
@@ -233,6 +234,68 @@ def test_split_scene_fragment_is_judged_with_its_full_sentence_and_neighbours(ru
 
 def test_prompt_judges_as_a_viewer_and_treats_metaphor_as_a_miss():
     p = vs.PROMPT
-    assert "the way a viewer\nwatching the whole video would" in p
-    assert "A metaphor, a symbol or a loose association is a miss, not a pass" in p
-    assert "score 4 or lower so the editor looks for another shot" in p
+    assert "a viewer watching THIS video\nwould immediately get this clip as THIS line" in p
+    assert "a symbol, a mood, a\n     metaphor" in p and "0-4 = depicts no" in p
+    # The whole script is context, never a reason a clip fits THIS line.
+    assert "They never make a clip fit THIS line" in p
+    # Setting is the viewer's reaction, not an optional rule handed to the model.
+    assert "tells you whether the place" not in p
+
+
+# --- #1192 live rerun fixtures (actual verifier answers from the snow t2v_2a61c079 and sleep t2v_cf976bf4 runs):
+# the model's own seen/fit_reason/score, plus the depicts call the new schema asks for. Test data only; none of
+# these words are in any prompt (see test_prompts_and_rules_have_no_topic_words_or_time_rules).
+LIVE_MISSES = [
+    # (sceneId, line, sentence, providerId, model score, seen, depicts)
+    ("sc_5", "where everyone can find them if travel becomes difficult.", "Keep needed medicines close, where everyone can find them if travel becomes difficult.",
+     "5457", 7, "A row of intravenous drip bags is hanging in a medical setting with clear liquid inside them.", "no"),
+    ("sc_14", "and replace weak batteries.", "Test smoke and carbon monoxide alarms, and replace weak batteries.",
+     "8501", 6, "A hand places a smartphone onto a wireless charging stand. The phone screen displays a battery charging icon.", "no"),
+    ("sc_7", "and seal gaps before temperatures drop.", "Feel for drafts around windows and doors, and seal gaps before temperatures drop.",
+     "7954", 9, "A hand uses a cloth to wipe down a dark, dusty glass or window pane, creating streaks.", "no"),
+    ("sc_10", "may need insulation before freezing weather arrives.", "Exposed pipes in cold spaces may need insulation before freezing weather arrives.",
+     "43629", 9, "A close-up of a grey industrial metal wheel valve attached to a large pipe outdoors.", "no"),
+    ("sc_20", "and backup batteries, and plan to check on neighbors who may need help.", "",
+     "47743", 9, "A close-up shot shows a person's hands holding and using a smartphone, scrolling on the screen.", "partly"),
+    ("sc_2", "Start with the forecast, then gather drinking water, shelf-stable food,", "",
+     "5629", 9, "A person uses a sponge to scrub the inside of a glass jar under a running kitchen faucet.", "partly"),
+    ("sc_13", "Make the bedroom dark, quiet, and comfortably cool.", "",
+     "111281", 8, "Hands turn the pages of an old book on a wooden table in a dimly lit room, beside a lit candle.", "no"),
+]
+
+
+@pytest.mark.parametrize("scene,line,sentence,pid,model_score,seen,depicts", LIVE_MISSES, ids=[f"{x[0]}-{x[3]}" for x in LIVE_MISSES])
+def test_live_rerun_misses_are_capped_by_the_depiction_call(run_job, scene, line, sentence, pid, model_score, seen, depicts):
+    """The model kept scoring these 6-9 on theme or category; its own depicts call now caps the score."""
+    shot = {"sceneId": scene, "narration": line, "needS": 3, "candidates": [cand(pid)]}
+    if sentence:
+        shot["sentence"] = sentence
+    ans = resp(model_score, visible=seen, reason="relates to the line")
+    ans.update({"seen": seen, "line_shows": "what the line is about", "depicts": depicts, "matches": True})
+    results, _ = run_job([shot], {pid: ans})
+    ev = results[0]["evaluated"][0]
+    assert ev["rawScore"] == model_score and ev["depicts"] == depicts
+    assert ev["score"] == min(model_score, vs.DEPICTS_CAP[depicts]) and ev["score"] <= 6
+    assert ev["matches"] is False
+    chosen = results[0]["chosen"]
+    assert chosen is None or chosen["verdict"] != "accepted"
+    if depicts == "no":
+        assert ev["score"] < vs.USABLE_SCORE  # a miss: the web never places it, reimagine fires
+
+
+def test_depicts_yes_keeps_the_model_score_and_old_answers_are_uncapped(run_job):
+    shots = [{"sceneId": "sc_1", "narration": "A line.", "needS": 3, "candidates": [cand("a"), cand("b")]}]
+    yes = resp(9, visible="It plainly shows the line")
+    yes.update({"depicts": "yes", "line_shows": "the line", "seen": "It plainly shows the line"})
+    old = resp(8, visible="An old answer without depicts")
+    results, _ = run_job(shots, {"a": yes, "b": old})
+    by = {e["providerId"]: e for e in results[0]["evaluated"]}
+    assert by["a"]["score"] == 9 and by["a"]["matches"] is True and by["a"]["lineShows"] == "the line"
+    assert by["b"]["score"] == 8 and by["b"]["depicts"] is None
+    assert results[0]["chosen"]["providerId"] == "a"
+
+
+def test_capped_score_handles_bad_values():
+    assert vs.capped_score({"score": "12", "depicts": "No"}) == (4, 10, "no")
+    assert vs.capped_score({"score": None, "depicts": "maybe"}) == (0, 0, None)
+    assert vs.capped_score({"score": 7.6, "depicts": "partly"}) == (6, 8, "partly")

@@ -48,8 +48,11 @@ PARALLEL_SHOTS = 4
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
-        # Written FIRST: what is literally on screen, before any judgement against the script.
+        # Written FIRST: what THIS line is about (from the line in its sentence), then what is literally on screen,
+        # then whether the screen shows it. The score is capped in code from that last judgement (DEPICTS_CAP).
+        "line_shows": {"type": "STRING"},
         "seen": {"type": "STRING"},
+        "depicts": {"type": "STRING", "enum": ["yes", "partly", "no"]},
         "visible": {"type": "STRING"},
         "main_subject": {"type": "STRING"},
         "action": {"type": "STRING"},
@@ -68,45 +71,48 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "subject_visible": {"type": "BOOLEAN"},
         "fit_reason": {"type": "STRING"},
     },
-    "required": ["seen", "visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
-    # Gemini fills properties in this order: describe (seen) first, then score and explain from that description.
-    "propertyOrdering": ["seen", "visible", "main_subject", "action", "fit_reason", "score", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
+    "required": ["line_shows", "seen", "depicts", "visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    # Gemini fills properties in this order: what the line needs, what is on screen, does it show it, then the
+    # score and only then the reason (writing the reason first let the model argue a clip into a pass).
+    "propertyOrdering": ["line_shows", "seen", "depicts", "visible", "main_subject", "action", "score", "fit_reason", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
-You watch ONE short stock clip (video frames only; no audio) and decide whether an experienced editor would
-put it under ONE line of THIS video. Judge only what is visible on screen, never titles or tags.
+You watch ONE short stock clip (video frames only; no audio) and decide whether a viewer watching THIS video
+would immediately get this clip as THIS line. Judge only what is visible on screen, never titles or tags.
 
 {script_block}Clip length: {clip_s:.1f} s. The shot needs about {need_s:.1f} s.
 
-Read the script first so you understand the video and this moment in it. If this line is only part of a
-sentence, read it as that whole sentence in its place in the story. Then judge the clip the way a viewer
-watching the whole video would: watching this video, would I see this clip as this line, in this story? A clip whose subject matches the words but would
-look out of place at this moment scores low; a clip that shows the moment in a different but natural way
-scores well. Decide yourself what matters for this line - the script, not a rule, tells you whether the place,
-light, season or people matter here. If the line warns against doing something, a clip that shows that act
+The whole script and the moment are context: they tell you what the video is about and what a viewer of it
+expects to see. They never make a clip fit THIS line: a clip that would suit another line of the script, the
+topic or the theme in general, but does not show THIS line, is a miss here. If this line is only part of a
+sentence, read it as that whole sentence. If the line warns against doing something, a clip that shows that act
 being done does not work.
 
-Work in two steps.
-1. seen: first describe in plain words what is literally on screen: the people, things and actions you can
-   actually see, and say if the picture is too dark or unclear to tell. Describe only; do not use the script here.
-2. Then judge the fit of what you wrote in seen against this line and the whole script. Base the score and
-   fit_reason on seen, not on what the clip might stand for. If seen does not show what this line is about,
-   the clip does not show the line. A metaphor, a symbol or a loose association is a miss, not a pass, however
-   well it could be argued: score 4 or lower so the editor looks for another shot.
-   If you cannot tell from the picture what is shown, score 3 or lower.
+Work in steps, in this order.
+1. line_shows: in a few plain words, the concrete thing or action THIS line is about (read inside its sentence).
+2. seen: describe in plain words what is literally on screen: the people, things and actions you can actually
+   see, and say if the picture is too dark, too small or too unclear to tell. Describe only.
+3. depicts: does what you wrote in seen show line_shows, so that a viewer watching this video would get it at
+   once, for most of the clip?
+   - "yes": it plainly shows line_shows (the same thing or action, from any angle or in any everyday situation),
+     and it would not look out of place to a viewer of this video.
+   - "partly": it shows only part of line_shows, or shows it in a way or setting a viewer of this video would
+     find odd.
+   - "no": it shows something else - a related object or activity, the same category, a symbol, a mood, a
+     metaphor, the result or a step only an argument connects, or it is too unclear to tell.
+4. score: 0-10 for this line in this video, based on seen and depicts, not on what the clip might stand for.
+   9-10 = depicts yes and exactly right here; 7-8 = depicts yes, clearly works; 5-6 = depicts partly, usable
+   but not ideal; 0-4 = depicts no (3 or lower when the picture is too unclear to tell).
+5. fit_reason: one short sentence on why what you described in seen does or does not show line_shows.
 
 Return JSON:
-- seen: 1-2 plain sentences, only what is literally visible (written before you judge the fit).
+- line_shows, seen, depicts, score, fit_reason: as above (in that order).
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
-- score: 0-10 for THIS spot in THIS video. 9-10 = exactly right here; 7-8 = clearly works, usable as-is
-  (it shows what the line is about, literally or from another angle of the same moment); 5-6 = works but not ideal; 3-4 = loosely on topic but wrong for
-  this moment; 0-2 = wrong, unusable, or contradicts the video.
-- matches: true when score >= 7 and the clip is readable (not too dark or blurry to see what it shows, no
-  dominating text, logos or watermarks).
-- fit_reason: one short sentence in your own words on why what you described in seen does or does not fit here.
-- subject_visible: true if what the viewer must recognise is clearly visible (information only).
+- matches: true when depicts is "yes", score >= 7 and the clip is readable (not too dark or blurry to see what
+  it shows, no dominating text, logos or watermarks).
+- subject_visible: true if what the viewer must recognise is clearly visible.
 - in_s, out_s: best continuous usable window, preferably >= {need_s:.1f} s; 0 <= in_s < out_s <= {clip_s:.1f}.
 - issues: shaky, blurry, text overlay, cut inside clip, or "".
 - style: live_action, animation, 3d_render, motion_graphics, clip_art, or screen_recording.
@@ -123,9 +129,31 @@ Whole script (this shot is line {line_no}):
 Previous line: "{prev}"
 This line (spoken over this shot): "{narration}"
 {sentence_line}Next line: "{next}"
-What this moment means in the video: "{moment}"
+What this moment means in the video (context only): "{moment}"
 What the viewer must recognise: "{must_recognise}"
 """
+
+
+# The score can never be higher than the literal-depiction judgement allows: a clip that does not show the
+# line is a miss however well it could be argued (snow sc_5 IV bags for medicines at home: 7; sleep sc_13
+# candlelit reading for "make the bedroom dark": 8). Same numbers as the web's DEPICTS_CAP.
+DEPICTS_CAP = {"yes": 10, "partly": 6, "no": 4}
+
+
+def norm_depicts(v: Any) -> str | None:
+    s = str(v or "").strip().lower()
+    return s if s in DEPICTS_CAP else None
+
+
+def capped_score(v: dict) -> tuple[int, int, str | None]:
+    """(score, rawScore, depicts): the model's score capped by its own depicts call. Old answers without
+    depicts keep their score (logged as uncapped by the caller)."""
+    try:
+        raw = max(0, min(10, int(round(float(v.get("score") or 0)))))
+    except (TypeError, ValueError):
+        raw = 0
+    d = norm_depicts(v.get("depicts"))
+    return (min(raw, DEPICTS_CAP[d]) if d else raw), raw, d
 
 
 def _sentence_line(shot: dict, q) -> str:
@@ -161,7 +189,8 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
             "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
             "candidateId": e.get("providerId"), "kind": e.get("kind") or "video", "score": e.get("score"),
             "lighting": e.get("lighting"), "matches": e.get("matches"), "verdict": "chosen" if picked else "not_chosen",
-            "seen": e.get("seen") or "", "reason": e.get("error") or e.get("fitReason") or "",
+            "lineShows": e.get("lineShows") or "", "seen": e.get("seen") or "", "depicts": e.get("depicts"),
+            "rawScore": e.get("rawScore"), "reason": e.get("error") or e.get("fitReason") or "",
         }))
     log.info("[t2v:verify:scene] %s", json.dumps({
         "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
@@ -371,7 +400,7 @@ def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4")
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": VERIFY_SCHEMA,
-        "maxOutputTokens": 900,
+        "maxOutputTokens": 1100,
         "mediaResolution": "MEDIA_RESOLUTION_LOW",
     }
     m = model.lower()
@@ -510,6 +539,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     usage["out"] += tout
                     usage["calls"] += 1
                 a, b = (0.0, clip_s) if is_photo else _clamp_window(v, clip_s, need_s)
+                sc, raw, dep = capped_score(v)
                 entry.update(
                     {
                         # What is literally on screen (written before the fit judgement); stored with fit_reason.
@@ -517,9 +547,13 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "visible": str(v.get("visible") or v.get("seen") or "")[:300],
                         "subject": str(v.get("main_subject") or "")[:120],
                         "action": str(v.get("action") or "")[:120],
-                        # The model's in-context judgement decides; subject_visible is information only.
-                        "matches": bool(v.get("matches")),
-                        "score": int(v.get("score") or 0),
+                        # The score is the model's, capped by its own literal-depiction call (DEPICTS_CAP);
+                        # matches never stands below 7 or when the clip does not plainly show the line.
+                        "lineShows": str(v.get("line_shows") or "")[:120],
+                        "depicts": dep,
+                        "rawScore": raw,
+                        "matches": bool(v.get("matches")) and sc >= ACCEPT_SCORE and dep in (None, "yes"),
+                        "score": sc,
                         "subjectVisible": bool(v.get("subject_visible", True)),
                         "inS": a,
                         "outS": b,
