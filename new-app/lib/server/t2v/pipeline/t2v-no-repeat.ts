@@ -7,52 +7,28 @@ import type { T2vPickedBy, T2vPlannedShot, T2vShotResult, T2vVerifiedPick } from
  * Shot sequencing for Prompt-to-Video. HARD RULE: a shot never repeats.
  * - Never the same stock clip ID twice; never two near-identical frames (worker dHash).
  * - Same shoot counts as a repeat: same author with neighbouring IDs (e.g. 24122/24123) is never placed
- *   adjacent, and is used elsewhere only when a scene has no other option.
+ *   within two shots of each other, and is used elsewhere only when a scene has no other option.
  * - One text-only LLM pass over the reviewer's descriptions catches look-alikes from different clips and
  *   adjacent scenes that are the same kind of shot (three aerial town shots in a row).
  *
- * Every scene tries, in order: accepted (7+), usable (5-6, works for the line), loosely on-topic (3-4),
- * then a "spare" clip the reviewer rated 6+ for another line of this video (on-topic B-roll nobody used).
- * Quality rules (t2vQualityOk): live action for realistic styles, lighting >= MIN_LIGHTING, no night/dark
- * footage unless the line is about night, colour unless the request asks for black-and-white. A clip failing
- * them is a last resort before an empty scene (lighting still applies to last-resort picks).
+ * Whether a clip fits is the reviewer's in-context score (it read the whole script). Scenes pick scarcest
+ * first (fewest passing clips; ties in story order) so a line with options never takes another line's only
+ * good clip. Every scene tries, in order: accepted (7+), usable (5-6), a photo (5+), a spare re-checked for
+ * this line (5+), an AI clip, then a last resort that still scored FILLER_MIN_SCORE+ for this line. Nothing
+ * scoring below FILLER_MIN_SCORE is ever placed. The only edit-quality rule is live action for realistic styles.
  */
 const NEAR_DUP_BITS = 10
 const ACCEPT_SCORE = 7
 const USABLE_SCORE = 5
-const LOOSE_SCORE = 3
 const SPARE_SCORE = 6
-export const MIN_LIGHTING = 6
-/** Measured frame stats (0-1, worker): darker / greyer than this fails a normal daytime colour line. */
-export const MIN_LUMA = 0.12
-export const MIN_SATURATION = 0.06
-const NIGHT_WORDS = /\b(night|nights|nighttime|night-time|overnight|evening|dusk|midnight|dark|darkness|after dark|neon|moonlight|stars)\b/i
-const MONO_WORDS = /\b(black[- ]and[- ]white|b&w|monochrome|grayscale|greyscale|noir|desaturated|sepia)\b/i
+/** Model-score floor for any filler (last resort, cross-line spare): no 0-4/10 clip is ever placed. */
+export const FILLER_MIN_SCORE = 5
 
-/** A line about night may use night/dark footage; every other line needs daylight-readable shots. */
-export function t2vNightLine(...texts: Array<string | undefined>): boolean {
-  return texts.some((t) => NIGHT_WORDS.test(t ?? ''))
-}
+export type T2vQualityCtx = { realistic: boolean }
 
-/** Black-and-white footage only when the request asks for it. */
-export function t2vMonoRequested(prompt: string | undefined): boolean {
-  return MONO_WORDS.test(prompt ?? '')
-}
-
-export type T2vQualityCtx = { realistic: boolean; nightOk: boolean; monoOk: boolean }
-
-/** Live action (realistic styles), lit >= MIN_LIGHTING, no night/dark for day lines, colour unless asked. */
-export function t2vQualityOk(e: { style?: string; lighting?: number; timeOfDay?: string; luma?: number; saturation?: number }, ctx: T2vQualityCtx): boolean {
-  if (ctx.realistic && e.style && e.style !== 'live_action') return false
-  if ((e.lighting ?? 10) < MIN_LIGHTING) return false
-  if (!ctx.nightOk && (e.timeOfDay === 'night' || (e.luma ?? 1) < MIN_LUMA)) return false
-  if (!ctx.monoOk && (e.saturation ?? 1) < MIN_SATURATION) return false
-  return true
-}
-/** Lighting rule alone (lit >= MIN_LIGHTING, not night/dark unless the line is about night). Applies to every pick. */
-export function t2vLitOk(e: { lighting?: number; timeOfDay?: string; luma?: number }, ctx: Pick<T2vQualityCtx, 'nightOk'>): boolean {
-  if ((e.lighting ?? 10) < MIN_LIGHTING) return false
-  return ctx.nightOk || (e.timeOfDay !== 'night' && (e.luma ?? 1) >= MIN_LUMA)
+/** Edit-quality rule only: live action for realistic styles. Fit to the line and video is the model's score. */
+export function t2vQualityOk(e: { style?: string }, ctx: T2vQualityCtx): boolean {
+  return !(ctx.realistic && e.style && e.style !== 'live_action')
 }
 
 /** AI clip with strong content may carry the reviewer's 3d_render tag (generated look) when stock is way off. */
@@ -61,10 +37,10 @@ export const AI_RELAXED_MIN_SCORE = 8
 export const AI_RELAXED_MAX_STOCK = 4
 
 /**
- * An AI clip works for a line when it passes the normal check (5+, live action, lit), or (aiBroll runs only)
+ * An AI clip works for a line when it passes the normal check (5+, live action), or (aiBroll runs only)
  * its content scores 8+ and only the style tag fails, while the best usable stock option scores 4 or lower.
  */
-export function t2vAiAcceptable(e: { score?: number; error?: string; style?: string; lighting?: number; timeOfDay?: string; luma?: number; saturation?: number }, ctx: T2vQualityCtx, bestStock: number): boolean {
+export function t2vAiAcceptable(e: { score?: number; error?: string; style?: string }, ctx: T2vQualityCtx, bestStock: number): boolean {
   if (e.error || typeof e.score !== 'number') return false
   if (e.score >= 5 && t2vQualityOk(e, ctx)) return true
   return e.score >= AI_RELAXED_MIN_SCORE && bestStock <= AI_RELAXED_MAX_STOCK && t2vQualityOk({ ...e, style: 'live_action' }, ctx)
@@ -116,7 +92,7 @@ export function similarSubject(a: string | undefined, b: string | undefined): bo
 
 /**
  * Same shoot = a near-repeat for spacing: same clip, or same author with neighbouring IDs, or same author
- * filming the same subject (e.g. two roasted-bean close-ups by one creator, IDs far apart).
+ * filming the same subject (e.g. two close-ups of one object by one creator, IDs far apart).
  */
 export function sameShoot(a: ClipRef, b: ClipRef): boolean {
   if (a.providerId === b.providerId) return true
@@ -131,8 +107,8 @@ export function sameShoot(a: ClipRef, b: ClipRef): boolean {
 export const MAX_CONSECUTIVE_STILLS = 2
 
 /**
- * Near-identical neighbours: the same subject in the same framing doing the same thing (falling roasted
- * beans twice in a row; two close-ups of cherries on a branch). Different framing or action is fine.
+ * Near-identical neighbours: the same subject in the same framing doing the same thing (the same object
+ * falling twice in a row; two close-ups of the same thing). Different framing or action is fine.
  */
 export function nearIdenticalShot(
   a: { subject?: string; framing?: string; action?: string; visible?: string },
@@ -194,9 +170,9 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
   }
 }
 
-/** Relevance first, then brightness (brighter wins ties and near-ties). */
+/** Relevance first (the reviewer's in-context score); readability only breaks near-ties. */
 function rank(e: Ev): number {
-  return (e.score ?? 0) + 0.3 * (e.lighting ?? 5) + (e.matches ? 1 : 0)
+  return (e.score ?? 0) + 0.1 * (e.lighting ?? 5) + (e.matches ? 1 : 0)
 }
 
 /** Best score among usable (quality-ok, placeable) stock clips and photos for one line; -1 when none. */
@@ -208,60 +184,89 @@ export function bestStockScore(r: T2vShotResult | undefined, ctx: T2vQualityCtx,
 
 export type NoRepeatPick = { sceneId: string; tier: string }
 
-/** Deterministic pass (story order): unique IDs, no dHash look-alikes, same-shoot rules, tiered fill. */
+/** A clip that passed review (accepted tier) for a line but is not on screen there, and why. */
+export type UnusedPassing = { sceneId: string; providerId: string; score: number; reason: string }
+
+/** Own clips that pass for this line (accepted tier: 7+, matches, live action). */
+function passingCount(r: T2vShotResult | undefined, ctx: T2vQualityCtx): number {
+  return (r?.evaluated ?? []).filter((e) => !isAi(e) && scored(e, ACCEPT_SCORE) && Boolean(e.matches) && t2vQualityOk(e, ctx)).length
+}
+
+/** Story indexes, scarcest first: fewest passing clips, ties in story order. */
+export function scarcityOrder(shots: T2vPlannedShot[], results: Record<string, T2vShotResult>, ctx: T2vQualityCtx): number[] {
+  const n = shots.map((s) => passingCount(results[s.sceneId], ctx))
+  return shots.map((_, i) => i).sort((a, b) => n[a]! - n[b]! || a - b)
+}
+
+type FreeClip = ClipRef & { phash?: string[]; kind?: string; framing?: string; action?: string; visible?: string }
+
+/** Deterministic pass (scarcest scenes first): unique IDs, no dHash look-alikes, same-shoot rules, tiered fill. */
 export function enforceNoRepeatDeterministic(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
+  opts: { realistic: boolean; spareScores?: SpareScores },
   banned: Record<string, Set<string>> = {},
-): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy>; spareRequests: Record<string, Ev[]>; banned: Record<string, Set<string>> } {
-  const ctxFor = (shot: T2vPlannedShot): T2vQualityCtx => ({
-    realistic: opts.realistic,
-    nightOk: t2vNightLine(shot.narration, shot.intent),
-    monoOk: Boolean(opts.monoOk),
-  })
+): {
+  out: Record<string, T2vShotResult>
+  replaced: number
+  tiers: Record<string, T2vPickedBy>
+  spareRequests: Record<string, Ev[]>
+  banned: Record<string, Set<string>>
+  unused: UnusedPassing[]
+} {
+  const ctx: T2vQualityCtx = { realistic: opts.realistic }
   const out: Record<string, T2vShotResult> = {}
   const tiers: Record<string, T2vPickedBy> = {}
-  const picked: T2vVerifiedPick[] = []
+  /** Picks by story index (neighbour rules read the shots already placed on either side). */
+  const placed = new Map<number, T2vVerifiedPick>()
+  const pickedBy = new Map<string, string>()
   let replaced = 0
   const spareRequests: Record<string, Ev[]> = {}
-  const tierList = (ctx: T2vQualityCtx): Tier[] => [
+  const tierList: Tier[] = [
     { verdict: 'accepted', tier: 'accepted', ok: (e) => scored(e, ACCEPT_SCORE) && Boolean(e.matches) && t2vQualityOk(e, ctx) },
     { verdict: 'weak_match', tier: 'usable', ok: (e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx) },
   ]
-  const fallbackTier = (ctx: T2vQualityCtx): Tier => ({ verdict: 'best_available', tier: 'fallback', ok: (e) => scored(e, LOOSE_SCORE) && t2vQualityOk(e, ctx) })
-  // On-topic B-roll the reviewer rated well for some other line of this video (quality re-checked per line).
+  // On-topic B-roll the reviewer rated well for some other line of this video (re-checked per line before use).
   const spares: Ev[] = []
   const seenSpare = new Set<string>()
   for (const shot of shots) {
     for (const e of results[shot.sceneId]?.evaluated ?? []) {
-      if (isPhoto(e) || isAi(e) || seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, { realistic: opts.realistic, nightOk: true, monoOk: true })) continue
+      if (isPhoto(e) || isAi(e) || seenSpare.has(e.providerId) || !scored(e, SPARE_SCORE) || !t2vQualityOk(e, ctx)) continue
       seenSpare.add(e.providerId)
       spares.push(e)
     }
   }
   spares.sort((a, b) => rank(b) - rank(a))
 
-  for (const shot of shots) {
+  /** Why `e` cannot go at story index i right now ('' = free). */
+  const blocker = (i: number, sceneId: string, e: FreeClip, strictShoot: boolean): string => {
+    if (banned[sceneId]?.has(e.providerId)) return 'banned_by_sequence_check'
+    const all = [...placed.entries()]
+    const same = all.find(([, p]) => p.providerId === e.providerId)
+    if (same) return `used_by:${shots[same[0]]?.sceneId}`
+    const dup = all.find(([, p]) => nearDuplicateHash(e.phash, p.phash))
+    if (dup) return `near_duplicate_of:${shots[dup[0]]?.sceneId}`
+    const near = [i - 2, i - 1, i + 1, i + 2].map((k) => placed.get(k)).filter(Boolean) as T2vVerifiedPick[]
+    if (near.some((p) => sameShoot(p, e))) return 'same_shoot_as_neighbour'
+    if (isPhoto(e)) {
+      const still = (k: number) => isPhoto(placed.get(k) ?? {})
+      if ((still(i - 2) && still(i - 1)) || (still(i - 1) && still(i + 1)) || (still(i + 1) && still(i + 2))) return 'third_still_in_a_row'
+    }
+    if (strictShoot && all.some(([, p]) => sameShoot(p, e))) return 'same_shoot_elsewhere'
+    if (strictShoot && [placed.get(i - 1), placed.get(i + 1)].some((p) => p && nearIdenticalShot(p, e))) return 'near_identical_neighbour'
+    return ''
+  }
+
+  for (const i of scarcityOrder(shots, results, ctx)) {
+    const shot = shots[i]!
     const r = results[shot.sceneId] ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
-    const ctx = ctxFor(shot)
-    const last2 = picked.slice(-2)
-    const prevPick = picked[picked.length - 1]
-    const stillsRun = last2.length === MAX_CONSECUTIVE_STILLS && last2.every((p) => isPhoto(p))
-    const free = (e: ClipRef & { phash?: string[]; kind?: string; framing?: string; action?: string; visible?: string }, strictShoot: boolean) =>
-      !banned[shot.sceneId]?.has(e.providerId) &&
-      !picked.some((p) => p.providerId === e.providerId) &&
-      !picked.some((p) => nearDuplicateHash(e.phash, p.phash)) &&
-      !last2.some((p) => sameShoot(p, e)) &&
-      !(stillsRun && isPhoto(e)) &&
-      (!strictShoot || !picked.some((p) => sameShoot(p, e))) &&
-      (!strictShoot || !prevPick || !nearIdenticalShot(prevPick, e))
+    const free = (e: FreeClip, strictShoot: boolean) => !blocker(i, shot.sceneId, e, strictShoot)
     let chosen: T2vVerifiedPick | null = null
     let tier: T2vPickedBy | '' = ''
-    // A worker fallback (3-4) is not taken directly: a re-checked spare (5+ for THIS line) beats it.
+    // A worker best_available pick is never taken directly: only the tiers below place a clip.
     if (r.chosen && r.chosen.verdict !== 'best_available' && free(r.chosen, true) && t2vQualityOk(r.chosen, ctx)) {
       chosen = r.chosen
-      tier = r.chosen.verdict === 'accepted' ? 'accepted' : r.chosen.verdict === 'weak_match' ? 'usable' : 'fallback'
+      tier = r.chosen.verdict === 'accepted' ? 'accepted' : 'usable'
     } else if (r.chosen) replaced++
     // Same-shoot elsewhere in the video only when the scene has no other option.
     for (const strict of [true, false]) {
@@ -270,7 +275,7 @@ export function enforceNoRepeatDeterministic(
       const alts = all.filter((e) => !isPhoto(e) && !isAi(e))
       const photos = all.filter(isPhoto)
       const ais = all.filter(isAi)
-      for (const t of tierList(ctx)) {
+      for (const t of tierList) {
         const hit = alts.find(t.ok)
         if (hit) {
           chosen = toPick(hit, t.verdict)
@@ -279,7 +284,7 @@ export function enforceNoRepeatDeterministic(
         }
       }
       if (!chosen) {
-        // Photo with motion: a still checked against THIS line (same subject rule, 5+), before spares.
+        // Photo with motion: a still judged for THIS line (5+), before spares.
         const hit = photos.find((e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
         if (hit) {
           chosen = toPick(hit, scored(hit, ACCEPT_SCORE) && hit.matches ? 'accepted' : 'weak_match')
@@ -290,7 +295,7 @@ export function enforceNoRepeatDeterministic(
         // Spare = a clip reviewed for another line. Only after it was re-checked against THIS line (5+);
         // its score becomes the score for this line, so QA judges the pick where it actually sits.
         const lineScores = opts.spareScores?.[shot.sceneId] ?? {}
-        const spare = spares.find((e) => free(e, strict) && t2vQualityOk(e, ctx) && (lineScores[e.providerId] ?? -1) >= USABLE_SCORE)
+        const spare = spares.find((e) => free(e, strict) && (lineScores[e.providerId] ?? -1) >= FILLER_MIN_SCORE)
         if (spare) {
           const lineScore = lineScores[spare.providerId]!
           chosen = { ...toPick(spare, 'weak_match'), score: lineScore, matches: lineScore >= ACCEPT_SCORE, reviewedForOtherLine: spare.score }
@@ -307,60 +312,82 @@ export function enforceNoRepeatDeterministic(
           tier = 'ai'
         }
       }
-      if (!chosen) {
-        const hit = alts.find(fallbackTier(ctx).ok) ?? photos.find(fallbackTier(ctx).ok)
-        if (hit) {
-          chosen = toPick(hit, 'best_available')
-          tier = 'fallback'
-        }
-      }
-      if (!chosen || tier === 'fallback') {
-        if (strict && !opts.spareScores) {
-          const asks = spares.filter((e) => free(e, true) && t2vQualityOk(e, ctx)).slice(0, 4)
-          if (asks.length) spareRequests[shot.sceneId] = asks
-        }
+      if (!chosen && strict && !opts.spareScores) {
+        const asks = spares.filter((e) => free(e, true)).slice(0, 4)
+        if (asks.length) spareRequests[shot.sceneId] = asks
       }
     }
     if (!chosen) {
-      // Last resort before an empty scene: any loosely on-topic clip, even stylised, but lit (a dim clip
-      // goes to the finisher, which prefers a brighter related clip or photo and uses dim only at the end).
-      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE) && t2vLitOk(e, ctx)).sort((a, b) => rank(b) - rank(a))[0]
+      // Last resort before reimagine/AI/extend-previous: an own clip the reviewer still scored
+      // FILLER_MIN_SCORE+ for this line in this video, even when it fails the live-action style rule.
+      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, FILLER_MIN_SCORE)).sort((a, b) => rank(b) - rank(a))[0]
       if (any) {
         chosen = toPick(any, 'best_available')
         tier = 'last_resort'
       }
     }
-    if (chosen) picked.push(chosen)
+    if (chosen) {
+      placed.set(i, chosen)
+      pickedBy.set(chosen.providerId, shot.sceneId)
+    }
     if (tier) tiers[shot.sceneId] = tier
     out[shot.sceneId] = { ...r, chosen }
   }
-  return { out, replaced, tiers, spareRequests, banned }
+  // Why each passing clip is not on screen under its own line (closes "why wasn't 124252 used?").
+  const unused: UnusedPassing[] = []
+  shots.forEach((shot, i) => {
+    const mine = out[shot.sceneId]?.chosen
+    for (const e of results[shot.sceneId]?.evaluated ?? []) {
+      if (isAi(e) || !scored(e, ACCEPT_SCORE) || !e.matches || !t2vQualityOk(e, ctx) || mine?.providerId === e.providerId) continue
+      const other = pickedBy.get(e.providerId)
+      let reason = other ? `used_by:${other}` : ''
+      if (!reason) {
+        const keep = placed.get(i)
+        placed.delete(i)
+        reason = blocker(i, shot.sceneId, e, false) || (mine ? `a_better_clip_was_picked:${mine.providerId}` : 'not_picked')
+        if (keep) placed.set(i, keep)
+      }
+      unused.push({ sceneId: shot.sceneId, providerId: e.providerId, score: e.score ?? 0, reason })
+    }
+  })
+  return { out, replaced, tiers, spareRequests, banned, unused }
 }
 
 export type SpareScores = Record<string, Record<string, number>>
 
-const SPARE_SYSTEM = `You re-check stock clips for a stock-footage video. Each clip was reviewed for a DIFFERENT
-narration line; a reviewer described what it shows. Score how well it works under the NEW line given (0-10):
-7-10 clearly works; 5-6 usable; 0-4 does not work. SUBJECT RULE: the clip must show the specific subject the
-line needs (coffee cherries, not any fruit; a roaster drum, not any machine). Right action, wrong subject = 0-2.
-A mug of coffee does not illustrate harvesting, processing or roasting.
+export const SPARE_SYSTEM = `You re-check stock clips for a stock-footage video. Each clip was reviewed for a DIFFERENT
+narration line; a reviewer described what it shows. Read the whole script first so you understand the video.
+Then score how well each clip works under the NEW line given, at that point of THIS video (0-10): 7-10
+clearly works; 5-6 usable; 0-4 does not work here. Use each line's moment and what the viewer must recognise;
+a clip that would look out of place at this moment scores low even when a word matches.
 Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "score": number}]}`
 
 /** One text-only call: score candidate spares against the line they would sit under. */
 export async function scoreSpares(
   shots: T2vPlannedShot[],
   requests: Record<string, Ev[]>,
+  context: { script?: string; videoUnderstanding?: string } = {},
 ): Promise<SpareScores> {
   const items = shots
     .filter((s) => requests[s.sceneId]?.length)
     .map((s) => ({
       sceneId: s.sceneId,
+      lineNo: shots.indexOf(s) + 1,
       line: s.narration,
-      subject: s.subject ?? s.intent,
+      moment: s.moment ?? s.intent,
+      mustRecognise: s.subject ?? s.intent,
       clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.visible ?? '').slice(0, 160)}`, framing: e.framing ?? '' })),
     }))
   if (!items.length) return {}
-  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(SPARE_SYSTEM, `Lines: ${JSON.stringify(items)}`, { maxTokens: 3000 })
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(
+    SPARE_SYSTEM,
+    [
+      ...(context.videoUnderstanding ? [`What this video is about: ${context.videoUnderstanding}`] : []),
+      ...(context.script ? [`Whole script:\n${context.script}`] : []),
+      `Lines: ${JSON.stringify(items)}`,
+    ].join('\n'),
+    { maxTokens: 3000 },
+  )
   const res: SpareScores = {}
   for (const r of Array.isArray(out.scores) ? out.scores : []) {
     const sc = Number(r.score)
@@ -373,13 +400,11 @@ export async function scoreSpares(
 const LOOKALIKE_SYSTEM = `You check the shot sequence of a stock-footage video for repetition. Each item is one shot,
 in edit order, described by a footage reviewer.
 1. "pairs": shots ANYWHERE in the list that a viewer would feel are the same shot shown twice: same main
-   subject AND same framing/shot size AND similar setting (two close-ups of a charging plug; two aerials of
-   the same kind of town; the same car at the same location from a slightly different angle; roasted beans
-   falling onto a pile twice; two close-ups of coffee cherries on a branch).
+   subject AND same framing/shot size AND similar setting (two close-ups of the same object; two aerials of
+   the same kind of place; the same thing at the same location from a slightly different angle).
 2. "sameKind": CONSECUTIVE shots (positions p and p+1) that are the same kind of shot, which makes the edit
-   feel monotonous: e.g. aerial town after aerial highway, traffic street after traffic highway, two static
-   product close-ups in a row, falling beans then pouring beans, a cherry-branch close-up after another
-   cherry-branch close-up. Different shot kinds (aerial vs close-up of hands vs interior) are fine.
+   feel monotonous: e.g. one aerial after another, two static product close-ups in a row. Different shot
+   kinds (aerial vs close-up of hands vs interior) are fine.
 Return ONLY JSON: {"pairs": [[p, q], ...], "sameKind": [[p, p+1], ...]} using the "p" positions given.`
 
 async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: string; subject: string; visible: string }>): Promise<{ dup: number[]; kind: number[]; pairs: Array<[number, number]> }> {
@@ -405,7 +430,7 @@ async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: 
   return { dup: later(out.pairs, false), kind: later(out.sameKind, true), pairs }
 }
 
-/** Does the scene have another good (5+, live, lit) clip besides `exceptId`? Variety swaps only then. */
+/** Does the scene have another good (5+, live action) clip besides `exceptId`? Variety swaps only then. */
 function hasGoodAlternative(r: T2vShotResult | undefined, exceptId: string, banned: Set<string> | undefined, ctx: T2vQualityCtx): boolean {
   return (r?.evaluated ?? []).some((e) => e.providerId !== exceptId && !banned?.has(e.providerId) && scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
 }
@@ -432,11 +457,11 @@ export function dupLoser(
   px: number,
   py: number,
   banned: Record<string, Set<string>>,
-  opts: { realistic: boolean; monoOk?: boolean },
+  opts: { realistic: boolean },
   results: Record<string, T2vShotResult>,
 ): number {
   const next = (v: { s: T2vPlannedShot; c?: T2vVerifiedPick | null }) => {
-    const ctx = { realistic: opts.realistic, nightOk: t2vNightLine(v.s.narration, v.s.intent), monoOk: Boolean(opts.monoOk) }
+    const ctx = { realistic: opts.realistic }
     return nextBestScore(results[v.s.sceneId], v.c!.providerId, banned[v.s.sceneId], ctx)
   }
   const nx = next(x)
@@ -451,7 +476,7 @@ export function dupLoser(
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
+  opts: { realistic: boolean; spareScores?: SpareScores; script?: string; videoUnderstanding?: string },
 ): Promise<{
   results: Record<string, T2vShotResult>
   replaced: number
@@ -460,18 +485,20 @@ export async function enforceNoRepeat(
   tiers: Record<string, T2vPickedBy>
   /** Clips the sequence check removed per scene: the finisher's fallback must never put them back. */
   banned: Record<string, string[]>
+  /** Passing clips not used under their own line, with the reason (also logged). */
+  unused: UnusedPassing[]
 }> {
   const banned: Record<string, Set<string>> = {}
-  let { out, replaced, tiers, spareRequests } = enforceNoRepeatDeterministic(shots, results, opts, banned)
+  let { out, replaced, tiers, spareRequests, unused } = enforceNoRepeatDeterministic(shots, results, opts, banned)
   // Spares are re-checked against the line they would fill before any is placed.
   let spareScores: SpareScores = {}
   try {
-    spareScores = await scoreSpares(shots, spareRequests)
+    spareScores = await scoreSpares(shots, spareRequests, { script: opts.script, videoUnderstanding: opts.videoUnderstanding })
   } catch (err) {
     logT2v('pipeline-norepeat', 'spare re-check failed (no spares used)', { error: err instanceof Error ? err.message : 'error' })
   }
   opts = { ...opts, spareScores }
-  ;({ out, replaced, tiers } = enforceNoRepeatDeterministic(shots, results, opts, banned))
+  ;({ out, replaced, tiers, unused } = enforceNoRepeatDeterministic(shots, results, opts, banned))
   let lookalikeSwaps = 0
   let varietySwaps = 0
   for (let pass = 0; pass < 3; pass++) {
@@ -496,6 +523,8 @@ export async function enforceNoRepeat(
       dropped.add(p)
       const z = seq[p]!
       ;(banned[z.s.sceneId] ??= new Set()).add(z.c!.providerId)
+      const o = p === a ? seq[b] : seq[a]
+      logT2v('pipeline-norepeat', 'ban', { sceneId: z.s.sceneId, providerId: z.c!.providerId, reason: `lookalike_of:${o?.s.sceneId ?? '?'}:${o?.c?.providerId ?? '?'}` })
       lookalikeSwaps++
       changed = true
     }
@@ -503,16 +532,17 @@ export async function enforceNoRepeat(
       const x = seq[p]
       if (!x || dropped.has(p)) continue
       // Variety is a preference: swap only when the scene has another good clip to use.
-      const ctx = { realistic: opts.realistic, nightOk: t2vNightLine(x.s.narration, x.s.intent), monoOk: Boolean(opts.monoOk) }
-      if (!hasGoodAlternative(out[x.s.sceneId], x.c!.providerId, banned[x.s.sceneId], ctx)) continue
+      if (!hasGoodAlternative(out[x.s.sceneId], x.c!.providerId, banned[x.s.sceneId], { realistic: opts.realistic })) continue
       ;(banned[x.s.sceneId] ??= new Set()).add(x.c!.providerId)
+      logT2v('pipeline-norepeat', 'ban', { sceneId: x.s.sceneId, providerId: x.c!.providerId, reason: `same_kind_as:${seq[p - 1]?.s.sceneId ?? '?'}` })
       varietySwaps++
       changed = true
     }
     if (!changed) break
-    ;({ out, replaced, tiers } = enforceNoRepeatDeterministic(shots, results, opts, banned))
+    ;({ out, replaced, tiers, unused } = enforceNoRepeatDeterministic(shots, results, opts, banned))
   }
   logT2v('pipeline-norepeat', 'done', { shots: shots.length, replaced, lookalikeSwaps, varietySwaps, tiers })
+  for (const u of unused) logT2v('pipeline-norepeat', 'passing clip unused', u)
   return {
     results: out,
     replaced,
@@ -520,5 +550,6 @@ export async function enforceNoRepeat(
     varietySwaps,
     tiers,
     banned: Object.fromEntries(Object.entries(banned).map(([k, v]) => [k, [...v]])),
+    unused,
   }
 }

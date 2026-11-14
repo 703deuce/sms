@@ -31,14 +31,11 @@ Return ONLY JSON: {"shots": [{"index": number, "beat": string, "intent": string,
 Rules for each sentence:
 - beat: one of establishing (sets a place), aerial, emotional (a moment to feel), detail (a close look),
   step (one step of a process), list (one of several items), action (something happening fast), transition.
-- intent: one plain sentence describing what generic stock B-roll should show (subject + action, optional
-  setting). Achievable with common stock footage; no time of day, weather, brand or specific people unless
-  the narration depends on it.
-- subject: the SPECIFIC visible subject the clip must show, 2-6 words: the thing AND its state or setting
-  (e.g. "red coffee cherries on a branch", "hands picking coffee cherries", "coffee beans on drying beds",
-  "burlap sacks of green coffee beans", "coffee roasting drum", "espresso pouring into a cup"). Never a
-  bare generic noun ("coffee beans", "coffee", "fruit", "machine", "people"). Neighbouring shots name
-  DIFFERENT subjects.
+- intent: one plain sentence describing what stock B-roll should show for this sentence in this video.
+  Achievable with common stock footage; no brands or specific named people.
+- subject: 2-5 words naming the one thing a viewer must be able to recognise on screen for the shot to work
+  (an object, place or activity). Do not add hands, people, camera angles or placement unless the sentence is
+  about them. Neighbouring shots name DIFFERENT subjects.
 - queries: exactly 3 stock-video search phrases of 1-3 common words (concrete nouns a stock site would tag).
   Query 1 most specific, query 3 a broader on-topic fallback. No abstract words.
 - pieces: for EVERY sentence of 8+ words that has a natural pause: split it into 2-3 contiguous pieces at pauses
@@ -58,17 +55,10 @@ function cleanQueries(raw: unknown, fallback: string): string[] {
   return [...new Set(queries)].slice(0, 3)
 }
 
-/** Bare generic subjects ("coffee beans") say nothing about what the clip must show. */
-const GENERIC_SUBJECT = /^(?:(?:the|a|an|some)\s+)?(?:[\p{L}-]+\s+)?(?:beans?|coffee|fruit|machines?|people|person|workers?|things?|products?|food|drinks?|cups?|plants?|trees?|farms?|city|nature)$/iu
-
-/** Subject the verifier will insist on: the planner's when specific, else the most specific query or intent. */
-export function specificSubject(subject: string, queries: string[], intent: string): string {
-  const s = subject.replace(/\s+/g, ' ').trim().slice(0, 80)
-  const wc = s ? s.split(' ').length : 0
-  if (s && (wc >= 3 || (wc === 2 && !GENERIC_SUBJECT.test(s)))) return s
-  const q = [...queries].filter((x) => x.split(' ').length >= 2 && !GENERIC_SUBJECT.test(x)).sort((a, b) => b.split(' ').length - a.split(' ').length)[0]
-  if (q) return q.slice(0, 80)
-  return (intent.split(/[,.;]/)[0] ?? intent).trim().slice(0, 80) || s
+/** What the viewer must recognise: the planner's subject, else the first query, else the intent's first clause. */
+function subjectOf(subject: unknown, queries: string[], intent: string): string {
+  const s = String(subject ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)
+  return s || queries[0] || (intent.split(/[,.;]/)[0] ?? intent).trim().slice(0, 80)
 }
 
 function asBeat(v: unknown): T2vBeat {
@@ -84,13 +74,13 @@ export function toPacingRows(rows: PlannerSentenceRow[], shots: Array<Record<str
     const s = byIndex.get(row.index) ?? {}
     const intent = String(s.intent ?? row.narration).trim().slice(0, 300)
     const queries = cleanQueries(s.queries, topic)
-    const subject = specificSubject(String(s.subject ?? ''), queries, intent)
+    const subject = subjectOf(s.subject, queries, intent)
     const pieces = validPieces(
       row.narration,
       (Array.isArray(s.pieces) ? (s.pieces as Array<Record<string, unknown>>) : []).map((p) => ({
         text: String(p.text ?? '').trim(),
         intent: String(p.intent ?? '').trim().slice(0, 300),
-        subject: specificSubject(String(p.subject ?? ''), cleanQueries(p.queries, topic), String(p.intent ?? '')),
+        subject: subjectOf(p.subject, cleanQueries(p.queries, topic), String(p.intent ?? '')),
         queries: cleanQueries(p.queries, topic),
       })),
     )

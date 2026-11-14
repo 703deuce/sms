@@ -59,8 +59,9 @@ describe('t2v pacing', () => {
     expect(pacingCheck('p', [8.5, 2.6, 3.1, 6.8, 2.2, 9.0, 3.4, 4.9, 2.5, 7.2], 'x')!.ok).toBe(true)
     expect(pacingStats([3, 3.1, 3.05, 3.0, 8]).longestEqualRun).toBe(4)
   })
-  it('shot lengths from assembler starts exclude the end card', () => {
-    expect(shotLengthsFrom([0, 5000, 7500, 12000], 14000)).toEqual([5000, 2500, 4500])
+  it('shot lengths from assembler starts (an end card only excluded when the draft has one)', () => {
+    expect(shotLengthsFrom([0, 5000, 7500, 12000], 14000)).toEqual([5000, 2500, 4500, 2000]) // no end card
+    expect(shotLengthsFrom([0, 5000, 7500, 12000], 14000, true)).toEqual([5000, 2500, 4500]) // older drafts with one
     expect(shotLengthsFrom(undefined, 1000)).toBeUndefined()
   })
 })

@@ -21,7 +21,7 @@ describe('t2v finisher: split sentences become in-scene cuts', () => {
       { sceneId: 'a', chosen: pick('1'), evaluated: [] },
       { sceneId: 'b', chosen: pick('2'), evaluated: [] },
       { sceneId: 'c', chosen: pick('3'), evaluated: [] },
-      { sceneId: 'd', chosen: null, evaluated: [{ ...pick('4'), score: 3 }] }, // weak but its own: never a held repeat
+      { sceneId: 'd', chosen: null, evaluated: [{ ...pick('4'), score: 5 }] }, // at the floor and its own: never a held repeat
     ]
     const { scenes, results: out } = await t2vFinisher({
       workspaceId: 'w',
@@ -33,7 +33,8 @@ describe('t2v finisher: split sentences become in-scene cuts', () => {
       results: results as never,
       candidates: { a: [cand('1')], b: [cand('2')], c: [cand('3')], d: [cand('4')] },
     })
-    expect(scenes).toHaveLength(3) // 2 voice scenes + end card
+    expect(scenes).toHaveLength(2) // 2 voice scenes; no end card (no text cards)
+    expect(scenes.every((sc) => !sc.texts?.length)).toBe(true) // no opening title overlay
     expect(scenes[1]!.narration).toBe('Workers move along the rows, picking ripe cherries by hand, while baskets slowly fill.')
     expect(scenes[1]!.cuts).toEqual([
       { atWord: 5, media: expect.objectContaining({ providerId: '3' }) },

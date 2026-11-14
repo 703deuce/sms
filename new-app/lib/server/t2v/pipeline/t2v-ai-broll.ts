@@ -2,7 +2,7 @@ import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vFootageCandidate, T2vPipelineRun, T2vPlannedShot, T2vShotResult } from '@/lib/t2v/pipeline/t2v-types'
-import { bestStockScore, enforceNoRepeatDeterministic, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, enforceNoRepeatDeterministic } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 
 /**
  * AI B-roll TEST step (Prompt-to-Video only; off by default — a future premium option, not a default).
@@ -45,16 +45,18 @@ export function aiFramesFor(needS: number): number {
 
 const PROMPT_SYSTEM = `You write prompts for a text-to-video model that must produce B-roll that blends with real
 stock footage in a documentary. For each shot write ONE prompt (35-70 words): realistic live-action stock
-footage of the specific subject doing what the line needs, in a plausible real setting; natural daylight or
-practical light, steady tripod or slow gimbal camera, shallow depth of field, true-to-life colours, 35mm film
-look. Must say: no text, no captions, no logos, no watermarks. Avoid faces in close-up and hands with fine
+footage of what the line's moment needs, in the place and light that moment implies in this video (read the
+moment given for each shot); steady tripod or slow gimbal camera, shallow depth of field, true-to-life
+colours, 35mm film look. Must say: no text, no captions, no logos, no watermarks. Avoid faces in close-up and hands with fine
 finger detail (models get them wrong); prefer objects, machines, materials, landscapes and mid shots.
 Return ONLY JSON: {"prompts": [{"sceneId": string, "prompt": string}]}`
 
-const SAFE_TAIL = ' Realistic live-action stock footage, natural light, steady camera, no text, no logos, no watermark.'
+const SAFE_TAIL = ' Realistic live-action stock footage, steady camera, no text, no logos, no watermark.'
 
-export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject'>): string {
-  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + SAFE_TAIL
+/** Template prompt: what must be recognised + the shot, set in the line's moment (no default light). */
+export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject' | 'moment'>): string {
+  const moment = shot.moment ? ` Moment: ${shot.moment.slice(0, 240)}` : ''
+  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + moment + SAFE_TAIL
 }
 
 export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Promise<Record<string, string>> {
@@ -62,7 +64,7 @@ export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Pr
   try {
     const res = await t2vLlmJson<{ prompts?: Array<{ sceneId?: string; prompt?: string }> }>(
       PROMPT_SYSTEM,
-      `Video topic: ${topic}\nShots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject })))}`,
+      `Video topic: ${topic}\nShots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject, ...(s.moment ? { moment: s.moment } : {}) })))}`,
       { maxTokens: 2000 },
     )
     for (const p of Array.isArray(res.prompts) ? res.prompts : []) {
@@ -148,13 +150,13 @@ export function aiCandidate(job: T2vAiJob, outputUrl: string): T2vFootageCandida
 
 /**
  * Spend the up-to-3 AI clips on the weakest scenes, weakest first: lines whose predicted pick (the full
- * no-repeat pass incl. sequence check; dry pass when not given) is empty, a last resort, or a fallback scoring 3 or lower, and where no usable stock
+ * no-repeat pass incl. sequence check; dry pass when not given) is empty, a last resort or a fallback, and where no usable stock
  * option for the line reaches 5. Short enough for a 3-5 s clip; one generation per scene, no retries.
  */
 export function aiBrollTargets(
   shots: T2vPlannedShot[],
   history: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean },
+  opts: { realistic: boolean },
   /** The full pick pass (spares + sequence check): what the edit would really place without AI. */
   predicted?: { out: Record<string, T2vShotResult>; tiers: Record<string, string> },
 ): T2vPlannedShot[] {
@@ -163,11 +165,11 @@ export function aiBrollTargets(
     .map((sh) => {
       const t = dry.tiers[sh.sceneId]
       const pick = dry.out[sh.sceneId]?.chosen
-      const ctx = { realistic: opts.realistic, monoOk: Boolean(opts.monoOk), nightOk: t2vNightLine(sh.narration, sh.intent) }
+      const ctx = { realistic: opts.realistic }
       // A 5+ usable stock option that a sequence rule moved away in the dry pass can still win: don't pay.
       // (With the full pass as prediction placement is already resolved, so only its outcome counts.)
       const anyGood = !predicted && bestStockScore(history[sh.sceneId], ctx) >= 5
-      const weak = !t || !pick || t === 'last_resort' || (t === 'fallback' && (pick.score ?? 0) <= 3)
+      const weak = !t || !pick || t === 'last_resort' || t === 'fallback'
       // Nothing at all predicted = weakest (the finisher would lend another line's footage).
       return { sh, weak: weak && !anyGood && sh.needS <= AI_BROLL_MAX_NEED_S, score: pick ? (pick.score ?? 0) : -1 }
     })

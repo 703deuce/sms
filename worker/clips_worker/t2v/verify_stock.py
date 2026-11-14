@@ -17,7 +17,6 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import re
 import subprocess
 import tempfile
 import threading
@@ -40,12 +39,6 @@ FALLBACK_MIN_SCORE = 3
 MAX_PREVIEW_BYTES = 40 * 1024 * 1024
 # Realistic styles (documentary etc.) accept live-action footage only.
 LIVE_ACTION = "live_action"
-MIN_LIGHTING = 6
-# Measured on frames (0-1): below these a clip is too dark / black-and-white for a normal line.
-MIN_LUMA = 0.12
-MIN_SATURATION = 0.06
-NIGHT_WORDS = re.compile(r"\b(night|nights|nighttime|night-time|overnight|evening|dusk|midnight|dark|darkness|after dark|neon|moonlight|stars)\b", re.I)
-MONO_WORDS = re.compile(r"\b(black[- ]and[- ]white|b&w|monochrome|grayscale|greyscale|noir|desaturated|sepia)\b", re.I)
 # Just under the relevance bar but still works for the line: used before holding the previous shot.
 USABLE_SCORE = 5
 # dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
@@ -71,57 +64,90 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "framing": {"type": "STRING"},
         "time_of_day": {"type": "STRING", "enum": ["day", "night", "dusk_dawn", "indoor"]},
         "subject_visible": {"type": "BOOLEAN"},
+        "fit_reason": {"type": "STRING"},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    "required": ["visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
-You watch ONE short stock clip (video frames only; there is no audio) and decide if it
-honestly illustrates ONE narration line. Judge only what is actually visible on screen,
-never the clip's title or tags.
+You watch ONE short stock clip (video frames only; no audio) and decide whether an experienced editor would
+put it under ONE line of THIS video. Judge only what is visible on screen, never titles or tags.
 
-Narration line (spoken over this shot): "{narration}"
-Intended shot: "{intent}"
-Required subject: "{subject}"
-Video topic: "{topic}"
-Clip length: {clip_s:.1f} s. The shot on screen needs about {need_s:.1f} s.
+{script_block}Clip length: {clip_s:.1f} s. The shot needs about {need_s:.1f} s.
 
-SUBJECT RULE: the clip must show the specific subject named above (for example coffee cherries, not any
-red fruit or berry; a coffee roaster drum, not any machine; coffee beans drying on beds, not any beans).
-The right action with the wrong subject FAILS: subject_visible=false, matches=false, score at most 2.
-A different subject of the same category (apples for coffee cherries, a kettle for a roaster) is the
-wrong subject.
+Read the script first so you understand the video and this moment in it. Then judge the clip as the editor
+would: does it make sense HERE, in THIS video, at this point? A clip whose subject matches the words but would
+look out of place at this moment scores low; a clip that shows the moment in a different but natural way
+scores well. Decide yourself what matters for this line - the script, not a rule, tells you whether the place,
+light, season or people matter here. If the line warns against doing something, a clip that shows that act
+being done does not work.
 
 Return JSON:
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
-- matches: judge "does this work in this spot?", not only an exact literal match. True if a
-  professional editor would honestly put this clip under that line as B-roll:
-  the clip clearly shows the narration's subject (or a directly relevant, visually honest depiction
-  of it). It does NOT need every detail of the intended shot: time of day, weather, exact camera
-  move, setting or extra people are nice-to-have, not requirements. When the subject looks like an
-  ordinary thing (an electric car looks like any modern car), a clean, modern example counts unless
-  something on screen contradicts the line. False when the main subject is wrong or unrelated, the
-  footage is too dark/blurry to read, or text, logos or watermarks dominate the frame.
-  Adjacent or broader B-roll that carries the line's meaning works too (a dealership for a line about
-  sales, a charging cable for a line about home charging, modern cars in a city for a line about EVs
-  becoming common).
-- score: 0-10 how well it works in this spot. 9-10 = exactly the subject and action; 7-8 = clearly
-  works here, usable as-is (literal or a fitting adjacent visual); 5-6 = works for the line but not
-  ideal (related subject an editor could still use here); 3-4 = loosely
-  on-topic; 0-2 = wrong or unusable.
-- in_s, out_s: the best continuous window inside the clip to use, where the relevant subject or
-  action is clearly visible and the framing is good. Prefer a window of at least {need_s:.1f} s
-  when the clip allows; use the whole clip if it is all usable. 0 <= in_s < out_s <= {clip_s:.1f}.
-- issues: short note on problems (shaky, blurry, text overlay, cut inside clip), or "".
-- style: live_action (real camera footage), animation (2D/cartoon), 3d_render (CGI, game-like or
-  AI-generated imagery, even if photoreal), motion_graphics, clip_art (icons/flat graphics on plain
-  backgrounds), or screen_recording.
-- lighting: 0-10 how well lit and readable the subject is (0 = too dark to read, 10 = bright, clear).
-- framing: 2-5 words, shot size + subject, e.g. "close-up charging plug", "aerial highway traffic".
-- subject_visible: true only if the required subject itself is clearly visible (see SUBJECT RULE).
-- time_of_day: day, night (dark sky / street lights / headlights in darkness), dusk_dawn, or indoor.
+- score: 0-10 for THIS spot in THIS video. 9-10 = exactly right here; 7-8 = clearly works, usable as-is
+  (literal or a natural alternative depiction); 5-6 = works but not ideal; 3-4 = loosely on topic but wrong for
+  this moment; 0-2 = wrong, unusable, or contradicts the video.
+- matches: true when score >= 7 and the clip is readable (not too dark or blurry to see what it shows, no
+  dominating text, logos or watermarks).
+- fit_reason: one short sentence in your own words on why it does or does not fit here.
+- subject_visible: true if what the viewer must recognise is clearly visible (information only).
+- in_s, out_s: best continuous usable window, preferably >= {need_s:.1f} s; 0 <= in_s < out_s <= {clip_s:.1f}.
+- issues: shaky, blurry, text overlay, cut inside clip, or "".
+- style: live_action, animation, 3d_render, motion_graphics, clip_art, or screen_recording.
+- lighting: 0-10 how readable the subject is (information only).
+- framing: 2-5 words, shot size + subject.
+- time_of_day: day, night, dusk_dawn, or indoor (information only).
 {style_rule}"""
+
+# The video context the checker reads before judging: its own-words understanding of the video (script-context
+# pass), the whole script, the neighbouring lines, this line's moment and what the viewer must recognise.
+SCRIPT_BLOCK = """What this video is about: {video_understanding}
+Whole script (this shot is line {line_no}):
+{script}
+Previous line: "{prev}"
+This line (spoken over this shot): "{narration}"
+Next line: "{next}"
+What this moment means in the video: "{moment}"
+What the viewer must recognise: "{must_recognise}"
+"""
+
+
+def script_block(script: str, shot: dict, video_understanding: str = "", topic: str = "") -> str:
+    """The context block of the prompt. Older payloads without a script still get the line, intent and subject."""
+    q = lambda v, n=300: str(v or "").replace('"', "'").replace("\n", " ")[:n]  # noqa: E731
+    text = str(script or "").strip()
+    return SCRIPT_BLOCK.format(
+        video_understanding=q(video_understanding, 1200) or q(topic, 200) or "(not given)",
+        line_no=shot.get("lineNo") or "?",
+        script=text[:8000] if text else "(not given)",
+        prev=q(shot.get("prevNarration")) or "(start of video)",
+        narration=q(shot.get("narration"), 600),
+        next=q(shot.get("nextNarration")) or "(end of video)",
+        moment=q(shot.get("moment") or shot.get("intent")),
+        must_recognise=q(shot.get("subject") or shot.get("intent"), 120),
+    )
+
+
+def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | None, ev: list[dict]) -> None:
+    """Per-scene log (no URLs): every candidate with score, verdict and reason, plus the top-K."""
+    for e in ev:
+        picked = bool(chosen and e.get("providerId") == chosen.get("providerId"))
+        log.info("[t2v:verify:candidate] %s", json.dumps({
+            "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
+            "candidateId": e.get("providerId"), "kind": e.get("kind") or "video", "score": e.get("score"),
+            "lighting": e.get("lighting"), "matches": e.get("matches"), "verdict": "chosen" if picked else "not_chosen",
+            "reason": e.get("error") or e.get("fitReason") or "",
+        }))
+    log.info("[t2v:verify:scene] %s", json.dumps({
+        "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
+        "candidates": len(ev), "candidateId": chosen.get("providerId") if chosen else None,
+        "score": chosen.get("score") if chosen else None, "verdict": chosen.get("verdict") if chosen else "none",
+        "topK": [
+            {"candidateId": e.get("providerId"), "score": e.get("score"), "lighting": e.get("lighting")}
+            for e in sorted((e for e in ev if not e.get("error")), key=lambda e: (-int(e.get("score", 0)), -int(e.get("lighting", 5))))[:5]
+        ],
+    }))
 
 
 def _payload(job: dict) -> dict:
@@ -227,33 +253,30 @@ def _color_stats(video: Path, in_s: float, out_s: float) -> tuple[float, float] 
 
 
 class Ctx:
-    """Per-shot quality rules: live action for realistic styles, night only for night lines, colour unless
-    the request asks for black-and-white."""
+    """Per-shot edit-quality rule: live action only for realistic styles. Everything about whether a clip fits
+    the line and the video is the model's in-context score."""
 
-    def __init__(self, realistic: bool = True, night_ok: bool = False, mono_ok: bool = False):
+    def __init__(self, realistic: bool = True):
         self.realistic = realistic
-        self.night_ok = night_ok
-        self.mono_ok = mono_ok
-
-
-def night_line(*texts: str) -> bool:
-    return any(NIGHT_WORDS.search(t or "") for t in texts)
 
 
 def quality_ok(entry: dict, ctx: Ctx) -> bool:
-    if ctx.realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
-        return False
-    if int(entry.get("lighting", 10)) < MIN_LIGHTING:
-        return False
-    if not ctx.night_ok and (entry.get("timeOfDay") == "night" or float(entry.get("luma", 1.0)) < MIN_LUMA):
-        return False
-    if not ctx.mono_ok and float(entry.get("saturation", 1.0)) < MIN_SATURATION:
-        return False
-    return True
+    return not (ctx.realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION)
 
 
 def _window_ok(entry: dict, need_s: float) -> bool:
     return (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
+
+
+def scarcity_order(shots: list[dict], evaluated_by_shot: list[list[dict]], realistic: bool = True) -> list[int]:
+    """Shot indexes ordered by number of passing candidates, ascending; ties keep story order."""
+    ctx = Ctx(realistic=realistic)
+
+    def n_pass(i: int) -> int:
+        need_s = float(shots[i].get("needS") or 4.0)
+        return sum(1 for e in evaluated_by_shot[i] if passes(e, need_s, ctx))
+
+    return sorted(range(len(shots)), key=lambda i: (n_pass(i), i))
 
 
 def passes(entry: dict, need_s: float, ctx: Ctx) -> bool:
@@ -270,8 +293,8 @@ def usable(entry: dict, need_s: float, ctx: Ctx) -> bool:
 
 
 def fallback_rank(entry: dict, ctx: Ctx) -> float:
-    """Best-available ordering: relevance first, then brightness; clips failing the quality rules
-    (non-live, dark, night for a day line, black-and-white) are a last resort."""
+    """Best-available ordering: relevance first, then readability (tie-break); non-live clips for a realistic
+    style come last."""
     s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5))
     if not quality_ok(entry, ctx):
         s -= 20
@@ -280,13 +303,13 @@ def fallback_rank(entry: dict, ctx: Ctx) -> float:
 
 PHOTO_NOTE = """
 THIS IS A STILL PHOTO, not a video clip. It will be shown with a slow zoom/pan under the line.
-Judge it exactly like a clip (same subject rule). style: live_action means a real camera photograph;
+Judge it exactly like a clip. style: live_action means a real camera photograph;
 illustration, vector art, 3D render, AI-generated imagery or clip art are NOT live_action.
 For in_s/out_s return 0 and {need_s:.1f}."""
 
 
 AI_NOTE = """
-THIS CLIP IS AI-GENERATED (a test B-roll option). Judge it exactly like stock (same subject rule).
+THIS CLIP IS AI-GENERATED (a test B-roll option). Judge it exactly like stock.
 style: live_action only if it would pass as real camera footage next to stock clips; visible AI artefacts
 (melting shapes, warped hands or objects, morphing, impossible physics, garbled text) mean style "3d_render" and score <= 4."""
 
@@ -397,11 +420,12 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     project_id = p.get("projectId")
     topic = str(p.get("topic") or "")[:200]
     shots = p.get("shots") or []
+    script = str(p.get("script") or "")
     if not draft_id or not workspace_id:
         raise ValueError("T2V_VERIFY_STOCK payload requires draftId and workspaceId")
     model = _model()
     realistic = bool(p.get("realistic", True))
-    mono_ok = bool(p.get("monoOk", False))
+    video_understanding = str(p.get("videoUnderstanding") or "")
     style_rule = (
         "This video uses a realistic (documentary) style: only live_action footage can match; animation, "
         "3d_render, motion_graphics, clip_art and screen_recording must have matches=false."
@@ -416,8 +440,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     evaluated_by_shot: list[list[dict]] = [[] for _ in shots]
 
     def shot_ctx(shot: dict) -> Ctx:
-        night_ok = bool(shot.get("nightOk")) or night_line(str(shot.get("narration") or ""), str(shot.get("intent") or ""))
-        return Ctx(realistic=realistic, night_ok=night_ok, mono_ok=mono_ok)
+        return Ctx(realistic=realistic)
 
     def verify_shot(idx: int, shot: dict, work: Path) -> None:
         need_s = float(shot.get("needS") or 4.0)
@@ -452,12 +475,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     if c.get("kind") == "ai":
                         entry["kind"] = "ai"
                 prompt = (PROMPT + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
-                    narration=str(shot.get("narration") or "")[:600].replace('"', "'"),
-                    intent=str(shot.get("intent") or "")[:300].replace('"', "'"),
-                    subject=str(shot.get("subject") or shot.get("intent") or "")[:120].replace('"', "'"),
-                    topic=topic.replace('"', "'"),
                     clip_s=clip_s,
                     need_s=need_s,
+                    script_block=script_block(script, shot, video_understanding, topic),
                     style_rule=style_rule,
                 )
                 v, tin, tout = _gemini_watch(model, muted, prompt, "image/jpeg" if is_photo else "video/mp4")
@@ -471,9 +491,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "visible": str(v.get("visible") or "")[:300],
                         "subject": str(v.get("main_subject") or "")[:120],
                         "action": str(v.get("action") or "")[:120],
-                        "matches": bool(v.get("matches")) and bool(v.get("subject_visible", True)),
-                        # Wrong subject (right action) fails: capped below the fallback bar.
-                        "score": int(v.get("score") or 0) if v.get("subject_visible", True) else min(int(v.get("score") or 0), 2),
+                        # The model's in-context judgement decides; subject_visible is information only.
+                        "matches": bool(v.get("matches")),
+                        "score": int(v.get("score") or 0),
                         "subjectVisible": bool(v.get("subject_visible", True)),
                         "inS": a,
                         "outS": b,
@@ -483,13 +503,14 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "lighting": int(v.get("lighting") if v.get("lighting") is not None else 5),
                         "framing": str(v.get("framing") or "")[:60],
                         "timeOfDay": str(v.get("time_of_day") or "day"),
+                        "fitReason": str(v.get("fit_reason") or "")[:200],
                     }
                 )
                 try:
                     cs = _color_stats(muted, a, b)
                     if cs:
                         entry["saturation"], entry["luma"] = cs
-                except Exception:  # noqa: BLE001 — colour stats are a bonus signal
+                except Exception:  # noqa: BLE001 — colour stats are information only
                     pass
                 try:
                     entry["phash"] = _dhash_frames(muted, a, b)
@@ -517,10 +538,12 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 except Exception as exc:  # noqa: BLE001 — a shot-level crash never fails the job
                     evaluated_by_shot[i].append({"providerId": "-", "error": f"shot_failed:{str(exc)[:160]}"})
 
-    # Sequential no-repeat selection in story order: never the same clip ID twice, never a near-identical
-    # frame (dHash) of an already-picked shot, including picks from earlier rounds.
-    results: list[dict] = []
-    for i, shot in enumerate(shots):
+    # No-repeat selection, scarcest shots first (fewest passing clips; ties in story order), so a line with
+    # plenty of options never takes another line's only good clip. Never the same clip ID twice, never a
+    # near-identical frame (dHash) of an already-picked shot, including picks from earlier rounds.
+    results: list[dict | None] = [None] * len(shots)
+    for i in scarcity_order(shots, evaluated_by_shot, realistic):
+        shot = shots[i]
         need_s = float(shot.get("needS") or 4.0)
         ctx = shot_ctx(shot)
         ev = evaluated_by_shot[i]
@@ -547,7 +570,8 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
             used_ids.add(chosen["providerId"])
             if chosen.get("phash"):
                 used_hashes.append(chosen["phash"])
-        results.append({"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": ev})
+        _log_scene(job.get("id"), draft_id, i, shot, chosen, ev)
+        results[i] = {"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": ev}
 
     try:
         if usage["calls"]:

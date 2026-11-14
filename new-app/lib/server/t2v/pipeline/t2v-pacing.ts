@@ -124,6 +124,35 @@ function toK(pieces: T2vPiece[], k: number): T2vPiece[] {
   return out
 }
 
+const BRIEF_STOP = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'then', 'while', 'as', 'so', 'to', 'of', 'in', 'on', 'at', 'for', 'with', 'into', 'from', 'until', 'your', 'you', 'it', 'its', 'their', 'this', 'that', 'those', 'these', 'is', 'are', 'be', 'can', 'will', 'feels', 'feel', 'little', 'way', 'more', 'less', 'some', 'any', 'every', 'when', 'where', 'before', 'after'])
+const contentWords = (t: string) => words(t.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ')).filter((w) => w.length > 2 && !BRIEF_STOP.has(w))
+const stemOf = (w: string) => (w.length > 5 ? w.slice(0, 5) : w.replace(/s$/, ''))
+
+/**
+ * Visual brief for each piece of a sentence split WITHOUT the planner's per-piece briefs (auto pieces, forced
+ * pacing split). The piece that matches the sentence's subject keeps the sentence brief; every other piece gets
+ * one from its OWN words (sleep run 4: "and adjust bedding until the space feels restful" inherited "person
+ * closing bedroom curtains", so every bedding clip failed the subject rule and the line fell to a 1/10 pick).
+ */
+export function pieceBriefs(
+  parent: { intent: string; subject: string; queries: string[] },
+  texts: string[],
+): Array<{ intent: string; subject: string; queries: string[] }> {
+  const parentWords = new Set(contentWords(`${parent.subject} ${parent.queries.join(' ')}`).map(stemOf))
+  const hits = texts.map((t) => contentWords(t).filter((w) => parentWords.has(stemOf(w))).length)
+  const owner = hits.indexOf(Math.max(...hits))
+  return texts.map((t, i) => {
+    if (i === owner) return { intent: parent.intent, subject: parent.subject, queries: parent.queries }
+    const own = contentWords(t)
+    if (!own.length) return { intent: parent.intent, subject: parent.subject, queries: parent.queries }
+    const ownStems = new Set(own.map(stemOf))
+    const related = parent.queries.filter((q) => contentWords(q).some((w) => ownStems.has(stemOf(w))))
+    const core = own.slice(0, 2).join(' ')
+    const queries = [...new Set([core, ...related, ...parent.queries])].slice(0, 3)
+    return { intent: `Stock B-roll that shows: ${t.trim()}`, subject: own.slice(0, 5).join(' '), queries }
+  })
+}
+
 const PAUSE_BEFORE = new Set(['and', 'then', 'while', 'but', 'as', 'where', 'which', 'before', 'after', 'until', 'so', 'when', 'from', 'into', 'with'])
 
 /**
@@ -151,12 +180,9 @@ export function autoPieces(row: T2vPacingRow, maxK = MAX_PIECES): T2vPiece[] | u
   }
   if (!cuts.length) return undefined
   const bounds = [0, ...cuts, w.length]
-  return bounds.slice(0, -1).map((b, i) => ({
-    text: w.slice(b, bounds[i + 1]).join(' '),
-    intent: row.intent,
-    subject: row.subject,
-    queries: row.queries,
-  }))
+  const texts = bounds.slice(0, -1).map((b, i) => w.slice(b, bounds[i + 1]).join(' '))
+  const briefs = pieceBriefs(row, texts)
+  return texts.map((text, i) => ({ text, ...briefs[i]! }))
 }
 
 type PlanKnobs = { holdP: number; splitP: number; detailSplitP: number; quickMergeP: number }
@@ -355,9 +381,11 @@ function fixCandidates(shots: T2vPacedShot[], start: number): T2vPacedShot[][] {
     const w = words(s.narration)
     const texts = auto?.length === 2 ? auto.map((p) => p.text) : [w.slice(0, Math.floor(w.length / 2)).join(' '), w.slice(Math.floor(w.length / 2)).join(' ')]
     const first = words(texts[0]!).length
+    // Each piece gets its own visual brief (the sentence's brief stays with the piece that matches it).
+    const briefs = auto?.length === 2 ? auto : pieceBriefs(s, texts)
     const pieces: T2vPacedShot[] = [
-      { ...s, narration: texts[0]!, wordOffset: 0, needS: r1(estimateS(texts[0]!) + 0.1) },
-      { ...s, narration: texts[1]!, wordOffset: first, needS: r1(estimateS(texts[1]!) + (s.needS - estimateS(s.narration))) },
+      { ...s, intent: briefs[0]!.intent, subject: briefs[0]!.subject, queries: briefs[0]!.queries, narration: texts[0]!, wordOffset: 0, needS: r1(estimateS(texts[0]!) + 0.1) },
+      { ...s, intent: briefs[1]!.intent, subject: briefs[1]!.subject, queries: briefs[1]!.queries, narration: texts[1]!, wordOffset: first, needS: r1(estimateS(texts[1]!) + (s.needS - estimateS(s.narration))) },
     ]
     out.push([...shots.slice(0, j), ...pieces, ...shots.slice(j + 1)])
   }

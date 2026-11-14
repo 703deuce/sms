@@ -6,7 +6,7 @@ vi.mock('@/lib/server/t2v/stock-asset', () => ({ ensureT2vStockAsset: async (_w:
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { enforceNoRepeatDeterministic, nearIdenticalShot } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { autoPieces, pacingStats, planPacing, type T2vPacingRow } from '@/lib/server/t2v/pipeline/t2v-pacing'
-import { specificSubject } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
+import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 
 const hash = () => [Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('')]
 const cand = (id: string, kind?: 'photo') => ({ provider: 'pixabay' as const, providerId: id, previewUrl: 'p', durationS: 20, width: 1920, height: 1080, query: 'q', tags: [], srcUrl: 's', thumbUrl: 't', pageUrl: 'u', author: 'a', ...(kind ? { kind } : {}) })
@@ -75,37 +75,32 @@ describe('t2v editorial round', () => {
     expect(p.every((x) => x.text.split(' ').length >= 4)).toBe(true)
     expect(autoPieces({ ...rows[5]! })).toBeUndefined() // "Harvesters pick ripe cherries by hand." has no pause
   })
-  it('specific subjects: bare generic nouns are replaced by the most specific query', () => {
-    expect(specificSubject('coffee beans', ['coffee beans', 'burlap sacks green beans', 'warehouse'], 'x')).toBe('burlap sacks green beans')
-    expect(specificSubject('coffee roasting drum', ['roaster'], 'x')).toBe('coffee roasting drum')
-    expect(specificSubject('coffee cherries', ['q'], 'x')).toBe('coffee cherries')
-  })
-  it('every split piece gets its own clip: no held second half, never a card; fallback skips banned clips', async () => {
+  it('a piece with nothing at the floor (5/10) extends the previous shot: never a sub-5 clip, never a card', async () => {
     const shots = [shot('a', 'Dried green beans travel to a roaster,', 'vg_0'), shot('b', 'where heat changes their scent.', 'vg_0'), shot('c', 'In the drum, pale beans deepen.', 'vg_1')]
     const results = [
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1')] },
-      // b: only a banned 9 and a weak 2 for its line; c reviewed a roaster photo (4) usable as closest related.
-      { sceneId: 'b', chosen: null, evaluated: [ev('9', { score: 9 }), ev('img_5', { score: 2, kind: 'photo', lighting: 8, subject: 'coffee roaster' })] },
-      { sceneId: 'c', chosen: null, evaluated: [ev('7', { score: 4, subject: 'coffee roaster drum', visible: 'a coffee roaster drum turning', lighting: 9 })] },
+      // b: only a banned 9 and a 2/10 photo; c: only a 4/10 clip. Both are below the floor.
+      { sceneId: 'b', chosen: null, evaluated: [ev('9', { score: 9 }), ev('img_5', { score: 2, kind: 'photo' })] },
+      { sceneId: 'c', chosen: null, evaluated: [ev('7', { score: 4 })] },
     ]
-    const { scenes, results: out } = await finish(shots, results, { a: [cand('1')], b: [cand('9'), cand('img_5', 'photo')], c: [cand('7')] }, { b: ['9'] })
-    const real = scenes.filter((s) => !s.id.startsWith('sc_end'))
-    expect(real.every((s) => s.media.kind !== 'color')).toBe(true)
-    expect(real[0]!.cuts).toEqual([{ atWord: 7, media: expect.objectContaining({ providerId: 'img_5', kind: 'image' }) }])
-    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'last_resort', 'fallback'])
-    expect(out[1]!.chosen).toMatchObject({ kind: 'photo', lighting: 8 })
-    expect(out[2]!.chosen).toMatchObject({ lighting: 9 })
-    expect(out.some((r) => r.outcome === 'held' || r.outcome === 'title_card')).toBe(false)
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '7', score: 3 }, { sceneId: 'c', providerId: '1', score: 2 }] } as never)
+    const { results: out } = await finish(shots, results, { a: [cand('1')], b: [cand('9'), cand('img_5', 'photo')], c: [cand('7')] }, { b: ['9'] })
+    expect(out[0]!.pickedBy).toBe('accepted')
+    for (const r of out.slice(1)) expect(r.chosen === null || (r.chosen.score ?? 0) >= 5).toBe(true)
+    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'held', 'held'])
+    expect(out.some((r) => r.outcome === 'title_card')).toBe(false)
   })
-  it('a line with nothing of its own takes the closest related clip reviewed for another line', async () => {
+  it('a line with nothing of its own takes another line\'s clip only when the re-check scores it 5+ for this line', async () => {
     const shots = [shot('a', 'Beans tumble in the roaster.', 'vg_0'), shot('b', 'The roaster drum glows with heat.', 'vg_1', { subject: 'coffee roaster drum' })]
     const results = [
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, subject: 'coffee roaster', visible: 'an industrial coffee roaster drum' }), ev('4', { score: 6, subject: 'coffee cup', visible: 'a cup of coffee' })] },
       { sceneId: 'b', chosen: null, evaluated: [] },
     ]
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 7 }, { sceneId: 'b', providerId: '4', score: 2 }] } as never)
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3'), cand('4')], b: [] })
     expect(out[1]!.chosen!.providerId).toBe('3')
-    expect(out[1]!.outcome).toBe('stock')
+    expect(out[1]!.chosen!.score).toBe(7)
+    expect(out[1]!.pickedBy).toBe('last_resort')
   })
   it('at most 2 stills in a row; no near-identical neighbours', () => {
     const s = (id: string) => ({ sceneId: id, narration: '', intent: '' }) as never
@@ -136,7 +131,7 @@ describe('t2v finisher sequence rules', () => {
     const results = [
       { sceneId: 'a', chosen: ev('img_1', { kind: 'photo' }), evaluated: [] },
       { sceneId: 'b', chosen: ev('img_2', { kind: 'photo' }), evaluated: [] },
-      { sceneId: 'c', chosen: null, evaluated: [ev('img_3', { kind: 'photo', score: 4 }), ev('30', { score: 3 })] },
+      { sceneId: 'c', chosen: null, evaluated: [ev('img_3', { kind: 'photo', score: 6 }), ev('30', { score: 5 })] },
     ]
     const { results: out } = await finish(shots, results, { a: [cand('img_1', 'photo')], b: [cand('img_2', 'photo')], c: [cand('img_3', 'photo'), cand('30')] })
     expect(out[2]!.chosen!.providerId).toBe('30')

@@ -23,8 +23,8 @@ describe('prompt-to-video scene planner helpers', () => {
     expect(estimateNeedS('one two three four five six seven eight nine ten')).toBeCloseTo(4.5, 0)
   })
 
-  it('budgets words for the requested runtime minus the end card', () => {
-    expect(wordBudget(90)).toBe(Math.round(87.5 * 2.3))
+  it('budgets words for the full requested runtime (no end card)', () => {
+    expect(wordBudget(90)).toBe(Math.round(90 * 2.3))
   })
 })
 

@@ -9,8 +9,8 @@ const seg = (words: number, i = 0) => ({ id: `seg_${i}`, purpose: 'p', narration
 
 describe('t2v script word budget', () => {
   beforeEach(() => llm.mockReset())
-  it('90 s budget is calibrated on finished-video pace (~2.3 words/s)', () => {
-    expect(wordBudget(90)).toBe(201)
+  it('90 s budget is calibrated on finished-video pace (~2.3 words/s, no end-card seconds)', () => {
+    expect(wordBudget(90)).toBe(207) // no end card: the whole 90 s is narration
   })
   it('leaves scripts within 5% alone (no LLM call)', async () => {
     const segs = [seg(105), seg(105, 1)] // 210 words vs 201 (+4.5%)

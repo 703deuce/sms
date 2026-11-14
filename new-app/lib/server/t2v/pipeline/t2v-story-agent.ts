@@ -5,8 +5,6 @@ import type { T2vNarrationSegment, T2vPipelineStyle, T2vStoryPlan } from '@/lib/
 
 /** Words per second used for planning only. Actual ElevenLabs audio timing drives the edit. */
 export const T2V_PLAN_WORDS_PER_S = 2.45
-/** Seconds reserved for the closing end card (no narration). */
-export const T2V_END_CARD_S = 2.5
 
 const STYLE_GUIDE: Record<T2vPipelineStyle, string> = {
   documentary: 'Documentary: calm authority, vivid concrete imagery, measured pacing, a sense of discovery.',
@@ -26,7 +24,7 @@ export const T2V_EDIT_WORDS_PER_S = 2.3
 export const T2V_BUDGET_TOLERANCE = 0.05
 
 export function wordBudget(durationS: number): number {
-  return Math.max(40, Math.round(Math.max(10, durationS - T2V_END_CARD_S) * T2V_EDIT_WORDS_PER_S))
+  return Math.max(40, Math.round(Math.max(10, durationS) * T2V_EDIT_WORDS_PER_S))
 }
 
 export function narrationWords(segs: Array<{ narration: string }>): number {
@@ -99,7 +97,7 @@ export async function t2vScriptAgent(input: {
     `Original request: ${input.prompt.slice(0, 2000)}`,
     `Style: ${STYLE_GUIDE[input.style]}`,
     `Story plan: ${JSON.stringify(input.story)}`,
-    `Word budget: ${budget} words total (~${input.durationS - T2V_END_CARD_S}s of narration).`,
+    `Word budget: ${budget} words total (~${input.durationS}s of narration).`,
   ].join('\n')
   const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(SCRIPT_SYSTEM, user)
   let segs = toSegments(out.segments)

@@ -13,7 +13,7 @@ const ev = (id: string, o: { score?: number; kind?: 'photo'; matches?: boolean; 
 const shot = (sceneId: string) => ({ sceneId, narration: '', intent: '' }) as never
 
 describe('t2v photo fallback', () => {
-  it('order: video (5+) first, then photo (5+), then re-checked spare, then related fallback', () => {
+  it('order: video (5+) first, then photo (5+), then re-checked spare; nothing below the 5/10 floor', () => {
     const data = {
       a: { sceneId: 'a', chosen: null, evaluated: [ev('1', { score: 6, matches: false }), ev('img_9', { kind: 'photo', score: 9 })] },
       b: { sceneId: 'b', chosen: null, evaluated: [ev('2', { score: 3 }), ev('img_8', { kind: 'photo', score: 7 })] },
@@ -23,8 +23,9 @@ describe('t2v photo fallback', () => {
     expect([r.out.a!.chosen!.providerId, r.tiers.a]).toEqual(['1', 'usable'])
     expect([r.out.b!.chosen!.providerId, r.tiers.b]).toEqual(['img_8', 'photo'])
     expect(r.out.b!.chosen!.kind).toBe('photo')
-    // Photo below 5 is not a photo pick; the 3/10 related video is the fallback.
-    expect([r.out.c!.chosen!.providerId, r.tiers.c]).toEqual(['3', 'fallback'])
+    // Photo below 5 is not a photo pick and a 3/10 video is below the floor: nothing is placed.
+    expect(r.out.c!.chosen).toBeNull()
+    expect(r.tiers.c).toBeUndefined()
   })
   it('photos are never offered as spares and never repeat', () => {
     const same = hash()

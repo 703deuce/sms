@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('server-only', () => ({}))
 vi.mock('@/lib/server/t2v/pipeline/t2v-llm', () => ({ t2vLlmJson: vi.fn() }))
 vi.mock('@/lib/server/t2v/log', () => ({ logT2v: vi.fn() }))
-import { enforceNoRepeatDeterministic, nearDuplicateHash, sameShoot, similarSubject, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeatDeterministic, nearDuplicateHash, FILLER_MIN_SCORE, sameShoot, scarcityOrder, similarSubject } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 
 let h = 0
 // Random 64-bit hashes: two of them are within 10 bits with negligible probability.
@@ -45,16 +45,17 @@ describe('t2v no-repeat', () => {
     expect(out.b!.chosen!.providerId).toBe('500')
     expect(tiers.b).toBe('usable')
   })
-  it('dark clips lose to lit ones; a spare is only placed after a 5+ re-check against its new line', () => {
+  it('the better fit wins whatever its light; a spare is only placed after a 5+ re-check against its new line', () => {
     const data = {
       a: res('a', null, [pick('10', { lighting: 3, phash: uniq() }), pick('11', { score: 7, lighting: 8, phash: uniq() })]),
       b: res('b', pick('20', { phash: uniq() }), [pick('20', { phash: uniq() }), pick('21', { score: 8, phash: uniq() }), pick('22', { score: 9, phash: uniq() })]),
       c: res('c', null, [pick('30', { score: 1, phash: uniq() })]),
     }
     const first = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true })
-    expect(first.out.a!.chosen!.providerId).toBe('11')
+    expect(first.out.a!.chosen!.providerId).toBe('10')
     expect(first.out.c!.chosen).toBeNull() // no unchecked spare
-    expect(first.spareRequests.c!.map((e) => e.providerId)).toEqual(['22', '21'])
+    // c has no passing clip, so it picks first (scarcest) and every spare is still free to ask about.
+    expect(first.spareRequests.c!.map((e) => e.providerId)).toEqual(['22', '20', '21', '10'])
     // 22 fails the re-check for line c (mug under a harvesting line); 21 works there (6/10).
     const second = enforceNoRepeatDeterministic([shot('a'), shot('b'), shot('c')], data, { realistic: true, spareScores: { c: { '22': 2, '21': 6 } } })
     expect(second.out.c!.chosen!.providerId).toBe('21')
@@ -73,28 +74,47 @@ describe('t2v no-repeat', () => {
     }, { realistic: true })
     expect(out.c!.chosen!.providerId).toBe('600')
   })
-  it('night/dark clips only for night lines; black-and-white only when requested; records how each was picked', () => {
-    const night = pick('40', { timeOfDay: 'night', luma: 0.07, phash: uniq() })
+  it('no time-of-day, brightness or colour gates: the reviewer score decides', () => {
+    const night = pick('40', { timeOfDay: 'night', luma: 0.07, lighting: 2, phash: uniq() })
     const day = pick('41', { score: 6, phash: uniq() })
     const bw = pick('42', { saturation: 0.005, phash: uniq() })
-    const { out, tiers } = enforceNoRepeatDeterministic([shot('a', 'Drivers start the day with a full battery.'), shot('b', 'City lights glow at night.'), shot('c', 'Parked cars line the street.')], {
+    const { out, tiers } = enforceNoRepeatDeterministic([shot('a'), shot('b')], {
       a: res('a', night, [night, day]),
-      b: res('b', null, [pick('43', { timeOfDay: 'night', luma: 0.07, phash: uniq() })]),
-      c: res('c', bw, [bw, pick('44', { score: 3, phash: uniq() })]),
+      b: res('b', bw, [bw, pick('44', { score: 6, phash: uniq() })]),
     }, { realistic: true })
-    expect(out.a!.chosen!.providerId).toBe('41')
-    expect(tiers.a).toBe('usable')
-    expect(out.b!.chosen!.providerId).toBe('43')
-    expect(tiers.b).toBe('accepted')
-    expect(out.c!.chosen!.providerId).toBe('44')
-    expect(tiers.c).toBe('fallback')
-    const mono = enforceNoRepeatDeterministic([shot('c')], { c: res('c', bw, [bw]) }, { realistic: true, monoOk: true })
-    expect(mono.out.c!.chosen!.providerId).toBe('42')
+    expect([out.a!.chosen!.providerId, tiers.a]).toEqual(['40', 'accepted'])
+    expect([out.b!.chosen!.providerId, tiers.b]).toEqual(['42', 'accepted'])
   })
-  it('night and black-and-white detection', () => {
-    expect(t2vNightLine('Headlights stream past after dark.')).toBe(true)
-    expect(t2vNightLine('A family loads the car on a sunny morning.')).toBe(false)
-    expect(t2vMonoRequested('a black and white documentary about trains')).toBe(true)
-    expect(t2vMonoRequested('why EVs are gaining ground')).toBe(false)
+  it(`floor: nothing scoring below ${FILLER_MIN_SCORE}/10 is placed (no 0-3/10 filler)`, () => {
+    const { out, tiers } = enforceNoRepeatDeterministic([shot('a'), shot('b')], {
+      a: res('a', null, [pick('50', { score: 3, matches: false, phash: uniq() }), pick('51', { score: 4, matches: false, phash: uniq() })]),
+      b: res('b', null, [pick('52', { score: 5, matches: false, phash: uniq() })]),
+    }, { realistic: true })
+    expect(out.a!.chosen).toBeNull()
+    expect(tiers.a).toBeUndefined()
+    expect(out.b!.chosen!.providerId).toBe('52')
+  })
+  it('scarcest scenes pick first: the line with one passing clip keeps it', () => {
+    const shared = pick('60', { phash: uniq() })
+    const data = {
+      a: res('a', null, [shared, pick('61', { phash: uniq() }), pick('62', { phash: uniq() })]),
+      b: res('b', null, [shared]),
+    }
+    expect(scarcityOrder([shot('a'), shot('b')], data, { realistic: true })).toEqual([1, 0])
+    const r = enforceNoRepeatDeterministic([shot('a'), shot('b')], data, { realistic: true })
+    expect(r.out.b!.chosen!.providerId).toBe('60')
+    expect(r.out.a!.chosen!.providerId).not.toBe('60')
+    // Ties keep story order.
+    expect(scarcityOrder([shot('x'), shot('y')], { x: res('x', null, [pick('70')]), y: res('y', null, [pick('71')]) }, { realistic: true })).toEqual([0, 1])
+  })
+  it('logs why each passing clip is not on screen under its own line', () => {
+    const shared = pick('60', { phash: uniq() })
+    const r = enforceNoRepeatDeterministic([shot('a'), shot('b')], {
+      a: res('a', null, [shared, pick('61', { score: 9, phash: uniq() })]),
+      b: res('b', null, [shared]),
+    }, { realistic: true })
+    const why = Object.fromEntries(r.unused.map((u) => [`${u.sceneId}:${u.providerId}`, u.reason]))
+    expect(why['a:60']).toBe('used_by:b')
+    expect(r.unused.find((u) => u.sceneId === 'b')).toBeUndefined()
   })
 })
