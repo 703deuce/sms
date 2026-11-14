@@ -138,27 +138,72 @@ Rules:
 - Keep the same segments in the same order with the same purpose and ending.
 - Add concrete, filmable detail (what a camera would show) - a short extra sentence or a richer clause - never
   filler, never new statistics, dates, names or quotations. Sentences 7-18 words, natural to read aloud.
-- Total narration words MUST be at or just under the target given.`
+- Total narration words MUST be at or just under the target given; follow the per-segment targets.`
+
+/** Expansion result must land within this of the word budget (either side). */
+export const T2V_EXPAND_CAP = 0.08
+
+/**
+ * Capped expansion: keep the original or the expanded version of EACH segment, choosing the mix whose
+ * total is within ±8% of budget and closest to it (an overshooting rewrite is trimmed back segment by
+ * segment instead of being thrown away). Returns null when no mix lands in the window.
+ */
+export function capExpansion(orig: T2vNarrationSegment[], expanded: T2vNarrationSegment[], budget: number): T2vNarrationSegment[] | null {
+  const lo = budget * (1 - T2V_EXPAND_CAP)
+  const hi = budget * (1 + T2V_EXPAND_CAP)
+  const total = (x: T2vNarrationSegment[]) => narrationWords(x)
+  if (expanded.length !== orig.length || orig.length > 14) {
+    const n = total(expanded)
+    return expanded.length && n >= lo && n <= hi ? expanded : null
+  }
+  const ow = orig.map((s) => narrationWords([s]))
+  const ew = expanded.map((s) => narrationWords([s]))
+  let best: { mask: number; dist: number; used: number } | null = null
+  for (let mask = 0; mask < 1 << orig.length; mask++) {
+    let n = 0
+    let used = 0
+    for (let i = 0; i < orig.length; i++) {
+      const pick = (mask >> i) & 1
+      n += pick ? ew[i]! : ow[i]!
+      used += pick
+    }
+    if (n < lo || n > hi) continue
+    const dist = Math.abs(n - budget)
+    // Closest to budget; on ties keep more of the rewrite (it was written as a whole).
+    if (!best || dist < best.dist || (dist === best.dist && used > best.used)) best = { mask, dist, used }
+  }
+  if (!best) return null
+  return orig.map((s, i) => ((best!.mask >> i) & 1 ? { ...expanded[i]!, id: s.id } : s))
+}
 
 /**
  * One expansion rewrite when the script is more than 5% under budget (mirror of the tightening rewrite;
- * a 90 s target otherwise finishes at ~85 s). Kept only if closer to budget and not over it by >10%.
+ * a 90 s target otherwise finishes at ~85 s). The model gets a per-segment word target; the result is
+ * capped to ±8% of budget (capExpansion), never rejected just for overshooting.
  */
 export async function expandToBudget(segs: T2vNarrationSegment[], budget: number): Promise<T2vNarrationSegment[]> {
   const words = narrationWords(segs)
   if (words >= budget * (1 - T2V_BUDGET_TOLERANCE)) return segs
+  // Spread the missing words over the segments by size (models overshoot a bare total badly).
+  const gap = budget - words
+  const perSeg = segs.map((s) => {
+    const w = narrationWords([s])
+    return w + Math.round((gap * w) / Math.max(1, words))
+  })
   try {
     const out = await t2vLlmJson<{ segments?: Array<Record<string, unknown>> }>(
       EXPAND_SYSTEM,
-      `Target: ${budget} words total (currently ${words}).\nScript: ${JSON.stringify(segs.map(({ purpose, narration, visualMeaning, emotion }) => ({ purpose, narration, visualMeaning, emotion })))}`,
+      `Target: ${budget} words total (currently ${words}). Per-segment word targets, in order: ${JSON.stringify(perSeg)}.\nScript: ${JSON.stringify(segs.map(({ purpose, narration, visualMeaning, emotion }) => ({ purpose, narration, visualMeaning, emotion })))}`,
     )
     const next = toSegments(out.segments)
-    const n = narrationWords(next)
-    if (next.length && n <= budget * 1.1 && Math.abs(n - budget) < Math.abs(words - budget)) {
-      logT2v('pipeline-script', 'expanded to budget', { budget, before: words, after: n })
-      return next
+    const raw = narrationWords(next)
+    const capped = capExpansion(segs, next, budget)
+    const n = capped ? narrationWords(capped) : raw
+    if (capped && Math.abs(n - budget) < Math.abs(words - budget)) {
+      logT2v('pipeline-script', 'expanded to budget', { budget, before: words, raw, after: n })
+      return capped
     }
-    logT2v('pipeline-script', 'expansion rejected', { budget, before: words, after: n })
+    logT2v('pipeline-script', 'expansion rejected', { budget, before: words, after: raw })
   } catch (err) {
     logT2v('pipeline-script', 'expansion failed (keeping original)', { error: err instanceof Error ? err.message : 'error' })
   }

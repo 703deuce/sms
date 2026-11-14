@@ -19,6 +19,8 @@ const bodySchema = z.object({
   voiceId: z.string().max(64).optional(),
   captions: z.boolean().default(true),
   renderResolution: z.enum(['480p', '720p', '1080p']).default('720p'),
+  /** Test/premium: up to 3 AI-generated B-roll clips for lines where stock is way off. Off by default. */
+  aiBroll: z.boolean().default(false),
 })
 
 /** Prompt-to-Video: one click → script, scenes, verified stock, narration, edit, render. */

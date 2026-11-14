@@ -33,6 +33,7 @@ import {
   AI_BROLL_MAX_NEED_S,
   aiBrollEnabled,
   aiBrollPrompts,
+  aiBrollTargets,
   aiCandidate,
   aiFramesFor,
   pollAiClip,
@@ -68,6 +69,8 @@ export type StartT2vPipelineInput = {
   voiceId?: string
   captions: boolean
   renderResolution: '480p' | '720p' | '1080p'
+  /** Per-run AI B-roll test option (off by default). */
+  aiBroll?: boolean
 }
 
 const STYLE_TONE: Record<T2vPipelineStyle, T2vDraftV1['settings']['tone']> = {
@@ -102,6 +105,7 @@ export async function startT2vPipeline(workspaceId: string, input: StartT2vPipel
     style: input.style,
     durationS: input.durationS,
     renderResolution: input.renderResolution,
+    ...(input.aiBroll ? { aiBroll: true } : {}),
     status: 'queued',
     completed: [],
     log: [{ stage: 'queued', at: now }],
@@ -112,7 +116,7 @@ export async function startT2vPipeline(workspaceId: string, input: StartT2vPipel
     where: { id: draft.id },
     data: { status: 'AUTOBUILDING', stage: 'queued', progress: 0 },
   })
-  logT2v('pipeline', 'run created', { draftId: draft.id, projectId: draft.projectId, durationS: input.durationS, style: input.style })
+  logT2v('pipeline', 'run created', { draftId: draft.id, projectId: draft.projectId, durationS: input.durationS, style: input.style, aiBroll: Boolean(input.aiBroll) })
   kickT2vPipeline(draft.id)
   return { draftId: draft.id, projectId: draft.projectId }
 }
@@ -672,25 +676,9 @@ async function claimAiStep(draftId: string): Promise<boolean> {
   return n === 1
 }
 
-/**
- * Pick at most 3 lines whose stock is way off (no pick, or only a fallback/last-resort after every stock
- * and photo round), short enough for a 3-5 s clip; start one generation each (no retries).
- */
+/** Start one generation per target scene (aiBrollTargets: weakest first, max 3); no retries. */
 async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[] }> {
-  const opts = { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) }
-  const dry = enforceNoRepeatDeterministic(run.shots!, history, opts)
-  const needy = run
-    .shots!.filter((sh) => {
-      const t = dry.tiers[sh.sceneId]
-      // Way off = no reviewed stock clip or photo for this line reaches 5 at all (a 5+ stock option that a
-      // sequence rule moved away in the dry pass can still win in the final pass; don't pay for that line).
-      const anyGood = (history[sh.sceneId]?.evaluated ?? []).some((e) => e.kind !== 'ai' && (e.score ?? 0) >= 5 && t2vQualityOk(e, { ...opts, nightOk: t2vNightLine(sh.narration, sh.intent) }))
-      return (!t || t === 'fallback' || t === 'last_resort') && !anyGood && sh.needS <= AI_BROLL_MAX_NEED_S
-    })
-    .map((sh) => ({ sh, score: dry.out[sh.sceneId]?.chosen?.score ?? -1 }))
-    .sort((a, b) => a.score - b.score)
-    .slice(0, AI_BROLL_MAX_CLIPS)
-    .map((x) => x.sh)
+  const needy = aiBrollTargets(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
   if (!needy.length) return { jobs: [] }
   const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
   const jobs: T2vAiJob[] = []

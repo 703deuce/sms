@@ -306,7 +306,91 @@ export function planPacing(rows: T2vPacingRow[], opts: { style: T2vPipelineStyle
     if (sc.ok) return shots
     if (!best || sc.score > best.score) best = { shots, score: sc.score }
   }
-  return best!.shots
+  // No passing plan in 60 draws: force-break every run of 3 near-equal shots (merge or split a neighbour).
+  return forceBreakEqualRuns(best!.shots)
+}
+
+const nearLen = (a: number, b: number) => Math.abs(a - b) / Math.max(a, b) <= 0.15
+const r1 = (x: number) => Math.round(x * 10) / 10
+
+/** Number of positions i where shots i-2, i-1, i are near-equal (0 = no run of 3). */
+export function equalTriplets(lengths: number[]): number {
+  let n = 0
+  for (let i = 2; i < lengths.length; i++) if (nearLen(lengths[i - 2]!, lengths[i - 1]!) && nearLen(lengths[i - 1]!, lengths[i]!)) n++
+  return n
+}
+
+/** A shot that is one whole sentence (or several whole sentences) on its own voice group. */
+function wholeShot(shots: T2vPacedShot[], i: number): boolean {
+  const s = shots[i]!
+  return s.wordOffset === 0 && norm(s.narration) === norm(s.sentence) && shots[i - 1]?.voiceGroup !== s.voiceGroup && shots[i + 1]?.voiceGroup !== s.voiceGroup
+}
+
+/** Candidate fixes for the run starting at `start`: merges of neighbours and 2-way splits of whole shots. */
+function fixCandidates(shots: T2vPacedShot[], start: number): T2vPacedShot[][] {
+  const out: T2vPacedShot[][] = []
+  for (let j = Math.max(0, start - 1); j <= start + 2; j++) {
+    const a = shots[j]
+    const b = shots[j + 1]
+    if (!a || !b || a.segmentId !== b.segmentId) continue
+    const sameGroup = a.voiceGroup === b.voiceGroup
+    if (!sameGroup && !(wholeShot(shots, j) && wholeShot(shots, j + 1))) continue
+    const narration = `${a.narration} ${b.narration}`
+    const merged: T2vPacedShot = sameGroup
+      ? { ...a, narration, needS: r1(estimateS(narration) + (b.needS - estimateS(b.narration))) }
+      : {
+          ...a,
+          narration,
+          sentence: narration,
+          queries: [...new Set([...a.queries, ...b.queries])].slice(0, 4),
+          needS: r1(estimateS(narration) + 0.4),
+        }
+    out.push([...shots.slice(0, j), merged, ...shots.slice(j + 2)])
+  }
+  for (let j = start; j <= start + 2; j++) {
+    const s = shots[j]
+    if (!s || !wholeShot(shots, j) || words(s.narration).length < MIN_PIECE_WORDS * 2) continue
+    // Natural pause first; otherwise the word boundary nearest the middle (still never mid-word).
+    const auto = autoPieces({ segmentId: s.segmentId, narration: s.narration, beat: s.beat, intent: s.intent, queries: s.queries, subject: s.subject }, 2)
+    const w = words(s.narration)
+    const texts = auto?.length === 2 ? auto.map((p) => p.text) : [w.slice(0, Math.floor(w.length / 2)).join(' '), w.slice(Math.floor(w.length / 2)).join(' ')]
+    const first = words(texts[0]!).length
+    const pieces: T2vPacedShot[] = [
+      { ...s, narration: texts[0]!, wordOffset: 0, needS: r1(estimateS(texts[0]!) + 0.1) },
+      { ...s, narration: texts[1]!, wordOffset: first, needS: r1(estimateS(texts[1]!) + (s.needS - estimateS(s.narration))) },
+    ]
+    out.push([...shots.slice(0, j), ...pieces, ...shots.slice(j + 1)])
+  }
+  return out
+}
+
+/**
+ * Forced fix-up after the planner draws: while any 3 consecutive shot lengths are near-equal, apply the
+ * merge/split of a neighbour that removes the most such runs (ties: higher CV). Stops when none remain or
+ * no fix helps. Merges never cross a segment; splits only touch whole-sentence shots (pieces share one
+ * narration clip, cut on a word boundary like every other split).
+ */
+export function forceBreakEqualRuns(input: T2vPacedShot[]): T2vPacedShot[] {
+  let shots = input
+  for (let guard = 0; guard < 24; guard++) {
+    const lens = shots.map((s) => s.needS)
+    const count = equalTriplets(lens)
+    if (!count) break
+    let start = -1
+    for (let i = 2; i < lens.length && start < 0; i++) if (nearLen(lens[i - 2]!, lens[i - 1]!) && nearLen(lens[i - 1]!, lens[i]!)) start = i - 2
+    let bestC: { shots: T2vPacedShot[]; count: number; cv: number } | null = null
+    for (const c of fixCandidates(shots, start)) {
+      const l = c.map((s) => s.needS)
+      if (l.some((x) => x < 1.4)) continue
+      const cand = { shots: c, count: equalTriplets(l), cv: pacingStats(l).cv }
+      // Fewer runs first; then keep CV above the QA bar; then higher CV.
+      const key = (x: { count: number; cv: number }) => x.count * 10 + (x.cv < PACING_MIN_CV ? 1 : 0) - Math.min(x.cv, 0.99)
+      if (!bestC || key(cand) < key(bestC)) bestC = cand
+    }
+    if (!bestC || bestC.count >= count) break
+    shots = bestC.shots
+  }
+  return shots
 }
 
 /** Coefficient of variation and the longest run of near-equal consecutive shot lengths. */

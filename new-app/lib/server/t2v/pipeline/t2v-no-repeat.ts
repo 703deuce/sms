@@ -15,7 +15,7 @@ import type { T2vPickedBy, T2vPlannedShot, T2vShotResult, T2vVerifiedPick } from
  * then a "spare" clip the reviewer rated 6+ for another line of this video (on-topic B-roll nobody used).
  * Quality rules (t2vQualityOk): live action for realistic styles, lighting >= MIN_LIGHTING, no night/dark
  * footage unless the line is about night, colour unless the request asks for black-and-white. A clip failing
- * them is a * last resort before an empty scene.
+ * them is a last resort before an empty scene (lighting still applies to last-resort picks).
  */
 const NEAR_DUP_BITS = 10
 const ACCEPT_SCORE = 7
@@ -49,6 +49,27 @@ export function t2vQualityOk(e: { style?: string; lighting?: number; timeOfDay?:
   if (!ctx.monoOk && (e.saturation ?? 1) < MIN_SATURATION) return false
   return true
 }
+/** Lighting rule alone (lit >= MIN_LIGHTING, not night/dark unless the line is about night). Applies to every pick. */
+export function t2vLitOk(e: { lighting?: number; timeOfDay?: string; luma?: number }, ctx: Pick<T2vQualityCtx, 'nightOk'>): boolean {
+  if ((e.lighting ?? 10) < MIN_LIGHTING) return false
+  return ctx.nightOk || (e.timeOfDay !== 'night' && (e.luma ?? 1) >= MIN_LUMA)
+}
+
+/** AI clip with strong content may carry the reviewer's 3d_render tag (generated look) when stock is way off. */
+export const AI_RELAXED_MIN_SCORE = 8
+/** ...but only when the best usable stock option for the line scores this or lower. */
+export const AI_RELAXED_MAX_STOCK = 4
+
+/**
+ * An AI clip works for a line when it passes the normal check (5+, live action, lit), or (aiBroll runs only)
+ * its content scores 8+ and only the style tag fails, while the best usable stock option scores 4 or lower.
+ */
+export function t2vAiAcceptable(e: { score?: number; error?: string; style?: string; lighting?: number; timeOfDay?: string; luma?: number; saturation?: number }, ctx: T2vQualityCtx, bestStock: number): boolean {
+  if (e.error || typeof e.score !== 'number') return false
+  if (e.score >= 5 && t2vQualityOk(e, ctx)) return true
+  return e.score >= AI_RELAXED_MIN_SCORE && bestStock <= AI_RELAXED_MAX_STOCK && t2vQualityOk({ ...e, style: 'live_action' }, ctx)
+}
+
 /** Pixabay IDs from one author this close together are almost always one shoot. */
 const SAME_SHOOT_ID_GAP = 40
 
@@ -178,6 +199,13 @@ function rank(e: Ev): number {
   return (e.score ?? 0) + 0.3 * (e.lighting ?? 5) + (e.matches ? 1 : 0)
 }
 
+/** Best score among usable (quality-ok, placeable) stock clips and photos for one line; -1 when none. */
+export function bestStockScore(r: T2vShotResult | undefined, ctx: T2vQualityCtx, placeable: (e: Ev) => boolean = () => true): number {
+  let best = -1
+  for (const e of r?.evaluated ?? []) if (!isAi(e) && !e.error && typeof e.score === 'number' && placeable(e) && t2vQualityOk(e, ctx)) best = Math.max(best, e.score)
+  return best
+}
+
 export type NoRepeatPick = { sceneId: string; tier: string }
 
 /** Deterministic pass (story order): unique IDs, no dHash look-alikes, same-shoot rules, tiered fill. */
@@ -271,7 +299,9 @@ export function enforceNoRepeatDeterministic(
       }
       if (!chosen) {
         // AI test clip: stock was way off; the generated clip passed the same check for THIS line (5+).
-        const hit = ais.find((e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
+        // Relaxed (content 8+, style tag only) when the best usable stock option for the line is 4 or lower.
+        const bestStock = bestStockScore(r, ctx, (e) => free(e, false))
+        const hit = ais.find((e) => t2vAiAcceptable(e, ctx, bestStock))
         if (hit) {
           chosen = toPick(hit, scored(hit, ACCEPT_SCORE) && hit.matches ? 'accepted' : 'weak_match')
           tier = 'ai'
@@ -292,8 +322,9 @@ export function enforceNoRepeatDeterministic(
       }
     }
     if (!chosen) {
-      // Last resort before an empty scene: any loosely on-topic clip, even dim or stylised.
-      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE)).sort((a, b) => rank(b) - rank(a))[0]
+      // Last resort before an empty scene: any loosely on-topic clip, even stylised, but lit (a dim clip
+      // goes to the finisher, which prefers a brighter related clip or photo and uses dim only at the end).
+      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE) && t2vLitOk(e, ctx)).sort((a, b) => rank(b) - rank(a))[0]
       if (any) {
         chosen = toPick(any, 'best_available')
         tier = 'last_resort'

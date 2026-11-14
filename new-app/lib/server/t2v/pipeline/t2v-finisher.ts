@@ -1,5 +1,5 @@
 import 'server-only'
-import { nearDuplicateHash, nearIdenticalShot, scoreSpares, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, nearDuplicateHash, nearIdenticalShot, scoreSpares, t2vAiAcceptable, t2vLitOk, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
@@ -153,12 +153,21 @@ export async function t2vFinisher(input: {
       if (top.pick.phash?.length) usedHashes.push(top.pick.phash)
     }
   }
+  const lit = (shot: T2vPlannedShot) => (e: Ev) => t2vLitOk(e, qctx(shot))
   for (const shot of open) {
     const ok = okFor(shot)
     const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
-    // 1) Related fallback: 3+ for THIS line (wrong-subject clips are capped at 2), quality-ok first.
-    const own = (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= 3).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
-    if (own.length) take(shot, own.map((e) => ({ pick: evToPick(e), tier: 'fallback' as const })))
+    const r = byScene.get(shot.sceneId)
+    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = []
+    // 0) A good AI clip for this line (same acceptance as the no-repeat pass) beats any weak fallback.
+    const banned = new Set(input.banned?.[shot.sceneId] ?? [])
+    const bestStock = bestStockScore(r, qctx(shot), (e) => !used.has(e.providerId))
+    for (const e of (r?.evaluated ?? []).filter((e) => e.kind === 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && t2vAiAcceptable(e, qctx(shot), bestStock)))
+      list.push({ pick: evToPick(e), tier: 'ai' })
+    // 1) Related fallback: 3+ for THIS line (wrong-subject clips are capped at 2), lit only, quality-ok first.
+    const own = (r?.evaluated ?? []).filter((e) => ok(e) && (e.score ?? 0) >= 3 && lit(shot)(e)).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+    for (const e of own) list.push({ pick: evToPick(e), tier: 'fallback' })
+    if (list.length) take(shot, list)
   }
   // 2) Closest related footage reviewed for another line: shortlist by subject overlap (topic words
   // ignored), then ONE text-only re-check scores each against the line it would sit under.
@@ -186,17 +195,26 @@ export async function t2vFinisher(input: {
     if (options.get(shot.sceneId)?.length) continue
     const ok = okFor(shot)
     const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
-    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = []
-    const seen = new Set<string>()
+    const l = (e: Ev) => Number(lit(shot)(e))
     const ls = lineScores[shot.sceneId] ?? {}
-    for (const e of (shortlist[shot.sceneId] ?? []).filter(ok).sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))) {
-      seen.add(e.providerId)
-      // Score = the re-check for THIS line (0 when not re-checked), so QA judges it where it sits.
-      list.push({ pick: { ...evToPick(e), score: ls[e.providerId] ?? 0, matches: (ls[e.providerId] ?? 0) >= 7, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' })
-    }
+    // Score = the re-check for THIS line (0 when not re-checked), so QA judges it where it sits.
+    const cross = (shortlist[shot.sceneId] ?? [])
+      .filter(ok)
+      .sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))
+      .map((e) => ({ pick: { ...evToPick(e), score: ls[e.providerId] ?? 0, matches: (ls[e.providerId] ?? 0) >= 7, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' as const }))
+    const crossIds = new Set(cross.map((o) => o.pick.providerId))
     // 3) Anything reviewed for this line that is still unused (real footage beats a card).
-    for (const e of (byScene.get(shot.sceneId)?.evaluated ?? []).filter((e) => ok(e) && !seen.has(e.providerId)).sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0)))
-      list.push({ pick: evToPick(e), tier: 'last_resort' })
+    const own = (byScene.get(shot.sceneId)?.evaluated ?? [])
+      .filter((e) => ok(e) && !crossIds.has(e.providerId))
+      .sort((a, b) => l(b) - l(a) || q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+      .map((e) => ({ e, o: { pick: evToPick(e), tier: 'last_resort' as const } }))
+    // Order: related brighter footage (re-checked 3+) → a dim but on-topic (5+) own clip (only when no lit
+    // related footage exists) → everything else by score for this line, lit first on ties.
+    const dimGood = own.filter((x) => !l(x.e) && (x.e.score ?? 0) >= 5).map((x) => x.o)
+    const rest = [...cross.filter((o) => o.pick.score < 3), ...own.filter((x) => l(x.e) || (x.e.score ?? 0) < 5).map((x) => x.o)].sort(
+      (a, b) => b.pick.score - a.pick.score || Number(t2vLitOk(b.pick, qctx(shot))) - Number(t2vLitOk(a.pick, qctx(shot))),
+    )
+    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = [...cross.filter((o) => o.pick.score >= 3), ...dimGood, ...rest]
     take(shot, list)
   }
   // Direction per photo shot, in story order (varied, never two of the same move in a row).

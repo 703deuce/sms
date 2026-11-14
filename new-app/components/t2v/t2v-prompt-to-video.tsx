@@ -50,6 +50,7 @@ export function T2vPromptToVideo() {
   const [style, setStyle] = useState<T2vPipelineStyle>('documentary')
   const [voiceId, setVoiceId] = useState(T2V_PIPELINE_DEFAULT_NARRATOR.voiceId)
   const [captions, setCaptions] = useState(true)
+  const [aiBroll, setAiBroll] = useState(false)
   const [renderResolution, setRenderResolution] = useState<'480p' | '720p' | '1080p'>('720p')
   const [starting, setStarting] = useState(false)
   const [status, setStatus] = useState<PipelineStatus | null>(null)
@@ -86,7 +87,7 @@ export function T2vPromptToVideo() {
       const res = await fetch('/api/t2v/pipeline', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim(), durationS, aspect, style, voiceId, captions, renderResolution }),
+        body: JSON.stringify({ prompt: prompt.trim(), durationS, aspect, style, voiceId, captions, renderResolution, aiBroll }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Could not start')
@@ -263,6 +264,13 @@ export function T2vPromptToVideo() {
         <div className="flex items-center gap-3">
           <Switch checked={captions} onCheckedChange={setCaptions} aria-label="Captions" />
           <span className="text-sm">Captions</span>
+        </div>
+        <div className="flex items-start gap-3">
+          <Switch checked={aiBroll} onCheckedChange={setAiBroll} aria-label="AI B-roll (test)" data-testid="t2v-pipeline-ai-broll" />
+          <span className="text-sm">
+            AI B-roll <span className="rounded bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">Test · premium</span>
+            <span className="block text-xs text-muted-foreground">Up to 3 short AI-generated clips, only where stock footage is way off.</span>
+          </span>
         </div>
       </div>
       <aside className="flex flex-col gap-4 rounded-xl border border-border p-4 lg:sticky lg:top-4 lg:self-start">
