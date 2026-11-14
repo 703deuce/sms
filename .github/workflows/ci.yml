@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: npx tsc --noEmit
+      - run: npx tsc --noEmit -p tsconfig.voice-agent.json
       - run: npm run build:voice-python
       - run: npm run test:voice-web-split
       - run: npm run verify:voice-v2-caller-experience-law
