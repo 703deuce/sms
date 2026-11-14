@@ -247,6 +247,16 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
             deleted_ids = document.get("deletedWordIds") or []
             has_gaps_pre = any(s.get("kind") == "gap" for s in edl)
             if not deleted_ids and not has_gaps_pre:
+                # Untouched T2V edit: export the assembled source as-is. The word EDL otherwise trims the
+                # lead-in and cuts the scene pauses/transition holds between narration words (a 94.6 s
+                # assembled video exported as 90.5 s, end card shortened).
+                if trim_in > range_start or cut_ranges:
+                    log.info(
+                        "[t2v:export] keeping full assembled source (no word edits)",
+                        extra={"compositionId": composition_id, "trimInMs": trim_in, "cutRanges": len(cut_ranges)},
+                    )
+                trim_in = min(trim_in, range_start)
+                cut_ranges = []
                 prev_out = trim_out
                 trim_out = max(trim_out, range_end)
                 if trim_out != prev_out:

@@ -37,6 +37,11 @@ MAX_CANDIDATES_PER_SHOT = 8
 # When nothing passes, use the best-scoring clip that is at least loosely on-topic rather than a text card.
 FALLBACK_MIN_SCORE = 3
 MAX_PREVIEW_BYTES = 40 * 1024 * 1024
+# Realistic styles (documentary etc.) accept live-action footage only.
+LIVE_ACTION = "live_action"
+MIN_LIGHTING = 4
+# dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
+NEAR_DUP_BITS = 10
 PARALLEL_SHOTS = 4
 
 VERIFY_SCHEMA: dict[str, Any] = {
@@ -50,8 +55,14 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "in_s": {"type": "NUMBER"},
         "out_s": {"type": "NUMBER"},
         "issues": {"type": "STRING"},
+        "style": {
+            "type": "STRING",
+            "enum": ["live_action", "animation", "3d_render", "motion_graphics", "clip_art", "screen_recording"],
+        },
+        "lighting": {"type": "INTEGER"},
+        "framing": {"type": "STRING"},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s"],
+    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -85,7 +96,12 @@ Return JSON:
   action is clearly visible and the framing is good. Prefer a window of at least {need_s:.1f} s
   when the clip allows; use the whole clip if it is all usable. 0 <= in_s < out_s <= {clip_s:.1f}.
 - issues: short note on problems (shaky, blurry, text overlay, cut inside clip), or "".
-"""
+- style: live_action (real camera footage), animation (2D/cartoon), 3d_render (CGI, game-like or
+  AI-generated imagery, even if photoreal), motion_graphics, clip_art (icons/flat graphics on plain
+  backgrounds), or screen_recording.
+- lighting: 0-10 how well lit and readable the subject is (0 = too dark to read, 10 = bright, clear).
+- framing: 2-5 words, shot size + subject, e.g. "close-up charging plug", "aerial highway traffic".
+{style_rule}"""
 
 
 def _payload(job: dict) -> dict:
@@ -134,6 +150,57 @@ def _mute_and_shrink(src: Path, dest: Path) -> None:
         raise RuntimeError(f"ffmpeg_mute_failed: {proc.stderr[-300:]}")
 
 
+def _dhash_frames(video: Path, in_s: float, out_s: float) -> list[str]:
+    """64-bit dHash of 3 frames inside the chosen window (25/50/75%). Cheap near-duplicate signal."""
+    hashes: list[str] = []
+    span = max(0.1, out_s - in_s)
+    for frac in (0.25, 0.5, 0.75):
+        t = in_s + span * frac
+        proc = subprocess.run(
+            ["ffmpeg", "-v", "error", "-ss", f"{t:.2f}", "-i", str(video), "-frames:v", "1",
+             "-vf", "scale=9:8:flags=area,format=gray", "-f", "rawvideo", "-"],
+            capture_output=True,
+        )
+        px = proc.stdout
+        if proc.returncode != 0 or len(px) < 72:
+            continue
+        bits = 0
+        for row in range(8):
+            for col in range(8):
+                bits = (bits << 1) | (1 if px[row * 9 + col] > px[row * 9 + col + 1] else 0)
+        hashes.append(f"{bits:016x}")
+    return hashes
+
+
+def near_duplicate(a: list[str], b: list[str]) -> bool:
+    for x in a or []:
+        for y in b or []:
+            if bin(int(x, 16) ^ int(y, 16)).count("1") <= NEAR_DUP_BITS:
+                return True
+    return False
+
+
+def passes(entry: dict, need_s: float, realistic: bool) -> bool:
+    if entry.get("error") or "score" not in entry:
+        return False
+    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
+        return False
+    return (
+        bool(entry.get("matches"))
+        and entry["score"] >= ACCEPT_SCORE
+        and int(entry.get("lighting", 10)) >= MIN_LIGHTING
+        and (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
+    )
+
+
+def fallback_rank(entry: dict, realistic: bool) -> float:
+    """Best-available ordering: relevance first, then lighting; non-live-action is a last resort."""
+    s = float(entry.get("score", 0)) + 0.15 * float(entry.get("lighting", 5))
+    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
+        s -= 20
+    return s
+
+
 def _probe_s(path: Path) -> float:
     try:
         out = subprocess.run(
@@ -157,7 +224,7 @@ def _gemini_watch(model: str, video: Path, prompt: str) -> tuple[dict, int, int]
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": VERIFY_SCHEMA,
-        "maxOutputTokens": 400,
+        "maxOutputTokens": 700,
         "mediaResolution": "MEDIA_RESOLUTION_LOW",
     }
     m = model.lower()
@@ -233,21 +300,27 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     if not draft_id or not workspace_id:
         raise ValueError("T2V_VERIFY_STOCK payload requires draftId and workspaceId")
     model = _model()
-    accepted: set[str] = set()
+    realistic = bool(p.get("realistic", True))
+    style_rule = (
+        "This video uses a realistic (documentary) style: only live_action footage can match; animation, "
+        "3d_render, motion_graphics, clip_art and screen_recording must have matches=false."
+        if realistic
+        else ""
+    )
+    # Clips/visuals already used by earlier rounds of this run: never pick them (or look-alikes) again.
+    used_ids: set[str] = {str(u.get("providerId")) for u in (p.get("used") or []) if u.get("providerId")}
+    used_hashes: list[list[str]] = [list(u.get("phash") or []) for u in (p.get("used") or []) if u.get("phash")]
     lock = threading.Lock()
     usage = {"in": 0, "out": 0, "calls": 0}
-    results: list[dict | None] = [None] * len(shots)
+    evaluated_by_shot: list[list[dict]] = [[] for _ in shots]
 
-    def verify_shot(idx: int, shot: dict, work: Path) -> dict:
+    def verify_shot(idx: int, shot: dict, work: Path) -> None:
         need_s = float(shot.get("needS") or 4.0)
-        evaluated: list[dict] = []
-        chosen: dict | None = None
-        best: dict | None = None
+        evaluated = evaluated_by_shot[idx]
+        passing = 0
         for c in (shot.get("candidates") or [])[:MAX_CANDIDATES_PER_SHOT]:
-            key = f"{c.get('provider', 'pixabay')}:{c.get('providerId')}"
-            with lock:
-                if key in accepted:
-                    continue
+            if str(c.get("providerId")) in used_ids:
+                continue
             entry: dict[str, Any] = {"providerId": str(c.get("providerId")), "provider": c.get("provider", "pixabay"), "query": c.get("query")}
             try:
                 raw = work / f"s{idx}_{c.get('providerId')}.mp4"
@@ -261,6 +334,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     topic=topic.replace('"', "'"),
                     clip_s=clip_s,
                     need_s=need_s,
+                    style_rule=style_rule,
                 )
                 v, tin, tout = _gemini_watch(model, muted, prompt)
                 with lock:
@@ -279,47 +353,63 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "outS": b,
                         "clipS": round(clip_s, 2),
                         "issues": str(v.get("issues") or "")[:200],
+                        "style": str(v.get("style") or LIVE_ACTION),
+                        "lighting": int(v.get("lighting") if v.get("lighting") is not None else 5),
+                        "framing": str(v.get("framing") or "")[:60],
                     }
                 )
+                try:
+                    entry["phash"] = _dhash_frames(muted, a, b)
+                except Exception:  # noqa: BLE001 — hash is a bonus signal
+                    entry["phash"] = []
             except Exception as exc:  # noqa: BLE001 — candidate-level failure, try next
                 entry.update({"error": str(exc)[:200]})
                 evaluated.append(entry)
                 continue
             evaluated.append(entry)
-            if best is None or entry["score"] > best["score"]:
-                best = entry
-            if entry["matches"] and entry["score"] >= ACCEPT_SCORE and (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05:
-                with lock:
-                    if key in accepted:
-                        continue
-                    accepted.add(key)
-                chosen = {**entry, "verdict": "accepted"}
-                break
-        if chosen is None:
-            ranked = sorted((e for e in evaluated if "score" in e), key=lambda e: e["score"], reverse=True)
-            for e in ranked:
-                if e["score"] < FALLBACK_MIN_SCORE:
+            if passes(entry, need_s, realistic):
+                passing += 1
+                # Two passing options give the no-repeat pass a backup without reviewing everything.
+                if passing >= 2:
                     break
-                key = f"{e['provider']}:{e['providerId']}"
-                with lock:
-                    if key in accepted:
-                        continue
-                    accepted.add(key)
-                verdict = "weak_match" if (e.get("matches") and e["score"] >= 5) else "best_available"
-                chosen = {**e, "verdict": verdict}
-                break
-        return {"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": evaluated}
 
     t0 = time.time()
     with tempfile.TemporaryDirectory(prefix="t2v-verify-") as td:
         work = Path(td)
         with ThreadPoolExecutor(max_workers=PARALLEL_SHOTS) as pool:
-            futs = {pool.submit(verify_shot, i, s, work): i for i, s in enumerate(shots)}
-            for f, i in futs.items():
+            futs = [pool.submit(verify_shot, i, s, work) for i, s in enumerate(shots)]
+            for i, f in enumerate(futs):
                 try:
-                    results[i] = f.result()
-                except Exception as exc:  # noqa: BLE001
-                    results[i] = {"sceneId": shots[i].get("sceneId"), "chosen": None, "evaluated": [], "error": str(exc)[:200]}
+                    f.result()
+                except Exception as exc:  # noqa: BLE001 — a shot-level crash never fails the job
+                    evaluated_by_shot[i].append({"providerId": "-", "error": f"shot_failed:{str(exc)[:160]}"})
+
+    # Sequential no-repeat selection in story order: never the same clip ID twice, never a near-identical
+    # frame (dHash) of an already-picked shot, including picks from earlier rounds.
+    results: list[dict] = []
+    for i, shot in enumerate(shots):
+        need_s = float(shot.get("needS") or 4.0)
+        ev = evaluated_by_shot[i]
+
+        def free(e: dict) -> bool:
+            return e["providerId"] not in used_ids and not any(near_duplicate(e.get("phash") or [], h) for h in used_hashes)
+
+        chosen = None
+        for e in sorted((e for e in ev if passes(e, need_s, realistic)), key=lambda e: (-e["score"], -e.get("lighting", 5))):
+            if free(e):
+                chosen = {**e, "verdict": "accepted"}
+                break
+        if chosen is None:
+            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, realistic)):
+                if free(e):
+                    ok_style = not realistic or e.get("style", LIVE_ACTION) == LIVE_ACTION
+                    chosen = {**e, "verdict": "weak_match" if (e.get("matches") and e["score"] >= 5 and ok_style) else "best_available"}
+                    break
+        if chosen:
+            used_ids.add(chosen["providerId"])
+            if chosen.get("phash"):
+                used_hashes.append(chosen["phash"])
+        results.append({"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": ev})
 
     try:
         if usage["calls"]:
