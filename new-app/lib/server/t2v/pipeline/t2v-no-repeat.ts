@@ -166,6 +166,11 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     timeOfDay: e.timeOfDay,
     saturation: e.saturation,
     luma: e.luma,
+    // The reviewer's words travel with every placed pick (photos and re-picked clips included).
+    subjectVisible: e.subjectVisible,
+    fitReason: e.fitReason ?? '',
+    seen: e.seen ?? e.visible ?? '',
+    fitReasonFrom: 'verify',
     verdict,
   }
 }
@@ -204,7 +209,7 @@ type FreeClip = ClipRef & { phash?: string[]; kind?: string; framing?: string; a
 export function enforceNoRepeatDeterministic(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; spareScores?: SpareScores },
+  opts: { realistic: boolean; spareScores?: SpareScores; spareReasons?: SpareReasons },
   banned: Record<string, Set<string>> = {},
 ): {
   out: Record<string, T2vShotResult>
@@ -294,11 +299,22 @@ export function enforceNoRepeatDeterministic(
       if (!chosen) {
         // Spare = a clip reviewed for another line. Only after it was re-checked against THIS line (5+);
         // its score becomes the score for this line, so QA judges the pick where it actually sits.
+        // Its fitReason is the re-check's reason for THIS line (never the other line's verify reason); a
+        // spare without one is not placed.
         const lineScores = opts.spareScores?.[shot.sceneId] ?? {}
-        const spare = spares.find((e) => free(e, strict) && (lineScores[e.providerId] ?? -1) >= FILLER_MIN_SCORE)
+        const lineReasons = opts.spareReasons?.[shot.sceneId]
+        const hasReason = (id: string) => !opts.spareReasons || Boolean(lineReasons?.[id])
+        const spare = spares.find((e) => free(e, strict) && (lineScores[e.providerId] ?? -1) >= FILLER_MIN_SCORE && hasReason(e.providerId))
         if (spare) {
           const lineScore = lineScores[spare.providerId]!
-          chosen = { ...toPick(spare, 'weak_match'), score: lineScore, matches: lineScore >= ACCEPT_SCORE, reviewedForOtherLine: spare.score }
+          chosen = {
+            ...toPick(spare, 'weak_match'),
+            score: lineScore,
+            matches: lineScore >= ACCEPT_SCORE,
+            reviewedForOtherLine: spare.score,
+            fitReason: lineReasons?.[spare.providerId] ?? '',
+            fitReasonFrom: 'line_recheck',
+          }
           tier = 'spare'
         }
       }
@@ -354,13 +370,17 @@ export function enforceNoRepeatDeterministic(
 }
 
 export type SpareScores = Record<string, Record<string, number>>
+/** The re-check's own reason per line and clip: the fitReason of a clip placed under a line it was not verified for. */
+export type SpareReasons = Record<string, Record<string, string>>
 
 export const SPARE_SYSTEM = `You re-check stock clips for a stock-footage video. Each clip was reviewed for a DIFFERENT
 narration line; a reviewer described what it shows. Read the whole script first so you understand the video.
 Then score how well each clip works under the NEW line given, at that point of THIS video (0-10): 7-10
 clearly works; 5-6 usable; 0-4 does not work here. Use each line's moment and what the viewer must recognise;
-a clip that would look out of place at this moment scores low even when a word matches.
-Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "score": number}]}`
+a clip that would look out of place at this moment scores low even when a word matches. Judge only what the
+clip shows ("shows"), not what it might stand for: if it does not show what the NEW line is about, score 4 or lower.
+For each clip give "reason": one short sentence on why what it shows does or does not fit the NEW line.
+Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "score": number, "reason": string}]}`
 
 /** One text-only call: score candidate spares against the line they would sit under. */
 export async function scoreSpares(
@@ -368,6 +388,15 @@ export async function scoreSpares(
   requests: Record<string, Ev[]>,
   context: { script?: string; videoUnderstanding?: string } = {},
 ): Promise<SpareScores> {
+  return (await scoreSparesWithReasons(shots, requests, context)).scores
+}
+
+/** Same re-check, also returning the re-check's reason per line and clip (fitReason for that line). */
+export async function scoreSparesWithReasons(
+  shots: T2vPlannedShot[],
+  requests: Record<string, Ev[]>,
+  context: { script?: string; videoUnderstanding?: string } = {},
+): Promise<{ scores: SpareScores; reasons: SpareReasons }> {
   const items = shots
     .filter((s) => requests[s.sceneId]?.length)
     .map((s) => ({
@@ -376,10 +405,10 @@ export async function scoreSpares(
       line: s.narration,
       moment: s.moment ?? s.intent,
       mustRecognise: s.subject ?? s.intent,
-      clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.visible ?? '').slice(0, 160)}`, framing: e.framing ?? '' })),
+      clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.seen || e.visible || '').slice(0, 160)}`, framing: e.framing ?? '' })),
     }))
-  if (!items.length) return {}
-  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(
+  if (!items.length) return { scores: {}, reasons: {} }
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown; reason?: unknown }> }>(
     SPARE_SYSTEM,
     [
       ...(context.videoUnderstanding ? [`What this video is about: ${context.videoUnderstanding}`] : []),
@@ -389,12 +418,15 @@ export async function scoreSpares(
     { maxTokens: 3000 },
   )
   const res: SpareScores = {}
+  const reasons: SpareReasons = {}
   for (const r of Array.isArray(out.scores) ? out.scores : []) {
     const sc = Number(r.score)
     if (!r.sceneId || !r.providerId || !Number.isFinite(sc) || !requests[r.sceneId]?.some((e) => e.providerId === String(r.providerId))) continue
     ;(res[r.sceneId] ??= {})[String(r.providerId)] = Math.max(0, Math.min(10, Math.round(sc)))
+    const why = String(r.reason ?? '').trim().slice(0, 200)
+    if (why) (reasons[r.sceneId] ??= {})[String(r.providerId)] = why
   }
-  return res
+  return { scores: res, reasons }
 }
 
 const LOOKALIKE_SYSTEM = `You check the shot sequence of a stock-footage video for repetition. Each item is one shot,
@@ -476,7 +508,7 @@ export function dupLoser(
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; spareScores?: SpareScores; script?: string; videoUnderstanding?: string },
+  opts: { realistic: boolean; spareScores?: SpareScores; spareReasons?: SpareReasons; script?: string; videoUnderstanding?: string },
 ): Promise<{
   results: Record<string, T2vShotResult>
   replaced: number
@@ -492,12 +524,13 @@ export async function enforceNoRepeat(
   let { out, replaced, tiers, spareRequests, unused } = enforceNoRepeatDeterministic(shots, results, opts, banned)
   // Spares are re-checked against the line they would fill before any is placed.
   let spareScores: SpareScores = {}
+  let spareReasons: SpareReasons = {}
   try {
-    spareScores = await scoreSpares(shots, spareRequests, { script: opts.script, videoUnderstanding: opts.videoUnderstanding })
+    ;({ scores: spareScores, reasons: spareReasons } = await scoreSparesWithReasons(shots, spareRequests, { script: opts.script, videoUnderstanding: opts.videoUnderstanding }))
   } catch (err) {
     logT2v('pipeline-norepeat', 'spare re-check failed (no spares used)', { error: err instanceof Error ? err.message : 'error' })
   }
-  opts = { ...opts, spareScores }
+  opts = { ...opts, spareScores, spareReasons }
   ;({ out, replaced, tiers, unused } = enforceNoRepeatDeterministic(shots, results, opts, banned))
   let lookalikeSwaps = 0
   let varietySwaps = 0
@@ -522,7 +555,9 @@ export async function enforceNoRepeat(
       const p = a === b ? a : dupLoser(x, y, a, b, banned, opts, results)
       dropped.add(p)
       const z = seq[p]!
-      ;(banned[z.s.sceneId] ??= new Set()).add(z.c!.providerId)
+      // A look-alike of a clip in this video is banned for EVERY line, not just the one it lost: placed
+      // elsewhere (e.g. the next line) it is still the same shot shown twice (sleep sh15/sh16, 42966).
+      for (const s of shots) (banned[s.sceneId] ??= new Set()).add(z.c!.providerId)
       const o = p === a ? seq[b] : seq[a]
       logT2v('pipeline-norepeat', 'ban', { sceneId: z.s.sceneId, providerId: z.c!.providerId, reason: `lookalike_of:${o?.s.sceneId ?? '?'}:${o?.c?.providerId ?? '?'}` })
       lookalikeSwaps++

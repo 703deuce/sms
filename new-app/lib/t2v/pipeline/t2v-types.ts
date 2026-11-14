@@ -146,6 +146,10 @@ export type T2vVerifiedPick = {
   subjectVisible?: boolean
   /** Reviewer's own words on why the clip does or does not fit here (whole-script judgement). */
   fitReason?: string
+  /** Reviewer: what is literally on screen, written before the fit judgement (score and fitReason build on it). */
+  seen?: string
+  /** Where fitReason comes from: the visual verify for this line, or the re-check against this line (clips first reviewed for another line). */
+  fitReasonFrom?: 'verify' | 'line_recheck'
   /** photo = still image (Ken Burns), ai = generated test clip, else stock video. */
   kind?: 'video' | 'photo' | 'ai'
   /** best_available = nothing passed review; the highest-scoring on-topic clip is used instead of a card. */
@@ -168,6 +172,18 @@ export type T2vShotResult = {
 }
 
 export type T2vPickedBy = 'accepted' | 'usable' | 'photo' | 'spare' | 'ai' | 'fallback' | 'last_resort' | 'held' | 'card'
+
+export type T2vReimaginePending = Record<string, { round: number; ideas: Array<{ intent: string; queries: string[] }> }>
+
+export type T2vReimagineLogEntry = {
+  sceneId: string
+  round: number
+  ideas: Array<{ idea: string; intent: string; queries: string[]; candidates: Array<{ providerId: string; score: number | null }> }>
+  bestScore: number | null
+  /** A candidate from this round scored FILLER_MIN_SCORE (5/10) or more for the line. */
+  passed: boolean
+  note?: string
+}
 
 export type T2vQaReport = {
   at: string
@@ -198,8 +214,14 @@ export type T2vPipelineRun = {
   photoRound?: number
   /** Legacy (pre-reimagine runs): related-subject rescue round. */
   rescueRound?: number
-  /** Reimagine rounds started (max T2V_REIMAGINE_ROUNDS): new shot ideas for lines nothing fits. */
+  /** Reimagine steps started (one verify job each). Per-line rounds are in reimagineTries. */
   reimagineRound?: number
+  /** Reimagine rounds done per line (each line max T2V_REIMAGINE_ROUNDS). */
+  reimagineTries?: Record<string, number>
+  /** Ideas of the reimagine step in flight, per line (logged with their scores when the verify job ends). */
+  reimaginePending?: T2vReimaginePending
+  /** Per line, per round: ideas, queries, candidates + scores, outcome (no URLs). */
+  reimagineLog?: T2vReimagineLogEntry[]
   /** AI B-roll test (off by default): per-run opt-in; 1 = generating, 2 = verify job in flight / done. */
   aiBroll?: boolean
   aiRound?: number

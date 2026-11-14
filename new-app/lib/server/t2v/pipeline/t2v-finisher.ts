@@ -1,5 +1,5 @@
 import 'server-only'
-import { bestStockScore, FILLER_MIN_SCORE, nearDuplicateHash, nearIdenticalShot, scoreSpares, t2vAiAcceptable, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { bestStockScore, FILLER_MIN_SCORE, nearDuplicateHash, nearIdenticalShot, scoreSparesWithReasons, t2vAiAcceptable, t2vQualityOk, type SpareReasons } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { compactScript } from '@/lib/server/t2v/pipeline/t2v-reimagine'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
@@ -71,6 +71,9 @@ function evToPick(e: Ev): T2vVerifiedPick {
     inS: e.inS ?? 0,
     outS: e.outS ?? 0,
     clipS: e.clipS ?? 0,
+    fitReason: e.fitReason ?? '',
+    seen: e.seen ?? e.visible ?? '',
+    fitReasonFrom: 'verify',
     verdict: 'best_available',
   } as T2vVerifiedPick
 }
@@ -162,9 +165,10 @@ export async function t2vFinisher(input: {
       .slice(0, 8)
   }
   let lineScores: Record<string, Record<string, number>> = {}
+  let lineReasons: SpareReasons = {}
   if (Object.values(shortlist).some((l) => l.length)) {
     try {
-      lineScores = await scoreSpares(open, shortlist, { script: compactScript(input.shots), videoUnderstanding: input.story.videoUnderstanding })
+      ;({ scores: lineScores, reasons: lineReasons } = await scoreSparesWithReasons(open, shortlist, { script: compactScript(input.shots), videoUnderstanding: input.story.videoUnderstanding }))
     } catch (err) {
       logT2v('pipeline-finisher', 'cross-line re-check failed', { error: err instanceof Error ? err.message : 'error' })
     }
@@ -173,11 +177,16 @@ export async function t2vFinisher(input: {
     if (options.get(shot.sceneId)?.length) continue
     const ok = okFor(shot)
     const ls = lineScores[shot.sceneId] ?? {}
-    // Score = the re-check for THIS line, so QA judges it where it sits.
+    const lr = lineReasons[shot.sceneId] ?? {}
+    // Score AND fitReason = the re-check for THIS line, so QA judges it where it sits. The other line's
+    // verify reason is never carried over; a clip the re-check gave no reason for is not placed.
     const cross = (shortlist[shot.sceneId] ?? [])
-      .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= FILLER_MIN_SCORE)
+      .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= FILLER_MIN_SCORE && Boolean(lr[e.providerId]))
       .sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))
-      .map((e) => ({ pick: { ...evToPick(e), score: ls[e.providerId]!, matches: ls[e.providerId]! >= 7, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' as const }))
+      .map((e) => ({
+        pick: { ...evToPick(e), score: ls[e.providerId]!, matches: ls[e.providerId]! >= 7, reviewedForOtherLine: e.score ?? 0, fitReason: lr[e.providerId]!, fitReasonFrom: 'line_recheck' as const },
+        tier: 'last_resort' as const,
+      }))
     if (!cross.length) logT2v('pipeline-finisher', 'no option at the floor, extending the previous shot', { sceneId: shot.sceneId, floor: FILLER_MIN_SCORE })
     take(shot, cross)
   }

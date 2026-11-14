@@ -48,6 +48,8 @@ PARALLEL_SHOTS = 4
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
     "properties": {
+        # Written FIRST: what is literally on screen, before any judgement against the script.
+        "seen": {"type": "STRING"},
         "visible": {"type": "STRING"},
         "main_subject": {"type": "STRING"},
         "action": {"type": "STRING"},
@@ -66,7 +68,9 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "subject_visible": {"type": "BOOLEAN"},
         "fit_reason": {"type": "STRING"},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    "required": ["seen", "visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    # Gemini fills properties in this order: describe (seen) first, then score and explain from that description.
+    "propertyOrdering": ["seen", "visible", "main_subject", "action", "fit_reason", "score", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -75,22 +79,33 @@ put it under ONE line of THIS video. Judge only what is visible on screen, never
 
 {script_block}Clip length: {clip_s:.1f} s. The shot needs about {need_s:.1f} s.
 
-Read the script first so you understand the video and this moment in it. Then judge the clip as the editor
-would: does it make sense HERE, in THIS video, at this point? A clip whose subject matches the words but would
+Read the script first so you understand the video and this moment in it. If this line is only part of a
+sentence, read it as that whole sentence in its place in the story. Then judge the clip the way a viewer
+watching the whole video would: watching this video, would I see this clip as this line, in this story? A clip whose subject matches the words but would
 look out of place at this moment scores low; a clip that shows the moment in a different but natural way
 scores well. Decide yourself what matters for this line - the script, not a rule, tells you whether the place,
 light, season or people matter here. If the line warns against doing something, a clip that shows that act
 being done does not work.
 
+Work in two steps.
+1. seen: first describe in plain words what is literally on screen: the people, things and actions you can
+   actually see, and say if the picture is too dark or unclear to tell. Describe only; do not use the script here.
+2. Then judge the fit of what you wrote in seen against this line and the whole script. Base the score and
+   fit_reason on seen, not on what the clip might stand for. If seen does not show what this line is about,
+   the clip does not show the line. A metaphor, a symbol or a loose association is a miss, not a pass, however
+   well it could be argued: score 4 or lower so the editor looks for another shot.
+   If you cannot tell from the picture what is shown, score 3 or lower.
+
 Return JSON:
+- seen: 1-2 plain sentences, only what is literally visible (written before you judge the fit).
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
 - score: 0-10 for THIS spot in THIS video. 9-10 = exactly right here; 7-8 = clearly works, usable as-is
-  (literal or a natural alternative depiction); 5-6 = works but not ideal; 3-4 = loosely on topic but wrong for
+  (it shows what the line is about, literally or from another angle of the same moment); 5-6 = works but not ideal; 3-4 = loosely on topic but wrong for
   this moment; 0-2 = wrong, unusable, or contradicts the video.
 - matches: true when score >= 7 and the clip is readable (not too dark or blurry to see what it shows, no
   dominating text, logos or watermarks).
-- fit_reason: one short sentence in your own words on why it does or does not fit here.
+- fit_reason: one short sentence in your own words on why what you described in seen does or does not fit here.
 - subject_visible: true if what the viewer must recognise is clearly visible (information only).
 - in_s, out_s: best continuous usable window, preferably >= {need_s:.1f} s; 0 <= in_s < out_s <= {clip_s:.1f}.
 - issues: shaky, blurry, text overlay, cut inside clip, or "".
@@ -107,10 +122,18 @@ Whole script (this shot is line {line_no}):
 {script}
 Previous line: "{prev}"
 This line (spoken over this shot): "{narration}"
-Next line: "{next}"
+{sentence_line}Next line: "{next}"
 What this moment means in the video: "{moment}"
 What the viewer must recognise: "{must_recognise}"
 """
+
+
+def _sentence_line(shot: dict, q) -> str:
+    """Split scenes: the full sentence this piece belongs to (the piece alone reads like a keyword list)."""
+    full = q(shot.get("sentence"), 600)
+    if not full or " ".join(full.lower().split()) == " ".join(q(shot.get("narration"), 600).lower().split()):
+        return ""
+    return f'This line is part of the sentence: "{full}"\n'
 
 
 def script_block(script: str, shot: dict, video_understanding: str = "", topic: str = "") -> str:
@@ -124,6 +147,7 @@ def script_block(script: str, shot: dict, video_understanding: str = "", topic: 
         prev=q(shot.get("prevNarration")) or "(start of video)",
         narration=q(shot.get("narration"), 600),
         next=q(shot.get("nextNarration")) or "(end of video)",
+        sentence_line=_sentence_line(shot, q),
         moment=q(shot.get("moment") or shot.get("intent")),
         must_recognise=q(shot.get("subject") or shot.get("intent"), 120),
     )
@@ -137,7 +161,7 @@ def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | 
             "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
             "candidateId": e.get("providerId"), "kind": e.get("kind") or "video", "score": e.get("score"),
             "lighting": e.get("lighting"), "matches": e.get("matches"), "verdict": "chosen" if picked else "not_chosen",
-            "reason": e.get("error") or e.get("fitReason") or "",
+            "seen": e.get("seen") or "", "reason": e.get("error") or e.get("fitReason") or "",
         }))
     log.info("[t2v:verify:scene] %s", json.dumps({
         "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("lineNo", idx), "sceneId": shot.get("sceneId"),
@@ -347,7 +371,7 @@ def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4")
     gen: dict[str, Any] = {
         "responseMimeType": "application/json",
         "responseSchema": VERIFY_SCHEMA,
-        "maxOutputTokens": 700,
+        "maxOutputTokens": 900,
         "mediaResolution": "MEDIA_RESOLUTION_LOW",
     }
     m = model.lower()
@@ -488,7 +512,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 a, b = (0.0, clip_s) if is_photo else _clamp_window(v, clip_s, need_s)
                 entry.update(
                     {
-                        "visible": str(v.get("visible") or "")[:300],
+                        # What is literally on screen (written before the fit judgement); stored with fit_reason.
+                        "seen": str(v.get("seen") or v.get("visible") or "")[:300],
+                        "visible": str(v.get("visible") or v.get("seen") or "")[:300],
                         "subject": str(v.get("main_subject") or "")[:120],
                         "action": str(v.get("action") or "")[:120],
                         # The model's in-context judgement decides; subject_visible is information only.
