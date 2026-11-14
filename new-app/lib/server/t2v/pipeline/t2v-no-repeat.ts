@@ -382,8 +382,8 @@ in edit order, described by a footage reviewer.
    cherry-branch close-up. Different shot kinds (aerial vs close-up of hands vs interior) are fine.
 Return ONLY JSON: {"pairs": [[p, q], ...], "sameKind": [[p, p+1], ...]} using the "p" positions given.`
 
-async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: string; subject: string; visible: string }>): Promise<{ dup: number[]; kind: number[] }> {
-  if (items.length < 2) return { dup: [], kind: [] }
+async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: string; subject: string; visible: string }>): Promise<{ dup: number[]; kind: number[]; pairs: Array<[number, number]> }> {
+  if (items.length < 2) return { dup: [], kind: [], pairs: [] }
   const out = await t2vLlmJson<{ pairs?: unknown[]; sameKind?: unknown[] }>(LOOKALIKE_SYSTEM, `Shots: ${JSON.stringify(items)}`, { maxTokens: 2000 })
   const later = (list: unknown[] | undefined, adjacentOnly: boolean) => {
     const s = new Set<number>()
@@ -396,7 +396,13 @@ async function sequenceCheck(items: Array<{ p: number; still: boolean; framing: 
     }
     return [...s]
   }
-  return { dup: later(out.pairs, false), kind: later(out.sameKind, true) }
+  const pairs: Array<[number, number]> = []
+  for (const p of Array.isArray(out.pairs) ? out.pairs : []) {
+    if (!Array.isArray(p) || p.length !== 2) continue
+    const [a, b] = p.map(Number)
+    if (Number.isInteger(a) && Number.isInteger(b) && a !== b) pairs.push([Math.min(a!, b!), Math.max(a!, b!)])
+  }
+  return { dup: later(out.pairs, false), kind: later(out.sameKind, true), pairs }
 }
 
 /** Does the scene have another good (5+, live, lit) clip besides `exceptId`? Variety swaps only then. */
@@ -404,6 +410,28 @@ function hasGoodAlternative(r: T2vShotResult | undefined, exceptId: string, bann
   return (r?.evaluated ?? []).some((e) => e.providerId !== exceptId && !banned?.has(e.providerId) && scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx))
 }
 
+/** Which position of a look-alike pair gives up its clip (see enforceNoRepeat). */
+export function dupLoser(
+  x: { s: T2vPlannedShot; c?: T2vVerifiedPick | null },
+  y: { s: T2vPlannedShot; c?: T2vVerifiedPick | null },
+  px: number,
+  py: number,
+  banned: Record<string, Set<string>>,
+  opts: { realistic: boolean; monoOk?: boolean },
+  results: Record<string, T2vShotResult>,
+): number {
+  const alt = (v: { s: T2vPlannedShot; c?: T2vVerifiedPick | null }) => {
+    const ctx = { realistic: opts.realistic, nightOk: t2vNightLine(v.s.narration, v.s.intent), monoOk: Boolean(opts.monoOk) }
+    return hasGoodAlternative(results[v.s.sceneId], v.c!.providerId, banned[v.s.sceneId], ctx)
+  }
+  const ax = alt(x)
+  const ay = alt(y)
+  if (ax !== ay) return ax ? px : py
+  const sx = x.c?.score ?? 0
+  const sy = y.c?.score ?? 0
+  if (sx !== sy) return sx < sy ? px : py
+  return Math.max(px, py)
+}
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
@@ -433,7 +461,7 @@ export async function enforceNoRepeat(
   for (let pass = 0; pass < 3; pass++) {
     const seq = shots.map((s) => ({ s, c: out[s.sceneId]?.chosen })).filter((x) => x.c)
     const items = seq.map((x, p) => ({ p, still: isPhoto(x.c!), framing: x.c!.framing ?? '', subject: x.c!.subject ?? '', visible: (x.c!.visible ?? '').slice(0, 160) }))
-    let check: { dup: number[]; kind: number[] }
+    let check: { dup: number[]; kind: number[]; pairs: Array<[number, number]> }
     try {
       check = await sequenceCheck(items)
     } catch (err) {
@@ -441,16 +469,23 @@ export async function enforceNoRepeat(
       break
     }
     let changed = false
-    for (const p of check.dup) {
-      const x = seq[p]
-      if (!x) continue
-      ;(banned[x.s.sceneId] ??= new Set()).add(x.c!.providerId)
+    // A look-alike pair loses ONE of its two shots: the side whose scene has another good clip; when
+    // neither has, the weaker pick (a good AI clip or strong stock never yields to a weaker twin).
+    const dropped = new Set<number>()
+    for (const [a, b] of check.pairs.length ? check.pairs : check.dup.map((p) => [p, p] as [number, number])) {
+      const x = seq[a]
+      const y = seq[b]
+      if (!x || !y || dropped.has(a) || dropped.has(b)) continue
+      const p = a === b ? a : dupLoser(x, y, a, b, banned, opts, results)
+      dropped.add(p)
+      const z = seq[p]!
+      ;(banned[z.s.sceneId] ??= new Set()).add(z.c!.providerId)
       lookalikeSwaps++
       changed = true
     }
     for (const p of check.kind) {
       const x = seq[p]
-      if (!x || check.dup.includes(p)) continue
+      if (!x || dropped.has(p)) continue
       // Variety is a preference: swap only when the scene has another good clip to use.
       const ctx = { realistic: opts.realistic, nightOk: t2vNightLine(x.s.narration, x.s.intent), monoOk: Boolean(opts.monoOk) }
       if (!hasGoodAlternative(out[x.s.sceneId], x.c!.providerId, banned[x.s.sceneId], ctx)) continue

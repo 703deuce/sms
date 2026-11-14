@@ -678,7 +678,12 @@ async function claimAiStep(draftId: string): Promise<boolean> {
 
 /** Start one generation per target scene (aiBrollTargets: weakest first, max 3); no retries. */
 async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[] }> {
-  const needy = aiBrollTargets(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+  const opts = { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) }
+  // Predict with the same full pass the edit uses (spares + sequence check), so the clips go where the
+  // final picks would really be weakest (the dry pass misses look-alike swaps).
+  const full = await enforceNoRepeat(run.shots!, history, opts).catch(() => undefined)
+  const predicted = full ? { out: full.results, tiers: full.tiers } : undefined
+  const needy = aiBrollTargets(run.shots!, history, opts, predicted)
   if (!needy.length) return { jobs: [] }
   const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
   const jobs: T2vAiJob[] = []

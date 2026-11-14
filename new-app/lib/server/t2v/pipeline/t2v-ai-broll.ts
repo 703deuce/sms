@@ -133,23 +133,26 @@ export function aiCandidate(job: T2vAiJob, outputUrl: string): T2vFootageCandida
 }
 
 /**
- * Spend the up-to-3 AI clips on the weakest scenes, weakest first: lines whose predicted pick (dry
- * no-repeat pass) is empty, a last resort, or a fallback scoring 3 or lower, and where no usable stock
+ * Spend the up-to-3 AI clips on the weakest scenes, weakest first: lines whose predicted pick (the full
+ * no-repeat pass incl. sequence check; dry pass when not given) is empty, a last resort, or a fallback scoring 3 or lower, and where no usable stock
  * option for the line reaches 5. Short enough for a 3-5 s clip; one generation per scene, no retries.
  */
 export function aiBrollTargets(
   shots: T2vPlannedShot[],
   history: Record<string, T2vShotResult>,
   opts: { realistic: boolean; monoOk?: boolean },
+  /** The full pick pass (spares + sequence check): what the edit would really place without AI. */
+  predicted?: { out: Record<string, T2vShotResult>; tiers: Record<string, string> },
 ): T2vPlannedShot[] {
-  const dry = enforceNoRepeatDeterministic(shots, history, opts)
+  const dry = predicted ?? enforceNoRepeatDeterministic(shots, history, opts)
   return shots
     .map((sh) => {
       const t = dry.tiers[sh.sceneId]
       const pick = dry.out[sh.sceneId]?.chosen
       const ctx = { realistic: opts.realistic, monoOk: Boolean(opts.monoOk), nightOk: t2vNightLine(sh.narration, sh.intent) }
       // A 5+ usable stock option that a sequence rule moved away in the dry pass can still win: don't pay.
-      const anyGood = bestStockScore(history[sh.sceneId], ctx) >= 5
+      // (With the full pass as prediction placement is already resolved, so only its outcome counts.)
+      const anyGood = !predicted && bestStockScore(history[sh.sceneId], ctx) >= 5
       const weak = !t || !pick || t === 'last_resort' || (t === 'fallback' && (pick.score ?? 0) <= 3)
       // Nothing at all predicted = weakest (the finisher would lend another line's footage).
       return { sh, weak: weak && !anyGood && sh.needS <= AI_BROLL_MAX_NEED_S, score: pick ? (pick.score ?? 0) : -1 }
