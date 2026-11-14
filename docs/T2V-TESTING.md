@@ -38,7 +38,10 @@ The living handoff for anyone (human or agent) testing T2V. Keep this file updat
   - `t2v_coffee.mp4`: baseline, CV 0.20, about 8 of 15 fit.
   - `t2v_coffee2.mp4`: photo fill, CV 0.17, about 12 of 18 fit, one card.
   - `t2v_coffee3.mp4` (d5a2106c1): editorial pacing, no cards, stills cap. 80.1 s, 185 words, 20 shots. Render CV 0.42 (QA pass), 0 cards, 1 held piece, about 11 of 19 fit. 7 cross-line last-resort picks were mostly wrong (mugs and pouring under farm/roasting lines), which led to the text re-check of cross-line picks.
-  - `t2v_coffee_ai.mp4`: Wan 2.2 AI B-roll test (see the latest round notes).
+  - `t2v_coffee_ai.mp4` (5a52a1c06, per-run `aiBroll`): 81.0 s, 185 words, 23 shots. Render CV 0.42 (QA pass), 0 cards, 0 held, all 23 lines have their own clip. Pick types: 11 accepted, 5 photo, 1 fallback, 6 last resort, 0 AI. One AI clip was generated for the "ready to harvest" line (103 frames ≈ 4.2 s, 14.7 s predict time, est. $0.025). It scored 10/10 live action, but a 9/10 stock photo won under the pick order. That led to two changes: AI now only runs when no stock clip or photo reaches 5 for the line, and the stills cap is enforced on fallbacks too. Issues: fallback photos made runs of 3+ stills, and shots 2-3 look like one static shot.
+
+## Round log
+- Nov 13-14, 2026: pacing (CV 0.20 → 0.17 → 0.42 → 0.42), photo fallback, no cards, related rescue round, AI B-roll test step. Next: cross-line fallback quality, script expansion overshoot (185 → 263 rejected), and same-setup lookalikes inside split sentences.
 
 ## Deploys
 - Web: Coolify auto-builds on every push to master (app `ds8s3hjin60qs6g7s0iqkixs`). Push with the `GITHUB_TOKEN_TRANSOVO` env var via GIT_ASKPASS. Never print it, never force-push.

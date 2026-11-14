@@ -1,5 +1,5 @@
 import 'server-only'
-import { nearDuplicateHash, scoreSpares, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { nearDuplicateHash, nearIdenticalShot, scoreSpares, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vRealisticStyle } from '@/lib/t2v/pipeline/t2v-types'
 import { ensureT2vStockAsset } from '@/lib/server/t2v/stock-asset'
 import type { StockCandidate } from '@/lib/server/t2v/stock-match'
@@ -132,7 +132,20 @@ export async function t2vFinisher(input: {
     return (e: Ev) =>
       !e.error && e.kind !== 'ai' && !used.has(e.providerId) && !banned.has(e.providerId) && hasCandidate(e.providerId) && !usedHashes.some((h) => nearDuplicateHash(e.phash, h))
   }
-  const take = (shot: T2vPlannedShot, list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>) => {
+  // Sequence rules hold for fallbacks too: at most 2 stills in a row, no near-identical neighbours.
+  const pickAt = (i: number) => {
+    const sh = input.shots[i]
+    return sh ? (byScene.get(sh.sceneId)?.chosen ?? options.get(sh.sceneId)?.[0]?.pick) : undefined
+  }
+  const seqOk = (shot: T2vPlannedShot, p: T2vVerifiedPick) => {
+    const i = input.shots.indexOf(shot)
+    const [b, a, n] = [pickAt(i - 2), pickAt(i - 1), pickAt(i + 1)]
+    const still = (x?: T2vVerifiedPick) => x?.kind === 'photo'
+    if (still(p) && still(a) && (still(b) || still(n))) return false
+    return !(a && nearIdenticalShot(a, p)) && !(n && nearIdenticalShot(n, p))
+  }
+  const take = (shot: T2vPlannedShot, raw: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }>) => {
+    const list = [...raw.filter((o) => seqOk(shot, o.pick)), ...raw.filter((o) => !seqOk(shot, o.pick))]
     options.set(shot.sceneId, list)
     const top = list[0]
     if (top) {

@@ -129,3 +129,16 @@ describe('t2v editorial round', () => {
     expect(enforceNoRepeatDeterministic([s('a'), s('b')], seq as never, { realistic: true }).out.b!.chosen!.providerId).toBe('3')
   })
 })
+
+describe('t2v finisher sequence rules', () => {
+  it('a fallback photo never makes a third still in a row when a video option exists', async () => {
+    const shots = [shot('a', 'one two three four', 'vg_0'), shot('b', 'five six seven eight', 'vg_1'), shot('c', 'nine ten eleven twelve', 'vg_2')]
+    const results = [
+      { sceneId: 'a', chosen: ev('img_1', { kind: 'photo' }), evaluated: [] },
+      { sceneId: 'b', chosen: ev('img_2', { kind: 'photo' }), evaluated: [] },
+      { sceneId: 'c', chosen: null, evaluated: [ev('img_3', { kind: 'photo', score: 4 }), ev('30', { score: 3 })] },
+    ]
+    const { results: out } = await finish(shots, results, { a: [cand('img_1', 'photo')], b: [cand('img_2', 'photo')], c: [cand('img_3', 'photo'), cand('30')] })
+    expect(out[2]!.chosen!.providerId).toBe('30')
+  })
+})

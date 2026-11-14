@@ -24,7 +24,7 @@ import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-sto
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
-import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vMonoRequested, t2vNightLine } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -682,7 +682,10 @@ async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShot
   const needy = run
     .shots!.filter((sh) => {
       const t = dry.tiers[sh.sceneId]
-      return (!t || t === 'fallback' || t === 'last_resort') && sh.needS <= AI_BROLL_MAX_NEED_S
+      // Way off = no reviewed stock clip or photo for this line reaches 5 at all (a 5+ stock option that a
+      // sequence rule moved away in the dry pass can still win in the final pass; don't pay for that line).
+      const anyGood = (history[sh.sceneId]?.evaluated ?? []).some((e) => e.kind !== 'ai' && (e.score ?? 0) >= 5 && t2vQualityOk(e, { ...opts, nightOk: t2vNightLine(sh.narration, sh.intent) }))
+      return (!t || t === 'fallback' || t === 'last_resort') && !anyGood && sh.needS <= AI_BROLL_MAX_NEED_S
     })
     .map((sh) => ({ sh, score: dry.out[sh.sceneId]?.chosen?.score ?? -1 }))
     .sort((a, b) => a.score - b.score)
