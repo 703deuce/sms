@@ -64,6 +64,8 @@ jobs:
             worker/tests/test_layout_router.py \
             worker/tests/test_director_calm.py \
             worker/tests/test_smoothing_calm.py \
-            worker/tests/test_person_count_probe.py
+            worker/tests/test_person_count_probe.py \
+            worker/tests/test_t2v_verify_stock.py \
+            worker/tests/test_t2v_verify_world.py
           bash .github/scripts/pytest-junit-guard.sh \
             /tmp/clips-worker-pytest.xml clips-worker-pytest

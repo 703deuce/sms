@@ -1,7 +1,8 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
-import type { T2vPickedBy, T2vPlannedShot, T2vShotResult, T2vVerifiedPick } from '@/lib/t2v/pipeline/t2v-types'
+import type { T2vPickedBy, T2vPlannedShot, T2vSceneWorld, T2vShotResult, T2vVerifiedPick } from '@/lib/t2v/pipeline/t2v-types'
+import { CONTEXT_FIT_ACCEPT, CONTEXT_FIT_MIN, worldLine } from '@/lib/server/t2v/pipeline/t2v-context'
 
 /**
  * Shot sequencing for Prompt-to-Video. HARD RULE: a shot never repeats.
@@ -41,18 +42,32 @@ export function t2vMonoRequested(prompt: string | undefined): boolean {
 
 export type T2vQualityCtx = { realistic: boolean; nightOk: boolean; monoOk: boolean }
 
-/** Live action (realistic styles), lit >= MIN_LIGHTING, no night/dark for day lines, colour unless asked. */
-export function t2vQualityOk(e: { style?: string; lighting?: number; timeOfDay?: string; luma?: number; saturation?: number }, ctx: T2vQualityCtx): boolean {
+/** Scene-world fit (Gemini contextFit; absent on runs without a world): every pick needs CONTEXT_FIT_MIN+. */
+export function t2vWorldOk(e: { contextFit?: number }): boolean {
+  return typeof e.contextFit !== 'number' || e.contextFit >= CONTEXT_FIT_MIN
+}
+
+/**
+ * Day/night is only a safety net: a night line allows night footage, and so does a clear scene-world fit
+ * (contextFit 6+: a sleep video's lamp-lit bedroom fits a line that never says "night").
+ */
+function nightFits(e: { contextFit?: number }, ctx: Pick<T2vQualityCtx, 'nightOk'>): boolean {
+  return ctx.nightOk || (typeof e.contextFit === 'number' && e.contextFit >= CONTEXT_FIT_ACCEPT)
+}
+
+/** Live action (realistic styles), lit >= MIN_LIGHTING, no night/dark for day lines, colour unless asked, on-world. */
+export function t2vQualityOk(e: { style?: string; lighting?: number; timeOfDay?: string; luma?: number; saturation?: number; contextFit?: number }, ctx: T2vQualityCtx): boolean {
+  if (!t2vWorldOk(e)) return false
   if (ctx.realistic && e.style && e.style !== 'live_action') return false
   if ((e.lighting ?? 10) < MIN_LIGHTING) return false
-  if (!ctx.nightOk && (e.timeOfDay === 'night' || (e.luma ?? 1) < MIN_LUMA)) return false
+  if (!nightFits(e, ctx) && (e.timeOfDay === 'night' || (e.luma ?? 1) < MIN_LUMA)) return false
   if (!ctx.monoOk && (e.saturation ?? 1) < MIN_SATURATION) return false
   return true
 }
-/** Lighting rule alone (lit >= MIN_LIGHTING, not night/dark unless the line is about night). Applies to every pick. */
-export function t2vLitOk(e: { lighting?: number; timeOfDay?: string; luma?: number }, ctx: Pick<T2vQualityCtx, 'nightOk'>): boolean {
-  if ((e.lighting ?? 10) < MIN_LIGHTING) return false
-  return ctx.nightOk || (e.timeOfDay !== 'night' && (e.luma ?? 1) >= MIN_LUMA)
+/** Lighting + world rule alone (lit >= MIN_LIGHTING, on-world, not night/dark unless the line is about night). Applies to every pick. */
+export function t2vLitOk(e: { lighting?: number; timeOfDay?: string; luma?: number; contextFit?: number }, ctx: Pick<T2vQualityCtx, 'nightOk'>): boolean {
+  if ((e.lighting ?? 10) < MIN_LIGHTING || !t2vWorldOk(e)) return false
+  return nightFits(e, ctx) || (e.timeOfDay !== 'night' && (e.luma ?? 1) >= MIN_LUMA)
 }
 
 /** AI clip with strong content may carry the reviewer's 3d_render tag (generated look) when stock is way off. */
@@ -190,6 +205,7 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     timeOfDay: e.timeOfDay,
     saturation: e.saturation,
     luma: e.luma,
+    ...(typeof e.contextFit === 'number' ? { contextFit: e.contextFit, contextReason: e.contextReason } : {}),
     verdict,
   }
 }
@@ -197,6 +213,16 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
 /** Relevance first, then brightness (brighter wins ties and near-ties). */
 function rank(e: Ev): number {
   return (e.score ?? 0) + 0.3 * (e.lighting ?? 5) + (e.matches ? 1 : 0)
+}
+
+/** Each earlier pick with a similar subject (batteries twice, phones three times) costs this much rank. */
+export const SUBJECT_REPEAT_PENALTY = 3
+/** The first shots establish the video world: a clip's world fit counts extra there. */
+export const ESTABLISHING_SHOTS = 2
+
+/** Subject-diversity penalty: how many already-picked shots show a similar subject. */
+export function subjectRepeatPenalty(e: { subject?: string }, picked: Array<{ subject?: string }>): number {
+  return SUBJECT_REPEAT_PENALTY * picked.filter((p) => similarSubject(e.subject, p.subject)).length
 }
 
 /** Best score among usable (quality-ok, placeable) stock clips and photos for one line; -1 when none. */
@@ -212,7 +238,7 @@ export type NoRepeatPick = { sceneId: string; tier: string }
 export function enforceNoRepeatDeterministic(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
+  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores; world?: T2vSceneWorld },
   banned: Record<string, Set<string>> = {},
 ): { out: Record<string, T2vShotResult>; replaced: number; tiers: Record<string, T2vPickedBy>; spareRequests: Record<string, Ev[]>; banned: Record<string, Set<string>> } {
   const ctxFor = (shot: T2vPlannedShot): T2vQualityCtx => ({
@@ -226,7 +252,7 @@ export function enforceNoRepeatDeterministic(
   let replaced = 0
   const spareRequests: Record<string, Ev[]> = {}
   const tierList = (ctx: T2vQualityCtx): Tier[] => [
-    { verdict: 'accepted', tier: 'accepted', ok: (e) => scored(e, ACCEPT_SCORE) && Boolean(e.matches) && t2vQualityOk(e, ctx) },
+    { verdict: 'accepted', tier: 'accepted', ok: (e) => scored(e, ACCEPT_SCORE) && Boolean(e.matches) && (e.contextFit ?? 10) >= CONTEXT_FIT_ACCEPT && t2vQualityOk(e, ctx) },
     { verdict: 'weak_match', tier: 'usable', ok: (e) => scored(e, USABLE_SCORE) && t2vQualityOk(e, ctx) },
   ]
   const fallbackTier = (ctx: T2vQualityCtx): Tier => ({ verdict: 'best_available', tier: 'fallback', ok: (e) => scored(e, LOOSE_SCORE) && t2vQualityOk(e, ctx) })
@@ -242,9 +268,10 @@ export function enforceNoRepeatDeterministic(
   }
   spares.sort((a, b) => rank(b) - rank(a))
 
-  for (const shot of shots) {
+  for (const [shotIndex, shot] of shots.entries()) {
     const r = results[shot.sceneId] ?? { sceneId: shot.sceneId, chosen: null, evaluated: [] }
     const ctx = ctxFor(shot)
+    const establishing = shotIndex < ESTABLISHING_SHOTS
     const last2 = picked.slice(-2)
     const prevPick = picked[picked.length - 1]
     const stillsRun = last2.length === MAX_CONSECUTIVE_STILLS && last2.every((p) => isPhoto(p))
@@ -266,7 +293,9 @@ export function enforceNoRepeatDeterministic(
     // Same-shoot elsewhere in the video only when the scene has no other option.
     for (const strict of [true, false]) {
       if (chosen) break
-      const all = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => rank(b) - rank(a))
+      // Subject diversity: a clip whose subject was already shown ranks lower (still usable if it is the only option).
+      const div = (e: Ev) => rank(e) - subjectRepeatPenalty(e, picked) + (establishing ? 0.5 * (e.contextFit ?? 0) : 0)
+      const all = r.evaluated.filter((e) => free(e, strict)).sort((a, b) => div(b) - div(a))
       const alts = all.filter((e) => !isPhoto(e) && !isAi(e))
       const photos = all.filter(isPhoto)
       const ais = all.filter(isAi)
@@ -324,7 +353,7 @@ export function enforceNoRepeatDeterministic(
     if (!chosen) {
       // Last resort before an empty scene: any loosely on-topic clip, even stylised, but lit (a dim clip
       // goes to the finisher, which prefers a brighter related clip or photo and uses dim only at the end).
-      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE) && t2vLitOk(e, ctx)).sort((a, b) => rank(b) - rank(a))[0]
+      const any = r.evaluated.filter((e) => !isAi(e) && free(e, false) && scored(e, LOOSE_SCORE) && t2vLitOk(e, ctx)).sort((a, b) => rank(b) - subjectRepeatPenalty(b, picked) - rank(a) + subjectRepeatPenalty(a, picked))[0]
       if (any) {
         chosen = toPick(any, 'best_available')
         tier = 'last_resort'
@@ -344,12 +373,14 @@ narration line; a reviewer described what it shows. Score how well it works unde
 7-10 clearly works; 5-6 usable; 0-4 does not work. SUBJECT RULE: the clip must show the specific subject the
 line needs (coffee cherries, not any fruit; a roaster drum, not any machine). Right action, wrong subject = 0-2.
 A mug of coffee does not illustrate harvesting, processing or roasting.
+A clip that does not belong in the VIDEO WORLD (when given) scores 0-3 even if a word matches.
 Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "score": number}]}`
 
 /** One text-only call: score candidate spares against the line they would sit under. */
 export async function scoreSpares(
   shots: T2vPlannedShot[],
   requests: Record<string, Ev[]>,
+  world?: T2vSceneWorld,
 ): Promise<SpareScores> {
   const items = shots
     .filter((s) => requests[s.sceneId]?.length)
@@ -357,10 +388,11 @@ export async function scoreSpares(
       sceneId: s.sceneId,
       line: s.narration,
       subject: s.subject ?? s.intent,
+      ...(s.situation ? { situation: s.situation } : {}),
       clips: requests[s.sceneId]!.map((e) => ({ providerId: e.providerId, shows: `${e.subject ?? ''}: ${(e.visible ?? '').slice(0, 160)}`, framing: e.framing ?? '' })),
     }))
   if (!items.length) return {}
-  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(SPARE_SYSTEM, `Lines: ${JSON.stringify(items)}`, { maxTokens: 3000 })
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown }> }>(SPARE_SYSTEM, `${world ? `VIDEO WORLD: ${worldLine(world)}\n` : ''}Lines: ${JSON.stringify(items)}`, { maxTokens: 3000 })
   const res: SpareScores = {}
   for (const r of Array.isArray(out.scores) ? out.scores : []) {
     const sc = Number(r.score)
@@ -451,7 +483,7 @@ export function dupLoser(
 export async function enforceNoRepeat(
   shots: T2vPlannedShot[],
   results: Record<string, T2vShotResult>,
-  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores },
+  opts: { realistic: boolean; monoOk?: boolean; spareScores?: SpareScores; world?: T2vSceneWorld },
 ): Promise<{
   results: Record<string, T2vShotResult>
   replaced: number
@@ -466,7 +498,7 @@ export async function enforceNoRepeat(
   // Spares are re-checked against the line they would fill before any is placed.
   let spareScores: SpareScores = {}
   try {
-    spareScores = await scoreSpares(shots, spareRequests)
+    spareScores = await scoreSpares(shots, spareRequests, opts.world)
   } catch (err) {
     logT2v('pipeline-norepeat', 'spare re-check failed (no spares used)', { error: err instanceof Error ? err.message : 'error' })
   }

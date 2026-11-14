@@ -33,7 +33,9 @@ describe('t2v finisher: split sentences become in-scene cuts', () => {
       results: results as never,
       candidates: { a: [cand('1')], b: [cand('2')], c: [cand('3')], d: [cand('4')] },
     })
-    expect(scenes).toHaveLength(3) // 2 voice scenes + end card
+    expect(scenes).toHaveLength(2) // 2 voice scenes; no end card (no text cards)
+    expect(scenes.every((sc) => !sc.texts?.length)).toBe(true) // no opening title overlay
+    expect(scenes.some((sc) => sc.media.kind === 'color')).toBe(false)
     expect(scenes[1]!.narration).toBe('Workers move along the rows, picking ripe cherries by hand, while baskets slowly fill.')
     expect(scenes[1]!.cuts).toEqual([
       { atWord: 5, media: expect.objectContaining({ providerId: '3' }) },

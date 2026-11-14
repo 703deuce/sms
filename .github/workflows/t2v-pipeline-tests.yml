@@ -1,0 +1,44 @@
+name: T2V pipeline tests
+
+on:
+  pull_request:
+    branches: [master]
+    paths:
+      - "new-app/lib/server/t2v/**"
+      - "new-app/lib/t2v/**"
+      - "new-app/app/api/t2v/**"
+      - "new-app/tests/t2v-*.test.ts"
+      - "worker/clips_worker/t2v/**"
+      - "worker/tests/test_t2v_*.py"
+      - ".github/workflows/t2v-pipeline-tests.yml"
+
+jobs:
+  t2v-vitest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: new-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: new-app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # All T2V suites, including the scene-world (sleep, winter, office, kids, snowstorm) regressions.
+      - run: pnpm exec vitest run tests/t2v-*.test.ts
+
+  t2v-pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: pip install pytest requests numpy==1.26.4
+      - run: PYTHONPATH=worker python3 -m pytest -q -rs worker/tests/test_t2v_verify_stock.py worker/tests/test_t2v_verify_world.py

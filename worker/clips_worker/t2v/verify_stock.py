@@ -51,6 +51,10 @@ USABLE_SCORE = 5
 # dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
 NEAR_DUP_BITS = 10
 PARALLEL_SHOTS = 4
+# Scene-world fit (Gemini context_fit 0-10, only when the job carries a world): accepted picks need 6+,
+# every other pick (weak, best-available) 5+. Off-world clips are never used just to fill a slot.
+CONTEXT_FIT_ACCEPT = 6
+CONTEXT_FIT_MIN = 5
 
 VERIFY_SCHEMA: dict[str, Any] = {
     "type": "OBJECT",
@@ -71,8 +75,10 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "framing": {"type": "STRING"},
         "time_of_day": {"type": "STRING", "enum": ["day", "night", "dusk_dawn", "indoor"]},
         "subject_visible": {"type": "BOOLEAN"},
+        "context_fit": {"type": "INTEGER"},
+        "context_reason": {"type": "STRING"},
     },
-    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    "required": ["visible", "main_subject", "action", "matches", "score", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible", "context_fit", "context_reason"],
 }
 
 PROMPT = """You are the footage checker for an automatic stock-footage video editor.
@@ -85,12 +91,17 @@ Intended shot: "{intent}"
 Required subject: "{subject}"
 Video topic: "{topic}"
 Clip length: {clip_s:.1f} s. The shot on screen needs about {need_s:.1f} s.
-
-SUBJECT RULE: the clip must show the specific subject named above (for example coffee cherries, not any
-red fruit or berry; a coffee roaster drum, not any machine; coffee beans drying on beds, not any beans).
-The right action with the wrong subject FAILS: subject_visible=false, matches=false, score at most 2.
-A different subject of the same category (apples for coffee cherries, a kettle for a roaster) is the
-wrong subject.
+{world_block}{negation_rule}
+SUBJECT RULE: the clip must show the KEY THING named in the required subject (for example coffee cherries,
+not any red fruit or berry; a coffee roaster drum, not any machine; coffee beans drying on beds, not any beans).
+The right action with the wrong thing FAILS: subject_visible=false, matches=false, score at most 2.
+A different thing of the same category (apples for coffee cherries, a kettle for a roaster) is the wrong
+subject. Hands, people, the exact action, camera angle or placement in the subject phrase are nice-to-have,
+NOT the key thing: a clear smoke alarm on its own IS the subject "hand testing ceiling alarm" (score it on
+how well it works, 6-9), a bottle of pills IS "hand placing medicine nearby". But the object shown must
+BE the named object, not a look-alike or neighbour: power pylons are not a generator, pressure-washing a
+pavement is not clearing a gutter, an industrial plant's pipes are not a home's pipes, a paintbrush is not
+weatherstripping (subject_visible=false).
 
 Return JSON:
 - visible: one sentence describing what is actually shown.
@@ -98,8 +109,10 @@ Return JSON:
 - matches: judge "does this work in this spot?", not only an exact literal match. True if a
   professional editor would honestly put this clip under that line as B-roll:
   the clip clearly shows the narration's subject (or a directly relevant, visually honest depiction
-  of it). It does NOT need every detail of the intended shot: time of day, weather, exact camera
-  move, setting or extra people are nice-to-have, not requirements. When the subject looks like an
+  of it). It does NOT need every detail of the intended shot: exact camera move, framing or extra
+  people are nice-to-have. Setting, season and time of day are HARD context whenever the line, the
+  VIDEO WORLD or the line's implied situation sets them: a clip that contradicts them does not work in
+  this spot (matches=false, low context_fit), however well the subject matches. When the subject looks like an
   ordinary thing (an electric car looks like any modern car), a clean, modern example counts unless
   something on screen contradicts the line. False when the main subject is wrong or unrelated, the
   footage is too dark/blurry to read, or text, logos or watermarks dominate the frame.
@@ -121,7 +134,33 @@ Return JSON:
 - framing: 2-5 words, shot size + subject, e.g. "close-up charging plug", "aerial highway traffic".
 - subject_visible: true only if the required subject itself is clearly visible (see SUBJECT RULE).
 - time_of_day: day, night (dark sky / street lights / headlights in darkness), dusk_dawn, or indoor.
+{context_rule}
 {style_rule}"""
+
+WORLD_BLOCK = """
+VIDEO WORLD (every shot of this video lives in it):
+{world}
+This line's implied situation: "{situation}"
+Previous line: "{prev}"
+Next line: "{next}"
+"""
+
+CONTEXT_RULE = """- context_fit: 0-10, does this clip make sense HERE in THIS video: inside the video world above
+  (setting, season, time of day, mood, who the viewer is) and the line's implied situation, read with
+  the previous and next lines. 9-10 = clearly belongs in this video at this point; 6-8 = fits;
+  5 = neutral, an editor could still use it; 0-4 = off-world (contradicts the world or the situation,
+  e.g. a sunny summer beach in a winter-storm video, a party in an office-productivity video, adult
+  nightlife in a kids' video, a daytime street under a "can't sleep" line). A line can move the world
+  on purpose ("step outside in the morning light"): then follow the line.
+- context_reason: one short phrase why (e.g. "summer beach contradicts winter storm"), "" when fit >= 6."""
+
+NEGATION_NOTE = """
+NEGATED LINE: this line warns AGAINST an action. The clip must NOT show that action being done (for "never
+bring an outdoor grill inside": no grilling, no grill indoors; a grill standing unused outside, ideally in
+the video's season, works). A clip showing the forbidden action: matches=false, score at most 2.
+"""
+
+NO_CONTEXT_RULE = """- context_fit: return 10. context_reason: return ""."""
 
 
 def _payload(job: dict) -> dict:
@@ -230,10 +269,18 @@ class Ctx:
     """Per-shot quality rules: live action for realistic styles, night only for night lines, colour unless
     the request asks for black-and-white."""
 
-    def __init__(self, realistic: bool = True, night_ok: bool = False, mono_ok: bool = False):
+    def __init__(self, realistic: bool = True, night_ok: bool = False, mono_ok: bool = False, has_world: bool = False):
         self.realistic = realistic
         self.night_ok = night_ok
         self.mono_ok = mono_ok
+        # The job carries a scene world: Gemini's context_fit gates every pick.
+        self.has_world = has_world
+
+
+def context_ok(entry: dict, ctx: Ctx, minimum: int = CONTEXT_FIT_MIN) -> bool:
+    if not ctx.has_world:
+        return True
+    return int(entry.get("contextFit", 10)) >= minimum
 
 
 def night_line(*texts: str) -> bool:
@@ -245,11 +292,14 @@ def quality_ok(entry: dict, ctx: Ctx) -> bool:
         return False
     if int(entry.get("lighting", 10)) < MIN_LIGHTING:
         return False
-    if not ctx.night_ok and (entry.get("timeOfDay") == "night" or float(entry.get("luma", 1.0)) < MIN_LUMA):
+    # Day/night is only a safety net: with a scene world, Gemini's context fit decides (a sleep video's
+    # lamp-lit bedroom at night fits even when the line itself never says "night").
+    night_ok = ctx.night_ok or (ctx.has_world and int(entry.get("contextFit", 0)) >= CONTEXT_FIT_ACCEPT)
+    if not night_ok and (entry.get("timeOfDay") == "night" or float(entry.get("luma", 1.0)) < MIN_LUMA):
         return False
     if not ctx.mono_ok and float(entry.get("saturation", 1.0)) < MIN_SATURATION:
         return False
-    return True
+    return context_ok(entry, ctx)
 
 
 def _window_ok(entry: dict, need_s: float) -> bool:
@@ -259,7 +309,13 @@ def _window_ok(entry: dict, need_s: float) -> bool:
 def passes(entry: dict, need_s: float, ctx: Ctx) -> bool:
     if entry.get("error") or "score" not in entry:
         return False
-    return bool(entry.get("matches")) and entry["score"] >= ACCEPT_SCORE and quality_ok(entry, ctx) and _window_ok(entry, need_s)
+    return (
+        bool(entry.get("matches"))
+        and entry["score"] >= ACCEPT_SCORE
+        and context_ok(entry, ctx, CONTEXT_FIT_ACCEPT)
+        and quality_ok(entry, ctx)
+        and _window_ok(entry, need_s)
+    )
 
 
 def usable(entry: dict, need_s: float, ctx: Ctx) -> bool:
@@ -272,10 +328,75 @@ def usable(entry: dict, need_s: float, ctx: Ctx) -> bool:
 def fallback_rank(entry: dict, ctx: Ctx) -> float:
     """Best-available ordering: relevance first, then brightness; clips failing the quality rules
     (non-live, dark, night for a day line, black-and-white) are a last resort."""
-    s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5))
+    s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5)) + 0.2 * float(entry.get("contextFit", 10))
     if not quality_ok(entry, ctx):
         s -= 20
     return s
+
+
+def selection_rank(entry: dict) -> tuple:
+    """Accepted ordering: relevance, then world fit, then brightness."""
+    return (-int(entry.get("score", 0)), -int(entry.get("contextFit", 10)), -int(entry.get("lighting", 5)))
+
+
+def reject_reason(entry: dict, need_s: float, ctx: Ctx) -> str:
+    """Why a candidate was not accepted (for the per-scene log)."""
+    if entry.get("error"):
+        return "error"
+    if not context_ok(entry, ctx, CONTEXT_FIT_ACCEPT):
+        return "context:" + (str(entry.get("contextReason") or "off-world")[:80])
+    if entry.get("subjectVisible") is False:
+        return "subject_mismatch"
+    if ctx.realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
+        return "not_live_action"
+    if int(entry.get("lighting", 10)) < MIN_LIGHTING:
+        return "too_dark"
+    if not quality_ok(entry, ctx):
+        return "night_dark_or_mono"
+    if not _window_ok(entry, need_s):
+        return "window_too_short"
+    if int(entry.get("score", 0)) < ACCEPT_SCORE or not entry.get("matches"):
+        return "low_relevance"
+    return ""
+
+
+def world_prompt(world: Any, shot: dict) -> tuple[str, str]:
+    """(world_block, context_rule) for the verify prompt; empty block without a world."""
+    text = str((world.get("text") if isinstance(world, dict) else world) or "").strip()[:1500]
+    if not text:
+        return "", NO_CONTEXT_RULE
+    q = lambda v: str(v or "").replace('"', "'")[:300]  # noqa: E731
+    block = WORLD_BLOCK.format(
+        world=text.replace("{", "(").replace("}", ")"),
+        situation=q(shot.get("situation")) or "(none given)",
+        prev=q(shot.get("prevNarration")) or "(start of video)",
+        next=q(shot.get("nextNarration")) or "(end of video)",
+    )
+    return block, CONTEXT_RULE
+
+
+def _log_scene(job_id: Any, draft_id: Any, idx: int, shot: dict, chosen: dict | None, ev: list[dict], need_s: float, ctx: Ctx) -> None:
+    """One JSON line per candidate and per scene: jobId, scene, candidate, scores, verdict, reason (no URLs)."""
+    for e in ev:
+        verdict = "chosen" if chosen and e.get("providerId") == chosen.get("providerId") else "rejected"
+        log.info("[t2v:verify:candidate] %s", json.dumps({
+            "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("sceneIndex", idx), "sceneId": shot.get("sceneId"),
+            "candidateId": e.get("providerId"), "kind": e.get("kind") or "video", "score": e.get("score"),
+            "contextFit": e.get("contextFit"), "lighting": e.get("lighting"), "verdict": verdict,
+            "reason": e.get("contextReason") if verdict == "chosen" else reject_reason(e, need_s, ctx),
+        }))
+    log.info("[t2v:verify:scene] %s", json.dumps({
+        "jobId": job_id, "draftId": draft_id, "sceneIndex": shot.get("sceneIndex", idx), "sceneId": shot.get("sceneId"),
+        "candidates": len(ev), "candidateId": chosen.get("providerId") if chosen else None,
+        "score": chosen.get("score") if chosen else None, "contextFit": chosen.get("contextFit") if chosen else None,
+        "verdict": chosen.get("verdict") if chosen else "none",
+        "weak": not chosen or chosen.get("verdict") != "accepted",
+        # Top-K with scores (input for a later sequence-level selection pass; nothing is persisted).
+        "topK": [
+            {"candidateId": e.get("providerId"), "score": e.get("score"), "contextFit": e.get("contextFit"), "lighting": e.get("lighting")}
+            for e in sorted((e for e in ev if not e.get("error")), key=selection_rank)[:5]
+        ],
+    }))
 
 
 PHOTO_NOTE = """
@@ -365,6 +486,13 @@ def _gemini_watch(model: str, video: Path, prompt: str, mime: str = "video/mp4")
     raise RuntimeError(last)
 
 
+def _int(v: Any, default: int) -> int:
+    try:
+        return max(0, min(10, int(v)))
+    except (TypeError, ValueError):
+        return default
+
+
 def _clamp_window(v: dict, clip_s: float, need_s: float) -> tuple[float, float]:
     try:
         a = float(v.get("in_s") or 0)
@@ -402,6 +530,8 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
     model = _model()
     realistic = bool(p.get("realistic", True))
     mono_ok = bool(p.get("monoOk", False))
+    world = p.get("world")
+    has_world = bool(world_prompt(world, {})[0])
     style_rule = (
         "This video uses a realistic (documentary) style: only live_action footage can match; animation, "
         "3d_render, motion_graphics, clip_art and screen_recording must have matches=false."
@@ -417,7 +547,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
 
     def shot_ctx(shot: dict) -> Ctx:
         night_ok = bool(shot.get("nightOk")) or night_line(str(shot.get("narration") or ""), str(shot.get("intent") or ""))
-        return Ctx(realistic=realistic, night_ok=night_ok, mono_ok=mono_ok)
+        return Ctx(realistic=realistic, night_ok=night_ok, mono_ok=mono_ok, has_world=has_world)
 
     def verify_shot(idx: int, shot: dict, work: Path) -> None:
         need_s = float(shot.get("needS") or 4.0)
@@ -451,6 +581,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     clip_s = float(c.get("durationS") or 0) or _probe_s(muted)
                     if c.get("kind") == "ai":
                         entry["kind"] = "ai"
+                world_block, context_rule = world_prompt(world, shot)
                 prompt = (PROMPT + (PHOTO_NOTE if is_photo else AI_NOTE if c.get("kind") == "ai" else "")).format(
                     narration=str(shot.get("narration") or "")[:600].replace('"', "'"),
                     intent=str(shot.get("intent") or "")[:300].replace('"', "'"),
@@ -458,6 +589,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     topic=topic.replace('"', "'"),
                     clip_s=clip_s,
                     need_s=need_s,
+                    world_block=world_block,
+                    negation_rule=NEGATION_NOTE if shot.get("negated") else "",
+                    context_rule=context_rule,
                     style_rule=style_rule,
                 )
                 v, tin, tout = _gemini_watch(model, muted, prompt, "image/jpeg" if is_photo else "video/mp4")
@@ -485,6 +619,10 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "timeOfDay": str(v.get("time_of_day") or "day"),
                     }
                 )
+                # Only with a scene world (no field otherwise, so the web keeps the old night rule).
+                if has_world:
+                    entry["contextFit"] = _int(v.get("context_fit"), 10)
+                    entry["contextReason"] = str(v.get("context_reason") or "")[:160]
                 try:
                     cs = _color_stats(muted, a, b)
                     if cs:
@@ -529,7 +667,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
             return e["providerId"] not in used_ids and not any(near_duplicate(e.get("phash") or [], h) for h in used_hashes)
 
         chosen = None
-        for e in sorted((e for e in ev if passes(e, need_s, ctx)), key=lambda e: (-e["score"], -e.get("lighting", 5))):
+        for e in sorted((e for e in ev if passes(e, need_s, ctx)), key=selection_rank):
             if free(e):
                 chosen = {**e, "verdict": "accepted"}
                 break
@@ -539,7 +677,8 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     chosen = {**e, "verdict": "weak_match"}
                     break
         if chosen is None:
-            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, ctx)):
+            # Best available still needs world fit and readable lighting: never an off-world clip to fill a slot.
+            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE and context_ok(e, ctx) and int(e.get("lighting", 10)) >= MIN_LIGHTING), key=lambda e: -fallback_rank(e, ctx)):
                 if free(e):
                     chosen = {**e, "verdict": "best_available"}
                     break
@@ -547,6 +686,7 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
             used_ids.add(chosen["providerId"])
             if chosen.get("phash"):
                 used_hashes.append(chosen["phash"])
+        _log_scene(job.get("id"), draft_id, i, shot, chosen, ev, need_s, ctx)
         results.append({"sceneId": shot.get("sceneId"), "chosen": chosen, "evaluated": ev})
 
     try:

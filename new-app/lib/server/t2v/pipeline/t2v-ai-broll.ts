@@ -45,24 +45,29 @@ export function aiFramesFor(needS: number): number {
 
 const PROMPT_SYSTEM = `You write prompts for a text-to-video model that must produce B-roll that blends with real
 stock footage in a documentary. For each shot write ONE prompt (35-70 words): realistic live-action stock
-footage of the specific subject doing what the line needs, in a plausible real setting; natural daylight or
-practical light, steady tripod or slow gimbal camera, shallow depth of field, true-to-life colours, 35mm film
+footage of the specific subject doing what the line needs, in a setting that belongs to the VIDEO WORLD
+and the line's implied situation (when given: its setting, season, time of day and light, mood; e.g. a dim
+lamp-lit bedroom at night, a snowy winter street); with no world given, a plausible real setting in
+practical light. Never default to daylight or summer. Steady tripod or slow gimbal camera, shallow depth of field, true-to-life colours, 35mm film
 look. Must say: no text, no captions, no logos, no watermarks. Avoid faces in close-up and hands with fine
 finger detail (models get them wrong); prefer objects, machines, materials, landscapes and mid shots.
 Return ONLY JSON: {"prompts": [{"sceneId": string, "prompt": string}]}`
 
-const SAFE_TAIL = ' Realistic live-action stock footage, natural light, steady camera, no text, no logos, no watermark.'
+const SAFE_TAIL = ' Realistic live-action stock footage, steady camera, no text, no logos, no watermark.'
 
-export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject'>): string {
-  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + SAFE_TAIL
+/** Template prompt: subject + intent, set in the line's situation / the video world (no daylight default). */
+export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject' | 'situation'>, world = ''): string {
+  const where = (shot.situation || world).trim()
+  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + (where ? ` Setting: ${where.slice(0, 200)}.` : '') + SAFE_TAIL
 }
 
-export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Promise<Record<string, string>> {
+/** `world`: one-line scene world (worldLine) so lighting, season and setting follow the video. */
+export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[], world = ''): Promise<Record<string, string>> {
   const out: Record<string, string> = {}
   try {
     const res = await t2vLlmJson<{ prompts?: Array<{ sceneId?: string; prompt?: string }> }>(
       PROMPT_SYSTEM,
-      `Video topic: ${topic}\nShots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject })))}`,
+      `Video topic: ${topic}\n${world ? `VIDEO WORLD: ${world}\n` : ''}Shots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject, ...(s.situation ? { situation: s.situation } : {}) })))}`,
       { maxTokens: 2000 },
     )
     for (const p of Array.isArray(res.prompts) ? res.prompts : []) {
@@ -72,7 +77,7 @@ export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Pr
   } catch (err) {
     logT2v('pipeline-ai', 'prompt writer failed, using template', { error: err instanceof Error ? err.message : 'error' })
   }
-  for (const s of shots) out[s.sceneId] ??= fallbackAiPrompt(s)
+  for (const s of shots) out[s.sceneId] ??= fallbackAiPrompt(s, world)
   return out
 }
 

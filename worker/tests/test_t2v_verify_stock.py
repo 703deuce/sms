@@ -88,7 +88,7 @@ def test_color_stats_on_synthetic_frames(tmp_path=None):
 def test_prompt_formats_with_style_rule():
     from clips_worker.t2v.verify_stock import PROMPT
 
-    out = PROMPT.format(narration="n", intent="i", subject="s", topic="t", clip_s=10.0, need_s=4.0, style_rule="RULE")
+    out = PROMPT.format(narration="n", intent="i", subject="s", topic="t", clip_s=10.0, need_s=4.0, world_block="", negation_rule="", context_rule="", style_rule="RULE")
     assert "RULE" in out
 
 
@@ -157,7 +157,7 @@ def test_photo_prompt_and_still_frame_stats():
 
     from clips_worker.t2v.verify_stock import PHOTO_NOTE, PROMPT, _color_stats, _dhash_frames, _shrink_photo
 
-    out = (PROMPT + PHOTO_NOTE).format(narration="n", intent="i", subject="coffee cherries", topic="t", clip_s=12.0, need_s=4.0, style_rule="")
+    out = (PROMPT + PHOTO_NOTE).format(narration="n", intent="i", subject="coffee cherries", topic="t", clip_s=12.0, need_s=4.0, world_block="", negation_rule="", context_rule="", style_rule="")
     assert "STILL PHOTO" in out and "coffee cherries" in out
     d = Path(tempfile.mkdtemp())
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=s=1280x720:d=1", "-frames:v", "1", str(d / "p.jpg")], check=True)

@@ -4,6 +4,7 @@ vi.mock('@/lib/server/t2v/pipeline/t2v-llm', () => ({ t2vLlmJson: vi.fn() }))
 vi.mock('@/lib/server/t2v/log', () => ({ logT2v: vi.fn(), logT2vError: vi.fn() }))
 vi.mock('@/lib/server/t2v/stock-asset', () => ({ ensureT2vStockAsset: async (_w: string, c: { providerId: string }) => ({ id: `asset_${c.providerId}` }) }))
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
+import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { enforceNoRepeatDeterministic, nearIdenticalShot } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
 import { autoPieces, pacingStats, planPacing, type T2vPacingRow } from '@/lib/server/t2v/pipeline/t2v-pacing'
 import { specificSubject } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
@@ -84,15 +85,15 @@ describe('t2v editorial round', () => {
     const shots = [shot('a', 'Dried green beans travel to a roaster,', 'vg_0'), shot('b', 'where heat changes their scent.', 'vg_0'), shot('c', 'In the drum, pale beans deepen.', 'vg_1')]
     const results = [
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1')] },
-      // b: only a banned 9 and a weak 2 for its line; c reviewed a roaster photo (4) usable as closest related.
-      { sceneId: 'b', chosen: null, evaluated: [ev('9', { score: 9 }), ev('img_5', { score: 2, kind: 'photo', lighting: 8, subject: 'coffee roaster' })] },
+      // b: only a banned 9 and a loose 3 for its line (last resort needs 3+, lit, on-world).
+      { sceneId: 'b', chosen: null, evaluated: [ev('9', { score: 9 }), ev('img_5', { score: 3, kind: 'photo', lighting: 8, subject: 'coffee roaster' })] },
       { sceneId: 'c', chosen: null, evaluated: [ev('7', { score: 4, subject: 'coffee roaster drum', visible: 'a coffee roaster drum turning', lighting: 9 })] },
     ]
     const { scenes, results: out } = await finish(shots, results, { a: [cand('1')], b: [cand('9'), cand('img_5', 'photo')], c: [cand('7')] }, { b: ['9'] })
     const real = scenes.filter((s) => !s.id.startsWith('sc_end'))
     expect(real.every((s) => s.media.kind !== 'color')).toBe(true)
     expect(real[0]!.cuts).toEqual([{ atWord: 7, media: expect.objectContaining({ providerId: 'img_5', kind: 'image' }) }])
-    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'last_resort', 'fallback'])
+    expect(out.map((r) => r.pickedBy)).toEqual(['accepted', 'fallback', 'fallback'])
     expect(out[1]!.chosen).toMatchObject({ kind: 'photo', lighting: 8 })
     expect(out[2]!.chosen).toMatchObject({ lighting: 9 })
     expect(out.some((r) => r.outcome === 'held' || r.outcome === 'title_card')).toBe(false)
@@ -103,6 +104,8 @@ describe('t2v editorial round', () => {
       { sceneId: 'a', chosen: ev('1'), evaluated: [ev('1'), ev('3', { score: 6, subject: 'coffee roaster', visible: 'an industrial coffee roaster drum' }), ev('4', { score: 6, subject: 'coffee cup', visible: 'a cup of coffee' })] },
       { sceneId: 'b', chosen: null, evaluated: [] },
     ]
+    // The related re-check (one text call) scores the roaster clip for line b; lent footage needs 3+ there.
+    vi.mocked(t2vLlmJson).mockResolvedValueOnce({ scores: [{ sceneId: 'b', providerId: '3', score: 6 }, { sceneId: 'b', providerId: '4', score: 1 }] })
     const { results: out } = await finish(shots, results, { a: [cand('1'), cand('3'), cand('4')], b: [] })
     expect(out[1]!.chosen!.providerId).toBe('3')
     expect(out[1]!.outcome).toBe('stock')

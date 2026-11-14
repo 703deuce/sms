@@ -1,6 +1,7 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
+import { normalizeSceneWorld, SCENE_WORLD_JSON, SCENE_WORLD_RULES } from '@/lib/server/t2v/pipeline/t2v-context'
 import type { T2vNarrationSegment, T2vPipelineStyle, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
 /** Words per second used for planning only. Actual ElevenLabs audio timing drives the edit. */
@@ -37,7 +38,8 @@ const STORY_SYSTEM = `You are the Story Planner for an automatic stock-footage v
 Understand the user's request and plan a coherent narrative with a beginning, middle and end.
 Return ONLY JSON:
 {"title": string, "topic": string, "audience": string, "tone": string, "hook": string,
- "keyPoints": string[], "ending": string, "musicMood": string}
+ "keyPoints": string[], "ending": string, "musicMood": string,
+ ${SCENE_WORLD_JSON}}
 Rules:
 - title: <= 8 words, no clickbait punctuation.
 - topic: 2-5 concrete words naming the subject (used to keep footage on topic).
@@ -45,7 +47,8 @@ Rules:
 - ending: how the video lands (conclusion or call to action).
 - musicMood: 3-8 words describing instrumental background music (no vocals).
 - Do not fabricate specific statistics, dates, names or quotations. Prefer well-established,
-  general facts; if unsure, describe trends qualitatively.`
+  general facts; if unsure, describe trends qualitatively.
+${SCENE_WORLD_RULES}`
 
 export async function t2vStoryAgent(input: {
   prompt: string
@@ -57,7 +60,7 @@ export async function t2vStoryAgent(input: {
     `Style: ${STYLE_GUIDE[input.style]}`,
     `Target runtime: about ${input.durationS} seconds.`,
   ].join('\n')
-  const out = await t2vLlmJson<Partial<T2vStoryPlan>>(STORY_SYSTEM, user)
+  const out = await t2vLlmJson<Partial<Omit<T2vStoryPlan, 'world'>> & { world?: unknown }>(STORY_SYSTEM, user)
   const keyPoints = (Array.isArray(out.keyPoints) ? out.keyPoints : []).map((k) => String(k).trim()).filter(Boolean)
   if (!keyPoints.length) throw new Error('t2v_story_empty')
   return {
@@ -70,6 +73,7 @@ export async function t2vStoryAgent(input: {
     ending: String(out.ending ?? '').trim().slice(0, 300),
     targetSeconds: input.durationS,
     musicMood: String(out.musicMood ?? 'subtle cinematic instrumental').trim().slice(0, 80),
+    world: normalizeSceneWorld(out.world, String(out.topic ?? '').trim()),
   }
 }
 

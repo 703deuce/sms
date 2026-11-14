@@ -14,6 +14,11 @@ import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cac
 import { T2V_PIPELINE_STAGES } from '@/lib/t2v/pipeline/t2v-types'
 import type { T2vDraftV1 } from '@/lib/t2v/types'
 
+/** Longest a status poll waits on an inline pipeline tick before answering with the current state. */
+const STATUS_TICK_WAIT_MS = 8000
+
+export const dynamic = 'force-dynamic'
+
 export async function GET(_request: Request, ctx: { params: Promise<{ draftId: string }> }) {
   const disabled = t2vFeatureDisabledResponse()
   if (disabled) return disabled
@@ -30,7 +35,9 @@ export async function GET(_request: Request, ctx: { params: Promise<{ draftId: s
         // Web process restarted: resume the server-side driver from the persisted stage.
         kickT2vPipeline(draftId, { resumed: true })
       } else {
-        await advanceT2vPipeline(draftId)
+        // Bounded: a slow tick (finisher, render QA) keeps running in the background; the poll always gets
+        // a JSON snapshot instead of hanging until a proxy timeout returns an empty body.
+        await Promise.race([advanceT2vPipeline(draftId), new Promise((r) => setTimeout(r, STATUS_TICK_WAIT_MS))])
       }
       row = (await prisma.t2vDraft.findFirst({ where: { id: draftId, workspaceId } }))!
       run = (row.document as T2vDraftV1).autobuild!

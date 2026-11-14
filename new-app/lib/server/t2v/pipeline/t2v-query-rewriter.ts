@@ -1,12 +1,14 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vPlannedShot, T2vShotResult, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
+import { worldLine } from '@/lib/server/t2v/pipeline/t2v-context'
 
 /**
  * Query Rewriter (Prompt-to-Video only). For shots where no stock clip passed review, propose NEW search
  * queries that could serve the same spot: escalate from the literal idea to adjacent concepts and broader
  * B-roll that still carries the line's meaning. Never repeats a query already tried. One LLM call per round.
  */
+
 const SYSTEM = `You help an automatic stock-footage video editor find B-roll on Pixabay (a free stock site with
 limited, generic footage). For each shot below no clip worked yet. Propose 3 NEW search queries that could
 serve the same spot in the video.
@@ -24,6 +26,11 @@ Rules:
   "highway sunset", "shopping street", "car interior", "wallet cash". Pick ones that fit the line's meaning
   and differ from the neighbouring shots.
 - Use what the reviewer actually saw in rejected clips to steer away from those results.
+- VIDEO WORLD (when given) and each shot's situation are hard context: queries stay inside the video's
+  setting, season and time of day (a winter-storm video: "snowy gutter", "frosted window", never a summer
+  garden; a sleep video: "bedside lamp night", never a sunny park).
+- negated shots warn AGAINST an action ("never bring a grill inside"): search for the safe version ("grill
+  snowy patio"), never the forbidden action's literal words ("grilling", "indoor grill").
 Return ONLY JSON: {"shots": [{"sceneId": string, "queries": [string, string, string]}]}`
 
 const RELATED = `
@@ -48,13 +55,15 @@ export async function t2vQueryRewriter(input: {
     narration: s.narration,
     intent: s.intent,
     subject: s.subject,
+    ...(s.situation ? { situation: s.situation } : {}),
+    ...(s.negated ? { negated: true } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejectedClipsShowed: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.visible)
       .slice(-4)
       .map((e) => String(e.visible).slice(0, 90)),
   }))
-  const user = [`Video topic: ${input.story.topic || input.story.title}`, `Round: ${input.round}`, `Shots: ${JSON.stringify(rows)}`].join('\n')
+  const user = [`Video topic: ${input.story.topic || input.story.title}`, ...(input.story.world ? [`VIDEO WORLD: ${worldLine(input.story.world)}`] : []), `Round: ${input.round}`, `Shots: ${JSON.stringify(rows)}`].join('\n')
   const out = await t2vLlmJson<{ shots?: Array<{ sceneId?: string; queries?: unknown[] }> }>(
     input.mode === 'related' ? SYSTEM + RELATED : SYSTEM,
     user,

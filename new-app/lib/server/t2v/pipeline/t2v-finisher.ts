@@ -12,10 +12,11 @@ import type {
   T2vPipelineRun,
   T2vPickedBy,
   T2vPlannedShot,
+  T2vSceneWorld,
   T2vShotResult,
   T2vStoryPlan,
 } from '@/lib/t2v/pipeline/t2v-types'
-import { T2V_END_CARD_S } from '@/lib/server/t2v/pipeline/t2v-story-agent'
+import { CONTEXT_FIT_ACCEPT } from '@/lib/server/t2v/pipeline/t2v-context'
 
 const TITLE_CARD_COLOR = '#0f1115'
 
@@ -99,7 +100,9 @@ export function relatedness(
  *   not removed by the sequence check) → closest related clip reviewed for another line → any unused
  *   reviewed footage for this line
  * - verified stock clip trimmed to the reviewer's in-point; audio is never used (-an in assemble)
- * - hard cuts inside a segment, dissolves between segments, opening title, closing end card
+ * - fallbacks obey the same rules as every pick: lit (lighting >= 6), on-world (contextFit >= 5) and
+ *   3+ for THIS line; with nothing left the line rides the previous shot (never an off-world filler)
+ * - hard cuts inside a segment, dissolves between segments; no text cards (no opening title, no end card)
  */
 export async function t2vFinisher(input: {
   workspaceId: string
@@ -112,6 +115,8 @@ export async function t2vFinisher(input: {
   candidates: Record<string, T2vFootageCandidate[]>
   /** Clips the sequence check removed per scene (never re-placed there). */
   banned?: Record<string, string[]>
+  /** Scene world: neutral on-world footage is lent across lines, re-checked with the world in the prompt. */
+  world?: T2vSceneWorld
 }): Promise<{ scenes: T2vScene[]; results: T2vShotResult[] }> {
   const byScene = new Map(input.results.map((r) => [r.sceneId, r]))
   const used = new Set(input.results.map((r) => r.chosen?.providerId).filter(Boolean) as string[])
@@ -182,11 +187,21 @@ export async function t2vFinisher(input: {
       .sort((a, b) => relatedness(shot, b, topicWords) - relatedness(shot, a, topicWords) || (b.score ?? 0) - (a.score ?? 0))
       .filter((e) => !seen.has(e.providerId) && seen.add(e.providerId))
       .slice(0, 5)
+    // Plus up to 3 clearly on-world clips from any line (contextFit 6+), so the re-check can pick a neutral
+    // in-world shot instead of an off-world filler.
+    if (input.world) {
+      const neutral = allEvaluated
+        .filter((e) => ok(e) && (e.contextFit ?? 0) >= CONTEXT_FIT_ACCEPT && t2vQualityOk(e, qctx(shot)) && !seen.has(e.providerId))
+        .sort((a, b) => (b.contextFit ?? 0) - (a.contextFit ?? 0) || (b.lighting ?? 0) - (a.lighting ?? 0))
+        .filter((e) => !seen.has(e.providerId) && seen.add(e.providerId))
+        .slice(0, 3)
+      shortlist[shot.sceneId]!.push(...neutral)
+    }
   }
   let lineScores: Record<string, Record<string, number>> = {}
   if (Object.values(shortlist).some((l) => l.length)) {
     try {
-      lineScores = await scoreSpares(open, shortlist)
+      lineScores = await scoreSpares(open, shortlist, input.world)
     } catch (err) {
       logT2v('pipeline-finisher', 'related re-check failed', { error: err instanceof Error ? err.message : 'error' })
     }
@@ -195,26 +210,22 @@ export async function t2vFinisher(input: {
     if (options.get(shot.sceneId)?.length) continue
     const ok = okFor(shot)
     const q = (e: Ev) => Number(t2vQualityOk(e, qctx(shot)))
-    const l = (e: Ev) => Number(lit(shot)(e))
     const ls = lineScores[shot.sceneId] ?? {}
     // Score = the re-check for THIS line (0 when not re-checked), so QA judges it where it sits.
     const cross = (shortlist[shot.sceneId] ?? [])
-      .filter(ok)
+      .filter((e) => ok(e) && lit(shot)(e) && (ls[e.providerId] ?? 0) >= 3)
       .sort((a, b) => (ls[b.providerId] ?? -1) - (ls[a.providerId] ?? -1))
       .map((e) => ({ pick: { ...evToPick(e), score: ls[e.providerId] ?? 0, matches: (ls[e.providerId] ?? 0) >= 7, reviewedForOtherLine: e.score ?? 0 }, tier: 'last_resort' as const }))
     const crossIds = new Set(cross.map((o) => o.pick.providerId))
-    // 3) Anything reviewed for this line that is still unused (real footage beats a card).
+    // 3) Anything reviewed for this line that is still unused, under the same rules: lit, on-world, 3+.
+    // Dim, off-world or 0-2 clips are never used to fill a slot; the line rides the previous shot instead.
     const own = (byScene.get(shot.sceneId)?.evaluated ?? [])
-      .filter((e) => ok(e) && !crossIds.has(e.providerId))
-      .sort((a, b) => l(b) - l(a) || q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
-      .map((e) => ({ e, o: { pick: evToPick(e), tier: 'last_resort' as const } }))
-    // Order: related brighter footage (re-checked 3+) → a dim but on-topic (5+) own clip (only when no lit
-    // related footage exists) → everything else by score for this line, lit first on ties.
-    const dimGood = own.filter((x) => !l(x.e) && (x.e.score ?? 0) >= 5).map((x) => x.o)
-    const rest = [...cross.filter((o) => o.pick.score < 3), ...own.filter((x) => l(x.e) || (x.e.score ?? 0) < 5).map((x) => x.o)].sort(
-      (a, b) => b.pick.score - a.pick.score || Number(t2vLitOk(b.pick, qctx(shot))) - Number(t2vLitOk(a.pick, qctx(shot))),
-    )
-    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = [...cross.filter((o) => o.pick.score >= 3), ...dimGood, ...rest]
+      .filter((e) => ok(e) && !crossIds.has(e.providerId) && lit(shot)(e) && (e.score ?? 0) >= 3)
+      .sort((a, b) => q(b) - q(a) || (b.score ?? 0) - (a.score ?? 0))
+      .map((e) => ({ pick: evToPick(e), tier: 'last_resort' as const }))
+    // Clearly on-world B-roll (contextFit 6+, e.g. a snowy house exterior) beats a literal but off-context clip.
+    const onWorld = (p: T2vVerifiedPick) => Number((p.contextFit ?? 0) >= CONTEXT_FIT_ACCEPT)
+    const list: Array<{ pick: T2vVerifiedPick; tier: T2vPickedBy }> = [...cross, ...own].sort((a, b) => onWorld(b.pick) - onWorld(a.pick) || b.pick.score - a.pick.score)
     take(shot, list)
   }
   // Direction per photo shot, in story order (varied, never two of the same move in a row).
@@ -304,8 +315,8 @@ export async function t2vFinisher(input: {
       return
     }
     results.push(got ? { ...r, chosen: got.pick, outcome: 'stock', pickedBy: got.tier } : { ...r, outcome: 'title_card', pickedBy: 'card' })
+    // No text cards: no opening title overlay (and no closing end card below).
     const texts: T2vScene['texts'] = []
-    if (i === 0) texts.push({ id: 't_open', kind: 'title', text: input.story.title, startMs: 300, endMs: 3300, animation: 'fade' })
     scenes.push({
       id: shot.sceneId,
       slot: scenes.length,
@@ -321,21 +332,7 @@ export async function t2vFinisher(input: {
       texts,
     })
   })
-  // Closing end card: title on black, no narration.
-  const endSlot = scenes.length
-  scenes.push({
-    id: `sc_end_${Math.random().toString(36).slice(2, 8)}`,
-    slot: endSlot,
-    narration: '',
-    keywords: [],
-    visualQuery: '',
-    media: { provider: 'color', kind: 'color', color: '#000000' },
-    minDurMs: Math.round(T2V_END_CARD_S * 1000),
-    padMs: 0,
-    transition: 'cut',
-    transitionMs: 0,
-    texts: [{ id: 't_end', kind: 'title', text: input.story.title, startMs: 200, endMs: Math.round(T2V_END_CARD_S * 1000), animation: 'fade' }],
-  })
-  if (scenes.length >= 2) scenes[scenes.length - 2]!.transitionMs = 600
+  // The last shot fades to black on its own (no end card after it).
+  if (scenes.length) scenes[scenes.length - 1]!.transitionMs = 600
   return { scenes, results }
 }

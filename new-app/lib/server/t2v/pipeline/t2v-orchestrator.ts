@@ -19,12 +19,15 @@ import {
   type T2vShotResult,
   type T2vPickedBy,
   type T2vFootageCandidate,
+  type T2vPlannedShot,
+  type T2vSceneWorld,
 } from '@/lib/t2v/pipeline/t2v-types'
 import { t2vScriptAgent, t2vStoryAgent } from '@/lib/server/t2v/pipeline/t2v-story-agent'
 import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { enforceNoRepeat, enforceNoRepeatDeterministic, t2vMonoRequested, t2vNightLine, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
+import { worldLine, worldPrompt, worldQuery } from '@/lib/server/t2v/pipeline/t2v-context'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -268,8 +271,9 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       await setStage(draftId, 'writing_script', 'planning_scenes', (r) => {
         r.story = story
         r.segments = segments
+        if (story.world) r.world = story.world
       })
-      logT2v('pipeline', 'script written', { draftId, segments: segments.length, words: segments.reduce((n, s) => n + s.narration.split(/\s+/).length, 0) })
+      logT2v('pipeline', 'script written', { draftId, segments: segments.length, words: segments.reduce((n, s) => n + s.narration.split(/\s+/).length, 0), world: Boolean(story.world) })
       return advanceOnce(draftId, {})
     }
     case 'planning_scenes': {
@@ -293,7 +297,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
     case 'finding_footage': {
       const topic = run.story?.topic || run.story?.title || ''
       const realistic = t2vRealisticStyle(run.style)
-      const candidates = await t2vFootageAgent({ shots: run.shots!, aspect: doc.settings.aspect, topic, realistic })
+      const candidates = await t2vFootageAgent({ shots: worldShots(run, run.shots!), aspect: doc.settings.aspect, topic, realistic })
       const jobId = await enqueueVerify(row, topic, run.shots!, candidates, { realistic, monoOk: t2vMonoRequested(run.prompt) })
       const tried: Record<string, string[]> = {}
       for (const sh of run.shots!) tried[sh.sceneId] = queryRewrites(sh.queries, topic)
@@ -393,7 +397,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       // Related rescue: lines with nothing usable for them get one more search on the closest related
       // subjects (video + photo, same visual check) so they are filled with real footage, never a card.
       if (!run.rescueRound) {
-        const dry = enforceNoRepeatDeterministic(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+        const dry = enforceNoRepeatDeterministic(run.shots!, history, pickOpts(run))
         const missing = run.shots!.filter((sh) => !dry.tiers[sh.sceneId] || dry.tiers[sh.sceneId] === 'last_resort')
         const rescue = missing.length
           ? await relatedSearchRound(row, run, missing, history).catch((err) => {
@@ -438,12 +442,13 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           return
         }
       }
-      const noRepeat = await enforceNoRepeat(run.shots!, history, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+      const noRepeat = await enforceNoRepeat(run.shots!, history, pickOpts(run))
       const results = run.shots!.map((sh): T2vShotResult => {
         const r = noRepeat.results[sh.sceneId] ?? { sceneId: sh.sceneId, chosen: null, evaluated: [] }
         return { ...r, pickedBy: noRepeat.tiers[sh.sceneId] }
       })
       const fin = await t2vFinisher({
+        world: runWorld(run),
         workspaceId: row.workspaceId,
         doc,
         run,
@@ -454,8 +459,14 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
         candidates: run.candidates ?? {},
         banned: noRepeat.banned,
       })
+      logScenePicks(draftId, run.shots!, fin.results)
       const qa = t2vQaPlan({ run, scenes: fin.scenes, results: fin.results })
       const stockStats = computeStockStats(fin.results, round)
+      // Plan QA failed on relevance: flag the draft for human review instead of shipping it silently (a
+      // re-plan would mean another paid verify loop, so none is started here).
+      const relevance = qa.checks.find((c) => c.id === 'visual_relevance')
+      const review = relevance && !relevance.ok ? { needed: true, reason: `plan_qa:${relevance.detail}`.slice(0, 200), at: new Date().toISOString() } : undefined
+      if (review) logT2v('pipeline', 'flagged for review', { draftId, reason: review.reason })
       const fresh = (await loadRow(draftId))!
       const nextDoc: T2vDraftV1 = {
         ...fresh.document,
@@ -469,6 +480,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
             verifySummary: payload.summary,
             stockStats,
             qa: [...(fresh.document.autobuild!.qa ?? []), qa],
+            ...(review ? { review } : {}),
           },
           'verifying_footage',
           'generating_narration',
@@ -552,7 +564,7 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
       const asmPayload = (asmJob?.payload ?? {}) as { shotStartsMs?: number[]; assembledMs?: number }
       const qa = t2vQaRender({
         run,
-        shotLengthsMs: shotLengthsFrom(asmPayload.shotStartsMs, asmPayload.assembledMs),
+        shotLengthsMs: shotLengthsFrom(asmPayload.shotStartsMs, asmPayload.assembledMs, Boolean(row.document.scenes?.at(-1)?.id.startsWith('sc_end'))),
         status: render.status,
         outputDurationMs: typeof settings.outputDurationMs === 'number' ? settings.outputDurationMs : null,
         sourceDurationMs: project?.rangeEndMs ?? null,
@@ -581,6 +593,10 @@ async function enqueueVerify(
   opts: { realistic: boolean; monoOk?: boolean; used?: Array<{ providerId: string; phash?: string[] }> },
 ): Promise<string> {
   const jobId = createId('job')
+  // Scene world + each line's implied situation and neighbouring lines (story order across the whole run).
+  const world = worldPrompt(row.document.autobuild?.world ?? row.document.autobuild?.story?.world)
+  const all = row.document.autobuild?.shots?.length ? row.document.autobuild.shots : shots
+  const at = (sceneId: string) => all.findIndex((x) => x.sceneId === sceneId)
   await getPrisma().clipJob.create({
     data: {
       id: jobId,
@@ -596,8 +612,14 @@ async function enqueueVerify(
         realistic: opts.realistic,
         monoOk: opts.monoOk ?? false,
         used: opts.used ?? [],
+        ...(world ? { world } : {}),
         shots: shots.map((s) => ({
           sceneId: s.sceneId,
+          sceneIndex: at(s.sceneId),
+          ...(s.negated ? { negated: true } : {}),
+          ...(world
+            ? { situation: s.situation ?? '', prevNarration: all[at(s.sceneId) - 1]?.narration ?? '', nextNarration: at(s.sceneId) >= 0 ? (all[at(s.sceneId) + 1]?.narration ?? '') : '' }
+            : {}),
           narration: s.narration,
           intent: s.intent,
           needS: s.needS,
@@ -617,6 +639,49 @@ async function enqueueVerify(
     },
   })
   return jobId
+}
+
+function runWorld(run: T2vPipelineRun): T2vSceneWorld | undefined {
+  return run.world ?? run.story?.world
+}
+
+/** Shots with the world's search terms appended to every stock query (search only; plans stay as written). */
+function worldShots<T extends { queries: string[] }>(run: T2vPipelineRun, shots: T[]): T[] {
+  const w = runWorld(run)
+  return w?.searchTerms ? shots.map((s) => ({ ...s, queries: s.queries.map((q) => worldQuery(q, w)) })) : shots
+}
+
+/** Options for every pick pass (dry run, no-repeat, AI targets): style, mono, scene world. */
+function pickOpts(run: T2vPipelineRun) {
+  return { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt), world: runWorld(run) }
+}
+
+/** One log line per scene after the edit: jobId (draft), sceneIndex, candidate, scores, verdict, reason. */
+function logScenePicks(draftId: string, shots: T2vPlannedShot[], results: T2vShotResult[]) {
+  results.forEach((r, sceneIndex) => {
+    const c = r.chosen
+    logT2v('pipeline-scene', 'scene pick', {
+      jobId: draftId,
+      sceneIndex,
+      sceneId: r.sceneId,
+      candidateId: c?.providerId ?? null,
+      kind: c?.kind ?? 'video',
+      score: c?.score ?? null,
+      contextFit: c?.contextFit ?? null,
+      lighting: c?.lighting ?? null,
+      verdict: r.pickedBy ?? r.outcome ?? null,
+      reason: c?.contextReason || (c ? '' : r.outcome === 'held' ? 'no on-world, lit, 3+ option: held previous shot' : 'no option'),
+      evaluated: r.evaluated?.length ?? 0,
+      offWorldRejected: (r.evaluated ?? []).filter((e) => typeof e.contextFit === 'number' && e.contextFit < 5).length,
+      // Top-K reviewed options with scores (per-run log only; input for a later sequence-level pass).
+      topK: (r.evaluated ?? [])
+        .filter((e) => !e.error && typeof e.score === 'number')
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || (b.contextFit ?? 10) - (a.contextFit ?? 10))
+        .slice(0, 5)
+        .map((e) => ({ candidateId: e.providerId, score: e.score, contextFit: e.contextFit ?? null, lighting: e.lighting ?? null })),
+      line: (shots[sceneIndex]?.narration ?? '').slice(0, 80),
+    })
+  })
 }
 
 function pickScore(r: T2vShotResult | undefined): number {
@@ -652,7 +717,7 @@ async function nextSearchRound(
   const exclude: Record<string, string[]> = {}
   for (const s of shots) exclude[s.sceneId] = (history[s.sceneId]?.evaluated ?? []).map((e) => e.providerId)
   const realistic = t2vRealisticStyle(run.style)
-  const found = await t2vFootageAgent({ shots, aspect: row.document.settings.aspect, rewrite: false, exclude, realistic })
+  const found = await t2vFootageAgent({ shots: worldShots(run, shots), aspect: row.document.settings.aspect, rewrite: false, exclude, realistic })
   const withCands = shots.filter((s) => found[s.sceneId]?.length)
   for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
   if (!withCands.length) return null
@@ -679,14 +744,14 @@ async function claimAiStep(draftId: string): Promise<boolean> {
 
 /** Start one generation per target scene (aiBrollTargets: weakest first, max 3); no retries. */
 async function aiBrollStart(run: T2vPipelineRun, history: Record<string, T2vShotResult>): Promise<{ jobs: T2vAiJob[] }> {
-  const opts = { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) }
+  const opts = pickOpts(run)
   // Predict with the same full pass the edit uses (spares + sequence check), so the clips go where the
   // final picks would really be weakest (the dry pass misses look-alike swaps).
   const full = await enforceNoRepeat(run.shots!, history, opts).catch(() => undefined)
   const predicted = full ? { out: full.results, tiers: full.tiers } : undefined
   const needy = aiBrollTargets(run.shots!, history, opts, predicted)
   if (!needy.length) return { jobs: [] }
-  const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy)
+  const prompts = await aiBrollPrompts(run.story?.topic || run.story?.title || '', needy, worldLine(runWorld(run)))
   const jobs: T2vAiJob[] = []
   for (const [k, sh] of needy.entries()) {
     const numFrames = aiFramesFor(sh.needS)
@@ -738,7 +803,7 @@ async function aiBrollPoll(
   if (!shots.length) return { done: true, jobs, costUsd, ok: 0 }
   const candidates = { ...(run.candidates ?? {}) }
   for (const s of shots) candidates[s.sceneId] = [...(candidates[s.sceneId] ?? []), ...found[s.sceneId]!]
-  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', shots, found, { realistic: t2vRealisticStyle(run.style), monoOk: t2vMonoRequested(run.prompt) })
+  const jobId = await enqueueVerify(row, run.story?.topic || run.story?.title || '', shots, found, pickOpts(run))
   return { done: true, jobs, costUsd, ok: shots.length, jobId, candidates }
 }
 
@@ -751,7 +816,12 @@ async function relatedSearchRound(
 ): Promise<{ jobId: string; tried: Record<string, string[]>; candidates: Record<string, T2vFootageCandidate[]>; shots: number } | null> {
   const tried = { ...(run.queriesTried ?? {}) }
   const alt = await t2vQueryRewriter({ story: run.story!, round: 4, shots: missing, tried, history, mode: 'related' })
-  const shots = missing.filter((s) => alt[s.sceneId]?.length).map((s) => ({ ...s, queries: alt[s.sceneId]! }))
+  // Plus one neutral on-world query per line (LLM-written with the scene world), so a line with no literal
+  // match can still get in-world B-roll instead of an off-world filler.
+  const extra = runWorld(run)?.fallbackQueries ?? []
+  const shots = missing
+    .map((s, i) => ({ ...s, queries: [...new Set([...(alt[s.sceneId] ?? []), ...(extra.length ? [extra[i % extra.length]!] : [])])] }))
+    .filter((s) => s.queries.length)
   if (!shots.length) return null
   for (const s of shots) tried[s.sceneId] = [...(tried[s.sceneId] ?? []), ...s.queries]
   const realistic = t2vRealisticStyle(run.style)
@@ -759,8 +829,8 @@ async function relatedSearchRound(
   const exclude: Record<string, string[]> = {}
   for (const s of shots) exclude[s.sceneId] = reviewed
   const aspect = row.document.settings.aspect
-  const videos = await t2vFootageAgent({ shots, aspect, rewrite: false, exclude, realistic })
-  const photos = await t2vPhotoAgent({ shots, aspect, realistic, exclude: new Set(reviewed) })
+  const videos = await t2vFootageAgent({ shots: worldShots(run, shots), aspect, rewrite: false, exclude, realistic })
+  const photos = await t2vPhotoAgent({ shots: worldShots(run, shots), aspect, realistic, exclude: new Set(reviewed) })
   const found: Record<string, T2vFootageCandidate[]> = {}
   for (const s of shots) {
     const list = [...(videos[s.sceneId] ?? []).slice(0, 4), ...(photos[s.sceneId] ?? []).slice(0, 3)]
@@ -783,7 +853,7 @@ async function photoSearchRound(
 ): Promise<{ jobId: string; candidates: Record<string, T2vFootageCandidate[]>; shots: number } | null> {
   const realistic = t2vRealisticStyle(run.style)
   const exclude = new Set(Object.values(history).flatMap((h) => h.evaluated.map((e) => e.providerId)))
-  const found = await t2vPhotoAgent({ shots: weak, aspect: row.document.settings.aspect, realistic, exclude })
+  const found = await t2vPhotoAgent({ shots: worldShots(run, weak), aspect: row.document.settings.aspect, realistic, exclude })
   const withCands = weak.filter((s) => found[s.sceneId]?.length)
   if (!withCands.length) return null
   const candidates = { ...(run.candidates ?? {}) }
@@ -792,12 +862,12 @@ async function photoSearchRound(
   return { jobId, candidates, shots: withCands.length }
 }
 
-/** Shot lengths from the assembler's shot starts; the closing end card (last entry) is excluded. */
-export function shotLengthsFrom(starts: number[] | undefined, totalMs: number | undefined): number[] | undefined {
+/** Shot lengths from the assembler's shot starts; a closing end card (last entry, older drafts) is excluded. */
+export function shotLengthsFrom(starts: number[] | undefined, totalMs: number | undefined, endCard = true): number[] | undefined {
   if (!starts?.length || !totalMs) return undefined
   const sorted = [...starts].sort((a, b) => a - b)
   const lens = sorted.map((s, i) => (sorted[i + 1] ?? totalMs) - s)
-  return lens.slice(0, -1).filter((l) => l > 0)
+  return (endCard ? lens.slice(0, -1) : lens).filter((l) => l > 0)
 }
 
 function computeStockStats(results: T2vShotResult[], round: number): NonNullable<T2vPipelineRun['stockStats']> {
