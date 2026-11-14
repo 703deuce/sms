@@ -39,7 +39,9 @@ FALLBACK_MIN_SCORE = 3
 MAX_PREVIEW_BYTES = 40 * 1024 * 1024
 # Realistic styles (documentary etc.) accept live-action footage only.
 LIVE_ACTION = "live_action"
-MIN_LIGHTING = 4
+MIN_LIGHTING = 5
+# Just under the relevance bar but still works for the line: used before holding the previous shot.
+USABLE_SCORE = 5
 # dHash Hamming distance (64-bit) at or below which two frames count as the same shot.
 NEAR_DUP_BITS = 10
 PARALLEL_SHOTS = 4
@@ -90,7 +92,8 @@ Return JSON:
   sales, a charging cable for a line about home charging, modern cars in a city for a line about EVs
   becoming common).
 - score: 0-10 how well it works in this spot. 9-10 = exactly the subject and action; 7-8 = clearly
-  works here, usable as-is (literal or a fitting adjacent visual); 5-6 = related but weak; 3-4 = loosely
+  works here, usable as-is (literal or a fitting adjacent visual); 5-6 = works for the line but not
+  ideal (related subject an editor could still use here); 3-4 = loosely
   on-topic; 0-2 = wrong or unusable.
 - in_s, out_s: the best continuous window inside the clip to use, where the relevant subject or
   action is clearly visible and the framing is good. Prefer a window of at least {need_s:.1f} s
@@ -193,11 +196,27 @@ def passes(entry: dict, need_s: float, realistic: bool) -> bool:
     )
 
 
+def usable(entry: dict, need_s: float, realistic: bool) -> bool:
+    """Second tier: live action, lit, window long enough, score 5-6 (works for the line, not perfect)."""
+    if entry.get("error") or "score" not in entry:
+        return False
+    if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
+        return False
+    return (
+        entry["score"] >= USABLE_SCORE
+        and int(entry.get("lighting", 10)) >= MIN_LIGHTING
+        and (entry["outS"] - entry["inS"]) >= min(need_s, entry["clipS"]) - 0.05
+    )
+
+
 def fallback_rank(entry: dict, realistic: bool) -> float:
-    """Best-available ordering: relevance first, then lighting; non-live-action is a last resort."""
-    s = float(entry.get("score", 0)) + 0.15 * float(entry.get("lighting", 5))
+    """Best-available ordering: relevance first, then lighting (brighter wins); non-live-action and dark
+    clips are a last resort."""
+    s = float(entry.get("score", 0)) + 0.3 * float(entry.get("lighting", 5))
     if realistic and entry.get("style", LIVE_ACTION) != LIVE_ACTION:
         s -= 20
+    if int(entry.get("lighting", 10)) < MIN_LIGHTING:
+        s -= 10
     return s
 
 
@@ -321,7 +340,12 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
         for c in (shot.get("candidates") or [])[:MAX_CANDIDATES_PER_SHOT]:
             if str(c.get("providerId")) in used_ids:
                 continue
-            entry: dict[str, Any] = {"providerId": str(c.get("providerId")), "provider": c.get("provider", "pixabay"), "query": c.get("query")}
+            entry: dict[str, Any] = {
+                "providerId": str(c.get("providerId")),
+                "provider": c.get("provider", "pixabay"),
+                "query": c.get("query"),
+                "author": str(c.get("author") or "")[:80],
+            }
             try:
                 raw = work / f"s{idx}_{c.get('providerId')}.mp4"
                 muted = work / f"s{idx}_{c.get('providerId')}_m.mp4"
@@ -400,10 +424,14 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                 chosen = {**e, "verdict": "accepted"}
                 break
         if chosen is None:
+            for e in sorted((e for e in ev if usable(e, need_s, realistic)), key=lambda e: -fallback_rank(e, realistic)):
+                if free(e):
+                    chosen = {**e, "verdict": "weak_match"}
+                    break
+        if chosen is None:
             for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, realistic)):
                 if free(e):
-                    ok_style = not realistic or e.get("style", LIVE_ACTION) == LIVE_ACTION
-                    chosen = {**e, "verdict": "weak_match" if (e.get("matches") and e["score"] >= 5 and ok_style) else "best_available"}
+                    chosen = {**e, "verdict": "best_available"}
                     break
         if chosen:
             used_ids.add(chosen["providerId"])

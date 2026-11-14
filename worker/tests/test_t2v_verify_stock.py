@@ -53,3 +53,13 @@ def test_prompt_formats_with_style_rule():
 
     out = PROMPT.format(narration="n", intent="i", topic="t", clip_s=10.0, need_s=4.0, style_rule="RULE")
     assert "RULE" in out
+
+
+def test_usable_tier_is_score_five_lit_live_action():
+    from clips_worker.t2v.verify_stock import usable
+
+    base = {"providerId": "1", "matches": False, "score": 5, "inS": 0, "outS": 5, "clipS": 10, "style": "live_action", "lighting": 6}
+    assert usable(base, 5, True)
+    assert not usable({**base, "score": 4}, 5, True)
+    assert not usable({**base, "lighting": 4}, 5, True)
+    assert not usable({**base, "style": "animation"}, 5, True)
