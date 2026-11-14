@@ -8,7 +8,9 @@ on:
       - "new-app/prisma/**"
       - "new-app/scripts/verify-app-route-dynamic-segments.mjs"
       - "new-app/scripts/verify-migration-table-refs.mjs"
+      - "new-app/scripts/verify-marketing-home-routes.mjs"
       - "new-app/tests/new-app-ci-guards.test.ts"
+      - "new-app/tests/marketing-home-routes.test.ts"
       - ".github/workflows/new-app-ci-guards.yml"
   pull_request:
     branches: [master]
@@ -17,6 +19,8 @@ on:
       - "new-app/prisma/**"
       - "new-app/scripts/**"
       - "new-app/tests/new-app-ci-guards.test.ts"
+      - "new-app/tests/marketing-home-routes.test.ts"
+      - ".github/workflows/new-app-ci-guards.yml"
 
 jobs:
   new-app-guards:
