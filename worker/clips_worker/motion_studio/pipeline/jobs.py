@@ -469,6 +469,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
         try:
             from clips_worker.motion_studio.core import qa as _qa
             from clips_worker.motion_studio.core.probes import final_res_times
+            from clips_worker.motion_studio.core.render import probe_stills
             fw, fh = config.final_render_size(settings.get("aspect", "16:9"), settings)
             row_now = db.get_scene(conn, scene["id"]) or scene
             prev_qa = dict(row_now.get("qa") or {})

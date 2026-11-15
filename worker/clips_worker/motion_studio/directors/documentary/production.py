@@ -388,6 +388,8 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
 def design_production(project: dict, story: dict, catalog: list[dict], plan: dict, log) -> dict:
     """Run the Production Designer and attach identity + blueprint to the director plan."""
     plan = plan or {}
+    if project.get("settings"):
+        plan.setdefault("settings", {k: v for k, v in project["settings"].items() if k in ("lengthMin", "voiceover", "music", "renderSize", "resolution", "format", "finalRenderSize")})
     if config.mock():
         out = fallback_production(project, story, catalog, plan)
         log("production_design", "deterministic production design (mock)", {"worlds": len(out.get("worlds") or [])})
@@ -536,6 +538,4 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
         "cameraRoute": (raw.get("cameraRoute") or "Follow the sequence of environments; motivated moves only."),
         "audioDirection": raw.get("audioDirection") or "Narration pauses during clip-mode footage.",
     }
-    if project.get("settings"):
-        plan.setdefault("settings", {k: v for k, v in project["settings"].items() if k in ("lengthMin", "voiceover", "music", "renderSize", "resolution", "format", "finalRenderSize")})
     return finalize_production(plan, story, catalog, inventory)
