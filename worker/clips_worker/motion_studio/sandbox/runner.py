@@ -48,6 +48,7 @@ def main(job_path: str) -> int:
 
         from clips_worker.motion_studio.core import api, blocks
         from clips_worker.motion_studio.core.world import HOUSE, StudioFilm
+        from clips_worker.motion_studio.core.camera import ensure_camera_hold
         from clips_worker.motion_studio.core.wordclock import WordClock
         from clips_worker.motion_studio.sandbox.policy import SAFE_BUILTINS, check_code
         from clips_worker.motion_studio.vendor.cinematic_skill import engine as E
@@ -170,8 +171,8 @@ def main(job_path: str) -> int:
         film = ns["build_scene"](ctx)
         if not isinstance(film, StudioFilm):
             raise TypeError("build_scene must return ctx.film()")
-        if len(film.cam_keys) < 1:
-            raise ValueError("scene has no camera keys")
+        # Engine HOW: typography-only or custom scenes may omit film.cam; hold still.
+        ensure_camera_hold(film, ctx_raw.get("duration") or getattr(film, "duration", 0) or 0)
         film.fade_in = film.fade_out = 0.0          # ST-RW-015: segments never fade
         film.duration = float(ctx_raw["duration"])
         r = E.Renderer(film, W, H)

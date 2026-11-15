@@ -32,6 +32,50 @@ def test_policy_fails_closed():
             check_code(bad)
 
 
+class _CamFilm:
+    def __init__(self, duration=4.0, keys=None):
+        self.duration = duration
+        self.cam_keys = list(keys or [])
+
+    def cam(self, t, x, y, zoom, rot=0.0):
+        self.cam_keys.append((t, x, y, zoom, rot))
+
+
+def test_ensure_camera_hold_adds_still_when_empty():
+    from clips_worker.motion_studio.core.camera import ensure_camera_hold
+    film = _CamFilm(duration=8.0)
+    assert ensure_camera_hold(film, 8.0) is True
+    assert film.cam_keys[0][0] == 0.0
+    assert film.cam_keys[-1][0] == 8.0
+    assert film.cam_keys[0][1:4] == (0.0, 0.0, 0.4)
+    assert film.cam_keys[-1][1:4] == (0.0, 0.0, 0.4)
+
+
+def test_ensure_camera_hold_leaves_existing_keys():
+    from clips_worker.motion_studio.core.camera import ensure_camera_hold
+    existing = [(0, 10, 20, 0.5, 0), (3, 12, 8, 0.35, 0)]
+    film = _CamFilm(keys=existing)
+    assert ensure_camera_hold(film, 3.0) is False
+    assert film.cam_keys == existing
+
+
+def test_ensure_camera_hold_uses_film_duration_when_omitted():
+    from clips_worker.motion_studio.core.camera import ensure_camera_hold
+    film = _CamFilm(duration=2.5)
+    assert ensure_camera_hold(film, None) is True
+    assert film.cam_keys[-1][0] == 2.5
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_studio_film_builds_default_hold_without_keys():
+    from clips_worker.motion_studio.core.world import StudioFilm
+    film = StudioFilm(duration=5.0, fps=30)
+    pose = film.camera(2.5)
+    assert film.cam_keys
+    assert film.cam_keys[0][0] == 0.0
+    assert film.cam_keys[-1][0] == 5.0
+    assert pose[2] > 0
+
 
 @pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
 def test_fallback_probe_and_runtime_block():

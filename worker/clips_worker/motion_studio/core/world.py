@@ -11,6 +11,7 @@ import math
 from clips_worker.motion_studio.vendor.cinematic_skill import engine as E
 from clips_worker.motion_studio.vendor.cinematic_skill.engine import Film, Item, clamp
 from clips_worker.motion_studio.core import fonts as _fonts
+from clips_worker.motion_studio.core.camera import ensure_camera_hold
 
 _fonts.apply()   # licence-clean font roles (RE-1)
 
@@ -159,7 +160,7 @@ class StudioFilm(Film):
 
     def _build(self):
         if not self.cam_keys:
-            raise ValueError("the scene has no camera keys: call film.cam(t, x, y, zoom) or film.shot(...)")
+            ensure_camera_hold(self, self.duration)
         k = sorted(self.cam_keys)
         self._cam = [CR([(a[0], a[1]) for a in k]), CR([(a[0], a[2]) for a in k]),
                      CR([(a[0], math.log(a[3])) for a in k], limit=1.6), CR([(a[0], a[4]) for a in k], limit=1.2)]
