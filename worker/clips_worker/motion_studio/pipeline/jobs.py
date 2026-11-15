@@ -337,8 +337,12 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             cp = os.path.join(work, f"scene_{scene['index']:03d}.py")
             Path(cp).write_text(code)
             upload_file(ck, Path(cp), "text/x-python")
+            qa_blob = {"checks": d["checks"], "verdict": d["verdict"], "ctxHash": ctx_hash}
+            if d.get("usedFallback") or d.get("degraded"):
+                qa_blob["degraded"] = True
+                qa_blob["degradeCause"] = d.get("degradeCause") or "framework fallback"
             db.update_scene(conn, scene["id"], codeKey=ck, codeHash=d["codeHash"], model=d["model"], fixRounds=d["fixRounds"],
-                            usedFallback=d["usedFallback"], qa={"checks": d["checks"], "verdict": d["verdict"], "ctxHash": ctx_hash})
+                            usedFallback=d["usedFallback"], qa=qa_blob)
         rh = _render_hash("scene-v1", hashlib.sha256(code.encode()).hexdigest(), ctx_hash, W, H)
         if scene.get("renderHash") == rh and scene.get("renderKey") and not p.get("force"):
             log("cache_hit", f"scene {scene['index'] + 1}: unchanged (cached)", {})
@@ -349,11 +353,14 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             except Exception as exc:  # noqa: BLE001 (render failure -> framework fallback, no paid retry)
                 kind = getattr(exc, "kind", "sandbox_error")
                 exec_log("render", False, kind, str(exc), None, scene.get("model"), None)
-                log("fallback", f"scene {scene['index'] + 1}: render failed ({kind}); framework fallback", {})
+                log("fallback", f"scene {scene['index'] + 1}: render failed ({kind}); framework fallback",
+                    {"cause": f"render failed ({kind})"})
                 from clips_worker.motion_studio.core.fallback import FALLBACK_CODE
                 code = FALLBACK_CODE
                 res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
-                db.update_scene(conn, scene["id"], usedFallback=True)
+                prev = scene.get("qa") or {}
+                db.update_scene(conn, scene["id"], usedFallback=True,
+                                qa={**prev, "degraded": True, "degradeCause": f"render failed ({kind})", "verdict": "degraded"})
                 rh = _render_hash("scene-v1", hashlib.sha256(code.encode()).hexdigest(), ctx_hash, W, H)
             rk = f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4"
             upload_file(rk, Path(out), "video/mp4")

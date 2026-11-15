@@ -97,13 +97,26 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
             break
     if best and best["code"]:
         verdict = qa.scene_verdict(best["checks"])
-        return {"code": best["code"], "codeHash": code_hash(best["code"]), "model": model, "fixRounds": rounds,
-                "usedFallback": False, "checks": best["checks"], "verdict": verdict, "cues": best.get("cues") or []}
+        empty = any(c.get("id") == "A14" and not c.get("pass") for c in (best.get("checks") or []))
+        if not empty:
+            return {"code": best["code"], "codeHash": code_hash(best["code"]), "model": model, "fixRounds": rounds,
+                    "usedFallback": False, "checks": best["checks"], "verdict": verdict, "cues": best.get("cues") or []}
+        log("empty_scene", f"scene {ctx['scene']['index'] + 1}: empty background (A14); using a framework fallback",
+            {"rounds": rounds})
+    if best is None:
+        cause = "scene code never produced a renderable probe"
+    elif any(c.get("id") == "A14" and not c.get("pass") for c in (best.get("checks") or [])):
+        cause = "empty background (A14) after fix rounds"
+    elif rounds:
+        cause = f"fix cap reached ({rounds})"
+    else:
+        cause = "framework fallback"
     fb = fallback_code(ctx)
     res = probe_stills(fb, ctx, scratch, probe_times(ctx), 960, 540, assets_dir)
     checks, _ = measure(res, ctx, 540)
     exec_log("probe", True, None, None, code_hash(fb), "framework", res.get("durationMs"))
-    log("fallback", f"scene {ctx['scene']['index'] + 1}: framework fallback scene",
-        {"rounds": rounds, "world": (ctx.get("scene") or {}).get("world")})
+    log("fallback", f"scene {ctx['scene']['index'] + 1}: framework fallback — {cause}",
+        {"rounds": rounds, "cause": cause, "world": (ctx.get("scene") or {}).get("world")})
     return {"code": fb, "codeHash": code_hash(fb), "model": "framework", "fixRounds": rounds,
-            "usedFallback": True, "checks": checks, "verdict": qa.scene_verdict(checks), "cues": res.get("cues") or []}
+            "usedFallback": True, "degraded": True, "degradeCause": cause, "checks": checks,
+            "verdict": "degraded", "cues": res.get("cues") or []}

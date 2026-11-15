@@ -74,7 +74,7 @@ def text_audit(stills: list[dict], render_h: int) -> list[dict]:
 
 
 def empty_background(stills: list[dict], max_flat: float = 0.62) -> dict:
-    """A14: fraction of the frame that is a flat field (low local variance). Flags a lone hero on emptiness."""
+    """A14: fraction of the frame that is a flat field (low local variance). Empty flyovers fail."""
     from PIL import Image
     worst = 0.0
     for s in stills or []:
@@ -83,9 +83,14 @@ def empty_background(stills: list[dict], max_flat: float = 0.62) -> dict:
         except Exception:  # noqa: BLE001
             continue
         gy, gx = np.gradient(im)
-        flat = float(((np.abs(gx) + np.abs(gy)) < 1.2).mean())
+        edge = np.abs(gx) + np.abs(gy)
+        flat = float((edge < 1.2).mean())
+        # A nearly black, low-edge frame (dark ocean / empty grid) is empty even if
+        # a little noise keeps the flat fraction just under the threshold.
+        if float(im.mean()) < 28 and float(edge.mean()) < 2.0:
+            flat = max(flat, 0.95)
         worst = max(worst, flat)
-    return _chk("A14", worst <= max_flat, round(worst, 3), "flat-field coverage of the emptiest still", "warn")
+    return _chk("A14", worst <= max_flat, round(worst, 3), "flat-field coverage of the emptiest still", "error")
 
 
 def loudness_check(meas: dict) -> dict:

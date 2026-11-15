@@ -89,13 +89,19 @@ def test_stock_maps_and_places():
     assert "Washington" in us["places"] and "California" in (us.get("regions") or {})
 
 
-def test_fallback_code_follows_world():
+def test_fallback_code_follows_visual_type():
     from clips_worker.motion_studio.core.fallback import FALLBACK_CODE, FALLBACK_MAP, FALLBACK_CHART, fallback_code
-    assert "ctx.geo" in fallback_code({"scene": {"world": "map"}})
-    assert "LineSeries" in fallback_code({"scene": {"world": "price_chart"}})
-    assert fallback_code({"scene": {"world": "abstract_field"}}) == FALLBACK_CODE
-    assert "GeoMap" in FALLBACK_MAP or "ctx.geo" in FALLBACK_MAP
+    assert fallback_code({"scene": {"visualType": "map"}}) == FALLBACK_MAP
+    assert "ctx.geo" in FALLBACK_MAP
+    assert fallback_code({"scene": {"visualType": "data"}}) == FALLBACK_CHART
+    assert "LineSeries" in FALLBACK_CHART
+    assert fallback_code({"scene": {"visualType": "timeline"}}) == FALLBACK_CHART
+    assert fallback_code({"scene": {"visualType": "abstract"}}) == FALLBACK_CODE
+    assert fallback_code({"scene": {"visualType": "diagram"}}) == FALLBACK_CODE
     assert "LinearAxis" in FALLBACK_CHART
+    # A world label must not swallow a data scene into the stock map.
+    assert fallback_code({"scene": {"world": "city_grid", "visualType": "data"}}) == FALLBACK_CHART
+    assert fallback_code({"scene": {"world": "city_grid", "visualType": "diagram"}}) == FALLBACK_CODE
 
 
 
@@ -237,6 +243,15 @@ def test_fallback_code_keeps_photo_even_in_a_city_grid_world():
     assert mapped == FALLBACK_MAP
 
 
+def test_fallback_map_has_no_default_city_tour():
+    from clips_worker.motion_studio.core.fallback import FALLBACK_MAP
+    # The hard-coded stock-city tour and "first N places on the map" fallback are gone.
+    assert 'picked = [n for n in ("Chicago"' not in FALLBACK_MAP
+    assert '"Lagos", "Sydney"' not in FALLBACK_MAP
+    assert "names[:4]" not in FALLBACK_MAP
+    assert "Never tour" in FALLBACK_MAP or "actually names" in FALLBACK_MAP
+
+
 def test_director_normalizes_string_emphasis():
     from clips_worker.motion_studio.directors.documentary.director import _normalize_emphasis
     s = {"lineIds": ["l1", "l2"], "emphasis": ["Movie night", {"word": "aisles", "lineId": "l2"}]}
@@ -324,3 +339,25 @@ def test_probe_video_counts_frames_without_decode(tmp_path):
     assert segment_ready(str(src), 30, 854, 480, 30)
     assert not segment_ready(str(src), 31, 854, 480, 30)
     assert not segment_ready(str(src), 30, 1920, 1080, 30)
+
+
+def test_empty_background_fails_flat_stills(tmp_path):
+    from PIL import Image
+    from clips_worker.motion_studio.core import qa
+    flat = tmp_path / "flat.jpg"
+    Image.new("RGB", (640, 360), (12, 16, 22)).save(flat, quality=90)
+    busy = tmp_path / "busy.jpg"
+    im = Image.new("RGB", (640, 360), (20, 24, 30))
+    # High-contrast type-like bars so the frame is clearly not empty.
+    for i in range(8):
+        for y in range(40 + i * 35, 70 + i * 35):
+            for x in range(40, 600):
+                im.putpixel((x, y), (240, 240, 230))
+    im.save(busy, quality=90)
+    bad = qa.empty_background([{"path": str(flat)}])
+    good = qa.empty_background([{"path": str(busy)}])
+    assert bad["id"] == "A14" and bad["pass"] is False
+    assert bad.get("severity") == "error"
+    assert good["pass"] is True
+    assert qa.scene_verdict([bad]) == "fail"
+    assert qa.scene_verdict([good]) == "pass"

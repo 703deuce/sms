@@ -88,31 +88,55 @@ def build_scene(ctx):
     world = film.add(ctx.geo("world", K=20000, look=look))
     lines = ctx.lines or []
     names = list((world.data.get("places") or {}).keys())
-    # Prefer place names mentioned in the lines; otherwise a short world tour.
+    # Only pin places the narration actually names. Never tour stock cities
+    # that are not in this story (no Chicago / London / Sydney default run).
     picked = []
     blob = " ".join((ln.get("text") or "") + " " + (ln.get("hero") or "") for ln in lines).lower()
     for n in names:
         if n.lower() in blob and n not in picked:
             picked.append(n)
-    if not picked:
-        picked = [n for n in ("Chicago", "London", "Tokyo", "Paris", "Lagos", "Sydney") if n in (world.data.get("places") or {})]
-    if not picked:
-        picked = names[:4]
     pts = [ctx.place(world, n) for n in picked]
     if pts:
         film.cam(0.0, pts[0][0] - 400, pts[0][1] + 200, 0.28)
-    for i, (n, (x, y)) in enumerate(zip(picked, pts)):
-        t0 = 0.15 if not lines else max(0.0, float((lines[min(i, len(lines) - 1)]).get("start", 0.15)))
-        film.add(MapPin(x, y, n, t0))
-        if i:
-            film.add(Route(pts[i - 1], (x, y), max(0.0, t0 - 0.35), dur=0.7, rgb=acc))
-        film.shot(t0, x, y, 0.7, radius=2200, strength=0.35)
-        hero = ""
-        if i < len(lines):
-            hero = (lines[i].get("hero") or "").strip() or (lines[i].get("text") or "")[:28]
-        film.add(HeroSlam((hero or n).upper()[:28], x, y - 520, 280, t0 + 0.05, None, rgb=ink, glow=0.35))
-    if pts:
+        for i, (n, (x, y)) in enumerate(zip(picked, pts)):
+            t0 = 0.15 if not lines else max(0.0, float((lines[min(i, len(lines) - 1)]).get("start", 0.15)))
+            film.add(MapPin(x, y, n, t0))
+            if i:
+                film.add(Route(pts[i - 1], (x, y), max(0.0, t0 - 0.35), dur=0.7, rgb=acc))
+            film.shot(t0, x, y, 0.7, radius=2200, strength=0.35)
+            hero = ""
+            if i < len(lines):
+                hero = (lines[i].get("hero") or "").strip() or (lines[i].get("text") or "")[:28]
+            film.add(HeroSlam((hero or n).upper()[:28], x, y - 520, 280, t0 + 0.05, None, rgb=ink, glow=0.35))
         film.cam(ctx.duration, pts[-1][0] + 300, pts[-1][1] - 200, 0.35)
+        return film
+    # No story places: keep the map as a sheet and put this scene's heroes / photos on it.
+    film.cam(0.0, 0, 200, 0.4)
+    photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")]
+    preferred = (ctx.scene or {}).get("assetId")
+    if preferred and preferred in (ctx.assets or {}):
+        photos = [preferred] + [k for k in photos if k != preferred]
+    if not lines:
+        film.add(HeroSlam("", 0, 0, 300, 0.1))
+        film.cam(ctx.duration, 200, 0, 0.35)
+        return film
+    n = max(1, len(lines))
+    for i, ln in enumerate(lines):
+        x, y = (i - (n - 1) / 2) * 2800, 400
+        t0 = max(0.0, float(ln.get("start", 0.0)))
+        t1 = min(ctx.duration, float(ln.get("end", t0 + 2.0)))
+        hero = (ln.get("hero") or "").strip()
+        if not hero:
+            words = [w for w in (ln.get("text") or "").split() if len(w) > 3]
+            hero = " ".join(words[:3]) if words else (ln.get("text") or "")[:24]
+        hero = hero.upper()[:28]
+        film.shot(max(0.0, t0 - 0.2), x, y, 0.65, radius=2200, strength=0.3)
+        film.add(HeroSlam(hero, x, y, 280, t0 + 0.05, None, rgb=ink, glow=0.35))
+        if photos:
+            k = photos[i % len(photos)]
+            film.add(PhotoFrame(k, x - 1600, y + 280, 1200, rot=-2 + 4 * (i % 2), t_in=t0 + 0.2, skin="print"))
+        film.cam(t1, x + 120, y - 80, 0.6)
+    film.cam(ctx.duration, 0, 0, 0.32)
     return film
 """
 
@@ -170,16 +194,19 @@ def build_scene(ctx):
 
 
 def fallback_code(ctx: dict | None = None) -> str:
-    """Pick a world-appropriate framework scene so the fallback is not always the same grid."""
+    """Pick a framework scene from the scene's visualType, not from a world-type menu.
+
+    A city_grid (or any) world label must not swallow data / timeline / diagram scenes
+    into a stock world map.
+    """
     ctx = ctx or {}
     scene = ctx.get("scene") or {}
-    world = str(scene.get("world") or ctx.get("world") or "").lower()
     vt = str(scene.get("visualType") or "").lower()
-    # A photo beat must keep the still, even when the film world is a map or city grid.
+    # A photo beat must keep the still.
     if vt == "photo" or scene.get("assetId"):
         return FALLBACK_CODE
-    if world in {"map", "city_grid"} or vt == "map":
+    if vt == "map":
         return FALLBACK_MAP
-    if world in {"price_chart", "timeline"} or vt in {"data", "timeline"}:
+    if vt in {"data", "timeline"}:
         return FALLBACK_CHART
     return FALLBACK_CODE
