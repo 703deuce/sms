@@ -441,6 +441,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
         "Every ready upload in the inventory should appear at least once. Repeats require a narrative reuseReason. "
+        "Do not drop an official Director assignment: if you move a still, place it on another scene in the same output. "
         "A logo/wordmark/brand mark/lockup belongs on the title or end card. "
         "Uploaded clips play their planned stretch in full with audioMode 'clip' and narration paused. "
         "No subject-specific special cases. "
@@ -506,6 +507,104 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         raise StageContractError("production_designer", [f"model call failed: {exc}"]) from exc
 
 
+
+def _still_ids(catalog: list[dict]) -> set[str]:
+    return {a["id"] for a in catalog if a.get("kind") in ("image", "photo", "still")}
+
+
+def _official_still_sites(scenes: list[dict], catalog: list[dict]) -> dict[str, list[dict]]:
+    """Map each Director-assigned still to the graphics scenes that officially hold it."""
+    stills = _still_ids(catalog)
+    sites: dict[str, list[dict]] = {}
+    for s in scenes or []:
+        if s.get("kind") in ("handoff", "hardcut"):
+            continue
+        aid = s.get("assetId")
+        if aid in stills:
+            sites.setdefault(aid, []).append({
+                "index": s.get("index"),
+                "reuseReason": s.get("reuseReason"),
+            })
+    return sites
+
+
+def _assigned_graphics_ids(scenes: list[dict]) -> set[str]:
+    return {
+        s.get("assetId") for s in scenes
+        if s.get("assetId") and s.get("kind") not in ("handoff", "hardcut")
+    }
+
+
+def _restore_official_stills(sites: dict[str, list[dict]], scenes: list[dict]) -> None:
+    """Restore official Director stills that production placements dropped.
+
+    This is not a new creative pick and does not fill stills the Director left
+    unassigned. A dropped still returns to its original scene when that scene
+    is empty or currently holds a repeat that remains assigned elsewhere;
+    otherwise it takes the first empty graphics scene.
+    """
+    if not sites:
+        return
+    kept = "kept the Director's official assignment; production design omitted this still"
+    by_idx = {
+        s.get("index"): s for s in scenes
+        if s.get("kind") not in ("handoff", "hardcut")
+    }
+
+    def assigned() -> set[str]:
+        return _assigned_graphics_ids(scenes)
+
+    def counts() -> dict[str, int]:
+        c: dict[str, int] = {}
+        for s in scenes:
+            if s.get("kind") in ("handoff", "hardcut"):
+                continue
+            aid = s.get("assetId")
+            if aid:
+                c[aid] = c.get(aid, 0) + 1
+        return c
+
+    for aid, locs in sites.items():
+        if aid in assigned():
+            continue
+        restored = False
+        for loc in locs:
+            s = by_idx.get(loc["index"])
+            if s is not None and not s.get("assetId"):
+                s["assetId"] = aid
+                if loc.get("reuseReason"):
+                    s["reuseReason"] = loc["reuseReason"]
+                s["assignmentKept"] = kept
+                restored = True
+                break
+        if restored:
+            continue
+        # Safe evict: original scene now holds a still that remains elsewhere.
+        for loc in locs:
+            s = by_idx.get(loc["index"])
+            if s is None:
+                continue
+            current = s.get("assetId")
+            if current and counts().get(current, 0) > 1:
+                s["assetId"] = aid
+                if loc.get("reuseReason"):
+                    s["reuseReason"] = loc["reuseReason"]
+                else:
+                    s.pop("reuseReason", None)
+                s["assignmentKept"] = kept
+                restored = True
+                break
+        if restored:
+            continue
+        for s in scenes:
+            if s.get("kind") in ("handoff", "hardcut"):
+                continue
+            if not s.get("assetId"):
+                s["assetId"] = aid
+                s["assignmentKept"] = kept
+                break
+
+
 def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory: list[dict], raw: dict) -> dict:
     raw = raw if isinstance(raw, dict) else {}
     identity = raw.get("identity") if isinstance(raw.get("identity"), dict) else {}
@@ -516,6 +615,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
             w["id"] = f"w{i}"
     _bind_scenes_to_worlds(plan.setdefault("scenes", []), worlds, story)
 
+    official = _official_still_sites(plan.get("scenes") or [], catalog)
     placements = raw.get("assetPlacements") or (raw.get("blueprint") or {}).get("assetPlacements") or []
     assets = {a["id"]: a for a in catalog}
     if isinstance(placements, list):
@@ -535,7 +635,9 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
                     if pl.get("reuseReason"):
                         s["reuseReason"] = pl["reuseReason"]
                     break
-    # Do not deterministically fill leftover stills on the live path.
+    # Restore official Director stills dropped by incomplete placements.
+    # Do not deterministically fill leftover stills the Director left unassigned.
+    _restore_official_stills(official, plan["scenes"])
     for k, s in enumerate(plan["scenes"]):
         s["index"] = k
 

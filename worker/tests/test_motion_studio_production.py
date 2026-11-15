@@ -214,3 +214,59 @@ def test_merge_does_not_keep_a_video_on_a_graphics_scene_or_fill_stills_silently
     })
     assert clean["scenes"][1].get("assetId") in (None, "photo_7")
     assert clean["scenes"][0]["assetId"] == "photo_7"
+
+
+def test_merge_restores_official_stills_dropped_by_production_but_does_not_fill_unassigned():
+    """A production placement that overwrites a unique official still must not drop it.
+
+    Stills the Director never assigned (e.g. a leftover mark) stay unassigned.
+    """
+    import copy
+    from clips_worker.motion_studio.directors.documentary.production import _merge_model_design
+    story = _story()
+    catalog = _catalog() + [
+        {"id": "photo_8", "kind": "image", "filename": "aisle.jpg", "status": "ready",
+         "width": 1600, "height": 1200, "analysis": {"subject": "the aisle", "tags": ["aisle"]}},
+    ]
+    design = {
+        "identity": {"concept": "a shop", "typography": "condensed", "materials": None, "palette": None,
+                     "cameraPersonality": "slow push on stills", "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
+        "worlds": [{"id": "w1", "name": "Shop", "brief": "the shop", "reason": "set", "chapters": None, "clusters": None}],
+        "customObjects": [], "sceneBindings": [], "missingNeeds": [],
+        "cameraRoute": "push in on the shop front, then hold",
+        "cameraRouteReason": "the stills should be read, not flown past",
+        "audioDirection": "narration pauses on the aisle clip",
+        "audioDirectionReason": "the clip should be heard as itself",
+    }
+    editorial = {
+        "source": "model",
+        "world": {"brief": "a shop", "reason": "the film is set there", "name": "The shop"},
+        "style": {"palette": {"bg": "#101010", "ink": "#f2f0ea", "accent": "#ffc400", "accent2": "#5ac8ff", "muted": "#7a8296"},
+                  "mood": "quiet", "reason": "hold stills"},
+        "scenes": [
+            {"index": 0, "kind": "graphics", "visualType": "photo", "lineIds": ["l1"], "description": "the shop",
+             "reason": "open on the shop front", "assetId": "photo_7", "emphasis": [], "transitionOut": "cut",
+             "reuseReason": None, "handoff": None},
+            {"index": 1, "kind": "graphics", "visualType": "photo", "lineIds": ["l2"], "description": "the aisle",
+             "reason": "the aisle of the shop", "assetId": "photo_8", "emphasis": [], "transitionOut": "cut",
+             "reuseReason": None, "handoff": None},
+            {"index": 2, "kind": "handoff", "visualType": "handoff", "lineIds": [], "description": "aisle clip",
+             "reason": "play the aisle footage in full",
+             "handoff": {"assetId": "clip_1", "inS": 0, "outS": 12.667, "audioMode": "clip"},
+             "emphasis": [], "transitionOut": "cut"},
+        ],
+        "musicAnchors": {},
+        "deliberateMinimal": [],
+    }
+    # Production repeats photo_7 onto the scene that uniquely held photo_8, and never mentions photo_8.
+    out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory_from_catalog(catalog, story), {
+        **design,
+        "assetPlacements": [{"sceneIndex": 1, "assetId": "photo_7", "reason": "repeat the shop front"}],
+    })
+    ids = {s.get("assetId") for s in out["scenes"] if s.get("assetId")}
+    assert "photo_8" in ids, out["scenes"]
+    assert "photo_7" in ids
+    assert all(s.get("assetId") != "mark_1" for s in out["scenes"])
+    # The official still is back on its original scene because photo_7 remains on scene 0.
+    assert out["scenes"][1]["assetId"] == "photo_8"
+    assert out["scenes"][0]["assetId"] == "photo_7"
