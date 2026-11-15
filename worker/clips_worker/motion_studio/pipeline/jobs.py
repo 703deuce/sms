@@ -121,8 +121,9 @@ def handle(conn, job: dict) -> None:
                 db.event(conn, pid, stage, "stage_failed", f"{exc.stage} failed its contract: {msg[:300]}",
                          {"stage": exc.stage, "errors": exc.errors[:12], "repaired": exc.repaired,
                           "outputStored": getattr(exc, "output", None) is not None})
-            db.update_project(conn, pid, status="failed", errorCode=f"{stage}_failed", errorMessage=msg[:1000],
-                              errorStage=stage, qa=qa)
+            failed_stage = exc.stage if isinstance(exc, StageContractError) else stage
+            db.update_project(conn, pid, status="failed", errorCode=f"{failed_stage}_failed", errorMessage=msg[:1000],
+                              errorStage=failed_stage, qa=qa)
             db.event(conn, pid, stage, "failed", f"{jtype} failed: {msg[:300]}", {"job": job["id"]})
         except Exception:  # noqa: BLE001
             conn.rollback()
@@ -182,7 +183,14 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
     db.update_project(conn, pid, story=story, title=(story.get("title") or proj.get("title") or "Documentary")[:120])
     log("story_ready", f"story: {len(story['lines'])} lines, ~{story['estimatedDurationS']:.0f}s", {"lines": len(story["lines"])})
     db.set_stage(conn, pid, "direct")
-    plan = agent.direct(proj, story, catalog, log)
+    # Persist the editorial plan before production design so a later contract
+    # failure does not lose a valid director plan.
+    if hasattr(agent, "direct_editorial") and hasattr(agent, "design_production"):
+        plan = agent.direct_editorial(proj, story, catalog, log)
+        db.update_project(conn, pid, plan=plan)
+        plan = agent.design_production(proj, story, catalog, plan, log)
+    else:
+        plan = agent.direct(proj, story, catalog, log)
     director.check({"world.canvas", "camera.path", "type.hero_slam"} | ({"handoff.enter"} if any(s["kind"] != "graphics" for s in plan["scenes"]) else set()))
     db.update_project(conn, pid, plan=plan)
     rows = [{"id": db.new_id("mss"), "index": s["index"], "chapter": 0, "kind": s["kind"], "visualType": s.get("visualType", "abstract"),

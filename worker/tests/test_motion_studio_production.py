@@ -162,3 +162,47 @@ def test_clean_film_passes_qa_and_reviewer():
     review = review_film(checks=checks, scenes=scenes, plan=plan)
     assert review["pass"] is True
     assert review["correctionRequests"] == []
+
+
+def test_merge_does_not_keep_a_video_on_a_graphics_scene_or_fill_stills_silently():
+    from clips_worker.motion_studio.directors.documentary.production import _merge_model_design
+    story = _story()
+    catalog = _catalog()
+    editorial = {
+        "source": "model",
+        "world": {"brief": "a shop", "reason": "the film is set there", "name": "The shop"},
+        "style": {"palette": {"bg": "#101010", "ink": "#f2f0ea", "accent": "#ffc400", "accent2": "#5ac8ff", "muted": "#7a8296"},
+                  "mood": "quiet", "reason": "hold stills"},
+        "scenes": [
+            {"index": 0, "kind": "graphics", "visualType": "photo", "lineIds": ["l1"], "description": "the shop",
+             "reason": "open on the shop front", "assetId": "photo_7", "emphasis": [], "transitionOut": "cut", "reuseReason": None, "handoff": None},
+            {"index": 1, "kind": "graphics", "visualType": "abstract", "lineIds": ["l2"], "description": "the chain",
+             "reason": "the chain arrives", "assetId": None, "emphasis": [], "transitionOut": "cut", "reuseReason": None, "handoff": None},
+            {"index": 2, "kind": "handoff", "visualType": "handoff", "lineIds": [], "description": "aisle clip",
+             "reason": "play the aisle footage in full", "handoff": {"assetId": "clip_1", "inS": 0, "outS": 12.667, "audioMode": "clip"},
+             "emphasis": [], "transitionOut": "cut"},
+        ],
+        "musicAnchors": {},
+        "deliberateMinimal": [],
+    }
+    dirty = _merge_model_design(editorial, story, catalog, inventory_from_catalog(catalog, story), {
+        "identity": {"concept": "a shop", "typography": "condensed", "materials": None, "palette": None,
+                     "cameraPersonality": None, "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
+        "worlds": [{"id": "w1", "name": "Shop", "brief": "the shop", "reason": "set", "chapters": None, "clusters": None}],
+        "assetPlacements": [{"sceneIndex": 1, "assetId": "clip_1", "reason": "wrongly placed a video on a graphics scene"}],
+        "customObjects": [], "sceneBindings": [], "missingNeeds": [],
+    })
+    # The video must not stick on the graphics scene, and leftover stills must not be auto-filled.
+    assert dirty["scenes"][1].get("assetId") != "clip_1"
+    mark_assigned = any(s.get("assetId") == "mark_1" for s in dirty["scenes"])
+    assert mark_assigned is False
+    # A later repair without that placement starts from a clean editorial copy in design_production;
+    # merge itself must also be safe if given a previously mutated plan-like dict.
+    clean = _merge_model_design(editorial, story, catalog, inventory_from_catalog(catalog, story), {
+        "identity": {"concept": "a shop", "typography": "condensed", "materials": None, "palette": None,
+                     "cameraPersonality": None, "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
+        "worlds": [{"id": "w1", "name": "Shop", "brief": "the shop", "reason": "set", "chapters": None, "clusters": None}],
+        "assetPlacements": [], "customObjects": [], "sceneBindings": [], "missingNeeds": [],
+    })
+    assert clean["scenes"][1].get("assetId") in (None, "photo_7")
+    assert clean["scenes"][0]["assetId"] == "photo_7"

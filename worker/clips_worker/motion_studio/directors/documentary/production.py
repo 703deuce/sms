@@ -7,6 +7,7 @@ decides WHAT / WHERE / WHEN / WHY for the whole film before any scene code.
 """
 from __future__ import annotations
 
+import copy
 import json
 import re
 
@@ -337,6 +338,7 @@ def finalize_production(plan: dict, story: dict, catalog: list[dict], inventory:
 
 def fallback_production(project: dict, story: dict, catalog: list[dict], plan: dict) -> dict:
     """Deterministic Production Designer when the model is unavailable or invalid."""
+    editorial = copy.deepcopy(plan)
     inventory = inventory_from_catalog(catalog, story)
     # Honour existing official assignments; fill any leftover stills.
     _assign_stills(plan.setdefault("scenes", []), catalog, story)
@@ -459,7 +461,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
         )
         log("model_call", "production design", m)
-        out = _merge_model_design(plan, story, catalog, inventory, raw)
+        out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
         errs = validate_plan(out, story, catalog)
         berrs = validate_blueprint(out.get("blueprint"))
         if errs or berrs:
@@ -475,7 +477,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                 schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
             )
             log("model_call", "production design repair", m)
-            out = _merge_model_design(plan, story, catalog, inventory, raw)
+            out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
             errs = validate_plan(out, story, catalog)
             berrs = validate_blueprint(out.get("blueprint"))
         if errs or berrs:
@@ -517,7 +519,11 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
             if not isinstance(pl, dict):
                 continue
             idx, aid = pl.get("sceneIndex"), pl.get("assetId")
-            if not isinstance(idx, int) or aid not in assets:
+            asset = assets.get(aid)
+            if not isinstance(idx, int) or not asset:
+                continue
+            # Graphics scenes may only receive stills. Videos belong on handoff.assetId.
+            if asset.get("kind") not in ("image", "photo", "still"):
                 continue
             for s in plan["scenes"]:
                 if s.get("index") == idx and s.get("kind") not in ("handoff", "hardcut"):
@@ -525,8 +531,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
                     if pl.get("reuseReason"):
                         s["reuseReason"] = pl["reuseReason"]
                     break
-    # Fill any leftovers so validation can pass.
-    _assign_stills(plan["scenes"], catalog, story)
+    # Do not deterministically fill leftover stills on the live path.
     for k, s in enumerate(plan["scenes"]):
         s["index"] = k
 
