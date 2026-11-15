@@ -20,23 +20,25 @@ import {
   Shapes,
   Sparkles,
   Upload,
+  XCircle,
 } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
 import { EmptyState } from '@/components/app/page-primitives'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { StatusBadge } from '@/components/app/status'
 import { ProcessingStepRail } from '@/components/clips/processing-step-rail'
 import { cn } from '@/lib/utils'
 import { getMotionStudioClient } from '@/lib/motion-studio'
 import { newIdempotencyKey, assetKindForFile, type MotionStudioClient } from '@/lib/motion-studio/client'
-import { MOTION_STUDIO_NAME, MOTION_STUDIO_ROUTE, MS_LABELS, MS_PROJECT_SECTIONS, MS_STAGES, type MsProjectSection } from '@/lib/motion-studio/config'
+import { MOTION_STUDIO_NAME, MOTION_STUDIO_NEW_ROUTE, MOTION_STUDIO_ROUTE, MS_LABELS, MS_PROJECT_SECTIONS, MS_STAGES, type MsProjectSection } from '@/lib/motion-studio/config'
 import { formatClock } from '@/lib/motion-studio/format'
 import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsScenePatch, MsSettings } from '@/lib/motion-studio/types'
 import { STATUS_LABEL, STATUS_TONE } from './motion-studio-create'
 import { useMotionProject } from './use-motion-project'
-import { InlineError, MockDataNotice, StageStatusIcon } from './motion-studio-shared'
+import { ExampleNotice, InlineError, MockDataNotice, StageStatusIcon } from './motion-studio-shared'
 import { SetupStep } from './setup-step'
 import { ProductionActivity } from './production-activity'
 import { MediaLibrary } from './media-library'
@@ -70,6 +72,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   const [libraryOpen, setLibraryOpen] = useState(false)
   const [activityOpen, setActivityOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<MobileTab>('preview')
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
@@ -148,6 +151,16 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   })()
   const awaitingReview = project.status === 'awaiting_review' && project.settings.productionMode === 'checkpoint' && !project.story?.approved
   const canExport = project.status === 'review' || project.status === 'complete' || project.status === 'exporting'
+  // Contract v1.1: the Compact Editor opens the assembled program MP4, which exists once the first cut is assembled.
+  const canOpenEditor = canExport && !project.isExample
+  const editorHint = project.isExample ? 'The example project is read-only' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
+  const canCancel = !project.isExample && (project.status === 'planning' || project.status === 'producing' || project.status === 'exporting')
+  const cancel = () =>
+    void act('cancel', async () => {
+      const p = await client.cancelProject(project.id)
+      setCancelOpen(false)
+      return p
+    })
 
   const patchSettings = (patch: Partial<MsSettings>) => void act('settings', () => client.updateProject(project.id, { settings: patch }))
   const createPlan = () =>
@@ -247,6 +260,12 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
             <FolderOpen className="size-3.5" aria-hidden />
             <span className="hidden sm:inline">{MS_LABELS.mediaLibrary}</span>
           </Button>
+          {canCancel ? (
+            <Button size="sm" variant="ghost" onClick={() => setCancelOpen(true)} disabled={busy != null} data-testid="ms-cancel">
+              <XCircle className="size-3.5" aria-hidden />
+              <span className="hidden sm:inline">Cancel</span>
+            </Button>
+          ) : null}
           {project.status !== 'setup' ? (
             <Button size="sm" variant={canExport ? 'default' : 'outline'} onClick={() => setExportOpen(true)} data-testid="ms-open-export">
               <Download className="size-3.5" aria-hidden />
@@ -333,7 +352,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
           ))}
         </div>
         {bottom === 'timeline' ? (
-          <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canExport} title={!canExport ? 'Available once the documentary is assembled' : undefined} data-testid="ms-open-editor-timeline">
+          <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canOpenEditor} title={editorHint} data-testid="ms-open-editor-timeline">
             <Rows3 className="size-3.5" aria-hidden />
             {MS_LABELS.openAdvanced}
           </Button>
@@ -355,7 +374,19 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
     <div className="flex min-h-full flex-col" data-testid="ms-workspace" data-status={project.status}>
       {header}
       <div className="flex flex-col gap-3 px-4 pt-3 md:px-6">
-        {client.mode === 'mock' ? <MockDataNotice /> : null}
+        {client.mode === 'mock' ? (
+          <MockDataNotice />
+        ) : project.isExample ? (
+          <ExampleNotice action={<Link href={MOTION_STUDIO_NEW_ROUTE} className={buttonVariants({ size: 'xs', variant: 'outline' })}>New documentary</Link>} />
+        ) : null}
+        {project.status === 'failed' ? (
+          <div data-testid="ms-project-failed">
+            <InlineError
+              message={project.error === 'Cancelled.' ? 'Production was cancelled. Failed steps can be retried from Production Activity; nothing retries automatically.' : project.error || 'A step failed. Retry it from Production Activity to continue.'}
+              action={<Button size="xs" variant="outline" onClick={() => setActivityOpen(true)}>Open activity</Button>}
+            />
+          </div>
+        ) : null}
         {actionError ? <InlineError message={actionError} onDismiss={() => setActionError(null)} /> : null}
         {awaitingReview ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3" role="status" data-testid="ms-checkpoint">
@@ -473,6 +504,22 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         </SheetContent>
       </Sheet>
 
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="ms-cancel-dialog">
+          <DialogHeader>
+            <DialogTitle>Cancel production?</DialogTitle>
+            <DialogDescription>
+              Queued and running steps stop now. Scenes that already rendered are kept, and nothing restarts on its own. You can retry a step later from Production Activity.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelOpen(false)} disabled={busy === 'cancel'}>Keep going</Button>
+            <Button variant="destructive" onClick={cancel} disabled={busy != null} data-testid="ms-cancel-confirm">
+              {busy === 'cancel' ? 'Cancelling…' : 'Cancel production'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <MotionExportDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
@@ -505,7 +552,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
             <MotionStudioTracks project={project} playheadMs={playheadMs} selectedSceneId={selectedSceneId} onSeek={setPlayheadMs} onSelectScene={setSelectedSceneId} />
           </div>
         </div>
-        <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canExport}>{MS_LABELS.openAdvanced}</Button>
+        <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canOpenEditor} title={editorHint}>{MS_LABELS.openAdvanced}</Button>
       </div>
     )
   }

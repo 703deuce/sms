@@ -45,14 +45,19 @@ export function DirectorChat({
         ) : null}
         {project.director.map((m) => {
           const proposal = m.proposalId ? project.proposals.find((p) => p.id === m.proposalId) : null
+          const body = (m.text ?? '').trim()
+          if (!body && !proposal) return null
+          const single = proposal ? proposal.items.length === 1 : false
           return (
             <div key={m.id} className={cn('flex flex-col gap-1.5', m.role === 'user' ? 'items-end' : 'items-start')}>
-              <p className={cn('max-w-[92%] rounded-xl px-3 py-2 text-sm leading-relaxed', m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>{m.text}</p>
+              {body ? (
+                <p className={cn('max-w-[92%] rounded-xl px-3 py-2 text-sm leading-relaxed', m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground')}>{body}</p>
+              ) : null}
               {proposal ? (
                 <div className="w-full rounded-xl border border-border bg-card p-3" data-testid="ms-proposal">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="flex items-center gap-1.5 text-xs font-semibold"><Sparkles className="size-3.5 text-lane-ai" aria-hidden />{MS_LABELS.proposedChanges}</p>
-                    {proposal.items.some((i) => i.status === 'pending') ? (
+                    {!single && proposal.items.some((i) => i.status === 'pending') ? (
                       <div className="flex gap-1">
                         <Button size="xs" variant="ghost" disabled={busy != null} onClick={() => onDecide(proposal.id, 'all', 'reject')}>Reject all</Button>
                         <Button size="xs" disabled={busy != null} onClick={() => onDecide(proposal.id, 'all', 'accept')} data-testid="ms-proposal-accept-all">Accept all</Button>
@@ -63,7 +68,15 @@ export function DirectorChat({
                     {proposal.items.map((i) => (
                       <li key={i.id} className="flex items-start gap-2 text-sm">
                         <span className={cn('min-w-0 flex-1 leading-snug', i.status === 'rejected' && 'text-muted-foreground line-through')}>{i.text}</span>
-                        {i.status === 'pending' ? (
+                        {i.status === 'pending' && single ? (
+                          <span className="flex shrink-0 gap-1">
+                            <Button size="xs" variant="ghost" disabled={busy != null} onClick={() => onDecide(proposal.id, [i.id], 'reject')} data-testid="ms-proposal-reject">Reject</Button>
+                            <Button size="xs" disabled={busy != null} onClick={() => onDecide(proposal.id, [i.id], 'accept')} data-testid="ms-proposal-accept">
+                              <Check className="size-3" aria-hidden />
+                              Accept
+                            </Button>
+                          </span>
+                        ) : i.status === 'pending' ? (
                           <span className="flex shrink-0 gap-1">
                             <Button size="icon-xs" variant="outline" aria-label={`Reject: ${i.text}`} disabled={busy != null} onClick={() => onDecide(proposal.id, [i.id], 'reject')}><X /></Button>
                             <Button size="icon-xs" aria-label={`Accept: ${i.text}`} disabled={busy != null} onClick={() => onDecide(proposal.id, [i.id], 'accept')}><Check /></Button>

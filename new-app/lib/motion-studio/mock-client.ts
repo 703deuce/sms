@@ -39,6 +39,7 @@ type Rec = {
   regenKeys?: string[]
   script?: string | null
   extraEvents: MsActivityEvent[]
+  cancelledAt?: number | null
 }
 
 type Store = { recs: Record<string, Rec>; seq: number }
@@ -237,6 +238,12 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
         stage('review', 'done')
       } else status = 'exporting'
     }
+    if (rec.cancelledAt != null && (status === 'planning' || status === 'producing' || status === 'awaiting_review' || status === 'exporting')) {
+      status = 'failed'
+      p.error = 'Cancelled.'
+      for (const st of p.stages) if (st.status === 'running' || st.status === 'needs_review') { st.status = 'failed'; st.error = 'Cancelled.' }
+      if (p.export.status === 'queued' || p.export.status === 'rendering') p.export = { status: 'idle', progress: 0 }
+    }
     p.status = status
     p.activity = activitySteps(p, rec)
     p.allowance = allowanceFor(p.settings, p.assets)
@@ -393,6 +400,7 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
         rec.project.settings = { ...rec.project.settings, ...patch.settings, format: '16:9_1080p' }
         if (patch.settings.voiceover) rec.project.audio.voice.mode = patch.settings.voiceover
         rec.project.audio.voice.label = rec.project.settings.voiceover === 'ai' ? 'AI voice · documentary narrator' : 'Your narration (uploaded)'
+        if (patch.settings.music) rec.project.audio.music.label = musicItem(rec.project.settings, rec.project.assets).label
       }
       touch(rec)
       return materialize(rec)
@@ -583,6 +591,16 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
       touch(rec)
       return materialize(rec)
     },
+    async cancelProject(pid) {
+      await wait()
+      const rec = get(pid)
+      const p = materialize(rec)
+      if (p.status === 'review' || p.status === 'complete' || p.status === 'failed' || p.status === 'setup') return p
+      rec.cancelledAt = now()
+      pushEvent(rec, p.stages.find((x) => x.status === 'running')?.id ?? 'story', 'warning', 'Cancelled by you. Queued steps stopped; nothing retries automatically.')
+      touch(rec)
+      return materialize(rec)
+    },
     async getExportDownload(pid) {
       await wait()
       const p = materialize(get(pid))
@@ -630,6 +648,12 @@ function proposalItems(text: string, scene: MsScene | null): string[] {
   return items.slice(0, 4)
 }
 
+function musicItem(settings: MsSettings, assets: MsAsset[]): MsAllowance['items'][number] {
+  const m = settings.music ?? (assets.some((a) => a.role === 'music') ? 'upload' : 'generated')
+  const label = m === 'upload' ? 'Your music (cut and ducked)' : m === 'elevenlabs' ? 'Premium generated music (optional)' : m === 'none' ? 'No music' : 'Score generated from the story beats'
+  return { id: 'music', label, included: true, thirdParty: m === 'elevenlabs', credits: null }
+}
+
 function allowanceFor(settings: MsSettings, assets: MsAsset[]): MsAllowance {
   return {
     estimateCredits: null,
@@ -639,7 +663,7 @@ function allowanceFor(settings: MsSettings, assets: MsAsset[]): MsAllowance {
       { id: 'analysis', label: `Upload analysis (${assets.length} file${assets.length === 1 ? '' : 's'})`, included: true, thirdParty: false, credits: null },
       { id: 'graphics', label: 'Code-rendered motion graphics and revisions', included: true, thirdParty: false, credits: null },
       { id: 'voice', label: settings.voiceover === 'ai' ? 'AI narration (premium voice service)' : 'Your narration (aligned, no voice cost)', included: settings.voiceover !== 'ai', thirdParty: settings.voiceover === 'ai', credits: null },
-      { id: 'music', label: assets.some((a) => a.role === 'music') ? 'Your music (cut and ducked)' : 'Generated score from the story beats', included: true, thirdParty: false, credits: null },
+      musicItem(settings, assets),
       { id: 'render', label: `Final render · ${settings.lengthMin} min · 1080p`, included: false, thirdParty: false, credits: null },
     ],
   }

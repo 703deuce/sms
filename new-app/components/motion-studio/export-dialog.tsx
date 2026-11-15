@@ -50,8 +50,16 @@ export function MotionExportDialog({
               <Progress value={ex.progress} className="h-1.5" />
             </div>
           ) : null}
+          {project.status === 'exporting' && ex.status !== 'rendering' && ex.status !== 'queued' ? (
+            <p className="text-xs text-muted-foreground" role="status">Re-assembling with your scene changes. The download unlocks when it finishes.</p>
+          ) : null}
           {ex.status === 'failed' ? <p className="text-sm text-destructive" role="alert">{ex.error ?? 'The export failed.'} You can start it again; nothing retries automatically.</p> : null}
           {!canExport ? <p className="text-xs text-muted-foreground">Export unlocks when the documentary is ready for review.</p> : null}
+          {canExport ? (
+            <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
+              The advanced editor opens the assembled program MP4 (picture and full mix) in the Compact Editor, so captions and export work as usual. Per-scene changes are made here with Regenerate, then Export.
+            </p>
+          ) : null}
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
             <Button variant="outline" onClick={onOpenEditor} disabled={busy != null || !canExport} data-testid="ms-open-editor">
               <ExternalLink className="size-3.5" aria-hidden />

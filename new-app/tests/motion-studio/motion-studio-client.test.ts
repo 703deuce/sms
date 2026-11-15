@@ -124,7 +124,7 @@ describe('Motion Studio config, tracks and nav', () => {
 
   it('keeps the v1 rules: picker hidden, credits only, exact concept labels', () => {
     expect(MS_MEDIA_PICKER_ENABLED).toBe(false)
-    expect(formatMsCredits(null)).toBe('Credits TBD')
+    expect(formatMsCredits(null)).toBe('Included')
     expect(formatMsCredits(12)).toBe('12 credits')
     expect(MS_LABELS.headline).toBe('What are we creating today?')
     expect(MS_LABELS.promptPlaceholder).toBe('Make a documentary about the GameStop short squeeze in 2021.')

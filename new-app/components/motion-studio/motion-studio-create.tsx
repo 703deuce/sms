@@ -12,7 +12,7 @@ import { EmptyState } from '@/components/app/page-primitives'
 import { StatusBadge, type Tone } from '@/components/app/status'
 import { cn } from '@/lib/utils'
 import { getMotionStudioClient } from '@/lib/motion-studio'
-import { assetKindForFile, newIdempotencyKey, type MotionStudioClient } from '@/lib/motion-studio/client'
+import { assetKindForFile, MotionStudioHttpError, newIdempotencyKey, type MotionStudioClient } from '@/lib/motion-studio/client'
 import {
   MOTION_STUDIO_NAME,
   MOTION_STUDIO_NEW_ROUTE,
@@ -85,6 +85,7 @@ export function MotionStudioCreate({
   const [error, setError] = useState<string | null>(null)
   const [projects, setProjects] = useState<MsProjectSummary[] | null>(null)
   const [projectsError, setProjectsError] = useState<string | null>(null)
+  const [projectsErrorStatus, setProjectsErrorStatus] = useState<number | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const folderRef = useRef<HTMLInputElement>(null)
   const idemKey = useRef(newIdempotencyKey('ms_create'))
@@ -97,9 +98,11 @@ export function MotionStudioCreate({
 
   const loadProjects = useCallback(async () => {
     setProjectsError(null)
+    setProjectsErrorStatus(null)
     try {
       setProjects(await client.listProjects())
     } catch (err) {
+      setProjectsErrorStatus(err instanceof MotionStudioHttpError ? err.status : null)
       setProjectsError(err instanceof Error ? err.message : 'Could not load your projects.')
     }
   }, [client])
@@ -336,7 +339,7 @@ export function MotionStudioCreate({
                 </div>
               </div>
             </section>
-            <ProjectsList projects={projects} error={projectsError} onRetry={() => void loadProjects()} onNew={() => router.push(MOTION_STUDIO_NEW_ROUTE)} />
+            <ProjectsList projects={projects} error={projectsError} errorStatus={projectsErrorStatus} onRetry={() => void loadProjects()} onNew={() => router.push(MOTION_STUDIO_NEW_ROUTE)} />
           </>
         )}
       </div>
@@ -360,8 +363,22 @@ function MediaSourcePicker() {
   )
 }
 
-function ProjectsList({ projects, error, onRetry, onNew }: { projects: MsProjectSummary[] | null; error: string | null; onRetry: () => void; onNew: () => void }) {
-  if (error) return <InlineError message={error} action={<Button size="xs" variant="outline" onClick={onRetry}>Retry</Button>} />
+function ProjectsList({ projects, error, errorStatus, onRetry, onNew }: { projects: MsProjectSummary[] | null; error: string | null; errorStatus?: number | null; onRetry: () => void; onNew: () => void }) {
+  if (error)
+    return (
+      <div data-testid="ms-projects-error" data-status={errorStatus ?? undefined}>
+        <InlineError
+          message={error}
+          action={
+            errorStatus === 401 ? (
+              <Button size="xs" variant="outline" onClick={() => window.location.reload()}>Refresh</Button>
+            ) : (
+              <Button size="xs" variant="outline" onClick={onRetry}>Retry</Button>
+            )
+          }
+        />
+      </div>
+    )
   if (!projects)
     return (
       <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4" aria-busy="true">

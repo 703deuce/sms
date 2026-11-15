@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { MS_LABELS } from '@/lib/motion-studio/config'
 import { formatClock } from '@/lib/motion-studio/format'
 import type { MsProject } from '@/lib/motion-studio/types'
 import { SceneFrame } from './scene-frame'
+import { TimingNote, timingsAreEstimated } from './motion-studio-shared'
 
 /** Visual Storyboard (concept §5): one card per major visual moment, chapter by chapter. */
 export function Storyboard({ project, selectedSceneId, onSelect }: { project: MsProject; selectedSceneId: string | null; onSelect: (sceneId: string) => void }) {
@@ -50,9 +51,11 @@ export function Storyboard({ project, selectedSceneId, onSelect }: { project: Ms
                 onClick={() => onSelect(s.id)}
                 aria-pressed={active}
                 data-testid="ms-scene-card"
+                data-status={s.status}
                 className={cn(
                   'flex w-full gap-3 rounded-xl border p-2 text-left transition-colors duration-150 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
                   active ? 'border-primary/60 bg-primary/5 ring-2 ring-primary/30' : 'border-border bg-card hover:bg-surface-raised',
+                  s.status === 'failed' && !active && 'border-destructive/40',
                 )}
               >
                 <div className="relative aspect-video w-28 shrink-0 overflow-hidden rounded-lg">
@@ -60,6 +63,10 @@ export function Storyboard({ project, selectedSceneId, onSelect }: { project: Ms
                   {s.status === 'rendering' ? (
                     <span className="absolute inset-0 grid place-items-center bg-black/50">
                       <Loader2 className="size-4 animate-spin text-white motion-reduce:animate-none" aria-label="Rendering" />
+                    </span>
+                  ) : s.status === 'failed' ? (
+                    <span className="absolute inset-0 grid place-items-center bg-destructive/40" data-testid="ms-scene-failed">
+                      <AlertTriangle className="size-4 text-white" aria-label="Render failed" />
                     </span>
                   ) : null}
                 </div>
@@ -70,6 +77,7 @@ export function Storyboard({ project, selectedSceneId, onSelect }: { project: Ms
                   <p className="text-xs font-medium text-foreground/90">{s.treatment}</p>
                   <p className="line-clamp-2 text-xs text-muted-foreground">{s.description}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{s.tags.join(' • ')}</p>
+                  {s.status === 'failed' ? <p className="mt-1 text-xs text-destructive">{s.error || 'This scene failed to render. Regenerate it to try again.'}</p> : null}
                 </div>
               </button>
             </li>
@@ -77,6 +85,7 @@ export function Storyboard({ project, selectedSceneId, onSelect }: { project: Ms
         })}
       </ul>
       <p className="text-xs text-muted-foreground">{MS_LABELS.selectHint}</p>
+      {timingsAreEstimated(project) ? <TimingNote /> : null}
     </div>
   )
 }

@@ -74,6 +74,9 @@ export function MotionStudioEditorLanes({
           Back to workspace
         </Link>
       </div>
+      <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
+        You’re editing the assembled program MP4 (picture and full mix). Captions and export work as usual. To change a scene, regenerate it in Motion Studio, then export again to update this cut.
+      </p>
       <div className="overflow-x-auto">
         <div className="min-w-[560px]">
           <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />

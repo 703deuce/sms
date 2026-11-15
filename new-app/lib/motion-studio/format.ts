@@ -20,7 +20,7 @@ export function parseShortClock(value: string): number | null {
 
 /** Credits only (hard rule: never currency). */
 export function formatMsCredits(credits: number | null | undefined): string {
-  if (credits == null) return 'Credits TBD'
+  if (credits == null) return 'Included'
   return `${credits} credit${credits === 1 ? '' : 's'}`
 }
 

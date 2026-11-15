@@ -91,6 +91,11 @@ export function PreviewStage({
         ) : (
           <div className="grid size-full place-items-center text-sm text-muted-foreground">The preview appears once the visual plan is ready.</div>
         )}
+        {!project.previewUrl && scene?.status === 'failed' ? (
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-destructive/85 px-3 py-2 text-xs text-white" role="status" data-testid="ms-preview-scene-failed">
+            Scene {scene.index + 1} failed to render. {scene.error || 'Regenerate it to try again.'}
+          </div>
+        ) : null}
         {!project.previewUrl && project.scenes.length ? (
           <Badge variant="onMedia" className="absolute top-2 left-2">
             {ready === project.scenes.length ? 'Storyboard preview' : `Rendering ${ready} of ${project.scenes.length} scenes`}

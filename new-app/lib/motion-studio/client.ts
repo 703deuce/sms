@@ -43,6 +43,8 @@ export type MotionStudioClient = {
   startExport: (id: string, idempotencyKey: string) => Promise<MsProject>
   getExportDownload: (id: string) => Promise<{ url: string; filename: string }>
   openInEditor: (id: string) => Promise<MsEditorHandoff>
+  /** Stop a running plan/production (contract v1.1 `POST /cancel`). Queued steps stop; nothing retries. */
+  cancelProject: (id: string) => Promise<MsProject>
   /** Upload through the existing clips upload path (live) or a local simulation (mock). */
   uploadFile: (file: File, onProgress: (percent: number) => void) => Promise<{ uploadId: string }>
 }
@@ -147,6 +149,7 @@ export function createLiveMotionStudioClient(opts: { fetcher?: Fetcher; upload?:
     retryStage: (id, stage, key) => post(`/projects/${enc(id)}/steps/${enc(stage)}/retry`, { idempotencyKey: key }, key),
     getAllowance: (id) => request<{ allowance: MsAllowance }>(f, `/projects/${enc(id)}/allowance`).then((r) => r.allowance),
     startExport: (id, key) => post(`/projects/${enc(id)}/export`, { idempotencyKey: key }, key),
+    cancelProject: (id) => post(`/projects/${enc(id)}/cancel`),
     getExportDownload: (id) => request<{ url: string; filename: string }>(f, `/projects/${enc(id)}/export/download`),
     openInEditor: (id) =>
       request<MsEditorHandoff>(f, `/projects/${enc(id)}/open-in-editor`, { method: 'POST', body: '{}' }),
