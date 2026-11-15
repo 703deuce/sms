@@ -798,6 +798,18 @@ DISPATCH["AD_STUDIO_RUN"] = handle_ad_studio_run
 log("[ad-studio:worker] dispatch_registered type=AD_STUDIO_RUN")
 
 
+# Motion Studio (documentaries): new job types; handlers own their job status (maxAttempts=1, no retry).
+def handle_motion_studio(conn, job: dict) -> None:
+    from clips_worker.motion_studio.pipeline.jobs import handle
+
+    handle(conn, job)
+
+
+for _ms_type in ("DOC_PLAN", "DOC_PRODUCE", "MGD_RENDER_SEGMENT", "DOC_ASSEMBLE"):
+    DISPATCH[_ms_type] = handle_motion_studio
+log("[motion-studio:worker] dispatch_registered types=DOC_PLAN,DOC_PRODUCE,MGD_RENDER_SEGMENT,DOC_ASSEMBLE")
+
+
 
 def _enable_t2v_info_logs() -> None:
     """Emit INFO from clips_worker.t2v.* (verify/assemble diagnostics, no URLs) to stdout.

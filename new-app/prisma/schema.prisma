@@ -10906,3 +10906,121 @@ model ClipTemplateRateLimit {
   @@index([windowStart])
   @@map("clip_template_rate_limits")
 }
+
+// ---------------------------------------------------------------------------
+// Motion Studio (documentaries) — #1210 BE-1. Additive only; no relations to existing tables are
+// altered. One project = one canvas ClipProject (sourceKind 'motion_studio') + one editor Clip whose
+// ClipEditsV2 is the editable timeline (Compact Editor), with an `edits.motionStudio` extension.
+model MotionStudioProject {
+  id              String    @id
+  workspaceId     String
+  userId          String
+  director        String    @default("documentary")
+  clipProjectId   String?
+  clipId          String?
+  title           String
+  brief           String    @default("")
+  workflow        String
+  settings        Json
+  status          String    @default("queued")
+  stage           String    @default("story")
+  stages          Json?
+  idempotencyKey  String
+  story           Json?
+  plan            Json?
+  narration       Json?
+  music           Json?
+  qa              Json?
+  exportInfo      Json?
+  proposals       Json?
+  timelineVersion Int       @default(0)
+  errorCode       String?
+  errorMessage    String?
+  errorStage      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?
+
+  @@unique([workspaceId, idempotencyKey])
+  @@index([workspaceId, createdAt])
+}
+
+model MotionStudioScene {
+  id           String   @id
+  projectId    String
+  index        Int
+  chapter      Int      @default(0)
+  kind         String   @default("graphics")
+  visualType   String
+  status       String   @default("planned")
+  plan         Json
+  startMs      Int      @default(0)
+  endMs        Int      @default(0)
+  model        String?
+  codeKey      String?
+  codeHash     String?
+  fixRounds    Int      @default(0)
+  usedFallback Boolean  @default(false)
+  qa           Json?
+  renderKey    String?
+  renderHash   String?
+  stillKey     String?
+  audioKey     String?
+  handoff      Json?
+  cues         Json?
+  error        String?
+  version      Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([projectId, index])
+  @@index([projectId, status])
+}
+
+model StudioAsset {
+  id            String   @id
+  projectId     String
+  workspaceId   String
+  uploadId      String
+  kind          String
+  filename      String   @default("")
+  status        String   @default("pending")
+  width         Int?
+  height        Int?
+  durationMs    Int?
+  analysis      Json?
+  provenanceLog Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([projectId, uploadId])
+  @@index([projectId])
+}
+
+model StudioActivityEvent {
+  id        Int      @id @default(autoincrement())
+  projectId String
+  stage     String
+  kind      String
+  message   String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([projectId, id])
+}
+
+model MotionStudioSandboxExec {
+  id         String   @id
+  projectId  String
+  sceneId    String?
+  mode       String
+  ok         Boolean
+  errorKind  String?
+  error      String?
+  codeHash   String?
+  model      String?
+  durationMs Int?
+  createdAt  DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
