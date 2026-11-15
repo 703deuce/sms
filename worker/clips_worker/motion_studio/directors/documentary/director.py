@@ -112,6 +112,24 @@ def _default_anchors(lines: list[dict]) -> dict:
     return {"pulse": pick(0.15), "build": pick(0.4), "peak": pick(0.7), "resolve": pick(0.9)}
 
 
+
+def _normalize_emphasis(scene: dict) -> None:
+    """Coerce emphasis to [{lineId, word}]. The model often returns a list of bare words."""
+    raw = scene.get("emphasis") or []
+    lids = [str(x) for x in (scene.get("lineIds") or [])]
+    out = []
+    for e in raw:
+        if isinstance(e, str) and e.strip():
+            out.append({"lineId": lids[0] if lids else None, "word": e.strip()})
+        elif isinstance(e, dict):
+            word = e.get("word") or e.get("text") or e.get("w") or ""
+            if not str(word).strip():
+                continue
+            lid = e.get("lineId") or e.get("line") or (lids[0] if lids else None)
+            out.append({"lineId": str(lid) if lid else None, "word": str(word).strip()})
+    scene["emphasis"] = out
+
+
 def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
     errs = []
     ids = [l["id"] for l in story["lines"]]
@@ -123,6 +141,7 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
         errs.append("style.palette needs bg/ink/accent/accent2/muted hex colours")
     assets = {a["id"]: a for a in catalog}
     for s in plan.get("scenes", []):
+        _normalize_emphasis(s)
         if not s.get("reason"):
             errs.append(f"scene {s.get('index')} has no reason")
         if s.get("kind") in ("handoff", "hardcut"):
@@ -156,13 +175,13 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
             f"(one of {list(WORLD_TYPES)}), a per-video style spec, and the scene list. Rules: scenes cover every line id exactly "
             "once in order (group 1-4 lines, ~6-15 s each); each scene has visualType "
             f"{list(VISUAL_TYPES)}, a one-sentence description of what the frame shows (3 layers: procedural background, "
-            "midground context, foreground hero), emphasis words that are literally in the line, a reason, and transitionOut. "
+            "midground context, foreground hero), emphasis as [{lineId, word}] with words that are literally in that line, a reason, and transitionOut. "
             "Uploaded videos may be used as handoff scenes (kind 'handoff', lineIds may be empty for clip-audio moments): "
             "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
             "audioMode: clip (footage sound, narration pauses) | bed (narration continues over it)}. Hard cuts (kind 'hardcut') need "
             "cutJustification. musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. Palette must be "
             "distinct and fit the subject. Return JSON {world:{type,reason}, style:{palette:{bg,ink,accent,accent2,muted}, mood, "
-            "grain, glow, vignette, reason}, scenes:[...], musicAnchors:{...}, deliberateMinimal:[{index, reason}]}.")
+            "grain, glow, vignette, reason}, scenes:[{kind,visualType,lineIds,description,emphasis:[{lineId,word}],reason,transitionOut,assetId,handoff}], musicAnchors:{...}, deliberateMinimal:[{index, reason}]}.")
         user = json.dumps({"title": story.get("title"), "tone": story.get("tone"), "aspect": settings.get("aspect", "16:9"),
                            "visualDirection": settings.get("visualDirection"), "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero")} for l in story["lines"]],
                            "data": story.get("data"), "uploads": cat})
@@ -173,6 +192,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
                 s["index"] = k
                 s.setdefault("kind", "graphics")
                 s["lineIds"] = [str(x) for x in s.get("lineIds") or []]
+                _normalize_emphasis(s)
             errs = validate_plan(plan, story, catalog)
             if errs:
                 log("plan_invalid", "director plan failed validation; using the deterministic plan", {"errors": errs[:8]})

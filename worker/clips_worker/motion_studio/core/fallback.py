@@ -22,7 +22,10 @@ def build_scene(ctx):
     film.add(NoiseTexture(seed=ctx.seed % 13 + 1, alpha=0.05, rgb=ink))
     lines = ctx.lines or []
     data = ctx.data or []
+    preferred = ((ctx.scene or {}) if getattr(ctx, "scene", None) else {}).get("assetId")
     photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")]
+    if preferred and preferred in (ctx.assets or {}):
+        photos = [preferred] + [k for k in photos if k != preferred]
     n = max(1, len(lines))
     pos = []
     for i in range(n):
@@ -172,6 +175,9 @@ def fallback_code(ctx: dict | None = None) -> str:
     scene = ctx.get("scene") or {}
     world = str(scene.get("world") or ctx.get("world") or "").lower()
     vt = str(scene.get("visualType") or "").lower()
+    # A photo beat must keep the still, even when the film world is a map or city grid.
+    if vt == "photo" or scene.get("assetId"):
+        return FALLBACK_CODE
     if world in {"map", "city_grid"} or vt == "map":
         return FALLBACK_MAP
     if world in {"price_chart", "timeline"} or vt in {"data", "timeline"}:

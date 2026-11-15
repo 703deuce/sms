@@ -107,6 +107,56 @@ def layout(plan: dict, narration: dict, story: dict, fps: int = HOUSE["fps"]) ->
     return {"scenes": scenes, "voSegments": vo_segments, "words": words, "frames": f, "durationS": round(f / fps, 4), "fps": fps}
 
 
+
+def _world_type(plan: dict) -> str | None:
+    world = (plan or {}).get("world")
+    if isinstance(world, str) and world.strip():
+        return world.strip()
+    if isinstance(world, dict):
+        typ = world.get("type")
+        return typ if isinstance(typ, str) and typ else None
+    return None
+
+
+def _emphasis_items(raw, line_ids: list) -> list[dict]:
+    """The director schema is [{lineId, word}], but the model often returns a list of bare words."""
+    items = []
+    ids = [str(x) for x in (line_ids or [])]
+    for e in raw or []:
+        if isinstance(e, str) and e.strip():
+            items.append({"lineId": None, "word": e.strip()})
+        elif isinstance(e, dict):
+            word = e.get("word") or e.get("text") or e.get("w") or ""
+            if not str(word).strip():
+                continue
+            lid = e.get("lineId") or e.get("line")
+            lid = str(lid) if lid else None
+            if lid and ids and lid not in ids:
+                lid = None
+            items.append({"lineId": lid, "word": str(word).strip()})
+    return items
+
+
+def _match_emphasis(items: list[dict], words: list[dict]) -> list[dict]:
+    emph = []
+    used = set()
+    for e in items:
+        word = e.get("word") or ""
+        needles = [word.lower()] + [p for p in word.lower().replace(",", "").split() if p]
+        for w in words:
+            key = (w["line"], w["s"], w["w"])
+            if key in used:
+                continue
+            if e.get("lineId") and w["line"] != e["lineId"]:
+                continue
+            token = w["w"].strip(".,!?;:\"'").lower()
+            if any(token.startswith(n[:6]) or n.startswith(token) or token in n for n in needles if n):
+                emph.append({"lineId": w["line"], "word": word, "t": w["s"]})
+                used.add(key)
+                break
+    return emph
+
+
 def scene_context(sc: dict, lay: dict, story: dict, plan: dict, assets_meta: dict, seed: int) -> dict:
     t0, t1 = sc["startS"], sc["endS"]
     by_id = {l["id"]: l for l in story["lines"]}
@@ -122,18 +172,19 @@ def scene_context(sc: dict, lay: dict, story: dict, plan: dict, assets_meta: dic
                       "typed": l.get("typed") or "", "start": ws[0]["s"], "end": ws[-1]["e"]})
     planned = next((p for p in plan["scenes"] if p["index"] == sc["index"]), {})
     data = [d for d in story.get("data") or [] if d.get("lineId") in sc["lineIds"]]
-    emph = []
-    for e in planned.get("emphasis") or []:
-        for w in words:
-            if w["line"] == e.get("lineId") and e.get("word") and w["w"].strip(".,!?;:\"'").lower().startswith(str(e["word"]).lower()[:6]):
-                emph.append({"lineId": e["lineId"], "word": e["word"], "t": w["s"]})
-                break
+    emph = _match_emphasis(_emphasis_items(planned.get("emphasis"), sc.get("lineIds") or []), words)
+    world = _world_type(plan)
+    asset_id = (planned.get("assetId") or ((planned.get("handoff") or {}).get("assetId") if isinstance(planned.get("handoff"), dict) else None)) if isinstance(planned, dict) else None
+    if not isinstance(asset_id, str):
+        asset_id = None
     return {"duration": round(t1 - t0, 4), "fps": lay["fps"], "seed": seed + sc["index"] * 7919,
             "style": plan["style"], "palette": plan["style"]["palette"], "lines": lines, "words": words, "emphasis": emph,
             "assets": assets_meta, "data": data,
-            "scene": {"id": f"s{sc['index']}", "index": sc["index"], "visualType": sc["visualType"],
-                      "description": planned.get("description", ""), "blocks": planned.get("blocks") or [],
-                      "world": plan.get("world", {}).get("type")}}
+            "scene": {"id": f"s{sc['index']}", "index": sc["index"], "kind": sc.get("kind") or planned.get("kind"),
+                      "visualType": sc["visualType"], "description": planned.get("description", "") if isinstance(planned, dict) else "",
+                      "blocks": (planned.get("blocks") or []) if isinstance(planned, dict) else [],
+                      "world": world, "assetId": asset_id}}
+
 
 
 def validate_for_export(lay: dict, handoffs: dict[int, dict]) -> list[str]:

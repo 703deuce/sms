@@ -192,3 +192,51 @@ def test_mix_two_pass_loudnorm_on_short_score(tmp_path):
         meas = mix(str(out), dur, str(vo), str(score), None)
         assert out.exists() and out.stat().st_size > 1000
         assert meas.get("I") is not None
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_scene_context_accepts_string_emphasis_and_passes_asset_id():
+    from clips_worker.motion_studio.pipeline.timeline import scene_context
+    story = {"lines": [
+        {"id": "l1", "text": "Movie night, in person.", "spoken": "Movie night, in person.", "hero": "MOVIE NIGHT"},
+        {"id": "l11", "text": "Netflix arrived through the mail.", "spoken": "Netflix arrived through the mail.", "hero": "NETFLIX"},
+    ]}
+    lay = {"fps": 30, "words": [
+        {"w": "Movie", "s": 0.1, "e": 0.4, "line": "l1"},
+        {"w": "night", "s": 0.4, "e": 0.7, "line": "l1"},
+        {"w": "Netflix", "s": 10.0, "e": 10.4, "line": "l11"},
+        {"w": "mail", "s": 10.8, "e": 11.1, "line": "l11"},
+    ]}
+    plan = {"world": {"type": "city_grid"}, "style": {"palette": {"bg": "#000000"}},
+            "scenes": [
+                {"index": 0, "emphasis": ["Movie night", "aisles"], "lineIds": ["l1"]},
+                {"index": 5, "kind": "photo", "visualType": "photo", "assetId": "msa_photo1",
+                 "emphasis": ["Netflix", "through the mail"], "lineIds": ["l11"]},
+            ]}
+    ctx0 = scene_context({"index": 0, "kind": "graphics", "visualType": "title",
+                          "startS": 0.0, "endS": 3.0, "lineIds": ["l1"]},
+                         lay, story, plan, {}, 1)
+    assert ctx0["scene"]["world"] == "city_grid"
+    assert any(e["word"] == "Movie night" for e in ctx0["emphasis"])
+    ctx5 = scene_context({"index": 5, "kind": "photo", "visualType": "photo",
+                          "startS": 9.5, "endS": 16.0, "lineIds": ["l11"]},
+                         lay, story, plan, {"msa_photo1": {"kind": "photo", "w": 100, "h": 80}}, 1)
+    assert ctx5["scene"]["assetId"] == "msa_photo1"
+    assert any(e["word"] == "Netflix" for e in ctx5["emphasis"])
+
+
+def test_fallback_code_keeps_photo_even_in_a_city_grid_world():
+    from clips_worker.motion_studio.core.fallback import fallback_code, FALLBACK_CODE, FALLBACK_MAP
+    photo = fallback_code({"scene": {"world": "city_grid", "visualType": "photo", "assetId": "msa_photo1"}})
+    assert photo == FALLBACK_CODE
+    assert "PhotoFrame" in photo
+    mapped = fallback_code({"scene": {"world": "city_grid", "visualType": "map"}})
+    assert mapped == FALLBACK_MAP
+
+
+def test_director_normalizes_string_emphasis():
+    from clips_worker.motion_studio.directors.documentary.director import _normalize_emphasis
+    s = {"lineIds": ["l1", "l2"], "emphasis": ["Movie night", {"word": "aisles", "lineId": "l2"}]}
+    _normalize_emphasis(s)
+    assert s["emphasis"][0] == {"lineId": "l1", "word": "Movie night"}
+    assert s["emphasis"][1]["word"] == "aisles" and s["emphasis"][1]["lineId"] == "l2"
