@@ -10,6 +10,7 @@ import json
 from typing import Any
 
 from clips_worker.motion_studio.tools.spec import duration_s, frames_to_s
+from clips_worker.motion_studio.tools.composition import RUNTIME, object_layers, artwork
 from clips_worker.motion_studio.tools.validate import validate_spec
 
 SKIN = {
@@ -98,7 +99,13 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
         "    muted = ctx.rgb('muted')",
     ]
 
-    # Environments become backdrop primitives, never a WORLD_TYPES template.
+    # Runtime helpers are trusted, fixed engine adapters, not model-authored methods.
+    lines[lines.index("def build_scene(ctx):"):lines.index("def build_scene(ctx):")] = RUNTIME.splitlines()
+    lines.append("    _elements = {}")
+    lines.append("    def _register(oid, item):")
+    lines.append("        _elements[oid] = item")
+
+    # Environments become backdrop primitives plus exactly the authored geometry.
     for eid, env in (spec.get("environments") or {}).items():
         brief = (env.get("brief") or "").replace("\\", "\\\\").replace('"', '\\"')[:120]
         lines.append(f"    # environment {eid}: {brief}")
@@ -116,23 +123,26 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
             # Gradient or flat field using official palette colors already bound above.
             lines.append("    film.add(GradientField([bg, muted], center=(0, 0)))")
 
+    for surface in artwork(spec):
+        lines.append(f"    film.add(_EnvironmentShape({surface!r}, ctx.palette))")
+
     # Media, graphics, primitives, typography, effects, extensions.
     for oid, obj in (spec.get("objects") or {}).items():
         kind = obj.get("kind")
         if kind == "media":
-            lines.extend(_emit_media(spec, oid, obj))
+            lines.extend(_register_emits(_emit_media(spec, oid, obj), oid))
         elif kind == "graphic":
-            lines.extend(_emit_graphic(spec, oid, obj))
+            lines.extend(_register_emits(_emit_graphic(spec, oid, obj), oid))
         elif kind == "path":
-            lines.extend(_emit_path(spec, oid, obj))
+            lines.extend(_register_emits(_emit_path(spec, oid, obj), oid))
         elif kind == "primitive":
-            lines.extend(_emit_primitive(spec, oid, obj))
+            lines.extend(_register_emits(_emit_primitive(spec, oid, obj), oid))
         elif kind == "effect":
-            lines.extend(_emit_effect(spec, oid, obj))
+            lines.extend(_register_emits(_emit_effect(spec, oid, obj), oid))
         elif kind == "extension":
-            lines.extend(_emit_extension(spec, oid, obj))
+            lines.extend(_register_emits(_emit_extension(spec, oid, obj), oid))
         elif kind == "group":
-            lines.append(f"    # layout group {oid}: {obj.get('memberIds')}")
+            pass  # Group transforms are applied to members by _DirectedItem.
 
     for tid, typo in (spec.get("typography") or {}).items():
         lines.extend(_emit_type(spec, tid, typo))
@@ -144,8 +154,21 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
             cue = str(snd["cue"]).replace("'", "")
             lines.append(f"    film.cue('{cue}', {texpr}, {gain})")
 
+    # Attach authored group/property animation, entrance/exit to the actual engine objects.
+    layers = object_layers(spec)
+    for oid, obj in (spec.get("objects") or {}).items():
+        if obj.get("kind") == "group":
+            continue
+        entrance = obj.get("entrance") or {}
+        if entrance:
+            entrance = {**entrance, "startS": frames_to_s(spec, obj.get("startFrame") or 0)}
+        exit_at = frames_to_s(spec, obj["endFrame"]) if obj.get("endFrame") is not None else None
+        lines.append(f"    film.add(_DirectedItem(_elements[{oid!r}], {layers[oid]!r}, {entrance!r}, {exit_at!r}))")
+
     cam_moves = list((spec.get("camera") or {}).values())
     if not cam_moves:
+        if spec.get("cameraRequired") or spec.get("cameraIntent") == "travel":
+            raise CompileError([{"code": "CAMERA_INTENT_MISSING", "message": "approved camera journey has no camera tools"}])
         dur = duration_s(spec)
         end = "ctx.duration" if dur is None else f"{dur:.4f}"
         lines.append("    film.cam(0, 0, 0, 0.4)")
@@ -166,6 +189,17 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
     lines.append("    return film")
     lines.append("")
     return "\n".join(lines)
+
+
+def _register_emits(rows: list[str], oid: str) -> list[str]:
+    """Stage actual visual Items until group transforms are applied."""
+    out = []
+    for row in rows:
+        if "film.add(" in row:
+            out.append(row.replace("film.add(", f"_register({oid!r}, ", 1))
+        else:
+            out.append(row)
+    return out
 
 
 def _entrance_expr(obj: dict) -> str:
