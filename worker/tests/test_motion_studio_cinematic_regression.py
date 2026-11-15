@@ -176,13 +176,13 @@ def test_registered_component_is_drawn_as_a_real_item():
 def test_approved_component_is_positionable_groupable_and_animatable():
     """Tier-3 content must participate in the SAME directed-object graph as photos."""
     code = (
-        "from motion_core import *\\n"
-        "def build_scene(ctx):\\n"
-        "    film = ctx.film()\\n"
-        "    film.add(Panel(0, 0, 500, 300, 0.0, title='Custom'))\\n"
-        "    film.cam(0, 0, 0, 0.5)\\n"
-        "    film.cam(ctx.duration, 0, 0, 0.5)\\n"
-        "    return film\\n"
+        "from motion_core import *\n"
+        "def build_scene(ctx):\n"
+        "    film = ctx.film()\n"
+        "    film.add(Panel(0, 0, 500, 300, 0.0, title='Custom'))\n"
+        "    film.cam(0, 0, 0, 0.5)\n"
+        "    film.cam(ctx.duration, 0, 0, 0.5)\n"
+        "    return film\n"
     )
     registered = register_component("groupable_component", code, visual_ok=True)
     assert registered["ok"], registered
