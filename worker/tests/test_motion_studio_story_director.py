@@ -162,6 +162,8 @@ def test_write_from_idea_prompt_still_writes_without_research():
     text = inspect.getsource(write_from_idea) + S.WRITING_RULES
     assert "Never return an empty lines list" in text
     assert "research notes are empty" in text
+    assert "every still and clip should earn at least one line" in text
+    assert "uploads" in text
     assert "Every numeric line must cite a research URL" not in text
     assert "Every factual claim must cite at least one source URL" not in text
 
@@ -244,3 +246,17 @@ def test_validate_plan_rejects_an_unused_upload():
             pl["assetId"] = None
     errs = validate_plan(plan, story, catalog)
     assert any("two.jpg" in e for e in errs), errs
+
+
+def test_fallback_script_weaves_in_upload_subjects():
+    from clips_worker.motion_studio.directors.documentary.story import _fallback_script
+    catalog = [
+        {"id": "a", "kind": "image", "filename": "harbor_crane.jpg", "analysis": {"summary": "a harbor crane at dusk"}},
+        {"id": "b", "kind": "video", "filename": "welding_spark.mp4", "analysis": {"description": "a close shot of welding sparks"}},
+    ]
+    story = _fallback_script("How a shipyard changed hands.", 1, "The yard", catalog=catalog)
+    blob = " ".join(l["text"] for l in story["lines"]).lower()
+    assert "harbor crane" in blob
+    assert "welding" in blob
+    texts = [l["text"] for l in story["lines"]]
+    assert len(texts) == len(set(texts))

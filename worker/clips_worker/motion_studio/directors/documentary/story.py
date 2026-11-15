@@ -148,7 +148,7 @@ def _lines_from_research(brief: str, length_min: int, title: str, research: dict
             "lines": _finalize(rows), "sources": research.get("sources") or [], "data": [], "fromResearch": True}
 
 
-def _fallback_script(brief: str, length_min: int, title: str, research: dict | None = None) -> dict:
+def _fallback_script(brief: str, length_min: int, title: str, research: dict | None = None, catalog: list[dict] | None = None) -> dict:
     sourced = _lines_from_research(brief, length_min, title, research or {})
     if sourced:
         return sourced
@@ -165,6 +165,20 @@ def _fallback_script(brief: str, length_min: int, title: str, research: dict | N
         ("This is how it happened.", "HOW IT HAPPENED", 3),
     ]
     rows = [{"text": t, "hero": h or _heuristic_hero(t), "chapter": c} for t, h, c in base]
+    # When uploads exist, add a unique line for each so the story can bind to them later.
+    extras = []
+    for a in catalog or []:
+        an = a.get("analysis") or {}
+        label = (an.get("summary") or an.get("description") or a.get("filename") or a.get("id") or "").strip()
+        label = " ".join(str(label).split())
+        if not label:
+            continue
+        # Keep it short; do not invent facts beyond naming the uploaded subject.
+        sentence = f"There is also this: {label.rstrip('.')}."
+        if any(sentence == r["text"] for r in rows + extras):
+            continue
+        extras.append({"text": sentence, "hero": _heuristic_hero(sentence), "chapter": 3})
+    rows.extend(extras[:8])
     return {"title": title or topic[:60], "logline": topic, "tone": "curious",
             "chapters": [{"n": i, "title": f"Part {i}"} for i in sorted({r['chapter'] for r in rows})],
             "lines": _finalize(rows), "sources": [], "data": [], "template": True}
@@ -185,7 +199,7 @@ def plan_research(brief: str, title: str, log) -> list[dict]:
         return default_research_plan(brief, title)
 
 
-def write_from_idea(brief: str, title: str, length_min: int, research: dict, tone_hint: str, log) -> dict:
+def write_from_idea(brief: str, title: str, length_min: int, research: dict, tone_hint: str, log, catalog: list[dict] | None = None) -> dict:
     facts = [{"query": r["query"], "text": r["text"][:3000], "sources": r["sources"][:8]} for r in research.get("results", [])]
     sys_ = ("You are the Story agent for a cinematic motion-graphics documentary in the family of a short, designed film: "
             "one clear through-line, type and numbers landing on the spoken word, not a news recap and not a list of facts.\n"
@@ -194,11 +208,21 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
             "Write a complete script even when research notes are empty: use the user's idea and established knowledge. "
             "Do not invent figures that are not in the idea or the research notes. Numbers that appear in the idea may be used. "
             "If research notes include sources, cite those URLs on numeric lines; if notes are empty, still return a full lines "
-            "array and leave sources as []. Never return an empty lines list.\n"
+            "array and leave sources as []. Never return an empty lines list. "
+            "When uploads are provided, write the story around them: every still and clip should earn at least one line "
+            "that names the subject, place, or object the file actually shows, so a later scene can bind to it. "
+            "Do not ignore the catalog or invent visuals that contradict what was uploaded.\n"
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\","
             "\"typed\",\"sources\":[url]}],\"data\":[{\"label\",\"value\",\"unit\",\"lineIndex\",\"sources\":[url]}]}."
             f" Length: about {target_words(length_min)} spoken words.")
-    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts})
+    uploads = [{"assetId": a["id"], "kind": a["kind"], "filename": a.get("filename"),
+                "summary": (a.get("analysis") or {}).get("summary") or (a.get("analysis") or {}).get("description"),
+                "tags": ((a.get("analysis") or {}).get("tags") or [])[:12],
+                "era": (a.get("analysis") or {}).get("era"),
+                "durationMs": a.get("durationMs"),
+                "moments": ((a.get("analysis") or {}).get("moments") or [])[:12]}
+               for a in (catalog or [])]
+    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts, "uploads": uploads})
     out, m = chat_json("story", sys_, user, max_tokens=16000)
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
@@ -330,11 +354,11 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
         if not config.mock():
             try:
                 story = (write_from_footage(brief, title, length_min, catalog, log) if workflow == "footage" and catalog
-                         else write_from_idea(brief, title, length_min, research, s.get("tone", ""), log))
+                         else write_from_idea(brief, title, length_min, research, s.get("tone", ""), log, catalog=catalog))
             except LLMError as exc:
                 log("model_call_failed", f"story fell back: {exc}", {"step": "story"})
         if story is None:
-            story = _fallback_script(brief, length_min, title, research)
+            story = _fallback_script(brief, length_min, title, research, catalog=catalog)
     for d in story.get("data") or []:
         if d["provenance"]["origin"] == "model":
             d["provenance"]["approximate"] = True
