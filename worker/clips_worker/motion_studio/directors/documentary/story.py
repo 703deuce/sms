@@ -25,12 +25,35 @@ WRITING_RULES = """Narration-writing rules (documentary):
 - `hero` = the 1-4 word phrase that lands on screen for that line (a number, name, or key idea). Prefer a hero
   that is NOT spoken word for word unless it is a number/name.
 - Target pace 120-125 words per minute; chapters separated by longer pauses.
-- Every factual claim must cite at least one source URL from the research (or the user's material).
-- Never invent numbers. Only use numbers present in the research or the user's material."""
+- Cite a source URL on a factual claim when the research or the user's material provides one; if there are no sources, still write the line and leave sources as [].
+- Do not invent figures. Use numbers from the idea, the research, the user's material, or well-established public facts the story is recounting."""
 
 
 def target_words(length_min: int) -> int:
     return int(max(1, length_min) * WPM)
+
+
+
+def _extract_lines(out: dict) -> list:
+    """Accept the documented schema plus common alternates so a valid script is not dropped as 'no lines'."""
+    lines = out.get("lines") if isinstance(out, dict) else None
+    if not lines and isinstance(out, dict):
+        for k in ("script", "narration", "beats", "story"):
+            v = out.get(k)
+            if isinstance(v, list) and v:
+                lines = v
+                break
+            if isinstance(v, dict) and isinstance(v.get("lines"), list) and v["lines"]:
+                lines = v["lines"]
+                break
+    rows = []
+    for r in lines or []:
+        if isinstance(r, str) and r.strip():
+            rows.append({"text": r.strip()})
+        elif isinstance(r, dict):
+            text = r.get("text") or r.get("narration") or r.get("content") or r.get("sentence") or r.get("line") or ""
+            rows.append({**r, "text": text})
+    return rows
 
 
 def _finalize(lines: list[dict]) -> list[dict]:
@@ -141,13 +164,7 @@ def _fallback_script(brief: str, length_min: int, title: str, research: dict | N
         ("What they did next changed everything.", "THE TURN", 3),
         ("This is how it happened.", "HOW IT HAPPENED", 3),
     ]
-    want = max(len(base), target_words(length_min) // 9)
-    rows = [{"text": t, "hero": h, "chapter": c} for t, h, c in base]
-    k = 0
-    while len(rows) < min(want, 60):
-        t, h, c = base[k % len(base)]
-        rows.append({"text": t, "hero": h, "chapter": 3 + k // len(base)})
-        k += 1
+    rows = [{"text": t, "hero": h or _heuristic_hero(t), "chapter": c} for t, h, c in base]
     return {"title": title or topic[:60], "logline": topic, "tone": "curious",
             "chapters": [{"n": i, "title": f"Part {i}"} for i in sorted({r['chapter'] for r in rows})],
             "lines": _finalize(rows), "sources": [], "data": [], "template": True}
@@ -174,16 +191,20 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
             "one clear through-line, type and numbers landing on the spoken word, not a news recap and not a list of facts.\n"
             + WRITING_RULES +
             "\nWrite short declarative sentences; one beat each. Heroes are a number, a name, or a key phrase (1-4 words), never a full sentence. "
-            "Never invent numbers or dates — if research does not contain a figure, write around it. Every numeric line must cite a research URL.\n"
+            "Write a complete script even when research notes are empty: use the user's idea and established knowledge. "
+            "Do not invent figures that are not in the idea or the research notes. Numbers that appear in the idea may be used. "
+            "If research notes include sources, cite those URLs on numeric lines; if notes are empty, still return a full lines "
+            "array and leave sources as []. Never return an empty lines list.\n"
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\","
             "\"typed\",\"sources\":[url]}],\"data\":[{\"label\",\"value\",\"unit\",\"lineIndex\",\"sources\":[url]}]}."
             f" Length: about {target_words(length_min)} spoken words.")
     user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts})
     out, m = chat_json("story", sys_, user, max_tokens=16000)
+    lines = _finalize(_extract_lines(out))
+    m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story script", m)
-    lines = _finalize(out.get("lines") or [])
     if not lines:
-        raise LLMError("story returned no lines")
+        raise LLMError(f"story returned no lines (keys={sorted(out.keys()) if isinstance(out, dict) else type(out).__name__})")
     return {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
             "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
             "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
@@ -263,10 +284,11 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\",\"typed\",\"quote\"}]}"
             f" Length: about {target_words(length_min)} spoken words.")
     out, m = chat_json("story", sys_, json.dumps({"title": title, "brief": brief, "catalog": cat}), max_tokens=16000)
+    lines = _finalize(_extract_lines(out))
+    m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story from footage", m)
-    lines = _finalize(out.get("lines") or [])
     if not lines:
-        raise LLMError("story returned no lines")
+        raise LLMError(f"story returned no lines (keys={sorted(out.keys()) if isinstance(out, dict) else type(out).__name__})")
     return {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
             "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
             "data": [], "sources": []}

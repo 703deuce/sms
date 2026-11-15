@@ -1,6 +1,7 @@
 """Motion Studio core smoke tests (run in the worker image build): engine import, word clock, sandbox
 policy fails closed, fallback scene renders a probe still, handoff module imports, boundary rule."""
 import importlib.util
+import shutil
 import os
 import pathlib
 import re
@@ -157,3 +158,37 @@ def build_scene(ctx):
             pass
         else:
             raise AssertionError("expected PolicyViolation for " + bad)
+
+
+@pytest.mark.skipif(importlib.util.find_spec("scipy") is None, reason="scipy not installed")
+def test_generate_score_writes_wav_for_short_and_typical_films(tmp_path):
+    from clips_worker.motion_studio.core.audio import generate_score, score_params, SR
+    params = score_params(1, "curious", "evidence_board", "Blockbuster")
+    for dur, anchors in ((2.0, {"peak": 1.0}), (8.0, {"pulse": 1.0, "build": 2.5, "peak": 5.0, "resolve": 6.5})):
+        wav = tmp_path / f"score_{int(dur)}s.wav"
+        info = generate_score(str(wav), dur, anchors, params)
+        assert wav.exists() and wav.stat().st_size > 1000
+        assert info["source"] == "generated"
+        assert info["params"]["bpm"] == params["bpm"]
+        # stereo 16-bit at SR, duration matches to 1 frame
+        import wave
+        with wave.open(str(wav), "rb") as f:
+            assert f.getnchannels() == 2 and f.getframerate() == SR
+            assert abs(f.getnframes() / SR - dur) < 1 / SR + 1e-6
+
+
+@pytest.mark.skipif(importlib.util.find_spec("scipy") is None, reason="scipy not installed")
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_mix_two_pass_loudnorm_on_short_score(tmp_path):
+    """2s and 4s beds used to fail the second loudnorm pass with an unspecified layout."""
+    from clips_worker.motion_studio.core.audio import generate_score, score_params, silence, mix
+    params = score_params(1, "curious", "evidence_board", "Blockbuster")
+    for dur in (2.0, 4.0):
+        score = tmp_path / f"score_{int(dur)}s.wav"
+        vo = tmp_path / f"vo_{int(dur)}s.wav"
+        out = tmp_path / f"mix_{int(dur)}s.wav"
+        generate_score(str(score), dur, {"peak": max(0.8, dur * 0.5)}, params)
+        silence(str(vo), dur)
+        meas = mix(str(out), dur, str(vo), str(score), None)
+        assert out.exists() and out.stat().st_size > 1000
+        assert meas.get("I") is not None

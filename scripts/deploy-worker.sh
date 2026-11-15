@@ -298,8 +298,10 @@ ssh "$HOST" "sudo bash -c '
   set -euo pipefail
   st=\$(systemctl is-active ${UNIT} 2>/dev/null || true)
   if { [ \"\$st\" = active ] || [ \"\$st\" = activating ] || [ \"\$st\" = reloading ]; } && [ ! -f ${REMOTE_RC} ]; then
-    echo \"[deploy-worker] ${UNIT} is still running (\$st); refusing to stop an in-flight rollout. Watch ${REMOTE_LOG} or stop it manually.\" >&2
-    exit 3
+    # This unit name includes the SHA. If this SHA is already rolling out (a previous client started it),
+    # wait for it so the Coolify CLIPS_WORKER_GIT_SHA sync still runs. Do not start a second unit.
+    echo \"[deploy-worker] ${UNIT} is already \$st; waiting for this SHA instead of starting a second rollout.\"
+    exit 0
   fi
   systemctl stop ${UNIT} 2>/dev/null || true
   mv -f /tmp/deploy-worker-remote-${SAFE_SHA}.sh.in ${REMOTE_SCRIPT}

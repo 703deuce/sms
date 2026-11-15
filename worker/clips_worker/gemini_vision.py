@@ -10,7 +10,7 @@ import requests
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 
 # Stable default for clipper text/vision/rank (thumbnails, LLM rank).
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"  # gemini-2.5-flash returns 404 for new API keys
 
 # Video-watch default (mixed_4min bake-off: prefer 3.8 Flash when quality ties).
 DEFAULT_VIDEO_PICKER_MODEL = "gemini-3.1-flash-lite"

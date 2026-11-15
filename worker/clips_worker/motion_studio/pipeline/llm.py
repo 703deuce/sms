@@ -47,9 +47,22 @@ def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, time
         metrics.update({"ms": int((time.time() - t0) * 1000), "error": type(exc).__name__})
         raise LLMError(f"OpenAI call failed: {type(exc).__name__}") from None
     usage = data.get("usage") or {}
+    details = (usage.get("completion_tokens_details") or {})
+    choice = (data.get("choices") or [{}])[0]
+    msg = choice.get("message") or {}
+    content = msg.get("content")
+    if isinstance(content, list):
+        content = "".join((p.get("text") if isinstance(p, dict) else str(p)) or "" for p in content)
+    content = content or ""
     metrics.update({"ok": True, "ms": int((time.time() - t0) * 1000), "promptTokens": usage.get("prompt_tokens"),
-                    "completionTokens": usage.get("completion_tokens")})
-    content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or "{}"
+                    "completionTokens": usage.get("completion_tokens"),
+                    "reasoningTokens": details.get("reasoning_tokens"),
+                    "finishReason": choice.get("finish_reason"),
+                    "contentChars": len(content)})
+    if not content.strip():
+        raise LLMError(f"model returned empty content (finish={choice.get('finish_reason')}, "
+                       f"completion_tokens={usage.get('completion_tokens')}, "
+                       f"reasoning_tokens={details.get('reasoning_tokens')})")
     try:
         return json.loads(content), metrics
     except ValueError:

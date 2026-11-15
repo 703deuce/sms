@@ -138,3 +138,33 @@ def test_grounded_http_error_is_a_warning_and_does_not_raise(monkeypatch):
     warn = next(m for k, m, _ in logs if k == "research_warning")
     assert "404" in warn
     assert "model knowledge" in warn.lower()
+
+
+def test_extract_lines_accepts_alternate_shapes():
+    from clips_worker.motion_studio.directors.documentary.story import _extract_lines, _finalize
+    rows = _finalize(_extract_lines({"script": [{"narration": "Blockbuster opened in Dallas.", "hero": "DALLAS"}]}))
+    assert len(rows) == 1 and rows[0]["text"].startswith("Blockbuster")
+    rows = _finalize(_extract_lines({"story": {"lines": ["The last store is in Bend, Oregon."]}}))
+    assert len(rows) == 1
+
+
+def test_write_from_idea_prompt_still_writes_without_research():
+    from clips_worker.motion_studio.directors.documentary.story import write_from_idea
+    src = write_from_idea.__code__
+    # The source of the prompt is in the function; load from module file instead.
+    import inspect
+    import clips_worker.motion_studio.directors.documentary.story as S
+    text = inspect.getsource(write_from_idea) + S.WRITING_RULES
+    assert "Never return an empty lines list" in text
+    assert "research notes are empty" in text
+    assert "Every numeric line must cite a research URL" not in text
+    assert "Every factual claim must cite at least one source URL" not in text
+
+
+def test_generic_fallback_does_not_pad_by_repeating():
+    from clips_worker.motion_studio.directors.documentary.story import _fallback_script
+    story = _fallback_script("How Blockbuster Video went from 9,000 stores to one, and the Netflix deal it turned down in 2000.", 3, "Blockbuster")
+    texts = [l["text"] for l in story["lines"]]
+    assert story.get("template")
+    assert len(texts) == len(set(texts)), texts
+    assert any("Blockbuster" in t for t in texts)

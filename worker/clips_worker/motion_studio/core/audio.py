@@ -100,8 +100,21 @@ def generate_score(out_wav: str, duration: float, anchors: dict, params: dict) -
         return e * e * (3 - 2 * e)
 
     def lp(x, fc):
-        k = np.exp(-2 * np.pi * fc / SR)
-        return lfilter([1 - k], [1, -k], x)
+        # scipy.signal.lfilter only accepts scalar filter coefficients. A time-varying
+        # cutoff (the riser sweep) has to be a one-pole walk, not an array of b/a taps.
+        x = np.asarray(x, dtype=float)
+        fc = np.asarray(fc, dtype=float)
+        if fc.ndim == 0:
+            k = float(np.exp(-2 * np.pi * float(fc) / SR))
+            return lfilter([1 - k], [1, -k], x)
+        k = np.exp(-2 * np.pi * np.clip(fc, 20.0, SR * 0.45) / SR)
+        y = np.empty_like(x, dtype=float)
+        acc = 0.0
+        a = 1.0 - k
+        for i in range(x.shape[0]):
+            acc = a[i] * x[i] + k[i] * acc
+            y[i] = acc
+        return y
 
     def saw(f, ph=0.0):
         return 2 * ((t * f + ph) % 1) - 1
@@ -178,7 +191,8 @@ def generate_score(out_wav: str, duration: float, anchors: dict, params: dict) -
     r0, r1 = max(0.0, a["peak"] - 3.0), a["peak"]
     if r1 - r0 > 0.6:
         nz = rng.standard_normal(n)
-        sweep = lp(nz, 400 + 1800 * np.clip((t - r0) / max(0.2, r1 - r0), 0, 1))
+        mix = np.clip((t - r0) / max(0.2, r1 - r0), 0, 1)
+        sweep = lp(nz, 400) * (1.0 - mix) + lp(nz, 2200) * mix
         out += (sweep * env(r0, r1, 1.2, 0.05) * 0.16)[:, None]
         events.append({"inst": "riser", "start": round(r0, 3), "end": round(r1, 3), "step": 0})
     out /= np.abs(out).max() + 1e-9
@@ -351,8 +365,11 @@ def mix(out_wav: str, duration: float, vo: str | None, music: str | None, sfx: s
     else:
         ln = f"loudnorm=I={I}:TP={TP}:LRA={LRA}"
     tmp = out_wav + ".tmp.wav"
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", pre, "-af", f"{ln},aresample=48000,apad,atrim=0:{duration:.4f}",
-                    "-ar", "48000", "-c:a", "pcm_s16le", tmp], check=True)
+    # loudnorm can emit an unspecified channel layout on some short/low-LRA beds; aresample then
+    # fails ("Cannot select channel layout") and DOC_ASSEMBLE dies. Force stereo before pad/trim.
+    af = f"{ln},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,apad,atrim=0:{duration:.4f}"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", pre, "-af", af,
+                    "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", tmp], check=True)
     os.replace(tmp, out_wav)
     os.unlink(pre)
     meas = loudness(out_wav)
