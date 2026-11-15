@@ -109,6 +109,27 @@ class _DirectedItem(Item):
         c.restore()
 
 
+class _FragmentItem(Item):
+    """Actual compositing of approved custom component Items into a host scene."""
+    def __init__(self, items):
+        self.children = [item for item in items if item.z > -9999]
+        if not self.children:
+            raise ValueError("registered component produced no drawable items")
+        super().__init__(t_in=min(item.t_in for item in self.children), t_out=None,
+                         z=min(item.z for item in self.children), sfx=False)
+
+    def bounds(self, res):
+        return None
+
+    def cues(self):
+        return [cue for item in self.children for cue in item.cues()]
+
+    def draw(self, c, res, t):
+        for item in sorted(self.children, key=lambda x: x.z):
+            if t >= item.t_in and (item.t_out is None or t < item.t_out):
+                item.draw(c, res, t)
+
+
 class _EnvironmentShape(Item):
     """A specifically planned visual surface, not a stock world or fallback artwork."""
     def __init__(self, shape, palette):

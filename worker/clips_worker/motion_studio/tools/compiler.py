@@ -141,7 +141,7 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
         elif kind == "effect":
             lines.extend(_emit_effect(spec, oid, obj))
         elif kind == "extension":
-            lines.extend(_register_emits(_emit_extension(spec, oid, obj), oid))
+            lines.extend(_emit_extension(spec, oid, obj))
         elif kind == "group":
             pass  # Group transforms are applied to members by _DirectedItem.
 
@@ -158,7 +158,7 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
     # Attach authored group/property animation, entrance/exit to the actual engine objects.
     layers = object_layers(spec)
     for oid, obj in (spec.get("objects") or {}).items():
-        if obj.get("kind") in ("group", "effect"):
+        if obj.get("kind") in ("group", "effect", "extension"):
             continue
         entrance = obj.get("entrance") or {}
         if entrance:
@@ -390,14 +390,33 @@ def _emit_effect(spec: dict, oid: str, obj: dict) -> list[str]:
 
 def _emit_extension(spec: dict, oid: str, obj: dict) -> list[str]:
     from clips_worker.motion_studio.tools.extensions import use_component
+    import re
     rec = use_component(obj.get("component") or "", obj.get("componentVersion"))
     if not rec:
-        return [f"    # extension {oid}: component {obj.get('component')!r} is not registered in this process"]
-    # The registered component exposes build or an Item class; we instantiate via a documented factory comment.
-    return [
-        f"    # extension {oid}: {rec['name']}@{rec['version']}",
-        f"    # component source is registered; the sandboxed runtime binds it by name.",
-    ]
+        raise CompileError([{"code": "COMPONENT_UNAVAILABLE",
+                             "message": f"approved custom component {obj.get('component')!r} is not loaded in this worker"}])
+    # Each component is a sandbox-verified motion_core build_scene. Scope its
+    # definitions inside a unique factory, instantiate its actual Items, and
+    # attach them to the host scene. Never substitute a comment placeholder.
+    code = rec["code"]
+    name = "_component_" + re.sub(r"[^a-zA-Z0-9_]", "_", oid)
+    src = [line for line in code.splitlines()
+           if line.strip() != "from motion_core import *"]
+    if not any(line.lstrip().startswith("def build_scene(ctx):") for line in src):
+        raise CompileError([{"code": "COMPONENT_INVALID", "message": f"{oid}: missing build_scene(ctx)"}])
+    args = obj.get("arguments") or {}
+    result = [f"    def {name}(ctx):"]
+    result.extend("    " + line if line.strip() else "" for line in src)
+    result.append("        return build_scene(ctx)")
+    result.append(f"    ctx.component_args = {args!r}")
+    result.append(f"    film_part_{name} = {name}(ctx)")
+    result.append(f"    film_items_{name} = _FragmentItem(film_part_{name}.items)")
+    result.append(f"    film_items_{name}.z = {int(obj.get('z') or 30)}")
+    result.append(f"    film_items_{name}.t_in = 0.0")
+    result.append(f"    film_items_{name}.t_out = None")
+    result.append(f"    film_items_{name}.component_version = {rec['version']!r}")
+    result.append(f"    film.add(film_items_{name})  # component {oid}")
+    return result
 
 
 def _emit_camera(spec: dict, cam: dict) -> list[str]:

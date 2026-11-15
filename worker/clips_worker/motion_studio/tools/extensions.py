@@ -57,3 +57,33 @@ def use_component(name: str, version: str | None = None) -> dict[str, Any] | Non
 
 def registered_names() -> list[str]:
     return sorted({rec["name"] for rec in _COMPONENTS.values() if isinstance(rec, dict) and "name" in rec})
+
+
+def export_approved_component(name: str, version: str | None = None) -> dict[str, Any] | None:
+    """Trusted storage service may persist this content-addressed approved record."""
+    rec = use_component(name, version)
+    if not rec:
+        return None
+    return {
+        "name": rec["name"], "version": rec["version"], "code": rec["code"],
+        "interface": rec["interface"],
+        "codeSha256": hashlib.sha256(rec["code"].encode()).hexdigest(),
+        "visualApproved": True,
+    }
+
+
+def hydrate_approved_component(record: dict[str, Any]) -> dict[str, Any]:
+    """Load a previously verified component from authorized persistent storage.
+
+    Call only after authenticating the storage object and project ownership.
+    Refuse tampered or incomplete objects; re-run policy validation on every load.
+    """
+    if not isinstance(record, dict) or record.get("visualApproved") is not True:
+        return {"ok": False, "errors": [{"code": "UNAPPROVED_COMPONENT", "message": "component lacks stored approval"}]}
+    name, code, version = record.get("name"), record.get("code"), record.get("version")
+    if not isinstance(name, str) or not isinstance(code, str) or not isinstance(version, str):
+        return {"ok": False, "errors": [{"code": "INVALID_COMPONENT", "message": "component metadata incomplete"}]}
+    digest = hashlib.sha256(code.encode()).hexdigest()
+    if digest != record.get("codeSha256") or version != "1.0+" + digest[:8]:
+        return {"ok": False, "errors": [{"code": "COMPONENT_HASH_MISMATCH", "message": "stored code differs from approved version"}]}
+    return register_component(name, code, interface=record.get("interface") or {}, visual_ok=True)
