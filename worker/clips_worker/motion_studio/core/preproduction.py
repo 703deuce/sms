@@ -74,6 +74,166 @@ def validate_creative_plan(plan: dict | None, story: dict | None = None, catalog
     return errs
 
 
+
+PROVENANCE_TYPES = (
+    "user_upload", "sourced_factual_data", "faithful_diagram",
+    "original_illustration", "generated_graphic",
+)
+
+
+def annotate_provenance(plan: dict | None) -> dict:
+    """Stamp a provenance type on every meaningful visual element."""
+    plan = plan or {}
+    bp = dict(plan.get("blueprint") or {})
+    ident = plan.get("identity") or plan.get("identityPackage") or {}
+    for entry in (plan.get("assetUsageManifest") or bp.get("assetUsageManifest") or {}).get("entries") or []:
+        if isinstance(entry, dict) and not entry.get("provenance"):
+            entry["provenance"] = "user_upload"
+            if entry.get("kind") in ("video", "image"):
+                entry["evidence"] = "authentic photograph or source footage"
+    objects = []
+    for obj in bp.get("customObjects") or []:
+        if not isinstance(obj, dict):
+            continue
+        o = dict(obj)
+        if not o.get("provenance"):
+            purpose = str(o.get("purpose") or o.get("type") or o.get("name") or "").lower()
+            if any(k in purpose for k in ("chart", "data", "number", "series")):
+                o["provenance"] = "sourced_factual_data"
+            elif any(k in purpose for k in ("diagram", "connector", "map")):
+                o["provenance"] = "faithful_diagram"
+            else:
+                o["provenance"] = "original_illustration"
+        objects.append(o)
+    bp["customObjects"] = objects
+    for need in bp.get("missingNeeds") or []:
+        if isinstance(need, dict):
+            need.setdefault("provenance", "original_illustration")
+    bp["provenance"] = bp.get("provenance") or {
+        "default": "user_upload",
+        "types": list(PROVENANCE_TYPES),
+    }
+    plan["blueprint"] = bp
+    plan["provenanceTypes"] = list(PROVENANCE_TYPES)
+    return plan
+
+
+def camera_continuity_plan(plan: dict | None, story: dict | None = None) -> dict:
+    """Per-scene camera beats: why the move, what to notice, reading time, hold."""
+    plan = plan or {}
+    ident = plan.get("identity") or plan.get("identityPackage") or {}
+    existing = (plan.get("blueprint") or {}).get("cameraPlan") or plan.get("cameraPlan") or {}
+    beats = []
+    for scene in plan.get("scenes") or []:
+        vt = str(scene.get("visualType") or "")
+        hold = bool(scene.get("heldStillOk") or vt == "photo" or (scene.get("kind") in ("photo",)))
+        start = scene.get("startMs")
+        end = scene.get("endMs")
+        try:
+            dur = (float(end) - float(start)) / 1000 if end is not None and start is not None else None
+        except (TypeError, ValueError):
+            dur = None
+        reading = 6.0 if hold else (max(2.0, min(5.0, dur)) if dur else 3.0)
+        why = scene.get("camera") or existing.get("personality") or (
+            "Hold the photograph so it can be read" if hold else "A motivated move to the next story beat, not motion for its own sake."
+        )
+        beats.append({
+            "sceneIndex": scene.get("index"),
+            "sceneId": scene.get("id"),
+            "why": why,
+            "notice": scene.get("description") or scene.get("reason") or scene.get("lineText") or "",
+            "readingTimeS": round(float(reading), 2),
+            "hold": hold,
+        })
+    return {
+        "contractVersion": CONTRACT_VERSION,
+        "personality": ident.get("cameraPersonality") or existing.get("personality"),
+        "rule": existing.get("rule") or "Motivated moves and holds only. A held photograph can beat chaotic motion.",
+        "route": existing.get("route") or "Follow the sequence of environments.",
+        "beats": beats,
+    }
+
+
+def sequence_review(plan: dict | None, scenes: list[dict] | None = None) -> dict:
+    """Do these scenes form a coherent, interesting visual progression?"""
+    plan = plan or {}
+    frames = (plan.get("storyboard") or {}).get("frames") or []
+    rows = list(scenes or plan.get("scenes") or [])
+    issues = []
+    envs = []
+    types = []
+    for i, scene in enumerate(rows):
+        env = None
+        if frames and i < len(frames):
+            env = (frames[i].get("environment") or {}).get("id") or (frames[i].get("environment") or {}).get("name")
+        if not env:
+            w = scene.get("world") if isinstance(scene.get("world"), dict) else {}
+            env = scene.get("worldId") or w.get("id") or w.get("name")
+        envs.append(env)
+        types.append(str(scene.get("visualType") or (scene.get("plan") or {}).get("visualType") or ""))
+    # Identity must bind changing environments.
+    ident = plan.get("identity") or plan.get("identityPackage") or {}
+    distinct_envs = {e for e in envs if e}
+    if len(distinct_envs) > 1 and not (ident.get("throughLine") or ident.get("concept") or ident.get("typography")):
+        issues.append({"kind": "identity", "detail": "environments change but the film identity is missing", "severity": "error"})
+    # A long film that uses one visualType for every graphics scene is not a progression.
+    graphic_types = [t for t in types if t and t not in ("handoff", "hardcut")]
+    if len(graphic_types) >= 6 and len(set(graphic_types)) == 1:
+        issues.append({"kind": "progression", "detail": f"every graphics scene uses visualType {graphic_types[0]}", "severity": "warn"})
+    # Storyboard pre-review failures carry through.
+    sb = plan.get("storyboardReview") or {}
+    if sb.get("status") == "needs_review":
+        issues.append({"kind": "storyboard", "detail": "storyboard was not approved before render", "severity": "error"})
+    return {
+        "contractVersion": CONTRACT_VERSION,
+        "pass": not any((i.get("severity") or "error") != "warn" for i in issues),
+        "issues": issues,
+        "environments": len(distinct_envs),
+        "visualTypes": sorted(set(graphic_types)),
+        "sceneCount": len(rows),
+    }
+
+
+def critique_film(plan: dict | None, checks: list[dict] | None, scenes: list[dict] | None,
+                  review: dict | None = None) -> dict:
+    """Full-film visual critic. Deterministic by default; no paid model call.
+
+    Answers the critic questions from film QA, the storyboard and the sequence
+    review so a separate model pass is optional and never automatic.
+    """
+    plan = plan or {}
+    seq = sequence_review(plan, scenes)
+    failed = [c for c in (checks or []) if not c.get("pass") and c.get("severity") != "warn"]
+    degraded = [s for s in (scenes or []) if s.get("usedFallback") or (s.get("qa") or {}).get("degraded")]
+    manifest = plan.get("assetUsageManifest") or {}
+    unused = list(manifest.get("unused") or [])
+    repeats = list(manifest.get("repeats") or [])
+    answers = [
+        {"question": "Does a visual idea pay off?",
+         "ok": seq["pass"] and not failed,
+         "detail": "Sequence and film QA passed." if seq["pass"] and not failed else "Sequence or film QA found problems."},
+        {"question": "Is the film showing something new, or repeating without reason?",
+         "ok": not repeats,
+         "detail": ("Repeats: " + ", ".join(repeats)) if repeats else "No unexplained repeats in the manifest."},
+        {"question": "Are uploaded assets used, and are missing beats justified?",
+         "ok": not unused,
+         "detail": ("Unused: " + ", ".join(unused)) if unused else "Inventory uploads are used or listed as unused."},
+        {"question": "Do degraded or empty scenes prevent this from shipping as finished?",
+         "ok": not degraded and not any(c.get("id") in ("F1", "F4", "A14") and not c.get("pass") for c in (checks or [])),
+         "detail": f"{len(degraded)} degraded scenes." if degraded else "No degraded scenes."},
+    ]
+    ok = all(a["ok"] for a in answers) and seq["pass"] and (review or {}).get("pass", True)
+    return {
+        "contractVersion": CONTRACT_VERSION,
+        "fromRole": "visual_critic",
+        "source": "deterministic",
+        "paidModel": False,
+        "pass": ok,
+        "answers": answers,
+        "sequence": seq,
+    }
+
+
 def identity_package(plan: dict | None, story: dict | None = None) -> dict:
     """Reusable, persistent, versioned visual-identity package for a project."""
     plan = plan or {}

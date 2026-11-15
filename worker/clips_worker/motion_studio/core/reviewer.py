@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from clips_worker.motion_studio.core.preproduction import critique_film, sequence_review
+
 CONTRACT_VERSION = "1.0"
 Role = Literal[
     "film_director", "production_designer", "motion_engineer",
@@ -121,13 +123,22 @@ def review_film(*, checks: list[dict] | None = None, scenes: list[dict] | None =
     """Evaluate the assembled film against the approved blueprint and route every issue."""
     issues = issues_from_film(checks=checks, scenes=scenes, plan=plan)
     requests = route_issues(issues)
+    seq = sequence_review(plan, scenes)
+    for item in seq.get("issues") or []:
+        if item.get("severity") != "warn":
+            issues.append({**item, "id": item.get("kind") or "sequence"})
+            requests.extend(route_issues([issues[-1]]))
+    critique = critique_film(plan, checks, scenes, {"pass": not any((i.get("severity") or "error") != "warn" for i in issues)})
+    ok = (not any((i.get("severity") or "error") != "warn" for i in issues)) and seq.get("pass", True)
     return {
         "version": CONTRACT_VERSION,
         "fromRole": "visual_reviewer",
         "toRoles": sorted({r["toRole"] for r in requests}),
         "issues": issues,
         "correctionRequests": requests,
-        "pass": not any((i.get("severity") or "error") != "warn" for i in issues),
-        "storyboardPresent": bool(storyboard),
+        "pass": ok,
+        "storyboardPresent": bool(storyboard or (plan or {}).get("storyboard")),
         "audioPresent": bool(audio),
+        "sequence": seq,
+        "critique": critique,
     }

@@ -10,6 +10,8 @@ from clips_worker.motion_studio.core.elements import elements_from_spec, apply_e
 from clips_worker.motion_studio.core.preproduction import (
     identity_package, build_storyboard, review_storyboard, acquisition_plan,
     estimate_credits, record_checkpoint, creative_report, validate_creative_plan,
+    annotate_provenance, camera_continuity_plan, sequence_review, critique_film,
+    PROVENANCE_TYPES,
 )
 from clips_worker.motion_studio.core.probes import probe_times, motion_strip_times, final_res_times
 from clips_worker.motion_studio.core.qa import (
@@ -284,3 +286,59 @@ def test_film_director_prompt_is_editorial_and_has_no_world_type_menu():
     assert "WORLD_TYPES" not in prompt
     assert "Invent ONE world" not in prompt
     assert "one of" not in prompt.lower() or "world type" not in prompt.lower()
+
+
+def test_provenance_camera_sequence_and_critic():
+    story = {"title": "A store closes", "lines": [{"id": "l1", "text": "The last store closed its doors."}]}
+    plan = {
+        "productionSource": "fallback",
+        "identity": {"throughLine": "empty shelves", "typography": {"display": "Oswald"},
+                     "cameraPersonality": "held stills", "concept": "a dim retail hall"},
+        "worlds": [{"id": "w_hall", "name": "the hall", "brief": "aisles after closing"},
+                   {"id": "w_stock", "name": "the stockroom", "brief": "boxes"}],
+        "scenes": [
+            {"id": "s0", "index": 0, "visualType": "photo", "assetId": "p1", "worldId": "w_hall",
+             "description": "The last store closed its doors.", "startMs": 0, "endMs": 6000, "heldStillOk": True},
+            {"id": "s1", "index": 1, "visualType": "text", "worldId": "w_stock",
+             "description": "end card", "startMs": 6000, "endMs": 10000},
+        ],
+        "assetUsageManifest": {"entries": [{"assetId": "p1", "kind": "image", "usedIn": [{"sceneIndex": 0}]}],
+                               "unused": [], "repeats": []},
+        "blueprint": {"customObjects": [{"id": "ticker", "name": "closings ticker", "purpose": "chart of closings"}],
+                      "missingNeeds": [{"sceneIndex": 1, "need": "end typography"}],
+                      "assetUsageManifest": {"entries": [{"assetId": "p1", "kind": "image", "usedIn": [{"sceneIndex": 0}]}]}},
+        "storyboard": {"frames": [
+            {"environment": {"id": "w_hall", "name": "the hall"}},
+            {"environment": {"id": "w_stock", "name": "the stockroom"}},
+        ]},
+        "storyboardReview": {"status": "approved", "pass": True},
+    }
+    plan = annotate_provenance(plan)
+    assert "user_upload" in PROVENANCE_TYPES
+    assert plan["assetUsageManifest"]["entries"][0]["provenance"] == "user_upload"
+    assert plan["blueprint"]["customObjects"][0]["provenance"] == "sourced_factual_data"
+    assert plan["blueprint"]["missingNeeds"][0]["provenance"] == "original_illustration"
+    cam = camera_continuity_plan(plan, story)
+    assert len(cam["beats"]) == 2
+    assert cam["beats"][0]["hold"] is True and cam["beats"][0]["readingTimeS"] >= 5
+    assert cam["beats"][0]["why"] and cam["beats"][0]["notice"]
+    seq = sequence_review(plan, plan["scenes"])
+    assert seq["pass"] is True and seq["environments"] == 2
+    critique = critique_film(plan, [], plan["scenes"], {"pass": True})
+    assert critique["paidModel"] is False and critique["source"] == "deterministic"
+    assert critique["pass"] is True
+    bad = sequence_review({"storyboardReview": {"status": "needs_review"}, "worlds": [{"id": "a"}, {"id": "b"}],
+                           "scenes": [{"worldId": "a"}, {"worldId": "b"}]})
+    assert bad["pass"] is False
+
+
+def test_component_tools_separate_core_from_custom():
+    from clips_worker.motion_studio.tools.registry import format_tools_reference
+    blob = format_tools_reference()
+    for name in ("animate_camera", "create_environment", "animate_text", "place_type",
+                 "create_graphic", "draw_path", "place_media", "place_photo", "place_primitive"):
+        assert name in blob
+    # Core primitives are tools; story-specific route, copy, data and docs come from the blueprint.
+    cam = camera_continuity_plan({"identity": {"cameraPersonality": "held stills"},
+                                  "scenes": [{"index": 0, "visualType": "photo", "description": "a held still"}]})
+    assert cam["beats"][0]["hold"] and cam["personality"] == "held stills"

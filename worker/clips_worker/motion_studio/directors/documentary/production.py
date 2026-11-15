@@ -314,6 +314,10 @@ def finalize_production(plan: dict, story: dict, catalog: list[dict], inventory:
     settings = plan.get("settings") or {}
     plan["costEstimate"] = pre.estimate_credits(plan, settings, story)
     plan["styleMemory"] = style_memory.record(plan, plan.get("styleMemory") or [])
+    plan = pre.annotate_provenance(plan)
+    plan["cameraPlan"] = pre.camera_continuity_plan(plan, story)
+    if isinstance(plan.get("blueprint"), dict):
+        plan["blueprint"]["cameraPlan"] = plan["cameraPlan"]
     pre.record_checkpoint(plan, "production_design", {
         "identityPackageVersion": plan["identityPackage"].get("packageVersion"),
         "storyboard": review.get("status"),
