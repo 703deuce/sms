@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server'
-import { resolveWorkspaceId } from '@/lib/server/workspace'
+import { requireMotionStudioCaller } from '@/lib/server/motion-studio/auth'
 import { motionStudioJsonError } from '@/lib/server/motion-studio/http'
 import { motionStudioConfig } from '@/lib/server/motion-studio/service'
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    await resolveWorkspaceId()
+    await requireMotionStudioCaller(request)
     return NextResponse.json(motionStudioConfig())
   } catch (err) { return motionStudioJsonError(err) }
 }
