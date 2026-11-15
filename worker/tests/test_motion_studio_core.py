@@ -281,12 +281,14 @@ def test_mix_true_peak_stays_under_house_cap(tmp_path):
     from clips_worker.motion_studio.core.qa import loudness_check
     from clips_worker.motion_studio.core.world import HOUSE
 
-    sr, dur = 48000, 2.0
+    # Continuous bed carries integrated loudness; occasional full-scale clicks are what used to
+    # overshoot true peak after linear loudnorm. A click-only bed would let the limiter pull I down.
+    sr, dur = 48000, 3.0
     n = int(sr * dur)
     frames = bytearray()
     for i in range(n):
-        s = 0.12 * math.sin(2 * math.pi * 220 * i / sr)
-        if i % (sr // 3) < 8:          # brief near-full-scale clicks, low RMS
+        s = 0.35 * math.sin(2 * math.pi * 220 * i / sr)
+        if 8 <= (i % (sr // 2)) < 16:
             s = 0.98 if s >= 0 else -0.98
         v = int(max(-1.0, min(1.0, s)) * 32767)
         frames.extend(struct.pack("<hh", v, v))
@@ -300,7 +302,7 @@ def test_mix_true_peak_stays_under_house_cap(tmp_path):
     meas = mix(str(out), dur, None, str(bed), None, music_gain_db=0.0)
     assert out.exists() and meas.get("I") is not None
     assert meas["TP"] <= HOUSE["true_peak"] + 0.05
-    assert meas["pass"] is True
+    assert meas["pass"] is True, meas
     chk = loudness_check(meas)
     assert chk["pass"], chk
     # Re-measure the written wav so we are not just trusting mix()'s own dict.
