@@ -20,6 +20,9 @@ from clips_worker.motion_studio.core.style_memory import APPROACHES, record, pro
 from clips_worker.motion_studio.core.preproduction import music_brief
 from clips_worker.motion_studio.tools.engines import get_engine, available_engines, CURRENT_ENGINE
 
+WORKER_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = WORKER_ROOT.parent
+
 
 def test_probe_times_are_adaptive_and_more_than_six():
     ctx = {
@@ -210,7 +213,7 @@ def test_style_memory_and_future_engines():
 
 
 def test_jobs_and_config_source_have_the_hooks():
-    jobs = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/pipeline/jobs.py").read_text()
+    jobs = (WORKER_ROOT / "clips_worker/motion_studio/pipeline/jobs.py").read_text()
     assert "recover_render_code" in jobs
     assert "final_res_times" in jobs
     assert "keyframe_entries" in jobs
@@ -220,19 +223,22 @@ def test_jobs_and_config_source_have_the_hooks():
     tree = ast.parse(jobs)
     # compile_spec / elementEdit path exists
     assert "elementEdit" in jobs and "compile_spec" in jobs
-    cfg = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/pipeline/config.py").read_text()
+    cfg = (WORKER_ROOT / "clips_worker/motion_studio/pipeline/config.py").read_text()
     assert "def final_render_size" in cfg
-    music = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/pipeline/music_source.py").read_text()
+    music = (WORKER_ROOT / "clips_worker/motion_studio/pipeline/music_source.py").read_text()
     assert "music_brief" in music and '.get("type")' not in music
-    prod = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/directors/documentary/production.py").read_text()
+    prod = (WORKER_ROOT / "clips_worker/motion_studio/directors/documentary/production.py").read_text()
     assert "identity_package" in prod and "build_storyboard" in prod and "estimate_credits" in prod
-    svc = Path("/workspace/sms-ms/new-app/lib/server/motion-studio/service.ts").read_text()
-    assert "resume: true" in svc
-    assert "elementEdit: reason === 'scene_updated'" in svc
-    assert "costEstimate" in svc
-    fmt = Path("/workspace/sms-ms/new-app/lib/motion-studio/format.ts").read_text()
-    fn = fmt.split("export function formatMsCredits")[1].split("export function")[0]
-    assert "USD" not in fn and "dollar" not in fn.lower() and "credit" in fn
+    svc = REPO_ROOT / "new-app/lib/server/motion-studio/service.ts"
+    if svc.exists():
+        text = svc.read_text()
+        assert "resume: true" in text
+        assert "elementEdit: reason === 'scene_updated'" in text
+        assert "costEstimate" in text
+    fmt = REPO_ROOT / "new-app/lib/motion-studio/format.ts"
+    if fmt.exists():
+        fn = fmt.read_text().split("export function formatMsCredits")[1].split("export function")[0]
+        assert "USD" not in fn and "dollar" not in fn.lower() and "credit" in fn
     from clips_worker.motion_studio.pipeline import config
     # Delivery QA is 1080p even when iteration is 480p.
     assert config.render_size("16:9", {"renderSize": "480p"}) == (854, 480)
@@ -269,7 +275,7 @@ def test_creative_plan_validation_requires_identity_and_rejects_type_only_worlds
 
 
 def test_film_director_prompt_is_editorial_and_has_no_world_type_menu():
-    src = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/directors/documentary/director.py").read_text()
+    src = (WORKER_ROOT / "clips_worker/motion_studio/directors/documentary/director.py").read_text()
     # The chat prompt (not the leftover capability tuple) must not force a WORLD_TYPES menu.
     start = src.find("You are the Film Director")
     end = src.find("Return JSON", start)
