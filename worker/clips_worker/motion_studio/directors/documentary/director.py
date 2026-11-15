@@ -76,8 +76,31 @@ def fallback_plan(project: dict, story: dict, catalog: list[dict]) -> dict:
                                "reason": "chapter break: let the uploaded footage breathe", "transitionOut": "handoff"})
     for k, s in enumerate(scenes):
         s["index"] = k
-    world = "price_chart" if story.get("data") else ("map" if re.search(r"\b(city|country|border|route|island|river)\b", " ".join(l["text"] for l in lines), re.I) else "abstract_field")
-    return {"world": {"type": world, "reason": "deterministic: derived from data presence / place words"},
+    blob = " ".join(l["text"] for l in lines)
+    if story.get("data") or re.search(r"\b(price|stock|market|percent|squeeze|share|trade)\b", blob, re.I):
+        world, why = "price_chart", "deterministic: the story is told through figures and a market or count"
+    elif re.search(r"\b(city|country|border|route|island|river|map|chicago|borough|street)\b", blob, re.I):
+        world, why = "map", "deterministic: the story is rooted in a place"
+    elif re.search(r"\b(trial|hearing|evidence|investigation|court|exhibit)\b", blob, re.I):
+        world, why = "evidence_board", "deterministic: the story is an investigation"
+    elif re.search(r"\b(19\d{2}|20\d{2}|decade|timeline|years later|in the spring)\b", blob, re.I):
+        world, why = "timeline", "deterministic: the story is a chronology"
+    elif re.search(r"\b(letter|contract|memo|document|filing)\b", blob, re.I):
+        world, why = "document_desk", "deterministic: the story lives in documents"
+    else:
+        world, why = "abstract_field", "deterministic: no stronger world cue; invent a field the camera can travel"
+    world_vt = {"map": "map", "price_chart": "data", "timeline": "timeline", "evidence_board": "document",
+                "network": "diagram", "document_desk": "document", "city_grid": "map"}.get(world, "abstract")
+    for s in scenes:
+        if s.get("visualType") == "title" or s.get("kind") != "graphics":
+            continue
+        if s.get("visualType") in ("photo",) and photos:
+            continue
+        if world_vt == "data" and s.get("visualType") == "data":
+            continue
+        s["visualType"] = world_vt
+        s["reason"] = f"{s['reason']}; world is {world}, so this scene is a {world_vt}"
+    return {"world": {"type": world, "reason": why},
             "style": {"palette": pal, "mood": story.get("tone") or "curious", "grain": 0.06, "glow": 0.35, "vignette": 0.35,
                       "fonts": {"display": "cond", "label": "label", "body": "serif"}, "reason": "seeded from project + script"},
             "scenes": scenes, "musicAnchors": _default_anchors(lines), "deliberateMinimal": [], "source": "fallback"}
@@ -125,7 +148,11 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
     if not config.mock():
         sys_ = (
             "You are the Documentary Director for a cinematic motion-graphics documentary (Cinematic Skill engine: a 4K world "
-            "canvas, a moving camera, word-synced graphics). From the story's SUBJECT and STRUCTURE derive: the world type "
+            "canvas, a moving camera, word-synced graphics). Invent ONE world for this topic — the camera travels through it "
+            "for the whole film. A map for a place-rooted story or a price chart for a market story are examples of the idea, "
+            "not templates to reuse: invent the world this subject needs. Type and numbers must land on the spoken word. "
+            "Graphics scenes live inside that world (visualType should match it: map→map, price_chart→data, timeline→timeline). "
+            "Footage uses a RETURN handoff by default; hard cuts need a justification. From the story's SUBJECT and STRUCTURE derive: the world type "
             f"(one of {list(WORLD_TYPES)}), a per-video style spec, and the scene list. Rules: scenes cover every line id exactly "
             "once in order (group 1-4 lines, ~6-15 s each); each scene has visualType "
             f"{list(VISUAL_TYPES)}, a one-sentence description of what the frame shows (3 layers: procedural background, "

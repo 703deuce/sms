@@ -7,6 +7,7 @@ Mock mode / LLM failure -> a deterministic template script (never an automatic p
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -53,7 +54,81 @@ def _lint(lines: list[dict]) -> list[dict]:
     return typed_spoken_lint(sc)
 
 
-def _fallback_script(brief: str, length_min: int, title: str) -> dict:
+def _research_key(brief: str, title: str) -> str:
+    return hashlib.sha256(f"{title}\n{brief}".encode()).hexdigest()[:16]
+
+
+def default_research_plan(brief: str, title: str) -> list[dict]:
+    """Deterministic research plan used when the planner LLM fails (no empty skip)."""
+    topic = " ".join(x for x in (title, brief) if x).strip() or "the subject"
+    qs = [
+        {"query": f"Key facts, dates, and figures about {topic[:220]}", "grounded": True,
+         "reason": "deterministic plan: numeric and date claims need live sources"},
+        {"query": f"Who was involved and what happened: {topic[:220]}", "grounded": True,
+         "reason": "deterministic plan: confirm people and events"},
+    ]
+    if re.search(r"20\d{2}|this year|latest|recent|today|current", topic, re.I):
+        qs.append({"query": f"Latest developments: {topic[:220]}", "grounded": True,
+                   "reason": "brief looks time-sensitive; model knowledge may be stale"})
+    return qs[: max(1, config.research_cap())]
+
+
+def backfill_sources(lines: list[dict], research: dict) -> list[dict]:
+    """Attach research URLs to numeric lines the model left unsourced (ST-RW-003)."""
+    claims = []
+    for r in research.get("results") or []:
+        urls = [s["url"] for s in (r.get("sources") or []) if s.get("url")]
+        blob = (r.get("text") or "")
+        for c in r.get("claims") or []:
+            claims.append((" ".join((c.get("claim") or "", blob)).lower(), c.get("sources") or urls))
+        if urls:
+            claims.append((blob.lower(), urls))
+    if not claims:
+        return lines
+    for l in lines:
+        if l.get("sources") or not re.search(r"\d", l.get("text") or ""):
+            continue
+        toks = set(re.findall(r"[a-z0-9$%]+", (l["text"] + " " + l.get("spoken", "")).lower()))
+        nums = set(re.findall(r"\d[\d,.]*", l["text"]))
+        best, score, num_hit = [], 0, False
+        for blob, urls in claims:
+            hit = sum(1 for t in toks if len(t) > 3 and t in blob)
+            n_ok = any(n in blob for n in nums)
+            if (hit > score or (n_ok and hit >= score)) and urls:
+                best, score, num_hit = urls, hit, n_ok
+        if num_hit or score >= 2:
+            l["sources"] = list(dict.fromkeys(best))[:4]
+    return lines
+
+
+def _lines_from_research(brief: str, length_min: int, title: str, research: dict) -> dict | None:
+    """When the story LLM fails, write a sourced script from grounded bullets instead of a generic template."""
+    facts = []
+    for r in research.get("results") or []:
+        urls = [s["url"] for s in (r.get("sources") or []) if s.get("url")]
+        for raw in (r.get("text") or "").splitlines():
+            line = re.sub(r"^[\s\-•*\d.]+", "", raw).strip()
+            if len(line) < 24:
+                continue
+            facts.append((line.rstrip(".") + ".", urls))
+    if len(facts) < 3:
+        return None
+    want = min(max(6, target_words(length_min) // 12), 24, len(facts) + 2)
+    topic = " ".join(brief.split())[:160] or title or "this story"
+    rows = [{"text": f"This is the story of {topic.rstrip('.')}.", "hero": _heuristic_hero(topic), "chapter": 1, "sources": []}]
+    for i, (text, urls) in enumerate(facts[: want - 2]):
+        ch = 1 if i < 2 else 2 if i < (want // 2) else 3
+        rows.append({"text": text, "hero": _heuristic_hero(text), "chapter": ch, "sources": urls[:4]})
+    rows.append({"text": "That is how it happened.", "hero": "HOW IT HAPPENED", "chapter": 3, "sources": []})
+    return {"title": title or topic[:60], "logline": topic, "tone": "curious",
+            "chapters": [{"n": i, "title": f"Part {i}"} for i in sorted({r["chapter"] for r in rows})],
+            "lines": _finalize(rows), "sources": research.get("sources") or [], "data": [], "fromResearch": True}
+
+
+def _fallback_script(brief: str, length_min: int, title: str, research: dict | None = None) -> dict:
+    sourced = _lines_from_research(brief, length_min, title, research or {})
+    if sourced:
+        return sourced
     topic = " ".join(brief.split())[:160] or "this story"
     base = [
         ("It starts with a simple question.", "THE QUESTION", 1),
@@ -86,15 +161,20 @@ def plan_research(brief: str, title: str, log) -> list[dict]:
     try:
         out, m = chat_json("research_plan", sys_, json.dumps({"title": title, "brief": brief}))
         log("model_call", "research plan", m)
-        return [q for q in out.get("queries") or [] if isinstance(q, dict)]
+        queries = [q for q in out.get("queries") or [] if isinstance(q, dict) and q.get("query")]
+        return queries or default_research_plan(brief, title)
     except LLMError as exc:
-        log("model_call_failed", f"research plan skipped: {exc}", {"step": "research_plan"})
-        return []
+        log("model_call_failed", f"research plan fell back to the deterministic queries: {exc}", {"step": "research_plan"})
+        return default_research_plan(brief, title)
 
 
 def write_from_idea(brief: str, title: str, length_min: int, research: dict, tone_hint: str, log) -> dict:
     facts = [{"query": r["query"], "text": r["text"][:3000], "sources": r["sources"][:8]} for r in research.get("results", [])]
-    sys_ = ("You are the Story agent for a cinematic motion-graphics documentary. Write the narration script.\n" + WRITING_RULES +
+    sys_ = ("You are the Story agent for a cinematic motion-graphics documentary in the family of a short, designed film: "
+            "one clear through-line, type and numbers landing on the spoken word, not a news recap and not a list of facts.\n"
+            + WRITING_RULES +
+            "\nWrite short declarative sentences; one beat each. Heroes are a number, a name, or a key phrase (1-4 words), never a full sentence. "
+            "Never invent numbers or dates — if research does not contain a figure, write around it. Every numeric line must cite a research URL.\n"
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\","
             "\"typed\",\"sources\":[url]}],\"data\":[{\"label\",\"value\",\"unit\",\"lineIndex\",\"sources\":[url]}]}."
             f" Length: about {target_words(length_min)} spoken words.")
@@ -200,25 +280,36 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
     length_min = int(s.get("lengthMin") or 3)
     research = {"results": [], "decisions": [], "sources": []}
     story = None
+    cache_key = _research_key(brief, title)
+    prev = project.get("story") or {}
     if workflow == "script" and (s.get("script") or brief):
         story = organize_script(s.get("script") or brief, title, log)
     else:
         if workflow == "idea" and not config.mock():
             from clips_worker.motion_studio.directors.documentary.research import run_research
-            plan = plan_research(brief, title, log)
-            research = run_research(plan, log)
+            if prev.get("researchCacheKey") == cache_key and (prev.get("researchResults") or prev.get("researchDecisions")):
+                research = {"results": prev.get("researchResults") or [], "decisions": prev.get("researchDecisions") or [],
+                            "sources": prev.get("sources") or []}
+                log("research_cache", "reusing grounded research for this brief (no re-request)", {"queries": len(research["decisions"])})
+            else:
+                plan = plan_research(brief, title, log) or default_research_plan(brief, title)
+                research = run_research(plan, log)
         if not config.mock():
             try:
                 story = (write_from_footage(brief, title, length_min, catalog, log) if workflow == "footage" and catalog
                          else write_from_idea(brief, title, length_min, research, s.get("tone", ""), log))
             except LLMError as exc:
-                log("model_call_failed", f"story fell back to the template script: {exc}", {"step": "story"})
+                log("model_call_failed", f"story fell back: {exc}", {"step": "story"})
         if story is None:
-            story = _fallback_script(brief, length_min, title)
+            story = _fallback_script(brief, length_min, title, research)
     for d in story.get("data") or []:
         if d["provenance"]["origin"] == "model":
             d["provenance"]["approximate"] = True
+    if workflow == "idea" and research.get("results"):
+        story["lines"] = backfill_sources(story["lines"], research)
     story["researchDecisions"] = research.get("decisions", [])
+    story["researchResults"] = research.get("results") or []
+    story["researchCacheKey"] = cache_key
     story["sources"] = story.get("sources") or research.get("sources", [])
     story["lint"] = _lint(story["lines"])
     story["wordCount"] = sum(len(l["spoken"].split()) for l in story["lines"])
