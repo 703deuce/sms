@@ -210,6 +210,8 @@ export type MsProjectSummary = Pick<MsProject, 'id' | 'title' | 'isExample' | 'c
   sceneCount: number
   durationMs: number
   thumbnailUrl?: string | null
+  /** FE-only hint for the code-rendered cover when there is no thumbnail (first scene's visual type). */
+  posterKind?: MsVisualType | null
 }
 
 export type MsUploadInput = { uploadId: string; kind: MsAssetKind; label: string; durationMs?: number | null }

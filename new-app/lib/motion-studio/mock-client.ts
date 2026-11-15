@@ -354,6 +354,7 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
           sceneCount: p.scenes.length,
           durationMs: p.durationMs || p.settings.lengthMin * 60_000,
           thumbnailUrl: null,
+          posterKind: p.isExample ? 'chart' : (p.scenes[0]?.visualType ?? (p.workflow === 'footage' ? 'footage' : 'text')),
         }))
     },
     async createProject(input) {

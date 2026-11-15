@@ -21,6 +21,12 @@ describe('Motion Studio workspace (FE-5/6/7)', () => {
       expect(screen.getAllByText(label).length).toBeGreaterThan(0)
     }
     expect(document.body.textContent).not.toMatch(/\$/)
+    // Storyboard + preview use code-rendered poster frames, never blank placeholders or external URLs.
+    const posters = document.querySelectorAll('[data-testid="ms-poster"]')
+    expect(posters.length).toBeGreaterThanOrEqual(3)
+    const kinds = new Set(Array.from(posters).map((p) => p.getAttribute('data-kind')))
+    expect(kinds.has('photo') && kinds.has('chart') && kinds.has('text')).toBe(true)
+    expect(document.body.innerHTML).not.toMatch(/(src|href)="https?:/)
   })
 
   it('editor lanes mount inside the Compact Editor slot and follow the editor playhead', async () => {

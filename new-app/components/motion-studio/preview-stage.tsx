@@ -86,7 +86,7 @@ export function PreviewStage({
           />
         ) : scene ? (
           <button type="button" className="size-full focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none" onClick={() => onSelectScene(scene.id)} aria-label={`Select scene ${scene.index + 1}: ${scene.title}`}>
-            <SceneFrame scene={scene} />
+            <SceneFrame scene={scene} animate />
           </button>
         ) : (
           <div className="grid size-full place-items-center text-sm text-muted-foreground">The preview appears once the visual plan is ready.</div>
