@@ -70,3 +70,71 @@ def test_director_fallback_invents_a_map_or_chart_world():
                                                      "provenance": {"origin": "research", "citations": [], "approximate": False}}]), [])
     assert chart["world"]["type"] == "price_chart"
     assert any(s["visualType"] == "data" for s in chart["scenes"] if s["visualType"] != "title")
+
+
+def test_web_research_is_off_by_default():
+    from clips_worker.motion_studio.directors.documentary.story import _web_research_on
+    assert _web_research_on(None) is False
+    assert _web_research_on({}) is False
+    assert _web_research_on({"webResearch": False}) is False
+    assert _web_research_on({"webResearch": "off"}) is False
+    assert _web_research_on({"webResearch": True}) is True
+    assert _web_research_on({"webResearch": "true"}) is True
+
+
+def test_web_research_off_skips_grounded_calls(monkeypatch):
+    from clips_worker.motion_studio.directors.documentary import story as S
+    monkeypatch.setattr(S.config, "mock", lambda: False)
+    called = []
+    monkeypatch.setattr(S, "plan_research", lambda *a, **k: called.append("plan") or [])
+    def _write(*a, **k):
+        return {"title": "t", "tone": "curious", "chapters": [], "lines": [
+            {"id": "l1", "chapter": 1, "text": "Hello.", "spoken": "hello", "hero": "HELLO", "typed": "", "sources": []}
+        ], "data": [], "sources": []}
+    monkeypatch.setattr(S, "write_from_idea", _write)
+    logs = []
+    story = S.build_story({"workflow": "idea", "brief": "Blockbuster", "title": "t", "settings": {}}, [], lambda k, m, d=None: logs.append(k))
+    assert called == []
+    assert "research_skipped" in logs
+    assert story["lines"]
+
+
+def test_web_research_on_runs_grounded_plan(monkeypatch):
+    from clips_worker.motion_studio.directors.documentary import story as S
+    import clips_worker.motion_studio.directors.documentary.research as R
+    monkeypatch.setattr(S.config, "mock", lambda: False)
+    called = []
+    monkeypatch.setattr(S, "plan_research", lambda *a, **k: called.append("plan") or [{"query": "how many stores", "grounded": True, "reason": "figure"}])
+    monkeypatch.setattr(R, "run_research", lambda plan, log: called.append("run") or {"results": [], "decisions": plan, "sources": []})
+    monkeypatch.setattr(S, "write_from_idea", lambda *a, **k: {"title": "t", "tone": "curious", "chapters": [], "lines": [
+        {"id": "l1", "chapter": 1, "text": "Hello.", "spoken": "hello", "hero": "HELLO", "typed": "", "sources": []}
+    ], "data": [], "sources": []})
+    S.build_story({"workflow": "idea", "brief": "Blockbuster", "title": "t", "settings": {"webResearch": True}}, [], lambda *a, **k: None)
+    assert called == ["plan", "run"]
+
+
+def test_grounded_http_error_is_a_warning_and_does_not_raise(monkeypatch):
+    import io, urllib.error
+    from clips_worker.motion_studio.directors.documentary import research as R
+    monkeypatch.setattr(R, "_model", lambda: "gemini-2.5-flash")
+    monkeypatch.setattr("clips_worker.gemini_vision._key", lambda: "test-key")
+    def boom(*a, **k):
+        raise urllib.error.HTTPError(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+            404,
+            "Not Found",
+            hdrs=None,
+            fp=io.BytesIO(b'{"error":{"code":404,"message":"This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash","status":"NOT_FOUND"}}'),
+        )
+    # First call (2.5) 404s; retry to 3.8 also 404s in this test so run_research must swallow it.
+    monkeypatch.setattr(urllib.request, "urlopen", boom)
+    logs = []
+    out = R.run_research([{"query": "how many Blockbuster stores", "grounded": True, "reason": "figure"}],
+                         lambda k, m, d=None: logs.append((k, m, d)))
+    assert out["results"] == []
+    kinds = [k for k, _, _ in logs]
+    assert "research_warning" in kinds
+    assert "research_failed" not in kinds
+    warn = next(m for k, m, _ in logs if k == "research_warning")
+    assert "404" in warn
+    assert "model knowledge" in warn.lower()

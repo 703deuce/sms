@@ -24,6 +24,8 @@ export type MsSettings = {
   format: MsFormat
   productionMode: MsProductionMode
   music?: MsMusicChoice
+  /** When true, story research may use Gemini grounded web search. Off by default. */
+  webResearch?: boolean
 }
 
 export type MsProjectStatus =

@@ -147,6 +147,19 @@ describe('contract v1.1 caveats', () => {
     expect(screen.getByTestId('ms-music-premium-note').textContent).toContain('never retries automatically')
   })
 
+  it('Web research is off by default and can be turned on in setup', async () => {
+    const client = createMockMotionStudioClient({ storage: null, seedExample: false })
+    const p = await client.createProject({ workflow: 'idea', prompt: 'x', uploads: [], mediaPolicy: 'uploads_only', idempotencyKey: 'wr1' })
+    expect(p.settings.webResearch).toBe(false)
+    const onChange = vi.fn()
+    render(<SetupStep project={p} busy={null} onChange={onChange} onPlan={vi.fn()} />)
+    const group = screen.getByTestId('ms-setting-web-research')
+    expect(group.textContent).toMatch(/Web research/)
+    expect(group.querySelector('[aria-checked="true"]')?.textContent).toBe('Off')
+    fireEvent.click(screen.getByRole('radio', { name: 'On' }))
+    expect(onChange).toHaveBeenCalledWith({ webResearch: true })
+  })
+
   it('timing note shows while scene times are estimates', async () => {
     const client = createMockMotionStudioClient({ storage: null, seedExample: false })
     const p = await client.createProject({ workflow: 'idea', prompt: 'Apollo', uploads: [], mediaPolicy: 'uploads_only', idempotencyKey: 't1' })

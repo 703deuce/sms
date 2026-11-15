@@ -38,6 +38,7 @@ export const MS_LABELS = {
   voiceover: 'Voiceover',
   format: 'Format',
   media: 'Media',
+  webResearch: 'Web research',
   formatValue: '16:9 · 1080p',
   /** v1 read-only media row (ST-UX-028 / ST-UI-107). */
   mediaValueV1: 'Use only my uploaded media',

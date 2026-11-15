@@ -69,7 +69,7 @@ export function musicChoiceOf(project: MsProject): MsMusicChoice {
   return 'generated'
 }
 
-/** Second screen (concept §2): only the five settings that change the production, then planning. */
+/** Second screen (concept §2): the production settings, then planning. */
 export function SetupStep({
   project,
   busy,
@@ -125,6 +125,24 @@ export function SetupStep({
               <Lock className="size-3.5" aria-hidden />
               {MS_LABELS.mediaValueV1}
             </p>
+          </div>
+          <div>
+            <Segmented
+              testId="ms-setting-web-research"
+              label={MS_LABELS.webResearch}
+              value={s.webResearch ? 'on' : 'off'}
+              options={[{ value: 'off', label: 'Off' }, { value: 'on', label: 'On' }]}
+              onChange={(v) => onChange({ webResearch: v === 'on' })}
+            />
+            {s.webResearch ? (
+              <p className="-mt-2 pb-4 text-xs text-muted-foreground sm:pl-[208px]" data-testid="ms-web-research-note">
+                Uses Google search for current facts. If search fails, writing continues from the model’s knowledge and your uploads.
+              </p>
+            ) : (
+              <p className="-mt-2 pb-4 text-xs text-muted-foreground sm:pl-[208px]">
+                The script is written from the model’s knowledge and your uploads.
+              </p>
+            )}
           </div>
         </div>
       </section>

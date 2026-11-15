@@ -51,7 +51,7 @@ function iso(ms: number) {
   return new Date(ms).toISOString()
 }
 
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 5, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint' }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 5, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', webResearch: false }
 
 export type MockOptions = {
   now?: () => number

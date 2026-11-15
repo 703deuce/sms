@@ -272,6 +272,15 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
             "data": [], "sources": []}
 
 
+
+def _web_research_on(settings: dict | None) -> bool:
+    """Project setting webResearch is off by default. Only an explicit on/true enables grounded search."""
+    v = (settings or {}).get("webResearch")
+    if isinstance(v, str):
+        return v.strip().lower() in {"1", "true", "yes", "on"}
+    return v is True
+
+
 def build_story(project: dict, catalog: list[dict], log) -> dict:
     s = project.get("settings") or {}
     workflow = project["workflow"]
@@ -285,7 +294,7 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
     if workflow == "script" and (s.get("script") or brief):
         story = organize_script(s.get("script") or brief, title, log)
     else:
-        if workflow == "idea" and not config.mock():
+        if workflow == "idea" and not config.mock() and _web_research_on(s):
             from clips_worker.motion_studio.directors.documentary.research import run_research
             if prev.get("researchCacheKey") == cache_key and (prev.get("researchResults") or prev.get("researchDecisions")):
                 research = {"results": prev.get("researchResults") or [], "decisions": prev.get("researchDecisions") or [],
@@ -294,6 +303,8 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
             else:
                 plan = plan_research(brief, title, log) or default_research_plan(brief, title)
                 research = run_research(plan, log)
+        elif workflow == "idea" and not _web_research_on(s):
+            log("research_skipped", "Web research is off; writing from model knowledge and uploads", {})
         if not config.mock():
             try:
                 story = (write_from_footage(brief, title, length_min, catalog, log) if workflow == "footage" and catalog

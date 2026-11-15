@@ -37,7 +37,7 @@ const MS_JOB_TYPES = ['DOC_PLAN', 'DOC_PRODUCE', 'MGD_RENDER_SEGMENT', 'DOC_ASSE
 const STAGE_ORDER: MsStageId[] = ['story', 'assets', 'direct', 'graphics', 'assemble', 'review']
 const LENGTHS = [3, 5, 10, 15] as const
 const DIRECTIONS = ['cinematic', 'explainer', 'investigative', 'technical_3d'] as const
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', music: 'generated' }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', music: 'generated', webResearch: false }
 const MUSIC_CHOICES: readonly MsMusicChoice[] = ['generated', 'upload', 'elevenlabs', 'none']
 const ENTER_MS = 1400
 const EXIT_MS = 1200
@@ -74,6 +74,8 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   if (o.productionMode === 'checkpoint' || o.productionMode === 'auto') out.productionMode = o.productionMode
   if (MUSIC_CHOICES.includes(o.music)) out.music = o.music
   out.music = out.music ?? 'generated'          // always explicit in the API (incl. 'none')
+  if (typeof o.webResearch === 'boolean') out.webResearch = o.webResearch
+  out.webResearch = out.webResearch === true
   out.format = '16:9_1080p'
   return out
 }
@@ -442,7 +444,7 @@ function allowanceFor(s: Json): MsAllowance {
   return {
     estimateCredits: null, minutes: Number(s.lengthMin) || 3,
     items: [
-      { id: 'research', label: 'Story research (grounded search)', included: true, thirdParty: true, credits: null },
+      { id: 'research', label: s.webResearch ? 'Story research (web search)' : 'Story from model knowledge', included: true, thirdParty: Boolean(s.webResearch), credits: null },
       { id: 'script', label: 'Scriptwriting and direction', included: true, thirdParty: true, credits: null },
       { id: 'narration', label: s.voiceover === 'upload' ? 'Your narration (uploaded)' : 'AI narration', included: true, thirdParty: s.voiceover !== 'upload', credits: null },
       { id: 'graphics', label: 'Code-rendered motion graphics', included: true, thirdParty: false, credits: null },

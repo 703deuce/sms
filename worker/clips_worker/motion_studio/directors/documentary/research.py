@@ -1,9 +1,13 @@
-"""#1212 BE-3 grounded research: Gemini generateContent with the google_search tool, called only when
-the plan says model knowledge isn't enough (recent/new info). Every query logs {query, grounded, reason}.
-Capped (MOTION_STUDIO_RESEARCH_CAP), de-duplicated, cached per project; a failed call is NOT re-requested."""
+"""#1212 BE-3 optional grounded research: Gemini generateContent with the google_search tool.
+
+Web search is off unless the project setting webResearch is on. Failed calls log a warning
+and are not re-requested; the story writer continues from model knowledge and uploads.
+"""
 from __future__ import annotations
 
 import json
+import os
+import re
 import time
 import urllib.error
 import urllib.request
@@ -11,24 +15,28 @@ import urllib.request
 from clips_worker.motion_studio.pipeline import config
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+# gemini-2.5-flash returns 404 for new API keys ("no longer available to new users").
+DEFAULT_RESEARCH_MODEL = "gemini-3.8-flash"
 
 
 def _model() -> str:
-    import os
-    return (os.environ.get("MOTION_STUDIO_RESEARCH_MODEL") or "gemini-2.5-flash").strip()
+    return (os.environ.get("MOTION_STUDIO_RESEARCH_MODEL") or DEFAULT_RESEARCH_MODEL).strip()
 
 
-def grounded_query(query: str, timeout_s: float = 90) -> dict:
-    from clips_worker.gemini_vision import _key
-    body = {"contents": [{"role": "user", "parts": [{"text": (
-        "Research this for a factual documentary script. Answer in 5-10 dense factual bullet points with dates and numbers, "
-        "and keep each claim attributable to a source.\n\nQuestion: " + query)}]}],
-        "tools": [{"google_search": {}}]}
-    req = urllib.request.Request(GEMINI_URL.format(model=_model()), data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json", "x-goog-api-key": _key()}, method="POST")
-    t0 = time.time()
-    with urllib.request.urlopen(req, timeout=timeout_s) as r:
-        data = json.loads(r.read())
+def _redact(text: str) -> str:
+    text = re.sub(r"AIza[0-9A-Za-z_-]{10,}", "AIzaREDACTED", text)
+    return re.sub(r"(?i)(api[_-]?key|key)(\s*[:=]\s*)([^\s&\"']+)", r"\1\2REDACTED", text)
+
+
+def _http_error(exc: urllib.error.HTTPError) -> tuple[int, str]:
+    try:
+        raw = exc.read().decode("utf-8", "replace")
+    except Exception:  # noqa: BLE001
+        raw = str(exc.reason or "")
+    return int(exc.code or 0), _redact(raw)[:800]
+
+
+def _parse_response(data: dict, query: str, model: str, t0: float) -> dict:
     cand = (data.get("candidates") or [{}])[0]
     text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts", []))
     gm = cand.get("groundingMetadata") or {}
@@ -44,11 +52,40 @@ def grounded_query(query: str, timeout_s: float = 90) -> dict:
         if seg:
             supports.append({"claim": seg[:400], "sources": [sources[i]["url"] for i in idx if i < len(sources)]})
     return {"query": query, "text": text, "sources": sources, "claims": supports,
-            "searchQueries": gm.get("webSearchQueries") or [], "ms": int((time.time() - t0) * 1000), "model": _model()}
+            "searchQueries": gm.get("webSearchQueries") or [], "ms": int((time.time() - t0) * 1000), "model": model}
+
+
+def _post(query: str, model: str, timeout_s: float) -> dict:
+    from clips_worker.gemini_vision import _key
+    body = {"contents": [{"role": "user", "parts": [{"text": (
+        "Research this for a factual documentary script. Answer in 5-10 dense factual bullet points with dates and numbers, "
+        "and keep each claim attributable to a source.\n\nQuestion: " + query)}]}],
+            "tools": [{"google_search": {}}]}
+    url = GEMINI_URL.format(model=model)
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json", "x-goog-api-key": _key()}, method="POST")
+    t0 = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as exc:
+        status, err = _http_error(exc)
+        # Retired-model 404: retry once on the current default without re-requesting the same bad id.
+        if status == 404 and model != DEFAULT_RESEARCH_MODEL:
+            return _post(query, DEFAULT_RESEARCH_MODEL, timeout_s)
+        raise urllib.error.HTTPError(url, status, err, exc.headers, None)
+    return _parse_response(data, query, model, t0)
+
+
+def grounded_query(query: str, timeout_s: float = 90) -> dict:
+    return _post(query, _model(), timeout_s)
 
 
 def run_research(plan: list[dict], log) -> dict:
-    """plan: [{query, grounded: bool, reason}] from the story step. Returns {results, decisions, sources}."""
+    """plan: [{query, grounded: bool, reason}] from the story step. Returns {results, decisions, sources}.
+
+    A failed grounded call is logged as a warning and skipped; it never raises to the job.
+    """
     cap = config.research_cap()
     seen, results, decisions, sources = set(), [], [], []
     used = 0
@@ -71,7 +108,11 @@ def run_research(plan: list[dict], log) -> dict:
         try:
             res = grounded_query(q)
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, RuntimeError) as exc:
-            log("research_failed", f"grounded call failed (no re-request): {type(exc).__name__}", {"query": q})
+            status = getattr(exc, "code", None)
+            detail = _redact(str(exc.reason if isinstance(exc, urllib.error.HTTPError) else exc))[:400]
+            log("research_warning",
+                f"grounded search failed ({status or type(exc).__name__}); writing from model knowledge (no re-request)",
+                {"query": q, "status": status, "error": detail})
             continue
         results.append(res)
         for s in res["sources"]:
