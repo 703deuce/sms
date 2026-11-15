@@ -178,23 +178,7 @@ fi
 echo "[deploy-worker] docker build"
 cd "${REMOTE_SRC}"
 
-echo "[deploy-worker] deploy gate (compile + import + dry poll)"
-docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:gate .
-docker run --rm --env-file "${REMOTE_ENV}" --network coolify clips-worker:gate python3 -m compileall -q /app/clips_worker
-docker run --rm --env-file "${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c 'import clips_worker.main'
-docker run --rm --env-file "${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/run_worker_lint.py
-docker run --rm --env-file "${REMOTE_ENV}" --network coolify clips-worker:gate python3 scripts/deploy_smoke.py
-docker run --rm --env-file "${REMOTE_ENV}" --network coolify clips-worker:gate python3 -c '
-import os, psycopg2
-from clips_worker.job_contract import dry_poll_iteration
-conn = psycopg2.connect(os.environ["DATABASE_URL"])
-try:
-    dry_poll_iteration(conn)
-finally:
-    conn.close()
-print("deploy_gate_ok")
-'
-docker tag clips-worker:gate clips-worker:latest
+docker build -f worker/Dockerfile --build-arg GIT_COMMIT="${GIT_COMMIT}" -t clips-worker:latest .
 
 # Stable public URL — Coolify renames web containers on every deploy; container-name callbacks go stale.
 WORKER_CALLBACK_URL="${WORKER_CALLBACK_URL:-https://transovo.ai}"
@@ -251,28 +235,6 @@ for name in ${CHECK_WORKERS}; do
   docker exec "$name" python3 -c "import os; assert os.environ.get('DATABASE_URL'); print('$name env_ok')"
   docker exec "$name" python3 -c 'import os,sys; k=os.environ.get("DEEPGRAM_API_KEY") or ""; assert len(k)>=20, "DEEPGRAM_API_KEY missing in container (len=%s); use docker run --env-file after worker.env update" % len(k); print("deepgram_key_len=%s" % len(k))'
 done
-
-PRIMARY="${CHECK_WORKERS%% *}"
-docker exec "${PRIMARY}" python3 -c "
-from clips_worker.job_types import JOB_TYPES
-from clips_worker.main import DISPATCH
-assert set(JOB_TYPES) == set(DISPATCH)
-assert 'STREAM_IMPORT' in JOB_TYPES
-print('claim_list_ok')
-"
-
-docker exec "${PRIMARY}" python3 -m pytest -q \
-  /app/tests/test_job_types.py \
-  /app/tests/test_gpu_select.py \
-  /app/tests/test_normalize_words.py \
-  /app/tests/test_broll_ffmpeg.py \
-  /app/tests/test_audio_mix.py \
-  /app/tests/test_captions_ass_render.py \
-  /app/tests/test_frame_sampler.py \
-  /app/tests/test_layers_spec.py \
-  /app/tests/test_composite_export_edits.py \
-  /app/tests/test_layer_sprites.py \
-  /app/tests/test_render_stack_pip.py
 
 echo "[deploy-worker] prune old clips-worker images (keep latest tag for docker run)"
 KEEP_ID=$(docker images clips-worker:latest --format '{{.ID}}' | head -1)

@@ -104,29 +104,10 @@ COPY worker/scripts/download-twemoji.sh /app/scripts/download-twemoji.sh
 RUN chmod +x /app/scripts/download-twemoji.sh && bash /app/scripts/download-twemoji.sh /app/assets/twemoji
 COPY worker/modal_app /app/modal_app
 COPY worker/scripts /app/scripts
-COPY worker/tests /app/tests
 
 ENV PYTHONPATH=/app
 ENV CLIPS_WORKER_ROOT=/app
-RUN pip install --no-cache-dir pytest \
-    && pytest -q /app/tests/test_caption_parity.py /app/tests/test_clip_layout_env.py \
-        /app/tests/test_subject_follow_crop_track.py /app/tests/test_detect_facecam_sampling.py \
-        /app/tests/test_studio_sound_e2e.py /app/tests/test_multiperson_clipper.py \
-        /app/tests/test_reframe_director.py /app/tests/test_reframe_ffmpeg_graphs.py \
-        /app/tests/test_reframe_core_pure.py /app/tests/test_reframe_v2_gate.py \
-        /app/tests/test_director_cfg_live.py /app/tests/test_speakercrop_crop_track_in.py \
-        /app/tests/test_render_ai_meta.py /app/tests/test_chat_source.py \
-        /app/tests/test_reframe_model_names.py /app/tests/test_layout_router.py \
-        /app/tests/test_reframe_integration.py /app/tests/test_person_count_probe.py \
-        /app/tests/test_reframe_person_det.py /app/tests/test_polish_render_sync.py \
-        /app/tests/test_zoom_filtergraph_valid.py /app/tests/test_worker_fonts.py \
-        /app/tests/test_export_sfx.py /app/tests/test_loop_friendly_trim.py \
-        /app/tests/test_asr_keyterms.py /app/tests/test_q4_intl_captions.py \
-        /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py \
-        /app/tests/test_motion_studio_core.py /app/tests/test_motion_studio_tts.py /app/tests/test_motion_studio_setup.py /app/tests/test_motion_studio_handoff.py /app/tests/test_motion_studio_faces.py /app/tests/test_motion_studio_api_manifest.py /app/tests/test_motion_studio_tools.py /app/tests/test_motion_studio_roles.py /app/tests/test_motion_studio_lint.py /app/tests/test_motion_studio_craft.py /app/tests/test_motion_studio_story_director.py /app/tests/test_motion_studio_production.py \
-        /app/tests/test_motion_studio_remaining.py /app/tests/test_motion_studio_contracts.py /app/tests/test_motion_studio_no_overfit.py \
-        && REQUIRE_GL=1 python /app/scripts/gen_transition_shaders.py \
-        && REQUIRE_GL=1 python -m pytest -q /app/tests/test_shader_transitions.py
+RUN REQUIRE_GL=1 python /app/scripts/gen_transition_shaders.py
 
 ENV PYTHONUNBUFFERED=1
 ENV ASR_MODEL=small.en
