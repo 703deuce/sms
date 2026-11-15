@@ -12,7 +12,7 @@ import {
   MS_VOICEOVER,
   selectedWorkflowLine,
 } from '@/lib/motion-studio/config'
-import type { MsProject, MsSettings } from '@/lib/motion-studio/types'
+import type { MsMusicChoice, MsProject, MsSettings } from '@/lib/motion-studio/types'
 import { AllowancePanel } from './allowance-panel'
 
 function Segmented<T extends string | number>({
@@ -59,6 +59,16 @@ function Segmented<T extends string | number>({
   )
 }
 
+/** Current music choice: explicit setting, else inferred from the allowance line the backend returns. */
+export function musicChoiceOf(project: MsProject): MsMusicChoice {
+  if (project.settings.music) return project.settings.music
+  const item = project.allowance?.items.find((i) => i.id === 'music')
+  if (item?.thirdParty) return 'elevenlabs'
+  if (/your music/i.test(item?.label ?? '') || project.audio?.music?.source === 'upload') return 'upload'
+  if (/^no music/i.test(item?.label ?? '')) return 'none'
+  return 'generated'
+}
+
 /** Second screen (concept §2): only the five settings that change the production, then planning. */
 export function SetupStep({
   project,
@@ -72,6 +82,14 @@ export function SetupStep({
   onPlan: () => void
 }) {
   const s = project.settings
+  const music = musicChoiceOf(project)
+  const hasMusicUpload = project.assets.some((a) => a.role === 'music') || music === 'upload'
+  const musicOptions: { value: MsMusicChoice; label: string; badge?: string }[] = [
+    { value: 'generated', label: 'Generated score' },
+    ...(hasMusicUpload ? [{ value: 'upload' as const, label: 'My music' }] : []),
+    { value: 'elevenlabs', label: 'Premium score', badge: 'Optional' },
+    { value: 'none', label: 'No music' },
+  ]
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-6 py-8" data-testid="ms-setup">
       <div className="flex flex-col gap-1">
@@ -89,6 +107,14 @@ export function SetupStep({
           />
           <Segmented testId="ms-setting-direction" label={MS_LABELS.visualDirection} value={s.visualDirection} options={MS_DIRECTIONS} onChange={(v) => onChange({ visualDirection: v })} />
           <Segmented testId="ms-setting-voiceover" label={MS_LABELS.voiceover} value={s.voiceover} options={MS_VOICEOVER} onChange={(v) => onChange({ voiceover: v })} />
+          <div>
+            <Segmented testId="ms-setting-music" label="Music" value={music} options={musicOptions} onChange={(v) => onChange({ music: v })} />
+            {music === 'elevenlabs' ? (
+              <p className="-mt-2 pb-4 text-xs text-muted-foreground sm:pl-[208px]" data-testid="ms-music-premium-note">
+                One premium generation per project and length, reused when the film is re-assembled. It never retries automatically and falls back to the generated score if unavailable. Included while charging is off.
+              </p>
+            ) : null}
+          </div>
           <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-[200px_1fr] sm:items-center" data-testid="ms-setting-format">
             <p className="text-sm font-medium">{MS_LABELS.format}</p>
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">{MS_LABELS.formatValue}</p>

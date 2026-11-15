@@ -14,12 +14,16 @@ export type MsVoiceover = 'ai' | 'upload'
 export type MsProductionMode = 'checkpoint' | 'auto'
 export type MsFormat = '16:9_1080p'
 
+/** Contract v1.1 `settings.music` (PATCH-only extra). `elevenlabs` is the optional premium tier (#1230). */
+export type MsMusicChoice = 'generated' | 'upload' | 'elevenlabs' | 'none'
+
 export type MsSettings = {
   lengthMin: MsLengthMin
   visualDirection: MsVisualDirection
   voiceover: MsVoiceover
   format: MsFormat
   productionMode: MsProductionMode
+  music?: MsMusicChoice
 }
 
 export type MsProjectStatus =
@@ -124,6 +128,9 @@ export type MsScene = {
   assetIds: string[]
   handoff?: MsHandoff | null
   version: number
+  /** Contract v1.1 optional fields. */
+  previewUrl?: string | null
+  error?: string | null
 }
 
 export type MsAssetKind = 'photo' | 'video' | 'audio' | 'script'
@@ -159,7 +166,7 @@ export type MsDirectorMessage = { id: string; role: 'user' | 'director'; text: s
 
 export type MsAllowanceItem = { id: string; label: string; included: boolean; thirdParty: boolean; credits: number | null }
 export type MsAllowance = {
-  /** null = "Credits TBD" until John sets the integers (D2). */
+  /** null while charging is off (contract v1.1) → shown as "Included". */
   estimateCredits: number | null
   minutes: number
   items: MsAllowanceItem[]

@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { MS_DIRECTIONS, MS_LABELS } from '@/lib/motion-studio/config'
 import { formatShortClock, parseShortClock } from '@/lib/motion-studio/format'
 import type { MsProject, MsScene, MsScenePatch } from '@/lib/motion-studio/types'
+import { InlineError, TimingNote, timingsAreEstimated } from './motion-studio-shared'
 
 const CAMERA_OPTIONS = ['Push in / orbit', 'Slow push-in', 'Pull out', 'Drift and settle', 'Locked off', 'Camera enters photo']
 const fieldCls =
@@ -74,6 +75,14 @@ export function Inspector({
   }
   return (
     <div className="flex flex-col gap-4" data-testid="ms-inspector" data-kind={scene.kind}>
+      {scene.status === 'failed' ? (
+        <div data-testid="ms-inspector-scene-error">
+          <InlineError
+            message={scene.error || 'This scene failed to render. Regenerate it to try again.'}
+            action={<Button size="xs" variant="outline" onClick={() => onRegenerate(scene.id)} disabled={busy != null}>Regenerate</Button>}
+          />
+        </div>
+      ) : null}
       <section className="flex flex-col gap-1">
         <p className="text-xs font-medium text-muted-foreground">{MS_LABELS.sceneGraphics}</p>
         <p className="text-sm font-semibold" data-testid="ms-inspector-graphic">{scene.graphicName}</p>
@@ -87,6 +96,7 @@ export function Inspector({
           <Input aria-label="End time" value={end} onChange={(e) => setEnd(e.target.value)} onBlur={commitTiming} onKeyDown={(e) => e.key === 'Enter' && commitTiming()} className="h-8 font-mono tabular-nums" disabled={disabled} />
         </div>
         {timingError ? <p className="text-xs text-destructive" role="alert">{timingError}</p> : null}
+        {timingsAreEstimated(project) ? <TimingNote /> : null}
       </Row>
 
       <Row label={MS_LABELS.style} htmlFor="ms-insp-style">
@@ -110,7 +120,7 @@ export function Inspector({
       <div className="flex flex-col gap-2 border-t border-border/70 pt-3">
         <Button size="sm" onClick={() => onRegenerate(scene.id)} disabled={disabled} data-testid="ms-regenerate">
           <RefreshCw className="size-3.5" aria-hidden />
-          {scene.status === 'rendering' ? 'Rendering…' : MS_LABELS.regenerate}
+          {scene.status === 'rendering' ? 'Rendering…' : scene.status === 'failed' ? 'Regenerate scene' : MS_LABELS.regenerate}
         </Button>
         <Button size="sm" variant="outline" onClick={() => onEditTimeline(scene.id)} data-testid="ms-edit-timeline">
           <Rows3 className="size-3.5" aria-hidden />

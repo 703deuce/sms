@@ -31,6 +31,8 @@ export function ProductionActivity({
     if (el) el.scrollTop = el.scrollHeight
   }, [events.length])
   const failed = project.stages.filter((s) => s.status === 'failed')
+  // Never render an empty box: the section stays hidden until the director has said something.
+  const reasoning = events.filter((e) => (e.text ?? '').trim())
   return (
     <div className={cn('flex min-h-0 flex-col gap-4', compact ? '' : 'h-full')} data-testid="ms-activity">
       <ol className="flex flex-col gap-1" aria-label="Production steps">
@@ -69,18 +71,19 @@ export function ProductionActivity({
         </div>
       ) : null}
 
+      {reasoning.length ? (
       <section className="flex min-h-0 flex-1 flex-col gap-2" aria-labelledby="ms-reasoning-title">
         <h3 id="ms-reasoning-title" className="text-xs font-medium text-muted-foreground">Director’s reasoning</h3>
-        {events.length ? (
+        {reasoning.length ? (
           <ol ref={feedRef} className={cn('flex min-h-0 flex-col gap-2 overflow-y-auto pr-1', compact ? 'max-h-64' : 'flex-1')} aria-live="polite" aria-relevant="additions" data-testid="ms-reasoning">
-            {events.map((e) => {
-              const Icon = KIND_ICON[e.kind]
+            {reasoning.map((e) => {
+              const Icon = KIND_ICON[e.kind] ?? CircleDot
               return (
                 <li key={e.id} className={cn('flex gap-2.5 rounded-lg border px-3 py-2 text-sm', e.kind === 'reasoning' ? 'border-lane-ai/30 bg-lane-ai/5' : e.kind === 'warning' ? 'border-warning/30 bg-warning/5' : 'border-border bg-card')}>
                   <Icon className={cn('mt-0.5 size-3.5 shrink-0', e.kind === 'reasoning' ? 'text-lane-ai' : 'text-muted-foreground')} aria-hidden />
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">
-                      <span className="font-medium">{KIND_LABEL[e.kind]}</span> · {MS_STAGES.find((s) => s.id === e.stage)?.label} ·{' '}
+                      <span className="font-medium">{KIND_LABEL[e.kind] ?? 'Update'}</span> · {MS_STAGES.find((s) => s.id === e.stage)?.label} ·{' '}
                       <time dateTime={e.at} className="tabular-nums">{new Date(e.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}</time>
                     </p>
                     <p className={cn('leading-relaxed', e.kind === 'reasoning' && 'italic')}>{e.text}</p>
@@ -89,10 +92,9 @@ export function ProductionActivity({
               )
             })}
           </ol>
-        ) : (
-          <p className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">Activity appears here once planning starts.</p>
-        )}
+        ) : null}
       </section>
+      ) : null}
     </div>
   )
 }
