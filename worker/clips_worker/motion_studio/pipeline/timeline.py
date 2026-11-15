@@ -70,17 +70,21 @@ def layout(plan: dict, narration: dict, story: dict, fps: int = HOUSE["fps"]) ->
             hard = s["kind"] == "hardcut"
             enter = 0.0 if hard else ENTER_S
             exit_ = 0.0 if hard else EXIT_S
-            clip_len = max(1.0, float(h.get("outS", 4)) - float(h.get("inS", 0)))
-            if segs:                           # narration over footage => footage mode (a): clip audio as a low bed
+            in_s = float(h.get("inS") or 0.0)
+            # Honour the planned stretch in full. Never shrink outS to fit the VO.
+            clip_len = max(1.0, float(h.get("outS") or 0) - in_s)
+            mode = h.get("audioMode")
+            if mode == "bed":
                 h["audioMode"] = "bed"
-                total = max(vo_dur, enter + exit_ + 1.0)
-                clip_len = total - enter - exit_
-            else:                              # footage mode (b): narration pauses, the clip's own sound plays
-                h["audioMode"] = h.get("audioMode") if h.get("audioMode") in ("clip", "mute") else "clip"
+                total = max(vo_dur, enter + clip_len + exit_)
+            else:
+                # Default (and Keef-style RETURN): narration pauses, the clip plays in full.
+                h["audioMode"] = mode if mode in ("clip", "mute") else "clip"
                 total = enter + clip_len + exit_
-            h["outS"] = round(float(h.get("inS", 0)) + clip_len, 3)
+                segs = []  # do not lay VO over the footage
             h["enterS"], h["exitS"] = enter, exit_
             rec["handoff"] = h
+            rec["voSegments"] = segs
             t = start + total
         else:
             t = start + max(vo_dur, 2.0)

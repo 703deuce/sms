@@ -51,7 +51,7 @@ def test_backfill_sources_attaches_urls_to_numeric_lines():
     assert out[1]["sources"] == []
 
 
-def test_director_fallback_invents_a_map_or_chart_world():
+def test_director_fallback_invents_a_story_world_brief():
     def story(text, data=None):
         extra = [
             {"id": "l2", "chapter": 1, "text": "Then the people closest to it saw it first.", "hero": "FIRST", "spoken": "then the people closest to it saw it first"},
@@ -62,14 +62,19 @@ def test_director_fallback_invents_a_map_or_chart_world():
                 "data": data or []}
 
     mapped = fallback_plan({"id": "p1"}, story("On the south side of Chicago the border of the city held."), [])
-    assert mapped["world"]["type"] == "map"
-    assert any(s["visualType"] == "map" for s in mapped["scenes"] if s["visualType"] != "title")
+    brief = (mapped["world"].get("brief") or mapped["world"].get("reason") or "").lower()
+    assert mapped["world"].get("name")
+    assert "place" in brief or "location" in brief
+    assert mapped["world"].get("type") not in {"map", "city_grid", "price_chart"}
+    # Do not overwrite scene visualTypes to match a world menu.
+    assert mapped["scenes"][0]["visualType"] == "title"
 
     chart = fallback_plan({"id": "p2"}, story("Then the share price and the market came apart.",
                                               data=[{"label": "price", "value": 483, "unit": "USD", "lineId": "l1",
                                                      "provenance": {"origin": "research", "citations": [], "approximate": False}}]), [])
-    assert chart["world"]["type"] == "price_chart"
-    assert any(s["visualType"] == "data" for s in chart["scenes"] if s["visualType"] != "title")
+    brief = (chart["world"].get("brief") or chart["world"].get("reason") or "").lower()
+    assert "data" in brief or "figure" in brief
+    assert chart["world"].get("type") not in {"price_chart", "map", "city_grid"}
 
 
 def test_web_research_is_off_by_default():
@@ -168,3 +173,74 @@ def test_generic_fallback_does_not_pad_by_repeating():
     assert story.get("template")
     assert len(texts) == len(set(texts)), texts
     assert any("Blockbuster" in t for t in texts)
+
+
+def test_fallback_plan_assigns_every_upload_and_plays_clips_in_full():
+    from clips_worker.motion_studio.directors.documentary.director import fallback_plan, validate_plan
+    story = {"title": "A shop on the corner", "tone": "curious", "lines": [
+        {"id": "l1", "chapter": 1, "text": "A shop stood on the corner for years.", "hero": "THE SHOP", "spoken": "a shop stood on the corner for years"},
+        {"id": "l2", "chapter": 1, "text": "Inside, the shelves were still full.", "hero": "SHELVES", "spoken": "inside the shelves were still full"},
+        {"id": "l3", "chapter": 1, "text": "A sign out front kept the name alive.", "hero": "THE SIGN", "spoken": "a sign out front kept the name alive"},
+        {"id": "l4", "chapter": 2, "text": "Mailers arrived in envelopes each week.", "hero": "THE MAILERS", "spoken": "mailers arrived in envelopes each week"},
+        {"id": "l5", "chapter": 2, "text": "Then a mechanism loaded a tape.", "hero": "THE TAPE", "spoken": "then a mechanism loaded a tape"},
+        {"id": "l6", "chapter": 2, "text": "What happened next was a different era.", "hero": "THE TURN", "spoken": "what happened next was a different era"},
+    ]}
+    catalog = [
+        {"id": "img_ext", "kind": "image", "filename": "shop_exterior.jpg",
+         "analysis": {"summary": "shop stood on the corner exterior", "tags": ["storefront", "shop"]}, "status": "ready"},
+        {"id": "img_int", "kind": "image", "filename": "shop_interior.jpg",
+         "analysis": {"summary": "inside shelves still full", "tags": ["interior", "shelves"]}, "status": "ready"},
+        {"id": "img_sign", "kind": "image", "filename": "shop_sign.jpg",
+         "analysis": {"summary": "a sign out front", "tags": ["sign"]}, "status": "ready"},
+        {"id": "img_mail", "kind": "image", "filename": "mailer_envelope.jpg",
+         "analysis": {"summary": "mailers arrived in envelopes", "tags": ["envelope", "mail"]}, "status": "ready"},
+        {"id": "img_logo", "kind": "image", "filename": "brand_logo.png",
+         "analysis": {"summary": "company wordmark", "tags": ["logo", "wordmark"]}, "status": "ready"},
+        {"id": "vid_mech", "kind": "video", "filename": "tape_load_mechanism.mp4", "durationMs": 12667,
+         "analysis": {"summary": "mechanism loaded a tape", "moments": [{"inS": 0, "outS": 12.667}]}, "status": "ready"},
+    ]
+    plan = fallback_plan({"id": "p-alloc"}, story, catalog)
+    errs = validate_plan(plan, story, catalog)
+    assert errs == [], errs
+    assigned = set()
+    for s in plan["scenes"]:
+        if s.get("assetId"):
+            assigned.add(s["assetId"])
+        if (s.get("handoff") or {}).get("assetId"):
+            assigned.add(s["handoff"]["assetId"])
+    assert assigned == {a["id"] for a in catalog}, assigned
+    logo_scenes = [s for s in plan["scenes"] if s.get("assetId") == "img_logo"]
+    assert logo_scenes, "logo/wordmark must be assigned"
+    assert any(s.get("visualType") == "title" or s is plan["scenes"][-1] or s.get("index") == 0 for s in logo_scenes)
+    stills = [s.get("assetId") for s in plan["scenes"] if s.get("assetId")]
+    assert len(stills) == len(set(stills)), stills
+    hand = next(s for s in plan["scenes"] if s.get("kind") == "handoff")
+    assert hand["handoff"]["audioMode"] == "clip"
+    assert abs(hand["handoff"]["outS"] - 12.667) < 0.02
+    assert hand["handoff"]["outS"] > 8.0
+    # visualTypes must not all be forced to one world menu value
+    vts = {s["visualType"] for s in plan["scenes"] if s.get("kind") == "graphics"}
+    assert "title" in vts
+
+
+def test_validate_plan_rejects_an_unused_upload():
+    from clips_worker.motion_studio.directors.documentary.director import fallback_plan, validate_plan
+    story = {"title": "t", "lines": [
+        {"id": "l1", "chapter": 1, "text": "Hello there friends.", "hero": "HELLO", "spoken": "hello there friends"},
+        {"id": "l2", "chapter": 1, "text": "Then everything changed.", "hero": "CHANGE", "spoken": "then everything changed"},
+        {"id": "l3", "chapter": 1, "text": "That was the end of it.", "hero": "THE END", "spoken": "that was the end of it"},
+    ]}
+    catalog = [
+        {"id": "used", "kind": "image", "filename": "one.jpg", "analysis": {"summary": "hello friends"}, "status": "ready"},
+        {"id": "left", "kind": "image", "filename": "two.jpg", "analysis": {"summary": "unused still"}, "status": "ready"},
+    ]
+    plan = fallback_plan({"id": "p-unused"}, story, catalog)
+    # Strip one assignment to simulate a director miss.
+    for s in plan["scenes"]:
+        if s.get("assetId") == "left":
+            s.pop("assetId", None)
+    for pl in (plan.get("blueprint") or {}).get("assetPlacements") or []:
+        if pl.get("assetId") == "left":
+            pl["assetId"] = None
+    errs = validate_plan(plan, story, catalog)
+    assert any("two.jpg" in e for e in errs), errs
