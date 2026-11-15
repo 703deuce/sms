@@ -4,7 +4,7 @@ import { Download, ExternalLink, Film } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
-import { MS_LABELS } from '@/lib/motion-studio/config'
+import { MS_LABELS, formatLabel } from '@/lib/motion-studio/config'
 import { formatClock, formatMsCredits } from '@/lib/motion-studio/format'
 import type { MsProject } from '@/lib/motion-studio/types'
 
@@ -34,7 +34,7 @@ export function MotionExportDialog({
       <DialogContent className="sm:max-w-md" data-testid="ms-export-dialog">
         <DialogHeader>
           <DialogTitle>Export documentary</DialogTitle>
-          <DialogDescription>MP4 · {MS_LABELS.formatValue} · {formatClock(project.durationMs)}</DialogDescription>
+          <DialogDescription>MP4 · {formatLabel(project.settings)} · {formatClock(project.durationMs)}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">

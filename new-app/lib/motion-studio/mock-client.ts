@@ -51,7 +51,7 @@ function iso(ms: number) {
   return new Date(ms).toISOString()
 }
 
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 5, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', webResearch: false }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 5, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_480p', renderSize: '480p', finalRenderSize: '480p', productionMode: 'checkpoint', webResearch: false }
 
 export type MockOptions = {
   now?: () => number
@@ -397,7 +397,9 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
         if (rec.planAt != null && patch.settings.lengthMin && patch.settings.lengthMin !== rec.project.settings.lengthMin) {
           throw new MotionStudioHttpError(409, 'PLAN_EXISTS', 'Length is locked once the production plan exists.')
         }
-        rec.project.settings = { ...rec.project.settings, ...patch.settings, format: '16:9_1080p' }
+        rec.project.settings = { ...rec.project.settings, ...patch.settings }
+        rec.project.settings.renderSize = rec.project.settings.renderSize || '480p'
+        rec.project.settings.format = rec.project.settings.format || '16:9_480p'
         if (patch.settings.voiceover) rec.project.audio.voice.mode = patch.settings.voiceover
         rec.project.audio.voice.label = rec.project.settings.voiceover === 'ai' ? 'AI voice · documentary narrator' : 'Your narration (uploaded)'
         if (patch.settings.music) rec.project.audio.music.label = musicItem(rec.project.settings, rec.project.assets).label
@@ -587,7 +589,7 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
       if (rec.exportIdem === key || (rec.exportAt != null && p.export.status !== 'failed')) return p
       rec.exportIdem = key
       rec.exportAt = now()
-      pushEvent(rec, 'review', 'action', 'Export started: MP4 · 16:9 · 1080p.')
+      pushEvent(rec, 'review', 'action', 'Export started: MP4 · 16:9 · 480p.')
       touch(rec)
       return materialize(rec)
     },

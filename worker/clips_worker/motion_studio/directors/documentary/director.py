@@ -471,16 +471,16 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
         sys_ = director_system()
         user = _director_user(project, story, catalog)
         try:
-            plan, m = chat_json(
+            raw, m = chat_json(
                 "director", sys_, user, max_tokens=12000,
                 schema=schema_for("director"), schema_name=schema_name("director"),
             )
             log("model_call", "director plan", m)
-            plan = _prepare_director_plan(plan, catalog)
+            plan = _prepare_director_plan(raw if isinstance(raw, dict) else {}, catalog)
             last_errs = validate_plan(plan, story, catalog)
             if last_errs:
                 log("plan_invalid", "director plan failed validation; requesting a targeted repair",
-                    {"errors": last_errs[:12]})
+                    {"errors": last_errs[:12], "output": raw})
                 repair_user = json.dumps({
                     "previous": plan,
                     "errors": last_errs,
@@ -491,18 +491,18 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
                         "satisfies the contract. Return the full corrected plan. Use exact asset ids."
                     ),
                 })
-                plan, m = chat_json(
+                raw, m = chat_json(
                     "director", sys_, repair_user, max_tokens=12000,
                     schema=schema_for("director"), schema_name=schema_name("director"),
                 )
                 log("model_call", "director plan repair", m)
                 repaired = True
-                plan = _prepare_director_plan(plan, catalog)
+                plan = _prepare_director_plan(raw if isinstance(raw, dict) else {}, catalog)
                 last_errs = validate_plan(plan, story, catalog)
             if last_errs:
                 log("plan_invalid", "director plan still invalid after targeted repair; stopping",
-                    {"errors": last_errs[:12], "repaired": True})
-                raise StageContractError("director", last_errs, repaired=True)
+                    {"errors": last_errs[:12], "repaired": True, "output": raw})
+                raise StageContractError("director", last_errs, repaired=True, output=raw)
             plan["source"] = "model_repaired" if repaired else "model"
         except StageContractError:
             raise

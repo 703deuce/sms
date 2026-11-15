@@ -37,7 +37,7 @@ const MS_JOB_TYPES = ['DOC_PLAN', 'DOC_PRODUCE', 'MGD_RENDER_SEGMENT', 'DOC_ASSE
 const STAGE_ORDER: MsStageId[] = ['story', 'assets', 'direct', 'graphics', 'assemble', 'review']
 const LENGTHS = [3, 5, 10, 15] as const
 const DIRECTIONS = ['cinematic', 'explainer', 'investigative', 'technical_3d'] as const
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', music: 'generated', webResearch: false }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_480p', renderSize: '480p', finalRenderSize: '480p', productionMode: 'checkpoint', music: 'generated', webResearch: false }
 const MUSIC_CHOICES: readonly MsMusicChoice[] = ['generated', 'upload', 'elevenlabs', 'none']
 const ENTER_MS = 1400
 const EXIT_MS = 1200
@@ -45,6 +45,15 @@ const EXIT_MS = 1200
 type Json = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 const J = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Json) : {})
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+
+function titleFromCreate(o: Json, prompt: string, script: string): string {
+  const explicit = str(o.title, 120)
+  if (explicit) return explicit
+  const src = prompt || script
+  const line = (src.split(/\r?\n/).find((l) => l.trim()) || src).trim()
+  const sentence = (line.split(/(?<=[.?!])\s+/)[0] || line).replace(/\s+/g, ' ').trim()
+  return sentence.slice(0, 80) || 'Documentary'
+}
 
 export function motionStudioEnabled(): boolean {
   const v = (process.env.MOTION_STUDIO_ENABLED ?? '1').trim().toLowerCase()
@@ -58,7 +67,7 @@ function assertEnabled() {
 export function motionStudioConfig() {
   return {
     lengths: [...LENGTHS], betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
-    productionModes: ['checkpoint', 'auto'], formats: ['16:9_1080p'], mediaPolicy: 'uploads_only',
+    productionModes: ['checkpoint', 'auto'], formats: ['16:9_480p', '16:9_720p', '16:9_1080p', '16:9_2160p'], mediaPolicy: 'uploads_only',
     music: ['generated', 'upload', 'elevenlabs', 'none'],
     features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'blueprint' },
   }
@@ -76,10 +85,25 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   out.music = out.music ?? 'generated'          // always explicit in the API (incl. 'none')
   if (typeof o.webResearch === 'boolean') out.webResearch = o.webResearch
   out.webResearch = out.webResearch === true
-  out.format = '16:9_1080p'
+  if (typeof o.preflightOnly === 'boolean') out.preflightOnly = o.preflightOnly
+  const FORMAT_RE = /^(16:9|9:16|1:1)_(480p|720p|1080p|2160p)$/
+  if (typeof o.format === 'string' && FORMAT_RE.test(o.format)) out.format = o.format as MsSettings['format']
   const rs = typeof o.renderSize === 'string' ? o.renderSize.trim().toLowerCase()
     : (typeof o.resolution === 'string' ? o.resolution.trim().toLowerCase() : '')
-  if (['480p', '720p', '1080p', '2160p', '4k'].includes(rs) || /^\d{2,4}x\d{2,4}$/.test(rs)) out.renderSize = rs
+  const validSize = (v: string) => ['480p', '720p', '1080p', '2160p', '4k'].includes(v) || /^\d{2,4}x\d{2,4}$/.test(v)
+  if (validSize(rs)) out.renderSize = rs
+  // Honest default: worker renders 480p when renderSize is omitted. Do not infer 1080p from a leftover format label.
+  if (!out.renderSize) {
+    const fromFmt = typeof out.format === 'string' && FORMAT_RE.test(out.format) ? out.format.split('_')[1] : ''
+    out.renderSize = (fromFmt && fromFmt !== '1080p') ? fromFmt : '480p'
+  }
+  const sizeKey = out.renderSize === '4k' ? '2160p' : (['480p', '720p', '1080p', '2160p'].includes(out.renderSize) ? out.renderSize : '480p')
+  const aspect = (typeof out.format === 'string' && out.format.includes('_')) ? out.format.split('_')[0] : '16:9'
+  out.format = `${aspect}_${sizeKey}` as MsSettings['format']
+  const fr = typeof o.finalRenderSize === 'string' ? o.finalRenderSize.trim().toLowerCase()
+    : (typeof o.deliverySize === 'string' ? o.deliverySize.trim().toLowerCase() : '')
+  if (validSize(fr)) out.finalRenderSize = fr
+  if (!out.finalRenderSize) out.finalRenderSize = out.renderSize
   return out
 }
 
@@ -213,7 +237,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const clipProjectId = createId('proj')
   const canvasUploadId = createId('upl')
   const clipId = stableId('clip_ms_', id)
-  const title = str(o.title, 120)
+  const title = titleFromCreate(o, prompt, script)
   try {
     await db().$transaction(async (tx: Tx) => {
       await tx.clipUpload.create({ data: { id: canvasUploadId, workspaceId, key: uploadSourceKey(workspaceId, canvasUploadId, 'mp4'),
@@ -431,6 +455,7 @@ function feStatus(c: Ctx): MsProjectStatus {
   if (row.status === 'failed' || row.status === 'cancelled') return 'failed'
   if (row.status === 'setup') return 'setup'
   if (row.status === 'awaiting_approval') return 'awaiting_review'
+  if (row.status === 'preflight_ok') return 'preflight_ok'
   if (row.status === 'review') return s.exportRequested && row.exportInfo ? 'complete' : 'review'
   if (!row.plan || row.stage === 'story' || row.stage === 'direct') return 'planning'
   return s.exportRequested ? 'exporting' : 'producing'
@@ -457,6 +482,10 @@ function stagesView(c: Ctx, status: MsProjectStatus): MsStage[] {
     const allReady = scenes.length > 0 && ready === scenes.length
     st.graphics = allReady ? 'done' : 'running'
     st.assemble = allReady ? 'running' : 'pending'
+  } else if (status === 'preflight_ok') {
+    doneThrough(3)
+    st.graphics = 'done'
+    labels.graphics = 'Pre-flight passed · render not started'
   } else if (status === 'review') {
     doneThrough(5); st.review = 'running'
   } else if (status === 'complete') {
@@ -517,6 +546,30 @@ function stageOf(stage: string): MsStageId {
   return (STAGE_ORDER as string[]).includes(stage) ? (stage as MsStageId) : stage === 'produce' ? 'graphics' : 'story'
 }
 
+function degradationsView(qa: unknown): MsProject['degradations'] {
+  const items = Array.isArray(J(qa).degradations) ? J(qa).degradations as Json[] : []
+  return items.map((d) => {
+    const row = J(d)
+    const errors = Array.isArray(row.errors) ? row.errors.map((e) => String(e)).slice(0, 12) : []
+    return { stage: str(row.stage, 60) || 'unknown', errors, repaired: Boolean(row.repaired), degraded: row.degraded !== false }
+  })
+}
+
+function preflightView(qa: unknown, settings: Json): MsProject['preflight'] {
+  const pf = J(J(qa).preflight)
+  if (!Object.keys(pf).length && !settings.preflightOnly) return null
+  return {
+    ok: pf.ok !== false,
+    only: Boolean(pf.only ?? settings.preflightOnly),
+    graphics: typeof pf.graphics === 'number' ? pf.graphics : undefined,
+    handoffs: typeof pf.handoffs === 'number' ? pf.handoffs : undefined,
+    scenes: typeof pf.scenes === 'number' ? pf.scenes : undefined,
+    planSource: str(pf.planSource, 40) || undefined,
+    productionSource: str(pf.productionSource, 40) || undefined,
+    repaired: Boolean(pf.repaired),
+  }
+}
+
 export async function getProject(workspaceId: string, id: string): Promise<MsProject> {
   let row = await required(workspaceId, id)
   row = await reconcileFailedJob(row)
@@ -552,7 +605,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
         : { status: 'idle', progress: 0 }
   const proposals = J(row.proposals)
   return {
-    id: row.id, title: row.title || str(c.story?.title, 120) || 'Untitled documentary', isExample: false,
+    id: row.id, title: row.title || str(c.story?.title, 120) || 'Documentary', isExample: false,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), workflow: row.workflow as MsWorkflow,
     prompt: row.brief, mediaPolicy: 'uploads_only', settings: feSettings(c.s), status, stages, activity,
     story: c.story ? { chapters, approved: Boolean(c.s.approved) || (c.s.productionMode === 'auto'), preservedUserScript: Boolean(c.story.verbatim),
@@ -573,6 +626,8 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
     director: Array.isArray(proposals.messages) ? proposals.messages : [],
     allowance: allowanceFor(c.s, c.plan), export: exportState,
     error: status === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : (row.errorMessage || 'A step failed. Retry it to continue.')) : null,
+    degradations: degradationsView(row.qa),
+    preflight: preflightView(row.qa, c.s),
   }
 }
 
@@ -592,7 +647,7 @@ export async function listProjects(workspaceId: string, q: { limit?: string | nu
       db().motionStudioScene.findFirst({ where: { projectId: r.id, stillKey: { not: null } }, orderBy: { index: 'asc' }, select: { stillKey: true } }),
     ])
     const c: Ctx = { row: r, s: J(r.settings), story: null, plan: r.plan ? J(r.plan) : null, scenes: [], assets: [] }
-    return { id: r.id, title: r.title || str(J(r.story).title, 120) || 'Untitled documentary', isExample: false, createdAt: r.createdAt.toISOString(),
+    return { id: r.id, title: r.title || str(J(r.story).title, 120) || 'Documentary', isExample: false, createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(), status: feStatus(c), workflow: r.workflow as MsWorkflow, sceneCount,
       durationMs: Number(J(r.exportInfo).durationMs) || (Number(J(r.settings).lengthMin) || 3) * 60_000, thumbnailUrl: await sign(thumb?.stillKey) }
   }))

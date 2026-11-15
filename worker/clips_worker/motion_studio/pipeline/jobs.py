@@ -21,7 +21,7 @@ import time
 import traceback
 from pathlib import Path
 
-from clips_worker.motion_studio.core.output_contracts import StageContractError, record_degradation
+from clips_worker.motion_studio.core.output_contracts import StageContractError, record_degradation, record_invalid_output
 from clips_worker.motion_studio.pipeline import config, db
 
 JOB_TYPES = ("DOC_PLAN", "DOC_PRODUCE", "MGD_RENDER_SEGMENT", "DOC_ASSEMBLE")
@@ -52,7 +52,23 @@ def _finish_job(conn, job_id: str, error: str | None = None) -> None:
 def _logger(conn, project_id: str, stage: str):
     def log(kind: str, message: str, data: dict | None = None):
         try:
-            db.event(conn, project_id, stage, kind, message, data)
+            payload = dict(data or {})
+            output = payload.get("output")
+            event_data = data
+            if output is not None or kind.endswith("_invalid") or kind == "plan_invalid":
+                if output is not None:
+                    proj = db.get_project(conn, project_id) or {}
+                    qa = record_invalid_output(
+                        proj.get("qa"),
+                        stage=str(payload.get("contractStage") or payload.get("stage") or stage),
+                        errors=list(payload.get("errors") or [message]),
+                        output=output,
+                        repaired=bool(payload.get("repaired")),
+                    )
+                    db.update_project(conn, project_id, qa=qa)
+                event_data = {k: v for k, v in payload.items() if k != "output"}
+                event_data["outputStored"] = output is not None
+            db.event(conn, project_id, stage, kind, message, event_data)
         except Exception:  # noqa: BLE001
             conn.rollback()
     return log
@@ -99,8 +115,12 @@ def handle(conn, job: dict) -> None:
             qa = current.get("qa") or {}
             if isinstance(exc, StageContractError):
                 qa = record_degradation(qa, stage=exc.stage, errors=exc.errors, repaired=exc.repaired)
+                if getattr(exc, "output", None) is not None:
+                    qa = record_invalid_output(qa, stage=exc.stage, errors=exc.errors, output=exc.output,
+                                              repaired=exc.repaired)
                 db.event(conn, pid, stage, "stage_failed", f"{exc.stage} failed its contract: {msg[:300]}",
-                         {"stage": exc.stage, "errors": exc.errors[:12], "repaired": exc.repaired})
+                         {"stage": exc.stage, "errors": exc.errors[:12], "repaired": exc.repaired,
+                          "outputStored": getattr(exc, "output", None) is not None})
             db.update_project(conn, pid, status="failed", errorCode=f"{stage}_failed", errorMessage=msg[:1000],
                               errorStage=stage, qa=qa)
             db.event(conn, pid, stage, "failed", f"{jtype} failed: {msg[:300]}", {"job": job["id"]})
@@ -159,7 +179,7 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
         proj = {**proj, "brief": f"{proj.get('brief') or ''}\n\nRevision requested by the user: {note}".strip()}
         log("decision", "applying the requested changes", {"note": note[:200]})
     story = agent.build_story(proj, catalog, log)
-    db.update_project(conn, pid, story=story, title=proj.get("title") or story.get("title") or "Untitled documentary")
+    db.update_project(conn, pid, story=story, title=(story.get("title") or proj.get("title") or "Documentary")[:120])
     log("story_ready", f"story: {len(story['lines'])} lines, ~{story['estimatedDurationS']:.0f}s", {"lines": len(story["lines"])})
     db.set_stage(conn, pid, "direct")
     plan = agent.direct(proj, story, catalog, log)
@@ -256,8 +276,20 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
     from clips_worker.motion_studio.core.recovery import resume_produce
     recover = resume_produce(plan, proj.get("narration"), p, db.scenes(conn, pid))
     narr = proj.get("narration")
+    preflight_only = bool(settings.get("preflightOnly") or p.get("preflightOnly"))
     if recover["skipPaidNarration"]:
         log("resume", "reusing existing narration (no new paid call)", {"policy": recover["policy"]})
+    elif preflight_only and (not narr or p.get("renarrate")):
+        from clips_worker.motion_studio.core.wordclock import Script, estimate_words
+        sc = Script.from_json([{**l, "chapterId": str(l["chapter"])} for l in story["lines"]])
+        ws = estimate_words(sc)
+        narr = {"voice": {"name": "none"}, "mock": False, "none": True, "preflightOnly": True,
+                "chapterPauseS": config.NARRATION["chapterPauseMs"] / 1000,
+                "chapters": [{"index": 0, "lineIds": [l["id"] for l in story["lines"]], "key": None,
+                              "durationS": (ws[-1]["e"] + 0.5) if ws else 1.0, "words": ws}]}
+        log("preflight_narration", "pre-flight dry-run skipped paid narration; using estimated timings",
+            {"durationS": narr["chapters"][0]["durationS"]})
+        db.update_project(conn, pid, narration=narr)
     elif not narr or p.get("renarrate"):
         if settings.get("voiceover") == "upload" and settings.get("voiceoverUploadKey"):
             narr = narrate_upload(conn, proj, story, settings["voiceoverUploadKey"], work, work_key(proj), log)
@@ -304,7 +336,7 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
         def _pf_exec(mode, ok, kind, err, chash, model, ms):
             db.sandbox_exec(conn, pid, None, mode, ok, kind, err, chash, model, ms)
 
-        run_preflight(
+        report = run_preflight(
             conn, {**proj, "story": story, "plan": plan, "qa": proj.get("qa")}, work, log,
             prepare_photos=_prepare_photos, assets_dir=_assets_dir, scratch_dir_fn=scratch_dir,
             scene_context_fn=scene_context, render_hash_fn=lambda ctx: _render_hash(ctx),
@@ -314,6 +346,21 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
         # Reload scenes so render jobs can reuse preflight codeKeys.
         rows = db.scenes(conn, pid)
         by_index = {r["index"]: r for r in rows}
+        if preflight_only:
+            qa = dict(proj.get("qa") or {})
+            qa["preflight"] = {**(report or {}), "ok": True, "only": True}
+            qa["preflightOnly"] = True
+            db.update_project(conn, pid, status="preflight_ok", stage="graphics", qa=qa)
+            log("preflight_only", "pre-flight green; render was not started (dry-run)",
+                {"graphics": (report or {}).get("graphics"), "scenes": len(lay.get("scenes") or [])})
+            return
+    if preflight_only:
+        qa = dict(proj.get("qa") or {})
+        qa["preflightOnly"] = True
+        qa["preflight"] = {"ok": True, "only": True, "skipped": True, "reason": "skipPreflight set"}
+        db.update_project(conn, pid, status="preflight_ok", stage="graphics", qa=qa)
+        log("preflight_only", "pre-flight dry-run requested but skipPreflight was set; render was not started", {})
+        return
     for sc in lay["scenes"]:
         r = by_index.get(sc["index"])
         if r and (pending is None or r["id"] in pending):

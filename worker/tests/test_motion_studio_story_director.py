@@ -1,3 +1,4 @@
+import pytest
 """Story / Research / Director helpers (no paid calls)."""
 from clips_worker.motion_studio.directors.documentary.director import fallback_plan
 from clips_worker.motion_studio.directors.documentary.story import (
@@ -260,3 +261,30 @@ def test_fallback_script_weaves_in_upload_subjects():
     assert "welding" in blob
     texts = [l["text"] for l in story["lines"]]
     assert len(texts) == len(set(texts))
+
+
+def test_plan_research_fails_loudly_instead_of_default_queries(monkeypatch):
+    from clips_worker.motion_studio.directors.documentary import story as S
+    from clips_worker.motion_studio.core.output_contracts import StageContractError
+    from clips_worker.motion_studio.pipeline.llm import LLMError
+    monkeypatch.setattr(S.config, "mock", lambda: False)
+    def boom(*a, **k):
+        raise LLMError("nope")
+    monkeypatch.setattr(S, "chat_json", boom)
+    with pytest.raises(StageContractError) as ei:
+        S.plan_research("a brief", "A title", lambda *a, **k: None)
+    assert ei.value.stage == "research_plan"
+    assert "failed" in str(ei.value).lower() or "model call" in str(ei.value).lower()
+
+
+def test_organize_script_fails_loudly_instead_of_heuristics(monkeypatch):
+    from clips_worker.motion_studio.directors.documentary import story as S
+    from clips_worker.motion_studio.core.output_contracts import StageContractError
+    from clips_worker.motion_studio.pipeline.llm import LLMError
+    monkeypatch.setattr(S.config, "mock", lambda: False)
+    def boom(*a, **k):
+        raise LLMError("nope")
+    monkeypatch.setattr(S, "chat_json", boom)
+    with pytest.raises(StageContractError) as ei:
+        S.organize_script("The last store closed in the afternoon. A new chapter began.", "The store", lambda *a, **k: None)
+    assert ei.value.stage == "story"

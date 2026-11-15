@@ -77,7 +77,7 @@ def enabled() -> bool:
 
 
 def custom_code_enabled() -> bool:
-    """Part 2 generated scene code through the sandbox (SEC-1 review pending). Off => framework scenes."""
+    """When off, Tier-3 custom Python is rejected as a structured limitation (never a silent framework scene)."""
     return _b("MOTION_STUDIO_CUSTOM_CODE", True)
 
 
@@ -157,10 +157,11 @@ def _apply_aspect(w: int, h: int, aspect: str) -> tuple[int, int]:
 
 
 def final_render_size(aspect: str = "16:9", settings: dict | None = None) -> tuple[int, int]:
-    """Delivery resolution for typography/detail QA.
+    """Typography/detail QA resolution.
 
-    Iteration may run at 480p, but preview QA still verifies typography, thin
-    lines, grain, photo detail and small UI at this size (default 1080p).
+    Uses an explicit target only: settings.finalRenderSize / deliverySize, then
+    MOTION_STUDIO_FINAL_SIZE, then the actual segment render size. Never infer
+    1080p from a format label when the film is rendering at another size.
     """
     raw = None
     if isinstance(settings, dict):
@@ -168,16 +169,8 @@ def final_render_size(aspect: str = "16:9", settings: dict | None = None) -> tup
     parsed = parse_render_size(str(raw) if raw is not None else None)
     if parsed is None:
         parsed = parse_render_size(os.environ.get("MOTION_STUDIO_FINAL_SIZE"))
-    if parsed is None and isinstance(settings, dict):
-        fmt = str(settings.get("format") or "")
-        if "2160" in fmt or "4k" in fmt.lower():
-            parsed = RENDER_PRESETS["2160p"]
-        elif "720" in fmt:
-            parsed = RENDER_PRESETS["720p"]
-        else:
-            parsed = RENDER_PRESETS["1080p"]
     if parsed is None:
-        parsed = RENDER_PRESETS["1080p"]
+        return render_size(aspect, settings)
     return _apply_aspect(*parsed, aspect)
 
 

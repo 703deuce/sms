@@ -20,6 +20,8 @@ from clips_worker.motion_studio.core.output_contracts import (
     normalize_palette,
     resolve_asset_id,
     schema_for,
+    assert_schemas_are_strict,
+    record_invalid_output,
 )
 from clips_worker.motion_studio.directors.documentary.director import (
     director_system,
@@ -200,3 +202,36 @@ def test_reviewer_reports_degraded_scenes_with_the_exact_cause():
     assert out["pass"] is False
     details = [i.get("detail") for i in out["issues"]]
     assert any("style.palette" in str(d) for d in details)
+
+
+def test_every_stage_schema_is_openai_strict():
+    problems = assert_schemas_are_strict()
+    assert problems == [], "strict json_schema problems:\n" + "\n".join(problems)
+    pal = schema_for("director")["properties"]["style"]["properties"]["palette"]["properties"]["bg"]
+    assert pal.get("pattern") == "^#[0-9A-Fa-f]{6}$"
+    args = schema_for("motion_engineer")["properties"]["tools"]["items"]["properties"]["arguments"]
+    assert args == {"type": "string"}
+
+
+def test_invalid_output_is_persisted_on_the_qa_record():
+    qa = record_invalid_output({}, stage="director", errors=["style.palette needs bg/ink/accent/accent2/muted hex colours"],
+                               output={"style": {"palette": {}}}, repaired=False)
+    stored = qa["invalidOutputs"]
+    assert len(stored) == 1
+    assert stored[0]["output"]["style"]["palette"] == {}
+    assert stored[0]["stage"] == "director"
+    qa2 = record_invalid_output(qa, stage="director", errors=stored[0]["errors"], output={"style": {"palette": {}}},
+                                repaired=False)
+    assert len(qa2["invalidOutputs"]) == 1  # same failure is not duplicated
+
+
+def test_jobs_source_has_preflight_only_and_persists_invalid_output():
+    from pathlib import Path as P
+    jobs = (P(__file__).resolve().parents[1] / "clips_worker/motion_studio/pipeline/jobs.py").read_text()
+    assert "preflightOnly" in jobs
+    assert "preflight_only" in jobs
+    assert "record_invalid_output" in jobs
+    assert "status=\"preflight_ok\"" in jobs or 'status="preflight_ok"' in jobs
+    assert "MGD_RENDER_SEGMENT" in jobs
+    # Dry-run must return before enqueue.
+    assert "render was not started" in jobs

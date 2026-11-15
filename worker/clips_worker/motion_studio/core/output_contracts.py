@@ -19,10 +19,11 @@ from typing import Any, Iterable
 class StageContractError(ValueError):
     """A model stage failed its contract after validation (and any repair)."""
 
-    def __init__(self, stage: str, errors: list[str], *, repaired: bool = False):
+    def __init__(self, stage: str, errors: list[str], *, repaired: bool = False, output: Any = None):
         self.stage = stage
         self.errors = [str(e) for e in errors]
         self.repaired = repaired
+        self.output = output
         head = "; ".join(self.errors[:8]) or "no details"
         suffix = " after targeted repair" if repaired else ""
         super().__init__(f"{stage} failed its output contract{suffix}: {head}")
@@ -171,10 +172,12 @@ ENGINEER_RULES: list[Rule] = [
         "id": "tools_or_code_or_limitation",
         "message": "motion engineer must return tools, a scene spec, code, or a limitation",
         "contract": (
-            "Return JSON as one of: {\"tools\":[{\"tool\":\"name\",\"arguments\":{...}}],\"dependencies\":[]}, "
-            "or {\"spec\":{...}}, or {\"code\":\"<python>\",\"tier\":3,\"reason\":\"...\"} only when a registered "
+            "Return JSON as one of: {\"tools\":[{\"tool\":\"name\",\"arguments\":\"<JSON object as a string>\"}],"
+            "\"dependencies\":[]}, or {\"spec\":\"<JSON object as a string or null>\"}, or "
+            "{\"code\":\"<python>\",\"tier\":3,\"reason\":\"...\"} only when a registered "
             "tool cannot implement the approved design, or {\"limitation\":{\"reason\":\"...\",\"missingTools\":[],"
-            "\"missingAssets\":[],\"unblock\":\"...\"}} if the design cannot be built. Do not silently rewrite the design."
+            "\"missingAssets\":[],\"unblock\":\"...\"}} if the design cannot be built. Do not silently rewrite the design. "
+            "Tool arguments and spec must be JSON text strings because strict structured output cannot carry open objects."
         ),
         "tokens": ["tools", "limitation", "build_scene", "dependencies"],
     },
@@ -210,6 +213,7 @@ REVIEWER_RULES: list[Rule] = [
 
 # --------------------------------------------------------------------------- schemas (strict)
 
+_HEX = {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"}
 _EMPHASIS = _obj({"lineId": {"type": ["string", "null"]}, "word": {"type": "string"}})
 _HANDOFF = _obj({
     "assetId": {"type": ["string", "null"]},
@@ -223,11 +227,16 @@ _HANDOFF = _obj({
 })
 _ANCHOR = _obj({"lineId": {"type": ["string", "null"]}, "word": {"type": ["string", "null"]}})
 _PALETTE = _obj({
-    "bg": {"type": "string"},
-    "ink": {"type": "string"},
-    "accent": {"type": "string"},
-    "accent2": {"type": "string"},
-    "muted": {"type": "string"},
+    "bg": _HEX,
+    "ink": _HEX,
+    "accent": _HEX,
+    "accent2": _HEX,
+    "muted": _HEX,
+})
+_FONTS = _obj({
+    "display": {"type": ["string", "null"]},
+    "label": {"type": ["string", "null"]},
+    "body": {"type": ["string", "null"]},
 })
 _DIRECTOR_SCENE = _obj({
     "kind": {"type": "string"},
@@ -241,6 +250,31 @@ _DIRECTOR_SCENE = _obj({
     "reuseReason": {"type": ["string", "null"]},
     "handoff": {"anyOf": [_HANDOFF, {"type": "null"}]},
 })
+_MINIMAL = _obj({
+    "sceneIndex": {"type": ["integer", "number", "null"]},
+    "reason": {"type": "string"},
+})
+_CUSTOM_OBJECT = _obj({
+    "id": {"type": ["string", "null"]},
+    "name": {"type": ["string", "null"]},
+    "purpose": {"type": ["string", "null"]},
+    "sceneIndex": {"type": ["integer", "number", "null"]},
+})
+_SCENE_BINDING = _obj({
+    "sceneIndex": {"type": ["integer", "number", "null"]},
+    "worldId": {"type": ["string", "null"]},
+    "objective": {"type": ["string", "null"]},
+    "heldStillOk": {"type": ["boolean", "null"]},
+})
+_MISSING_NEED = _obj({
+    "sceneIndex": {"type": ["integer", "number", "null"]},
+    "need": {"type": ["string", "null"]},
+    "treatment": {"type": ["string", "null"]},
+})
+_STRING_OR_NUM_LIST = {"anyOf": [
+    {"type": "array", "items": {"type": ["string", "integer", "number"]}},
+    {"type": "null"},
+]}
 
 DIRECTOR_SCHEMA = _obj({
     "world": _obj({
@@ -255,7 +289,7 @@ DIRECTOR_SCHEMA = _obj({
         "glow": {"type": ["number", "null"]},
         "vignette": {"type": ["number", "null"]},
         "reason": {"type": "string"},
-        "fonts": {"type": ["object", "null"]},
+        "fonts": {"anyOf": [_FONTS, {"type": "null"}]},
     }),
     "scenes": {"type": "array", "items": _DIRECTOR_SCENE},
     "musicAnchors": _obj({
@@ -265,18 +299,22 @@ DIRECTOR_SCHEMA = _obj({
         "crash": {"anyOf": [_ANCHOR, {"type": "null"}]},
         "resolve": {"anyOf": [_ANCHOR, {"type": "null"}]},
     }),
-    "deliberateMinimal": {"type": "array", "items": {"type": "object"}},
+    "deliberateMinimal": {"type": "array", "items": _MINIMAL},
 })
 
 PRODUCTION_SCHEMA = _obj({
     "identity": _obj({
         "concept": {"type": ["string", "null"]},
-        "typography": {"type": ["string", "object", "null"]},
+        "typography": {"anyOf": [{"type": "string"}, _FONTS, {"type": "null"}]},
         "materials": {"type": ["string", "null"]},
         "palette": {"anyOf": [_PALETTE, {"type": "null"}]},
         "cameraPersonality": {"type": ["string", "null"]},
         "transitionLanguage": {"type": ["string", "null"]},
-        "motifs": {"type": ["array", "string", "null"]},
+        "motifs": {"anyOf": [
+            {"type": "array", "items": {"type": "string"}},
+            {"type": "string"},
+            {"type": "null"},
+        ]},
         "throughLine": {"type": ["string", "null"]},
     }),
     "worlds": {"type": "array", "items": _obj({
@@ -284,18 +322,18 @@ PRODUCTION_SCHEMA = _obj({
         "name": {"type": "string"},
         "brief": {"type": "string"},
         "reason": {"type": "string"},
-        "chapters": {"type": ["array", "null"]},
-        "clusters": {"type": ["array", "null"]},
+        "chapters": _STRING_OR_NUM_LIST,
+        "clusters": _STRING_OR_NUM_LIST,
     })},
-    "customObjects": {"type": "array", "items": {"type": "object"}},
+    "customObjects": {"type": "array", "items": _CUSTOM_OBJECT},
     "assetPlacements": {"type": "array", "items": _obj({
         "sceneIndex": {"type": ["integer", "number", "null"]},
         "assetId": {"type": "string"},
         "reason": {"type": ["string", "null"]},
         "reuseReason": {"type": ["string", "null"]},
     })},
-    "sceneBindings": {"type": "array", "items": {"type": "object"}},
-    "missingNeeds": {"type": "array", "items": {"type": "object"}},
+    "sceneBindings": {"type": "array", "items": _SCENE_BINDING},
+    "missingNeeds": {"type": "array", "items": _MISSING_NEED},
 })
 
 STORY_SCHEMA = _obj({
@@ -319,9 +357,9 @@ STORY_SCHEMA = _obj({
 ENGINEER_SCHEMA = _obj({
     "tools": {"type": ["array", "null"], "items": _obj({
         "tool": {"type": "string"},
-        "arguments": {"type": "object"},
+        "arguments": {"type": "string"},
     })},
-    "spec": {"type": ["object", "null"]},
+    "spec": {"type": ["string", "null"]},
     "code": {"type": ["string", "null"]},
     "tier": {"type": ["integer", "number", "null"]},
     "reason": {"type": ["string", "null"]},
@@ -334,10 +372,16 @@ ENGINEER_SCHEMA = _obj({
     }), {"type": "null"}]},
 })
 
+_ISSUE = _obj({
+    "code": {"type": ["string", "null"]},
+    "message": {"type": ["string", "null"]},
+    "sceneIndex": {"type": ["integer", "number", "null"]},
+    "degradeCause": {"type": ["string", "null"]},
+})
 REVIEWER_SCHEMA = _obj({
     "pass": {"type": "boolean"},
-    "issues": {"type": "array", "items": {"type": "object"}},
-    "correctionRequests": {"type": "array", "items": {"type": "object"}},
+    "issues": {"type": "array", "items": _ISSUE},
+    "correctionRequests": {"type": "array", "items": _ISSUE},
     "fromRole": {"type": "string"},
     "toRoles": {"type": "array", "items": {"type": "string"}},
 })
@@ -387,6 +431,41 @@ def assert_prompt_covers_rules(stage: str, prompt: str, schema: dict | None = No
             if tok.lower() not in hay_l:
                 missing.append(f"{stage} rule {rule['id']} is not represented in the prompt/schema (missing {tok!r})")
     return missing
+
+
+def iter_strict_schema_problems(schema: dict | None, path: str = "$") -> list[str]:
+    """Catch shapes OpenAI strict json_schema rejects (verified against gpt-6-luna, 15 Nov 2026).
+
+    Every object must set additionalProperties to false and list properties.
+    Every array must declare items. Bare objects (no properties) are invalid.
+    """
+    if not isinstance(schema, dict):
+        return []
+    problems: list[str] = []
+    types = schema.get("type")
+    tlist = types if isinstance(types, list) else [types] if types is not None else []
+    if "properties" in schema or "object" in tlist:
+        if schema.get("additionalProperties") is not False:
+            problems.append(f"{path} object must set additionalProperties to false")
+        if "properties" not in schema:
+            problems.append(f"{path} object type must declare properties")
+        for key, sub in (schema.get("properties") or {}).items():
+            problems.extend(iter_strict_schema_problems(sub, f"{path}.{key}"))
+    if "array" in tlist or (schema.get("items") is not None and "anyOf" not in schema and "type" in schema and "array" in tlist):
+        if "items" not in schema:
+            problems.append(f"{path} array must declare items")
+    if "items" in schema:
+        problems.extend(iter_strict_schema_problems(schema["items"], f"{path}[]"))
+    for i, alt in enumerate(schema.get("anyOf") or schema.get("oneOf") or []):
+        problems.extend(iter_strict_schema_problems(alt, f"{path}.anyOf[{i}]"))
+    return problems
+
+
+def assert_schemas_are_strict() -> list[str]:
+    problems: list[str] = []
+    for stage in STAGES:
+        problems.extend(iter_strict_schema_problems(schema_for(stage), stage))
+    return problems
 
 
 # --------------------------------------------------------------------------- light coercions (format only, never invent content)
@@ -516,6 +595,20 @@ def record_degradation(qa: dict | None, *, stage: str, errors: list[str], repair
     items.append({"stage": stage, "errors": list(errors), "repaired": repaired, "degraded": True})
     blob["degradations"] = items
     blob["degraded"] = True
+    return blob
+
+
+def record_invalid_output(qa: dict | None, *, stage: str, errors: list[str], output: Any,
+                          repaired: bool = False) -> dict:
+    """Persist the full invalid model output on the project qa record."""
+    blob = dict(qa or {})
+    items = list(blob.get("invalidOutputs") or [])
+    entry = {"stage": stage, "errors": list(errors), "repaired": repaired, "output": output}
+    if items and items[-1].get("stage") == stage and items[-1].get("errors") == entry["errors"] and items[-1].get("repaired") == repaired:
+        items[-1] = entry
+    else:
+        items.append(entry)
+    blob["invalidOutputs"] = items
     return blob
 
 

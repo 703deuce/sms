@@ -39,7 +39,7 @@ export const MS_LABELS = {
   format: 'Format',
   media: 'Media',
   webResearch: 'Web research',
-  formatValue: '16:9 · 1080p',
+  formatValue: '16:9 · 480p',
   /** v1 read-only media row (ST-UX-028 / ST-UI-107). */
   mediaValueV1: 'Use only my uploaded media',
   nextPlan: 'Next: Create production plan',
@@ -167,3 +167,10 @@ export function selectedWorkflowLine(workflow: MsWorkflow, opts: { lengthMin?: M
 
 /** Upload accept list: video, photos and music (plus scripts as text/doc). */
 export const MS_UPLOAD_ACCEPT = 'video/*,image/*,audio/*,.txt,.md,.doc,.docx,.pdf'
+
+/** Visible format label from the actual render size, not a hardcoded 1080p string. */
+export function formatLabel(settings?: { format?: string; renderSize?: string } | null): string {
+  const size = (settings?.renderSize || (settings?.format || '').split('_')[1] || '480p').toLowerCase()
+  const aspect = (settings?.format || '16:9_480p').split('_')[0] || '16:9'
+  return `${aspect} · ${size}`
+}

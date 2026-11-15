@@ -196,10 +196,15 @@ def plan_research(brief: str, title: str, log) -> list[dict]:
         out, m = chat_json("research_plan", sys_, json.dumps({"title": title, "brief": brief}))
         log("model_call", "research plan", m)
         queries = [q for q in out.get("queries") or [] if isinstance(q, dict) and q.get("query")]
-        return queries or default_research_plan(brief, title)
+        if not queries:
+            log("research_plan_invalid", "research plan returned no queries", {"output": out, "errors": ["research plan returned no queries"]})
+            raise StageContractError("research_plan", ["research plan returned no queries"], output=out)
+        return queries
+    except StageContractError:
+        raise
     except LLMError as exc:
-        log("model_call_failed", f"research plan fell back to the deterministic queries: {exc}", {"step": "research_plan"})
-        return default_research_plan(brief, title)
+        log("model_call_failed", f"research plan failed: {exc}", {"step": "research_plan"})
+        raise StageContractError("research_plan", [f"research plan model call failed: {exc}"]) from exc
 
 
 def write_from_idea(brief: str, title: str, length_min: int, research: dict, tone_hint: str, log, catalog: list[dict] | None = None) -> dict:
@@ -237,7 +242,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
              "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
     errs = validate_story(draft)
     if errs:
-        log("story_invalid", "story failed validation; requesting a targeted repair", {"errors": errs[:12]})
+        log("story_invalid", "story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
             "story", sys_, json.dumps({"previous": out, "errors": errs,
                                        "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
@@ -250,7 +255,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
                  "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
         errs = validate_story(draft)
         if errs:
-            raise StageContractError("story", errs, repaired=True)
+            raise StageContractError("story", errs, repaired=True, output=out)
     return draft
 
 
@@ -292,7 +297,8 @@ def organize_script(script_text: str, title: str, log) -> dict:
             meta, m = chat_json("story", sys_, json.dumps({"title": title, "lines": [l["text"] for l in lines]}))
             log("model_call", "organize script", m)
         except LLMError as exc:
-            log("model_call_failed", f"organize fell back to heuristics: {exc}", {"step": "story"})
+            log("model_call_failed", f"organize script failed: {exc}", {"step": "story"})
+            raise StageContractError("story", [f"organize script model call failed: {exc}"]) from exc
     by_i = {int(r.get("i")): r for r in meta.get("lines") or [] if isinstance(r, dict) and str(r.get("i", "")).isdigit()}
     for i, l in enumerate(lines):
         r = by_i.get(i) or {}
@@ -339,7 +345,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
              "data": [], "sources": []}
     errs = validate_story(draft)
     if errs:
-        log("story_invalid", "footage story failed validation; requesting a targeted repair", {"errors": errs[:12]})
+        log("story_invalid", "footage story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
             "story", sys_, json.dumps({"previous": out, "errors": errs,
                                        "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
@@ -352,7 +358,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
                  "data": [], "sources": []}
         errs = validate_story(draft)
         if errs:
-            raise StageContractError("story", errs, repaired=True)
+            raise StageContractError("story", errs, repaired=True, output=out)
     return draft
 
 
@@ -385,7 +391,7 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
                             "sources": prev.get("sources") or []}
                 log("research_cache", "reusing grounded research for this brief (no re-request)", {"queries": len(research["decisions"])})
             else:
-                plan = plan_research(brief, title, log) or default_research_plan(brief, title)
+                plan = plan_research(brief, title, log)
                 research = run_research(plan, log)
         elif workflow == "idea" and not _web_research_on(s):
             log("research_skipped", "Web research is off; writing from model knowledge and uploads", {})

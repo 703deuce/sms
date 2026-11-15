@@ -1,6 +1,7 @@
 """Turn a Motion Engineer JSON payload into a compiled scene or a structured limitation."""
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from clips_worker.motion_studio.directors.documentary.contracts import extract_limitation
@@ -21,6 +22,7 @@ def compile_agent_output(
 ) -> dict[str, Any]:
     """Prefer tool calls / a scene spec. Custom code is Tier 3 only. Limitations pass through."""
     payload = out or {}
+    payload = _coerce_structured_fields(payload)
     lim = extract_limitation(payload)
     if lim and not payload.get("tools") and not payload.get("spec") and not payload.get("code"):
         return {"ok": False, "limitation": lim, "tier": None, "code": None, "spec": None, "errors": []}
@@ -91,3 +93,33 @@ def _dependencies(spec: dict) -> list[str]:
         if obj.get("component"):
             deps.append(f"component:{obj['component']}")
     return sorted(set(deps))
+
+
+def _coerce_structured_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Accept tool arguments / spec as a JSON object or as a JSON string (strict schema)."""
+    out = dict(payload)
+    tools = out.get("tools")
+    if isinstance(tools, list):
+        coerced = []
+        for item in tools:
+            if not isinstance(item, dict):
+                coerced.append(item)
+                continue
+            row = dict(item)
+            args = row.get("arguments")
+            if isinstance(args, str):
+                try:
+                    row["arguments"] = json.loads(args) if args.strip() else {}
+                except ValueError:
+                    row["arguments"] = {"_unparsed": args}
+            elif args is None:
+                row["arguments"] = {}
+            coerced.append(row)
+        out["tools"] = coerced
+    spec = out.get("spec")
+    if isinstance(spec, str):
+        try:
+            out["spec"] = json.loads(spec) if spec.strip() else None
+        except ValueError:
+            pass
+    return out

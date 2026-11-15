@@ -464,7 +464,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         berrs = validate_blueprint(out.get("blueprint"))
         if errs or berrs:
             log("production_invalid", "production design failed validation; requesting a targeted repair",
-                {"errors": (errs or berrs)[:12]})
+                {"errors": (errs or berrs)[:12], "output": raw})
             repair_user = json.dumps({
                 "previous": raw,
                 "errors": (errs or []) + (berrs or []),
@@ -481,8 +481,8 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         if errs or berrs:
             problems = (errs or []) + (berrs or [])
             log("production_invalid", "production design still invalid after targeted repair; stopping",
-                {"errors": problems[:12], "repaired": True})
-            raise StageContractError("production_designer", problems, repaired=True)
+                {"errors": problems[:12], "repaired": True, "output": raw})
+            raise StageContractError("production_designer", problems, repaired=True, output=raw)
         out["productionSource"] = "model"
         return out
     except StageContractError:

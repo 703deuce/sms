@@ -109,10 +109,26 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
         db.update_scene(conn, row["id"], codeKey=ck, codeHash=chash, model=d.get("model"),
                         fixRounds=d.get("fixRounds") or 0, usedFallback=False, qa=qa_blob, status="preflight")
 
+    handoffs = sum(1 for sc in (lay.get("scenes") or []) if sc.get("kind") in ("handoff", "hardcut"))
+    assigned = {s.get("assetId") for s in (plan.get("scenes") or []) if s.get("assetId")}
+    assigned |= {((s.get("handoff") or {}).get("assetId")) for s in (plan.get("scenes") or []) if (s.get("handoff") or {}).get("assetId")}
+    report = {
+        "ok": not errors,
+        "errors": errors,
+        "degradations": degradations,
+        "graphics": graphics,
+        "handoffs": handoffs,
+        "scenes": len(lay.get("scenes") or []),
+        "planSource": plan.get("source"),
+        "productionSource": plan.get("productionSource"),
+        "repaired": (plan.get("source") == "model_repaired") or bool(plan.get("repaired")),
+        "assignedAssetCount": len({x for x in assigned if x}),
+        "catalogCount": len(catalog or []),
+    }
     if errors:
         log("preflight_failed", f"pre-flight failed on {len(errors)} check(s); render will not start",
-            {"errors": errors[:16], "graphics": graphics})
+            {k: report[k] for k in ("errors", "graphics", "handoffs", "planSource", "productionSource")})
         raise StageContractError("preflight", errors)
-    log("preflight_ok", f"pre-flight green: {graphics} graphics scenes linted, handoffs checked; render may start",
-        {"graphics": graphics})
-    return {"ok": True, "errors": [], "degradations": degradations}
+    log("preflight_ok", f"pre-flight green: {graphics} graphics scenes linted, {handoffs} handoffs checked; render may start",
+        {k: report[k] for k in ("graphics", "handoffs", "scenes", "planSource", "productionSource", "repaired", "assignedAssetCount", "catalogCount")})
+    return report

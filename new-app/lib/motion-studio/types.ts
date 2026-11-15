@@ -12,7 +12,7 @@ export type MsLengthMin = 3 | 5 | 10 | 15
 export type MsVisualDirection = 'cinematic' | 'explainer' | 'investigative' | 'technical_3d'
 export type MsVoiceover = 'ai' | 'upload'
 export type MsProductionMode = 'checkpoint' | 'auto'
-export type MsFormat = '16:9_1080p'
+export type MsFormat = '16:9_480p' | '16:9_720p' | '16:9_1080p' | '16:9_2160p'
 
 /** Contract v1.1 `settings.music` (PATCH-only extra). `elevenlabs` is the optional premium tier (#1230). */
 export type MsMusicChoice = 'generated' | 'upload' | 'elevenlabs' | 'none'
@@ -26,8 +26,12 @@ export type MsSettings = {
   music?: MsMusicChoice
   /** When true, story research may use Gemini grounded web search. Off by default. */
   webResearch?: boolean
-  /** Pixel size for Motion Studio renders ('480p', '1080p', or '1920x1080'). Omit to use the worker default (480p while testing). */
+  /** Pixel size for Motion Studio segment renders. Default 480p. */
   renderSize?: string
+  /** Explicit typography/detail QA target. Defaults to the same as renderSize. */
+  finalRenderSize?: string
+  /** When true, run story/plan/design/lint/compile only and do not enqueue render segments. */
+  preflightOnly?: boolean
 }
 
 export type MsProjectStatus =
@@ -36,6 +40,7 @@ export type MsProjectStatus =
   | 'awaiting_review'
   | 'producing'
   | 'review'
+  | 'preflight_ok'
   | 'exporting'
   | 'complete'
   | 'failed'
@@ -225,6 +230,9 @@ export type MsProject = {
   allowance: MsAllowance | null
   export: MsExport
   error?: string | null
+  /** Contract/stage failures that were recorded on the project (visible even when status is not failed). */
+  degradations?: { stage: string; errors: string[]; repaired?: boolean; degraded?: boolean }[]
+  preflight?: { ok?: boolean; only?: boolean; graphics?: number; handoffs?: number; scenes?: number; planSource?: string; productionSource?: string; repaired?: boolean } | null
 }
 
 export type MsProjectSummary = Pick<MsProject, 'id' | 'title' | 'isExample' | 'createdAt' | 'updatedAt' | 'status' | 'workflow'> & {

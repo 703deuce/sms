@@ -115,10 +115,17 @@ export function SetupStep({
               </p>
             ) : null}
           </div>
-          <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-[200px_1fr] sm:items-center" data-testid="ms-setting-format">
-            <p className="text-sm font-medium">{MS_LABELS.format}</p>
-            <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">{MS_LABELS.formatValue}</p>
-          </div>
+          <Segmented
+            testId="ms-setting-format"
+            label={MS_LABELS.format}
+            value={s.renderSize || '480p'}
+            options={[
+              { value: '480p', label: '16:9 · 480p' },
+              { value: '720p', label: '16:9 · 720p' },
+              { value: '1080p', label: '16:9 · 1080p' },
+            ]}
+            onChange={(v) => onChange({ renderSize: v, format: `16:9_${v}` as MsSettings['format'], finalRenderSize: v })}
+          />
           <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-[200px_1fr] sm:items-center" data-testid="ms-setting-media">
             <p className="text-sm font-medium">{MS_LABELS.media}</p>
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">

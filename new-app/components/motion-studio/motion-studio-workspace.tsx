@@ -387,6 +387,34 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
             />
           </div>
         ) : null}
+        {(project.degradations && project.degradations.length > 0) ? (
+          <div
+            className="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm"
+            role="alert"
+            data-testid="ms-degradations"
+          >
+            <p className="font-medium">Degraded stages</p>
+            <ul className="mt-1 list-disc space-y-1 pl-5 text-muted-foreground">
+              {project.degradations.map((d, i) => (
+                <li key={`${d.stage}-${i}`}>
+                  <span className="font-medium text-foreground">{d.stage}</span>
+                  {d.repaired ? ' (after repair)' : ''}: {(d.errors || []).slice(0, 3).join('; ') || 'failed its contract'}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {project.status === 'preflight_ok' || project.preflight?.only ? (
+          <div
+            className="rounded-xl border border-border bg-card px-4 py-3 text-sm"
+            role="status"
+            data-testid="ms-preflight-ok"
+          >
+            <span className="font-medium">Pre-flight passed.</span> Render was not started (dry run)
+            {project.preflight?.scenes != null ? ` · ${project.preflight.scenes} scenes` : ''}
+            {project.preflight?.planSource ? ` · plan ${project.preflight.planSource}` : ''}.
+          </div>
+        ) : null}
         {actionError ? <InlineError message={actionError} onDismiss={() => setActionError(null)} /> : null}
         {awaitingReview ? (
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3" role="status" data-testid="ms-checkpoint">

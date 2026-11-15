@@ -243,9 +243,10 @@ def test_jobs_and_config_source_have_the_hooks():
         fn = fmt.read_text().split("export function formatMsCredits")[1].split("export function")[0]
         assert "USD" not in fn and "dollar" not in fn.lower() and "credit" in fn
     from clips_worker.motion_studio.pipeline import config
-    # Delivery QA is 1080p even when iteration is 480p.
+    # QA uses an explicit target; a 480p film is checked at 480p unless finalRenderSize is set.
     assert config.render_size("16:9", {"renderSize": "480p"}) == (854, 480)
-    assert config.final_render_size("16:9", {"renderSize": "480p", "format": "16:9_1080p"}) == (1920, 1080)
+    assert config.final_render_size("16:9", {"renderSize": "480p", "format": "16:9_1080p"}) == (854, 480)
+    assert config.final_render_size("16:9", {"renderSize": "480p", "finalRenderSize": "1080p"}) == (1920, 1080)
 
 
 def test_fallback_still_available_as_last_resort():
@@ -343,3 +344,15 @@ def test_component_tools_separate_core_from_custom():
     cam = camera_continuity_plan({"identity": {"cameraPersonality": "held stills"},
                                   "scenes": [{"index": 0, "visualType": "photo", "description": "a held still"}]})
     assert cam["beats"][0]["hold"] and cam["personality"] == "held stills"
+
+
+def test_custom_code_off_is_a_limitation_not_a_framework_scene():
+    from clips_worker.motion_studio.tools.plan import compile_agent_output
+    out = compile_agent_output({"code": "from motion_core import *\n\ndef build_scene(ctx):\n    return None\n"},
+                               scene_id="s1", allow_custom_code=False)
+    assert out["ok"] is False
+    assert out["code"] is None
+    assert out["limitation"]
+    assert any((e.get("code") if isinstance(e, dict) else "") == "CUSTOM_CODE_DISABLED" for e in out["errors"])
+    cfg = (Path(__file__).resolve().parents[1] / "clips_worker/motion_studio/pipeline/config.py").read_text()
+    assert "framework scenes" not in cfg
