@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// @ts-expect-error vitest is resolved in new-app; root tsc has no vitest types
+// @ts-ignore vitest is resolved in new-app; root tsc has no vitest types
 import { afterEach, describe, expect, it, vi } from 'vitest'
-// @ts-expect-error testing-library is resolved in new-app; root tsc does not include its test types
+// @ts-ignore testing-library is resolved in new-app; root tsc does not include its test types
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 const push = vi.fn()

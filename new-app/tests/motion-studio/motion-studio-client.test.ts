@@ -1,4 +1,4 @@
-// @ts-expect-error vitest is resolved in new-app; root tsc has no vitest types
+// @ts-ignore vitest is resolved in new-app; root tsc has no vitest types
 import { describe, expect, it } from 'vitest'
 import { createMockMotionStudioClient, MOCK_TIMING } from '../../lib/motion-studio/mock-client'
 import { buildMotionTracks } from '../../lib/motion-studio/timeline'
