@@ -161,7 +161,7 @@ def _timed(anim: dict, spec: dict) -> dict:
 
 def object_layers(spec: dict) -> dict[str, list[dict]]:
     """Resolve each object's group ancestry and keyframes; reject circular/ambiguous groups."""
-    objects = spec.get("objects") or {}
+    objects = {**(spec.get("objects") or {}), **(spec.get("typography") or {})}
     animations = defaultdict(list)
     for a in (spec.get("animation") or {}).values():
         animations[a.get("targetId")].append(_timed(a, spec))
@@ -175,7 +175,7 @@ def object_layers(spec: dict) -> dict[str, list[dict]]:
             parents[mid] = gid
     layers: dict[str, list[dict]] = {}
     for oid, obj in objects.items():
-        if obj.get("kind") == "group":
+        if obj.get("kind") in ("group", "effect"):
             continue
         lineage, seen, current = [], set(), oid
         while current in parents:

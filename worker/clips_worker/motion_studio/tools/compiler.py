@@ -119,9 +119,10 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
             lines.append("    film.add(GridField())")
         elif kind in ("texture", "grain", "noise"):
             lines.append("    film.add(NoiseTexture())")
-        else:
-            # Gradient or flat field using official palette colors already bound above.
+        elif kind in ("gradient", "flat"):
             lines.append("    film.add(GradientField([bg, muted], center=(0, 0)))")
+        elif kind and kind != "geometry":
+            raise CompileError([{"code": "UNSUPPORTED_BACKDROP", "message": f"environment {eid}: unsupported backdrop {kind}"}])
 
     for surface in artwork(spec):
         lines.append(f"    film.add(_EnvironmentShape({surface!r}, ctx.palette))")
@@ -138,14 +139,14 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
         elif kind == "primitive":
             lines.extend(_register_emits(_emit_primitive(spec, oid, obj), oid))
         elif kind == "effect":
-            lines.extend(_register_emits(_emit_effect(spec, oid, obj), oid))
+            lines.extend(_emit_effect(spec, oid, obj))
         elif kind == "extension":
             lines.extend(_register_emits(_emit_extension(spec, oid, obj), oid))
         elif kind == "group":
             pass  # Group transforms are applied to members by _DirectedItem.
 
     for tid, typo in (spec.get("typography") or {}).items():
-        lines.extend(_emit_type(spec, tid, typo))
+        lines.extend(_register_emits(_emit_type(spec, tid, typo), tid))
 
     for sid, snd in (spec.get("sound") or {}).items():
         if snd.get("role") in ("cue", "effect") and snd.get("cue"):
@@ -157,13 +158,16 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
     # Attach authored group/property animation, entrance/exit to the actual engine objects.
     layers = object_layers(spec)
     for oid, obj in (spec.get("objects") or {}).items():
-        if obj.get("kind") == "group":
+        if obj.get("kind") in ("group", "effect"):
             continue
         entrance = obj.get("entrance") or {}
         if entrance:
             entrance = {**entrance, "startS": frames_to_s(spec, obj.get("startFrame") or 0)}
         exit_at = frames_to_s(spec, obj["endFrame"]) if obj.get("endFrame") is not None else None
         lines.append(f"    film.add(_DirectedItem(_elements[{oid!r}], {layers[oid]!r}, {entrance!r}, {exit_at!r}))")
+
+    for tid, typo in (spec.get("typography") or {}).items():
+        lines.append(f"    film.add(_DirectedItem(_elements[{tid!r}], {layers[tid]!r}))")
 
     cam_moves = list((spec.get("camera") or {}).values())
     if not cam_moves:
@@ -199,6 +203,8 @@ def _register_emits(rows: list[str], oid: str) -> list[str]:
             out.append(row.replace("film.add(", f"_register({oid!r}, ", 1))
         else:
             out.append(row)
+    if not any("_register(" in row for row in out):
+        raise CompileError([{"code": "UNIMPLEMENTED_TOOL_EFFECT", "message": f"{oid} generated no visible engine Item"}])
     return out
 
 
