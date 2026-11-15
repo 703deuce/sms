@@ -116,6 +116,59 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
                             "code": "SPOTLIGHT_SPACING",
                             "message": f"spotlight effects {a.get('id')} and {b.get('id')} on different targets are closer than 0.25 s.",
                         })
+    # Film-specific intent is a mandatory contract: no slideshow substitution for requested graphics.
+    required = set(spec.get("requiredEffects") or [])
+    objects = spec.get("objects") or {}
+    present = set()
+    if any(o.get("kind") == "media" for o in objects.values()):
+        present.add("media")
+    if any((env.get("geometry") or (env.get("backdrop") or {}).get("elements")) for env in envs.values()):
+        present.add("environment_geometry")
+    if any(o.get("kind") == "group" for o in objects.values()):
+        present.add("group")
+    if spec.get("animation"):
+        present.add("property_animation")
+    if spec.get("typography"):
+        present.add("typography")
+    if spec.get("transitions"):
+        present.add("transition")
+    if spec.get("extensions") or any(o.get("kind") == "extension" for o in objects.values()):
+        present.add("custom_component")
+    if any(o.get("kind") in ("path",) or (o.get("kind") == "graphic" and o.get("graphicKind") in ("route",)) for o in objects.values()):
+        present.add("connector")
+    if any(o.get("kind") in ("graphic", "primitive") for o in objects.values()):
+        present.add("graphic")
+    moves = list((spec.get("camera") or {}).values())
+    if any(c.get("from") != c.get("to") and c.get("easing") != "hold" for c in moves):
+        present.add("camera_travel")
+    if spec.get("cameraIntent") == "travel" and "camera_travel" not in present:
+        problems.append({"code": "CAMERA_INTENT_MISSING", "message": "the approved design requires a moving camera; use animate_camera with distinct poses"})
+    if spec.get("cameraIntent") == "hold" and "camera_travel" in present:
+        problems.append({"code": "CAMERA_INTENT_MISMATCH", "message": "the approved design specifies a deliberate hold, not a camera journey"})
+    for feature in sorted(required - present):
+        problems.append({"code": "MISSING_PLANNED_EFFECT", "message": f"approved visual effect {feature!r} was not implemented"})
+    supported_props = {"position", "position.x", "position.y", "scale", "rotation", "opacity"}
+    for aid, anim in (spec.get("animation") or {}).items():
+        if anim.get("property") not in supported_props:
+            problems.append({"code": "UNSUPPORTED_ANIMATION", "message": f"animation {aid}: {anim.get('property')!r} has no verified engine implementation"})
+        if anim.get("property") in ("position",) and not (isinstance(anim.get("from"), dict) and isinstance(anim.get("to"), dict)):
+            problems.append({"code": "INVALID_ANIMATION", "message": f"animation {aid}: position requires from/to positions"})
+    parents = {}
+    for oid, obj in objects.items():
+        if obj.get("kind") != "group":
+            continue
+        for mid in obj.get("memberIds") or []:
+            if mid in parents:
+                problems.append({"code": "MULTIPLE_GROUP_PARENTS", "message": f"{mid} belongs to multiple layout groups"})
+            parents[mid] = oid
+    for mid in parents:
+        seen, at = set(), mid
+        while at in parents:
+            at = parents[at]
+            if at in seen:
+                problems.append({"code": "GROUP_CYCLE", "message": f"{mid} has cyclic layout ancestry"})
+                break
+            seen.add(at)
     return problems
 
 

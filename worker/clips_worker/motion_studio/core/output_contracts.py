@@ -202,6 +202,20 @@ PRODUCTION_RULES: list[Rule] = [
     },
 ]
 
+PRODUCTION_RULES.append({
+    "id": "composition_fidelity",
+    "message": "compositionPlan or requiredEffects is missing",
+    "contract": (
+        "Each sceneBinding MUST provide compositionPlan describing the specific physical layout, layers, "
+        "objects, connections, reveals and visual relationships; cameraIntent must explicitly be hold, "
+        "travel or none; requiredEffects must name the actual scene tools that MUST render. "
+        "An intentional minimalist composition may have no optional effects, but it must be justified. "
+        "If you require a component, group, connection, transition, animation or camera journey, list it "
+        "in requiredEffects. This is an implementation contract, not a style menu."
+    ),
+    "tokens": ["compositionPlan", "cameraIntent", "requiredEffects"],
+})
+
 DIRECTOR_RULES.append({
     "id": "evidence_match",
     "message": "which the assigned asset's analysis does not record",
@@ -359,6 +373,12 @@ _CUSTOM_OBJECT = _obj({
     "sceneIndex": {"type": ["integer", "number", "null"]},
 })
 _SCENE_BINDING = _obj({
+    "compositionPlan": {"type": "string"},
+    "cameraIntent": {"type": "string", "enum": ["hold", "travel", "none"]},
+    "requiredEffects": {"type": "array", "items": {"type": "string", "enum": [
+        "media", "environment_geometry", "group", "property_animation", "camera_travel",
+        "connector", "custom_component", "transition", "typography", "graphic",
+    ]}},
     "sceneIndex": {"type": ["integer", "number", "null"]},
     "worldId": {"type": ["string", "null"]},
     "objective": {"type": ["string", "null"]},

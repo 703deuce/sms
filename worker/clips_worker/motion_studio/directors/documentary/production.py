@@ -442,7 +442,12 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Each world: {id, name, brief, reason, chapters, clusters}. All worlds share the film identity.\n"
         "3. blueprint additions: customObjects [{id, name, purpose, sceneIndex}], "
         "assetPlacements [{sceneIndex, assetId, reason, reuseReason}], "
-        "sceneBindings [{sceneIndex, worldId, objective, heldStillOk, evidenceBasis, toolBasis}], "
+        "sceneBindings [{sceneIndex, worldId, objective, heldStillOk, evidenceBasis, toolBasis, "
+        "compositionPlan, cameraIntent, requiredEffects}], "
+        "For each graphics scene: compositionPlan specifies exact layout, foreground/background layers, "
+        "framed media, group relationships, paths, bespoke objects, camera choreography and timed reveals; "
+        "cameraIntent is hold or travel; requiredEffects lists only the visual tools the design REQUIRES. "
+        "Do not use identical plans across unrelated scenes. Every required effect must survive rendering. "
         "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
         "Every ready upload in the inventory should appear at least once. Repeats require a narrative reuseReason. "
@@ -541,6 +546,9 @@ def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
             "heldStillOk": held,
             "evidenceBasis": b.get("evidenceBasis") or None,
             "toolBasis": b.get("toolBasis") or None,
+            "compositionPlan": b.get("compositionPlan") or "",
+            "cameraIntent": b.get("cameraIntent"),
+            "requiredEffects": b.get("requiredEffects") if isinstance(b.get("requiredEffects"), list) else [],
         })
     return out
 
@@ -559,6 +567,10 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
             continue
         if not scene and not (b.get("objective") or b.get("assetId")):
             continue
+        if not b.get("compositionPlan") or b.get("cameraIntent") not in ("hold", "travel"):
+            errs.append(f"scene {idx} compositionPlan or explicit cameraIntent (hold/travel) is missing")
+        if not isinstance(b.get("requiredEffects"), list):
+            errs.append(f"scene {idx} requiredEffects must be an array")
         if not (b.get("evidenceBasis") and b.get("toolBasis")):
             errs.append(
                 f"scene {idx} visual objective is not supported by the assigned asset's evidence or by registered tools"

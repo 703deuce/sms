@@ -20,6 +20,8 @@ def compile_agent_output(
     fps: int = 30,
     allow_custom_code: bool = True,
     anchors: dict | None = None,
+    camera_intent: str | None = None,
+    required_effects: list[str] | None = None,
 ) -> dict[str, Any]:
     """Prefer tool calls / a scene spec. Custom code is Tier 3 only. Limitations pass through."""
     payload = out or {}
@@ -31,6 +33,9 @@ def compile_agent_output(
     if payload.get("spec") or payload.get("tools"):
         spec = payload.get("spec") or new_spec(scene_id, fps=fps, duration_s=duration_s, catalog_ids=catalog_ids)
         attach_scene_timing(spec, duration_s=duration_s, fps=fps, anchors=anchors)
+        spec["cameraIntent"] = camera_intent
+        spec["cameraRequired"] = camera_intent == "travel"
+        spec["requiredEffects"] = list(required_effects or [])
         if payload.get("tools"):
             spec, results = apply_calls(spec, payload["tools"])
             errors = [e for r in results for e in r.errors]
@@ -55,6 +60,10 @@ def compile_agent_output(
         }
 
     if payload.get("code"):
+        # The custom-code route cannot silently substitute a static scene for a planned camera journey.
+        if camera_intent == "travel" and not any(token in str(payload["code"]) for token in ("film.cam(", "film.shot(")):
+            return {"ok": False, "limitation": None, "tier": 3, "code": None, "spec": None,
+                    "errors": [{"code": "CAMERA_INTENT_MISSING", "message": "custom code lacks the planned camera journey"}]}
         if not allow_custom_code:
             return {
                 "ok": False,

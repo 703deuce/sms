@@ -104,6 +104,8 @@ def _interpret(out: dict, ctx: dict) -> dict:
         duration_s=ctx.get("duration"),
         fps=int((ctx.get("fps") or 30)),
         allow_custom_code=config.custom_code_enabled(),
+        camera_intent=(ctx.get("sceneBinding") or {}).get("cameraIntent"),
+        required_effects=(ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
         anchors={
             "lines": {
                 l["id"]: {"startS": l.get("start"), "endS": l.get("end")}
