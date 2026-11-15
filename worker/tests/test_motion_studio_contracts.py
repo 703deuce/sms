@@ -446,3 +446,18 @@ def test_preflight_fails_loudly_if_revision_still_limited(monkeypatch, tmp_path)
         )
     assert ei.value.stage == "preflight"
     assert any("still cannot fade each letter" in e for e in ei.value.errors)
+
+
+def test_story_resolves_filename_citations_to_in_hand_ids():
+    catalog = _shop_catalog()
+    story = {
+        "title": "The last shop",
+        "chapters": [{"n": 1, "title": "The shop"}],
+        "lines": [
+            {"id": "l1", "chapter": 1, "text": 'The shop sign reads "OPEN".', "visualAssetId": "shop.jpg"},
+            {"id": "l2", "chapter": 1, "text": "The aisles go quiet.", "visualAssetId": "aisle.mp4"},
+        ],
+    }
+    assert validate_story(story, catalog=catalog) == []
+    assert story["lines"][0]["visualAssetId"] == "photo_7"
+    assert story["lines"][1]["visualAssetId"] == "clip_1"

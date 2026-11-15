@@ -215,6 +215,7 @@ def validate_story_assets(story: dict, catalog: list | None) -> list[str]:
     by_id = {a["id"]: a for a in hand}
     errs: list[str] = []
     cited: set[str] = set()
+    from clips_worker.motion_studio.core.output_contracts import resolve_asset_id
     for i, ln in enumerate(story.get("lines") or []):
         if not isinstance(ln, dict):
             continue
@@ -222,7 +223,11 @@ def validate_story_assets(story: dict, catalog: list | None) -> list[str]:
         aid = ln.get("visualAssetId") or ln.get("assetId")
         q = ln.get("quote")
         if isinstance(q, dict) and q.get("assetId"):
+            q["assetId"] = resolve_asset_id(q.get("assetId"), hand)
             aid = aid or q.get("assetId")
+        if aid:
+            aid = resolve_asset_id(aid, hand)
+            ln["visualAssetId"] = aid
         text = " ".join(str(x) for x in (ln.get("text"), ln.get("spoken"), ln.get("hero")) if x)
         if aid:
             if aid not in by_id:
