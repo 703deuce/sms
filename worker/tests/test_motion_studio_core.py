@@ -118,3 +118,17 @@ def test_fallback_map_probe():
     res = probe_stills(fallback_code(ctx), ctx, d, [1.2], 480, 270, assets)
     assert res.get("ok"), res
     assert os.path.exists(res["stills"][0]["path"])
+
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_score_params_are_seeded_and_world_aware():
+    from clips_worker.motion_studio.core.audio import music_seed, score_params
+    a = score_params(music_seed("p1", "hello story"), "curious")
+    b = score_params(music_seed("p1", "hello story"), "curious")
+    c = score_params(music_seed("p1", "a completely different script about collapse"), "curious")
+    assert a == b
+    assert a["bpm"] != c["bpm"] or a["key"] != c["key"] or a["instruments"] != c["instruments"]
+    chart = score_params(1, "curious", "price_chart", "The squeeze")
+    assert "sub" in chart["instruments"] or chart["mood"] == "driving"
+    assert chart["mode"] in {"minor", "dorian", "major"}

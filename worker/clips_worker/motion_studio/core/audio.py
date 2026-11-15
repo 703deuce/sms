@@ -52,19 +52,27 @@ def music_seed(project_id: str, script_text: str) -> int:
     return int(hashlib.sha256(f"{project_id}\n{script_text}".encode()).hexdigest()[:8], 16)
 
 
-def score_params(seed: int, tone: str = "") -> dict:
-    """RE-12: tempo, key/mode, instrumentation, mood derived from the script seed + tone."""
+def score_params(seed: int, tone: str = "", world: str = "", title: str = "") -> dict:
+    """RE-12: tempo, key/mode, instrumentation, mood derived from the script seed + tone + world."""
     r = random.Random(seed)
-    tone = (tone or "").lower()
-    dark = any(k in tone for k in ("dark", "tense", "crime", "crash", "investig", "serious", "tragic", "war"))
-    bright = any(k in tone for k in ("uplift", "hope", "inspir", "playful", "bright", "fun", "triumph"))
-    mode = "major" if bright else "minor" if dark else r.choice(["minor", "minor", "dorian", "major"])
-    lo, hi = (78, 100) if dark else (92, 118) if bright else (84, 108)
+    blob = " ".join(x for x in (tone, world, title) if x).lower()
+    dark = any(k in blob for k in ("dark", "tense", "crime", "crash", "investig", "serious", "tragic", "war",
+                                   "drill", "squeeze", "short", "trial", "hearing"))
+    bright = any(k in blob for k in ("uplift", "hope", "inspir", "playful", "bright", "fun", "triumph"))
+    chart = any(k in blob for k in ("price", "chart", "market", "stock", "finance", "trade"))
+    mapped = any(k in blob for k in ("map", "city", "country", "route", "border"))
+    mode = "major" if bright else "minor" if dark or chart else r.choice(["minor", "minor", "dorian", "major"])
+    lo, hi = (78, 100) if dark or chart else (92, 118) if bright else (84, 108)
+    if mapped and not dark:
+        lo, hi = (86, 104)
     inst_pool = ["drone", "pad", "hat", "kick", "pluck", "sub", "pulse_bass", "bell"]
     inst = ["pad", "hat", "kick"] + r.sample([i for i in inst_pool if i not in ("pad", "hat", "kick")], k=r.randint(1, 3))
+    if chart and "sub" not in inst:
+        inst.append("sub")
     return {"bpm": r.randint(lo, hi), "key": r.choice(list(NOTE)), "mode": mode, "instruments": sorted(set(inst)),
-            "mood": "dark" if dark else "bright" if bright else r.choice(["tense", "curious", "driving", "reflective"]),
-            "seed": seed, "padCutoff": r.choice([380, 420, 520, 650]), "swing": round(r.uniform(0, 0.08), 3)}
+            "mood": "dark" if dark else "bright" if bright else ("driving" if chart else r.choice(["tense", "curious", "driving", "reflective"])),
+            "seed": seed, "padCutoff": r.choice([380, 420, 520, 650]), "swing": round(r.uniform(0, 0.08), 3),
+            "world": (world or "")[:40]}
 
 
 def generate_score(out_wav: str, duration: float, anchors: dict, params: dict) -> dict:
@@ -166,6 +174,13 @@ def generate_score(out_wav: str, duration: float, anchors: dict, params: dict) -
         hits(a["peak"], min(stop, a["peak"] + beat * 8), beat * 2, pluck(root * 8), lambda k: 0.35, -0.3, "bell")
     ch = sum(lp(saw(f) + saw(f * 1.004, 0.5), 900) for f in (root, root * fifth, root * 2)) * 0.22
     out += (ch * env(max(0.0, a["resolve"] - 0.6), T, 0.8, 2.4))[:, None]
+    # riser into the peak (GME music.py: energy builds into the hit word)
+    r0, r1 = max(0.0, a["peak"] - 3.0), a["peak"]
+    if r1 - r0 > 0.6:
+        nz = rng.standard_normal(n)
+        sweep = lp(nz, 400 + 1800 * np.clip((t - r0) / max(0.2, r1 - r0), 0, 1))
+        out += (sweep * env(r0, r1, 1.2, 0.05) * 0.16)[:, None]
+        events.append({"inst": "riser", "start": round(r0, 3), "end": round(r1, 3), "step": 0})
     out /= np.abs(out).max() + 1e-9
     out *= 0.7
     _write_wav(out_wav, out)
@@ -179,6 +194,50 @@ def beat_grid(path: str) -> dict:
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
     return {"bpm": float(np.atleast_1d(tempo)[0]), "beats": [round(float(b), 4) for b in beats],
             "duration": float(len(y) / sr)}
+
+
+def snap_window_to_beats(path: str, in_s: float, out_s: float, *, max_shift: float = 0.2,
+                         min_span: float = 1.5) -> dict:
+    """ST-RW-005: snap a footage in/out window to a stable musical beat grid.
+
+    Only snaps when the clip has a regular beat (inter-beat CV <= 0.15) and the nearest
+    beat is within `max_shift` seconds. Speech-heavy clips usually fail the stability
+    test and are left unchanged. Never an automatic paid call.
+    """
+    orig_in, orig_out = float(in_s), float(out_s)
+    in_s, out_s = orig_in, orig_out
+    info = {"inS": in_s, "outS": out_s, "snapped": False, "reason": "no_grid"}
+    try:
+        grid = beat_grid(path)
+    except Exception:  # noqa: BLE001
+        info["reason"] = "beat_detect_failed"
+        return info
+    beats = [b for b in (grid.get("beats") or []) if b >= 0]
+    if len(beats) < 8:
+        info["reason"] = "too_few_beats"
+        return info
+    gaps = np.diff(beats)
+    mean = float(gaps.mean()) if len(gaps) else 0.0
+    if mean <= 0.2 or (float(gaps.std()) / mean) > 0.15:
+        info["reason"] = "unstable_grid"
+        return info
+
+    def nearest(t):
+        return min(beats, key=lambda b: abs(b - t))
+
+    inn, outn = nearest(in_s), nearest(out_s)
+    if abs(inn - in_s) > max_shift and abs(outn - out_s) > max_shift:
+        info["reason"] = "too_far"
+        return info
+    if abs(inn - in_s) <= max_shift:
+        in_s = float(inn)
+    if abs(outn - out_s) <= max_shift:
+        out_s = float(outn)
+    if out_s - in_s < min_span:
+        later = [b for b in beats if b >= in_s + min_span]
+        out_s = float(later[0]) if later else in_s + min_span
+    return {"inS": round(in_s, 4), "outS": round(out_s, 4), "snapped": True, "reason": "beat",
+            "bpm": grid.get("bpm"), "shiftIn": round(in_s - orig_in, 4), "shiftOut": round(out_s - orig_out, 4)}
 
 
 def cut_uploaded_music(src: str, out_wav: str, duration: float, work_dir: str, start_on_beat: float | None = None) -> dict:
