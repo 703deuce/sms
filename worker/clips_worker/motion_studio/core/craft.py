@@ -358,4 +358,11 @@ Static-validate against the API contract. Word timing uses official word ids or 
 Express tool timing relative to the scene (startS/endS in seconds, startFrac/endFrac, or line anchors). Do not convert to frames; the engine converts from the real durationS and fps. Custom code uses ctx.duration and ctx.W() in seconds.
 All roles currently run on gpt-6-luna; do not mention or choose a model.
 """
-    return role + "\n" + TECHNICAL_COMPOSITION + "\n\n" + (tools_reference or "") + "\n\n" + (api_reference or "")
+    # The engine manifest is still available to repairs. The complete class-name
+    # index repeats constructors already documented above; omit that index from
+    # the regular scene prompt to retain the precise tool descriptions within budget.
+    api_reference = "\n".join(
+        line for line in (api_reference or "").splitlines()
+        if not line.startswith("All exposed classes: ")
+    )
+    return role + "\n" + TECHNICAL_COMPOSITION + "\n\n" + (tools_reference or "") + "\n\n" + api_reference

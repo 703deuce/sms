@@ -1,0 +1,36 @@
+name: Motion Studio Skia regression verification
+
+on:
+  push:
+    branches:
+      - ms-ci/cinematic-fix-20261115
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  skia-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install worker system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg libgl1 libegl1 libgles2 libsm6 libxext6 libglib2.0-0
+      - name: Install worker Python and Skia dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r worker/requirements-m4.txt pytest Pillow
+          python -c "import skia; print('Skia:', skia.__version__)"
+      - name: Verify generated tool manifest is committed
+        run: |
+          PYTHONPATH=worker python3 -m clips_worker.motion_studio.tools
+          git diff --exit-code -- worker/clips_worker/motion_studio/tools/tools_manifest.json
+      - name: Run complete Motion Studio tests with Skia
+        run: |
+          PYTHONPATH=worker python3 -m pytest -q -ra --tb=short worker/tests/test_motion_studio*.py

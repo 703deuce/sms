@@ -353,6 +353,8 @@ def format_tools_reference(registry: ToolRegistry | None = None, compact: bool =
         "Custom Python is Tier 3 only, and only when a registered tool cannot express the approved design.",
         "Available tools: " + ", ".join(reg.names()) + ".",
         "Aliases: " + ", ".join(f"{a}->{c}" for a, c in sorted(reg.aliases().items())) + ".",
+        "Argument notation: name:type! is required; name:type? is optional. Calls use validated JSON.",
+        "All tools are planning-only: never invent engine APIs, access privileged systems, or execute raw code.",
         "",
     ]
     for name in reg.names():
@@ -363,23 +365,28 @@ def format_tools_reference(registry: ToolRegistry | None = None, compact: bool =
         lines.append(f"  Purpose: {doc['purpose']}")
         lines.append(f"  Use when: {doc['whenToUse']}")
         lines.append(f"  Do not use when: {doc['whenNotToUse']}")
-        lines.append(f"  Required: {req}. Optional: {opt}.")
+        # name:type! means required; name:type? means optional.
         for param in doc["parameters"]:
-            valid = f" Allowed values: {param['allowed']}." if param.get("allowed") is not None else ""
+            valid = f" Allowed: {param['allowed']}." if param.get("allowed") is not None else ""
             fallback = f" Default: {param['default']}." if param.get("default") is not None else ""
-            lines.append(f"  Arg {param['name']} ({param['type']}; "
-                         f"{'required' if param['required'] else 'optional'}): "
+            required = "!" if param["required"] else "?"
+            lines.append(f"  {param['name']}:{param['type']}{required} — "
                          f"{param['description']}{valid}{fallback}")
         lines.append(f"  Limits: {doc['resourceLimits']}. Reversible: {doc['reversible']}")
         if compact:
             # one short example
             if doc["examples"]:
-                lines.append(f"  Example: {json.dumps(doc['examples'][0], sort_keys=True)}")
+                lines.append(f"  Example arguments: {json.dumps(doc['examples'][0].get('arguments') or {}, sort_keys=True, separators=(',', ':'))}")
         else:
             lines.append(f"  Behavior: {doc['behavior']}")
             lines.append(f"  Preconditions: {doc['preconditions']}")
             lines.append(f"  Errors: {doc['errors']}")
-            lines.append(f"  Prohibited: {doc['prohibited']}")
+            # Shared prohibitions are stated once; keep special restrictions.
+            common = ("Do not invent engine method names, call skia or other low-level drawing APIs, "
+                      "edit renderer internals, or write database or storage records.")
+            extra = doc["prohibited"].removeprefix(common).strip()
+            if extra:
+                lines.append(f"  Prohibited specifically: {extra}")
             for ex in doc["examples"]:
                 lines.append(f"  Example: {json.dumps(ex, sort_keys=True)}")
         lines.append("")

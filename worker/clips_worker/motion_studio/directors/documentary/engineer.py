@@ -24,7 +24,9 @@ from clips_worker.motion_studio.sandbox.policy import lint_scene
 from clips_worker.motion_studio.tools.plan import compile_agent_output
 from clips_worker.motion_studio.tools.registry import format_tools_reference
 
-SYSTEM = engineer_system(API_REFERENCE, format_tools_reference(compact=False)) + "\n\n" + format_contract("motion_engineer")
+# Complete argument schemas and examples, without duplicating verbose legal/repair metadata.
+# The per-error repair path supplies the exact matching API reference on demand.
+SYSTEM = engineer_system(API_REFERENCE, format_tools_reference()) + "\n\n" + format_contract("motion_engineer")
 
 
 def code_hash(code: str) -> str:
