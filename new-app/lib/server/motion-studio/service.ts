@@ -5,15 +5,21 @@ import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { createReadableSignedUrl, storageDriverName, uploadSourceKey } from '@/lib/storage'
 import { defaultClipSettings } from '@/lib/clips/settings'
-import { defaultEdits, type ClipEditsV2, type ClipMotionStudioExt } from '@/lib/clips/edits'
+import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
+import type { Marker } from '@/lib/clips/editor/markers'
+import { buildMotionStudioEditorEdits, MS_MUSIC_ID_PREFIX, type MsEditorStems } from '@/lib/motion-studio/editor-timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import type {
   MsActivityEvent, MsActivityStep, MsAllowance, MsAsset, MsAssetKind, MsChapter, MsEditorHandoff, MsProject, MsProjectStatus,
   MsProjectSummary, MsProposal, MsScene, MsSceneStatus, MsSelectionKind, MsSettings, MsStage, MsStageId, MsStageStatus, MsVisualType,
-  MsWorkflow, MsMusicChoice,
+  MsWorkflow, MsMusicChoice, MsProposalItem, MsDirectorMessage,
 } from '@/lib/motion-studio/types'
+import {
+  applyOps, buildBlueprint, effectOf, noCurrency, scenesPhrase, validateItems, type DirectorItem, type DirectorOp,
+} from '@/lib/motion-studio/director-ops'
+import { askDirector } from '@/lib/server/motion-studio/director-llm'
 
 /**
  * Motion Studio service — matches the frontend client (lib/motion-studio/client.ts, PR #1260) exactly.
@@ -54,7 +60,7 @@ export function motionStudioConfig() {
     lengths: [...LENGTHS], betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
     productionModes: ['checkpoint', 'auto'], formats: ['16:9_1080p'], mediaPolicy: 'uploads_only',
     music: ['generated', 'upload', 'elevenlabs', 'none'],
-    features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'basic' },
+    features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'blueprint' },
   }
 }
 
@@ -511,7 +517,8 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
     durationMs: Number(ex?.durationMs) || sceneViews.at(-1)?.endMs || 0,
     previewUrl: ex ? await sign(ex.smallKey ?? ex.masterKey) : null,
     styleRationale: c.plan ? str(J(c.plan.style).reason, 400) || str(J(c.plan.world).reason, 400) || null : null,
-    proposals: (Array.isArray(proposals.items) ? proposals.items : []) as MsProposal[],
+    proposals: (Array.isArray(proposals.items) ? proposals.items : []).map((p: StoredProposal) => ({ ...p,
+      items: (Array.isArray(p.items) ? p.items : []).map(({ op: _op, ...it }) => it) })) as MsProposal[],
     director: Array.isArray(proposals.messages) ? proposals.messages : [],
     allowance: allowanceFor(c.s), export: exportState,
     error: status === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : 'A step failed. Retry it to continue.') : null,
@@ -759,7 +766,27 @@ export async function regenerateScene(workspaceId: string, id: string, sceneId: 
   return getProject(workspaceId, id)
 }
 
-/** Director chat (BE-10 basic): turns the message into a proposal; nothing is applied until accepted. */
+type StoredItem = MsProposalItem & { op?: DirectorOp }
+type StoredProposal = Omit<MsProposal, 'items'> & { items: StoredItem[] }
+
+const isProduced = (row: ProjectRow) =>
+  Boolean(row.narration) && ['review', 'failed', 'running'].includes(row.status) && row.stage !== 'story' && row.stage !== 'direct'
+
+async function blueprintOf(row: ProjectRow) {
+  const [scenes, assets] = await Promise.all([
+    db().motionStudioScene.findMany({ where: { projectId: row.id }, orderBy: { index: 'asc' } }),
+    db().studioAsset.findMany({ where: { projectId: row.id } }),
+  ])
+  const bp = buildBlueprint({ plan: row.plan, story: row.story, scenes, settings: row.settings, title: row.title,
+    assets: assets.map((a: (typeof assets)[number]) => ({ id: a.id, kind: a.kind === 'video' ? 'video' : a.kind, filename: a.filename, durationMs: a.durationMs, analysis: a.analysis })) })
+  return { bp, scenes }
+}
+
+/**
+ * Director chat (BE-10 / FE-7). The model reads the film's blueprint (world, look, scenes with their lines, emphasis
+ * words and camera, footage inserts, score cues) and proposes typed edits; each one says what it will re-render.
+ * Nothing is applied until accepted. If the model is unavailable the request is kept as one honest note-style change.
+ */
 export async function sendDirectorMessage(workspaceId: string, id: string, body: unknown) {
   const row = await required(workspaceId, id)
   const o = J(body)
@@ -769,50 +796,104 @@ export async function sendDirectorMessage(workspaceId: string, id: string, body:
   if (sceneId && !(await db().motionStudioScene.findFirst({ where: { id: sceneId, projectId: id }, select: { id: true } })))
     throw new MotionStudioError('NOT_FOUND', 'Scene not found.', 404)
   const now = new Date().toISOString()
-  const proposal: MsProposal = { id: createId('pr'), request: text, sceneId, createdAt: now, items: [
-    { id: createId('pi'), text: sceneId ? `Regenerate this scene with: “${text.slice(0, 200)}”` : `Revise the story and plan with: “${text.slice(0, 200)}” (unchanged scenes keep their renders)`, status: 'pending' },
-  ] }
   const cur = J(row.proposals)
-  const items = [proposal, ...(Array.isArray(cur.items) ? cur.items : [])].slice(0, 50)
-  const messages = [...(Array.isArray(cur.messages) ? cur.messages : []),
-    { id: createId('dm'), role: 'user', text, at: now },
-    { id: createId('dm'), role: 'director', text: 'Here’s what I’d change. Nothing is applied until you accept.', at: now, proposalId: proposal.id }].slice(-200)
-  await db().motionStudioProject.update({ where: { id }, data: { proposals: toPrismaJson({ ...cur, items, messages }) } })
+  const prior: MsDirectorMessage[] = Array.isArray(cur.messages) ? cur.messages : []
+  let reply: string
+  let items: DirectorItem[] = []
+  if (!row.plan || !row.story) {
+    items = [{ text: `Use this when the plan is written: “${noCurrency(text).slice(0, 200)}”`, effect: 'Applies when the plan is written', op: { type: 'story', note: text } }]
+    reply = 'The plan isn’t written yet, so I’ll use this when I write it.'
+  } else {
+    const { bp, scenes } = await blueprintOf(row)
+    const focus = sceneId ? scenes.find((x: (typeof scenes)[number]) => x.id === sceneId)?.index ?? null : null
+    try {
+      const out = await askDirector({ message: text, focusSceneIndex: focus, stage: isProduced(row) ? 'produced' : 'plan', blueprint: bp,
+        recent: prior.map(m => ({ role: m.role, text: m.text })) })
+      const v = validateItems(out.items, bp)
+      items = v.items
+      reply = noCurrency(out.reply.trim()).slice(0, 600) || (items.length ? 'Here’s what I’d change.' : 'Which scene should change, and how?')
+      console.info('[motion-studio:director] proposal', { projectId: id, items: items.length, dropped: v.dropped.length, model: out.model,
+        ops: items.map(i => i.op.type) })
+      if (v.dropped.length) console.info('[motion-studio:director] dropped_ops', { projectId: id, reasons: v.dropped.slice(0, 8) })
+      if (items.length) await event(id, isProduced(row) ? 'review' : 'direct', 'decision', `Director proposed ${items.length} change${items.length === 1 ? '' : 's'}: ${items.map(i => i.text).join(' · ').slice(0, 300)}`)
+    } catch (err) {
+      console.warn('[motion-studio:director] model_unavailable', { projectId: id, message: err instanceof Error ? err.message : String(err) })
+      const sc = focus != null ? bp.scenes.find(x => x.index === focus) : undefined
+      const op: DirectorOp = sc && sc.kind === 'graphics' ? { type: 'scene', sceneIndex: sc.index, note: text } : { type: 'story', note: text }
+      items = [{ text: op.type === 'scene' ? `Scene ${op.sceneIndex + 1}: ${noCurrency(text).slice(0, 200)}` : `Revise the story and plan: “${noCurrency(text).slice(0, 200)}”`, effect: effectOf(op, bp), op }]
+      reply = 'I couldn’t work out the exact edits just now, so here’s your request as one change.'
+    }
+  }
+  const proposal: StoredProposal | null = items.length ? { id: createId('pr'), request: text, sceneId, createdAt: now,
+    items: items.map(i => ({ id: createId('pi'), text: i.text, effect: i.effect, status: 'pending' as const, op: i.op })) } : null
+  const all = [...(proposal ? [proposal] : []), ...(Array.isArray(cur.items) ? cur.items : [])].slice(0, 50)
+  const messages = [...prior, { id: createId('dm'), role: 'user', text, at: now },
+    { id: createId('dm'), role: 'director', text: reply, at: now, proposalId: proposal?.id ?? null }].slice(-200)
+  await db().motionStudioProject.update({ where: { id }, data: { proposals: toPrismaJson({ ...cur, items: all, messages }) } })
   return getProject(workspaceId, id)
 }
 
 export async function decideProposal(workspaceId: string, id: string, proposalId: string, decision: 'accept' | 'reject', body: unknown) {
   const row = await required(workspaceId, id)
   const cur = J(row.proposals)
-  const items: MsProposal[] = Array.isArray(cur.items) ? cur.items : []
+  const items: StoredProposal[] = Array.isArray(cur.items) ? cur.items : []
   const pr = items.find(x => x.id === proposalId)
   if (!pr) throw new MotionStudioError('NOT_FOUND', 'Proposal not found.', 404)
   const raw = J(body).itemIds
   const ids = raw === 'all' ? pr.items.filter(i => i.status === 'pending').map(i => i.id) : Array.isArray(raw) ? raw.map(String) : []
-  let applied = 0
-  for (const it of pr.items) {
-    if (!ids.includes(it.id) || it.status !== 'pending') continue
-    it.status = decision === 'accept' ? 'accepted' : 'rejected'
-    if (decision === 'accept') applied++
+  const picked = pr.items.filter(it => ids.includes(it.id) && it.status === 'pending')
+  if (decision === 'accept' && picked.length && ['queued', 'running'].includes(row.status))
+    throw new MotionStudioError('CONFLICT', 'The Director can apply this once the current step finishes.', 409)
+  for (const it of picked) it.status = decision === 'accept' ? 'accepted' : 'rejected'
+  if (decision !== 'accept' || !picked.length) {
+    await db().motionStudioProject.update({ where: { id }, data: { proposals: toPrismaJson({ ...cur, items }) } })
+    return getProject(workspaceId, id)
   }
-  await db().motionStudioProject.update({ where: { id }, data: { proposals: toPrismaJson({ ...cur, items }) } })
-  if (applied) {
-    if (pr.sceneId) {
-      const fresh = await required(workspaceId, id)
-      const scene = await db().motionStudioScene.findFirst({ where: { id: pr.sceneId, projectId: id } })
-      if (scene) {
-        const p = J(scene.plan)
-        p.userNotes = [str(p.userNotes, 4000), `Director note: ${pr.request}`].filter(Boolean).join('\n')
-        await db().motionStudioScene.update({ where: { id: scene.id }, data: { plan: toPrismaJson(p), version: { increment: 1 } } })
-        await rerenderScenes(fresh, [scene.id], 'proposal_accepted')
-        await event(id, 'graphics', 'stage', `Applied the change to scene ${scene.index + 1}.`)
-      }
-    } else if (row.story && ['awaiting_approval', 'review', 'failed'].includes(row.status)) {
-      return requestStoryChanges(workspaceId, id, { note: pr.request })
-    } else {
-      await updateSettingsLocked(id, s => ({ ...s, changeNote: [str(s.changeNote, 3000), pr.request].filter(Boolean).join('\n') }))
-      await event(id, 'story', 'decision', 'Change noted; it applies when the plan is written.')
-    }
+  // Older proposals (before typed ops) carry only text: keep their old meaning.
+  const sceneRow = pr.sceneId ? await db().motionStudioScene.findFirst({ where: { id: pr.sceneId, projectId: id } }) : null
+  const ops: DirectorOp[] = picked.map(it => it.op ?? (sceneRow ? { type: 'scene', sceneIndex: sceneRow.index, note: pr.request } : { type: 'story', note: pr.request }))
+  const story = ops.filter((x): x is Extract<DirectorOp, { type: 'story' }> => x.type === 'story')
+  if (story.length || !row.plan || !row.story) {
+    // Script / structure changes go through the story revision; the other accepted edits ride along as notes.
+    const note = [...story.map(x => x.note), ...picked.filter(it => it.op?.type !== 'story').map(it => it.text)].join('\n')
+    await db().motionStudioProject.update({ where: { id }, data: { proposals: toPrismaJson({ ...cur, items }) } })
+    if (row.story && ['awaiting_approval', 'review', 'failed'].includes(row.status)) return requestStoryChanges(workspaceId, id, { note })
+    await updateSettingsLocked(id, s => ({ ...s, changeNote: [str(s.changeNote, 3000), note].filter(Boolean).join('\n') }))
+    await event(id, 'story', 'decision', 'Change noted; it applies when the plan is written.')
+    return getProject(workspaceId, id)
+  }
+  const { bp, scenes } = await blueprintOf(row)
+  const res = applyOps(row.plan, scenes, ops, bp)
+  const { layout: _layout, ...planNoLayout } = J(row.plan)
+  const history = [{ at: new Date().toISOString(), proposalId, plan: planNoLayout,
+    scenes: [...res.rowPlans.keys()].map(i => ({ index: i, plan: scenes.find((x: (typeof scenes)[number]) => x.index === i)?.plan ?? null })) },
+    ...(Array.isArray(cur.history) ? cur.history : [])].slice(0, 3)
+  await db().motionStudioProject.update({ where: { id }, data: { plan: toPrismaJson(res.plan), proposals: toPrismaJson({ ...cur, items, history }) } })
+  for (const [index, rp] of res.rowPlans) {
+    const sr = scenes.find((x: (typeof scenes)[number]) => x.index === index)
+    if (!sr) continue
+    await db().motionStudioScene.update({ where: { id: sr.id }, data: { plan: toPrismaJson(rp.plan), ...(rp.visualType ? { visualType: rp.visualType } : {}), version: { increment: 1 } } })
+  }
+  if (res.musicSetting) await updateSettingsLocked(id, s => ({ ...s, music: res.musicSetting }))
+  const fresh = await required(workspaceId, id)
+  const affected = [...res.affected].sort((a, b) => a - b)
+  const what = picked.map(it => it.text).join(' · ').slice(0, 200)
+  if (!isProduced(fresh)) {
+    await event(id, 'direct', 'decision', `Plan updated: ${what}. It applies when production runs.`)
+  } else if (res.relayout) {
+    await db().motionStudioProject.update({ where: { id }, data: { status: 'running', stage: 'assets', errorCode: null, errorMessage: null, errorStage: null } })
+    await updateSettingsLocked(id, s => ({ ...s, exportRequested: false }))
+    await enqueue(fresh, 'DOC_PRODUCE', { reason: 'director_chat' }, 5)
+    await event(id, 'graphics', 'decision', `Applying: ${what}. Re-timing the program; re-rendering ${scenesPhrase(affected)} only, the rest are cached.`)
+  } else if (affected.length) {
+    const sids = scenes.filter((x: (typeof scenes)[number]) => res.affected.has(x.index)).map((x: (typeof scenes)[number]) => x.id)
+    await rerenderScenes(fresh, sids, 'director_chat')
+    await event(id, 'graphics', 'decision', `Applying: ${what}. Re-rendering ${scenesPhrase(affected)} only.`)
+  } else if (res.remix) {
+    await db().motionStudioProject.update({ where: { id }, data: { status: 'running', stage: 'assemble', errorCode: null, errorMessage: null, errorStage: null } })
+    await updateSettingsLocked(id, s => ({ ...s, exportRequested: false }))
+    await enqueue(fresh, 'DOC_ASSEMBLE', { reason: 'director_chat' }, 5)
+    await event(id, 'assemble', 'decision', `Applying: ${what}. Re-mixing the music; no scene re-renders.`)
   }
   return getProject(workspaceId, id)
 }
@@ -866,7 +947,29 @@ export async function listActivity(workspaceId: string, id: string, q: { after?:
   }
 }
 
-/** Compact Editor clip for the assembled program: canvas = master mix; Motion Studio tracks ride in edits.motionStudio. */
+/** Music stem of one assembly as a COMPLETE upload + project media (Compact Editor Music lane). */
+async function ensureMusicStemUpload(workspaceId: string, row: ProjectRow, ex: Json): Promise<string | null> {
+  const stems = J(ex.editorStems) as MsEditorStems & { musicBytes?: number }
+  if (!stems.musicKey || !row.clipProjectId) return null
+  const uploadId = stableId(MS_MUSIC_ID_PREFIX, `${row.id}:${stems.musicKey}`)
+  const durationMs = Number(stems.durationMs ?? ex.durationMs) || null
+  const s = J(row.settings)
+  const label = s.music === 'upload' ? 'Your music (Motion Studio)' : 'Motion Studio score'
+  await db().clipUpload.upsert({
+    where: { id: uploadId },
+    create: { id: uploadId, workspaceId, key: stems.musicKey, filename: `${label}.m4a`, bytes: BigInt(Math.max(0, Number(stems.musicBytes) || 0)),
+      mime: 'audio/mp4', durationMs, status: 'COMPLETE', storageDriver: storageDriverName(), kind: 'media' },
+    update: {},
+  })
+  await registerProjectMedia(workspaceId, row.clipProjectId, { uploadId, label, durationMs: durationMs ?? undefined, hasAudio: true })
+  return uploadId
+}
+
+/**
+ * Compact Editor clip for the assembled program (FE-6 / BE-9). Canvas = picture + dialog (or the full master for
+ * older assemblies); scenes and footage inserts are Video-lane splits; music sits on the Music lane; the labelled
+ * Motion Studio lanes ride in edits.motionStudio. Re-synced whenever timelineVersion changes.
+ */
 async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clipProjectId: string; clipId: string; edits: ClipEditsV2 }> {
   const row = await required(workspaceId, id)
   const ex = row.exportInfo ? J(row.exportInfo) : null
@@ -877,22 +980,41 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
   const meta = J(existing?.aiMeta)
   if (existing && meta.motionStudioTimelineVersion === row.timelineVersion)
     return { clipProjectId: row.clipProjectId, clipId: row.clipId, edits: existing.edits as unknown as ClipEditsV2 }
-  const base = existing ? (existing.edits as unknown as ClipEditsV2) : defaultEdits({ clipStartMs: 0, clipEndMs: durationMs, trimMinMs: 0, trimMaxMs: durationMs })
-  const edits: ClipEditsV2 = {
-    ...base, trim: { in: 0, out: durationMs }, aspectRatio: '16:9',
-    layout: { ...(base.layout ?? { shotOverrides: [] }), mode: 'full_frame', shotOverrides: base.layout?.shotOverrides ?? [] },
-    markers: (patch.markers as ClipEditsV2['markers']) ?? base.markers,
-    motionStudio: patch.motionStudio as ClipMotionStudioExt | undefined,
+  let musicUploadId: string | null = null
+  try {
+    musicUploadId = await ensureMusicStemUpload(workspaceId, row, ex)
+  } catch (err) {
+    console.warn('[motion-studio:editor] music_stem_unavailable', { projectId: id, message: err instanceof Error ? err.message : String(err) })
   }
+  const edits = buildMotionStudioEditorEdits({
+    base: existing ? (existing.edits as unknown as ClipEditsV2) : null,
+    durationMs,
+    patch: { markers: patch.markers as Marker[] | undefined, motionStudio: patch.motionStudio as ClipMotionStudioExt | undefined },
+    musicUploadId,
+    lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
+  })
+  const placedMusic = edits.audio?.music?.uploadId?.startsWith(MS_MUSIC_ID_PREFIX) ? edits.audio.music.uploadId : (meta.motionStudioMusicUploadId ?? null)
+  const aiMeta = { ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion, motionStudioMusicUploadId: placedMusic }
   await db().clip.upsert({
     where: { id: row.clipId },
     create: { id: row.clipId, workspaceId, projectId: row.clipProjectId, title: (row.title || 'Documentary').slice(0, 120), reason: 'motion_studio',
-      startMs: 0, endMs: durationMs, storageDriver: storageDriverName(), edits: toPrismaJson(edits),
-      aiMeta: toPrismaJson({ motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion }) },
-    update: { endMs: durationMs, edits: toPrismaJson(edits), aiMeta: toPrismaJson({ ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion }) },
+      startMs: 0, endMs: durationMs, storageDriver: storageDriverName(), edits: toPrismaJson(edits), aiMeta: toPrismaJson(aiMeta) },
+    update: { endMs: durationMs, edits: toPrismaJson(edits), aiMeta: toPrismaJson(aiMeta) },
   })
-  console.info('[motion-studio:editor] clip_ready', { projectId: id, clipId: row.clipId, version: row.timelineVersion })
+  console.info('[motion-studio:editor] clip_ready', { projectId: id, clipId: row.clipId, version: row.timelineVersion,
+    scenes: (edits.videoSplits?.length ?? 0) + 1, music: Boolean(edits.audio?.music), dialogCanvas: J(ex.editorStems).canvas === 'dialog' })
   return { clipProjectId: row.clipProjectId, clipId: row.clipId, edits }
+}
+
+/** Editor page: bring a Motion Studio clip up to the latest assembly before it loads (no-op when current). */
+export async function syncEditorClipIfStale(workspaceId: string, motionStudioProjectId: string, clipId: string): Promise<boolean> {
+  const row = await db().motionStudioProject.findFirst({ where: { id: motionStudioProjectId, workspaceId },
+    select: { clipId: true, timelineVersion: true, exportInfo: true } })
+  if (!row || row.clipId !== clipId || !row.exportInfo) return false
+  const clip = await db().clip.findUnique({ where: { id: clipId }, select: { aiMeta: true } })
+  if (J(clip?.aiMeta).motionStudioTimelineVersion === row.timelineVersion) return false
+  await ensureEditorClip(workspaceId, motionStudioProjectId)
+  return true
 }
 
 export async function openInEditor(workspaceId: string, id: string): Promise<MsEditorHandoff> {

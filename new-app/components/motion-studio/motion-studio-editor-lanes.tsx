@@ -75,7 +75,7 @@ export function MotionStudioEditorLanes({
         </Link>
       </div>
       <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
-        You’re editing the assembled program MP4 (picture and full mix). Captions and export work as usual. To change a scene, regenerate it in Motion Studio, then export again to update this cut.
+        Each scene and footage insert is its own clip on the Video track, narration stays with the picture, and the score is on the Music track. Trim, delete, mute or swap them here. To redesign a scene, ask the Director in Motion Studio; only that scene re-renders, and this cut updates the next time you open it.
       </p>
       <div className="overflow-x-auto">
         <div className="min-w-[560px]">

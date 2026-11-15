@@ -3,6 +3,7 @@ import { isFullVideoSettings } from '../../../../../../lib/clips/full-video'
 import { getClipEditorPayload } from '../../../../../../lib/server/clips/clip-detail'
 import { notFound } from 'next/navigation'
 import { editorPanelFromSearchParam } from '../../../../../../lib/clips/editor-initial-panel'
+import { syncEditorClipIfStale } from '../../../../../../lib/server/motion-studio/service'
 
 export async function EditorPayloadSection({
   workspaceId,
@@ -34,6 +35,17 @@ export async function EditorPayloadSection({
     throw err
   }
   if (!data || data.clip.projectId !== projectId) notFound()
+  // Motion Studio: the clip remembers its project, so the lanes show even without ?motionStudio=, and a clip opened
+  // after a scene re-render is brought up to the latest assembly before it loads.
+  const msFromMeta = (data.aiMeta as { motionStudioProjectId?: unknown } | null)?.motionStudioProjectId
+  const msProjectId = motionStudioProjectId || (typeof msFromMeta === 'string' && msFromMeta ? msFromMeta : null)
+  if (msProjectId) {
+    try {
+      if (await syncEditorClipIfStale(workspaceId, msProjectId, clipId)) data = (await getClipEditorPayload(workspaceId, clipId)) ?? data
+    } catch (err) {
+      console.warn('[motion-studio:editor] sync_failed', { clipId, message: err instanceof Error ? err.message : String(err) })
+    }
+  }
 
   const posterUrl = data.mediaUrls.poster || data.mediaUrls.preview
 
@@ -76,7 +88,7 @@ export async function EditorPayloadSection({
       clipperStudio={clipperStudio}
       initialPanel={initialPanel}
       initialProducerOpen={initialProducerOpen}
-      motionStudioProjectId={motionStudioProjectId}
+      motionStudioProjectId={msProjectId}
     />
   )
 }

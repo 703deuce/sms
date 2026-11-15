@@ -67,7 +67,12 @@ export function DirectorChat({
                   <ul className="flex flex-col gap-1.5">
                     {proposal.items.map((i) => (
                       <li key={i.id} className="flex items-start gap-2 text-sm">
-                        <span className={cn('min-w-0 flex-1 leading-snug', i.status === 'rejected' && 'text-muted-foreground line-through')}>{i.text}</span>
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <span className={cn('leading-snug', i.status === 'rejected' && 'text-muted-foreground line-through')}>{i.text}</span>
+                          {i.effect && i.status !== 'rejected' ? (
+                            <span className="text-xs text-muted-foreground" data-testid="ms-proposal-effect">{i.effect}</span>
+                          ) : null}
+                        </span>
                         {i.status === 'pending' && single ? (
                           <span className="flex shrink-0 gap-1">
                             <Button size="xs" variant="ghost" disabled={busy != null} onClick={() => onDecide(proposal.id, [i.id], 'reject')} data-testid="ms-proposal-reject">Reject</Button>
@@ -92,6 +97,12 @@ export function DirectorChat({
             </div>
           )
         })}
+        {busy === 'director' ? (
+          <p className="flex items-center gap-1.5 self-start rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground" role="status" data-testid="ms-director-thinking">
+            <Sparkles className="size-3.5 animate-pulse text-lane-ai motion-reduce:animate-none" aria-hidden />
+            The Director is reading the film…
+          </p>
+        ) : null}
       </div>
       <div className="rounded-xl border border-border bg-card transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30">
         <label htmlFor="ms-director-input" className="sr-only">Message the AI Director</label>

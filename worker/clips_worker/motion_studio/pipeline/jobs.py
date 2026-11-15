@@ -534,11 +534,21 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
                     (proj["clipProjectId"],))
         canvas = cur.fetchone()
     conn.commit()
+    # FE-6: the editor canvas is picture + dialog (VO, footage sound, SFX); music goes to the editor's Music lane
+    from clips_worker.motion_studio.pipeline.editor_stems import build_editor_stems
+    stems = build_editor_stems(work, total, picture, vo, music.get("path"), sfx, clips, log)
+    editor_stems = None
+    if stems:
+        editor_stems = {"canvas": "dialog", "gainDb": stems["gainDb"], "durationMs": int(total * 1000)}
+        if stems.get("music"):
+            editor_stems["musicKey"] = f"{kb}/editor_music_v{version}.m4a"
+            upload_file(editor_stems["musicKey"], Path(stems["music"]), "audio/mp4")
+            editor_stems["musicBytes"] = os.path.getsize(stems["music"])
     if canvas:
-        upload_file(canvas[1], Path(master), "video/mp4")
+        upload_file(canvas[1], Path(stems["canvas"] if stems else master), "video/mp4")
         with conn.cursor() as cur:
             cur.execute('UPDATE clip_uploads SET status=\'COMPLETE\', bytes=%s, "durationMs"=%s, width=%s, height=%s WHERE id=%s',
-                        (os.path.getsize(master), int(total * 1000), W, H, canvas[0]))
+                        (os.path.getsize(stems["canvas"] if stems else master), int(total * 1000), W, H, canvas[0]))
             cur.execute("UPDATE clip_projects SET status='READY', stage='ready', progress=100, \"rangeEndMs\"=%s, \"updatedAt\"=NOW() WHERE id=%s",
                         (int(total * 1000), proj["clipProjectId"]))
         conn.commit()
@@ -568,7 +578,7 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     music_rec = {k: v for k, v in music.items() if k != "path"}
     export_info = {"version": version, "masterKey": master_key, "smallKey": small_key, "creditsKey": f"{kb}/credits_v{version}.txt",
                    "durationMs": int(total * 1000), "frames": lay["frames"], "width": W, "height": H, "manifest": manifest,
-                   "editsPatch": edits_patch, "loudness": meas, "qaArtifacts": qa_keys}
+                   "editsPatch": edits_patch, "loudness": meas, "qaArtifacts": qa_keys, "editorStems": editor_stems}
     db.update_project(conn, pid, status="review", stage="review", exportInfo=export_info, music=music_rec,
                       qa={"checks": checks, "pass": all(c["pass"] or c.get("severity") == "warn" for c in checks)},
                       timelineVersion=version, errorCode=None, errorMessage=None, errorStage=None)

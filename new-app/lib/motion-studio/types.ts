@@ -160,7 +160,8 @@ export type MsAsset = {
 
 export type MsMissingVisual = { id: string; chapterId: string; description: string }
 
-export type MsProposalItem = { id: string; text: string; status: 'pending' | 'accepted' | 'rejected' }
+/** effect = what accepting re-renders (e.g. "Re-renders scene 3 only"). */
+export type MsProposalItem = { id: string; text: string; status: 'pending' | 'accepted' | 'rejected'; effect?: string | null }
 export type MsProposal = { id: string; request: string; sceneId?: string | null; createdAt: string; items: MsProposalItem[] }
 export type MsDirectorMessage = { id: string; role: 'user' | 'director'; text: string; at: string; proposalId?: string | null }
 
