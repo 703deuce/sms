@@ -77,7 +77,7 @@ def analyze_asset(conn, project: dict, asset: dict, work: str, log) -> dict:
             try:
                 an.update(describe_image(local))
             except Exception as exc:  # noqa: BLE001 (no retry; recorded)
-                an["describeError"] = type(exc).__name__
+                raise RuntimeError(f"image description failed for asset {asset['id']}: {type(exc).__name__}: {exc}") from exc
         an["summary"] = an.get("description") or asset.get("filename")
     elif kind == "video":
         wav = os.path.join(work, f"asset_{asset['id']}.wav")
@@ -91,10 +91,10 @@ def analyze_asset(conn, project: dict, asset: dict, work: str, log) -> dict:
                 words = res.words
         an["words"] = words
         an["speakers"] = sorted({int(w.get("spk", 0)) for w in words})
-        an["transcriptText"] = " ".join(w["w"] for w in words)[:20000]
+        an["transcriptText"] = " ".join(w["w"] for w in words)
         try:
             from clips_worker.reframe_core import detect_shots
-            an["shots"] = [[round(a, 3), round(b, 3)] for a, b in detect_shots(local)][:400]
+            an["shots"] = [[round(a, 3), round(b, 3)] for a, b in detect_shots(local)]
         except Exception as exc:  # noqa: BLE001
             an["shots"] = []
             an["shotsError"] = type(exc).__name__
@@ -102,14 +102,13 @@ def analyze_asset(conn, project: dict, asset: dict, work: str, log) -> dict:
             try:
                 from clips_worker.ai_producer_agent.finder.watch import watch_video_file
                 moments, meta = watch_video_file(Path(local), duration_s=int(info["durationS"]), chunk_label="motion_studio",
-                                                 transcript_text=an["transcriptText"][:8000], scratch=Path(work), fail_open=True)
+                                                 transcript_text=an["transcriptText"], scratch=Path(work), fail_open=False)
                 an["moments"] = [{k: m.get(k) for k in ("start_s", "end_s", "what_happened", "score", "activity", "title") if k in m}
-                                 for m in moments][:40]
+                                 for m in moments]
                 an["watchModel"] = meta.get("model")
             except Exception as exc:  # noqa: BLE001
-                an["moments"] = []
-                an["watchError"] = type(exc).__name__
-        an["summary"] = "; ".join(str(m.get("what_happened") or "") for m in an.get("moments", [])[:3]) or an["transcriptText"][:200]
+                raise RuntimeError(f"footage watch failed for asset {asset['id']}: {type(exc).__name__}: {exc}") from exc
+        an["summary"] = "; ".join(str(m.get("what_happened") or "") for m in an.get("moments", [])) or an["transcriptText"]
     elif kind == "audio":
         an["summary"] = asset.get("filename")
     an.update({k: v for k, v in info.items() if k in ("durationS", "hasAudio")})

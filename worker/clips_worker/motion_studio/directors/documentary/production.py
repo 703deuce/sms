@@ -73,7 +73,7 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
         an = a.get("analysis") or {}
         text = _blob(a)
         subject = (an.get("subject") or an.get("summary") or an.get("description") or a.get("filename") or a["id"])
-        subject = " ".join(str(subject).split())[:160]
+        subject = " ".join(str(subject).split())
         era = str(an.get("era") or "").strip()
         score = _token_overlap(a, blob)
         if score >= 2 or (a.get("kind") == "video" and (a.get("durationMs") or 0) > 2000):
@@ -101,7 +101,7 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
         rows.append({
             "assetId": a["id"], "kind": a.get("kind"), "filename": a.get("filename"),
             "subject": subject, "era": era or ev.get("era") or "", "relevance": relevance, "quality": quality,
-            "role": role, "moments": moments[:16] or ev.get("moments") or [],
+            "role": role, "moments": moments or ev.get("moments") or [],
             "evidence": ev,
         })
     return rows
@@ -144,7 +144,7 @@ def environments_from_story(story: dict, seed_world: dict | None = None) -> list
     for i, c in enumerate(ch_ids, 1):
         title = next((str(ch.get("title") or "") for ch in chapters
                       if int(ch.get("n") or ch.get("index") or 0) == c), "") or f"Sequence {i}"
-        sample = " ".join((l.get("hero") or l.get("text") or "")[:80] for l in by_ch[c][:3])
+        sample = " ".join((l.get("hero") or l.get("text") or "") for l in by_ch[c])
         worlds.append({
             "id": f"w{i}",
             "name": title,
@@ -486,7 +486,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
     try:
         sys_ = sys_ + "\n\n" + format_contract("production_designer")
         raw, m = chat_json(
-            "production_designer", sys_, user, max_tokens=32000, timeout_s=360,
+            "production_designer", sys_, user, max_tokens=128000, timeout_s=360,
             schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
         )
         log("model_call", "production design", m)
@@ -499,10 +499,10 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             repair_user = json.dumps({
                 "previous": raw,
                 "errors": (errs or []) + (berrs or []),
-                "instruction": "Fix ONLY these validation errors. Keep the rest of the design. Return the full corrected JSON.",
+                "instruction": "Fix ONLY these validation errors. For asset wording errors, compare the quoted phrase against the actual onScreenText and description included in the error. Preserve other decisions. Return the full corrected JSON.",
             })
             raw, m = chat_json(
-                "production_designer", sys_, repair_user, max_tokens=32000, timeout_s=360,
+                "production_designer", sys_, repair_user, max_tokens=128000, timeout_s=360,
                 schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
             )
             log("model_call", "production design repair", m)
@@ -520,7 +520,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         raise
     except LLMError as exc:
         log("model_call_failed", f"production designer failed: {exc}", {"step": "production_designer"})
-        raise StageContractError("production_designer", [f"model call failed: {exc}"]) from exc
+        raise StageContractError("production_designer", [f"model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
 
 
 
@@ -650,13 +650,13 @@ def revise_limited_scenes(project: dict, story: dict, catalog: list[dict], plan:
     })
     try:
         raw, m = chat_json(
-            "production_designer", sys_, user, max_tokens=16000, timeout_s=360,
+            "production_designer", sys_, user, max_tokens=128000, timeout_s=360,
             schema=schema_for("production_revision"), schema_name=schema_name("production_revision"),
         )
         log("model_call", "production limitation revision", m)
     except LLMError as exc:
         log("model_call_failed", f"production revision failed: {exc}", {"step": "production_revision"})
-        raise StageContractError("production_designer", [f"limitation revision failed: {exc}"]) from exc
+        raise StageContractError("production_designer", [f"limitation revision failed: {exc}"], output=getattr(exc, "output", None)) from exc
     revisions = (raw or {}).get("sceneRevisions") if isinstance(raw, dict) else None
     if not isinstance(revisions, list) or not revisions:
         raise StageContractError("production_designer", ["limitation revision returned no sceneRevisions"], output=raw)

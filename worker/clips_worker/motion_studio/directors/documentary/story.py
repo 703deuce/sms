@@ -74,7 +74,7 @@ def _finalize(lines: list[dict]) -> list[dict]:
             aid = aid or r["quote"].get("assetId")
         out.append({"id": f"l{len(out) + 1}", "chapter": int(r.get("chapter") or 1), "text": text, "spoken": sp,
                     "hero": str(r.get("hero") or "")[:40], "typed": str(r.get("typed") or "")[:60],
-                    "sources": [s for s in (r.get("sources") or []) if isinstance(s, str) and s.startswith("http")][:4],
+                    "sources": [s for s in (r.get("sources") or []) if isinstance(s, str) and s.startswith("http")],
                     "quote": r.get("quote") if isinstance(r.get("quote"), dict) else None,
                     "visualAssetId": aid or None,
                     "illustrative": bool(r.get("illustrative")) if r.get("illustrative") is not None else False,
@@ -95,15 +95,15 @@ def default_research_plan(brief: str, title: str) -> list[dict]:
     """Deterministic research plan used when the planner LLM fails (no empty skip)."""
     topic = " ".join(x for x in (title, brief) if x).strip() or "the subject"
     qs = [
-        {"query": f"Key facts, dates, and figures about {topic[:220]}", "grounded": True,
+        {"query": f"Key facts, dates, and figures about {topic}", "grounded": True,
          "reason": "deterministic plan: numeric and date claims need live sources"},
-        {"query": f"Who was involved and what happened: {topic[:220]}", "grounded": True,
+        {"query": f"Who was involved and what happened: {topic}", "grounded": True,
          "reason": "deterministic plan: confirm people and events"},
     ]
     if re.search(r"20\d{2}|this year|latest|recent|today|current", topic, re.I):
-        qs.append({"query": f"Latest developments: {topic[:220]}", "grounded": True,
+        qs.append({"query": f"Latest developments: {topic}", "grounded": True,
                    "reason": "brief looks time-sensitive; model knowledge may be stale"})
-    return qs[: max(1, config.research_cap())]
+    return qs
 
 
 def backfill_sources(lines: list[dict], research: dict) -> list[dict]:
@@ -130,7 +130,7 @@ def backfill_sources(lines: list[dict], research: dict) -> list[dict]:
             if (hit > score or (n_ok and hit >= score)) and urls:
                 best, score, num_hit = urls, hit, n_ok
         if num_hit or score >= 2:
-            l["sources"] = list(dict.fromkeys(best))[:4]
+            l["sources"] = list(dict.fromkeys(best))
     return lines
 
 
@@ -151,7 +151,7 @@ def _lines_from_research(brief: str, length_min: int, title: str, research: dict
     rows = [{"text": f"This is the story of {topic.rstrip('.')}.", "hero": _heuristic_hero(topic), "chapter": 1, "sources": []}]
     for i, (text, urls) in enumerate(facts[: want - 2]):
         ch = 1 if i < 2 else 2 if i < (want // 2) else 3
-        rows.append({"text": text, "hero": _heuristic_hero(text), "chapter": ch, "sources": urls[:4]})
+        rows.append({"text": text, "hero": _heuristic_hero(text), "chapter": ch, "sources": urls})
     rows.append({"text": "That is how it happened.", "hero": "HOW IT HAPPENED", "chapter": 3, "sources": []})
     return {"title": title or topic[:60], "logline": topic, "tone": "curious",
             "chapters": [{"n": i, "title": f"Part {i}"} for i in sorted({r["chapter"] for r in rows})],
@@ -203,7 +203,7 @@ def plan_research(brief: str, title: str, log) -> list[dict]:
     sys_ = ("You plan research for a short factual documentary. Decide which questions need live web search "
             "(grounded=true) because the information is recent, fast-changing, numeric or obscure, and which are "
             "stable knowledge you already know (grounded=false). Return JSON {\"queries\":[{\"query\",\"grounded\",\"reason\"}]} "
-            f"with at most {max(1, config.research_cap() + 2)} queries.")
+            "with as many distinct grounded questions as the subject requires.")
     try:
         out, m = chat_json("research_plan", sys_, json.dumps({"title": title, "brief": brief}))
         log("model_call", "research plan", m)
@@ -216,11 +216,11 @@ def plan_research(brief: str, title: str, log) -> list[dict]:
         raise
     except LLMError as exc:
         log("model_call_failed", f"research plan failed: {exc}", {"step": "research_plan"})
-        raise StageContractError("research_plan", [f"research plan model call failed: {exc}"]) from exc
+        raise StageContractError("research_plan", [f"research plan model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
 
 
 def write_from_idea(brief: str, title: str, length_min: int, research: dict, tone_hint: str, log, catalog: list[dict] | None = None) -> dict:
-    facts = [{"query": r["query"], "text": r["text"][:3000], "sources": r["sources"][:8]} for r in research.get("results", [])]
+    facts = [{"query": r["query"], "text": r["text"], "sources": r["sources"]} for r in research.get("results", [])]
     sys_ = ("You are the Story agent for a cinematic motion-graphics documentary in the family of a short, designed film: "
             "one clear through-line, type and numbers landing on the spoken word, not a news recap and not a list of facts.\n"
             + WRITING_RULES +
@@ -245,7 +245,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
                        "assetsInHand": uploads, "uploads": uploads,
                        "assetIds": [u["assetId"] for u in uploads],
                        "instruction": "Build the story only from assetsInHand. Cite visualAssetId. Put wishes that are not in hand on missingAssets."})
-    out, m = chat_json("story", sys_, user, max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
+    out, m = chat_json("story", sys_, user, max_tokens=128000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story script", m)
@@ -258,7 +258,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
         out, m = chat_json(
             "story", sys_, json.dumps({"previous": out, "errors": errs,
                                        "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
-            max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"),
+            max_tokens=128000, schema=schema_for("story"), schema_name=schema_name("story"),
         )
         log("model_call", "story repair", m)
         lines = _finalize(_extract_lines(out))
@@ -310,7 +310,7 @@ def organize_script(script_text: str, title: str, log) -> dict:
             log("model_call", "organize script", m)
         except LLMError as exc:
             log("model_call_failed", f"organize script failed: {exc}", {"step": "story"})
-            raise StageContractError("story", [f"organize script model call failed: {exc}"]) from exc
+            raise StageContractError("story", [f"organize script model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
     by_i = {int(r.get("i")): r for r in meta.get("lines") or [] if isinstance(r, dict) and str(r.get("i", "")).isdigit()}
     for i, l in enumerate(lines):
         r = by_i.get(i) or {}
@@ -354,7 +354,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
                                                 "catalog": cat,
                                                 "assetIds": [c["assetId"] for c in cat],
                                                 "instruction": "Build the story only from assetsInHand. Cite visualAssetId. Put wishes that are not in hand on missingAssets."}),
-                       max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
+                       max_tokens=128000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story from footage", m)
@@ -367,7 +367,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
         out, m = chat_json(
             "story", sys_, json.dumps({"previous": out, "errors": errs,
                                        "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
-            max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"),
+            max_tokens=128000, schema=schema_for("story"), schema_name=schema_name("story"),
         )
         log("model_call", "story repair", m)
         lines = _finalize(_extract_lines(out))
@@ -421,7 +421,7 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
                 raise
             except LLMError as exc:
                 log("model_call_failed", f"story failed: {exc}", {"step": "story"})
-                raise StageContractError("story", [f"model call failed: {exc}"]) from exc
+                raise StageContractError("story", [f"model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
         if story is None:
             # Mock / no-model path only.
             story = _fallback_script(brief, length_min, title, research, catalog=catalog)

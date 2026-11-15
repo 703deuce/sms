@@ -63,8 +63,6 @@ def test_designer_prompt_includes_craft_guide_and_examples():
         "three",
     ):
         assert needle in low, f"missing craft cue {needle!r}"
-    # Token budget: chars/4 is a rough token count. Keep the system prompt tight.
-    assert len(system) < 28_000, f"designer system prompt is {len(system)} chars; trim the guide or examples"
     assert "Cached" in api
     assert "CREAM" in api
     assert "heartbeat" in api
@@ -99,4 +97,3 @@ def test_engineer_prompt_is_technical_and_tool_first():
     assert "no 'rgb' argument" in api.lower() or "no rgb argument" in api.lower()
     assert "dark_line" in api
     assert "0.25" in api
-    assert len(system) < 28_000, f"engineer system prompt is {len(system)} chars"

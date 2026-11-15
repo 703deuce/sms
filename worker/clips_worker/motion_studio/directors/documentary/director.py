@@ -518,7 +518,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
         user = _director_user(project, story, catalog)
         try:
             raw, m = chat_json(
-                "director", sys_, user, max_tokens=32000, timeout_s=360,
+                "director", sys_, user, max_tokens=128000, timeout_s=360,
                 schema=schema_for("director"), schema_name=schema_name("director"),
             )
             log("model_call", "director plan", m)
@@ -533,12 +533,13 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
                     "uploads": catalog_split(catalog),
                     "lines": [l["id"] for l in story["lines"]],
                     "instruction": (
-                        "Fix ONLY these validation errors. Keep every scene and decision that already "
-                        "satisfies the contract. Return the full corrected plan. Use exact asset ids."
+                        "Fix ONLY these validation errors. For on-screen wording mismatches, the errors include "
+                        "the exact rejected phrase and the assigned asset analysis wording; use that evidence. "
+                        "Keep every already-valid decision. Return the full corrected plan with exact asset ids."
                     ),
                 })
                 raw, m = chat_json(
-                    "director", sys_, repair_user, max_tokens=32000, timeout_s=360,
+                    "director", sys_, repair_user, max_tokens=128000, timeout_s=360,
                     schema=schema_for("director"), schema_name=schema_name("director"),
                 )
                 log("model_call", "director plan repair", m)
@@ -554,7 +555,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
             raise
         except LLMError as exc:
             log("model_call_failed", f"director plan failed: {exc}", {"step": "director"})
-            raise StageContractError("director", [f"model call failed: {exc}"], repaired=repaired) from exc
+            raise StageContractError("director", [f"model call failed: {exc}"], repaired=repaired, output=getattr(exc, "output", None)) from exc
     if plan is None:
         # Mock / no-model path only. Live films must not ship a deterministic substitute.
         plan = fallback_plan(project, story, catalog)

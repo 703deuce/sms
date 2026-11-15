@@ -85,10 +85,6 @@ def fix_rounds() -> int:
     return max(0, min(2, _i("MOTION_STUDIO_FIX_ROUNDS", 2)))
 
 
-def research_cap() -> int:
-    return max(0, _i("MOTION_STUDIO_RESEARCH_CAP", 6))
-
-
 # Named presets and WxH. Default 480p while we test; switch with
 # MOTION_STUDIO_RENDER_SIZE=1080p (or 1920x1080) or project settings.renderSize.
 RENDER_PRESETS = {

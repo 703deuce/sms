@@ -13,7 +13,11 @@ from clips_worker.motion_studio.pipeline import config
 
 
 class LLMError(RuntimeError):
-    pass
+    """A visible model failure, retaining any original invalid response body."""
+
+    def __init__(self, message: str, *, output=None):
+        super().__init__(message)
+        self.output = output
 
 
 def _response_format(schema: dict | None, schema_name: str | None) -> dict:
@@ -56,7 +60,9 @@ def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, time
         body["max_tokens"] = max_tokens
         body["temperature"] = 0.4
     t0 = time.time()
-    budget = max(1, int(max_tokens))
+    # Official GPT-6 Luna/Sol/Astra maximum output is 128,000 tokens.
+    # Older/custom configured models preserve their caller budget until verified.
+    budget = 128000 if re.match(r"^gpt-6(?:[.-]|$)", model, re.I) else max(1, int(max_tokens))
     content = ""
     usage: dict = {}
     details: dict = {}
@@ -106,14 +112,17 @@ def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, time
     if not content.strip():
         raise LLMError(f"model returned empty content (finish={choice.get('finish_reason')}, "
                        f"completion_tokens={usage.get('completion_tokens')}, "
-                       f"reasoning_tokens={details.get('reasoning_tokens')})")
+                       f"reasoning_tokens={details.get('reasoning_tokens')})", output=content)
     try:
         return json.loads(content), metrics
     except ValueError:
         m = re.search(r"\{.*\}", content, re.S)
         if m:
-            return json.loads(m.group(0)), metrics
-        raise LLMError("model returned non-JSON") from None
+            try:
+                return json.loads(m.group(0)), metrics
+            except ValueError:
+                pass
+        raise LLMError("model returned invalid or non-JSON content", output=content) from None
 
 
 def chat_text(step: str, system: str, user: str, *, max_tokens: int = 12000) -> tuple[str, dict]:

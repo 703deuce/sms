@@ -107,7 +107,7 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
 
     # Environments become backdrop primitives plus exactly the authored geometry.
     for eid, env in (spec.get("environments") or {}).items():
-        brief = (env.get("brief") or "").replace("\\", "\\\\").replace('"', '\\"')[:120]
+        brief = " ".join(str(env.get("brief") or "").split()).replace("\\", "\\\\").replace('"', '\\"')
         lines.append(f"    # environment {eid}: {brief}")
         backdrop = env.get("backdrop") or {}
         kind = (backdrop.get("kind") or "").lower()

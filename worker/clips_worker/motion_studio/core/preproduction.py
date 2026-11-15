@@ -44,7 +44,7 @@ def music_brief(plan: dict | None, story: dict | None = None) -> str:
             parts.append(str(env.get("brief") or env.get("name") or ""))
     if story.get("tone"):
         parts.append(str(story["tone"]))
-    return " ".join(p for p in parts if p).strip()[:400]
+    return " ".join(p for p in parts if p).strip()
 
 
 

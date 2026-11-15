@@ -156,7 +156,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
     if not config.mock():
         brief = _engineer_brief(ctx)
         try:
-            out, m = chat_json("motion_engineer", SYSTEM, json.dumps(brief), max_tokens=14000,
+            out, m = chat_json("motion_engineer", SYSTEM, json.dumps(brief), max_tokens=128000,
                              schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer", m)
             interpreted = _interpret(out, ctx)
@@ -168,7 +168,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                 code = None
         except LLMError as exc:
             log("model_call_failed", f"motion engineer failed: {exc}", {"step": "motion_engineer"})
-            code = None
+            raise StageContractError("motion_engineer", [f"model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
     passing = None
     failed = None
     problems: list[str] = list(
@@ -222,7 +222,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             payload = {
                 "previous_code": code,
                 "previous_spec": spec,
-                "problems": problems[:16],
+                "problems": problems,
                 "traceback": (failed or {}).get("trace") or problems,
                 "api": api_excerpt_for(problems + ((failed or {}).get("trace") or []), code or None),
                 "instruction": (
@@ -231,7 +231,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                     "If the design cannot be implemented, return a structured limitation."
                 ),
             }
-            out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=14000,
+            out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=128000,
                            schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer fix round {rounds}", m)
             interpreted = _interpret(out, ctx)
@@ -252,7 +252,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                 code = None
         except LLMError as exc:
             log("model_call_failed", f"scene fix failed: {exc}", {"step": "scene_fix"})
-            break
+            raise StageContractError("scene_fix", [f"model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
     if passing and passing.get("code"):
         result = {
             "code": passing["code"], "codeHash": code_hash(passing["code"]), "model": model, "fixRounds": rounds,

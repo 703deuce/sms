@@ -1,7 +1,7 @@
 """#1212 BE-3 optional grounded research: Gemini generateContent with the google_search tool.
 
-Web search is off unless the project setting webResearch is on. Failed calls log a warning
-and are not re-requested; the story writer continues from model knowledge and uploads.
+Web search is off unless the project setting webResearch is on. Failed calls
+raise a visible research-stage error instead of silently degrading to unsourced claims.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def _parse_response(data: dict, query: str, model: str, t0: float) -> dict:
         seg = (s.get("segment") or {}).get("text")
         idx = s.get("groundingChunkIndices") or []
         if seg:
-            supports.append({"claim": seg[:400], "sources": [sources[i]["url"] for i in idx if i < len(sources)]})
+            supports.append({"claim": seg, "sources": [sources[i]["url"] for i in idx if i < len(sources)]})
     return {"query": query, "text": text, "sources": sources, "claims": supports,
             "searchQueries": gm.get("webSearchQueries") or [], "ms": int((time.time() - t0) * 1000), "model": model}
 
@@ -58,7 +58,7 @@ def _parse_response(data: dict, query: str, model: str, t0: float) -> dict:
 def _post(query: str, model: str, timeout_s: float) -> dict:
     from clips_worker.gemini_vision import _key
     body = {"contents": [{"role": "user", "parts": [{"text": (
-        "Research this for a factual documentary script. Answer in 5-10 dense factual bullet points with dates and numbers, "
+        "Research this for a factual documentary script. Include all relevant factual evidence with dates and numbers, "
         "and keep each claim attributable to a source.\n\nQuestion: " + query)}]}],
             "tools": [{"google_search": {}}]}
     url = GEMINI_URL.format(model=model)
@@ -84,36 +84,31 @@ def grounded_query(query: str, timeout_s: float = 90) -> dict:
 def run_research(plan: list[dict], log) -> dict:
     """plan: [{query, grounded: bool, reason}] from the story step. Returns {results, decisions, sources}.
 
-    A failed grounded call is logged as a warning and skipped; it never raises to the job.
+    A failed grounded call raises a visible discrepancy; never silently omit research.
     """
-    cap = config.research_cap()
     seen, results, decisions, sources = set(), [], [], []
-    used = 0
     for item in plan or []:
-        q = " ".join(str(item.get("query") or "").split())[:300]
+        q = " ".join(str(item.get("query") or "").split())
         if not q or q.lower() in seen:
             continue
         seen.add(q.lower())
         grounded = bool(item.get("grounded"))
-        reason = str(item.get("reason") or "")[:300]
-        if grounded and used >= cap:
-            grounded, reason = False, f"cap reached ({cap}); {reason}"
+        reason = str(item.get("reason") or "")
         if grounded and config.mock():
             grounded, reason = False, f"mock mode; {reason}"
         decisions.append({"query": q, "grounded": grounded, "reason": reason})
         log("research_decision", f"{'GROUND' if grounded else 'model knowledge'}: {q}", {"query": q, "grounded": grounded, "reason": reason})
         if not grounded:
             continue
-        used += 1
         try:
             res = grounded_query(q)
         except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, RuntimeError) as exc:
             status = getattr(exc, "code", None)
             detail = _redact(str(exc.reason if isinstance(exc, urllib.error.HTTPError) else exc))[:400]
-            log("research_warning",
-                f"grounded search failed ({status or type(exc).__name__}); writing from model knowledge (no re-request)",
+            from clips_worker.motion_studio.core.output_contracts import StageContractError
+            log("research_failed", f"grounded search failed ({status or type(exc).__name__})",
                 {"query": q, "status": status, "error": detail})
-            continue
+            raise StageContractError("research", [f"query {q!r}: grounded lookup failed ({status or type(exc).__name__}): {detail}"]) from exc
         results.append(res)
         for s in res["sources"]:
             if s["url"] not in {x["url"] for x in sources}:

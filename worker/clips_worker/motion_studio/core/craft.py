@@ -317,7 +317,7 @@ def designer_system(api_reference: str) -> str:
         "uses a map, use ctx.geo / ctx.place / ctx.ll, GeoMap, RegionFill, Route, "
         "MapPin — do not reimplement a map. When it uses a chart, subclass Item with real numbers from "
         "ctx.data only. skia, random, math and numpy are already in scope (see the API sandbox contract). "
-        "Keep it under ~250 lines.\n"
+        "Use as much code as the approved composition genuinely requires.\n"
     )
     return role + CRAFT_GUIDE + api_reference + WORKED_EXAMPLES
 
@@ -358,11 +358,8 @@ Static-validate against the API contract. Word timing uses official word ids or 
 Express tool timing relative to the scene (startS/endS in seconds, startFrac/endFrac, or line anchors). Do not convert to frames; the engine converts from the real durationS and fps. Custom code uses ctx.duration and ctx.W() in seconds.
 All roles currently run on gpt-6-luna; do not mention or choose a model.
 """
-    # The engine manifest is still available to repairs. The complete class-name
-    # index repeats constructors already documented above; omit that index from
-    # the regular scene prompt to retain the precise tool descriptions within budget.
-    api_reference = "\n".join(
-        line for line in (api_reference or "").splitlines()
-        if not line.startswith("All exposed classes: ")
-    )
-    return role + "\n" + TECHNICAL_COMPOSITION + "\n\n" + (tools_reference or "") + "\n\n" + api_reference
+    # Keep the entire verified API, cinematic craft guide and worked grammar
+    # examples; the engineer must know the expressive surface, not a prompt-size subset.
+    return (role + "\n" + TECHNICAL_COMPOSITION + "\n\n" + (tools_reference or "")
+            + "\n\n" + (api_reference or "") + "\n\nCINEMATIC CRAFT REFERENCE (implementation only; do not redesign):\n"
+            + CRAFT_GUIDE + "\n\n" + WORKED_EXAMPLES)

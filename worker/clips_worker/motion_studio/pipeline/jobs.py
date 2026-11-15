@@ -167,9 +167,10 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
                 r = analyze_asset(conn, proj, a, work, log)
                 db.update_asset(conn, a["id"], status="ready", analysis=r["analysis"], width=r["width"], height=r["height"],
                                 durationMs=r["durationMs"])
-            except Exception as exc:  # noqa: BLE001 (one asset failing doesn't stop the run)
-                db.update_asset(conn, a["id"], status="failed", analysis={"error": type(exc).__name__})
-                log("asset_failed", f"analysis failed for {a.get('filename')}: {type(exc).__name__}", {"assetId": a["id"]})
+            except Exception as exc:  # noqa: BLE001
+                db.update_asset(conn, a["id"], status="failed", analysis={"error": type(exc).__name__, "message": str(exc)})
+                log("asset_failed", f"analysis failed for {a.get('filename')}: {type(exc).__name__}", {"assetId": a["id"], "error": str(exc)})
+                raise StageContractError("asset_analysis", [f"asset {a['id']}: {type(exc).__name__}: {exc}"]) from exc
         assets = db.assets(conn, pid)
         assets = _group_faces(conn, assets, log)
     catalog = [a for a in assets if a["status"] == "ready"]
@@ -264,7 +265,7 @@ def _prepare_photos(conn, proj: dict, work: str) -> dict:
             with Image.open(dst) as im:
                 meta[a["id"]] = {"w": im.width, "h": im.height, "keyframes": keyframes}
             out[a["id"]] = {"kind": "photo" if a["kind"] == "image" else "still", "w": meta[a["id"]]["w"], "h": meta[a["id"]]["h"],
-                            "description": ((a.get("analysis") or {}).get("summary") or a.get("filename") or "")[:200],
+                            "description": ((a.get("analysis") or {}).get("description") or (a.get("analysis") or {}).get("summary") or a.get("filename") or ""),
                             "keyframes": keyframes}
     Path(os.path.join(ad, "photos", "meta.json")).write_text(json.dumps(meta))
     Path(os.path.join(ad, "keyframes", "library.json")).write_text(json.dumps(library_from_catalog(catalog)))
@@ -458,7 +459,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
         ctx = scene_context(sc, lay, story, plan, assets_meta, seed)
         notes = str((scene.get("plan") or {}).get("userNotes") or "").strip()
         if notes:                          # inspector edits / director notes from the user (part of the ctx hash)
-            ctx["scene"]["userNotes"] = notes[:2000]
+            ctx["scene"]["userNotes"] = notes
         ctx_hash = _render_hash(ctx)
         code = None
         element_edit = bool(p.get("elementEdit") or (scene.get("plan") or {}).get("elementPatches"))

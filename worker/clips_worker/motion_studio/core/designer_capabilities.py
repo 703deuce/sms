@@ -12,6 +12,8 @@ or declare a custom-object extension.
 from __future__ import annotations
 
 import re
+import unicodedata
+from collections import Counter
 
 
 def format_designer_capabilities() -> str:
@@ -65,7 +67,7 @@ def asset_evidence(asset: dict | None) -> dict:
     faces = an.get("faces") or []
     def _trim_people(items):
         out = []
-        for p in items[:12]:
+        for p in items:
             if isinstance(p, dict):
                 out.append({k: p[k] for k in ("name", "label", "role", "count", "id") if k in p})
             elif isinstance(p, str):
@@ -75,19 +77,19 @@ def asset_evidence(asset: dict | None) -> dict:
     if isinstance(transcript, list):
         transcript = " ".join(str(x) for x in transcript)
     evidence = {
-        "summary": (an.get("summary") or "")[:400] or None,
-        "description": (an.get("description") or "")[:400] or None,
-        "onScreenText": [str(x)[:120] for x in text[:24]],
-        "tags": [str(x)[:80] for x in tags[:24]],
+        "summary": (an.get("summary") or "") or None,
+        "description": (an.get("description") or "") or None,
+        "onScreenText": [str(x) for x in text],
+        "tags": [str(x) for x in tags],
         "people": _trim_people(people),
         "faces": _trim_people(faces) if isinstance(faces, list) else faces,
         "era": an.get("era") or None,
-        "moments": (an.get("moments") or [])[:16],
-        "shots": (an.get("shots") or [])[:12],
+        "moments": (an.get("moments") or []),
+        "shots": (an.get("shots") or []),
         "hasAudio": an.get("hasAudio"),
         "durationS": an.get("durationS"),
-        "transcriptText": (str(transcript)[:400] or None),
-        "speakers": (an.get("speakers") or [])[:8],
+        "transcriptText": (str(transcript) or None),
+        "speakers": (an.get("speakers") or []),
     }
     # Drop empty values so the prompt stays tight.
     return {k: v for k, v in evidence.items() if v not in (None, "", [], {})}
@@ -177,32 +179,74 @@ def evidence_text(asset: dict | None) -> str:
     return " ".join(parts)
 
 
-_QUOTED = re.compile('[\u201c\u201d\u0022]([^\u201c\u201d\u0022]{2,120})[\u201c\u201d\u0022]')
+_QUOTED = re.compile('[\u201c\u201d\u0022]([^\u201c\u201d\u0022]{2,})[\u201c\u201d\u0022]')
+_SCREEN_WORDING = re.compile(
+    r"(?is)\b(?:on[-\s]?screen|sign|marquee|billboard|caption|subtitle|"
+    r"wording|lettering|text|label|poster|banner|headline|inscription|"
+    r"printed|written|reads?|spells?)\b[^\"“”\n]{0,120}$"
+)
 
 
 def quoted_claims(text: str | None) -> list[str]:
-    """Quoted phrases in a visual claim (on-screen wording, titles, signs)."""
+    """Only literal quoted visual wording is an asset claim; narrative quotes are not."""
     if not text:
         return []
-    return [m.strip() for m in _QUOTED.findall(text) if m.strip()]
+    source = str(text)
+    return [m.group(1).strip() for m in _QUOTED.finditer(source)
+            if m.group(1).strip()
+            and _SCREEN_WORDING.search(source[max(0, m.start() - 160):m.start()])]
+
+
+def _normalize_wording(value: object) -> str:
+    value = unicodedata.normalize("NFKC", str(value or ""))
+    value = value.translate(str.maketrans({
+        "\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"',
+        "\u00a0": " ", "\u2013": "-", "\u2014": "-",
+    }))
+    return " ".join(value.casefold().split()).strip(" \t\r\n\"'“”‘’.,!?;:")
+
+
+def _supported_wording(claim: str, sources: list[str]) -> bool:
+    needle = _normalize_wording(claim)
+    if not needle:
+        return True
+    significant = [t for t in re.findall(r"[\w$]+(?:\.\d+)?", needle)
+                   if t not in {"a", "an", "the", "and", "or", "to", "of", "on", "in", "as", "is"}]
+    for source in sources:
+        haystack = _normalize_wording(source)
+        if needle in haystack or (len(haystack) >= 8 and haystack in needle):
+            return True
+        if len(significant) >= 2:
+            tokens = Counter(re.findall(r"[\w$]+(?:\.\d+)?", haystack))
+            overlap = sum(min(n, tokens[t]) for t, n in Counter(significant).items())
+            if overlap / len(significant) >= 0.7:
+                return True
+    return False
 
 
 def validate_claims_against_asset(text: str | None, asset: dict | None, label: str) -> list[str]:
-    """A visual claim must not invent wording the assigned asset's analysis does not record."""
+    """Compare explicit on-screen quotation against *unabridged* asset analysis."""
     claims = quoted_claims(text)
     if not claims:
         return []
     if not asset:
-        return [f"{label} claims {claims[0]!r} but no asset in hand is assigned"]
-    blob = evidence_text(asset).lower()
-    errs: list[str] = []
+        return [f"{label} claims literal text {claims[0]!r} but no asset in hand is assigned"]
+    analysis = asset.get("analysis") or {}
+    on_screen = analysis.get("onScreenText") or analysis.get("text") or analysis.get("ocr") or []
+    if isinstance(on_screen, str):
+        on_screen = [on_screen]
+    description = str(analysis.get("description") or "")
+    summary = str(analysis.get("summary") or "")
+    sources = [str(x) for x in on_screen] + [description, summary]
+    errors = []
     for claim in claims:
-        needle = " ".join(claim.lower().split())
-        if needle and needle not in " ".join(blob.split()):
-            errs.append(
-                f"{label} claims {claim!r} which the assigned asset's analysis does not record"
+        if not _supported_wording(claim, sources):
+            errors.append(
+                f"{label} claims literal on-screen text {claim!r}, but the assigned asset analysis "
+                f"records onScreenText={on_screen!r}; description={description!r}; summary={summary!r}. "
+                "Use the actual wording, or write a paraphrase without presenting it as quoted sign text."
             )
-    return errs
+    return errors
 
 
 def validate_story_assets(story: dict, catalog: list | None) -> list[str]:
