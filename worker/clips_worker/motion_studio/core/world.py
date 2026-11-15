@@ -10,6 +10,9 @@ import math
 
 from clips_worker.motion_studio.vendor.cinematic_skill import engine as E
 from clips_worker.motion_studio.vendor.cinematic_skill.engine import Film, Item, clamp
+from clips_worker.motion_studio.core import fonts as _fonts
+
+_fonts.apply()   # licence-clean font roles (RE-1)
 
 HOUSE = {
     # versioned house constants (ST-RW-011 lessons bump the version)

@@ -175,7 +175,8 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
     cat = [{"assetId": a["id"], "kind": a["kind"], "filename": a.get("filename"),
             "summary": (a.get("analysis") or {}).get("summary"),
             "transcript": ((a.get("analysis") or {}).get("transcriptText") or "")[:4000],
-            "moments": ((a.get("analysis") or {}).get("moments") or [])[:20]} for a in catalog]
+            "moments": ((a.get("analysis") or {}).get("moments") or [])[:20],
+            "people": ((a.get("analysis") or {}).get("people") or [])[:8]} for a in catalog]
     sys_ = ("You are the Story agent. Build a documentary narration around the user's uploaded footage. Lines are either "
             "narration, or a quote from an uploaded clip: {\"quote\":{\"assetId\",\"text\":<exact words from the transcript>}} "
             "with `text` repeating the quote.\n" + WRITING_RULES +

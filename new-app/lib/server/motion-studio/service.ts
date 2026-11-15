@@ -815,6 +815,10 @@ export async function getAllowance(workspaceId: string, id: string): Promise<MsA
 /** POST /export — the assembled master already exists after review; export marks it delivered (no re-render unless scenes changed). */
 export async function startExport(workspaceId: string, id: string, key?: string | null) {
   const row = await required(workspaceId, id)
+  // ST-CMH-014 hard gate: a footage handoff whose seam check failed blocks export (regenerate that scene first)
+  const seam = ((row.qa ? J(row.qa) : null)?.checks as Array<{ id?: string; pass?: boolean }> | undefined)?.find(c => c?.id === 'A15')
+  if (row.status === 'review' && seam && seam.pass === false)
+    throw new MotionStudioError('CONFLICT', 'A footage handoff failed its seam check. Regenerate that scene, then export.', 409)
   if (!(await claimKey(id, 'export', key))) return getProject(workspaceId, id)
   if (!['review', 'running', 'failed'].includes(row.status) || !row.plan || !row.narration)
     throw new MotionStudioError('CONFLICT', 'Export is available once the documentary is ready for review.', 409)

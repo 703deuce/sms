@@ -10,7 +10,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import tempfile
 import urllib.request
 from pathlib import Path
 
@@ -79,12 +78,15 @@ def narrate(project: dict, story: dict, work: str, upload_key: str, log) -> dict
             subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono", "-t", f"{dur:.3f}",
                             "-c:a", "libmp3lame", "-b:a", "128k", path], check=True)
         else:
-            from clips_worker.t2v.elevenlabs_tts import tts_with_timestamps_once
+            from clips_worker.motion_studio.pipeline.tts import tts_with_format_fallback
             from clips_worker.t2v.tts_alignment import words_from_alignment
             prev = " ".join(l["spoken"] for l in chs[ci - 1])[-400:] if ci > 0 else None
             nxt = " ".join(l["spoken"] for l in chs[ci + 1])[:400] if ci + 1 < len(chs) else None
-            audio, alignment, used_model = tts_with_timestamps_once(api_key, text, voice, previous_text=prev, next_text=nxt,
-                                                                    model_id=preset["modelId"])
+            audio, alignment, fmt_used = tts_with_format_fallback(api_key, text, voice, model_id=preset["modelId"],
+                                                                  preferred=preset["outputFormat"], previous_text=prev,
+                                                                  next_text=nxt, log=log)
+            used_model = preset["modelId"]
+            out["voice"]["format"] = fmt_used
             Path(path).write_bytes(audio)
             raw = words_from_alignment(alignment, offset_s=0.0, scene_slot=ci)
             words = align_words_to_lines(raw, sc)

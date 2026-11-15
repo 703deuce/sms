@@ -4,7 +4,6 @@ ONE paid generation per explicit action, idempotent per project+version, never r
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 
 from clips_worker.motion_studio.core import audio as A
