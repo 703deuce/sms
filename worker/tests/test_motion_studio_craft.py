@@ -3,8 +3,10 @@ import pathlib
 
 from clips_worker.motion_studio.core.craft import (
     CRAFT_GUIDE,
+    EXAMPLE_BOARD,
     EXAMPLE_CHART,
     EXAMPLE_MAP,
+    SCENE_SKELETON,
     WORKED_EXAMPLES,
     designer_system,
 )
@@ -34,6 +36,8 @@ def test_designer_prompt_includes_craft_guide_and_examples():
     system = designer_system(api)
     assert "designer_system(API_REFERENCE)" in DESIGNER_SRC
     assert CRAFT_GUIDE in system
+    assert SCENE_SKELETON in system
+    assert EXAMPLE_BOARD in system
     assert EXAMPLE_MAP in system
     assert EXAMPLE_CHART in system
     assert WORKED_EXAMPLES in system
@@ -49,6 +53,13 @@ def test_designer_prompt_includes_craft_guide_and_examples():
         "rollingnumber",
         "glowpin",
         "pricechart",
+        "source of truth",
+        "illustrations",
+        "never the only templates",
+        "starter skeleton",
+        "wright flyer",
+        "data is the world",
+        "paperdoc",
         "three",
     ):
         assert needle in low, f"missing craft cue {needle!r}"
@@ -61,8 +72,8 @@ def test_designer_prompt_includes_craft_guide_and_examples():
 
 
 def test_worked_examples_pass_sandbox_policy():
-    check_code(_example_code(EXAMPLE_MAP))
-    check_code(_example_code(EXAMPLE_CHART))
+    for block in (SCENE_SKELETON, EXAMPLE_BOARD, EXAMPLE_MAP, EXAMPLE_CHART):
+        check_code(_example_code(block))
 
 
 def test_motion_core_exports_craft_surface():

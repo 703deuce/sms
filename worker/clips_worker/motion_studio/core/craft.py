@@ -1,18 +1,26 @@
 """Craft guidance and compact worked examples for the Motion Designer prompt.
 
-Distilled from the Cinematic Skill manual (SKILL.md + references/film, story, sound, voice)
-and from the handmade Keef (map world) and GameStop (custom chart Item) films. Kept tight so
-the designer system prompt stays inside a reasonable token budget.
+Distilled from the Cinematic Skill manual (SKILL.md, references/, scripts/) — the source of
+truth for what the engine can do — plus handover 6A/6B/6C (core vs custom) and the reference
+workflow S1–S16. Worked examples (starter skeleton, Wright Flyer, Keef map, GME chart) are
+illustrations of grammar, never the only templates. Kept tight for the token budget.
 """
 from __future__ import annotations
 
 CRAFT_GUIDE = '''
 CRAFT (how a film in this engine is actually made — follow these, not just the signatures):
 
+Source of truth. The engine manual (capabilities in motion_core and this guide) defines what
+is possible. Invent a NEW world from those capabilities for THIS topic. The starter skeleton,
+the Wright Flyer board, the Keef map, and the GameStop chart are ILLUSTRATIONS of grammar —
+never the only templates, and never worlds to copy onto a new subject. Shared core blocks
+(word clock, camera, type, charts, maps, stamps, prints, cues) are reused; custom Item
+subclasses (the film's ext.py) are invented per video. "The data is the world" is a heuristic
+when the story is a number moving, not a rule that every film is a chart.
+
 World. One camera move over ONE invented world for this topic. Every graphic lives on that
 world. A map, a price chart, an evidence board, a desk, a network, a city grid, or something
-new you invent — not a generic dark grid with slammed type. Do not copy the example worlds
-onto a new subject; steal the grammar, invent the set.
+new you invent — not a generic dark grid with slammed type. Steal the grammar, invent the set.
 
 Camera. Use film.shot(t, x, y, zoom, rot=..., radius=..., strength=...) so the spotlight
 travels with the camera (never leave the light behind). Keys every 0.6–3 s; the spline keeps
@@ -63,10 +71,21 @@ lands; film.cue("heartbeat", t) or "clock" under the tensest line. Kinds: pop wh
 impact boom ticks riser stamp shimmer drop marker pencil tick snip click heartbeat clock.
 Effects are felt, not noticed; the voice always wins. Do not pile cues on every item.
 
+Structure. Every generated scene follows the starter skeleton: lay the world out in clusters
+(one per section), add items on ctx.W / line times, then camera keys (land on each cluster
+just after it appears, end on a pull-back), then a few hand cues. Do not invent a new file
+layout.
+
+Evidence. Nothing invented that looks real: a code-drawn document is a recreation and may
+quote only words that were really written (PaperDoc + phrase highlight). Photos come from
+ctx.assets / PhotoFrame or Print. Never upscale a soft thumbnail into a hero.
+
+Performance. Every Item needs bounds() (off-screen items are skipped). Cache big static vector
+art with Cached. Do not fill a rotating texture with a repeating image shader; tile it.
+
 Custom items. Subclass Item (__init__ t_in,t_out,z,sfx; bounds(res); draw(c,res,t) in world
-px). Use text(), paint(), ramp(), ease_*, spring(), rrect(). Subclass Cached for a big static
-drawing (a street plan, a floor, a chart grid) so it is drawn once and reused. Seeded
-randomness only (ctx.rand / seed=ctx.seed). No files, network, or OS.
+px). Use text(), paint(), ramp(), ease_*, spring(), rrect(). Seeded randomness only
+(ctx.rand / seed=ctx.seed). No files, network, or OS.
 '''
 
 # Compact map-world grammar, adapted from keef/scene.py to motion_core.
@@ -186,10 +205,89 @@ def build_scene(ctx):
     return film
 '''
 
+SCENE_SKELETON = r'''
+# SKELETON — structure every build_scene like this (from the engine's blank starter scene).
+# Replace the cards/title with THIS topic's world; keep the order: clusters, items on W/L, camera, cues.
+from motion_core import *
+def build_scene(ctx):
+    W, film = ctx.W, ctx.film()
+    ink, acc = ctx.rgb("ink", (34, 32, 30)), ctx.rgb("accent", (198, 92, 46))
+    lines = ctx.lines or []
+    # 1. Title / hook, emphasis on the word that matters
+    if lines:
+        mid = 0.0
+        film.add(HeroSlam((ctx.scene or {}).get("description") or (ctx.scene or {}).get("visualType") or "THE STORY",
+                          mid, -2300, 700, lines[0]["start"], font="cond", rgb=ink, glow=0.2))
+        if lines[0].get("hero"):
+            try:
+                t = W(lines[0]["id"], lines[0]["hero"].split()[0])
+                film.add(EmphasisMark("underline", mid, -2050, 4000, 50, t, rgb=acc))
+            except Exception:
+                pass
+    # 2-3. Clusters (one per section) appear as their lines start; routes draw on between them
+    gap, xs = 4400, []
+    for i, ln in enumerate(lines[1:5] or lines):
+        x = i * gap; xs.append(x)
+        film.add(Card(x, 0, 3000, 1600, ln["start"] + 0.05, title=(ln.get("hero") or "")[:24] or "BEAT",
+                      lines=[ln["text"][:48]], accent=acc))
+    for a, b, ln in zip(xs, xs[1:], (lines[1:5] or lines)[1:]):
+        film.add(Route((a + 1500, 0), (b - 1500, 0), t_in=ln["start"] - 0.15, dur=0.5, bend=-0.3, width=24, rgb=ink))
+    # 4-5. Camera: title, then land on each cluster just after it appears, then the whole journey
+    film.shot(0.0, 0, -2200, 0.52)
+    if xs:
+        film.shot((lines[0]["end"] if lines else 0.8) + 0.2, (xs[0] + xs[-1]) / 2, -400, 0.34)
+        for x, ln in zip(xs, lines[1:5] or lines):
+            film.shot(ln["start"] + 0.45, x, 350, 0.62)
+            film.shot(ln["end"] - 0.05 if ln.get("end") else ln["start"] + 1.2, x + 200, 450, 0.58)
+        film.shot(ctx.duration, (xs[0] + xs[-1]) / 2, 0, 0.22, radius=18000, strength=0.1)
+    else:
+        film.shot(ctx.duration, 0, 0, 0.35, radius=12000, strength=0.15)
+    return film
+'''
+
+EXAMPLE_BOARD = r'''
+# EXAMPLE C — documentary board grammar (from the Wright Flyer worked example). Invent new clusters
+# and places for THIS topic. Map in the middle; clusters off the cork, tied to a place with StringLine.
+from motion_core import *
+def build_scene(ctx):
+    W, film = ctx.W, ctx.film()
+    us = film.add(ctx.geo("us", K=60000, look=dict(sheet=(30, 28, 24), water=(42, 58, 62), land=(78, 92, 70), border=(160, 140, 90))))
+    # Prefer ctx.place; fall back to ctx.ll if the name is missing from the stock map.
+    def at(name, lat, lon):
+        try: return ctx.place(us, name)
+        except Exception: return ctx.ll(us, lat, lon)
+    kdh = at("Kill Devil Hills", 36.0, -75.67)
+    lines = ctx.lines or []
+    lid = lines[0]["id"] if lines else "l1"
+    t0 = lines[0]["start"] if lines else 0.2
+    word = (lines[0].get("hero") or (ctx.words[0]["w"] if ctx.words else "the")).split()[0]
+    try: tw = W(lid, word)
+    except Exception: tw = t0
+    CX = kdh[0] + 8000
+    film.add(RegionFill(us, ["North Carolina"], RUST, tw, to_rgb=MUSTARD, t_change=min(ctx.duration, tw + 4)))
+    film.add(XMarker(*kdh, "KILL DEVIL HILLS", t_in=tw, side="left", size=3.0, label_size=150))
+    if ctx.assets:
+        key = next(iter(ctx.assets))
+        photo = film.add(PhotoFrame(key, CX, 300, 2600, rot=-1.2, t_in=t0 + 0.1, skin="print"))
+    film.add(StringLine(kdh, (CX - 1250, -560), t_in=t0 + 0.2, dur=0.7, sag=0.03, width=16, persist=True))
+    film.add(HeroSlam("TWELVE SECONDS", CX, -2300, 800, min(ctx.duration * 0.35, t0 + 2.0), font="cond", rgb=CREAM, glow=0.3))
+    # A typeset recreation quotes only real words; highlight the phrase on the spoken beat.
+    doc = film.add(PaperDoc(CX + 4000, -2000, 2500, 3200, rot=1.4, t_in=t0 + 1.0,
+                            header=(("A REAL LETTER", 130, "serif"),), sentence="I am an enthusiast, but not a crank."))
+    film.add(Stamp("FAILED", CX + 4200, -400, size=300, rot=-8, t_in=min(ctx.duration * 0.7, t0 + 3.0), rgb=RED))
+    film.shot(0.0, CX, -2150, 1.0, -1.0, strength=0.5)
+    film.shot(tw + 0.4, (kdh[0] + CX) / 2, -1100, 0.33, 0.0, radius=7000, strength=0.3)
+    film.shot(t0 + 1.2, CX, 250, 1.12, -0.6)
+    film.shot(ctx.duration, CX, -800, 0.28, 0.0, radius=16000, strength=0.15)
+    film.cue("boom", min(ctx.duration * 0.35, t0 + 2.0), 0.55)
+    return film
+'''
+
 WORKED_EXAMPLES = (
-    "\nWORKED EXAMPLES (patterns of camera, timing, and custom Items — invent a new world for THIS topic;\n"
-    "do not reuse these stories, palettes, or place names):\n"
-    + EXAMPLE_MAP + "\n" + EXAMPLE_CHART
+    "\nSOURCE OF TRUTH AND ILLUSTRATIONS: the engine manual (motion_core + CRAFT above) is what is\n"
+    "possible. Invent a new world from those capabilities. The skeleton, Wright Flyer board, Keef map,\n"
+    "and GameStop chart are illustrations of grammar — never the only templates, never worlds to copy:\n"
+    + SCENE_SKELETON + "\n" + EXAMPLE_BOARD + "\n" + EXAMPLE_MAP + "\n" + EXAMPLE_CHART
 )
 
 
@@ -199,9 +297,14 @@ def designer_system(api_reference: str) -> str:
         "You are the Motion Designer for a cinematic motion-graphics documentary. Write ONE Python "
         "scene for the Transovo engine. Output JSON {\"code\": \"<python source>\"}. The code must "
         "`from motion_core import *` and define `build_scene(ctx)` returning `film = ctx.film()` "
-        "populated with items and camera keys. Design fresh for THIS video and scene. Invent ONE "
-        "continuous world from the story's subject. When the world is a map, use ctx.geo / ctx.place "
-        "/ ctx.ll, GeoMap, RegionFill, Route, MapPin — do not reimplement a map. When it is a chart, "
-        "subclass Item (see the example) with real numbers from ctx.data only. Keep it under ~250 lines.\n"
+        "populated with items and camera keys, structured like the starter skeleton (clusters, items "
+        "on spoken-word times, then camera keys, then cues). "
+        "The engine manual (motion_core + the craft guide) is the source of truth for what is possible. "
+        "Invent a NEW world from those capabilities for THIS topic. The starter skeleton, Wright Flyer, "
+        "Keef map, and GameStop chart are illustrations of grammar — never the only templates, and never "
+        "worlds to copy onto a new subject. Shared core blocks are reused; custom Items are invented per "
+        "video. When the world is a map, use ctx.geo / ctx.place / ctx.ll, GeoMap, RegionFill, Route, "
+        "MapPin — do not reimplement a map. When it is a chart, subclass Item with real numbers from "
+        "ctx.data only. Keep it under ~250 lines.\n"
     )
     return role + CRAFT_GUIDE + api_reference + WORKED_EXAMPLES
