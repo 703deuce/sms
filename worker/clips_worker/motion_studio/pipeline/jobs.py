@@ -250,7 +250,10 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
     seed = int(hashlib.sha256(pid.encode()).hexdigest()[:6], 16)
     if sc["kind"] in ("handoff", "hardcut"):
         from clips_worker.motion_studio.core.handoff import HandoffSpec, render_handoff
-        h = sc["handoff"]
+        h = dict(sc["handoff"])
+        row_h = (scene.get("plan") or {}).get("handoff") or {}
+        if row_h.get("assetId"):          # Media Library "replace" updates the scene row
+            h["assetId"] = row_h["assetId"]
         asset = next((a for a in db.assets(conn, pid) if a["id"] == h["assetId"]), None)
         if not asset:
             raise ValueError("handoff asset missing")
@@ -282,6 +285,9 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
     else:
         assets_meta = _prepare_photos(conn, proj, work)
         ctx = scene_context(sc, lay, story, plan, assets_meta, seed)
+        notes = str((scene.get("plan") or {}).get("userNotes") or "").strip()
+        if notes:                          # inspector edits / director notes from the user (part of the ctx hash)
+            ctx["scene"]["userNotes"] = notes[:2000]
         ctx_hash = _render_hash(ctx)
         code = None
         if scene.get("codeKey") and not p.get("regenerate") and (scene.get("qa") or {}).get("ctxHash") == ctx_hash:

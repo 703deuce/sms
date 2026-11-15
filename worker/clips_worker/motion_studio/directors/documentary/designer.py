@@ -61,6 +61,9 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
         brief = {"scene": ctx["scene"], "duration": ctx["duration"], "style": ctx["style"], "lines": ctx["lines"],
                  "emphasis": ctx["emphasis"], "data": ctx["data"],
                  "assets": {k: {kk: v.get(kk) for kk in ("kind", "w", "h", "description")} for k, v in ctx["assets"].items()}}
+        if ctx["scene"].get("userNotes"):
+            brief["userRequest"] = ("The user asked for these changes to this scene; honor them within the house rules: "
+                                    + ctx["scene"]["userNotes"])
         try:
             out, m = chat_json("scene_code", SYSTEM, json.dumps(brief), max_tokens=14000)
             code = str(out.get("code") or "")

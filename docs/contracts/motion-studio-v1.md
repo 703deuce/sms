@@ -1,163 +1,96 @@
-# Transovo Studio (Motion Studio, documentaries) — Backend API contract v1
+# Motion Studio (documentaries): Backend API contract v1.1
 
-> **Issue alignment (1:15 AM ET, 15 Nov 2026):** route prefix is `/api/motion-studio/*` per #1211 (BE-2). Activity events = `StudioActivityEvent` (#1221), assets = `StudioAsset` (#1210), handoff segment record fields per #1222 (BE-13), director registry with one entry `documentary` (#1210). Timeline track labels VIDEO / GRAPHICS / VOICE / MUSIC (#1236 FE-6). Media policy fixed to `uploads_only` in v1 (#1231 FE-1).
-
-Owner: Backend Engineer. Status: **DRAFT for Frontend agreement** (written 15 Nov 2026, ~1:10 AM ET). Repo copy: `docs/contracts/motion-studio-v1.md`.
-Spec: `specs/transovo-studio-build.md` (D3: UI `/app/documentary`, API `/api/motion-studio/*`).
+**Status: matches the merged frontend** (PR #1260, master 277e1c54). The types are `new-app/lib/motion-studio/types.ts`, and the live client is `new-app/lib/motion-studio/client.ts`; both are the source of truth for shapes. Turn the live backend on with `NEXT_PUBLIC_MOTION_STUDIO_LIVE=1`. Owner: Backend Engineer. Updated 15 Nov 2026, ~2:00 AM ET. The repo copy is `docs/contracts/motion-studio-v1.md`.
 
 ## 0. Principles
-- **Reuse, don't fork.** Uploads = existing clip uploads (`/api/clips/uploads`). Storage, auth (`resolveWorkspaceId`), job queue (`clip_jobs` on the clips worker), clipper analysis (Deepgram transcription + Gemini watch) and the **Compact Editor data model (`ClipEditsV2`)** are reused.
-- **One Motion Studio project = one canvas `ClipProject` + one editor `Clip`.** The editable timeline *is* `Clip.edits` (`ClipEditsV2`), opened in the Compact Editor at `/app/video-editor/{clipProjectId}/edit/{clipId}?mode=compact` (same handoff as Ad Studio). Motion Studio adds an optional `edits.motionStudio` extension (track kinds + scene/handoff metadata). **No new editor format.**
-- All times are **milliseconds** unless the field ends in `S` (seconds).
-- **No `$` anywhere.** `creditEstimate` is `null` (credits charging is OFF).
-- Errors: `{ "error": string, "code": string }` with HTTP status. Codes: `INVALID`, `NOT_FOUND`, `CONFLICT`, `STAGE_NOT_RETRYABLE`, `INTERNAL`.
-- Auth: same session/workspace as the rest of `/app` (cookie). Every route is workspace-scoped.
-- Idempotency: `POST /projects` honours `Idempotency-Key` (same key → same project, 200 instead of 201).
+- **Reuse, don't fork.**
+  - Uploads use the existing clips upload path (`uploadClipFile(..., {kind:'media'})`, which returns `uploadId`).
+  - Auth uses `resolveWorkspaceId`.
+  - Jobs go on the existing `clip_jobs` queue on the clips worker, as the types `DOC_PLAN`, `DOC_PRODUCE`, `MGD_RENDER_SEGMENT` and `DOC_ASSEMBLE`.
+  - Analysis reuses the clipper analysis.
+  - The timeline is the Compact Editor (`ClipEditsV2` plus the optional `edits.motionStudio` extension).
+- One project = one `MotionStudioProject`, one canvas `ClipProject` (`sourceKind:'motion_studio'`) and one editor `Clip`.
+- Times are in milliseconds.
+- **No currency anywhere.** Allowance `credits`/`estimateCredits` are `null` until D2, and charging is OFF.
+- **Envelope.** Mutations and `GET /projects/:id` return `{ project: MsProject }`. Lists return `{ projects }`, `{ assets }` or `{ allowance }`.
+- **Errors** are `{ error, code }` with an HTTP status. The codes are `INVALID`, `NOT_FOUND`, `CONFLICT`, `STAGE_NOT_RETRYABLE`, `DISABLED` and `INTERNAL`. Messages never contain keys, signed URLs, provider names or prompts.
+- **Idempotency-Key** (a header; the body `idempotencyKey` is also accepted):
+  - create is deduped per user (`userId:key`, unique per workspace);
+  - plan, run, regenerate (per scene), retry (per stage) and export are deduped per project. Keys are stored atomically under a row lock, so a repeated key returns the current project and starts nothing.
+  - Separately from the keys, the job enqueue is deduped: there is never a second QUEUED/RUNNING job of the same type (or for the same scene).
+- No automatic paid retries. Every job has `maxAttempts=1`, and retry is manual (`/steps/:stage/retry`).
 
-## 1. Upload flow (existing, unchanged)
-1. `POST /api/clips/uploads` `{ filename, bytes, mime, kind: "media" }` → `{ data: { uploadId, key, storage } }` (signed upload; multipart via `/api/clips/uploads/{id}/parts|chunk`).
-2. `POST /api/clips/uploads/{id}/complete`.
-3. Pass the `uploadId`s to Motion Studio (create, or `POST /projects/{id}/assets`). Videos, images and audio are accepted. A pasted or uploaded **text** script is sent as the `script` string (the UI reads the text file).
+## 1. Lifecycle (what each call does)
+`createProject` → `status:'setup'` (no job queued) → `PATCH settings` → `POST /plan` (enqueues `DOC_PLAN` = analysis + story + visual plan; **never renders**) → `status:'planning'` → plan done → `status:'awaiting_review'`.
 
-## 2. Enums
-- `workflow`: `idea` ("Start with idea") | `script` ("Use a script") | `footage` ("Edit my footage").
-- `settings.lengthMin`: `3 | 5 | 10 | 15` (10/15 = Beta).
-- `settings.visualDirection`: `auto | cinematic_documentary | netflix_financial | archival_history | modern_explainer | 3d_technical | minimal_editorial` (free text accepted in `visualNotes`).
-- `settings.voiceover`: `ai_brian` (ElevenLabs Brian, default) | `upload` (user narration audio, `narrationUploadId`) | `none`.
-- `settings.aspect`: `16:9` (default) | `9:16` | `1:1`.
-- `settings.automation`: `checkpoint` (pause after story + visual plan, default) | `auto` (fully automatic).
-- `settings.music`: `generated` (default; code-generated beat-keyed score) | `upload` (`musicUploadId`) | `elevenlabs` (optional ElevenLabs music tier, #1230 BE-22: one generation per project/length, reused on re-assemble, no automatic retries, falls back to `generated` if unavailable) | `none`. No price/credit fields.
-- Server-side the web resolves `narrationUploadId`/`musicUploadId` to storage keys (`settings.voiceoverUploadKey` / `settings.musicUploadKey`) for the worker; those keys are never returned to the client.
-- Project `status`: `queued | running | awaiting_approval | review | failed | cancelled`.
-- `stage` (the six concept stages, in order):
-  `story` ("Develop the story") → `assets` ("Prepare the footage and assets") → `direct` ("Direct the documentary") → `graphics` ("Generate motion graphics") → `assemble` ("Assemble and mix") → `review` ("Review and export").
-  Internal order on the worker: `assets` runs first when there are uploads (analysis feeds the story), then `story`, `direct`, checkpoint, narration (part of `assemble` prep, shown as `story`→`assemble` sub-step `narration`), `graphics`, `assemble`.
-- Stage status: `pending | running | done | needs_review | failed | skipped`.
-- Scene `visualType`: `footage | photo | diagram | map | chart | cinematic | interview | title | none`.
-- Scene `status`: `planned | rendering | qa | fixing | ready | fallback | failed`.
+Production starts only when **both** hold: `POST /run` was called **and** (`mode:'auto'` **or** `POST /story/approve` was called). Either order works:
+- `/run` with mode auto, sent during planning, continues straight into production when the plan finishes.
+- With checkpoint mode, production starts on approve.
 
-## 3. Endpoints
+This decision is made under a row lock that the web and the worker share (`finish_plan`), so exactly one `DOC_PRODUCE` is queued.
 
-### `GET /api/motion-studio/config`
-→ `{ lengths:[3,5,10,15], betaLengths:[10,15], visualDirections:[{id,label}], voiceovers:[{id,label}], aspects:[...], automation:[...], music:[...], features:{ narration:boolean, groundedResearch:boolean, generatedMusic:true, elevenLabsMusic:boolean, customSceneCode:boolean }, mediaPolicy:'uploads_only', stages:[{id,label}], creditEstimate:null }`
+`producing` (narration → per-scene renders) → `review` (the assembled master exists) → `POST /export` → `complete` (the master is already rendered, so export marks it delivered; if scenes changed, `exporting` shows until re-assembly finishes).
 
-### `POST /api/motion-studio/projects` (Start)
-Body:
-```json
-{ "brief": "Make a documentary about the GameStop short squeeze in 2021.",
-  "workflow": "idea",
-  "title": null,
-  "script": null,
-  "uploadIds": ["upl_..."],
-  "settings": { "lengthMin": 5, "visualDirection": "auto", "visualNotes": "", "voiceover": "ai_brian",
-                "narrationUploadId": null, "aspect": "16:9", "automation": "checkpoint",
-                "music": "generated", "musicUploadId": null } }
-```
-- `brief` 1..20000 chars (≥ 2,000-char briefs accepted). `script` ≤ 60000 chars, required for `workflow=script` unless `settings.voiceover=upload`.
-- Creates the project + canvas ClipProject, attaches uploads as project media, writes the activity event, and queues the **planning** run (analysis/story/direct). **No narration or render is queued until the plan exists** (and, in `checkpoint` mode, until `/approve`).
-- Header `Idempotency-Key` (recommended).
-→ `201 { project: ProjectView }` (or `200` on idempotent replay).
+## 2. Status mapping (backend → `MsProjectStatus`)
 
-### `GET /api/motion-studio/projects?limit=20&cursor=`
-"My projects", newest first → `{ projects: ProjectSummary[], nextCursor: string|null }`.
-`ProjectSummary = { id, title, status, stage, workflow, createdAt, updatedAt, thumbnailUrl|null, durationMs|null }`
+| Backend row | FE status |
+|---|---|
+| `setup` | `setup` |
+| queued/running, no plan yet or stage `story`/`direct` | `planning` |
+| `awaiting_approval` | `awaiting_review` (story stage = `needs_review` when checkpoint and not approved) |
+| running after the plan | `producing` (`exporting` if export was requested) |
+| `review` | `review`, or `complete` once export was requested |
+| `failed` / `cancelled` | `failed` (`error` is a friendly message) |
 
-### `GET /api/motion-studio/projects/{id}`
-→ `{ project: ProjectView }` — poll every 2–4 s while `status` is `queued|running`.
+Stages are the six FE `MsStageId`s, each with a status and `progressLabel` (for example "3 of 5 uploads analyzed" or "12 of 15 scenes"). `activity` holds the five `MsActivityStep`s with counts and the latest action for each stage.
 
-```ts
-type ProjectView = {
-  id: string; title: string; brief: string; workflow: 'idea'|'script'|'footage'
-  status: 'queued'|'running'|'awaiting_approval'|'review'|'failed'|'cancelled'
-  stage: Stage; stages: { id: Stage; label: string; status: StageStatus; startedAt?: string; finishedAt?: string; detail?: string }[]
-  settings: Settings
-  story: Story | null          // after the story stage
-  plan: DirectorPlan | null    // after the direct stage
-  scenes: SceneView[]
-  assets: AssetView[]
-  narration: { status: StageStatus; durationMs?: number; voiceName?: string; wpm?: number } | null
-  music: { source: 'generated'|'user'|'elevenlabs'|'none'; params?: MusicParams } | null
-  qa: QaSummary | null
-  editor: { clipProjectId: string|null; clipId: string|null; compactEditorUrl: string|null; fullEditorUrl: string|null }
-  export: { status: StageStatus; videoUrl: string|null /* short-lived signed */; durationMs?: number; width?: number; height?: number; creditsFileUrl?: string|null } | null
-  error: { code: string; message: string; stage: Stage; retryable: boolean } | null
-  creditEstimate: null
-  createdAt: string; updatedAt: string
-}
-type Story = {
-  title: string; logline: string
-  chapters: { id: string; title: string; lineIds: string[] }[]
-  lines: { id: string; text: string; spoken: string; hero?: string; typed?: string; chapterId: string; claimIds?: string[] }[]
-  claims: { id: string; text: string; grounded: boolean; sources: { url: string; title?: string; retrievedAt: string }[] }[]
-  research: { query: string; grounded: boolean; reason: string }[]   // every research decision (ST-RES-001)
-  lint: { lineId: string; issue: string }[]                          // typed-vs-spoken lint
-  userWordsPreserved: boolean                                         // WF-B
-}
-type DirectorPlan = {
-  world: { kind: string; reason: string }             // derived from the story (ST-DIR-001)
-  styleSpec: Record<string, unknown>                   // 24 fields (ST-STY-005), each with a reason in styleReasons
-  styleReasons: Record<string, string>
-  emphasis: { lineId: string; word: string; reason: string }[]
-  music: { mood: string; anchors: { event: 'enter'|'build'|'peak'|'cut'|'pad'|'resolve'; lineId: string; word: string }[]; reason: string } | null
-  scenes: PlannedScene[]
-}
-type PlannedScene = {
-  id: string; index: number; lineIds: string[]; visualType: VisualType; reason: string
-  description: string; blocks: string[]                // Part 1 blocks it uses
-  assetIds: string[]
-  handoff?: { assetId: string; inS: number; outS: number; surfaceKind: 'photo'|'tv'|'monitor'|'newspaper'|'phone'|'cinema'|'billboard'|'panel';
-              exitStyle: 'mirror'|'asymmetric'; footageMode: 'a'|'b'; presentationReason: string; cutType?: 'hard'; justification?: string }
-}
-type SceneView = PlannedScene & {
-  status: SceneStatus; startMs?: number; endMs?: number
-  model?: string; fixRounds: number; usedFallback: boolean
-  qa?: { passed: boolean; checks: { id: string; passed: boolean; value?: number|string; note?: string }[] }
-  previewUrl?: string|null    // signed mp4 of the scene segment
-  stillUrl?: string|null      // signed jpg
-}
-type AssetView = {
-  id: string; uploadId: string; kind: 'video'|'image'|'audio'; title: string
-  durationMs?: number; width?: number; height?: number
-  status: 'pending'|'analyzing'|'ready'|'failed'
-  analysis?: { description?: string; transcriptWords?: number; moments?: { startS: number; endS: number; label: string }[]; onScreenText?: string[]; people?: { label: string; suggested?: string }[] }
-  thumbUrl?: string|null
-}
-```
+## 3. Endpoints (all under `/api/motion-studio`)
 
-### `PATCH /api/motion-studio/projects/{id}`
-Body (any subset): `{ title?, settings?: Partial<Settings>, story?: { lines?: {id,text,spoken?}[] } }`.
-Story edits are allowed until narration starts (`409 CONFLICT` after). → `{ project }`
+| Method + path | Body | Returns |
+|---|---|---|
+| `GET /config` | | lengths, directions, voiceovers, productionModes, formats, mediaPolicy, music options, features |
+| `GET /projects` | `?limit&cursor` | `{ projects: MsProjectSummary[], nextCursor }` |
+| `POST /projects` | `MsCreateInput` `{workflow, prompt, script?, uploads:[{uploadId, kind, label}], mediaPolicy:'uploads_only', idempotencyKey}` | `{ project }` (201 new / 200 replay) |
+| `GET /projects/:id` | | `{ project }` |
+| `PATCH /projects/:id` | `{ title?, settings?: Partial<MsSettings> }` | `{ project }` (409 if `lengthMin` changes after the plan exists) |
+| `POST /projects/:id/plan` | Idempotency-Key | `{ project }` |
+| `POST /projects/:id/run` | `{ mode: 'checkpoint'\|'auto' }` + key | `{ project }` (409 before a plan was requested) |
+| `POST /projects/:id/story/approve` | | `{ project }` |
+| `POST /projects/:id/story/changes` | `{ note }` | `{ project }` (re-plans with the note; unchanged scenes reuse cached renders) |
+| `GET /projects/:id/activity` | `?after=<eventId>&limit` | `{ events: MsActivityEvent[], cursor }` (only events after `after`; `cursor` = last id) |
+| `GET /projects/:id/assets` | | `{ assets: MsAsset[] }` |
+| `POST /projects/:id/assets` | `{ uploads:[{uploadId, kind, label}] }` | `{ project }` |
+| `POST /projects/:id/assets/:assetId/replace` | `{ withAssetId }` | `{ project }` (re-renders only the affected scenes) |
+| `PATCH /projects/:id/scenes/:sceneId` | `MsScenePatch` `{startMs?, endMs?, style?, camera?, text?, params?}` | `{ project }` (re-renders that scene if production already ran) |
+| `POST /projects/:id/scenes/:sceneId/regenerate` | `{ instruction }` + key | `{ project }` (409 before the scene was produced) |
+| `POST /projects/:id/director` | `{ message, sceneId? }` | `{ project }` (adds a proposal and chat messages; nothing is applied) |
+| `POST /projects/:id/proposals/:pid/accept` | `{ itemIds: string[] \| 'all' }` | `{ project }` |
+| `POST /projects/:id/proposals/:pid/reject` | `{ itemIds: string[] \| 'all' }` | `{ project }` |
+| `POST /projects/:id/steps/:stage/retry` | key | `{ project }` (409 `STAGE_NOT_RETRYABLE` unless failed) |
+| `GET /projects/:id/allowance` | | `{ allowance: MsAllowance }` (all credits `null`) |
+| `POST /projects/:id/export` | key | `{ project }` |
+| `GET /projects/:id/export/download` | | `{ url, filename }` (short-lived signed URL; 409 until ready) |
+| `POST /projects/:id/open-in-editor` | | `{ clipProjectId, clipId }`. Creates or syncs the Compact Editor clip from the timeline (409 before the first cut). The FE routes to `/app/video-editor/{clipProjectId}/edit/{clipId}?motionStudio={id}` |
+| `POST /projects/:id/cancel` | | `{ project }` (extra) |
+| `GET /projects/:id/timeline` | | `{ clipProjectId, clipId, edits, compactEditorUrl }` (extra, read convenience) |
 
-### `POST /api/motion-studio/projects/{id}/approve`
-Checkpoint "Approve story & plan" (only when `status=awaiting_approval`). Queues narration → graphics → assemble. → `{ project }`
-
-### `POST /api/motion-studio/projects/{id}/request-changes`
-`{ note: string, target: 'story'|'plan' }` → re-runs story or direct with the note (one Luna call, no paid media). Only while `awaiting_approval` or `review`. → `{ project }`
-
-### `POST /api/motion-studio/projects/{id}/retry`
-User-initiated "Retry step" for a `failed` stage (never automatic for paid steps). → `{ project }`
-
-### `POST /api/motion-studio/projects/{id}/cancel` → `{ project }`
-
-### `POST /api/motion-studio/projects/{id}/assets`
-`{ uploadIds: string[] }` → attaches media and queues analysis for the new assets. → `{ assets: AssetView[] }`
-
-### `POST /api/motion-studio/projects/{id}/scenes/{sceneId}/regenerate`
-`{ instruction?: string }` — per-scene regenerate (never the whole film): re-generates that scene's code (Luna), re-renders only that segment, then re-assembles. Allowed in `review`. → `{ project }`
-
-### `GET /api/motion-studio/projects/{id}/activity?after={eventId}&limit=100`
-Production Activity stream (poll). → `{ events: ActivityEvent[], lastId: string|null }`
-```ts
-type ActivityEvent = { id: string; at: string; stage: Stage; agent: 'story'|'researcher'|'director'|'footage_editor'|'motion_designer'|'narrator'|'composer'|'qa'|'assembler'|'system'
-  kind: 'stage'|'decision'|'research'|'model_call'|'render'|'qa'|'fix'|'warning'|'error'; message: string; reason?: string; data?: Record<string, unknown> }
-```
-(Never contains keys, signed URLs, prompts or raw model output.)
-
-### `GET /api/motion-studio/projects/{id}/timeline`
-→ `{ clipProjectId, clipId, edits: ClipEditsV2 /* includes edits.motionStudio */, compactEditorUrl }`. The Compact Editor loads/saves via its existing clip APIs; this route is a read convenience.
-
-### `POST /api/motion-studio/projects/{id}/export`
-Re-runs only `assemble` (mix + join + QA + export) from cached segments. → `{ project }`. The finished MP4 is `project.export.videoUrl`.
+### Field notes
+- **Uploads.** `kind` comes from the FE (`photo|video|audio|script`). The mime type wins when they disagree.
+  - An audio upload whose label matches `vo|voice|voiceover|narrat` becomes the narration (and `settings.voiceover` = `upload`).
+  - Any other audio upload becomes the music (`music: 'upload'`).
+  - Storage keys stay server-side only.
+- **Settings** are the FE `MsSettings` (`lengthMin`, `visualDirection`, `voiceover`, `format:'16:9_1080p'`, `productionMode`). `PATCH` also accepts an optional, non-FE `settings.music: 'generated'|'upload'|'elevenlabs'|'none'`:
+  - `elevenlabs` is the optional tier from #1230: one generation per project and length, reused on re-assemble, never retried automatically, and it falls back to `generated` when unavailable.
+  - The default is always `generated`.
+- **Scenes.** `MsScene` plus these optional fields:
+  - `thumbnailUrl` (still) and `previewUrl` (segment MP4);
+  - `params` (the stored per-type inspector params: chart/photo/clip key→string|number|boolean);
+  - `error` (friendly text).
+  - Before narration exists, `startMs`/`endMs` are estimated from word counts. After production they are exact program times.
+  - `handoff` = `{assetId, approachMs:1400, footageMs, returnMs:1200, exit:'return'|'cut'}`.
+- **Assets.** `MsAsset` with `url` (a short-lived signed preview) and analysis `{status, summary, transcriptExcerpt, faces, objects, shots}`.
+- **Project.** `previewUrl` is the assembled small export (signed) once it exists. `allowance` is always non-null, with `estimateCredits: null`. `isExample` is `false` (examples are FE-only). `missingVisuals` is `[]` in v1.
+- **Activity events.** `{id, at, stage, kind:'reasoning'|'action'|'status'|'warning', text}`. They never contain keys, signed URLs, prompts or raw model output.
 
 ## 4. Timeline = Compact Editor `ClipEditsV2` + `motionStudio` extension
 **As built (v1):** the Compact Editor clip's canvas source is the **assembled program MP4** (picture + full mix: VO, clip audio, SFX, music at -15 LUFS). That keeps preview, captions and `RENDER_CLIP` export working unchanged with no duplicate audio items:

@@ -6,6 +6,8 @@ import { getTimeline } from '@/lib/server/motion-studio/service'
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params
-    return NextResponse.json(await getTimeline(await resolveWorkspaceId(), id))
+    const workspaceId = await resolveWorkspaceId()
+    const result = await getTimeline(workspaceId, id)
+    return NextResponse.json(result)
   } catch (err) { return motionStudioJsonError(err) }
 }

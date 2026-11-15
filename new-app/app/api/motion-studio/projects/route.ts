@@ -13,12 +13,12 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  console.info('[motion-studio:api:projects] create_begin')
   try {
     const workspaceId = await resolveWorkspaceId()
     const userId = await resolveClipsActorUserId(request)
     const body: unknown = await request.json().catch(() => ({}))
     const result = await createProject(workspaceId, userId, body, request.headers.get('Idempotency-Key'))
+    console.info('[motion-studio:api:create] ok', { projectId: result.project.id, created: result.created })
     return NextResponse.json({ project: result.project }, { status: result.created ? 201 : 200 })
   } catch (err) { return motionStudioJsonError(err) }
 }

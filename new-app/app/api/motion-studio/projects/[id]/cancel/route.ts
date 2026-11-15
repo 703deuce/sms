@@ -6,8 +6,9 @@ import { cancelProject } from '@/lib/server/motion-studio/service'
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await ctx.params
-    const project = await cancelProject(await resolveWorkspaceId(), id)
-    console.info('[motion-studio:api:cancel] ok', { projectId: id, status: project.status })
-    return NextResponse.json({ project })
+    const workspaceId = await resolveWorkspaceId()
+    const result = await cancelProject(workspaceId, id)
+    console.info('[motion-studio:api:cancel] ok', { projectId: id })
+    return NextResponse.json({ project: result })
   } catch (err) { return motionStudioJsonError(err) }
 }
