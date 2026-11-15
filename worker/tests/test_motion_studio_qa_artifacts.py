@@ -71,3 +71,24 @@ def test_contact_sheet_and_hit_strips(tmp_path):
     assert any(c["id"] == "N1" and c["pass"] for c in art["checks"])
     assert any(name == "contact_sheet.jpg" for _, name, _ in art["files"])
     assert any(name.startswith("strip_") for _, name, _ in art["files"])
+
+
+def test_hit_word_times_accepts_string_emphasis():
+    """The director often returns emphasis as bare words; this used to crash DOC_ASSEMBLE."""
+    lay = {"words": [
+        {"w": "Movie", "s": 0.1, "e": 0.4, "line": "l1"},
+        {"w": "night", "s": 0.4, "e": 0.7, "line": "l1"},
+        {"w": "Netflix", "s": 10.0, "e": 10.4, "line": "l11"},
+    ]}
+    story = {"lines": [
+        {"id": "l1", "text": "Movie night, in person.", "spoken": "Movie night, in person.", "hero": ""},
+        {"id": "l11", "text": "Netflix arrived through the mail.", "spoken": "Netflix arrived through the mail.", "hero": ""},
+    ]}
+    plan = {"scenes": [
+        {"index": 0, "lineIds": ["l1"], "emphasis": ["Movie night", "aisles"]},
+        {"index": 5, "lineIds": ["l11"], "emphasis": ["Netflix"]},
+    ]}
+    hits = hit_word_times(lay, story, plan)
+    words = {h[2] for h in hits}
+    assert "Movie" in words or "night" in words
+    assert "Netflix" in words

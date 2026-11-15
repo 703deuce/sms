@@ -316,9 +316,22 @@ def hit_word_times(lay: dict, story: dict, plan: dict | None = None) -> list[tup
     heroes = {l["id"]: (l.get("hero") or "").lower() for l in story.get("lines") or []}
     emph = []
     for s in (plan or {}).get("scenes") or []:
+        lids = [str(x) for x in (s.get("lineIds") or [])]
         for e in s.get("emphasis") or []:
-            if e.get("lineId") and e.get("word"):
-                emph.append((str(e["lineId"]), str(e["word"]).lower()))
+            if isinstance(e, str) and e.strip():
+                word, line = e.strip().lower(), None
+            elif isinstance(e, dict):
+                word = str(e.get("word") or e.get("text") or e.get("w") or "").strip().lower()
+                line = e.get("lineId") or e.get("line")
+                line = str(line) if line else None
+            else:
+                continue
+            if not word:
+                continue
+            # Bare words from the director have no lineId; attach them to every line in the scene.
+            targets = [line] if line else (lids or [None])
+            for lid in targets:
+                emph.append((lid, word))
     out = []
     seen = set()
     for w in lay.get("words") or []:
@@ -327,7 +340,7 @@ def hit_word_times(lay: dict, story: dict, plan: dict | None = None) -> list[tup
             continue
         hero = heroes.get(lid) or ""
         hit = tok in re.sub(r"[^a-z0-9 ]", "", hero) or any(tok in re.sub(r"[^a-z0-9]", "", word) or word.startswith(tok)
-                                                            for line, word in emph if line == lid)
+                                                            for line, word in emph if line is None or line == lid)
         if not hit:
             continue
         key = (round(float(w["s"]), 1), lid)
