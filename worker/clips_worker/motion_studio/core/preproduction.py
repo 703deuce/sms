@@ -39,6 +39,41 @@ def music_brief(plan: dict | None, story: dict | None = None) -> str:
     return " ".join(p for p in parts if p).strip()[:400]
 
 
+
+def validate_creative_plan(plan: dict | None, story: dict | None = None, catalog: list[dict] | None = None) -> list[str]:
+    """Creative-plan validation that goes beyond structure, used before render.
+
+    Editorial plans (pre-Production Designer) only get light checks. Once a
+    blueprint or identity package is attached, identity, environments, storyboard,
+    asset usage and a credits estimate are required.
+    """
+    plan = plan or {}
+    errs: list[str] = []
+    world = plan.get("world") if isinstance(plan.get("world"), dict) else {}
+    produced = bool(plan.get("identityPackage") or plan.get("storyboard") or plan.get("productionSource"))
+    if produced:
+        ident = plan.get("identity") or plan.get("identityPackage") or {}
+        if not (ident.get("typography") or ident.get("concept") or ident.get("throughLine") or ident.get("cameraPersonality")):
+            errs.append("identity package is missing typography, concept, through-line or camera personality")
+        worlds = plan.get("worlds") or (plan.get("blueprint") or {}).get("worlds") or []
+        if not worlds and not (world.get("brief") or world.get("name") or ident.get("throughLine")):
+            errs.append("no story-driven environment brief")
+        review = plan.get("storyboardReview") or {}
+        if plan.get("storyboard") and review.get("status") == "needs_review":
+            errs.append("storyboard needs review before render")
+        if plan.get("costEstimate") is None:
+            errs.append("plan is missing a credits estimate")
+        elif str((plan.get("costEstimate") or {}).get("unit") or "").lower() not in ("", "credits"):
+            errs.append("cost estimate must be in credits, never currency")
+        manifest = plan.get("assetUsageManifest") or (plan.get("blueprint") or {}).get("assetUsageManifest")
+        if catalog and manifest is None and not (plan.get("blueprint") or {}).get("assetPlacements"):
+            errs.append("plan is missing an asset usage manifest")
+    # A type-only world with no brief is a leftover menu pick — flag it when we have a chance to rewrite.
+    if world.get("type") and not (world.get("brief") or world.get("name") or world.get("reason")):
+        errs.append("world has a type label but no story brief")
+    return errs
+
+
 def identity_package(plan: dict | None, story: dict | None = None) -> dict:
     """Reusable, persistent, versioned visual-identity package for a project."""
     plan = plan or {}

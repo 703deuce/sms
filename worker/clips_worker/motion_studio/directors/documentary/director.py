@@ -1,4 +1,4 @@
-"""#1214 BE-5 Documentary Director: derives the world type, style spec, scene list, emphasis words,
+"""#1214 BE-5 Film Director (editorial): style hints, scene list, emphasis words, asset assignments;
 transitions, handoffs (footage modes a/b) and music anchors from the story; every entry has a reason.
 Validated; on an invalid/missing LLM plan a deterministic plan is used (no automatic paid retry)."""
 from __future__ import annotations
@@ -8,6 +8,7 @@ import json
 import random
 import re
 
+from clips_worker.motion_studio.core.preproduction import validate_creative_plan
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
 
@@ -395,6 +396,7 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
     world = plan.get("world") or {}
     if not (world.get("brief") or world.get("reason") or world.get("name") or world.get("type")):
         errs.append("plan is missing a world brief")
+    errs.extend(validate_creative_plan(plan, story, catalog))
     return errs
 
 
@@ -406,13 +408,13 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
     plan = None
     if not config.mock():
         sys_ = (
-            "You are the Documentary Director for a cinematic motion-graphics documentary (Cinematic Skill engine: a 4K world "
-            "canvas, a moving camera, word-synced graphics). Invent ONE world for this topic — the camera travels through it "
-            "for the whole film. A map for a place-rooted story or a price chart for a market story are examples of the idea, "
-            "not templates to reuse: invent the world this subject needs. Type and numbers must land on the spoken word. "
-            "Graphics scenes live inside that world (visualType should match it: map→map, price_chart→data, timeline→timeline). "
-            "Footage uses a RETURN handoff by default; hard cuts need a justification. From the story's SUBJECT and STRUCTURE derive: the world type "
-            f"(one of {list(WORLD_TYPES)}), a per-video style spec, and the scene list. Rules: scenes cover every line id exactly "
+            "You are the Film Director (editorial only) for a cinematic motion-graphics documentary. "
+            "You own narrative, structure, pacing, sequence breakdown and editorial intentions. "
+            "You write NO rendering code and you do not pick a world type from a menu. "
+            "Visual identity and custom environments are invented later by the Production Designer. "
+            "Type and numbers must land on the spoken word. "
+            "Footage uses a RETURN handoff by default; hard cuts need a justification. "
+            "From the story's SUBJECT and STRUCTURE derive the scene list and a starting style palette. Rules: scenes cover every line id exactly "
             "once in order (group 1-4 lines, ~6-15 s each); each scene has visualType "
             f"{list(VISUAL_TYPES)}, a one-sentence description of what the frame shows (3 layers: procedural background, "
             "midground context, foreground hero), emphasis as [{lineId, word}] with words that are literally in that line, a reason, and transitionOut. "
@@ -420,7 +422,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
             "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
             "audioMode: clip (footage sound, narration pauses) | bed (narration continues over it)}. Hard cuts (kind 'hardcut') need "
             "cutJustification. musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. Palette must be "
-            "distinct and fit the subject. Return JSON {world:{type,reason}, style:{palette:{bg,ink,accent,accent2,muted}, mood, "
+            "distinct and fit the subject. Return JSON {world:{brief,reason}, style:{palette:{bg,ink,accent,accent2,muted}, mood, "
             "grain, glow, vignette, reason}, scenes:[{kind,visualType,lineIds,description,emphasis:[{lineId,word}],reason,transitionOut,assetId,handoff}], musicAnchors:{...}, deliberateMinimal:[{index, reason}]}.")
         user = json.dumps({"title": story.get("title"), "tone": story.get("tone"), "aspect": settings.get("aspect", "16:9"),
                            "visualDirection": settings.get("visualDirection"), "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero")} for l in story["lines"]],

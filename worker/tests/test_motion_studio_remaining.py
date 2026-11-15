@@ -9,7 +9,7 @@ from clips_worker.motion_studio.core.keyframes import keyframe_entries, library_
 from clips_worker.motion_studio.core.elements import elements_from_spec, apply_element_patch
 from clips_worker.motion_studio.core.preproduction import (
     identity_package, build_storyboard, review_storyboard, acquisition_plan,
-    estimate_credits, record_checkpoint, creative_report,
+    estimate_credits, record_checkpoint, creative_report, validate_creative_plan,
 )
 from clips_worker.motion_studio.core.probes import probe_times, motion_strip_times, final_res_times
 from clips_worker.motion_studio.core.qa import (
@@ -241,3 +241,40 @@ def test_jobs_and_config_source_have_the_hooks():
 
 def test_fallback_still_available_as_last_resort():
     assert isinstance(FALLBACK_CODE, str) and "build_scene" in FALLBACK_CODE or "StudioFilm" in FALLBACK_CODE or "Film(" in FALLBACK_CODE or "def build" in FALLBACK_CODE or len(FALLBACK_CODE) > 20
+
+
+def test_creative_plan_validation_requires_identity_and_rejects_type_only_worlds():
+    story = {"title": "A store closes", "lines": [{"id": "l1", "text": "The last store closed."}]}
+    editorial = {"world": {"brief": "a dim retail hall", "reason": "the story is set there"}, "scenes": []}
+    assert validate_creative_plan(editorial, story) == []
+    assert "type label" in " ".join(validate_creative_plan({"world": {"type": "city_grid"}}, story))
+    produced = {
+        "blueprint": {}, "identityPackage": {}, "world": {"type": "city_grid"},
+        "storyboard": {"frames": []}, "storyboardReview": {"status": "needs_review"},
+    }
+    errs = validate_creative_plan(produced, story)
+    assert any("identity" in e for e in errs)
+    assert any("storyboard" in e for e in errs)
+    assert any("credits" in e for e in errs)
+    good = identity_package({"identity": {"typography": {"display": "Oswald"}, "throughLine": "empty shelves",
+                                          "cameraPersonality": "held stills"},
+                             "worlds": [{"id": "w", "name": "the hall", "brief": "aisles"}],
+                             "scenes": []}, story)
+    plan = {"blueprint": {"worlds": [{"id": "w"}]}, "identityPackage": good, "identity": good,
+            "worlds": [{"id": "w", "brief": "aisles"}], "storyboard": {"frames": [1]},
+            "storyboardReview": {"status": "approved", "pass": True},
+            "costEstimate": {"unit": "credits", "total": 12},
+            "assetUsageManifest": {"entries": []}}
+    assert validate_creative_plan(plan, story) == []
+
+
+def test_film_director_prompt_is_editorial_and_has_no_world_type_menu():
+    src = Path("/workspace/sms-ms/worker/clips_worker/motion_studio/directors/documentary/director.py").read_text()
+    # The chat prompt (not the leftover capability tuple) must not force a WORLD_TYPES menu.
+    start = src.find("You are the Film Director")
+    end = src.find("Return JSON", start)
+    prompt = src[start:end]
+    assert start != -1 and "editorial only" in prompt
+    assert "WORLD_TYPES" not in prompt
+    assert "Invent ONE world" not in prompt
+    assert "one of" not in prompt.lower() or "world type" not in prompt.lower()
