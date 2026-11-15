@@ -123,7 +123,7 @@ def test_direct_repair_is_a_backstop_and_does_not_silently_fallback(monkeypatch)
 
     valid = fallback_plan({"id": "p-repair"}, doc["story"], doc["catalog"])
 
-    def fake_chat(step, system, user, *, max_tokens=0, schema=None, schema_name=None):
+    def fake_chat(step, system, user, *, max_tokens=0, schema=None, schema_name=None, **_kw):
         calls.append({"schema_name": schema_name, "user": user, "system_has_contract": "OUTPUT CONTRACT for director" in system})
         if len(calls) == 1:
             return json.loads(json.dumps(doc["plan"])), {"ok": True, "step": "director"}
@@ -152,7 +152,7 @@ def test_direct_stops_instead_of_shipping_a_fallback_plan(monkeypatch):
     import clips_worker.motion_studio.directors.documentary.director as director_mod
     monkeypatch.setattr(config, "mock", lambda: False)
 
-    def fake_chat(step, system, user, *, max_tokens=0, schema=None, schema_name=None):
+    def fake_chat(step, system, user, *, max_tokens=0, schema=None, schema_name=None, **_kw):
         return json.loads(json.dumps(doc["plan"])), {"ok": True, "step": "director"}
 
     monkeypatch.setattr(director_mod, "chat_json", fake_chat)

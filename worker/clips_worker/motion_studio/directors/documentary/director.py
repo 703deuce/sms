@@ -491,7 +491,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
         user = _director_user(project, story, catalog)
         try:
             raw, m = chat_json(
-                "director", sys_, user, max_tokens=12000,
+                "director", sys_, user, max_tokens=32000, timeout_s=360,
                 schema=schema_for("director"), schema_name=schema_name("director"),
             )
             log("model_call", "director plan", m)
@@ -511,7 +511,7 @@ def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
                     ),
                 })
                 raw, m = chat_json(
-                    "director", sys_, repair_user, max_tokens=12000,
+                    "director", sys_, repair_user, max_tokens=32000, timeout_s=360,
                     schema=schema_for("director"), schema_name=schema_name("director"),
                 )
                 log("model_call", "director plan repair", m)

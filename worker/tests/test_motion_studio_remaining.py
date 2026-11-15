@@ -356,3 +356,47 @@ def test_custom_code_off_is_a_limitation_not_a_framework_scene():
     assert any((e.get("code") if isinstance(e, dict) else "") == "CUSTOM_CODE_DISABLED" for e in out["errors"])
     cfg = (Path(__file__).resolve().parents[1] / "clips_worker/motion_studio/pipeline/config.py").read_text()
     assert "framework scenes" not in cfg
+
+
+def test_chat_json_bumps_budget_when_reasoning_fills_the_cap(monkeypatch):
+    """A length-capped empty completion gets one budget bump so the JSON can land."""
+    import json
+    from clips_worker.motion_studio.pipeline import config, llm
+
+    monkeypatch.setattr(config, "mock", lambda: False)
+    monkeypatch.setattr(config, "model_for", lambda step: "gpt-6-luna")
+    monkeypatch.setattr(config, "reasoning_for", lambda step: "medium")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
+    calls = []
+
+    class _Resp:
+        def __init__(self, payload):
+            self._payload = payload
+        def read(self):
+            return json.dumps(self._payload).encode()
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(req, timeout=0):
+        calls.append(json.loads(req.data.decode()))
+        if len(calls) == 1:
+            return _Resp({
+                "choices": [{"finish_reason": "length", "message": {"content": ""}}],
+                "usage": {"prompt_tokens": 10, "completion_tokens": 12000,
+                          "completion_tokens_details": {"reasoning_tokens": 12000}},
+            })
+        return _Resp({
+            "choices": [{"finish_reason": "stop", "message": {"content": '{"ok": true}'}}],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 80,
+                      "completion_tokens_details": {"reasoning_tokens": 20}},
+        })
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fake_urlopen)
+    out, metrics = llm.chat_json("director", "sys", "user", max_tokens=12000)
+    assert out == {"ok": True}
+    assert metrics["lengthBudgetRetry"] is True
+    assert len(calls) == 2
+    assert calls[0]["max_completion_tokens"] == 12000
+    assert calls[1]["max_completion_tokens"] == 32000

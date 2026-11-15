@@ -55,32 +55,54 @@ def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, time
     else:
         body["max_tokens"] = max_tokens
         body["temperature"] = 0.4
-    req = urllib.request.Request("https://api.openai.com/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST")
     t0 = time.time()
-    try:
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            data = json.loads(resp.read())
-    except urllib.error.HTTPError as exc:
-        snippet = exc.read().decode(errors="replace")[:300]
-        metrics.update({"ms": int((time.time() - t0) * 1000), "error": f"http_{exc.code}"})
-        raise LLMError(f"OpenAI HTTP {exc.code}: {snippet}") from None
-    except Exception as exc:  # noqa: BLE001
-        metrics.update({"ms": int((time.time() - t0) * 1000), "error": type(exc).__name__})
-        raise LLMError(f"OpenAI call failed: {type(exc).__name__}") from None
-    usage = data.get("usage") or {}
-    details = (usage.get("completion_tokens_details") or {})
-    choice = (data.get("choices") or [{}])[0]
-    msg = choice.get("message") or {}
-    content = msg.get("content")
-    if isinstance(content, list):
-        content = "".join((p.get("text") if isinstance(p, dict) else str(p)) or "" for p in content)
-    content = content or ""
+    budget = max(1, int(max_tokens))
+    content = ""
+    usage: dict = {}
+    details: dict = {}
+    choice: dict = {}
+    length_retried = False
+    while True:
+        if "max_completion_tokens" in body:
+            body["max_completion_tokens"] = budget
+        elif "max_tokens" in body:
+            body["max_tokens"] = budget
+        req = urllib.request.Request(
+            "https://api.openai.com/v1/chat/completions", data=json.dumps(body).encode(),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"}, method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            snippet = exc.read().decode(errors="replace")[:300]
+            metrics.update({"ms": int((time.time() - t0) * 1000), "error": f"http_{exc.code}"})
+            raise LLMError(f"OpenAI HTTP {exc.code}: {snippet}") from None
+        except Exception as exc:  # noqa: BLE001
+            metrics.update({"ms": int((time.time() - t0) * 1000), "error": type(exc).__name__})
+            raise LLMError(f"OpenAI call failed: {type(exc).__name__}") from None
+        usage = data.get("usage") or {}
+        details = (usage.get("completion_tokens_details") or {})
+        choice = (data.get("choices") or [{}])[0]
+        msg = choice.get("message") or {}
+        content = msg.get("content")
+        if isinstance(content, list):
+            content = "".join((p.get("text") if isinstance(p, dict) else str(p)) or "" for p in content)
+        content = content or ""
+        # If reasoning consumed the whole cap, raise the budget once so the JSON can land.
+        # This is a completion-budget bump, not a quality retry of a finished answer.
+        if not content.strip() and choice.get("finish_reason") == "length" and not length_retried and budget < 64000:
+            length_retried = True
+            budget = min(64000, max(budget * 2, 32000))
+            continue
+        break
     metrics.update({"ok": True, "ms": int((time.time() - t0) * 1000), "promptTokens": usage.get("prompt_tokens"),
                     "completionTokens": usage.get("completion_tokens"),
                     "reasoningTokens": details.get("reasoning_tokens"),
                     "finishReason": choice.get("finish_reason"),
-                    "contentChars": len(content)})
+                    "contentChars": len(content),
+                    "maxCompletionTokens": budget,
+                    "lengthBudgetRetry": length_retried})
     if not content.strip():
         raise LLMError(f"model returned empty content (finish={choice.get('finish_reason')}, "
                        f"completion_tokens={usage.get('completion_tokens')}, "

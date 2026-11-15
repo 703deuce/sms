@@ -470,7 +470,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
     try:
         sys_ = sys_ + "\n\n" + format_contract("production_designer")
         raw, m = chat_json(
-            "production_designer", sys_, user, max_tokens=12000,
+            "production_designer", sys_, user, max_tokens=32000, timeout_s=360,
             schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
         )
         log("model_call", "production design", m)
@@ -486,7 +486,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                 "instruction": "Fix ONLY these validation errors. Keep the rest of the design. Return the full corrected JSON.",
             })
             raw, m = chat_json(
-                "production_designer", sys_, repair_user, max_tokens=12000,
+                "production_designer", sys_, repair_user, max_tokens=32000, timeout_s=360,
                 schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
             )
             log("model_call", "production design repair", m)
