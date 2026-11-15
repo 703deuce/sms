@@ -408,7 +408,7 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     from clips_worker.motion_studio.core.render import ffprobe_frames
     from clips_worker.motion_studio.pipeline.music_source import build_music, work_key
     from clips_worker.motion_studio.pipeline.timeline import chapter_markers, editor_extension, validate_for_export
-    from clips_worker.storage import put_json, upload_file
+    from clips_worker.storage import download_object, put_json, upload_file
     pid = proj["id"]
     work = workdir(pid)
     log = _logger(conn, pid, "assemble")
@@ -508,7 +508,22 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     os.replace(small + ".tmp.mp4", small)
     checks = [qa.frame_parity(master, lay["frames"]), qa.frame_parity(small, lay["frames"]), *qa.black_and_freeze(master),
               qa.loudness_check(meas), qa.seam_check(list(handoffs.values()))]
-    # 8) uploads: canvas (editor main source), words, exports, ledger
+    # 7b) ST-BLK-19 contact sheet + hit-word strips; ST-RW-003 spoken vs on-screen numbers
+    codes = {}
+    for i, r in rows.items():
+        key = r.get("codeKey")
+        if not key:
+            continue
+        dest = os.path.join(work, f"qa_code_{i}.py")
+        try:
+            download_object(key, Path(dest))
+            codes[i] = Path(dest).read_text(errors="replace")
+        except Exception:  # noqa: BLE001
+            log("qa_code_missing", f"could not load scene {i + 1} code for the number check", {"index": i})
+    qa_dir = os.path.join(work, "qa")
+    art = qa.export_qa_artifacts(master, qa_dir, lay, story, plan, codes)
+    checks.extend(art["checks"])
+    # 8) uploads: canvas (editor main source), words, exports, ledger, QA artifacts
     kb = work_key(proj)
     version = int(proj.get("timelineVersion") or 0) + 1
     master_key, small_key = f"{kb}/export_v{version}.mp4", f"{kb}/export_v{version}_small.mp4"
@@ -539,6 +554,13 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     lp = os.path.join(work, "credits.txt")
     Path(lp).write_text(ledger)
     upload_file(f"{kb}/credits_v{version}.txt", Path(lp), "text/plain")
+    qa_keys = []
+    for path, name, mime in art.get("files") or []:
+        qk = f"{kb}/qa_v{version}/{name}"
+        upload_file(qk, Path(path), mime)
+        qa_keys.append({"name": name, "key": qk})
+    if qa_keys:
+        log("qa_artifacts", f"{len(qa_keys)} QA stills / contact sheet / strips uploaded", {"count": len(qa_keys)})
     manifest = [manifest_entry(a["id"], a["kind"], a["filename"], used_in=[f"s{s['index']}" for s in lay["scenes"]
                                                                          if (s.get("handoff") or {}).get("assetId") == a["id"]]) for a in assets]
     ext = editor_extension(pid, lay, story, plan, handoffs, music, version, {i: r.get("renderHash") for i, r in rows.items()})
@@ -546,7 +568,7 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     music_rec = {k: v for k, v in music.items() if k != "path"}
     export_info = {"version": version, "masterKey": master_key, "smallKey": small_key, "creditsKey": f"{kb}/credits_v{version}.txt",
                    "durationMs": int(total * 1000), "frames": lay["frames"], "width": W, "height": H, "manifest": manifest,
-                   "editsPatch": edits_patch, "loudness": meas}
+                   "editsPatch": edits_patch, "loudness": meas, "qaArtifacts": qa_keys}
     db.update_project(conn, pid, status="review", stage="review", exportInfo=export_info, music=music_rec,
                       qa={"checks": checks, "pass": all(c["pass"] or c.get("severity") == "warn" for c in checks)},
                       timelineVersion=version, errorCode=None, errorMessage=None, errorStage=None)
