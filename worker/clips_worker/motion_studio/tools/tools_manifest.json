@@ -143,12 +143,12 @@
   ],
   "package": "motion.studio.tools",
   "schema": 1,
-  "sourceHash": "ecbbe1c360c5321397240bf6",
+  "sourceHash": "fdf56441c8e40c866d8fc5b3",
   "tools": {
     "animate_camera": {
       "aliases": [],
       "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
-      "behavior": "Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors \u2014 do not compute frames.",
+      "behavior": "Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors — do not compute frames.",
       "defaults": "easing defaults to ease_in_out; rot defaults to 0.",
       "dependencies": [
         "create_environment"
@@ -931,7 +931,7 @@
         },
         {
           "allowed": null,
-          "default": 1.0,
+          "default": 1,
           "description": "Linear gain.",
           "name": "gain",
           "required": false,
@@ -1003,7 +1003,7 @@
             "type": "integer"
           },
           "gain": {
-            "default": 1.0,
+            "default": 1,
             "description": "Linear gain.",
             "type": "number"
           },
@@ -1120,7 +1120,7 @@
         {
           "allowed": null,
           "default": null,
-          "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
+          "description": "Backdrop hints (color, gradient, texture) — primitives, not a world template.",
           "name": "backdrop",
           "required": false,
           "type": "object"
@@ -1141,7 +1141,7 @@
             "type": "object"
           },
           "backdrop": {
-            "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
+            "description": "Backdrop hints (color, gradient, texture) — primitives, not a world template.",
             "type": "object"
           },
           "brief": {
@@ -1203,7 +1203,7 @@
               },
               {
                 "x": "2021",
-                "y": 12.0
+                "y": 12
               }
             ],
             "height": 900,
@@ -2506,7 +2506,7 @@
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 3,
       "version": "1.0+edeaf8c2",
-      "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path \u2014 that is the extension registrar after lint, sandbox and visual tests.",
+      "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path — that is the extension registrar after lint, sandbox and visual tests.",
       "whenToUse": "When a previously registered extension (validated, versioned, documented) should appear in this scene."
     }
   }

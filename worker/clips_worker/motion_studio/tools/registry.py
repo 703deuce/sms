@@ -310,7 +310,7 @@ def default_registry() -> ToolRegistry:
 
 def _source_hash() -> str:
     h = hashlib.sha256()
-    for name in ("registry.py", "spec.py", "builtin.py", "validate.py", "compiler.py", "extensions.py"):
+    for name in ("registry.py", "spec.py", "builtin.py", "validate.py", "compiler.py", "extensions.py", "composition.py"):
         path = TOOLS_DIR / name
         if path.exists():
             h.update(name.encode())
