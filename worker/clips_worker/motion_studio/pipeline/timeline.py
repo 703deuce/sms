@@ -157,6 +157,42 @@ def _match_emphasis(items: list[dict], words: list[dict]) -> list[dict]:
     return emph
 
 
+
+def assigned_asset_ids(planned: dict | None, plan: dict | None = None, index: int | None = None) -> list[str]:
+    """Asset ids officially bound to this scene (plan assetId / handoff / blueprint placement)."""
+    ids: list[str] = []
+    planned = planned or {}
+    if not isinstance(planned, dict):
+        return ids
+
+    def add(v):
+        if isinstance(v, str) and v and v not in ids:
+            ids.append(v)
+
+    add(planned.get("assetId"))
+    for extra in planned.get("assetIds") or []:
+        add(extra)
+    h = planned.get("handoff")
+    if isinstance(h, dict):
+        add(h.get("assetId"))
+    bp = (plan or {}).get("blueprint") or {}
+    for row in bp.get("assetPlacements") or []:
+        if not isinstance(row, dict):
+            continue
+        if index is not None and row.get("sceneIndex") == index:
+            add(row.get("assetId"))
+    return ids
+
+
+def assets_for_scene(planned: dict | None, assets_meta: dict | None, plan: dict | None = None,
+                     index: int | None = None) -> dict:
+    """Only the stills assigned to this scene, so a designer cannot reuse the whole bag."""
+    meta = assets_meta or {}
+    ids = assigned_asset_ids(planned, plan, index)
+    if ids:
+        return {k: meta[k] for k in ids if k in meta}
+    return {}
+
 def scene_context(sc: dict, lay: dict, story: dict, plan: dict, assets_meta: dict, seed: int) -> dict:
     t0, t1 = sc["startS"], sc["endS"]
     by_id = {l["id"]: l for l in story["lines"]}
@@ -177,13 +213,15 @@ def scene_context(sc: dict, lay: dict, story: dict, plan: dict, assets_meta: dic
     asset_id = (planned.get("assetId") or ((planned.get("handoff") or {}).get("assetId") if isinstance(planned.get("handoff"), dict) else None)) if isinstance(planned, dict) else None
     if not isinstance(asset_id, str):
         asset_id = None
+    assets = assets_for_scene(planned if isinstance(planned, dict) else {}, assets_meta, plan, sc.get("index"))
     return {"duration": round(t1 - t0, 4), "fps": lay["fps"], "seed": seed + sc["index"] * 7919,
             "style": plan["style"], "palette": plan["style"]["palette"], "lines": lines, "words": words, "emphasis": emph,
-            "assets": assets_meta, "data": data,
+            "assets": assets, "data": data, "blueprint": (plan or {}).get("blueprint") or {},
             "scene": {"id": f"s{sc['index']}", "index": sc["index"], "kind": sc.get("kind") or planned.get("kind"),
                       "visualType": sc["visualType"], "description": planned.get("description", "") if isinstance(planned, dict) else "",
                       "blocks": (planned.get("blocks") or []) if isinstance(planned, dict) else [],
-                      "world": world, "assetId": asset_id}}
+                      "world": world, "assetId": asset_id,
+                      "worldId": (planned.get("worldId") if isinstance(planned, dict) else None)}}
 
 
 

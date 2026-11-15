@@ -266,8 +266,10 @@ def build_scene(ctx):
     CX = kdh[0] + 8000
     film.add(RegionFill(us, ["North Carolina"], RUST, tw, to_rgb=MUSTARD, t_change=min(ctx.duration, tw + 4)))
     film.add(XMarker(*kdh, "KILL DEVIL HILLS", t_in=tw, side="left", size=3.0, label_size=150))
-    if ctx.assets:
+    key = (ctx.scene or {}).get("assetId") if ctx.scene else None
+    if not key and ctx.assets:
         key = next(iter(ctx.assets))
+    if key:
         photo = film.add(PhotoFrame(key, CX, 300, 2600, rot=-1.2, t_in=t0 + 0.1, skin="print"))
     film.add(StringLine(kdh, (CX - 1250, -560), t_in=t0 + 0.2, dur=0.7, sag=0.03, width=16, persist=True))
     film.add(HeroSlam("TWELVE SECONDS", CX, -2300, 800, min(ctx.duration * 0.35, t0 + 2.0), font="cond", rgb=CREAM, glow=0.3))

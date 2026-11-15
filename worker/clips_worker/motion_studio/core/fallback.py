@@ -23,9 +23,12 @@ def build_scene(ctx):
     lines = ctx.lines or []
     data = ctx.data or []
     preferred = (ctx.scene or {}).get("assetId")
-    photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")]
+    # Only the still assigned to this scene — never cycle the whole bag (no i % len).
+    photos = []
     if preferred and preferred in (ctx.assets or {}):
-        photos = [preferred] + [k for k in photos if k != preferred]
+        photos = [preferred]
+    else:
+        photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")][:1]
     n = max(1, len(lines))
     pos = []
     for i in range(n):
@@ -56,7 +59,7 @@ def build_scene(ctx):
             except (TypeError, ValueError):
                 pass
         elif photos:
-            k = photos[i % len(photos)]
+            k = photos[0]
             film.add(PhotoFrame(k, x - 1700, y + 300, 1300, rot=-3 + 6 * (i % 2), t_in=t0 + 0.2, skin="print"))
         else:
             film.add(Callout((ln.get("text") or "")[:34], x + 900, y - 420, t0 + 0.5, None, accent=acc2, size=96))
@@ -112,10 +115,12 @@ def build_scene(ctx):
         return film
     # No story places: keep the map as a sheet and put this scene's heroes / photos on it.
     film.cam(0.0, 0, 200, 0.4)
-    photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")]
     preferred = (ctx.scene or {}).get("assetId")
+    photos = []
     if preferred and preferred in (ctx.assets or {}):
-        photos = [preferred] + [k for k in photos if k != preferred]
+        photos = [preferred]
+    else:
+        photos = [k for k, v in (ctx.assets or {}).items() if v.get("kind") in ("photo", "image", "still")][:1]
     if not lines:
         film.add(HeroSlam("", 0, 0, 300, 0.1))
         film.cam(ctx.duration, 200, 0, 0.35)
@@ -133,7 +138,7 @@ def build_scene(ctx):
         film.shot(max(0.0, t0 - 0.2), x, y, 0.65, radius=2200, strength=0.3)
         film.add(HeroSlam(hero, x, y, 280, t0 + 0.05, None, rgb=ink, glow=0.35))
         if photos:
-            k = photos[i % len(photos)]
+            k = photos[0]
             film.add(PhotoFrame(k, x - 1600, y + 280, 1200, rot=-2 + 4 * (i % 2), t_in=t0 + 0.2, skin="print"))
         film.cam(t1, x + 120, y - 80, 0.6)
     film.cam(ctx.duration, 0, 0, 0.32)

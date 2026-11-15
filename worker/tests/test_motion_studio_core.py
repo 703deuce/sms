@@ -227,11 +227,16 @@ def test_scene_context_accepts_string_emphasis_and_passes_asset_id():
                          lay, story, plan, {}, 1)
     assert ctx0["scene"]["world"] == "city_grid"
     assert any(e["word"] == "Movie night" for e in ctx0["emphasis"])
+    bag = {"msa_photo1": {"kind": "photo", "w": 100, "h": 80},
+           "msa_photo2": {"kind": "photo", "w": 80, "h": 80}}
     ctx5 = scene_context({"index": 5, "kind": "photo", "visualType": "photo",
                           "startS": 9.5, "endS": 16.0, "lineIds": ["l11"]},
-                         lay, story, plan, {"msa_photo1": {"kind": "photo", "w": 100, "h": 80}}, 1)
+                         lay, story, plan, bag, 1)
     assert ctx5["scene"]["assetId"] == "msa_photo1"
+    assert list(ctx5["assets"]) == ["msa_photo1"]
+    assert "msa_photo2" not in ctx5["assets"]
     assert any(e["word"] == "Netflix" for e in ctx5["emphasis"])
+    assert ctx0["assets"] == {}
 
 
 def test_fallback_code_keeps_photo_even_in_a_city_grid_world():
@@ -361,3 +366,22 @@ def test_empty_background_fails_flat_stills(tmp_path):
     assert good["pass"] is True
     assert qa.scene_verdict([bad]) == "fail"
     assert qa.scene_verdict([good]) == "pass"
+
+
+def test_fallback_does_not_round_robin_photos():
+    from clips_worker.motion_studio.core.fallback import FALLBACK_CODE, FALLBACK_MAP
+    assert "% len(photos)" not in FALLBACK_CODE
+    assert "% len(photos)" not in FALLBACK_MAP
+    assert "photos[i % " not in FALLBACK_CODE
+    assert "photos[i % " not in FALLBACK_MAP
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_assets_for_scene_is_only_the_assigned_still():
+    from clips_worker.motion_studio.pipeline.timeline import assets_for_scene, assigned_asset_ids
+    meta = {"a": {"kind": "photo"}, "b": {"kind": "photo"}, "c": {"kind": "still"}}
+    assert assigned_asset_ids({"assetId": "a"}) == ["a"]
+    assert assets_for_scene({"assetId": "a"}, meta) == {"a": meta["a"]}
+    assert assets_for_scene({"visualType": "diagram"}, meta) == {}
+    plan = {"blueprint": {"assetPlacements": [{"sceneIndex": 2, "assetId": "b"}]}}
+    assert assets_for_scene({"index": 2}, meta, plan, 2) == {"b": meta["b"]}
