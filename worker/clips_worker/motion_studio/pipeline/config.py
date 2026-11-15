@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 
-STEPS = ("story", "research_plan", "director", "scene_code", "scene_fix", "analysis", "chat")
+STEPS = ("story", "research_plan", "director", "production_designer", "scene_code", "scene_fix", "storyboard", "critic", "analysis", "chat")
 DEFAULT_MODEL = "gpt-6-luna"
 
 
@@ -23,9 +23,31 @@ def _i(name: str, default: int) -> int:
         return default
 
 
-def model_for(step: str) -> str:
-    v = (os.environ.get(f"MOTION_STUDIO_MODEL_{step.upper()}") or os.environ.get("MOTION_STUDIO_MODEL") or "").strip()
-    return v or DEFAULT_MODEL
+# Project-level model overrides (settings.models.<step> or settings.model_<step>).
+_project_settings: dict = {}
+
+
+def apply_project_settings(settings: dict | None) -> None:
+    """Install this project's settings so model_for() honours settings.models."""
+    global _project_settings
+    _project_settings = dict(settings or {})
+
+
+def model_for(step: str, settings: dict | None = None) -> str:
+    """Resolve the model for a pipeline step. Precedence: explicit settings,
+    then project settings.models / model_<step>, then MOTION_STUDIO_MODEL_<STEP>,
+    then MOTION_STUDIO_MODEL, then DEFAULT_MODEL (gpt-6-luna). No automatic escalation."""
+    src = settings if settings is not None else _project_settings
+    models = src.get("models") if isinstance((src or {}).get("models"), dict) else {}
+    for v in (
+        (models or {}).get(step),
+        (src or {}).get(f"model_{step}"),
+        os.environ.get(f"MOTION_STUDIO_MODEL_{step.upper()}"),
+        os.environ.get("MOTION_STUDIO_MODEL"),
+    ):
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+    return DEFAULT_MODEL
 
 
 def reasoning_for(step: str) -> str:

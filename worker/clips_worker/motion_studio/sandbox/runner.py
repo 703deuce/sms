@@ -159,7 +159,12 @@ def main(job_path: str) -> int:
                 raise ImportError(f"sandbox_policy: import {name} blocked")
             return _il.import_module(name) if not fromlist else __import__(name, globals, locals, fromlist, level)
         safe["__import__"] = _imp
-        ns = {"__builtins__": safe, "__name__": "generated_scene"}
+        # Pre-provide the same names the API reference says are in scope, so
+        # `from motion_core import *` is not required to use skia.Rect / random / math / numpy.
+        import numpy
+        import skia
+        ns = {"__builtins__": safe, "__name__": "generated_scene",
+              "skia": skia, "random": random, "math": math, "numpy": numpy, "np": numpy}
         armed[0] = True
         exec(compile(code, "generated_scene.py", "exec"), ns)  # noqa: S102 (policy-checked, audited)
         film = ns["build_scene"](ctx)
@@ -221,8 +226,9 @@ def main(job_path: str) -> int:
             "sandbox_limit" if isinstance(exc, (MemoryError, TimeoutError)) or "sandbox_limit" in str(exc) else "sandbox_error")
         tb = traceback.extract_tb(exc.__traceback__)
         gen = [f"line {f.lineno}: {f.line}" for f in tb if f.filename == "generated_scene.py"]
+        full = traceback.format_exception(type(exc), exc, exc.__traceback__)
         result.update({"ok": False, "errorKind": kind, "error": f"{exc.__class__.__name__}: {str(exc)[:600]}",
-                       "generatedTrace": gen[-4:]})
+                       "generatedTrace": gen + [ln.rstrip() for ln in full][:80]})
         if enc is not None:
             try:
                 enc.kill()

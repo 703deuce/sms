@@ -5,6 +5,16 @@
 Contract for generated code: define `build_scene(ctx)` returning `ctx.film()` populated with items and
 camera keys. Time anchors come from `ctx.W(line_id, word, nth=0, end=False)` (raises on a miss).
 """
+import math
+import random
+
+try:
+    import numpy
+    import skia
+except ImportError:  # unit hosts may lack the worker image deps
+    numpy = None  # type: ignore[assignment]
+    skia = None  # type: ignore[assignment]
+
 from clips_worker.motion_studio.vendor.cinematic_skill.engine import (  # noqa: F401  (world items for Part 2)
     Board, Cached, Chalk, GeoMap, Holes, Ledger, LOOKS, MAP_LOOKS, OpenLedger, Print, RegionFill,
     CREAM, WHITE, RUST, MUSTARD, HILITE, RED, INK, TEAL,
@@ -23,7 +33,31 @@ from clips_worker.motion_studio.core.blocks import (  # noqa: F401
 
 __all__ = [n for n in dir() if not n.startswith("_")]
 
+
+API_PITFALLS = """
+SANDBOX NAMES (already in scope; also exported by `from motion_core import *`):
+  skia, random, math, numpy (as numpy and np). You do not need to import them.
+  Prefer ctx.rand (seeded random.Random) over random.random().
+PALETTE: ctx.palette and ctx.rgb(name) know ONLY these keys: bg, ink, accent, accent2, muted.
+  There is no dark_line or any other key. Mix from those five, or use the constants
+  CREAM, WHITE, RUST, MUSTARD, HILITE, RED, INK, TEAL.
+StringLine(a, b, t_in, dur=1.0, sag=0.05, width=9, z=None, pins=True, t_out=None, persist=False, hold=5.0, sfx=True)
+  a and b are (x, y) points. There is NO rgb argument — the string is a red thread.
+  To colour a connector use Connector(a, b, t_in, dur=0.8, bend=0.18, width=8, rgb=..., dashed=False).
+Rounded rects on a skia canvas `c`:
+  rrect(x, y, w, h, r) -> skia.RRect; then c.drawRRect(rrect(x, y, w, h, r), paint(rgb, a)).
+  Or c.drawRoundRect(skia.Rect.MakeXYWH(x, y, w, h), rx, ry, paint).
+  WRONG: c.drawRoundRect(x, y, w, h, r, paint) — that arity does not exist.
+SPOTLIGHT: film.shot() and film.focus() each place a spotlight key. Two spotlight keys
+  closer than 0.25 s that target different positions fail QA: "two spotlight keys within 0.25 s".
+  One hero per beat. Space shot()/focus() at least 0.25 s apart, or keep the same target
+  (positions within 1 world unit). A camera hold should use film.cam() for the second key,
+  or two keys on the same target — not two shot() calls 0.1 s apart at slightly different points.
+"""
+
 API_REFERENCE = '''
+See also the sandbox contract below.
+
 motion_core API (Cinematic Skill engine + Transovo Part 1 blocks). World units = 4K px at zoom 1; frame is 3840x2160 world px at zoom 1.
 ctx: duration, fps, width, height, seed, style (dict), palette {bg,ink,accent,accent2,muted} as (r,g,b),
      lines [{id,text,spoken,start,end,hero,typed}] (scene-local seconds), words [{w,s,e,line}], emphasis [{lineId,word,t}],
@@ -68,4 +102,5 @@ World / map items (use these; do not reimplement a map): GeoMap(data, K, origin=
      ctx.ll(geomap, lat, lon) -> (x,y) for any WGS84 coordinate on that map.
      ctx.maps is ('world','us'). Prefer inventing a look dict (sheet/water/land/border colours) from the story palette
      rather than the default explainer/period looks. Add Route, MapPin, XMarker, StringLine between places.
-'''
+''' + API_PITFALLS
+

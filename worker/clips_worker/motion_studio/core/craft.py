@@ -24,7 +24,7 @@ new you invent — not a generic dark grid with slammed type. Steal the grammar,
 
 Camera. Use film.shot(t, x, y, zoom, rot=..., radius=..., strength=...) so the spotlight
 travels with the camera (never leave the light behind). Keys every 0.6–3 s; the spline keeps
-drifting, so a hold is two keys close together and slightly apart. Push in (zoom ~0.5 → 0.9
+drifting. A hold is two camera keys close together on the SAME target (use film.cam() for the second key, or two shot() calls at the same x,y). Never place two spotlight keys (shot/focus) less than 0.25 s apart on different targets. Push in (zoom ~0.5 → 0.9
 → 1.2) to land on a hero; pull back (0.2–0.35) to show a connection or the whole board; whip
 between clusters in 0.8–1.2 s. Land the camera on a hero about 0.3 s AFTER it appears (the
 camera notices it). Lean rot a degree or two. ctx.film() already has organic drift and
@@ -301,12 +301,19 @@ def designer_system(api_reference: str) -> str:
         "`from motion_core import *` and define `build_scene(ctx)` returning `film = ctx.film()` "
         "populated with items and camera keys, structured like the starter skeleton (clusters, items "
         "on spoken-word times, then camera keys, then cues). "
+        "CORE VS CUSTOM: the engine supplies HOW (camera systems, render, timing, typography mechanics, "
+        "PhotoFrame, footage playback, mix, primitives). You decide WHAT, WHERE, WHEN and WHY — but you "
+        "inherit this film's Production Designer blueprint (film identity, the environment for this "
+        "scene, asset placements, custom objects, camera plan). Do not invent a new world that "
+        "contradicts the blueprint; do not copy a finished composition from another film. Shared blocks "
+        "are tools, not templates. A held photograph can beat chaotic motion — do not add movement for "
+        "its own sake. "
         "The engine manual (motion_core + the craft guide) is the source of truth for what is possible. "
-        "Invent a NEW world from those capabilities for THIS topic. The starter skeleton, Wright Flyer, "
-        "Keef map, and GameStop chart are illustrations of grammar — never the only templates, and never "
-        "worlds to copy onto a new subject. Shared core blocks are reused; custom Items are invented per "
-        "video. When the world is a map, use ctx.geo / ctx.place / ctx.ll, GeoMap, RegionFill, Route, "
-        "MapPin — do not reimplement a map. When it is a chart, subclass Item with real numbers from "
-        "ctx.data only. Keep it under ~250 lines.\n"
+        "The starter skeleton, Wright Flyer, Keef map, and GameStop chart are illustrations of grammar — "
+        "never the only templates, and never worlds to copy onto a new subject. When the environment "
+        "uses a map, use ctx.geo / ctx.place / ctx.ll, GeoMap, RegionFill, Route, "
+        "MapPin — do not reimplement a map. When it uses a chart, subclass Item with real numbers from "
+        "ctx.data only. skia, random, math and numpy are already in scope (see the API sandbox contract). "
+        "Keep it under ~250 lines.\n"
     )
     return role + CRAFT_GUIDE + api_reference + WORKED_EXAMPLES

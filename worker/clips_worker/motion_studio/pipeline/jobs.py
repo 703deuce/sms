@@ -69,6 +69,7 @@ def handle(conn, job: dict) -> None:
         proj = db.get_project(conn, pid)
         if not proj:
             raise ValueError("Motion Studio project not found")
+        config.apply_project_settings(proj.get("settings") or {})
         if proj["status"] == "cancelled":
             _finish_job(conn, job["id"])
             return
