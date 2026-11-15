@@ -158,7 +158,7 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
     # Attach authored group/property animation, entrance/exit to the actual engine objects.
     layers = object_layers(spec)
     for oid, obj in (spec.get("objects") or {}).items():
-        if obj.get("kind") in ("group", "effect", "extension"):
+        if obj.get("kind") in ("group", "effect"):
             continue
         entrance = obj.get("entrance") or {}
         if entrance:
@@ -415,7 +415,7 @@ def _emit_extension(spec: dict, oid: str, obj: dict) -> list[str]:
     result.append(f"    film_items_{name}.t_in = 0.0")
     result.append(f"    film_items_{name}.t_out = None")
     result.append(f"    film_items_{name}.component_version = {rec['version']!r}")
-    result.append(f"    film.add(film_items_{name})  # component {oid}")
+    result.append(f"    _register({oid!r}, film_items_{name})  # component {oid}")
     return result
 
 

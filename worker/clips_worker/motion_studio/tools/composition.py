@@ -213,7 +213,11 @@ def object_layers(spec: dict) -> dict[str, list[dict]]:
                 "origin": group.get("origin") or {"x": 0, "y": 0},
             }, "animations": animations[current]})
         base = {"position": obj.get("position") or {"x": 0, "y": 0},
-                "originalPosition": obj.get("position") or {"x": 0, "y": 0},
+                # Built-in items already draw at their authored coordinates; a custom
+                # component fragment defines its own local scene, so its placement
+                # is an actual translation from that fragment\u0027s local origin.
+                "originalPosition": ({"x": 0, "y": 0} if obj.get("kind") == "extension"
+                                     else obj.get("position") or {"x": 0, "y": 0}),
                 "origin": obj.get("position") or {"x": 0, "y": 0},
                 "scale": obj.get("scale") or 1, "rotation": 0, "opacity": 1}
         layers[oid] = list(reversed(lineage)) + [{"kind": "object", "base": base,
