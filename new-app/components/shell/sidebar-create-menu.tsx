@@ -4,6 +4,7 @@ import Link from 'next/link'
 import {
   Captions,
   Clapperboard,
+  Film as MotionStudioIcon,
   Download,
   GraduationCap,
   House,
@@ -40,6 +41,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   record: Video,
   aiVideo: Sparkles,
   studio: Sparkles,
+  motionStudio: MotionStudioIcon,
   captions: Captions,
   media: Images,
   brand: Palette,

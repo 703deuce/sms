@@ -274,6 +274,7 @@ export function EditorShell({
   clipperStudio = false,
   initialPanel,
   initialProducerOpen = false,
+  motionStudioSlot,
 }: {
   projectId: string
   projectTitle?: string
@@ -317,6 +318,11 @@ export function EditorShell({
   initialPanel?: EditorPanelId
   /** Deep-link compatibility for /chat; default-off everywhere else. */
   initialProducerOpen?: boolean
+  /**
+   * Motion Studio mode (FE-6): extra lanes (scenes, handoff inserts, graphics, VO, music) rendered above the
+   * clip timeline. Undefined everywhere else, so clip editing, captions, save, reload, preview and export are unchanged.
+   */
+  motionStudioSlot?: (ctx: { outputMs: number; seekOutput: (ms: number) => void }) => React.ReactNode
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -4126,6 +4132,11 @@ export function EditorShell({
             />
           ) : (
           <>
+          {motionStudioSlot ? (
+            <div className="max-h-60 shrink-0 overflow-y-auto border-b border-border/70 px-2 py-2" data-testid="editor-motion-studio-lanes">
+              {motionStudioSlot({ outputMs, seekOutput })}
+            </div>
+          ) : null}
           {compact ? (
             <button
               type="button"

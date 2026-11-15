@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Captions,
   Clapperboard,
+  Film as MotionStudioIcon,
   Download,
   Film,
   FlaskConical,
@@ -69,6 +70,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   record: Video,
   aiVideo: Sparkles,
   studio: WandSparkles,
+  motionStudio: MotionStudioIcon,
   captions: Captions,
   media: Images,
   brand: Palette,

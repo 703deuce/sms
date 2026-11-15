@@ -23,7 +23,7 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
-  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', ...(isT2vFeatureEnabled() ? ['text-to-video'] : []), 'captions', 'ai-studio', 'ad-studio'] })
+  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', ...(isT2vFeatureEnabled() ? ['text-to-video'] : []), 'captions', 'ai-studio', 'ad-studio', 'motion-studio'] })
   return (
     <Page>
       <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
@@ -78,6 +78,13 @@ export default async function AppDashboardPage() {
           title="Ad Studio"
           description="Create product ads from a brief or product image."
           testId="app-launcher-product-ad-studio"
+        />
+        <LauncherCard
+          href="/app/motion-studio"
+          icon={Film}
+          title="Motion Studio"
+          description="Turn an idea, script, or footage into a cinematic documentary."
+          testId="app-launcher-motion-studio"
         />
       </div>
       <section className="mt-8" aria-labelledby="recent-projects-heading">

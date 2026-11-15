@@ -24,6 +24,7 @@ describe('sidebar model', () => {
       'ai-video',
       'studio',
       'ad-studio',
+      'motion-studio',
       'media',
       'brand',
       'templates',
@@ -42,6 +43,7 @@ describe('sidebar model', () => {
       captions: '/app/captions',
       studio: '/app/studio',
       'ad-studio': '/app/ad-studio',
+      'motion-studio': '/app/motion-studio',
       record: '/app/rooms/new',
       'ai-video': '/app/ai-video/new',
       templates: '/app/clips/templates',
@@ -74,6 +76,7 @@ describe('sidebar model', () => {
       'Recording',
       'AI Video',
       'AI Studio',
+      'Motion Studio',
     ])
     expect(Object.fromEntries(items.map((i: { id: string; href: string }) => [i.id, i.href]))).toMatchObject({
       'create-clip': '/app/clips/new',
@@ -121,6 +124,8 @@ describe('sidebar model', () => {
     ['/app/youtube-video', '', 'youtube-video'],
     ['/app/studio', '', 'studio'],
     ['/app/ad-studio', '', 'ad-studio'],
+    ['/app/motion-studio', '', 'motion-studio'],
+    ['/app/motion-studio/ms_1', '', 'motion-studio'],
     ['/app/streamer', '', 'streamer'],
     ['/app/settings/billing', '', 'settings'],
     ['/app/help', '', 'learn'],
