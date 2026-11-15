@@ -104,10 +104,11 @@ def main(job_path: str) -> int:
             out = os.path.realpath(out)
             if not out.startswith(scratch + os.sep):
                 raise ValueError("output must be inside scratch")
-            crf = str(job.get("crf", 16))
+            crf = str(job.get("crf", 22))
+            preset = str(job.get("preset") or "fast")
             enc = subprocess.Popen(
                 ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r",
-                 str(ctx_raw.get("fps", 30)), "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", crf,
+                 str(ctx_raw.get("fps", 30)), "-i", "-", "-c:v", "libx264", "-preset", preset, "-crf", crf,
                  "-pix_fmt", "yuv420p", "-x264-params", "keyint=60:min-keyint=60:scenecut=0", "-movflags", "+faststart", out],
                 stdin=subprocess.PIPE, env={"PATH": os.environ.get("PATH", "/usr/bin:/bin")})
 

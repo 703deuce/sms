@@ -77,6 +77,9 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   if (typeof o.webResearch === 'boolean') out.webResearch = o.webResearch
   out.webResearch = out.webResearch === true
   out.format = '16:9_1080p'
+  const rs = typeof o.renderSize === 'string' ? o.renderSize.trim().toLowerCase()
+    : (typeof o.resolution === 'string' ? o.resolution.trim().toLowerCase() : '')
+  if (['480p', '720p', '1080p', '2160p', '4k'].includes(rs) || /^\d{2,4}x\d{2,4}$/.test(rs)) out.renderSize = rs
   return out
 }
 

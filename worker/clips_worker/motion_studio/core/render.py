@@ -109,7 +109,56 @@ def probe_stills(code: str, ctx: dict, scratch: str, times: list[float], width=9
     return _collect([(job, _spawn(job, scratch))], scratch, lim["wall_s"])[0]
 
 
+def probe_video(path: str) -> dict:
+    """Width, height, fps, pix_fmt, and frame count without decoding the stream.
+
+    Prefers container ``nb_frames``, then a packet count (index read). Falls back to a
+    full decode only when those are missing — ``-count_frames`` is far too slow to use
+    on every assemble segment.
+    """
+    r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_packets",
+                        "-show_entries", "stream=width,height,avg_frame_rate,r_frame_rate,pix_fmt,nb_frames,nb_read_packets,codec_name",
+                        "-of", "json", path], capture_output=True, text=True)
+    try:
+        s = (json.loads(r.stdout) or {}).get("streams") or [{}]
+        s = s[0] if s else {}
+    except (json.JSONDecodeError, IndexError, TypeError):
+        s = {}
+
+    def _num(v):
+        try:
+            if v in (None, "", "N/A"):
+                return None
+            return int(v)
+        except (TypeError, ValueError):
+            return None
+
+    def _fps(v):
+        try:
+            if not v or v in ("N/A", "0/0"):
+                return None
+            if "/" in str(v):
+                a, b = str(v).split("/", 1)
+                return float(a) / float(b) if float(b) else None
+            return float(v)
+        except (TypeError, ValueError, ZeroDivisionError):
+            return None
+
+    frames = _num(s.get("nb_frames")) or _num(s.get("nb_read_packets"))
+    return {
+        "width": _num(s.get("width")),
+        "height": _num(s.get("height")),
+        "fps": _fps(s.get("avg_frame_rate")) or _fps(s.get("r_frame_rate")),
+        "pix_fmt": s.get("pix_fmt"),
+        "codec": s.get("codec_name"),
+        "frames": frames if frames is not None else -1,
+    }
+
+
 def ffprobe_frames(path: str) -> int:
+    n = probe_video(path).get("frames", -1)
+    if n and n > 0:
+        return int(n)
     r = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-count_frames", "-show_entries",
                         "stream=nb_read_frames", "-of", "csv=p=0", path], capture_output=True, text=True)
     try:
@@ -118,12 +167,20 @@ def ffprobe_frames(path: str) -> int:
         return -1
 
 
+def segment_ready(src: str, frames: int, width: int, height: int, fps: int) -> bool:
+    """True when the segment can be stream-copied into the picture (right size, fps, frames)."""
+    info = probe_video(src)
+    got_fps = info.get("fps") or 0
+    return (info.get("frames") == frames and info.get("width") == width and info.get("height") == height
+            and info.get("pix_fmt") == "yuv420p" and abs(float(got_fps) - fps) < 0.05)
+
+
 def atomic_replace(tmp: str, final: str) -> None:
     os.replace(tmp, final)
 
 
-def render_scene(code: str, ctx: dict, out_path: str, scratch: str, width=1920, height=1080, crf=16,
-                 workers: int | None = None, assets_dir: str | None = None) -> dict:
+def render_scene(code: str, ctx: dict, out_path: str, scratch: str, width=854, height=480, crf=22,
+                 workers: int | None = None, assets_dir: str | None = None, preset: str = "fast") -> dict:
     """Render the whole scene in parallel chunks; returns {frames, cues, durationMs}. Raises SandboxError."""
     try:
         check_code(code)
@@ -140,7 +197,8 @@ def render_scene(code: str, ctx: dict, out_path: str, scratch: str, width=1920, 
     for i in range(k):
         job = {"tag": f"c{i:03d}", "code_path": cp, "ctx_path": xp, "scratch": scratch, "mode": "render",
                "width": width, "height": height, "f0": bounds[i], "f1": bounds[i + 1], "crf": crf,
-               "out": os.path.join(scratch, f"chunk_{i:03d}.mp4"), "limits": lim, "assets_dir": assets_dir or scratch,
+               "preset": preset, "out": os.path.join(scratch, f"chunk_{i:03d}.mp4"), "limits": lim,
+               "assets_dir": assets_dir or scratch,
                "cues": i == 0}
         procs.append((job, _spawn(job, scratch)))
     results = _collect(procs, scratch, lim["wall_s"])

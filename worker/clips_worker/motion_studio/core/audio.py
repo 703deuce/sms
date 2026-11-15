@@ -323,6 +323,10 @@ def mix(out_wav: str, duration: float, vo: str | None, music: str | None, sfx: s
     """VO + music (sidechain-ducked under VO) + SFX + clip-audio stems -> two-pass loudnorm. Padded or
     trimmed to exactly `duration` (never -shortest)."""
     I, TP, LRA = HOUSE["lufs"], HOUSE["true_peak"], HOUSE["lra"]
+    # loudnorm's true-peak limiter often overshoots by ~0.2 dB (A7 failed at TP -1.3 vs -1.5).
+    # Aim slightly under the cap, then oversampled-limit so the measured TP stays <= -1.5.
+    ln_tp = TP - 0.1
+    tp_limit = 10 ** ((TP - 0.05) / 20.0)
     ins, chains, labels = [], [], []
     def add(p):
         ins.extend(["-i", p])
@@ -358,16 +362,20 @@ def mix(out_wav: str, duration: float, vo: str | None, music: str | None, sfx: s
     pre = out_wav + ".pre.wav"
     subprocess.run(["ffmpeg", "-v", "error", "-y", *ins, "-filter_complex", ";".join(chains), "-map", "[pre]",
                     "-c:a", "pcm_s24le", pre], check=True)
-    m = _loudnorm_measure(pre, I, TP, LRA)
+    m = _loudnorm_measure(pre, I, ln_tp, LRA)
     if m:
-        ln = (f"loudnorm=I={I}:TP={TP}:LRA={LRA}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
+        ln = (f"loudnorm=I={I}:TP={ln_tp}:LRA={LRA}:measured_I={m['input_i']}:measured_TP={m['input_tp']}:"
               f"measured_LRA={m['input_lra']}:measured_thresh={m['input_thresh']}:offset={m['target_offset']}:linear=true")
     else:
-        ln = f"loudnorm=I={I}:TP={TP}:LRA={LRA}"
+        ln = f"loudnorm=I={I}:TP={ln_tp}:LRA={LRA}"
     tmp = out_wav + ".tmp.wav"
     # loudnorm can emit an unspecified channel layout on some short/low-LRA beds; aresample then
     # fails ("Cannot select channel layout") and DOC_ASSEMBLE dies. Force stereo before pad/trim.
-    af = f"{ln},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,apad,atrim=0:{duration:.4f}"
+    # 192 kHz alimiter approximates a true-peak ceiling a little under the house cap.
+    af = (f"{ln},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,"
+          f"aresample=osr=192000:osf=fltp,alimiter=limit={tp_limit:.6f}:level=false:attack=1:release=50,"
+          f"aresample=osr=48000:osf=fltp,"
+          f"aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,apad,atrim=0:{duration:.4f}")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", pre, "-af", af,
                     "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le", tmp], check=True)
     os.replace(tmp, out_wav)

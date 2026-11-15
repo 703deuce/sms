@@ -26,6 +26,8 @@ export type MsSettings = {
   music?: MsMusicChoice
   /** When true, story research may use Gemini grounded web search. Off by default. */
   webResearch?: boolean
+  /** Pixel size for Motion Studio renders ('480p', '1080p', or '1920x1080'). Omit to use the worker default (480p while testing). */
+  renderSize?: string
 }
 
 export type MsProjectStatus =

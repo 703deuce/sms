@@ -192,6 +192,9 @@ def test_mix_two_pass_loudnorm_on_short_score(tmp_path):
         meas = mix(str(out), dur, str(vo), str(score), None)
         assert out.exists() and out.stat().st_size > 1000
         assert meas.get("I") is not None
+        from clips_worker.motion_studio.core.world import HOUSE
+        assert meas.get("TP") is not None and meas["TP"] <= HOUSE["true_peak"] + 0.05
+        assert meas.get("pass") is True
 
 
 @pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
@@ -240,3 +243,82 @@ def test_director_normalizes_string_emphasis():
     _normalize_emphasis(s)
     assert s["emphasis"][0] == {"lineId": "l1", "word": "Movie night"}
     assert s["emphasis"][1]["word"] == "aisles" and s["emphasis"][1]["lineId"] == "l2"
+
+
+def test_render_size_defaults_to_480p_and_honors_env_and_settings(monkeypatch):
+    from clips_worker.motion_studio.pipeline import config
+    monkeypatch.delenv("MOTION_STUDIO_RENDER_SIZE", raising=False)
+    monkeypatch.delenv("MOTION_STUDIO_RENDER_CRF", raising=False)
+    monkeypatch.delenv("MOTION_STUDIO_RENDER_PRESET", raising=False)
+    assert config.render_size("16:9") == (854, 480)
+    assert config.render_size("9:16") == (480, 854)
+    assert config.render_size("1:1") == (480, 480)
+    assert config.render_crf() == 22
+    assert config.render_preset() == "fast"
+    assert config.encoder_args()[:6] == ["-c:v", "libx264", "-preset", "fast", "-crf", "22"]
+
+    monkeypatch.setenv("MOTION_STUDIO_RENDER_SIZE", "1080p")
+    monkeypatch.setenv("MOTION_STUDIO_RENDER_CRF", "20")
+    monkeypatch.setenv("MOTION_STUDIO_RENDER_PRESET", "medium")
+    assert config.render_size("16:9") == (1920, 1080)
+    assert config.render_crf() == 20
+    assert config.render_preset() == "medium"
+
+    # Project field wins over the env var, so one film can request 1080p while tests stay at 480p.
+    assert config.render_size("16:9", {"renderSize": "480p"}) == (854, 480)
+    assert config.render_size("16:9", {"resolution": "1920x1080"}) == (1920, 1080)
+    assert config.render_crf({"renderCrf": 23}) == 23
+
+
+@pytest.mark.skipif(importlib.util.find_spec("skia") is None, reason="skia not installed")
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_mix_true_peak_stays_under_house_cap(tmp_path):
+    """A quiet bed with full-scale clicks used to finish at TP -1.3 and fail A7 (cap -1.5)."""
+    import math
+    import struct
+    import wave as wavmod
+    from clips_worker.motion_studio.core.audio import mix, loudness
+    from clips_worker.motion_studio.core.qa import loudness_check
+    from clips_worker.motion_studio.core.world import HOUSE
+
+    sr, dur = 48000, 2.0
+    n = int(sr * dur)
+    frames = bytearray()
+    for i in range(n):
+        s = 0.12 * math.sin(2 * math.pi * 220 * i / sr)
+        if i % (sr // 3) < 8:          # brief near-full-scale clicks, low RMS
+            s = 0.98 if s >= 0 else -0.98
+        v = int(max(-1.0, min(1.0, s)) * 32767)
+        frames.extend(struct.pack("<hh", v, v))
+    bed = tmp_path / "peaky.wav"
+    with wavmod.open(str(bed), "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(sr)
+        f.writeframes(bytes(frames))
+    out = tmp_path / "mix.wav"
+    meas = mix(str(out), dur, None, str(bed), None, music_gain_db=0.0)
+    assert out.exists() and meas.get("I") is not None
+    assert meas["TP"] <= HOUSE["true_peak"] + 0.05
+    assert meas["pass"] is True
+    chk = loudness_check(meas)
+    assert chk["pass"], chk
+    # Re-measure the written wav so we are not just trusting mix()'s own dict.
+    again = loudness(str(out))
+    assert again.get("TP") is not None and again["TP"] <= HOUSE["true_peak"] + 0.05
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg not installed")
+def test_probe_video_counts_frames_without_decode(tmp_path):
+    import subprocess
+    from clips_worker.motion_studio.core.render import ffprobe_frames, probe_video, segment_ready
+    src = tmp_path / "seg.mp4"
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=black:s=854x480:r=30:d=1",
+                    "-frames:v", "30", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(src)], check=True)
+    info = probe_video(str(src))
+    assert info["width"] == 854 and info["height"] == 480
+    assert info["frames"] == 30
+    assert ffprobe_frames(str(src)) == 30
+    assert segment_ready(str(src), 30, 854, 480, 30)
+    assert not segment_ready(str(src), 31, 854, 480, 30)
+    assert not segment_ready(str(src), 30, 1920, 1080, 30)

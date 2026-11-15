@@ -263,7 +263,9 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
     plan, story = proj["plan"], proj["story"]
     lay = plan["layout"]
     sc = next(s for s in lay["scenes"] if s["index"] == scene["index"])
-    W, H = config.render_size((proj.get("settings") or {}).get("aspect", "16:9"))
+    settings = proj.get("settings") or {}
+    W, H = config.render_size(settings.get("aspect", "16:9"), settings)
+    crf, preset = config.render_crf(settings), config.render_preset(settings)
     db.update_scene(conn, scene["id"], status="rendering")
     out = os.path.join(work, f"seg_{scene['index']:03d}.mp4")
     key_base = work_key(proj)
@@ -297,7 +299,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             log("cache_hit", f"scene {scene['index'] + 1}: handoff unchanged (cached)", {})
         else:
             wav = out.replace(".mp4", ".wav")
-            rec = render_handoff(spec, out, wav)
+            rec = render_handoff(spec, out, wav, crf=crf, preset=preset)
             rec["segmentId"] = f"seg_{scene['index']}"
             rec["beatSnap"] = beat_snap
             upload_file(f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4", Path(out), "video/mp4")
@@ -342,7 +344,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             log("cache_hit", f"scene {scene['index'] + 1}: unchanged (cached)", {})
         else:
             try:
-                res = render_scene(code, ctx, out, sdir, W, H, 16, None, assets_dir)
+                res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
                 exec_log("render", True, None, None, hashlib.sha256(code.encode()).hexdigest()[:24], scene.get("model"), res["durationMs"])
             except Exception as exc:  # noqa: BLE001 (render failure -> framework fallback, no paid retry)
                 kind = getattr(exc, "kind", "sandbox_error")
@@ -350,7 +352,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
                 log("fallback", f"scene {scene['index'] + 1}: render failed ({kind}); framework fallback", {})
                 from clips_worker.motion_studio.core.fallback import FALLBACK_CODE
                 code = FALLBACK_CODE
-                res = render_scene(code, ctx, out, sdir, W, H, 16, None, assets_dir)
+                res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
                 db.update_scene(conn, scene["id"], usedFallback=True)
                 rh = _render_hash("scene-v1", hashlib.sha256(code.encode()).hexdigest(), ctx_hash, W, H)
             rk = f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4"
@@ -393,19 +395,35 @@ def _fetch(key: str, local: str) -> str:
     return local
 
 
-def _normalize_segment(src: str, frames: int, W: int, H: int, fps: int, dst: str) -> None:
+def _normalize_segment(src: str, frames: int, W: int, H: int, fps: int, dst: str,
+                       crf: int = 22, preset: str = "fast") -> None:
     """Exact frame count per segment (pad by holding the last frame, or trim). Never -shortest."""
+    enc = config.encoder_args(crf=crf, preset=preset)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-an", "-vf",
                     f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={fps},tpad=stop_mode=clone:stop=-1,format=yuv420p",
-                    "-frames:v", str(frames), "-c:v", "libx264", "-preset", "veryfast", "-crf", "12", dst + ".tmp.mp4"], check=True)
+                    "-frames:v", str(frames), *enc, "-movflags", "+faststart", dst + ".tmp.mp4"], check=True)
     os.replace(dst + ".tmp.mp4", dst)
+
+
+def _concat_picture(lst: str, picture: str, fps: int, crf: int, preset: str) -> None:
+    """Stream-copy the (already sized) segments when possible; re-encode only if copy fails."""
+    tmp = picture + ".tmp.mp4"
+    copy = subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst,
+                           "-c", "copy", "-movflags", "+faststart", tmp])
+    if copy.returncode != 0 or not os.path.exists(tmp) or os.path.getsize(tmp) < 1000:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        enc = config.encoder_args(crf=crf, preset=preset)
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst,
+                        *enc, "-r", str(fps), "-movflags", "+faststart", tmp], check=True)
+    os.replace(tmp, picture)
 
 
 def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     from clips_worker.motion_studio.core import audio as A
     from clips_worker.motion_studio.core import qa
     from clips_worker.motion_studio.core.credits import credits_ledger, manifest_entry
-    from clips_worker.motion_studio.core.render import ffprobe_frames
+    from clips_worker.motion_studio.core.render import ffprobe_frames, segment_ready
     from clips_worker.motion_studio.pipeline.music_source import build_music, work_key
     from clips_worker.motion_studio.pipeline.timeline import chapter_markers, editor_extension, validate_for_export
     from clips_worker.storage import download_object, put_json, upload_file
@@ -416,29 +434,35 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     plan, story, narr = proj["plan"], proj["story"], proj["narration"]
     lay = plan["layout"]
     fps = lay["fps"]
-    W, H = config.render_size((proj.get("settings") or {}).get("aspect", "16:9"))
+    settings = proj.get("settings") or {}
+    W, H = config.render_size(settings.get("aspect", "16:9"), settings)
+    crf, preset = config.render_crf(settings), config.render_preset(settings)
+    log("render_size", f"assemble at {W}x{H}, crf {crf} {preset}", {"width": W, "height": H, "crf": crf, "preset": preset})
     rows = {r["index"]: r for r in db.scenes(conn, pid)}
     handoffs = {i: r["handoff"] for i, r in rows.items() if r.get("handoff")}
     errs = validate_for_export(lay, handoffs)
     if errs:
         raise ValueError("export refused: " + "; ".join(errs[:4]))
-    # 1) picture
+    # 1) picture — copy-concat when segments already match; re-encode only the ones that don't
     norm = []
     for sc in lay["scenes"]:
         r = rows[sc["index"]]
         src = _fetch(r["renderKey"], os.path.join(work, f"dl_seg_{sc['index']:03d}_{(r['renderHash'] or '')[:10]}.mp4"))
         got = ffprobe_frames(src)
-        dst = os.path.join(work, f"norm_{sc['index']:03d}.mp4")
-        _normalize_segment(src, sc["frames"], W, H, fps, dst)
-        if got != sc["frames"]:
-            log("parity_fix", f"scene {sc['index'] + 1}: {got} -> {sc['frames']} frames", {})
-        norm.append(dst)
+        if segment_ready(src, sc["frames"], W, H, fps):
+            norm.append(src)
+        else:
+            dst = os.path.join(work, f"norm_{sc['index']:03d}.mp4")
+            _normalize_segment(src, sc["frames"], W, H, fps, dst, crf, preset)
+            if got != sc["frames"]:
+                log("parity_fix", f"scene {sc['index'] + 1}: {got} -> {sc['frames']} frames", {})
+            else:
+                log("norm_reencode", f"scene {sc['index'] + 1}: re-encoded to {W}x{H} @ {fps} fps", {})
+            norm.append(dst)
     lst = os.path.join(work, "concat.txt")
     Path(lst).write_text("".join(f"file '{n}'\n" for n in norm))
     picture = os.path.join(work, "picture.mp4")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", lst, "-c:v", "libx264", "-preset", "medium",
-                    "-crf", "16", "-pix_fmt", "yuv420p", "-r", str(fps), picture + ".tmp.mp4"], check=True)
-    os.replace(picture + ".tmp.mp4", picture)
+    _concat_picture(lst, picture, fps, crf, preset)
     total = lay["frames"] / fps
     if ffprobe_frames(picture) != lay["frames"]:
         raise RuntimeError("picture frame parity failed")
@@ -502,9 +526,11 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", picture, "-i", final_wav, "-map", "0:v", "-map", "1:a", "-c:v", "copy",
                     "-c:a", "aac", "-b:a", "256k", "-af", f"apad,atrim=0:{total:.4f}", "-movflags", "+faststart", master + ".tmp.mp4"], check=True)
     os.replace(master + ".tmp.mp4", master)
+    # Preview: one light CRF encode (not a 6 Mbps CBR pass — that made a 3-min 1080p file huge and slow).
     small = os.path.join(work, "small.mp4")
-    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", master, "-c:v", "libx264", "-preset", "medium", "-b:v", "6M", "-maxrate", "6M",
-                    "-bufsize", "12M", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", small + ".tmp.mp4"], check=True)
+    small_crf = min(32, max(crf + 4, 26))
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", master, *config.encoder_args(crf=small_crf, preset="veryfast"),
+                    "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", small + ".tmp.mp4"], check=True)
     os.replace(small + ".tmp.mp4", small)
     checks = [qa.frame_parity(master, lay["frames"]), qa.frame_parity(small, lay["frames"]), *qa.black_and_freeze(master),
               qa.loudness_check(meas), qa.seam_check(list(handoffs.values()))]

@@ -262,7 +262,7 @@ def _audio(spec: HandoffSpec, out_wav: str, enter_n: int, play_n: int, exit_n: i
             "fadeInMs": int(fin * 1000), "fadeOutMs": int(fout * 1000)}
 
 
-def render_handoff(spec: HandoffSpec, out_mp4: str, out_wav: str, crf: int = 14) -> dict:
+def render_handoff(spec: HandoffSpec, out_mp4: str, out_wav: str, crf: int = 22, preset: str = "fast") -> dict:
     """Render ENTER+PLAYBACK+EXIT as one segment (one encode). Returns the BE-13 handoff record (ST-CMH-017)."""
     if spec.surface not in SURFACES:
         raise ValueError(f"surface {spec.surface!r} not in P1 kinds {SURFACES}")
@@ -285,7 +285,7 @@ def render_handoff(spec: HandoffSpec, out_mp4: str, out_wav: str, crf: int = 14)
     total_est = enter_v0 + play_total + exit_n
     zones = _seam_zones([enter_v0, enter_v0 + play_total - 1], total_est)
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(fps),
-                            "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-x264-params", f"zones={zones}",
+                            "-i", "-", "-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-x264-params", f"zones={zones}",
                             "-pix_fmt", "yuv420p", "-movflags", "+faststart", tmp], stdin=subprocess.PIPE)
     fs = W * H * 3
     first = last = second = None

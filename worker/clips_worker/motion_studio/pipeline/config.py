@@ -55,18 +55,91 @@ def research_cap() -> int:
     return max(0, _i("MOTION_STUDIO_RESEARCH_CAP", 6))
 
 
-def render_size(aspect: str = "16:9") -> tuple[int, int]:
-    raw = (os.environ.get("MOTION_STUDIO_RENDER_SIZE") or "1920x1080").lower()
-    try:
-        w, h = (int(x) for x in raw.split("x"))
-    except ValueError:
-        w, h = 1920, 1080
+# Named presets and WxH. Default 480p while we test; switch with
+# MOTION_STUDIO_RENDER_SIZE=1080p (or 1920x1080) or project settings.renderSize.
+RENDER_PRESETS = {
+    "480p": (854, 480),
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
+    "2160p": (3840, 2160),
+    "4k": (3840, 2160),
+}
+DEFAULT_RENDER_SIZE = "480p"
+DEFAULT_RENDER_CRF = 22
+DEFAULT_RENDER_PRESET = "fast"
+_PRESETS_X264 = frozenset({
+    "ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow",
+})
+
+
+def parse_render_size(raw: str | None) -> tuple[int, int] | None:
+    """Parse '480p', '1080p', or '1920x1080'. Returns None if the value is empty or invalid."""
+    s = (raw or "").strip().lower().replace(" ", "").replace("×", "x")
+    if not s:
+        return None
+    if s in RENDER_PRESETS:
+        return RENDER_PRESETS[s]
+    if "x" in s:
+        a, b = s.split("x", 1)
+        try:
+            w, h = int(a), int(b)
+        except ValueError:
+            return None
+        if 16 <= w <= 7680 and 16 <= h <= 4320 and w % 2 == 0 and h % 2 == 0:
+            return w, h
+    return None
+
+
+def render_size(aspect: str = "16:9", settings: dict | None = None) -> tuple[int, int]:
+    """Pixel size for segment renders and the assemble master.
+
+    Precedence: project settings.renderSize / settings.resolution, then
+    MOTION_STUDIO_RENDER_SIZE, then 480p (854x480).
+    """
+    raw = None
+    if isinstance(settings, dict):
+        raw = settings.get("renderSize") or settings.get("resolution")
+    parsed = parse_render_size(str(raw) if raw is not None else None)
+    if parsed is None:
+        parsed = parse_render_size(os.environ.get("MOTION_STUDIO_RENDER_SIZE"))
+    w, h = parsed or RENDER_PRESETS[DEFAULT_RENDER_SIZE]
     long_side = max(w, h)
     if aspect == "9:16":
         return (long_side * 9 // 16) // 2 * 2, long_side
     if aspect == "1:1":
-        return (long_side * 9 // 16) // 2 * 2, (long_side * 9 // 16) // 2 * 2
+        side = (long_side * 9 // 16) // 2 * 2
+        return side, side
     return long_side, (long_side * 9 // 16) // 2 * 2
+
+
+def render_crf(settings: dict | None = None) -> int:
+    raw = None
+    if isinstance(settings, dict):
+        raw = settings.get("renderCrf")
+    if raw is None or str(raw).strip() == "":
+        raw = os.environ.get("MOTION_STUDIO_RENDER_CRF")
+    try:
+        n = int(raw) if raw is not None and str(raw).strip() != "" else DEFAULT_RENDER_CRF
+    except (TypeError, ValueError):
+        n = DEFAULT_RENDER_CRF
+    return max(12, min(32, n))
+
+
+def render_preset(settings: dict | None = None) -> str:
+    raw = None
+    if isinstance(settings, dict):
+        raw = settings.get("renderPreset")
+    if raw is None or str(raw).strip() == "":
+        raw = os.environ.get("MOTION_STUDIO_RENDER_PRESET")
+    s = (str(raw).strip().lower() if raw is not None else "") or DEFAULT_RENDER_PRESET
+    return s if s in _PRESETS_X264 else DEFAULT_RENDER_PRESET
+
+
+def encoder_args(settings: dict | None = None, *, crf: int | None = None, preset: str | None = None) -> list[str]:
+    """libx264 args for segment, normalize, and master encodes (CRF 22 / fast by default)."""
+    c = render_crf(settings) if crf is None else max(12, min(32, int(crf)))
+    p = render_preset(settings) if preset is None else (preset if preset in _PRESETS_X264 else DEFAULT_RENDER_PRESET)
+    return ["-c:v", "libx264", "-preset", p, "-crf", str(c), "-pix_fmt", "yuv420p"]
 
 
 def elevenlabs_music_enabled() -> bool:
