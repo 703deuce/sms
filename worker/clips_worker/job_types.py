@@ -35,6 +35,11 @@ JOB_TYPES: tuple[str, ...] = (
     "AI_PRODUCER_AGENT_ANALYZE",
     "AI_PRODUCER_AGENT_RUN",
     "AD_STUDIO_RUN",
+    # Motion Studio (documentaries) — additive job types on the existing clips worker (#1199 RE-2).
+    "DOC_PLAN",
+    "DOC_PRODUCE",
+    "MGD_RENDER_SEGMENT",
+    "DOC_ASSEMBLE",
 )
 
 

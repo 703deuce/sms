@@ -326,6 +326,20 @@ export type ClipEditsV2 = {
   speakerNames?: Record<string, string>
   /** B3 non-authoritative template lineage. Excluded from render-cache hashing. */
   templateProvenance?: ClipTemplateProvenance
+  /** Motion Studio (documentaries) timeline extension: track kinds + scene/handoff segment records. Editor/
+   * renderer ignore it; preserved by normalizeEdits (docs/contracts/motion-studio-v1.md §4). */
+  motionStudio?: ClipMotionStudioExt
+}
+
+/** Motion Studio extension (opaque to the editor/renderer). Items are JSON objects described in the contract. */
+export type ClipMotionStudioExt = {
+  v: 1
+  projectId: string
+  timelineVersion: number
+  durationMs: number
+  fps: number
+  tracks: { id: string; kind: string; label: string; items: object[] }[]
+  segments: object[]
 }
 
 export type ClipBounds = {
@@ -901,6 +915,7 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     beatSync: normalizeBeatSync(o.beatSync),
     speakerNames: normalizeSpeakerNames(o.speakerNames),
     templateProvenance: normalizeTemplateProvenance(o.templateProvenance),
+    motionStudio: normalizeMotionStudioExtension(o.motionStudio),
   }
   // N8: old generated clips often have headlineBar.enabled=false without anyone hiding
   // the Headline. Migrate that old default to visible; from now on an explicit eye
@@ -914,6 +929,20 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
   // G1c: take groups reference the normalized B-roll ids.
   const takes = normalizeTakes(o.takes, new Set((out.broll ?? []).map((b) => b.id)))
   return { ...out, takes }
+}
+
+/** Motion Studio extension passthrough: a plain JSON object with v === 1, capped at ~256 KB. */
+function normalizeMotionStudioExtension(raw: unknown): ClipMotionStudioExt | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const o = raw as Record<string, unknown>
+  if (o.v !== 1 || typeof o.projectId !== 'string' || !Array.isArray(o.tracks)) return undefined
+  try {
+    const json = JSON.stringify(o)
+    if (json.length > 262_144) return undefined
+    return JSON.parse(json) as ClipMotionStudioExt
+  } catch {
+    return undefined
+  }
 }
 
 function normalizeChatOverlay(raw: unknown): ClipEditsV2['chatOverlay'] | undefined {

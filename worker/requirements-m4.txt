@@ -19,3 +19,5 @@ scenedetect==0.7.2
 supervision>=0.30.9,<0.31
 modal>=1.0.0,<2
 yt-dlp[default,curl-cffi]>=2024.0.0
+# Motion Studio render engine (Cinematic Skill, MIT; vendored under clips_worker/motion_studio/vendor)
+skia-python==144.1

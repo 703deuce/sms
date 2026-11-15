@@ -1,1 +1,9 @@
 RobustVideoMatting (GPL-3.0) — server-side Modal job only; see worker/modal_app/third_party/rvm/NOTICE.md
+
+--------------------------------------------------------------------------------
+Cinematic Skill (cinematic-film engine) — MIT License
+https://github.com/Moh4696/cinematic-skill @ bf435561c6203f90f971300efe952b68b5ec3417
+Copyright (c) exploraX
+Vendored unmodified at worker/clips_worker/motion_studio/vendor/cinematic_skill/ (full licence text in
+LICENSE there). Used by Motion Studio as its render engine. Fonts and Piper voices from the upstream
+repo are NOT vendored.
