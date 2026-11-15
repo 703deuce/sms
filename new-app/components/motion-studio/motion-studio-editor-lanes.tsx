@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Film, Loader2 } from 'lucide-react'
 import { getMotionStudioClient } from '@/lib/motion-studio'
-import type { MotionStudioClient } from '@/lib/motion-studio/client'
+import { MotionStudioHttpError, type MotionStudioClient } from '@/lib/motion-studio/client'
 import { MOTION_STUDIO_NAME, MOTION_STUDIO_ROUTE } from '@/lib/motion-studio/config'
 import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsProject } from '@/lib/motion-studio/types'
@@ -33,13 +33,28 @@ export function MotionStudioEditorLanes({
     client
       .getProject(projectId)
       .then((p) => alive && setProject(p))
-      .catch((err) => alive && setError(err instanceof Error ? err.message : 'Could not load the Motion Studio lanes.'))
+      .catch((err) => {
+        if (!alive) return
+        setError(
+          err instanceof MotionStudioHttpError && err.status === 404
+            ? 'project not found in this workspace.'
+            : err instanceof Error
+              ? err.message
+              : 'Could not load the Motion Studio lanes.',
+        )
+      })
     return () => {
       alive = false
     }
   }, [client, projectId])
 
-  if (error) return <p className="px-1 text-xs text-muted-foreground" role="status">Motion Studio lanes unavailable: {error}</p>
+  if (error)
+    return (
+      <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground" role="status" data-testid="ms-editor-lanes-error">
+        Motion Studio lanes unavailable: {error}
+        <Link href={MOTION_STUDIO_ROUTE} className="text-primary hover:underline">Back to Motion Studio</Link>
+      </p>
+    )
   if (!project)
     return (
       <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground" aria-busy="true">

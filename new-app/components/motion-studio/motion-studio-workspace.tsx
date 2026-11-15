@@ -16,11 +16,13 @@ import {
   Loader2,
   Pencil,
   Rows3,
+  SearchX,
   Shapes,
   Sparkles,
   Upload,
 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { EmptyState } from '@/components/app/page-primitives'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { StatusBadge } from '@/components/app/status'
@@ -59,7 +61,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
 export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 1500 }: { projectId: string; client?: MotionStudioClient; pollMs?: number }) {
   const client = useMemo(() => injected ?? getMotionStudioClient(), [injected])
   const router = useRouter()
-  const { project, events, loadError, actionError, setActionError, busy, act, refresh } = useMotionProject(client, projectId, pollMs)
+  const { project, events, loadError, loadStatus, actionError, setActionError, busy, act, refresh } = useMotionProject(client, projectId, pollMs)
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null)
   const [playheadMs, setPlayheadMs] = useState(0)
   const [playing, setPlaying] = useState(false)
@@ -97,10 +99,35 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
     [scenes],
   )
 
+  if (loadError && !project && loadStatus === 404) {
+    return (
+      <div className="mx-auto flex max-w-xl flex-col px-6 py-16" data-testid="ms-not-found">
+        <EmptyState
+          icon={SearchX}
+          title="Project not found"
+          description="This documentary doesn't exist, was deleted, or belongs to another workspace."
+          action={
+            <Link href={MOTION_STUDIO_ROUTE} className={buttonVariants({ variant: 'default' })} data-testid="ms-not-found-back">
+              Back to {MS_LABELS.myProjects}
+            </Link>
+          }
+        />
+      </div>
+    )
+  }
   if (loadError && !project) {
     return (
       <div className="mx-auto flex max-w-xl flex-col gap-4 px-6 py-16">
-        <InlineError message={loadError} action={<Button size="xs" variant="outline" onClick={() => void refresh()}>Retry</Button>} />
+        <InlineError
+          message={loadError}
+          action={
+            loadStatus === 401 ? (
+              <Button size="xs" variant="outline" onClick={() => window.location.reload()}>Refresh</Button>
+            ) : (
+              <Button size="xs" variant="outline" onClick={() => void refresh()}>Retry</Button>
+            )
+          }
+        />
         <Link href={MOTION_STUDIO_ROUTE} className="text-sm text-primary hover:underline">Back to {MS_LABELS.myProjects}</Link>
       </div>
     )

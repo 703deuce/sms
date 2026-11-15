@@ -21,6 +21,8 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
   const [project, setProject] = useState<MsProject | null>(null)
   const [events, setEvents] = useState<MsActivityEvent[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  /** HTTP status of the last failed load (404 = not found / other workspace, 401 = no session). */
+  const [loadStatus, setLoadStatus] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
   const cursor = useRef<string | null>(null)
@@ -32,6 +34,7 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
       if (!alive.current) return
       setProject(p)
       setLoadError(null)
+      setLoadStatus(null)
       if (a.events.length) {
         setEvents((prev) => {
           const seen = new Set(prev.map((e) => e.id))
@@ -41,7 +44,16 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
       cursor.current = a.cursor
     } catch (err) {
       if (!alive.current) return
-      const msg = err instanceof MotionStudioHttpError && err.status === 404 ? 'This project does not exist or you no longer have access.' : err instanceof Error ? err.message : 'Could not load the project.'
+      const status = err instanceof MotionStudioHttpError ? err.status : null
+      const msg =
+        status === 404
+          ? 'This project does not exist or belongs to another workspace.'
+          : status === 401
+            ? 'Your session has ended. Refresh the page to sign in again.'
+            : err instanceof Error
+              ? err.message
+              : 'Could not load the project.'
+      setLoadStatus(status)
       setLoadError(msg)
     }
   }, [client, projectId])
@@ -83,5 +95,5 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
     [refresh],
   )
 
-  return { project, events, loadError, actionError, setActionError, busy, act, refresh }
+  return { project, events, loadError, loadStatus, actionError, setActionError, busy, act, refresh }
 }
