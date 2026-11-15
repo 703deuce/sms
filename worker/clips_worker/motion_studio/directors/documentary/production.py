@@ -338,7 +338,6 @@ def finalize_production(plan: dict, story: dict, catalog: list[dict], inventory:
 
 def fallback_production(project: dict, story: dict, catalog: list[dict], plan: dict) -> dict:
     """Deterministic Production Designer when the model is unavailable or invalid."""
-    editorial = copy.deepcopy(plan)
     inventory = inventory_from_catalog(catalog, story)
     # Honour existing official assignments; fill any leftover stills.
     _assign_stills(plan.setdefault("scenes", []), catalog, story)
@@ -408,6 +407,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         validate_plan(out, story, catalog)
         return out
 
+    editorial = copy.deepcopy(plan)
     inventory = inventory_from_catalog(catalog, story)
     sys_ = (
         "You are the Production Designer for a cinematic motion-graphics documentary. "
