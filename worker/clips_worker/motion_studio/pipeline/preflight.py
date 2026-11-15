@@ -10,13 +10,11 @@ import hashlib
 from pathlib import Path
 
 from clips_worker.motion_studio.core.output_contracts import StageContractError, validate_story
-from clips_worker.motion_studio.directors.documentary.contracts import validate_blueprint
-from clips_worker.motion_studio.directors.documentary.director import validate_plan
 
 
 def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_dir, scratch_dir_fn,
                   scene_context_fn, render_hash_fn, upload_file, work_key: str, design_scene,
-                  exec_log, catalog: list | None = None) -> dict:
+                  exec_log, catalog: list | None = None, validate_plan=None, validate_blueprint=None) -> dict:
     """Validate contracts and dry-run compile/lint every graphics scene.
 
     Handoff scenes are checked for a real video asset id but are not rendered.
@@ -34,13 +32,14 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
     log("preflight", "starting pre-flight (story, plan, design, lint/compile)", {})
     for err in validate_story(story):
         errors.append(f"story: {err}")
-    if isinstance(story, dict) and isinstance(story.get("lines"), list):
+    if validate_plan and isinstance(story, dict) and isinstance(story.get("lines"), list):
         for err in validate_plan(plan, story, catalog):
             errors.append(f"plan: {err}")
     elif not any(e.startswith("story:") for e in errors):
         errors.append("story: story must include narration lines")
-    for err in validate_blueprint(plan.get("blueprint")):
-        errors.append(f"blueprint: {err}")
+    if validate_blueprint:
+        for err in validate_blueprint(plan.get("blueprint")):
+            errors.append(f"blueprint: {err}")
     if (plan.get("source") or "") == "fallback" or (plan.get("productionSource") or "") == "fallback":
         errors.append("plan: a fallback/deterministic substitute was used; test runs must not ship that")
 

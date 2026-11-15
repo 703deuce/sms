@@ -309,7 +309,7 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
             prepare_photos=_prepare_photos, assets_dir=_assets_dir, scratch_dir_fn=scratch_dir,
             scene_context_fn=scene_context, render_hash_fn=lambda ctx: _render_hash(ctx),
             upload_file=upload_file, work_key=work_key(proj), design_scene=agent.design_scene,
-            exec_log=_pf_exec,
+            exec_log=_pf_exec, validate_plan=agent.validate_plan, validate_blueprint=agent.validate_blueprint,
         )
         # Reload scenes so render jobs can reuse preflight codeKeys.
         rows = db.scenes(conn, pid)
