@@ -450,13 +450,118 @@ def unused_uploads_check(plan: dict | None, catalog: list[dict] | None = None) -
     return _chk("F3", not unused, unused, ("unused uploads: " + ", ".join(unused)) if unused else "every inventory upload is used")
 
 
-def film_quality(plan: dict | None, scenes: list[dict] | None, catalog: list[dict] | None = None) -> list[dict]:
+def empty_interval_check(scenes: list[dict] | None) -> dict:
+    """Long empty or low-information intervals fail film QA (D2 / C22)."""
+    bad = []
+    for s in scenes or []:
+        qa_blob = s.get("qa") or {}
+        start = s.get("startMs") if s.get("startMs") is not None else int(float(s.get("startS") or 0) * 1000)
+        end = s.get("endMs") if s.get("endMs") is not None else int(float(s.get("endS") or 0) * 1000)
+        try:
+            dur = (float(end) - float(start)) / 1000 if end and start is not None else float(s.get("duration") or 0)
+        except (TypeError, ValueError):
+            dur = 0.0
+        empty_hits = []
+        for c in qa_blob.get("checks") or []:
+            if c.get("id") in ("A14", "F4") and not c.get("pass"):
+                empty_hits.append(c)
+        for c in qa_blob.get("finalRes") or []:
+            if c.get("id") in ("A14", "F6") and not c.get("pass"):
+                empty_hits.append(c)
+        if empty_hits and dur >= 2.0:
+            bad.append({"index": s.get("index"), "durationS": round(dur, 2), "detail": "empty or low-information interval"})
+        # A scene with no media, no typography/title treatment, and a long hold is empty coverage.
+        vt = str(s.get("visualType") or (s.get("plan") or {}).get("visualType") or "").lower()
+        has_media = bool(s.get("assetId") or (s.get("handoff") or {}).get("assetId") if isinstance(s.get("handoff"), dict) else s.get("assetId"))
+        if dur >= 4.0 and not has_media and vt not in ("text", "title", "quote", "data", "timeline", "diagram", "abstract") and not empty_hits:
+            if qa_blob.get("degraded") or s.get("usedFallback"):
+                bad.append({"index": s.get("index"), "durationS": round(dur, 2), "detail": "degraded scene with no media coverage"})
+    return _chk("F4", not bad, bad, ("empty intervals: " + ", ".join(f"s{b['index']}" for b in bad)) if bad else "no long empty intervals")
+
+
+def _tokens(text: str) -> set[str]:
+    import re
+    return {w for w in re.findall(r"[A-Za-z][A-Za-z0-9'\-]{2,}", text or "")}
+
+
+def unrelated_labels_check(plan: dict | None, story: dict | None = None) -> dict:
+    """On-screen labels that do not appear in the story or identity fail film QA."""
+    plan = plan or {}
+    story = story or {}
+    vocab: set[str] = set()
+    for line in story.get("lines") or []:
+        vocab |= {w.lower() for w in _tokens(str(line.get("text") or line.get("spoken") or ""))}
+    vocab |= {w.lower() for w in _tokens(str(story.get("title") or plan.get("title") or ""))}
+    ident = plan.get("identity") or plan.get("identityPackage") or {}
+    for key in ("throughLine", "concept", "motifs"):
+        val = ident.get(key)
+        if isinstance(val, list):
+            for item in val:
+                vocab |= {w.lower() for w in _tokens(str(item))}
+        elif val:
+            vocab |= {w.lower() for w in _tokens(str(val))}
+    # Allow typography/identity words and generic UI labels.
+    vocab |= {"the", "and", "for", "chapter", "act", "part", "scene", "title"}
+    labels = []
+    for scene in plan.get("scenes") or []:
+        for key in ("onScreenText", "label", "labels", "stamp", "lowerThird", "placeLabel"):
+            val = scene.get(key)
+            if isinstance(val, list):
+                labels.extend((scene.get("index"), str(x)) for x in val if x)
+            elif val:
+                labels.append((scene.get("index"), str(val)))
+        for item in (scene.get("graphics") or []):
+            if isinstance(item, dict) and (item.get("text") or item.get("label")):
+                labels.append((scene.get("index"), str(item.get("text") or item.get("label"))))
+    # Blueprint-declared labels (never treat environment names as automatically ok if they are invented places off-story).
+    for item in (plan.get("blueprint") or {}).get("labels") or []:
+        if isinstance(item, dict):
+            labels.append((item.get("sceneIndex"), str(item.get("text") or item.get("label") or "")))
+        elif item:
+            labels.append((None, str(item)))
+    bad = []
+    for index, text in labels:
+        words = [w.lower() for w in _tokens(text)]
+        content = [w for w in words if w not in {"the", "and", "for", "a", "of", "to", "in"}]
+        if content and not any(w in vocab for w in content):
+            bad.append({"index": index, "label": text})
+    return _chk("F5", not bad, bad, ("unrelated labels: " + ", ".join(repr(b["label"]) for b in bad[:8])) if bad else "on-screen labels match the story")
+
+
+def final_res_check(scenes: list[dict] | None) -> dict:
+    """Typography, thin lines and photo detail must be verified at final resolution even when iterating at 480p."""
+    missing = []
+    failed = []
+    for s in scenes or []:
+        qa_blob = s.get("qa") or {}
+        rows = qa_blob.get("finalRes") or []
+        if not rows:
+            missing.append(s.get("index"))
+            continue
+        if any(not c.get("pass") and c.get("severity") != "warn" for c in rows):
+            failed.append(s.get("index"))
+    # Missing probes are a warning so a film that has not yet been through the
+    # new worker still gets a report; failed typography at final res is an error.
+    if failed:
+        return _chk("F6", False, {"failed": failed, "missing": missing},
+                    "final-resolution typography or detail failed on " + ", ".join(f"s{i}" for i in failed))
+    if missing:
+        return _chk("F6", True, {"missing": missing}, "final-resolution probes not yet recorded on every scene", "warn")
+    return _chk("F6", True, {}, "final-resolution typography and detail checked")
+
+
+def film_quality(plan: dict | None, scenes: list[dict] | None, catalog: list[dict] | None = None,
+                 story: dict | None = None) -> list[dict]:
     """Whole-film technical+allocation QA, reported separately from creative quality."""
     return [
         degraded_scenes_check(scenes),
         unexplained_repetition_check(plan),
         unused_uploads_check(plan, catalog),
+        empty_interval_check(scenes),
+        unrelated_labels_check(plan, story),
+        final_res_check(scenes),
     ]
+
 
 
 def film_pass(checks: list[dict], scenes: list[dict] | None = None) -> bool:

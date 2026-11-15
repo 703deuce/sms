@@ -146,6 +146,41 @@ def render_size(aspect: str = "16:9", settings: dict | None = None) -> tuple[int
     return long_side, (long_side * 9 // 16) // 2 * 2
 
 
+def _apply_aspect(w: int, h: int, aspect: str) -> tuple[int, int]:
+    long_side = max(w, h)
+    if aspect == "9:16":
+        return (long_side * 9 // 16) // 2 * 2, long_side
+    if aspect == "1:1":
+        side = (long_side * 9 // 16) // 2 * 2
+        return side, side
+    return long_side, (long_side * 9 // 16) // 2 * 2
+
+
+def final_render_size(aspect: str = "16:9", settings: dict | None = None) -> tuple[int, int]:
+    """Delivery resolution for typography/detail QA.
+
+    Iteration may run at 480p, but preview QA still verifies typography, thin
+    lines, grain, photo detail and small UI at this size (default 1080p).
+    """
+    raw = None
+    if isinstance(settings, dict):
+        raw = settings.get("finalRenderSize") or settings.get("deliverySize")
+    parsed = parse_render_size(str(raw) if raw is not None else None)
+    if parsed is None:
+        parsed = parse_render_size(os.environ.get("MOTION_STUDIO_FINAL_SIZE"))
+    if parsed is None and isinstance(settings, dict):
+        fmt = str(settings.get("format") or "")
+        if "2160" in fmt or "4k" in fmt.lower():
+            parsed = RENDER_PRESETS["2160p"]
+        elif "720" in fmt:
+            parsed = RENDER_PRESETS["720p"]
+        else:
+            parsed = RENDER_PRESETS["1080p"]
+    if parsed is None:
+        parsed = RENDER_PRESETS["1080p"]
+    return _apply_aspect(*parsed, aspect)
+
+
 def render_crf(settings: dict | None = None) -> int:
     raw = None
     if isinstance(settings, dict):

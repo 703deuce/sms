@@ -135,6 +135,15 @@ export type MsScene = {
   /** Contract v1.1 optional fields. */
   previewUrl?: string | null
   error?: string | null
+  /** Editable scene elements (text, graphics, media, animation, audio). */
+  elements?: MsSceneElement[]
+  params?: Record<string, string | number | boolean>
+}
+
+export type MsSceneElement = {
+  id: string
+  kind: 'environment' | 'media' | 'graphic' | 'text' | 'animation' | 'audio' | 'camera' | string
+  [key: string]: unknown
 }
 
 export type MsAssetKind = 'photo' | 'video' | 'audio' | 'script'
@@ -240,6 +249,9 @@ export type MsCreateInput = {
 export type MsScenePatch = Partial<Pick<MsScene, 'startMs' | 'endMs' | 'style' | 'camera' | 'text'>> & {
   /** Photo: crop/depth/animation; clip: trim/sound (Footage Editor action, ST-BND-002). */
   params?: Record<string, string | number | boolean>
+  /** Targeted element patches; re-render this scene without a new model call. */
+  elements?: MsSceneElement[]
+  elementPatches?: MsSceneElement[]
 }
 
 export type MsEditorHandoff = { clipProjectId: string; clipId: string }

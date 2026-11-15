@@ -12,6 +12,7 @@ import json
 
 from clips_worker.motion_studio.core import qa
 from clips_worker.motion_studio.core.api import API_REFERENCE
+from clips_worker.motion_studio.core.probes import final_res_times, probe_times
 from clips_worker.motion_studio.core.api_manifest import format_repair, load_manifest
 from clips_worker.motion_studio.core.craft import engineer_system
 from clips_worker.motion_studio.core.fallback import fallback_code
@@ -28,18 +29,6 @@ SYSTEM = engineer_system(API_REFERENCE, format_tools_reference())
 
 def code_hash(code: str) -> str:
     return hashlib.sha256(code.encode()).hexdigest()[:24]
-
-
-def probe_times(ctx: dict) -> list[float]:
-    ts = []
-    for l in ctx["lines"]:
-        ts.append(min(ctx["duration"] - 0.05, l["start"] + 0.9))
-    ts.append(max(0.1, ctx["duration"] - 0.4))
-    out = []
-    for t in sorted(ts):
-        if not out or t - out[-1] > 0.6:
-            out.append(round(t, 3))
-    return out[:6] or [round(ctx["duration"] / 2, 3)]
 
 
 def measure(res: dict, ctx: dict, probe_h: int) -> tuple[list[dict], list[str]]:

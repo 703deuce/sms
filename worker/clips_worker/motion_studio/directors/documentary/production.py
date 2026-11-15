@@ -18,6 +18,8 @@ from clips_worker.motion_studio.directors.documentary.director import (
     is_mark_asset,
     validate_plan,
 )
+from clips_worker.motion_studio.core import preproduction as pre
+from clips_worker.motion_studio.core import style_memory
 from clips_worker.motion_studio.directors.documentary.contracts import (
     CONTRACT_VERSION,
     FORBIDDEN_BLUEPRINT_KEYS,
@@ -302,6 +304,24 @@ def finalize_production(plan: dict, story: dict, catalog: list[dict], inventory:
     plan["blueprint"] = bp
     plan["assetUsageManifest"] = manifest
     plan["identity"] = identity
+    plan["identityPackage"] = pre.identity_package(plan, story)
+    storyboard = pre.build_storyboard(plan, story)
+    review = pre.review_storyboard(storyboard, plan)
+    storyboard["status"] = review["status"]
+    plan["storyboard"] = storyboard
+    plan["storyboardReview"] = review
+    plan["acquisitionPlan"] = pre.acquisition_plan(plan, story)
+    settings = plan.get("settings") or {}
+    plan["costEstimate"] = pre.estimate_credits(plan, settings, story)
+    plan["styleMemory"] = style_memory.record(plan, plan.get("styleMemory") or [])
+    pre.record_checkpoint(plan, "production_design", {
+        "identityPackageVersion": plan["identityPackage"].get("packageVersion"),
+        "storyboard": review.get("status"),
+        "assetUsageManifest": True,
+        "acquisitionPlan": True,
+        "costEstimateCredits": plan["costEstimate"].get("total"),
+        "unit": "credits",
+    })
     return plan
 
 
@@ -360,6 +380,8 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
     }
     plan["productionSource"] = "fallback"
     inventory = inventory or inventory_from_catalog(catalog, story)
+    if project.get("settings"):
+        plan.setdefault("settings", {k: v for k, v in project["settings"].items() if k in ("lengthMin", "voiceover", "music", "renderSize", "resolution", "format", "finalRenderSize")})
     return finalize_production(plan, story, catalog, inventory)
 
 
@@ -398,7 +420,11 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Every ready upload in the inventory should appear at least once. Repeats require a narrative reuseReason. "
         "A logo/wordmark/brand mark/lockup belongs on the title or end card. "
         "Uploaded clips play their planned stretch in full with audioMode 'clip' and narration paused. "
-        "No subject-specific special cases."
+        "No subject-specific special cases. "
+        "Art direction is more than a palette; invent typography, materials, camera personality and motifs. "
+        "Do not spend the most expensive treatment on every beat — prefer held photographs, registered tools "
+        "and the generated score unless a paid or custom-code pass is genuinely required. "
+        + style_memory.prompt_excerpt(project.get("styleMemory") or plan.get("styleMemory"))
     )
     user = json.dumps({
         "title": story.get("title"), "tone": story.get("tone"), "logline": story.get("logline"),
@@ -411,6 +437,8 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                                      "assetId": s.get("assetId"), "handoff": s.get("handoff"), "reason": s.get("reason")}
                                     for s in plan.get("scenes") or []]},
         "inventory": inventory,
+        "visualApproaches": style_memory.APPROACHES,
+        "styleMemory": project.get("styleMemory") or plan.get("styleMemory") or [],
     })
     try:
         raw, m = chat_json("production_designer", sys_, user, max_tokens=12000)
@@ -508,4 +536,6 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
         "cameraRoute": (raw.get("cameraRoute") or "Follow the sequence of environments; motivated moves only."),
         "audioDirection": raw.get("audioDirection") or "Narration pauses during clip-mode footage.",
     }
+    if project.get("settings"):
+        plan.setdefault("settings", {k: v for k, v in project["settings"].items() if k in ("lengthMin", "voiceover", "music", "renderSize", "resolution", "format", "finalRenderSize")})
     return finalize_production(plan, story, catalog, inventory)

@@ -7,7 +7,9 @@ import os
 from pathlib import Path
 
 from clips_worker.motion_studio.core import audio as A
+from clips_worker.motion_studio.core.preproduction import music_brief
 from clips_worker.motion_studio.pipeline import config
+
 
 
 def anchors_in_program(plan: dict, lay: dict) -> dict:
@@ -60,7 +62,7 @@ def build_music(project: dict, plan: dict, story: dict, lay: dict, work: str, us
         if src == "elevenlabs" and raw:
             info = A.cut_uploaded_music(raw, out_wav, dur, work, start_on_beat=0.0)
             return {**info, "source": "elevenlabs", "elevenKey": prev.get("elevenKey"), "lengthS": dur, "path": out_wav}
-    params = A.score_params(A.music_seed(project["id"], " ".join(l["text"] for l in story["lines"])), story.get("tone") or "", (plan.get("world") or {}).get("type") or "", story.get("title") or "")
+    params = A.score_params(A.music_seed(project["id"], " ".join(l["text"] for l in story["lines"])), story.get("tone") or "", music_brief(plan, story), story.get("title") or "")
     anchors = anchors_in_program(plan, lay)
     info = A.generate_score(out_wav, dur, anchors, params)
     log("music", f"generated score: {params['bpm']} bpm {params['key']} {params['mode']} ({', '.join(params['instruments'])})",

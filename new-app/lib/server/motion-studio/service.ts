@@ -331,6 +331,34 @@ function chaptersView(story: Json | null): MsChapter[] {
   })
 }
 
+
+function sceneElements(plan: Json, qa: unknown): MsScene['elements'] {
+  if (Array.isArray(plan.elements)) return plan.elements as MsScene['elements']
+  const blob = qa ? J(qa) : {}
+  if (Array.isArray(blob.elements)) return blob.elements as MsScene['elements']
+  const spec = blob.spec ? J(blob.spec) : {}
+  const out: NonNullable<MsScene['elements']> = []
+  const push = (id: unknown, kind: string, extra?: Json) => {
+    if (!id) return
+    out.push({ id: String(id), kind, ...((extra && typeof extra === 'object') ? extra : {}) })
+  }
+  if (spec.environment) push(J(spec.environment).id ?? 'environment', 'environment', J(spec.environment))
+  for (const row of ([...(Array.isArray(spec.media) ? spec.media : []), ...(Array.isArray(spec.placements) ? spec.placements : [])] as Json[]).slice(0, 40)) {
+    const r = J(row)
+    push(r.id ?? r.assetId, 'media', r)
+  }
+  for (const row of ([...(Array.isArray(spec.graphics) ? spec.graphics : []), ...(Array.isArray(spec.objects) ? spec.objects : [])] as Json[]).slice(0, 40)) {
+    const r = J(row)
+    push(r.id ?? r.name, 'graphic', r)
+  }
+  for (const row of (Array.isArray(spec.text) ? spec.text : []) as Json[]) {
+    const r = J(row)
+    push(r.id ?? r.name, 'text', r)
+  }
+  if (spec.camera) push(J(spec.camera).id ?? 'camera', 'camera', J(spec.camera))
+  return out.length ? out : undefined
+}
+
 async function scenesView(c: Ctx): Promise<MsScene[]> {
   const lines: Json[] = Array.isArray(c.story?.lines) ? c.story!.lines : []
   const byLine = new Map(lines.map(l => [String(l.id), l]))
@@ -368,6 +396,7 @@ async function scenesView(c: Ctx): Promise<MsScene[]> {
       assetIds: asset ? [asset.id] : [],
       handoff: h ? { assetId: String(h.assetId), approachMs: ENTER_MS, footageMs, returnMs: EXIT_MS, exit: s.kind === 'hardcut' ? 'cut' : 'return' } : null,
       version: s.version, params, error: s.error ? 'This scene failed to render. Regenerate it to try again.' : null,
+      elements: sceneElements(p, s.qa),
     } as MsScene
   }))
 }
@@ -442,18 +471,35 @@ function stagesView(c: Ctx, status: MsProjectStatus): MsStage[] {
     error: st[id] === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : row.errorMessage ? 'This step failed. Retry it to continue.' : null) : null }))
 }
 
-function allowanceFor(s: Json): MsAllowance {
+function allowanceFor(s: Json, plan?: Json | null): MsAllowance {
   const music = s.music ?? 'generated'
-  return {
-    estimateCredits: null, minutes: Number(s.lengthMin) || 3,
-    items: [
+  const estimate = plan ? J(plan).costEstimate : null
+  const breakdown = estimate && Array.isArray(J(estimate).breakdown) ? J(estimate).breakdown as Json[] : null
+  const items = breakdown && breakdown.length
+    ? breakdown.slice(0, 16).map((b) => {
+        const row = J(b)
+        const credits = Number(row.credits)
+        const n = Number.isFinite(credits) ? credits : 0
+        return {
+          id: str(row.id, 40) || 'item',
+          label: str(row.label, 160) || str(row.id, 40) || 'Item',
+          included: n === 0,
+          thirdParty: Boolean(row.paidModel),
+          credits: n,
+        }
+      })
+    : [
       { id: 'research', label: s.webResearch ? 'Story research (web search)' : 'Story from model knowledge', included: true, thirdParty: Boolean(s.webResearch), credits: null },
       { id: 'script', label: 'Scriptwriting and direction', included: true, thirdParty: true, credits: null },
       { id: 'narration', label: s.voiceover === 'upload' ? 'Your narration (uploaded)' : 'AI narration', included: true, thirdParty: s.voiceover !== 'upload', credits: null },
       { id: 'graphics', label: 'Code-rendered motion graphics', included: true, thirdParty: false, credits: null },
       { id: 'music', label: music === 'upload' ? 'Your music' : music === 'elevenlabs' ? 'Generated music' : music === 'none' ? 'No music' : 'Score generated from the story beats', included: music !== 'none', thirdParty: music === 'elevenlabs', credits: null },
       { id: 'render', label: 'Render, mix and QA', included: true, thirdParty: false, credits: null },
-    ],
+    ]
+  const estimateCredits = estimate && typeof J(estimate).total === 'number' ? Number(J(estimate).total) : null
+  return {
+    estimateCredits, minutes: Number(s.lengthMin) || 3,
+    items,
   }
 }
 
@@ -525,7 +571,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
     proposals: (Array.isArray(proposals.items) ? proposals.items : []).map((p: StoredProposal) => ({ ...p,
       items: (Array.isArray(p.items) ? p.items : []).map(({ op: _op, ...it }) => it) })) as MsProposal[],
     director: Array.isArray(proposals.messages) ? proposals.messages : [],
-    allowance: allowanceFor(c.s), export: exportState,
+    allowance: allowanceFor(c.s, c.plan), export: exportState,
     error: status === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : 'A step failed. Retry it to continue.') : null,
   }
 }
@@ -652,7 +698,7 @@ export async function retryStep(workspaceId: string, id: string, stage: string, 
   await db().motionStudioProject.update({ where: { id }, data: { status: 'running', stage: type === 'DOC_PLAN' ? 'story' : type === 'DOC_ASSEMBLE' ? 'assemble' : 'graphics',
     errorCode: null, errorMessage: null, errorStage: null } })
   await event(id, stageOf(stage), 'stage', 'Retry requested by you. This step runs once; nothing retries automatically.')
-  await enqueue(row, type, {}, 5)
+  await enqueue(row, type, { resume: true }, 5)
   return getProject(workspaceId, id)
 }
 
@@ -692,7 +738,10 @@ async function rerenderScenes(row: ProjectRow, sceneIds: string[], reason: strin
   await db().motionStudioScene.updateMany({ where: { id: { in: sceneIds } }, data: { status: 'queued' } })
   await db().motionStudioProject.update({ where: { id: row.id }, data: { status: 'running', stage: 'graphics' } })
   await updateSettingsLocked(row.id, s => ({ ...s, exportRequested: false }))
-  for (const sid of sceneIds) await enqueue(row, 'MGD_RENDER_SEGMENT', { sceneId: sid, regenerate: true, force: true, reason }, 6)
+  for (const sid of sceneIds) await enqueue(row, 'MGD_RENDER_SEGMENT', {
+    sceneId: sid, regenerate: reason === 'regenerate' || reason === 'director_chat', force: true, reason,
+    elementEdit: reason === 'scene_updated',
+  }, 6)
   return true
 }
 
@@ -746,6 +795,18 @@ export async function updateScene(workspaceId: string, id: string, sceneId: stri
       if (['string', 'number', 'boolean'].includes(typeof v)) clean[k.slice(0, 40)] = typeof v === 'string' ? v.slice(0, 200) : (v as number | boolean)
     }
     p.params = { ...J(p.params), ...clean }
+  }
+  const elementList = Array.isArray(o.elements) ? o.elements : Array.isArray(o.elementPatches) ? o.elementPatches : null
+  if (elementList) {
+    p.elementPatches = (elementList as Json[]).slice(0, 40).map((el) => {
+      const row = J(el)
+      const out: Record<string, unknown> = { id: str(row.id, 80) }
+      for (const [k, v] of Object.entries(row).slice(0, 20)) {
+        if (k === 'id') continue
+        if (['string', 'number', 'boolean'].includes(typeof v)) out[k.slice(0, 40)] = typeof v === 'string' ? v.slice(0, 400) : v
+      }
+      return out
+    }).filter((el) => el.id)
   }
   const notes = [p.styleOverride && `Style: ${p.styleOverride}`, p.cameraOverride && `Camera: ${p.cameraOverride}`,
     p.textOverride && `On-screen text: ${p.textOverride}`, Object.keys(J(p.params)).length && `Parameters: ${JSON.stringify(p.params)}`].filter(Boolean)
@@ -905,7 +966,7 @@ export async function decideProposal(workspaceId: string, id: string, proposalId
 
 export async function getAllowance(workspaceId: string, id: string): Promise<MsAllowance> {
   const row = await required(workspaceId, id)
-  return allowanceFor(J(row.settings))
+  return allowanceFor(J(row.settings), row.plan ? J(row.plan) : null)
 }
 
 /** POST /export — the assembled master already exists after review; export marks it delivered (no re-render unless scenes changed). */

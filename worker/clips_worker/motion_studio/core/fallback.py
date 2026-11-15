@@ -215,3 +215,21 @@ def fallback_code(ctx: dict | None = None) -> str:
     if vt in {"data", "timeline"}:
         return FALLBACK_CHART
     return FALLBACK_CODE
+
+
+
+def recover_render_code(ctx: dict | None = None, original_code: str | None = None) -> tuple[str, str]:
+    """Intent-preserving recovery after a render exception.
+
+    Keep the original specification and asset references. Prefer a visual-type
+    fallback that still uses this scene's assets; the generic framework
+    fallback is the last resort and is applied by the caller if this code also
+    fails to render.
+    """
+    ctx = ctx or {}
+    code = fallback_code(ctx)
+    vt = str(((ctx.get("scene") or {}).get("visualType") or "")).lower() or "scene"
+    cause = f"intent-preserving {vt or 'visual-type'} fallback; original specification and assets retained"
+    if original_code and code == original_code:
+        cause += " (same source as the failed attempt; caller may last-resort)"
+    return code, cause

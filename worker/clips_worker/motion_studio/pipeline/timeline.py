@@ -121,9 +121,22 @@ def _scene_environment(plan: dict, planned: dict) -> dict:
     if env is None and worlds:
         env = worlds[0] if isinstance(worlds[0], dict) else None
     if isinstance(env, dict):
-        return {"id": env.get("id"), "name": env.get("name"), "brief": env.get("brief"), "reason": env.get("reason")}
-    world = (plan or {}).get("world") if isinstance((plan or {}).get("world"), dict) else {}
-    return {"id": None, "name": world.get("name"), "brief": world.get("brief"), "reason": world.get("reason")}
+        return {
+            "id": env.get("id"),
+            "name": env.get("name") or env.get("type") or env.get("id"),
+            "brief": env.get("brief") or env.get("reason"),
+            "reason": env.get("reason"),
+        }
+    raw = (plan or {}).get("world")
+    if isinstance(raw, str) and raw.strip():
+        return {"id": None, "name": raw.strip(), "brief": None, "reason": None}
+    world = raw if isinstance(raw, dict) else {}
+    return {
+        "id": world.get("id"),
+        "name": world.get("name") or world.get("type") or world.get("id"),
+        "brief": world.get("brief") or world.get("reason"),
+        "reason": world.get("reason"),
+    }
 
 
 def _world_type(plan: dict) -> str | None:
