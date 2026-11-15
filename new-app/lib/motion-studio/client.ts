@@ -75,8 +75,8 @@ type Fetcher = typeof fetch
 async function request<T>(fetcher: Fetcher, path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET'
   console.info('[motion-studio:ui] request', { step: 'begin', method, path })
-  // Same-origin session cookie auth: every /api/motion-studio/* route is 401 without a session and
-  // 404 for another workspace's ids (backend contract, New).
+  // Same-origin cookies, matching the rest of the app. A missing session is not a login error;
+  // 404 is reserved for another workspace's ids.
   const res = await fetcher(`${MOTION_STUDIO_API_BASE}${path}`, {
     credentials: 'same-origin',
     ...init,
