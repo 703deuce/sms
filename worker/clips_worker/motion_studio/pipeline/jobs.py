@@ -280,6 +280,11 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
         src = os.path.join(work, f"asset_{asset['id']}{Path(asset.get('filename') or '').suffix}")
         if not os.path.exists(src):
             download_object(asset["storageKey"], Path(src))
+        from clips_worker.motion_studio.core.audio import snap_window_to_beats
+        beat_snap = snap_window_to_beats(src, float(h.get("inS", 0)), float(h.get("outS") or 0) or 4.0)
+        if beat_snap.get("snapped"):
+            h["inS"], h["outS"] = beat_snap["inS"], beat_snap["outS"]
+            log("handoff_beats", f"scene {scene['index'] + 1}: in/out snapped to a musical beat", beat_snap)
         pal = plan["style"]["palette"]
         hexrgb = lambda s: tuple(int(s[i:i + 2], 16) for i in (1, 3, 5))  # noqa: E731
         spec = HandoffSpec(clip_path=src, in_s=float(h.get("inS", 0)), out_s=float(h["outS"]), surface=h.get("surface", "photo"),
@@ -287,13 +292,14 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
                            exit_reason=h.get("exitReason", ""), cut_type="hardcut" if sc["kind"] == "hardcut" else "handoff",
                            cut_justification=h.get("cutJustification", ""), audio_mode=h.get("audioMode", "clip"),
                            bg=hexrgb(pal["bg"]), accent=hexrgb(pal["accent"]), width=W, height=H, seed=seed + scene["index"])
-        rh = _render_hash("handoff-v2", spec.__dict__ | {"clip_path": asset["id"]}, W, H)
+        rh = _render_hash("handoff-v3", spec.__dict__ | {"clip_path": asset["id"]}, W, H)
         if scene.get("renderHash") == rh and scene.get("renderKey") and not p.get("force"):
             log("cache_hit", f"scene {scene['index'] + 1}: handoff unchanged (cached)", {})
         else:
             wav = out.replace(".mp4", ".wav")
             rec = render_handoff(spec, out, wav)
             rec["segmentId"] = f"seg_{scene['index']}"
+            rec["beatSnap"] = beat_snap
             upload_file(f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4", Path(out), "video/mp4")
             upload_file(f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.wav", Path(wav), "audio/wav")
             db.update_scene(conn, scene["id"], renderKey=f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4",
