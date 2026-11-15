@@ -97,6 +97,23 @@ def handle(conn, job: dict) -> None:
 
 
 # ---------------------------------------------------------------- DOC_PLAN
+def _group_faces(conn, assets: list[dict], log) -> list[dict]:
+    """G2: stable people P1..Pn across the project's photos and footage (local models, no paid call)."""
+    from clips_worker.motion_studio.pipeline import faces as face_g2
+    ready = [a for a in assets if a["status"] == "ready" and isinstance((a.get("analysis") or {}).get("faces"), list)]
+    if not any(a["analysis"]["faces"] for a in ready):
+        return assets
+    labelled, people = face_g2.group([{"id": a["id"], "faces": a["analysis"]["faces"]} for a in ready])
+    for a in ready:
+        an = face_g2.relabel(a["analysis"], labelled.get(a["id"], []))
+        if an != a["analysis"]:
+            db.update_asset(conn, a["id"], analysis=an)
+            a["analysis"] = an
+    log("faces_grouped", f"{len(people)} people across {sum(1 for a in ready if a['analysis']['faces'])} assets",
+        {"people": [{k: v for k, v in pp.items() if k != "sample"} for pp in people][:20]})
+    return assets
+
+
 def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
     from clips_worker.motion_studio.directors.registry import get_director
     from clips_worker.motion_studio.pipeline.analyze import analyze_asset
@@ -120,6 +137,7 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
                 db.update_asset(conn, a["id"], status="failed", analysis={"error": type(exc).__name__})
                 log("asset_failed", f"analysis failed for {a.get('filename')}: {type(exc).__name__}", {"assetId": a["id"]})
         assets = db.assets(conn, pid)
+        assets = _group_faces(conn, assets, log)
     catalog = [a for a in assets if a["status"] == "ready"]
     db.set_stage(conn, pid, "story")
     log("stage", "writing the story", {})
@@ -267,7 +285,7 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
                            exit_reason=h.get("exitReason", ""), cut_type="hardcut" if sc["kind"] == "hardcut" else "handoff",
                            cut_justification=h.get("cutJustification", ""), audio_mode=h.get("audioMode", "clip"),
                            bg=hexrgb(pal["bg"]), accent=hexrgb(pal["accent"]), width=W, height=H, seed=seed + scene["index"])
-        rh = _render_hash("handoff-v1", spec.__dict__ | {"clip_path": asset["id"]}, W, H)
+        rh = _render_hash("handoff-v2", spec.__dict__ | {"clip_path": asset["id"]}, W, H)
         if scene.get("renderHash") == rh and scene.get("renderKey") and not p.get("force"):
             log("cache_hit", f"scene {scene['index'] + 1}: handoff unchanged (cached)", {})
         else:

@@ -13,7 +13,10 @@
 - Times are in milliseconds.
 - **No currency anywhere.** Allowance `credits`/`estimateCredits` are `null` until D2, and charging is OFF.
 - **Envelope.** Mutations and `GET /projects/:id` return `{ project: MsProject }`. Lists return `{ projects }`, `{ assets }` or `{ allowance }`.
-- **Errors** are `{ error, code }` with an HTTP status. The codes are `INVALID`, `NOT_FOUND`, `CONFLICT`, `STAGE_NOT_RETRYABLE`, `DISABLED` and `INTERNAL`. Messages never contain keys, signed URLs, provider names or prompts.
+- **Auth (PR #1264):** every `/api/motion-studio/*` route requires a signed-in session (Supabase cookie; the client sends same-origin credentials). No session → `401 UNAUTHENTICATED`; a signed-in user with no workspace membership → `403 FORBIDDEN`. All reads and writes are scoped to the caller's own workspace (the pinned workspace when the user is a member of it, else their oldest membership). An id from another workspace returns `404 NOT_FOUND`, never 403.
+- **Errors** are `{ error, code }` with an HTTP status. The codes are `UNAUTHENTICATED`, `FORBIDDEN`, `INVALID`, `NOT_FOUND`, `CONFLICT`, `STAGE_NOT_RETRYABLE`, `DISABLED` and `INTERNAL`. Messages never contain keys, signed URLs, provider names or prompts.
+- **Export seam gate (ST-CMH-014):** `POST /export` returns `409 CONFLICT` while a footage handoff in the latest assembly failed its seam check (QA `A15`); regenerate that scene, then export.
+- **Faces (G2):** `assets[].analysis.faces` is the number of faces found (YuNet, local). People are grouped across photos and footage server-side (P1..Pn); no new field is required.
 - **Idempotency-Key** (a header; the body `idempotencyKey` is also accepted):
   - create is deduped per user (`userId:key`, unique per workspace);
   - plan, run, regenerate (per scene), retry (per stage) and export are deduped per project. Keys are stored atomically under a row lock, so a repeated key returns the current project and starts nothing.

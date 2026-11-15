@@ -4,7 +4,7 @@ Reused: transcription (transcribe_provider.transcribe_audio_request -> Deepgram 
 Gemini video watch (ai_producer_agent/finder/watch.watch_video_file), shot detection (reframe_core.detect_shots),
 storage (clips_worker.storage). Gaps: G1 still-image analysis + G3 on-screen text (Gemini inline image, below),
 G4 persisted to the Motion Studio catalog (StudioAsset.analysis), G5 own flag (MOTION_STUDIO_ANALYSIS, never flips
-AI_PRODUCER_AGENT_ENABLED). G2 face grouping: NOT BUILT in this release (reported as such in the catalog).
+AI_PRODUCER_AGENT_ENABLED). G2 faces: YuNet + SFace (pipeline/faces.py, the clipper's local vision models); grouped into P1..Pn in run_plan.
 """
 from __future__ import annotations
 
@@ -66,7 +66,9 @@ def analyze_asset(conn, project: dict, asset: dict, work: str, log) -> dict:
     if not os.path.exists(local):
         download_object(asset["storageKey"], Path(local))
     info = _probe(local) if kind in ("video", "audio") else {}
-    an: dict = {"faces": {"status": "not_built", "note": "G2 face grouping is not in this release"}}
+    from clips_worker.motion_studio.pipeline import faces as face_g2
+    fd = face_g2.detect(local, kind)
+    an: dict = {"faces": fd["items"], "faceStatus": fd["status"]}
     if kind == "image":
         from PIL import Image
         with Image.open(local) as im:

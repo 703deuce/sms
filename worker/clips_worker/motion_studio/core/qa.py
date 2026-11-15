@@ -92,8 +92,9 @@ def loudness_check(meas: dict) -> dict:
 
 
 def seam_check(handoffs: list[dict]) -> dict:
-    bad = [h.get("segmentId") for h in handoffs if not h.get("decodeVerified") or not h.get("seamScores")]
-    return _chk("A15", not bad, len(bad), f"handoffs missing seam scores/decode verification: {bad[:5]}")
+    bad = [h.get("segmentId") for h in handoffs
+           if not h.get("decodeVerified") or not h.get("seamScores") or h.get("seamPass") is False]
+    return _chk("A15", not bad, len(bad), f"handoff seams failing ST-CMH-014 or unverified: {bad[:5]}")
 
 
 def scene_verdict(checks: list[dict]) -> str:

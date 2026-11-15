@@ -25,6 +25,7 @@ from clips_worker.motion_studio.core.render import ffprobe_frames
 
 SURFACES = ("photo", "tv", "newspaper")            # P1 surface kinds (phone/cinema/billboard/panel: P2, same interface)
 SEAM_THRESHOLDS = {"mad": 1.0, "within4": 0.999, "psnr": 45.0}   # ST-CMH-014 (VQ tunes)
+SEAM_QP = 4                                                          # x264 qp on seam frames (0 would force High 4:4:4)
 
 
 @dataclass
@@ -189,6 +190,35 @@ def _seam(a: np.ndarray, b: np.ndarray) -> dict:
             "psnr": round(99.0 if mse == 0 else 10 * math.log10(255 ** 2 / mse), 2)}
 
 
+def _yuv420_roundtrip(arr: np.ndarray) -> np.ndarray:
+    """The frame as it can exist in a yuv420p deliverable (chroma subsampled, no compression). Seam scores compare
+    against this so they measure seam/grab/codec error, not the format's chroma subsampling (ST-CMH-014)."""
+    H, W = arr.shape[:2]
+    r = subprocess.run(["ffmpeg", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-i", "-",
+                        "-vf", "format=yuv420p,format=rgb24", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+                       input=arr.tobytes(), capture_output=True)
+    if len(r.stdout) != W * H * 3:
+        return arr
+    return np.frombuffer(r.stdout, np.uint8).reshape(H, W, 3)
+
+
+def _seam_zones(idxs: list[int], total: int, q: int = SEAM_QP, radius: int = 3) -> str:
+    """x264 zones: near-transparent quantiser around each seam frame so the handoff frame survives the encode.
+    +/-3 frames, because with B-frames a +/-1 zone is undone by its lower-quality reference frames (measured)."""
+    zs = []
+    for i in sorted(set(idxs)):
+        a, b = max(0, i - radius), min(total - 1, i + radius)
+        if zs and a <= zs[-1][1] + 1:
+            zs[-1][1] = b
+        else:
+            zs.append([a, b])
+    return "/".join(f"{a},{b},q={q}" for a, b in zs)
+
+
+def _seam_ok(sc: dict) -> bool:
+    return sc["mad"] <= SEAM_THRESHOLDS["mad"] and sc["within4"] >= SEAM_THRESHOLDS["within4"] and sc["psnr"] >= SEAM_THRESHOLDS["psnr"]
+
+
 def _decode_frames_at(path: str, idxs: list[int], W: int, H: int) -> dict[int, np.ndarray]:
     sel = "+".join(f"eq(n\\,{i})" for i in idxs)
     r = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-vf", f"select='{sel}'", "-vsync", "0", "-f", "rawvideo",
@@ -251,9 +281,12 @@ def render_handoff(spec: HandoffSpec, out_mp4: str, out_wav: str, crf: int = 14)
     bg = _background(spec)
     dec = subprocess.Popen(_decode_cmd(spec, play_total), stdout=subprocess.PIPE)
     tmp = out_mp4 + ".tmp.mp4"
+    enter_v0 = max(0, enter_n - 1)
+    total_est = enter_v0 + play_total + exit_n
+    zones = _seam_zones([enter_v0, enter_v0 + play_total - 1], total_est)
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}", "-r", str(fps),
-                            "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p",
-                            "-movflags", "+faststart", tmp], stdin=subprocess.PIPE)
+                            "-i", "-", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf), "-x264-params", f"zones={zones}",
+                            "-pix_fmt", "yuv420p", "-movflags", "+faststart", tmp], stdin=subprocess.PIPE)
     fs = W * H * 3
     first = last = second = None
     got = 0
@@ -307,11 +340,15 @@ def render_handoff(spec: HandoffSpec, out_mp4: str, out_wav: str, crf: int = 14)
     dec_frames = _decode_frames_at(tmp, [seam_in_idx, seam_out_idx], W, H)
     scores = {}
     if seam_in_idx in dec_frames:
-        scores["enter"] = _seam(dec_frames[seam_in_idx], first)
+        scores["enter"] = _seam(dec_frames[seam_in_idx], _yuv420_roundtrip(first))
     if seam_out_idx in dec_frames:
-        scores["exit"] = _seam(dec_frames[seam_out_idx], last)
+        scores["exit"] = _seam(dec_frames[seam_out_idx], _yuv420_roundtrip(last))
+    if not hard:
+        # render-domain: the fully arrived surface (u=1) must show exactly the grabbed frame (catches crop/grade/resample)
+        scores["enterRender"] = _seam(_world_frame(surface, bg, img0, 1.0, False), first)
+        scores["exitRender"] = _seam(_world_frame(surface, bg, imgL, 1.0, asym), last)
     decode_ok = len(dec_frames) == 2
-    passed = decode_ok and all(s["mad"] <= SEAM_THRESHOLDS["mad"] * 4 and s["psnr"] >= 30 for s in scores.values())
+    passed = decode_ok and all(_seam_ok(s) for s in scores.values())
     os.replace(tmp, out_mp4)
     audio = _audio(spec, out_wav, enter_v, play_n, exit_n, meta["hasAudio"], src_dur)
     h = hashlib.sha256()
