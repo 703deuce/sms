@@ -76,12 +76,34 @@ The living handoff for anyone (human or agent) testing T2V. Keep this file updat
 - One LLM pass after pacing reads the whole script and writes `story.videoUnderstanding` (own words) and, per
   shot (split pieces included), `moment`, `mustRecognise` (stored as `subject`) and `showIdeas`.
 - The Gemini verifier reads the understanding, the whole numbered script, the previous/next lines, the moment and
-  what must be recognised, and returns `fit_reason`. No night/colour/brightness gates and no season/time/setting
-  rules: the model's in-context score is the only gate. `lighting`, `time_of_day`, `subject_visible` are info only.
+  what must be recognised, and returns `fit_reason`. No night/colour/brightness word lists or thresholds: the
+  model's in-context judgement is the gate. `lighting`, `time_of_day`, `subject_visible` are info only. The one
+  context cap in code is the implied-setting cap below (the model's call, not a word list).
 - Scarcest scenes pick first (fewest passing clips; ties in story order). Unused passing clips are logged with why.
 - Reimagine (max 2 rounds, 10 lines, 3 ideas) replaces the related round: new shot ideas for lines nothing fits.
 - Floor: nothing below 5/10 is ever placed as filler; with no option at the floor the line extends the previous shot.
 - QA restart with script + plan frozen: `python docs/t2v-test-tools/t2v_reset_run.py <draftId> --from-footage`.
+
+## Implied setting (whole-video context, Nov 15)
+
+Rick: picks must fit the WHOLE video, not just the line's literal words (sleep video: "if you can't sleep, get out
+of bed and do a quiet activity" got a daytime walk in the woods).
+- Script-context pass writes `shot.setting` per line: `{timeOfDay: day|night|morning|evening|any, place:
+  indoor|outdoor|any, where, mood}`, inferred from the topic and the lines around it. lineShows, searches and
+  showIdeas must fit it. Frozen plans get it once (`run.settingsFixedAt`, log `settings_fixed:N_model`).
+  Helpers: `new-app/lib/server/t2v/pipeline/t2v-setting.ts`.
+- The scene planner, query rewriter, reimagine and AI B-roll prompt writer all get the setting (idea shots
+  inherit their line's). AI prompts include `Setting: …`.
+- Verify payload: `shots[].setting` (one text line). The blind observation now records the clip's own
+  `setting` (indoor/outdoor, kind of place, time of day); `DESCRIBE_VERSION` is `events-v2`, so clips cached
+  under v1 are described once more. The scorer returns `setting_fit` (fits / neutral / contradicts) and
+  `setting_reason`. **contradicts caps the score at 4** (`SETTING_CAP`, below the 5/10 floor), clears `matches`,
+  and excludes the clip from the worker's best-available tier. Logged `[t2v:verify:setting]`. Entries carry
+  `settingFit`, `settingReason`, `clipSetting`.
+- Text re-checks (spare, cross-line last resort, hold compare) send the line's setting and the clip's
+  `clipSetting`; `settingFit` contradicts caps at 4 the same way (log `re-check setting contradicts`). The hold
+  fallback never places a contradicting clip.
+- neutral (setting not visible, e.g. a tight close-up, or no setting given) never caps.
 
 ## Round log
 - Nov 13-14, 2026: pacing (CV 0.20 → 0.17 → 0.42 → 0.42), photo fallback, no cards, related rescue round, AI B-roll test step. Next: cross-line fallback quality, script expansion overshoot (185 → 263 rejected), and same-setup lookalikes inside split sentences.

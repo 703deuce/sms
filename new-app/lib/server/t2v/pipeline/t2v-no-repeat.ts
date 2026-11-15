@@ -1,7 +1,8 @@
 import 'server-only'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
-import type { T2vDepicts, T2vLookalikeBan, T2vPickedBy, T2vPlannedShot, T2vShotResult, T2vVerifiedPick } from '@/lib/t2v/pipeline/t2v-types'
+import type { T2vDepicts, T2vLookalikeBan, T2vPickedBy, T2vPlannedShot, T2vSettingFit, T2vShotResult, T2vVerifiedPick } from '@/lib/t2v/pipeline/t2v-types'
+import { capBySetting, normSettingFit, settingText } from '@/lib/server/t2v/pipeline/t2v-setting'
 
 /**
  * Shot sequencing for Prompt-to-Video. HARD RULE: a shot never repeats.
@@ -221,6 +222,8 @@ function toPick(e: Ev, verdict: T2vVerifiedPick['verdict']): T2vVerifiedPick {
     seen: e.seen ?? e.visible ?? '',
     lineShows: e.lineShows,
     depicts: e.depicts,
+    ...(e.settingFit ? { settingFit: e.settingFit, settingReason: e.settingReason } : {}),
+    ...(e.clipSetting ? { clipSetting: e.clipSetting } : {}),
     rawScore: e.rawScore,
     static: e.static,
     motion: e.motion,
@@ -248,6 +251,9 @@ export function borrowedPick(e: Ev, lineScore: number, reason: string, j: SpareJ
     score: lineScore,
     rawScore: j?.rawScore ?? lineScore,
     depicts,
+    // The setting judgement is the re-check's for the placed line (never the original line's).
+    settingFit: j?.settingFit ?? 'neutral',
+    settingReason: undefined,
     lineShows: j?.lineShows || shot.lineShows || shot.intent,
     lineShowsFixed: true,
     matches: lineScore >= ACCEPT_SCORE && depicts === 'yes',
@@ -545,14 +551,28 @@ For each NEW line (read it inside its full sentence and next to its neighbouring
 - depicts: does what the clip shows ("shows") literally show lineShows, as a viewer watching the whole video
   would see it? "yes" = it shows it; "partly" = it shows part of it, or it in a clearly different situation;
   "no" = it shows something else, even if related, symbolic or a metaphor.
+- settingFit: each line may give a setting (time of day, indoor/outdoor, kind of place, mood) that its moment
+  implies in this video, read from the topic and the lines around it. Compare it with what the clip shows
+  (its "shows", its "clipSetting" and its events): "contradicts" when the clip visibly shows a different time
+  of day, the other side of indoor/outdoor, a clearly different kind of place, or a mood that clashes with the
+  line in this video, even if the literal subject or action matches; "fits" when it visibly matches;
+  "neutral" when the clip does not show enough of its surroundings to tell, or the line gives no setting.
 - score: how well the clip works under the NEW line at that point of THIS video (0-10): 7-10 clearly works;
-  5-6 usable; 0-4 does not work here. depicts "no" means 4 or lower; "partly" means 6 or lower.
+  5-6 usable; 0-4 does not work here. depicts "no" means 4 or lower; "partly" means 6 or lower; settingFit
+  "contradicts" means 4 or lower.
 - reason: one short sentence on why what it shows does or does not fit the NEW line.
 - in_s, out_s: only for a clip given with timestamped "events" (a locked observation written without any
   line): the continuous run of events in which lineShows is plainly visible, from their t_start/t_end. Judge
   depicts and score on the events inside that window only. Omit both for a clip without events.
 Return ONLY JSON: {"scores": [{"sceneId": string, "providerId": string, "depicts": "yes"|"partly"|"no",
-"score": number, "reason": string, "in_s"?: number, "out_s"?: number}]}`
+"settingFit": "fits"|"neutral"|"contradicts", "score": number, "reason": string, "in_s"?: number,
+"out_s"?: number}]}`
+
+/** A line's implied setting (idea shots `sc~iK` use their line's), as one prompt line. */
+function settingOf(shots: T2vPlannedShot[], s: T2vPlannedShot): string {
+  const baseId = s.sceneId.split('~')[0]
+  return settingText((shots.find((x) => x.sceneId === baseId) ?? s).setting ?? s.setting)
+}
 
 /** One text-only call: score candidate spares against the line they would sit under. */
 export async function scoreSpares(
@@ -564,7 +584,7 @@ export async function scoreSpares(
 }
 
 /** The re-check's full judgement of a clip for the line it would sit under (stored on the pick when placed). */
-export type SpareJudgement = { depicts: T2vDepicts; rawScore: number; score: number; lineShows: string; reason: string; inS?: number; outS?: number }
+export type SpareJudgement = { depicts: T2vDepicts; rawScore: number; score: number; lineShows: string; reason: string; inS?: number; outS?: number; settingFit?: T2vSettingFit }
 export type SpareJudgements = Record<string, Record<string, SpareJudgement>>
 
 /** Same re-check, also returning the re-check's reason per line and clip (fitReason for that line). */
@@ -585,11 +605,14 @@ export async function scoreSparesWithReasons(
       moment: s.moment ?? s.intent,
       // The line's fixed lineShows (the same text the visual check used); the re-check judges against it.
       lineShows: (s.lineShows || s.intent || '').trim(),
+      // The setting this moment implies (topic + neighbouring lines): a clip contradicting it is capped at 4.
+      ...(settingOf(shots, s) ? { setting: settingOf(shots, s) } : {}),
       mustRecognise: s.subject ?? s.intent,
       clips: requests[s.sceneId]!.map((e) => ({
         providerId: e.providerId,
         shows: `${e.subject ?? ''}: ${(e.seen || e.visible || '').slice(0, 160)}`,
         framing: e.framing ?? '',
+        ...(e.clipSetting ? { clipSetting: e.clipSetting.slice(0, 160) } : {}),
         // Blind-observed clips: the locked timestamped observation, so the re-check picks THIS line's window.
         ...(e.observation ? { events: e.observation.slice(0, 700), clipS: e.clipS } : {}),
       })),
@@ -597,7 +620,7 @@ export async function scoreSparesWithReasons(
   if (!items.length) return { scores: {}, reasons: {}, judgements: {}, asked: 0 }
   // One re-check per clip and line asked: counted into the run's verifierCalls (QA S4: 88 were not counted).
   const asked = items.reduce((n, it) => n + it.clips.length, 0)
-  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown; reason?: unknown; line_shows?: unknown; depicts?: unknown; in_s?: unknown; out_s?: unknown }> }>(
+  const out = await t2vLlmJson<{ scores?: Array<{ sceneId?: string; providerId?: string; score?: unknown; reason?: unknown; line_shows?: unknown; depicts?: unknown; settingFit?: unknown; setting_fit?: unknown; in_s?: unknown; out_s?: unknown }> }>(
     SPARE_SYSTEM,
     [
       ...(context.videoUnderstanding ? [`What this video is about: ${context.videoUnderstanding}`] : []),
@@ -617,7 +640,9 @@ export async function scoreSparesWithReasons(
     if (!depictsWord(r.depicts)) logT2v('pipeline-norepeat', 're-check depicts unknown', { sceneId: r.sceneId, providerId: id, depicts: String(r.depicts ?? '').slice(0, 40), treatedAs: 'no' })
     const depicts = normDepicts(r.depicts)
     const raw = Math.max(0, Math.min(10, Math.round(sc)))
-    const score = capByDepicts(raw, depicts)
+    const settingFit = normSettingFit(r.settingFit ?? r.setting_fit)
+    const score = capBySetting(capByDepicts(raw, depicts), settingFit)
+    if (settingFit === 'contradicts') logT2v('pipeline-norepeat', 're-check setting contradicts', { sceneId: r.sceneId, providerId: id, rawScore: raw, score })
     ;(res[r.sceneId] ??= {})[id] = score
     let why = String(r.reason ?? '').trim().slice(0, 200)
     if (!why) {
@@ -633,8 +658,8 @@ export async function scoreSparesWithReasons(
     const wa = Number(r.in_s)
     const wb = Number(r.out_s)
     const win = ev?.observation && Number.isFinite(wa) && Number.isFinite(wb) && wb > wa ? { inS: Math.max(0, wa), outS: Math.min(ev.clipS ?? wb, wb) } : {}
-    ;(judgements[r.sceneId] ??= {})[id] = { depicts, rawScore: raw, score, lineShows, reason: why, ...win }
-    logT2v('pipeline-norepeat', 're-check', { sceneId: r.sceneId, providerId: id, lineShows: lineShows.slice(0, 80), depicts, rawScore: raw, score })
+    ;(judgements[r.sceneId] ??= {})[id] = { depicts, rawScore: raw, score, lineShows, reason: why, ...win, settingFit }
+    logT2v('pipeline-norepeat', 're-check', { sceneId: r.sceneId, providerId: id, lineShows: lineShows.slice(0, 80), depicts, settingFit, rawScore: raw, score })
   }
   return { scores: res, reasons, judgements, asked }
 }

@@ -29,8 +29,9 @@ import { t2vScenePlanner } from '@/lib/server/t2v/pipeline/t2v-scene-planner'
 import { queryRewrites, t2vFootageAgent, t2vPhotoAgent } from '@/lib/server/t2v/pipeline/t2v-footage-agent'
 import { t2vQueryRewriter } from '@/lib/server/t2v/pipeline/t2v-query-rewriter'
 import { depictsRank, enforceNoRepeat, t2vQualityOk } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
-import { fixLineShows, t2vLineShowsOnce, t2vScriptContext } from '@/lib/server/t2v/pipeline/t2v-script-context'
+import { fixLineShows, t2vLineShowsOnce, t2vScriptContext, t2vSettingsOnce } from '@/lib/server/t2v/pipeline/t2v-script-context'
 import { baseSceneId, compactScript, ideaShots, logReimagineOutcomes, reimagineBudget, reimagineFailing, reimagineOutcomes, reimagineTargets, sceneAllowance, sceneContext, T2V_REIMAGINE_ROUNDS, t2vReimagineAll, trimPerScene } from '@/lib/server/t2v/pipeline/t2v-reimagine'
+import { settingText } from '@/lib/server/t2v/pipeline/t2v-setting'
 import { t2vFinisher } from '@/lib/server/t2v/pipeline/t2v-finisher'
 import { t2vQaPlan, t2vQaRender } from '@/lib/server/t2v/pipeline/t2v-qa'
 import {
@@ -322,6 +323,17 @@ async function advanceOnce(draftId: string, opts: { resumed?: boolean }) {
           r.shots = fixed.shots
           r.lineShowsFixedAt = new Date().toISOString()
           r.log.push({ stage: r.status, at: r.lineShowsFixedAt, note: `line_shows_fixed:${fixed.fromModel}_model:${fixed.fallback.length}_intent` })
+          return r
+        })
+        return advanceOnce(draftId, {})
+      }
+      // Frozen plan without implied settings: write them ONCE (the checker, re-checks and AI prompts use them).
+      if (run.shots?.length && !run.settingsFixedAt && run.shots.some((s) => !s.setting)) {
+        const withSettings = await t2vSettingsOnce(run.story!, run.shots)
+        await writeRun(draftId, (r) => {
+          r.shots = withSettings.shots
+          r.settingsFixedAt = new Date().toISOString()
+          r.log.push({ stage: r.status, at: r.settingsFixedAt, note: `settings_fixed:${withSettings.fromModel}_model` })
           return r
         })
         return advanceOnce(draftId, {})
@@ -753,6 +765,8 @@ async function enqueueVerify(
             // The line's FIXED lineShows: every clip of this line (every round, reimagine ideas too) is judged
             // against this same text; the checker does not write its own.
             lineShows: fixedLineShows(all, s),
+            // The setting this moment implies (topic + neighbouring lines); a clip contradicting it is capped.
+            setting: fixedSetting(all, s),
             candidates: (candidates[s.sceneId] ?? []).map((c) => ({
               provider: c.provider,
               providerId: c.providerId,
@@ -844,6 +858,12 @@ export function markIncumbents(results: T2vShotResult[], prior: T2vPipelineRun['
 export function fixedLineShows(all: T2vPlannedShot[], s: T2vPlannedShot): string {
   const base = all.find((x) => x.sceneId === baseSceneId(s.sceneId))
   return (base?.lineShows || s.lineShows || base?.intent || s.intent || '').trim()
+}
+
+/** The line's implied setting as one prompt line (idea shots `sc~iK` use their line's); '' when unknown. */
+export function fixedSetting(all: T2vPlannedShot[], s: T2vPlannedShot): string {
+  const base = all.find((x) => x.sceneId === baseSceneId(s.sceneId))
+  return settingText(base?.setting ?? s.setting)
 }
 
 /** Options for every pick pass (dry run, no-repeat, AI targets): style plus the script for the re-checks. */

@@ -1,4 +1,5 @@
 import 'server-only'
+import { settingText } from '@/lib/server/t2v/pipeline/t2v-setting'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
 import { FILLER_MIN_SCORE } from '@/lib/server/t2v/pipeline/t2v-no-repeat'
@@ -117,8 +118,10 @@ implies the line will be rejected, so do not propose those. Example of the think
 racing with no raceway footage -> cars passing a corner of a race track from the stands, an onboard view of a
 race car on the track, a close-up of race tyres on the track.
 
-Use what was tried and why the reviewer rejected it (fit_reason) to avoid the same dead ends. Never propose
-something that would look out of place in this video, and if the line warns against an act, show the safe
+Use what was tried and why the reviewer rejected it (fit_reason) to avoid the same dead ends. Every idea stays
+inside the line's setting when one is given (time of day, indoor/outdoor, kind of place, mood): a clip that
+contradicts it is rejected even when it shows the right thing. Never propose something that would look out of
+place in this video, and if the line warns against an act, show the safe
 alternative, never the act.
 
 Each idea:
@@ -192,6 +195,7 @@ export async function t2vReimagine(input: {
     nextLine: ctx.nextNarration,
     moment: s.moment || s.intent,
     ...(s.lineShows ? { lineShows: s.lineShows } : {}),
+    ...(s.setting ? { setting: settingText(s.setting) } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejected: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.seen || e.visible)

@@ -202,8 +202,8 @@ def test_seen_is_described_first_and_stored_with_fit_reason(run_job):
     assert order[:3] == ["line_shows", "seen", "depicts"] and order.index("depicts") < order.index("score") < order.index("fit_reason")
     assert sorted(order) == sorted(props)  # Gemini needs every property listed
     p = vs.PROMPT
-    assert p.index("1. line_shows") < p.index("2. seen") < p.index("3. depicts") < p.index("4. score") < p.index("5. fit_reason")
-    assert "based on seen and depicts, not on what the clip might stand for" in p and "metaphor" in p
+    assert p.index("1. line_shows") < p.index("2. seen") < p.index("3. depicts") < p.index("4. setting_fit") < p.index("5. score") < p.index("6. fit_reason")
+    assert "based on seen, depicts and setting_fit, not on what the clip might" in p and "metaphor" in p
     shots = [{"sceneId": "sc_3", "narration": "flashlights, and spare batteries.", "needS": 3, "candidates": [cand("8501")]}]
     ans = resp(3, visible="A phone placed on a wireless charging stand", reason="seen shows a phone charging, not flashlights or batteries")
     ans["seen"] = "A hand puts a smartphone on a wireless charging stand next to a plant."
@@ -430,7 +430,7 @@ def test_fixed_line_shows_is_stable_across_candidates(run_job):
     for pid, prompt in prompts.items():
         assert f'(fixed for every clip of this line): "{fixed}"' in prompt, pid
         assert vs.FIXED_MARKER in prompt and "1. line_shows: in a few plain words" not in prompt
-        assert "- seen, depicts, score, fit_reason: as above" in prompt
+        assert "- seen, depicts, setting_fit, setting_reason, score, fit_reason: as above" in prompt
 
 
 def test_fixed_prompt_uses_the_schema_without_line_shows(monkeypatch):

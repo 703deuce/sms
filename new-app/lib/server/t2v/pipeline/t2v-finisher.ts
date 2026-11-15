@@ -217,6 +217,7 @@ export async function t2vFinisher(input: {
     take(shot, cross)
   }
   // Hold fallback (QA V2): a line about to be held is compared against the hold itself, not against perfection.
+  // A clip whose setting contradicts the line's implied setting (re-check or reviewer) is never placed here.
   // The clip it would extend is re-checked (text, its existing `seen` against THIS line's fixed lineShows); the
   // best own or re-checked option below the floor is placed when it scores higher than the hold. One bounded text
   // call for all held lines; logged either way.
@@ -255,11 +256,11 @@ export async function t2vFinisher(input: {
       const r = byScene.get(shot.sceneId)
       // Below-floor options: this line's own reviewed clips, then clips re-checked for this line above.
       const ownBelow = (r?.evaluated ?? [])
-        .filter((e) => ok(e) && t2vQualityOk(e, qctx) && (e.score ?? 0) >= HOLD_COMPARE_MIN)
+        .filter((e) => ok(e) && t2vQualityOk(e, qctx) && (e.score ?? 0) >= HOLD_COMPARE_MIN && e.settingFit !== 'contradicts')
         .map((e) => ({ pick: evToPick(e), score: e.score ?? 0 }))
       const ls = lineScores[shot.sceneId] ?? {}
       const crossBelow = (shortlist[shot.sceneId] ?? [])
-        .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= HOLD_COMPARE_MIN && Boolean(lineReasons[shot.sceneId]?.[e.providerId]))
+        .filter((e) => ok(e) && (ls[e.providerId] ?? -1) >= HOLD_COMPARE_MIN && Boolean(lineReasons[shot.sceneId]?.[e.providerId]) && lineJudgements[shot.sceneId]?.[e.providerId]?.settingFit !== 'contradicts')
         .map((e) => ({ pick: { ...borrowedPick(e as Ev, ls[e.providerId]!, lineReasons[shot.sceneId]![e.providerId]!, lineJudgements[shot.sceneId]?.[e.providerId], shot), verdict: 'best_available' as const }, score: ls[e.providerId]! }))
       const best = [...ownBelow, ...crossBelow].sort((a, b) => depictsRank(b.pick) - depictsRank(a.pick) || b.score - a.score)[0]
       const beats = Boolean(best && best.score > holdScore)

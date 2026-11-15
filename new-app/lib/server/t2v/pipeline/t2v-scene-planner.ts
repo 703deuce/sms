@@ -42,7 +42,11 @@ Rules for each sentence:
   (commas, "and", "while", "then", clause boundaries). The pieces' text joined with spaces must reproduce the
   sentence EXACTLY, word for word. Each piece >= 4 words and shows a DIFFERENT visual, with its own intent,
   subject and 3 queries. Omit or use [] when the sentence reads as one continuous image.
-- Plan visual variety: neighbouring shots should differ in subject, framing and setting.
+- Read every sentence through the whole video: its topic and the sentences around it imply a setting (time of
+  day, indoor/outdoor, kind of place, mood). intent and queries show the version that fits that setting, never
+  a literal reading of one word that contradicts it; when the setting would be visible, one query names it.
+- Plan visual variety: neighbouring shots should differ in subject and framing (and in place where the script
+  moves), while staying inside the setting the script implies.
 - Never put words on screen: no headlines, labels or captions of your own.`
 
 export type PlannerSentenceRow = { index: number; segmentId: string; narration: string }

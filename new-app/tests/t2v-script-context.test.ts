@@ -187,6 +187,9 @@ describe('no topic words or season/time/setting rules in prompts and rules', () 
       const src = readFileSync(join(dir, f), 'utf8')
       expect(src, f).not.toMatch(/NIGHT_WORDS|t2vNightLine|t2vMonoRequested|nightOk|monoOk|MIN_LIGHTING|MIN_LUMA|MIN_SATURATION|HARD context|timeOfDay ===|season ===/)
     }
-    expect(SCRIPT_CONTEXT_SYSTEM).not.toMatch(/time of day|weather|season/i)
+    // The implied setting (time of day, indoor/outdoor, place, mood) is the MODEL's reading of the topic and the
+    // lines around each line (Rick, Nov 15: whole-video context), never a word list; no weather/season rules.
+    expect(SCRIPT_CONTEXT_SYSTEM).not.toMatch(/weather|season/i)
+    expect(SCRIPT_CONTEXT_SYSTEM).toMatch(/inferred from the video's topic and the\s+lines around it/)
   })
 })

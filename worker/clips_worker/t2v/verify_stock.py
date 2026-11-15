@@ -55,7 +55,7 @@ MAX_OUTPUT_TOKENS = 2048
 BLIND_DESCRIBE = os.environ.get("T2V_BLIND_DESCRIBE", "1").strip().lower() not in ("0", "false", "no", "off")
 DESCRIBE_MAX_TOKENS = 2048
 # Bumped when the describe prompt or the feed changes, so old cached descriptions are not reused.
-DESCRIBE_VERSION = "events-v1"
+DESCRIBE_VERSION = "events-v2"
 DESCRIBE_FEED = "360p4fps-fps1-low"
 # Entry copy of the blind description (rechecks read it for the window); the cache keeps the full text.
 DESCRIBED_CHARS = 900
@@ -85,11 +85,13 @@ VERIFY_SCHEMA: dict[str, Any] = {
         "time_of_day": {"type": "STRING", "enum": ["day", "night", "dusk_dawn", "indoor"]},
         "subject_visible": {"type": "BOOLEAN"},
         "fit_reason": {"type": "STRING"},
+        "setting_fit": {"type": "STRING", "enum": ["fits", "neutral", "contradicts"]},
+        "setting_reason": {"type": "STRING"},
     },
-    "required": ["line_shows", "seen", "depicts", "visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
+    "required": ["line_shows", "seen", "depicts", "setting_fit", "setting_reason", "visible", "main_subject", "action", "matches", "score", "fit_reason", "in_s", "out_s", "style", "lighting", "framing", "time_of_day", "subject_visible"],
     # Gemini fills properties in this order: what the line needs, what is on screen, does it show it, then the
     # score and only then the reason (writing the reason first let the model argue a clip into a pass).
-    "propertyOrdering": ["line_shows", "seen", "depicts", "visible", "main_subject", "action", "score", "fit_reason", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
+    "propertyOrdering": ["line_shows", "seen", "depicts", "setting_fit", "setting_reason", "visible", "main_subject", "action", "score", "fit_reason", "matches", "subject_visible", "in_s", "out_s", "issues", "style", "lighting", "framing", "time_of_day"],
 }
 
 # Fixed line_shows (the normal case): written ONCE per line by the web (script-context pass, or once for a frozen
@@ -132,16 +134,27 @@ Work in steps, in this order.
      it is too unclear to tell.
    If an intended shot is given above, "yes" also needs the clip to show that intended shot (something merely
    similar is "partly" at most).
-4. score: 0-10 for this line in this video, based on seen and depicts, not on what the clip might stand for.
-   9-10 = depicts yes and exactly right here; 7-8 = depicts yes, clearly works; 5-6 = depicts partly, usable
-   but not ideal; 0-4 = depicts no (3 or lower when the picture is too unclear to tell).
-5. fit_reason: one short sentence on why what you described in seen does or does not show line_shows.
+4. setting_fit: the implied setting given above (time of day, indoor/outdoor, kind of place, mood) is what a
+   viewer of THIS video expects at this moment, read from its topic and the lines around it. Compare it with
+   what the clip shows:
+   - "contradicts": it visibly shows a different time of day (bright daylight for a night moment, night for a
+     day one), the other side of indoor/outdoor, a clearly different kind of place, or a mood that clashes
+     with the line in this video - even when the literal subject or action matches line_shows.
+   - "fits": its visible time of day, place and mood match the implied setting.
+   - "neutral": it does not show enough of its surroundings to tell (a tight close-up), or no implied setting
+     is given.
+   setting_reason: a few words on what in the clip fits or contradicts the setting.
+5. score: 0-10 for this line in this video, based on seen, depicts and setting_fit, not on what the clip might
+   stand for. 9-10 = depicts yes and exactly right here; 7-8 = depicts yes, clearly works; 5-6 = depicts
+   partly, usable but not ideal; 0-4 = depicts no or setting_fit contradicts (3 or lower when the picture is
+   too unclear to tell).
+6. fit_reason: one short sentence on why what you described in seen does or does not show line_shows.
 
 Return JSON:
-- line_shows, seen, depicts, score, fit_reason: as above (in that order).
+- line_shows, seen, depicts, setting_fit, setting_reason, score, fit_reason: as above (in that order).
 - visible: one sentence describing what is actually shown.
 - main_subject, action: the main subject and what it is doing.
-- matches: true when depicts is "yes", score >= 7 and the clip is readable (not too dark or blurry to see what
+- matches: true when depicts is "yes", setting_fit is not "contradicts", score >= 7 and the clip is readable (not too dark or blurry to see what
   it shows, no dominating text, logos or watermarks).
 - subject_visible: true if what the viewer must recognise is clearly visible.
 - in_s, out_s: the best continuous window in which line_shows is visible, preferably >= {need_s:.1f} s;
@@ -164,8 +177,8 @@ _STEP1_FIXED = """1. """ + FIXED_MARKER + """: the same for every clip checked f
    Judge against it exactly as written. Never restate, widen, narrow or reinterpret it to fit what this clip
    shows, and do not output it.
 """
-_RETURN_FREE = "- line_shows, seen, depicts, score, fit_reason: as above (in that order)."
-_RETURN_FIXED = "- seen, depicts, score, fit_reason: as above (in that order)."
+_RETURN_FREE = "- line_shows, seen, depicts, setting_fit, setting_reason, score, fit_reason: as above (in that order)."
+_RETURN_FIXED = "- seen, depicts, setting_fit, setting_reason, score, fit_reason: as above (in that order)."
 
 
 def prompt_template(fixed: bool) -> str:
@@ -185,13 +198,40 @@ This line (spoken over this shot): "{narration}"
 {sentence_line}Next line: "{next}"
 What this moment means in the video (context only): "{moment}"
 What the viewer must recognise: "{must_recognise}"
-{search_line}{idea_line}"""
+{setting_line}{search_line}{idea_line}"""
 
 
 # The score can never be higher than the literal-depiction judgement allows: a clip that does not show the
 # line is a miss however well it could be argued (snow sc_5 IV bags for medicines at home: 7; sleep sc_13
 # candlelit reading for "make the bedroom dark": 8). Same numbers as the web's DEPICTS_CAP.
 DEPICTS_CAP = {"yes": 10, "partly": 6, "no": 4}
+
+# A clip whose visible setting contradicts the moment's implied setting (time of day, indoor/outdoor, place, mood
+# from the topic and the lines around it) never reaches the 5/10 filler floor, even when the literal subject
+# matches (sleep: a daytime woods walk under "get out of bed and do a quiet activity"). The fit is the model's
+# call; code only applies the cap. Same number as the web's SETTING_CAP.
+SETTING_CAP = 4
+
+
+def norm_setting_fit(v: Any) -> str:
+    """fits / neutral / contradicts. Anything else (or missing) is neutral: depicts still gates the clip."""
+    w = (re.sub(r"[^a-z]+", " ", str(v or "").lower()).split() or [""])[0]
+    if w in ("contradicts", "contradict", "conflicts", "wrong", "no"):
+        return "contradicts"
+    if w in ("fits", "fit", "yes", "matches"):
+        return "fits"
+    return "neutral"
+
+
+def apply_setting_cap(entry: dict) -> bool:
+    """Cap the score and drop `matches` when the setting contradicts. True when it capped anything."""
+    if entry.get("settingFit") != "contradicts":
+        return False
+    entry["matches"] = False
+    if entry.get("score", 0) > SETTING_CAP:
+        entry["score"] = SETTING_CAP
+        return True
+    return False
 
 
 # Spellings of the three answers (case and punctuation are ignored). Anything else is unknown.
@@ -247,14 +287,18 @@ DESCRIBE_EXTRA = (
     "each 1-3 seconds (start a new one whenever what is visible or happening changes), each with t_start and "
     "t_end in seconds, visible (who/what is in shot), action (what they do; 'nothing' if still), motion "
     "(direction of any movement of subjects or camera, or 'none') and lighting (brightness and colour, and "
-    "whether it is too dark or blurry to see). Also: style (live-action camera footage, animation, 3D render or "
+    "whether it is too dark or blurry to see). Also: setting (indoor or outdoor, the kind of place, and the time "
+    "of day as far as the picture shows it: daylight, night, dusk/dawn, or 'cannot tell'), style (live-action "
+    "camera footage, animation, 3D render or "
     "graphics) and notes (any on-screen text or watermark, green or blue screen, studio lights or film "
     "equipment in shot, frozen frames; '' if none)."
 )
 DESCRIBE_PHOTO_PROMPT = (
     "Describe exactly what is in this photo: who/what is visible, what they are doing, colours, lighting, "
     "indoor/outdoor, time of day.\nReturn JSON with one event (t_start 0, t_end 0) holding visible, action, "
-    "motion ('none') and lighting. Also: style (real camera photograph, illustration, 3D render, or a cut-out on "
+    "motion ('none') and lighting. Also: setting (indoor or outdoor, the kind of place, and the time of day as "
+    "far as the picture shows it: daylight, night, dusk/dawn, or 'cannot tell'), style (real camera "
+    "photograph, illustration, 3D render, or a cut-out on "
     "a plain or transparent background) and notes (any on-screen text or watermark, green or blue screen, studio "
     "lights or equipment, stretched, smeared or distorted areas; '' if none)."
 )
@@ -273,11 +317,12 @@ OBSERVE_SCHEMA: dict[str, Any] = {
                 "propertyOrdering": ["t_start", "t_end", "visible", "action", "motion", "lighting"],
             },
         },
+        "setting": {"type": "STRING"},
         "style": {"type": "STRING"},
         "notes": {"type": "STRING"},
     },
-    "required": ["events", "style", "notes"],
-    "propertyOrdering": ["events", "style", "notes"],
+    "required": ["events", "setting", "style", "notes"],
+    "propertyOrdering": ["events", "setting", "style", "notes"],
 }
 
 
@@ -299,7 +344,8 @@ def norm_observation(obs: Any, clip_s: float) -> dict:
     events.sort(key=lambda e: e["t_start"])
     if events:
         events[-1]["t_end"] = max(events[-1]["t_end"], round(clip_s, 2)) if clip_s else events[-1]["t_end"]
-    return {"events": events, "style": str(obs.get("style") or "")[:120], "notes": str(obs.get("notes") or "")[:300]}
+    return {"events": events, "setting": str(obs.get("setting") or "")[:200],
+            "style": str(obs.get("style") or "")[:120], "notes": str(obs.get("notes") or "")[:300]}
 
 
 def event_line(e: dict) -> str:
@@ -309,6 +355,8 @@ def event_line(e: dict) -> str:
 
 def observation_text(obs: dict) -> str:
     lines = [event_line(e) for e in obs.get("events") or []]
+    if obs.get("setting"):
+        lines.append(f"setting: {obs['setting']}")
     lines.append(f"style: {obs.get('style') or '(not said)'}")
     lines.append(f"notes: {obs.get('notes') or '(none)'}")
     return "\n".join(lines)
@@ -380,20 +428,31 @@ Work in steps, in this order.
      the description is too vague or the picture too unclear to tell.
    If an intended shot is given above, "yes" also needs the clip to show that intended shot (something merely
    similar is "partly" at most).
-5. artifacts: what the observation reports inside that window (or in its notes): "production" (green or blue screen, studio
+5. setting_fit: the implied setting given above (time of day, indoor/outdoor, kind of place, mood) is what a
+   viewer of THIS video expects at this moment, read from its topic and the lines around it. Compare it with
+   what the observation (its events and its setting line) shows:
+   - "contradicts": it visibly shows a different time of day (bright daylight for a night moment, night for a
+     day one), the other side of indoor/outdoor, a clearly different kind of place, or a mood that clashes
+     with the line in this video - even when the literal subject or action matches line_shows.
+   - "fits": its visible time of day, place and mood match the implied setting.
+   - "neutral": it does not show enough of its surroundings to tell (a tight close-up), or no implied setting
+     is given.
+   setting_reason: a few words on what in the observation (its events and its setting line) fits or contradicts the setting.
+6. artifacts: what the observation reports inside that window (or in its notes): "production" (green or blue screen, studio
    lights, stands, crew or set equipment in shot), "stretched" (stretched, squashed, smeared or distorted
    picture), "frozen" (frozen or still frames in a video), "dark" (near-black or too dark to see), else "none".
-6. score: 0-10 for this line in this video, for that window only, based on seen and depicts, not on what the
-   clip might stand for.
+7. score: 0-10 for this line in this video, for that window only, based on seen, depicts and setting_fit, not
+   on what the clip might stand for.
    9-10 = depicts yes and exactly right here; 7-8 = depicts yes, clearly works; 5-6 = depicts partly, usable
-   but not ideal; 0-4 = depicts no (3 or lower when the picture is too unclear to tell).
-7. fit_reason: one short sentence on why what was seen does or does not show line_shows.
+   but not ideal; 0-4 = depicts no or setting_fit contradicts (3 or lower when the picture is too unclear).
+8. fit_reason: one short sentence on why what was seen does or does not show line_shows.
 
 Return JSON:
-- in_s, out_s, seen, depicts, artifacts, score, fit_reason: as above (in that order).
+- in_s, out_s, seen, depicts, setting_fit, setting_reason, artifacts, score, fit_reason: as above (in that order).
 - visible: one sentence describing what is shown in the window.
 - main_subject, action: the main subject and what it is doing.
-- matches: true when depicts is "yes", score >= 7, artifacts is "none" and the window is readable.
+- matches: true when depicts is "yes", setting_fit is not "contradicts", score >= 7, artifacts is "none" and
+  the window is readable.
 - subject_visible: true if what the viewer must recognise is clearly visible.
 - issues: shaky, blurry, text overlay, cut inside clip, or "".
 - style: from the observation: live_action (real camera footage or photo), animation, 3d_render,
@@ -419,6 +478,8 @@ SCORE_SCHEMA: dict[str, Any] = {
         "out_s": {"type": "NUMBER"},
         "seen": {"type": "STRING"},
         "depicts": {"type": "STRING", "enum": ["yes", "partly", "no"]},
+        "setting_fit": VERIFY_SCHEMA["properties"]["setting_fit"],
+        "setting_reason": {"type": "STRING"},
         "artifacts": {"type": "STRING", "enum": ["none", "production", "stretched", "frozen", "dark"]},
         "score": {"type": "INTEGER"},
         "fit_reason": {"type": "STRING"},
@@ -433,9 +494,9 @@ SCORE_SCHEMA: dict[str, Any] = {
         "framing": {"type": "STRING"},
         "time_of_day": VERIFY_SCHEMA["properties"]["time_of_day"],
     },
-    "required": ["in_s", "out_s", "seen", "depicts", "artifacts", "score", "fit_reason", "visible", "main_subject",
+    "required": ["in_s", "out_s", "seen", "depicts", "setting_fit", "setting_reason", "artifacts", "score", "fit_reason", "visible", "main_subject",
                  "action", "matches", "subject_visible", "style", "lighting", "framing", "time_of_day"],
-    "propertyOrdering": ["in_s", "out_s", "seen", "depicts", "artifacts", "score", "fit_reason", "visible",
+    "propertyOrdering": ["in_s", "out_s", "seen", "depicts", "setting_fit", "setting_reason", "artifacts", "score", "fit_reason", "visible",
                          "main_subject", "action", "matches", "subject_visible", "issues", "style", "lighting",
                          "framing", "time_of_day"],
 }
@@ -631,6 +692,12 @@ def _idea_line(shot: dict, q) -> str:
     return f'Intended shot (this clip was found for it): "{idea}"\n' if idea else ""
 
 
+def _setting_line(shot: dict, q) -> str:
+    """The setting this moment implies (web script-context pass: topic + neighbouring lines), '' when unknown."""
+    setting = q(shot.get("setting"), 240)
+    return f'Implied setting of this moment (from the video and the lines around it): "{setting}"\n' if setting else ""
+
+
 def _sentence_line(shot: dict, q) -> str:
     """Split scenes: the full sentence this piece belongs to (the piece alone reads like a keyword list)."""
     full = q(shot.get("sentence"), 600)
@@ -644,7 +711,7 @@ def script_block(script: str, shot: dict, video_understanding: str = "", topic: 
     q = lambda v, n=300: str(v or "").replace('"', "'").replace("\n", " ")[:n]  # noqa: E731
     text = str(script or "").strip()
     return SCRIPT_BLOCK.format(
-        video_understanding=q(video_understanding, 1200) or q(topic, 200) or "(not given)",
+        video_understanding=(f"{q(topic, 200)}. " if topic and video_understanding else "") + (q(video_understanding, 1200) or q(topic, 200) or "(not given)"),
         line_no=shot.get("lineNo") or "?",
         script=text[:8000] if text else "(not given)",
         prev=q(shot.get("prevNarration")) or "(start of video)",
@@ -654,6 +721,7 @@ def script_block(script: str, shot: dict, video_understanding: str = "", topic: 
         moment=q(shot.get("moment") or shot.get("intent")),
         must_recognise=q(shot.get("subject") or shot.get("intent"), 120),
         idea_line=_idea_line(shot, q),
+        setting_line=_setting_line(shot, q),
         search_line=(f'line_shows - what a viewer should SEE for this line (fixed for every clip of this line): "{q(shot.get("lineShows"), 200)}"\n' if shot.get("lineShows") else ""),
     )
 
@@ -1171,12 +1239,23 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                         "framing": str(v.get("framing") or "")[:60],
                         "timeOfDay": str(v.get("time_of_day") or "day"),
                         "fitReason": str(v.get("fit_reason") or "")[:200],
+                        "settingFit": norm_setting_fit(v.get("setting_fit")) if shot.get("setting") else "neutral",
+                        "settingReason": str(v.get("setting_reason") or "")[:160],
                     }
                 )
+                before_setting = entry["score"]
+                if apply_setting_cap(entry):
+                    print("[t2v:verify:setting]", json.dumps({
+                        "draftId": draft_id, "sceneId": shot.get("sceneId"), "candidateId": c.get("providerId"),
+                        "setting": str(shot.get("setting") or "")[:160], "reason": entry["settingReason"],
+                        "score": before_setting, "capped": entry["score"],
+                    }), flush=True)
                 if blind:
                     entry["blind"] = True
                     # QA/VQ: the locked observation and the events inside the verified window.
                     entry["observation"] = obs_text[:DESCRIBED_CHARS]
+                    if obs.get("setting"):
+                        entry["clipSetting"] = obs["setting"][:200]
                     entry["windowEvents"] = [event_line(e) for e in events_in(obs, pa, pb)][:8]
                     art = norm_artifacts(v.get("artifacts"), obs.get("notes", "") + " " + " ".join(
                         f"{e.get('visible', '')} {e.get('lighting', '')}" for e in events_in(obs, pa, pb)))
@@ -1273,7 +1352,9 @@ def run_t2v_verify_stock_job(conn, job: dict) -> dict:
                     chosen = {**e, "verdict": "weak_match"}
                     break
         if chosen is None:
-            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE), key=lambda e: -fallback_rank(e, ctx)):
+            # A clip contradicting the moment's implied setting is never even a best-available pick.
+            for e in sorted((e for e in ev if not e.get("error") and e.get("score", 0) >= FALLBACK_MIN_SCORE
+                             and e.get("settingFit") != "contradicts"), key=lambda e: -fallback_rank(e, ctx)):
                 if free(e):
                     chosen = {**e, "verdict": "best_available"}
                     break

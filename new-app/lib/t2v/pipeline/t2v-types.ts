@@ -101,7 +101,29 @@ export type T2vPlannedShot = {
   sentence?: string
   /** Reimagine idea shots: the intended shot that found the candidates (sent to the checker). */
   idea?: string
+  /**
+   * Script-context pass: the setting this moment implies, read from the video's topic and the lines around it
+   * (not only this line's literal words). Searches, the checker, every re-check and AI prompts use it; a clip
+   * that contradicts it (e.g. a daytime woods walk under "get out of bed and do a quiet activity" in a sleep
+   * video) is capped below the filler floor.
+   */
+  setting?: T2vShotSetting
 }
+
+/** The setting a shot's moment implies (model-written, plain words; 'any' when the script does not imply one). */
+export type T2vShotSetting = {
+  /** day | night | morning | evening | any */
+  timeOfDay: string
+  /** indoor | outdoor | any */
+  place: string
+  /** A few words: the kind of place (e.g. "bedroom", "kitchen", "city street"); '' when open. */
+  where: string
+  /** A few words: the mood the footage should carry (e.g. "calm, quiet, dim"). */
+  mood: string
+}
+
+/** Model call: does the clip's visible setting fit the moment's implied setting? contradicts caps the score. */
+export type T2vSettingFit = 'fits' | 'neutral' | 'contradicts'
 
 export type T2vFootageCandidate = {
   /** photo = still image fallback (shown with a slow Ken Burns move). Default video. */
@@ -156,6 +178,12 @@ export type T2vVerifiedPick = {
   lineShows?: string
   /** Reviewer: does `seen` literally show `lineShows`? Code caps the score: no -> 4, partly -> 6. */
   depicts?: T2vDepicts
+  /** Reviewer: does the clip's visible setting (time of day, indoor/outdoor, place, mood) fit the shot's implied setting? contradicts -> score capped at 4. */
+  settingFit?: T2vSettingFit
+  /** Reviewer's short reason for settingFit. */
+  settingReason?: string
+  /** Blind observation: the clip's own setting (indoor/outdoor, kind of place, time of day), written without the line. */
+  clipSetting?: string
   /** Worker motion check: a video clip whose chosen window is a frozen frame (treated as a still, score capped). */
   static?: boolean
   /** Mean frame difference (0-255) across the window, information only. */
@@ -274,6 +302,8 @@ export type T2vPipelineRun = {
   describeCalls?: number
   /** Fixed lineShows were written for a frozen plan (once; never regenerated in this run). */
   lineShowsFixedAt?: string
+  /** Implied settings were written for a frozen plan (once; never regenerated in this run). */
+  settingsFixedAt?: string
   /** Placed picks of the previous run (kept by the reset tool): incumbents a new clip must clearly beat. */
   priorPicks?: Record<string, { providerId: string; score: number; depicts?: T2vDepicts; kind?: string; at?: string; candidate?: T2vFootageCandidate }>
   /** Reimagine: lines whose round did not happen (budget / no ideas), not counted as rounds. */

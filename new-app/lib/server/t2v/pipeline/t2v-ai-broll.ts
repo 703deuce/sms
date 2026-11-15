@@ -1,4 +1,5 @@
 import 'server-only'
+import { settingText } from '@/lib/server/t2v/pipeline/t2v-setting'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import { logT2v } from '@/lib/server/t2v/log'
 import type { T2vFootageCandidate, T2vPipelineRun, T2vPlannedShot, T2vShotResult } from '@/lib/t2v/pipeline/t2v-types'
@@ -48,7 +49,8 @@ export function aiFramesFor(needS: number): number {
 const PROMPT_SYSTEM = `You write prompts for a text-to-video model that must produce B-roll that blends with real
 stock footage in a documentary. For each shot write ONE prompt (35-70 words): realistic live-action stock
 footage of what the line's moment needs, in the place and light that moment implies in this video (read the
-moment given for each shot); steady tripod or slow gimbal camera, shallow depth of field, true-to-life
+moment and the setting given for each shot: its time of day, indoor/outdoor, kind of place and mood are part of
+the prompt, never contradicted); steady tripod or slow gimbal camera, shallow depth of field, true-to-life
 colours, 35mm film look. Must say: no text, no captions, no logos, no watermarks. Avoid faces in close-up and hands with fine
 finger detail (models get them wrong); prefer objects, machines, materials, landscapes and mid shots.
 Return ONLY JSON: {"prompts": [{"sceneId": string, "prompt": string}]}`
@@ -56,9 +58,10 @@ Return ONLY JSON: {"prompts": [{"sceneId": string, "prompt": string}]}`
 const SAFE_TAIL = ' Realistic live-action stock footage, steady camera, no text, no logos, no watermark.'
 
 /** Template prompt: what must be recognised + the shot, set in the line's moment (no default light). */
-export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject' | 'moment'>): string {
+export function fallbackAiPrompt(shot: Pick<T2vPlannedShot, 'intent' | 'subject' | 'moment' | 'setting'>): string {
   const moment = shot.moment ? ` Moment: ${shot.moment.slice(0, 240)}` : ''
-  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + moment + SAFE_TAIL
+  const setting = settingText(shot.setting)
+  return `${shot.subject ? `${shot.subject}: ` : ''}${shot.intent}`.slice(0, 300) + (setting ? ` Setting: ${setting}.` : '') + moment + SAFE_TAIL
 }
 
 export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Promise<Record<string, string>> {
@@ -66,7 +69,7 @@ export async function aiBrollPrompts(topic: string, shots: T2vPlannedShot[]): Pr
   try {
     const res = await t2vLlmJson<{ prompts?: Array<{ sceneId?: string; prompt?: string }> }>(
       PROMPT_SYSTEM,
-      `Video topic: ${topic}\nShots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject, ...(s.moment ? { moment: s.moment } : {}) })))}`,
+      `Video topic: ${topic}\nShots: ${JSON.stringify(shots.map((s) => ({ sceneId: s.sceneId, line: s.narration, intent: s.intent, subject: s.subject, ...(s.moment ? { moment: s.moment } : {}), ...(s.setting ? { setting: settingText(s.setting) } : {}) })))}`,
       { maxTokens: 2000 },
     )
     for (const p of Array.isArray(res.prompts) ? res.prompts : []) {

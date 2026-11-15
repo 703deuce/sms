@@ -1,4 +1,5 @@
 import 'server-only'
+import { settingText } from '@/lib/server/t2v/pipeline/t2v-setting'
 import { t2vLlmJson } from '@/lib/server/t2v/pipeline/t2v-llm'
 import type { T2vPlannedShot, T2vShotResult, T2vStoryPlan } from '@/lib/t2v/pipeline/t2v-types'
 
@@ -15,6 +16,9 @@ Rules:
   place. No abstract words, moods or metaphors, and no broader topic B-roll that does not show the line.
 - Each query a DIFFERENT literal phrasing: another everyday word for the subject, another angle (close-up of
   hands, wider shot of the person), or the visible result of the action.
+- When a shot has a setting (time of day, indoor/outdoor, kind of place, mood implied by the video and the
+  lines around it), every query fits it; one query may name the place or time. Never a query whose results
+  would contradict it (e.g. an outdoor daytime version of a line set indoors at night).
 - Never reuse a tried query or a near-duplicate.
 - Use what the reviewer actually saw in rejected clips, and why they did not fit, to steer away from those results.
 Return ONLY JSON: {"shots": [{"sceneId": string, "queries": [string, string, string]}]}`
@@ -34,6 +38,7 @@ export async function t2vQueryRewriter(input: {
     subject: s.subject,
     ...(s.moment ? { moment: s.moment } : {}),
     ...(s.lineShows ? { lineShows: s.lineShows } : {}),
+    ...(s.setting ? { setting: settingText(s.setting) } : {}),
     tried: (input.tried[s.sceneId] ?? []).slice(-15),
     rejectedClipsShowed: (input.history[s.sceneId]?.evaluated ?? [])
       .filter((e) => e.visible)
