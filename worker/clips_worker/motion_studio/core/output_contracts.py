@@ -276,6 +276,19 @@ ENGINEER_RULES: list[Rule] = [
         "contract": "Never substitute a framework or deterministic scene if the approved design cannot be built; return a structured limitation instead.",
         "tokens": ["limitation", "Do not silently"],
     },
+    {
+        "id": "relative_timing",
+        "message": "endFrame is outside the scene duration",
+        "contract": (
+            "Express timing relative to THIS scene: startS/endS (seconds from the scene start), "
+            "startFrac/endFrac (a fraction 0..1 of the scene), or a line/word anchor. "
+            "Do not convert times to frames and do not invent a frame count. "
+            "durationS, fps and durationFrames in the brief are the exact length after layout/TTS timing; "
+            "the engine converts relative times to frames from that duration. "
+            "A hold or move that lasts the whole scene uses startS=0 and endS='end' or endFrac=1."
+        ),
+        "tokens": ["startS", "endS", "startFrac", "endFrac", "durationS", "durationFrames", "do not convert"],
+    },
 ]
 
 REVIEWER_RULES: list[Rule] = [

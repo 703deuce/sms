@@ -331,6 +331,7 @@ Never invent functions, imports, constructors, palette keys or kwargs.
 Never perform privileged actions (database, storage, downloads, renderer internals, or OS access).
 If the design cannot be implemented, return {"limitation": {"reason": "...", "missingTools": [], "missingAssets": [], "unblock": "what the Production Designer should change"}} and do not silently rewrite the design.
 Static-validate against the API contract. Word timing uses official word ids or ctx.W.
+Express tool timing relative to the scene (startS/endS in seconds, startFrac/endFrac, or line anchors). Do not convert to frames; the engine converts from the real durationS and fps. Custom code uses ctx.duration and ctx.W() in seconds.
 All roles currently run on gpt-6-luna; do not mention or choose a model.
 """
     return role + "\n" + (tools_reference or "") + "\n\n" + (api_reference or "")

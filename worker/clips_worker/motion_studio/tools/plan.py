@@ -7,7 +7,7 @@ from typing import Any
 from clips_worker.motion_studio.directors.documentary.contracts import extract_limitation
 from clips_worker.motion_studio.tools.compiler import CompileError, compile_spec
 from clips_worker.motion_studio.tools.registry import apply_calls
-from clips_worker.motion_studio.tools.spec import new_spec
+from clips_worker.motion_studio.tools.spec import attach_scene_timing, clamp_spec_timing, new_spec
 from clips_worker.motion_studio.tools.validate import validate_spec
 
 
@@ -19,6 +19,7 @@ def compile_agent_output(
     duration_s: float | None = None,
     fps: int = 30,
     allow_custom_code: bool = True,
+    anchors: dict | None = None,
 ) -> dict[str, Any]:
     """Prefer tool calls / a scene spec. Custom code is Tier 3 only. Limitations pass through."""
     payload = out or {}
@@ -29,11 +30,13 @@ def compile_agent_output(
 
     if payload.get("spec") or payload.get("tools"):
         spec = payload.get("spec") or new_spec(scene_id, fps=fps, duration_s=duration_s, catalog_ids=catalog_ids)
+        attach_scene_timing(spec, duration_s=duration_s, fps=fps, anchors=anchors)
         if payload.get("tools"):
             spec, results = apply_calls(spec, payload["tools"])
             errors = [e for r in results for e in r.errors]
             if errors:
                 return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec, "errors": errors, "results": [r.as_dict() for r in results]}
+        clamp_spec_timing(spec)
         problems = validate_spec(spec, catalog_ids=catalog_ids)
         if problems:
             return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec, "errors": problems}

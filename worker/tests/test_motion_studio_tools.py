@@ -212,3 +212,96 @@ def test_chart_data_must_be_verified():
         "kind": "chart_line", "data": [{"x": 0, "y": 1}, {"x": 1, "y": 2}],
     }}])
     assert res[-1].ok
+
+
+def test_relative_timing_converts_and_clamps_to_real_duration():
+    """Timing math is the engine's job: seconds, fractions, and leftover frames all resolve to the real duration."""
+    from clips_worker.motion_studio.tools.plan import compile_agent_output
+    from clips_worker.motion_studio.tools.spec import new_spec, resolve_scene_timing
+
+    # 10.2667 s at 30 fps is the kind of post-TTS layout duration a still scene actually has.
+    dur, fps = 10.2667, 30
+    frames = int(round(dur * fps))
+    spec = new_spec("s", fps=fps, duration_s=dur)
+    assert spec["durationFrames"] == frames
+
+    s, e, err = resolve_scene_timing(spec, {"startS": 0, "endS": "end"}, default_start=0, default_end="duration", required=True)
+    assert err is None and s == 0 and e == frames
+
+    s, e, err = resolve_scene_timing(spec, {"startFrac": 0, "endFrac": 1}, required=True)
+    assert err is None and s == 0 and e == frames
+
+    s, e, err = resolve_scene_timing(spec, {"startS": 0, "endS": 2.0})
+    assert err is None and s == 0 and e == 60
+
+    # A model that computed frames at the wrong fps (e.g. 616 at 60 fps) must be clamped, not rejected.
+    s, e, err = resolve_scene_timing(spec, {"startFrame": 0, "endFrame": 616}, default_start=0, default_end="duration")
+    assert err is None and s == 0 and e == frames
+
+    env = {"tool": "create_environment", "arguments": {"environmentId": "e1", "brief": "a still shop front"}}
+    cam = {
+        "tool": "animate_camera",
+        "arguments": {
+            "environmentId": "e1",
+            "startS": 0,
+            "endS": "end",
+            "from": {"x": 0, "y": 0, "zoom": 0.4},
+            "to": {"x": 0, "y": 0, "zoom": 0.4},
+            "easing": "hold",
+        },
+    }
+    out = compile_agent_output({"tools": [env, cam]}, scene_id="s", duration_s=dur, fps=fps)
+    assert out["ok"], out.get("errors")
+    move = next(iter((out["spec"]["camera"] or {}).values()))
+    assert move["startFrame"] == 0 and move["endFrame"] == frames
+    assert "film.cam(" in (out["code"] or "")
+
+    # Legacy endFrame past the scene still compiles: the engine clamps to the real duration.
+    cam_frames = {
+        "tool": "animate_camera",
+        "arguments": {
+            "environmentId": "e1",
+            "startFrame": 0,
+            "endFrame": 616,
+            "from": {"x": 0, "y": 0, "zoom": 0.4},
+            "to": {"x": 80, "y": 0, "zoom": 0.55},
+            "easing": "ease_in_out",
+        },
+    }
+    out = compile_agent_output({"tools": [env, cam_frames]}, scene_id="s", duration_s=dur, fps=fps)
+    assert out["ok"], out.get("errors")
+    move = next(iter((out["spec"]["camera"] or {}).values()))
+    assert move["endFrame"] == frames
+
+
+def test_line_anchor_timing_uses_official_line_times():
+    from clips_worker.motion_studio.tools.plan import compile_agent_output
+    env = {"tool": "create_environment", "arguments": {"environmentId": "e1", "brief": "open field"}}
+    cam = {
+        "tool": "animate_camera",
+        "arguments": {
+            "environmentId": "e1",
+            "startLineId": "l1",
+            "endLineId": "l1",
+            "from": {"x": 0, "y": 0, "zoom": 0.4},
+            "to": {"x": 20, "y": 0, "zoom": 0.5},
+        },
+    }
+    out = compile_agent_output(
+        {"tools": [env, cam]},
+        scene_id="s",
+        duration_s=8,
+        fps=30,
+        anchors={"lines": {"l1": {"startS": 1.0, "endS": 3.5}}},
+    )
+    assert out["ok"], out.get("errors")
+    move = next(iter((out["spec"]["camera"] or {}).values()))
+    assert move["startFrame"] == 30 and move["endFrame"] == 105
+
+
+def test_engineer_brief_includes_exact_scene_duration():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parents[1] / "clips_worker/motion_studio/directors/documentary/engineer.py").read_text()
+    assert '"durationS"' in src and '"durationFrames"' in src and '"fps"' in src
+    assert "Do not convert to frames" in src
+    assert "startS/endS" in src

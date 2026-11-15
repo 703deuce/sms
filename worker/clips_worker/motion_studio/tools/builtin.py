@@ -27,6 +27,7 @@ from clips_worker.motion_studio.tools.spec import (
     MAX_PRIMITIVES,
     MAX_TRANSITIONS,
     next_id,
+    resolve_scene_timing,
 )
 
 EASING = ("linear", "ease_in_out", "ease_out_cubic", "ease_out_back", "ease_in", "ease_out", "hold")
@@ -192,11 +193,11 @@ def _animate_camera(spec: dict, arguments: dict) -> ToolResult:
     eid, err = _require_env(spec, arguments, version, tool)
     if err:
         return err
-    start, end = arguments.get("startFrame"), arguments.get("endFrame")
-    try:
-        start_i, end_i = int(start), int(end)
-    except (TypeError, ValueError):
-        return _fail(tool, version, error(INVALID_ARGUMENT, "startFrame and endFrame must be integers."))
+    start_i, end_i, terr = resolve_scene_timing(
+        spec, arguments, default_start=0, default_end="duration", required=True,
+    )
+    if terr:
+        return _fail(tool, version, error(INVALID_ARGUMENT, terr))
     easing = arguments.get("easing") or "ease_in_out"
     # A deliberate hold may use start == end; any other movement needs a positive interval.
     if easing != "hold" and end_i <= start_i:
@@ -295,11 +296,13 @@ def _transition_scene(spec: dict, arguments: dict) -> ToolResult:
         "type": arguments.get("type") or "cut",
         "fromSceneId": arguments.get("fromSceneId"),
         "toSceneId": arguments.get("toSceneId") or spec.get("sceneId"),
-        "startFrame": arguments.get("startFrame"),
-        "endFrame": arguments.get("endFrame"),
         "sharedObjectIds": arguments.get("sharedObjectIds") or [],
         "params": arguments.get("params") or {},
     }
+    start_i, end_i, terr = resolve_scene_timing(spec, arguments)
+    if terr:
+        return _fail(tool, version, error(INVALID_ARGUMENT, terr))
+    payload["startFrame"], payload["endFrame"] = start_i, end_i
     if payload["startFrame"] is not None and payload["endFrame"] is not None and int(payload["endFrame"]) < int(payload["startFrame"]):
         return _fail(tool, version, error(INVALID_RANGE, "transition endFrame must be >= startFrame."))
     _put(spec, "transitions", tid, payload)
@@ -319,11 +322,13 @@ def _compose_audio(spec: dict, arguments: dict) -> ToolResult:
         "role": arguments["role"],
         "cue": arguments.get("cue"),
         "gain": arguments.get("gain", 1.0),
-        "startFrame": arguments.get("startFrame"),
-        "endFrame": arguments.get("endFrame"),
         "anchorWordId": arguments.get("anchorWordId"),
         "bed": arguments.get("bed") or False,
     }
+    start_i, end_i, terr = resolve_scene_timing(spec, arguments)
+    if terr:
+        return _fail(tool, version, error(INVALID_ARGUMENT, terr))
+    payload["startFrame"], payload["endFrame"] = start_i, end_i
     _put(spec, "sound", sid, payload)
     return _ok(tool, version, {"id": sid, "soundId": sid})
 
@@ -436,10 +441,12 @@ def _animate_property(spec: dict, arguments: dict) -> ToolResult:
         "property": arguments["property"],
         "from": arguments.get("from"),
         "to": arguments.get("to"),
-        "startFrame": arguments.get("startFrame"),
-        "endFrame": arguments.get("endFrame"),
         "easing": arguments.get("easing") or "ease_in_out",
     }
+    start_i, end_i, terr = resolve_scene_timing(spec, arguments)
+    if terr:
+        return _fail(tool, version, error(INVALID_ARGUMENT, terr))
+    payload["startFrame"], payload["endFrame"] = start_i, end_i
     if payload["startFrame"] is not None and payload["endFrame"] is not None and int(payload["endFrame"]) < int(payload["startFrame"]):
         return _fail(tool, version, error(INVALID_RANGE, "animation endFrame must be >= startFrame."))
     _put(spec, "animation", aid, payload)
@@ -459,10 +466,12 @@ def _apply_effect(spec: dict, arguments: dict) -> ToolResult:
         "effectKind": arguments["kind"],
         "environmentId": eid,
         "targetId": arguments.get("targetId"),
-        "startFrame": arguments.get("startFrame"),
-        "endFrame": arguments.get("endFrame"),
         "params": arguments.get("params") or {},
     }
+    start_i, end_i, terr = resolve_scene_timing(spec, arguments)
+    if terr:
+        return _fail(tool, version, error(INVALID_ARGUMENT, terr))
+    payload["startFrame"], payload["endFrame"] = start_i, end_i
     _put(spec, "objects", oid, payload)
     return _ok(tool, version, {"id": oid, "effectId": oid})
 
@@ -629,7 +638,7 @@ def all_tools() -> list[Tool]:
             prohibited=_COMMON_PROHIBITED,
             preconditions=["An environment exists.", "focusTargetId, if set, refers to an existing object."],
             dependencies=["create_environment"],
-            behavior="Validate the target, frame interval, camera constraints and easing type; generate camera keyframes on the specification; return the generated motionId. A hold may use startFrame == endFrame with easing='hold'.",
+            behavior="Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors — do not compute frames.",
             errors={
                 PRECONDITION_FAILED: "Call create_environment first.",
                 MISSING_TARGET: "Place the focus target first, or omit focusTargetId.",
@@ -643,8 +652,14 @@ def all_tools() -> list[Tool]:
             defaults="easing defaults to ease_in_out; rot defaults to 0.",
             parameters=[
                 Param("environmentId", "string", False, "Existing environment containing the camera. Defaults to the sole environment."),
-                Param("startFrame", "integer", True, "Inclusive start frame."),
-                Param("endFrame", "integer", True, "End frame (exclusive of a later move). Must be > startFrame unless easing is hold."),
+                Param("startS", "number", False, "Start time in seconds from the beginning of this scene. Preferred. The engine converts to frames."),
+                Param("endS", "number", False, "End time in seconds from the beginning of this scene, or 'end' for the real scene duration."),
+                Param("startFrac", "number", False, "Start as a fraction of this scene's duration (0..1)."),
+                Param("endFrac", "number", False, "End as a fraction of this scene's duration (0..1). Use 1 for the end of the scene."),
+                Param("startLineId", "string", False, "Start at the official start of this narration line."),
+                Param("endLineId", "string", False, "End at the official end of this narration line."),
+                Param("startFrame", "integer", False, "Legacy start frame. Optional. Prefer startS/startFrac/startLineId; the engine clamps to the real duration."),
+                Param("endFrame", "integer", False, "Legacy end frame. Optional. Prefer endS/endFrac/endLineId; the engine clamps to the real duration."),
                 Param("from", "object", True, "Start pose {x, y, zoom, rot?}."),
                 Param("to", "object", True, "End pose {x, y, zoom, rot?}."),
                 Param("easing", "string", False, "Supported movement profile.", allowed=list(EASING), default="ease_in_out"),
@@ -655,8 +670,8 @@ def all_tools() -> list[Tool]:
                 "tool": "animate_camera",
                 "arguments": {
                     "environmentId": "env_desk",
-                    "startFrame": 0,
-                    "endFrame": 90,
+                    "startS": 0,
+                    "endS": 3,
                     "from": {"x": 0, "y": 0, "zoom": 0.35, "rot": 0},
                     "to": {"x": 1250, "y": 400, "zoom": 0.7, "rot": 0},
                     "easing": "ease_in_out",
@@ -736,8 +751,10 @@ def all_tools() -> list[Tool]:
                 Param("type", "string", False, "Transition type (parameterized, not a fixed pack).", allowed=list(TRANSITION_TYPES), default="cut"),
                 Param("fromSceneId", "string", False, "Outgoing scene id."),
                 Param("toSceneId", "string", False, "Incoming scene id."),
-                Param("startFrame", "integer", False, "Start frame of the transition window."),
-                Param("endFrame", "integer", False, "End frame of the transition window."),
+                Param("startS", "number", False, "Start time in seconds from the beginning of this scene. The engine converts to frames."),
+                Param("endS", "number", False, "End time in seconds, or the end of the scene."),
+                Param("startFrame", "integer", False, "Legacy start frame; prefer startS. The engine clamps to the real duration."),
+                Param("endFrame", "integer", False, "Legacy end frame; prefer endS. The engine clamps to the real duration."),
                 Param("sharedObjectIds", "array", False, "Objects that persist across the transition."),
                 Param("params", "object", False, "Type-specific parameters (duration, direction, etc.)."),
                 Param("transitionId", "string", False, "Stable id."),

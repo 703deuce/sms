@@ -143,12 +143,12 @@
   ],
   "package": "motion.studio.tools",
   "schema": 1,
-  "sourceHash": "d97858705a05a4863724a731",
+  "sourceHash": "ecbbe1c360c5321397240bf6",
   "tools": {
     "animate_camera": {
       "aliases": [],
       "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
-      "behavior": "Validate the target, frame interval, camera constraints and easing type; generate camera keyframes on the specification; return the generated motionId. A hold may use startFrame == endFrame with easing='hold'.",
+      "behavior": "Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors \u2014 do not compute frames.",
       "defaults": "easing defaults to ease_in_out; rot defaults to 0.",
       "dependencies": [
         "create_environment"
@@ -163,7 +163,7 @@
         {
           "arguments": {
             "easing": "ease_in_out",
-            "endFrame": 90,
+            "endS": 3,
             "environmentId": "env_desk",
             "focusTargetId": "media_1",
             "from": {
@@ -172,7 +172,7 @@
               "y": 0,
               "zoom": 0.35
             },
-            "startFrame": 0,
+            "startS": 0,
             "to": {
               "rot": 0,
               "x": 1250,
@@ -196,17 +196,65 @@
         {
           "allowed": null,
           "default": null,
-          "description": "Inclusive start frame.",
+          "description": "Start time in seconds from the beginning of this scene. Preferred. The engine converts to frames.",
+          "name": "startS",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End time in seconds from the beginning of this scene, or 'end' for the real scene duration.",
+          "name": "endS",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start as a fraction of this scene's duration (0..1).",
+          "name": "startFrac",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End as a fraction of this scene's duration (0..1). Use 1 for the end of the scene.",
+          "name": "endFrac",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start at the official start of this narration line.",
+          "name": "startLineId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End at the official end of this narration line.",
+          "name": "endLineId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Legacy start frame. Optional. Prefer startS/startFrac/startLineId; the engine clamps to the real duration.",
           "name": "startFrame",
-          "required": true,
+          "required": false,
           "type": "integer"
         },
         {
           "allowed": null,
           "default": null,
-          "description": "End frame (exclusive of a later move). Must be > startFrame unless easing is hold.",
+          "description": "Legacy end frame. Optional. Prefer endS/endFrac/endLineId; the engine clamps to the real duration.",
           "name": "endFrame",
-          "required": true,
+          "required": false,
           "type": "integer"
         },
         {
@@ -283,9 +331,21 @@
             ],
             "type": "string"
           },
+          "endFrac": {
+            "description": "End as a fraction of this scene's duration (0..1). Use 1 for the end of the scene.",
+            "type": "number"
+          },
           "endFrame": {
-            "description": "End frame (exclusive of a later move). Must be > startFrame unless easing is hold.",
+            "description": "Legacy end frame. Optional. Prefer endS/endFrac/endLineId; the engine clamps to the real duration.",
             "type": "integer"
+          },
+          "endLineId": {
+            "description": "End at the official end of this narration line.",
+            "type": "string"
+          },
+          "endS": {
+            "description": "End time in seconds from the beginning of this scene, or 'end' for the real scene duration.",
+            "type": "number"
           },
           "environmentId": {
             "description": "Existing environment containing the camera. Defaults to the sole environment.",
@@ -303,9 +363,21 @@
             "description": "Stable motion id. Generated if omitted.",
             "type": "string"
           },
+          "startFrac": {
+            "description": "Start as a fraction of this scene's duration (0..1).",
+            "type": "number"
+          },
           "startFrame": {
-            "description": "Inclusive start frame.",
+            "description": "Legacy start frame. Optional. Prefer startS/startFrac/startLineId; the engine clamps to the real duration.",
             "type": "integer"
+          },
+          "startLineId": {
+            "description": "Start at the official start of this narration line.",
+            "type": "string"
+          },
+          "startS": {
+            "description": "Start time in seconds from the beginning of this scene. Preferred. The engine converts to frames.",
+            "type": "number"
           },
           "to": {
             "description": "End pose {x, y, zoom, rot?}.",
@@ -313,8 +385,6 @@
           }
         },
         "required": [
-          "startFrame",
-          "endFrame",
           "from",
           "to"
         ],
@@ -322,7 +392,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+525ea7c1",
+      "version": "1.0+a8b292e3",
       "whenNotToUse": "Do not use it to place objects, invent camera method names, or hold with a second film.shot() closer than 0.25 s on a new target.",
       "whenToUse": "When the story needs a camera push, pull-back, pan, tracking movement, reveal or deliberate hold."
     },
@@ -487,7 +557,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+625b9d3b",
+      "version": "1.0+5666de26",
       "whenNotToUse": "Prefer animate_camera for camera moves. Do not invent property names the compiler cannot bind.",
       "whenToUse": "When a custom motion path or fade is required on an object the higher-level tools do not already express."
     },
@@ -663,7 +733,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+d775b5b6",
+      "version": "1.0+9beb1047",
       "whenNotToUse": "Do not use it to place a photo or to invent a word clock. Time anchors must be official word ids or explicit frames.",
       "whenToUse": "When the blueprint calls for a title, lower third, label, or word-synced kinetic line."
     },
@@ -810,7 +880,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+68838b2b",
+      "version": "1.0+0eac7a28",
       "whenNotToUse": "Do not stack two spotlights on different targets closer than 0.25 s. A camera hold should use animate_camera with easing='hold', not a second shot key.",
       "whenToUse": "When the blueprint calls for a spotlight, grain, camera shake, damp or a deliberate hold effect."
     },
@@ -964,7 +1034,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+0a21ca88",
+      "version": "1.0+5b038809",
       "whenNotToUse": "Do not use it to synthesize audio, write files, or override the authorized mixer / true-peak limiter.",
       "whenToUse": "When the blueprint calls for a cue, a bed, a paused-narration window, or a word-anchored sound."
     },
@@ -1102,7 +1172,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+9d2cd30d",
+      "version": "1.0+70f1cedd",
       "whenNotToUse": "Do not call it to pick a stock city tour or a fixed WORLD_TYPES enum entry. Do not use it to place media or move the camera.",
       "whenToUse": "When the scene needs a visual space (desk, map space, invented interior, graphic field, etc.) before objects are placed."
     },
@@ -1350,7 +1420,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+57872a38",
+      "version": "1.0+34d5f08e",
       "whenNotToUse": "Do not invent numeric or geographic data. Do not use this to place a photo (use place_media) or to write a new procedural component (use the extension path).",
       "whenToUse": "When the blueprint calls for a chart, map annotation, callout, pin, route, stamp or similar graphic built from approved data."
     },
@@ -1509,7 +1579,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+0385b8d4",
+      "version": "1.0+ee534d3d",
       "whenNotToUse": "Do not use it to move the camera or to invent a skia drawing call.",
       "whenToUse": "When the design needs a custom path that is not a stock chart or map tool output."
     },
@@ -1608,7 +1678,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+7f57cd58",
+      "version": "1.0+e59ffe0c",
       "whenNotToUse": "Do not use it to create objects; place them first.",
       "whenToUse": "When several placed objects should move or be composed as a unit."
     },
@@ -1867,7 +1937,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+a6a5bd8e",
+      "version": "1.0+5d92cb39",
       "whenNotToUse": "Do not use it to invent an asset that is not in the catalog, or to draw a chart or typography.",
       "whenToUse": "When an approved still or clip should appear in the scene (print on a desk, framed still, screen, footage window, full-bleed plate)."
     },
@@ -2041,7 +2111,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+dd0b4fdb",
+      "version": "1.0+e659beb7",
       "whenNotToUse": "Prefer place_media, create_graphic, or animate_text when those already express the design. Do not use this to call skia directly.",
       "whenToUse": "When building a custom composition from shapes, paths and textures rather than a higher-level media/graphic tool."
     },
@@ -2112,7 +2182,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+13e17044",
+      "version": "1.0+91ee8106",
       "whenNotToUse": "Do not invent palette keys. Do not use this to move or create objects.",
       "whenToUse": "When the design needs a custom finish on an object that already exists in the specification."
     },
@@ -2177,7 +2247,23 @@
         {
           "allowed": null,
           "default": null,
-          "description": "Start frame of the transition window.",
+          "description": "Start time in seconds from the beginning of this scene. The engine converts to frames.",
+          "name": "startS",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End time in seconds, or the end of the scene.",
+          "name": "endS",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Legacy start frame; prefer startS. The engine clamps to the real duration.",
           "name": "startFrame",
           "required": false,
           "type": "integer"
@@ -2185,7 +2271,7 @@
         {
           "allowed": null,
           "default": null,
-          "description": "End frame of the transition window.",
+          "description": "Legacy end frame; prefer endS. The engine clamps to the real duration.",
           "name": "endFrame",
           "required": false,
           "type": "integer"
@@ -2226,8 +2312,12 @@
         "additionalProperties": false,
         "properties": {
           "endFrame": {
-            "description": "End frame of the transition window.",
+            "description": "Legacy end frame; prefer endS. The engine clamps to the real duration.",
             "type": "integer"
+          },
+          "endS": {
+            "description": "End time in seconds, or the end of the scene.",
+            "type": "number"
           },
           "fromSceneId": {
             "description": "Outgoing scene id.",
@@ -2242,8 +2332,12 @@
             "type": "array"
           },
           "startFrame": {
-            "description": "Start frame of the transition window.",
+            "description": "Legacy start frame; prefer startS. The engine clamps to the real duration.",
             "type": "integer"
+          },
+          "startS": {
+            "description": "Start time in seconds from the beginning of this scene. The engine converts to frames.",
+            "type": "number"
           },
           "toSceneId": {
             "description": "Incoming scene id.",
@@ -2272,7 +2366,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+20d142e8",
+      "version": "1.0+0b4940b7",
       "whenNotToUse": "Do not use it to move the camera inside a scene (animate_camera) or to invent a transition that contradicts the editorial plan.",
       "whenToUse": "When the editorial plan or blueprint specifies how this scene should enter, exit, or share an element with a neighbor."
     },
@@ -2411,7 +2505,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 3,
-      "version": "1.0+88e7c7ef",
+      "version": "1.0+edeaf8c2",
       "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path \u2014 that is the extension registrar after lint, sandbox and visual tests.",
       "whenToUse": "When a previously registered extension (validated, versioned, documented) should appear in this scene."
     }

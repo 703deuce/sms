@@ -67,6 +67,9 @@ def _engineer_brief(ctx: dict) -> dict:
         "blueprint": ctx.get("blueprint") or (ctx.get("scene") or {}).get("blueprint") or {},
         "scene": ctx["scene"],
         "duration": ctx["duration"],
+        "durationS": ctx["duration"],
+        "fps": int(ctx.get("fps") or 30),
+        "durationFrames": int(round(float(ctx["duration"]) * int(ctx.get("fps") or 30))),
         "lines": ctx["lines"],
         "emphasis": ctx["emphasis"],
         "data": ctx["data"],
@@ -76,7 +79,11 @@ def _engineer_brief(ctx: dict) -> dict:
         "engineCapabilities": caps,
         "instruction": (
             "Translate the approved blueprint with registered tools. "
-            "Do not rewrite the creative concept or pick random media."
+            "Do not rewrite the creative concept or pick random media. "
+            "durationS, fps and durationFrames are the exact length of THIS scene after layout/TTS timing. "
+            "Express tool timing relative to the scene: startS/endS (seconds from 0), startFrac/endFrac (0..1), "
+            "or a line/word anchor. Do not convert to frames; the engine converts from the real duration. "
+            "A move or hold that lasts the whole scene uses startS=0 and endS='end' or endFrac=1."
         ),
     }
     # Maps remain available as engine capabilities, not as a world to invent.
@@ -97,6 +104,16 @@ def _interpret(out: dict, ctx: dict) -> dict:
         duration_s=ctx.get("duration"),
         fps=int((ctx.get("fps") or 30)),
         allow_custom_code=config.custom_code_enabled(),
+        anchors={
+            "lines": {
+                l["id"]: {"startS": l.get("start"), "endS": l.get("end")}
+                for l in (ctx.get("lines") or []) if isinstance(l, dict) and l.get("id")
+            },
+            "words": [
+                {"w": w.get("w"), "s": w.get("s"), "e": w.get("e"), "line": w.get("line")}
+                for w in (ctx.get("words") or []) if isinstance(w, dict)
+            ],
+        },
     )
 
 
