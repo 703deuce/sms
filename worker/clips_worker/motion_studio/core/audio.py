@@ -66,7 +66,11 @@ def score_params(seed: int, tone: str = "", world: str = "", title: str = "", *,
     lo, hi = (78, 100) if dark else (92, 118) if bright else (84, 108)
     inst_pool = ["drone", "pad", "hat", "kick", "pluck", "sub", "pulse_bass", "bell"]
     inst = ["pad", "hat", "kick"] + r.sample([i for i in inst_pool if i not in ("pad", "hat", "kick")], k=r.randint(1, 3))
-    return {"bpm": r.randint(lo, hi), "key": r.choice(list(NOTE)), "mode": mode, "instruments": sorted(set(inst)),
+    bpm = r.randint(lo, hi)
+    key = r.choice(list(NOTE))
+    # Keep this draw so bpm/key/cutoff/swing stay seed-stable when mood is supplied explicitly.
+    r.choice(["tense", "curious", "driving", "reflective"])
+    return {"bpm": bpm, "key": key, "mode": mode, "instruments": sorted(set(inst)),
             "mood": chosen or "unspecified",
             "brief": (brief or "")[:200],
             "seed": seed, "padCutoff": r.choice([380, 420, 520, 650]), "swing": round(r.uniform(0, 0.08), 3),
