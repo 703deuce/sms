@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from clips_worker.motion_studio.core.output_contracts import format_contract
 from clips_worker.motion_studio.core.preproduction import critique_film, sequence_review
+
+REVIEWER_CONTRACT = format_contract("reviewer")
 
 CONTRACT_VERSION = "1.0"
 Role = Literal[

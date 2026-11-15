@@ -572,7 +572,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
       items: (Array.isArray(p.items) ? p.items : []).map(({ op: _op, ...it }) => it) })) as MsProposal[],
     director: Array.isArray(proposals.messages) ? proposals.messages : [],
     allowance: allowanceFor(c.s, c.plan), export: exportState,
-    error: status === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : 'A step failed. Retry it to continue.') : null,
+    error: status === 'failed' ? (row.status === 'cancelled' ? 'Cancelled.' : (row.errorMessage || 'A step failed. Retry it to continue.')) : null,
   }
 }
 

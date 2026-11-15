@@ -15,16 +15,16 @@ from clips_worker.motion_studio.core.api import API_REFERENCE
 from clips_worker.motion_studio.core.probes import final_res_times, probe_times
 from clips_worker.motion_studio.core.api_manifest import format_repair, load_manifest
 from clips_worker.motion_studio.core.craft import engineer_system
-from clips_worker.motion_studio.core.fallback import fallback_code
 from clips_worker.motion_studio.core.render import SandboxError, probe_stills
 from clips_worker.motion_studio.directors.documentary.contracts import extract_limitation
 from clips_worker.motion_studio.pipeline import config
+from clips_worker.motion_studio.core.output_contracts import StageContractError, format_contract, schema_for, schema_name
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
 from clips_worker.motion_studio.sandbox.policy import lint_scene
 from clips_worker.motion_studio.tools.plan import compile_agent_output
 from clips_worker.motion_studio.tools.registry import format_tools_reference
 
-SYSTEM = engineer_system(API_REFERENCE, format_tools_reference())
+SYSTEM = engineer_system(API_REFERENCE, format_tools_reference()) + "\n\n" + format_contract("motion_engineer")
 
 
 def code_hash(code: str) -> str:
@@ -100,11 +100,13 @@ def _interpret(out: dict, ctx: dict) -> dict:
     )
 
 
-def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dict:
+def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, preflight: bool = False) -> dict:
     """Motion Engineer entry point. Returns a validated scene implementation or a degraded fallback.
 
     Also returns `limitation` when the approved design cannot be built, so the
     Production Designer can revise the blueprint.
+    preflight=True: lint/compile only (no probe, no framework fallback) so a cheap gate can
+    fail before any render starts.
     """
     model = config.model_for("motion_engineer")
     code = None
@@ -115,7 +117,8 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
     if not config.mock():
         brief = _engineer_brief(ctx)
         try:
-            out, m = chat_json("motion_engineer", SYSTEM, json.dumps(brief), max_tokens=14000)
+            out, m = chat_json("motion_engineer", SYSTEM, json.dumps(brief), max_tokens=14000,
+                             schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer", m)
             interpreted = _interpret(out, ctx)
             limitation = interpreted.get("limitation")
@@ -146,6 +149,10 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
                 problems = [f"static: {p}" for p in static]
                 failed = {"code": code, "checks": [], "stills": None, "cues": [], "problems": problems, "spec": spec}
                 exec_log("lint", False, "static_check", "; ".join(problems)[:500], code_hash(code), model, None)
+            elif preflight:
+                passing = {"code": code, "checks": [], "stills": None, "cues": [],
+                           "problems": [], "spec": spec, "tier": (interpreted or {}).get("tier")}
+                break
             else:
                 try:
                     res = probe_stills(code, ctx, scratch, probe_times(ctx), 960, 540, assets_dir)
@@ -185,7 +192,8 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
                     "If the design cannot be implemented, return a structured limitation."
                 ),
             }
-            out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=14000)
+            out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=14000,
+                           schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer fix round {rounds}", m)
             interpreted = _interpret(out, ctx)
             limitation = interpreted.get("limitation")
@@ -225,7 +233,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
         return out
     if failed and failed.get("checks") and any(c.get("id") == "A14" and not c.get("pass") for c in failed["checks"]):
         cause = "empty background (A14) after fix rounds"
-        log("empty_scene", f"scene {ctx['scene']['index'] + 1}: empty background (A14); using a framework fallback",
+        log("empty_scene", f"scene {ctx['scene']['index'] + 1}: empty background (A14); not substituting a framework scene",
             {"rounds": rounds})
     elif failed is None:
         cause = "scene implementation never produced a renderable probe"
@@ -233,15 +241,11 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
         cause = f"fix cap reached ({rounds})" + (f": {'; '.join((failed.get('problems') or problems)[:2])}" if (failed.get("problems") or problems) else "")
     else:
         cause = "framework fallback"
-    fb = fallback_code(ctx)
-    res = probe_stills(fb, ctx, scratch, probe_times(ctx), 960, 540, assets_dir)
-    checks, _ = measure(res, ctx, 540)
-    exec_log("probe", True, None, None, code_hash(fb), "framework", res.get("durationMs"))
-    log("fallback", f"scene {ctx['scene']['index'] + 1}: framework fallback — {cause}",
-        {"rounds": rounds, "cause": cause, "world": (ctx.get("scene") or {}).get("world")})
-    out = {"code": fb, "codeHash": code_hash(fb), "model": "framework", "fixRounds": rounds,
-           "usedFallback": True, "degraded": True, "degradeCause": cause, "checks": checks,
-           "verdict": "degraded", "cues": res.get("cues") or [], "spec": spec}
+    log("engineer_failed", f"scene {ctx['scene']['index'] + 1}: {cause} — not substituting a framework scene",
+        {"rounds": rounds, "cause": cause, "preflight": preflight})
+    out = {"code": None, "codeHash": None, "model": model, "fixRounds": rounds,
+           "usedFallback": False, "degraded": True, "degradeCause": cause, "checks": (failed or {}).get("checks") or [],
+           "verdict": "failed", "cues": [], "spec": spec}
     if failed and failed.get("code"):
         out["failedCode"] = failed["code"]
         out["failedProblems"] = failed.get("problems") or problems

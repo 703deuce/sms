@@ -21,6 +21,7 @@ import time
 import traceback
 from pathlib import Path
 
+from clips_worker.motion_studio.core.output_contracts import StageContractError, record_degradation
 from clips_worker.motion_studio.pipeline import config, db
 
 JOB_TYPES = ("DOC_PLAN", "DOC_PRODUCE", "MGD_RENDER_SEGMENT", "DOC_ASSEMBLE")
@@ -88,9 +89,20 @@ def handle(conn, job: dict) -> None:
         msg = f"{type(exc).__name__}: {str(exc)[:500]}"
         traceback.print_exc()
         try:
+            current = db.get_project(conn, pid) or proj or {}
+            if current.get("status") == "cancelled":
+                db.event(conn, pid, stage, "failed", f"{jtype} aborted after cancel: {msg[:300]}", {"job": job["id"]})
+                _finish_job(conn, job["id"], msg)
+                return
             if jtype == "MGD_RENDER_SEGMENT" and p.get("sceneId"):
                 db.update_scene(conn, p["sceneId"], status="failed", error=msg[:1000])
-            db.update_project(conn, pid, status="failed", errorCode=f"{stage}_failed", errorMessage=msg[:1000], errorStage=stage)
+            qa = current.get("qa") or {}
+            if isinstance(exc, StageContractError):
+                qa = record_degradation(qa, stage=exc.stage, errors=exc.errors, repaired=exc.repaired)
+                db.event(conn, pid, stage, "stage_failed", f"{exc.stage} failed its contract: {msg[:300]}",
+                         {"stage": exc.stage, "errors": exc.errors[:12], "repaired": exc.repaired})
+            db.update_project(conn, pid, status="failed", errorCode=f"{stage}_failed", errorMessage=msg[:1000],
+                              errorStage=stage, qa=qa)
             db.event(conn, pid, stage, "failed", f"{jtype} failed: {msg[:300]}", {"job": job["id"]})
         except Exception:  # noqa: BLE001
             conn.rollback()
@@ -279,6 +291,29 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
         r = by_index.get(sc["index"])
         if r and (pending is None or r["id"] in pending):
             db.update_scene(conn, r["id"], startMs=int(sc["startS"] * 1000), endMs=int(sc["endS"] * 1000), status="queued")
+    # Cheap pre-flight: validate story/plan/design and lint/compile every scene spec.
+    # Render jobs are enqueued only if this gate is fully green.
+    if not p.get("skipPreflight"):
+        from clips_worker.motion_studio.core.render import scratch_dir
+        from clips_worker.motion_studio.directors.registry import get_director
+        from clips_worker.motion_studio.pipeline.preflight import run_preflight
+        from clips_worker.motion_studio.pipeline.timeline import scene_context
+        from clips_worker.storage import upload_file
+        agent = get_director(proj.get("director") or "documentary").load()
+
+        def _pf_exec(mode, ok, kind, err, chash, model, ms):
+            db.sandbox_exec(conn, pid, None, mode, ok, kind, err, chash, model, ms)
+
+        run_preflight(
+            conn, {**proj, "story": story, "plan": plan, "qa": proj.get("qa")}, work, log,
+            prepare_photos=_prepare_photos, assets_dir=_assets_dir, scratch_dir_fn=scratch_dir,
+            scene_context_fn=scene_context, render_hash_fn=lambda ctx: _render_hash(ctx),
+            upload_file=upload_file, work_key=work_key(proj), design_scene=agent.design_scene,
+            exec_log=_pf_exec,
+        )
+        # Reload scenes so render jobs can reuse preflight codeKeys.
+        rows = db.scenes(conn, pid)
+        by_index = {r["index"]: r for r in rows}
     for sc in lay["scenes"]:
         r = by_index.get(sc["index"])
         if r and (pending is None or r["id"] in pending):
@@ -397,15 +432,13 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             d = agent.design_scene(ctx, sdir, assets_dir, log, exec_log)
             code = d.get("code")
             if not code:
-                # Limitation or a failed engineer pass still needs a renderable, flagged scene.
-                from clips_worker.motion_studio.core.fallback import fallback_code
-                code = fallback_code(ctx)
-                d = {**d, "code": code, "codeHash": hashlib.sha256(code.encode()).hexdigest()[:24], "usedFallback": True,
-                     "degraded": True, "model": d.get("model") or "framework",
-                     "degradeCause": d.get("degradeCause") or (
-                         "limitation: " + ((d.get("limitation") or {}).get("reason") or "design cannot be built")
-                         if d.get("limitation") else "scene implementation missing"
-                     )}
+                raise StageContractError(
+                    "motion_engineer",
+                    [d.get("degradeCause") or (
+                        "limitation: " + ((d.get("limitation") or {}).get("reason") or "design cannot be built")
+                        if d.get("limitation") else "scene implementation missing"
+                    )],
+                )
             ck = f"{key_base}/generated/scene_{scene['index']:03d}_{d['codeHash']}.py"
             cp = os.path.join(work, f"scene_{scene['index']:03d}.py")
             Path(cp).write_text(code)
@@ -430,30 +463,16 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             try:
                 res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
                 exec_log("render", True, None, None, hashlib.sha256(code.encode()).hexdigest()[:24], scene.get("model"), res["durationMs"])
-            except Exception as exc:  # noqa: BLE001 (render failure -> intent-preserving fallback, no paid retry)
+            except Exception as exc:  # noqa: BLE001 — do not substitute a framework scene
                 kind = getattr(exc, "kind", "sandbox_error")
                 exec_log("render", False, kind, str(exc), None, scene.get("model"), None)
-                from clips_worker.motion_studio.core.fallback import FALLBACK_CODE, recover_render_code
+                cause = f"render failed ({kind}): {exc}"
+                log("render_failed", f"scene {scene['index'] + 1}: {cause} — not substituting a framework scene",
+                    {"cause": cause})
                 prev = scene.get("qa") or {}
-                original_hash = hashlib.sha256(code.encode()).hexdigest()[:24] if code else None
-                try:
-                    code, recover_cause = recover_render_code(ctx, code)
-                    res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
-                    cause = f"render failed ({kind}); {recover_cause}"
-                except Exception as exc2:  # noqa: BLE001
-                    kind2 = getattr(exc2, "kind", "sandbox_error")
-                    log("fallback", f"scene {scene['index'] + 1}: visual-type fallback also failed ({kind2}); last-resort framework fallback",
-                        {"cause": f"render failed ({kind}, then {kind2})"})
-                    code = FALLBACK_CODE
-                    res = render_scene(code, ctx, out, sdir, W, H, crf, None, assets_dir, preset)
-                    cause = f"render failed ({kind}); last-resort framework fallback after visual-type fallback failed"
-                log("fallback", f"scene {scene['index'] + 1}: {cause}", {"cause": cause, "keptAssets": list((ctx.get("assets") or {}))})
-                db.update_scene(conn, scene["id"], usedFallback=True,
-                                qa={**prev, "degraded": True, "degradeCause": cause, "verdict": "degraded",
-                                    "keptSpec": bool(prev.get("spec")), "spec": prev.get("spec"),
-                                    "keptAssets": list((ctx.get("assets") or {})),
-                                    "originalCodeHash": original_hash})
-                rh = _render_hash("scene-v1", hashlib.sha256(code.encode()).hexdigest(), ctx_hash, W, H)
+                db.update_scene(conn, scene["id"], status="failed", error=cause[:1000],
+                                qa={**prev, "degraded": True, "degradeCause": cause, "verdict": "failed"})
+                raise StageContractError("render", [f"scene {scene['index']}: {cause}"]) from exc
             rk = f"{key_base}/seg_{scene['index']:03d}_{rh[:10]}.mp4"
             upload_file(rk, Path(out), "video/mp4")
             still = os.path.join(work, f"still_{scene['index']:03d}.jpg")
@@ -499,6 +518,10 @@ def _maybe_assemble(conn, proj: dict, p: dict) -> None:
         cur.execute("SELECT COUNT(*) FROM clip_jobs WHERE \"projectId\"=%s AND type='DOC_ASSEMBLE' AND status IN ('QUEUED','RUNNING')",
                     (proj["clipProjectId"],))
         pending = cur.fetchone()[0]
+    fresh = db.get_project(conn, pid) or proj
+    if fresh.get("status") in {"cancelled", "failed"}:
+        conn.commit()
+        return
     if remaining == 0 and pending == 0 and p.get("assemble", True):
         db.enqueue(conn, proj["clipProjectId"], "DOC_ASSEMBLE", {"motionProjectId": pid}, priority=4)
     else:

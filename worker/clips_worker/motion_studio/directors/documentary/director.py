@@ -1,6 +1,6 @@
 """#1214 BE-5 Film Director (editorial): style hints, scene list, emphasis words, asset assignments;
 transitions, handoffs (footage modes a/b) and music anchors from the story; every entry has a reason.
-Validated; on an invalid/missing LLM plan a deterministic plan is used (no automatic paid retry)."""
+Validated against the shared output contract. Invalid plans get one targeted repair that is fed the exact validator errors (not a blind retry). If still invalid, the stage fails loudly — the deterministic plan is only used in mock mode."""
 from __future__ import annotations
 
 import hashlib
@@ -8,6 +8,14 @@ import json
 import random
 import re
 
+from clips_worker.motion_studio.core.output_contracts import (
+    StageContractError,
+    catalog_split,
+    format_contract,
+    normalize_director_plan,
+    schema_for,
+    schema_name,
+)
 from clips_worker.motion_studio.core.preproduction import validate_creative_plan
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
@@ -400,53 +408,114 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
     return errs
 
 
+
+def director_system() -> str:
+    """System prompt for the Film Director, including the shared output contract."""
+    return (
+        "You are the Film Director (editorial only) for a cinematic motion-graphics documentary. "
+        "You own narrative, structure, pacing, sequence breakdown and editorial intentions. "
+        "You write NO rendering code and you do not pick a world type from a menu. "
+        "Visual identity and custom environments are invented later by the Production Designer. "
+        "Type and numbers must land on the spoken word. "
+        "Footage uses a RETURN handoff by default; hard cuts need a justification. "
+        "From the story's SUBJECT and STRUCTURE derive the scene list and a starting style palette. "
+        "Rules: scenes cover every line id exactly once in order (group 1-4 lines, ~6-15 s each); "
+        f"each scene has visualType {list(VISUAL_TYPES)}, a one-sentence description of what the frame shows "
+        "(3 layers: procedural background, midground context, foreground hero), emphasis as [{lineId, word}] "
+        "with words that are literally in that line, a reason, and transitionOut. "
+        "Use the exact assetId values from uploads.stills and uploads.videos — never filenames. "
+        "A logo, wordmark, brand mark or lockup belongs on the title or the end card. "
+        "Put any spoken setup in the previous graphics scene — lineIds on a clip-audio handoff should be empty. "
+        "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
+        "audioMode: clip (footage sound, narration pauses) | bed (narration continues over it)}. "
+        "Hard cuts (kind 'hardcut') need cutJustification. "
+        "musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. "
+        "\n\n" + format_contract("director")
+    )
+
+
+def _prepare_director_plan(plan: dict, catalog: list[dict]) -> dict:
+    for k, s in enumerate(plan.get("scenes") or []):
+        s["index"] = k
+        s.setdefault("kind", "graphics")
+        s["lineIds"] = [str(x) for x in s.get("lineIds") or []]
+        _normalize_emphasis(s)
+    return normalize_director_plan(plan, catalog)
+
+
+def _director_user(project: dict, story: dict, catalog: list[dict]) -> str:
+    settings = project.get("settings") or {}
+    uploads = catalog_split(catalog)
+    return json.dumps({
+        "title": story.get("title"),
+        "tone": story.get("tone"),
+        "aspect": settings.get("aspect", "16:9"),
+        "visualDirection": settings.get("visualDirection"),
+        "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero")} for l in story["lines"]],
+        "data": story.get("data"),
+        "uploads": uploads,
+        "assetIds": uploads["allAssetIds"],
+        "instruction": (
+            "Assign every still in uploads.stills and every video in uploads.videos. "
+            "Copy assetId values verbatim into scene.assetId or handoff.assetId."
+        ),
+    })
+
+
 def direct(project: dict, story: dict, catalog: list[dict], log) -> dict:
     settings = project.get("settings") or {}
-    cat = [{"assetId": a["id"], "kind": a["kind"], "filename": a.get("filename"), "durationMs": a.get("durationMs"),
-            "summary": (a.get("analysis") or {}).get("summary"), "moments": ((a.get("analysis") or {}).get("moments") or [])[:12]}
-           for a in catalog]
     plan = None
+    repaired = False
+    last_errs: list[str] = []
     if not config.mock():
-        sys_ = (
-            "You are the Film Director (editorial only) for a cinematic motion-graphics documentary. "
-            "You own narrative, structure, pacing, sequence breakdown and editorial intentions. "
-            "You write NO rendering code and you do not pick a world type from a menu. "
-            "Visual identity and custom environments are invented later by the Production Designer. "
-            "Type and numbers must land on the spoken word. "
-            "Footage uses a RETURN handoff by default; hard cuts need a justification. "
-            "From the story's SUBJECT and STRUCTURE derive the scene list and a starting style palette. Rules: scenes cover every line id exactly "
-            "once in order (group 1-4 lines, ~6-15 s each); each scene has visualType "
-            f"{list(VISUAL_TYPES)}, a one-sentence description of what the frame shows (3 layers: procedural background, "
-            "midground context, foreground hero), emphasis as [{lineId, word}] with words that are literally in that line, a reason, and transitionOut. "
-            "Every ready upload must appear at least once: assign each still a unique official scene via assetId (add reuseReason only if a repeat is truly necessary). A logo, wordmark, brand mark or lockup belongs on the title or the end card. Uploaded videos are handoff scenes (kind 'handoff'); play the planned stretch in full (inS/outS, default the whole clip) with audioMode 'clip' and narration paused. Put any spoken setup in the previous graphics scene — lineIds on a clip-audio handoff should be empty: "
-            "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
-            "audioMode: clip (footage sound, narration pauses) | bed (narration continues over it)}. Hard cuts (kind 'hardcut') need "
-            "cutJustification. musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. Palette must be "
-            "distinct and fit the subject. Return JSON {world:{brief,reason}, style:{palette:{bg,ink,accent,accent2,muted}, mood, "
-            "grain, glow, vignette, reason}, scenes:[{kind,visualType,lineIds,description,emphasis:[{lineId,word}],reason,transitionOut,assetId,handoff}], musicAnchors:{...}, deliberateMinimal:[{index, reason}]}.")
-        user = json.dumps({"title": story.get("title"), "tone": story.get("tone"), "aspect": settings.get("aspect", "16:9"),
-                           "visualDirection": settings.get("visualDirection"), "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero")} for l in story["lines"]],
-                           "data": story.get("data"), "uploads": cat})
+        sys_ = director_system()
+        user = _director_user(project, story, catalog)
         try:
-            plan, m = chat_json("director", sys_, user, max_tokens=12000)
+            plan, m = chat_json(
+                "director", sys_, user, max_tokens=12000,
+                schema=schema_for("director"), schema_name=schema_name("director"),
+            )
             log("model_call", "director plan", m)
-            for k, s in enumerate(plan.get("scenes") or []):
-                s["index"] = k
-                s.setdefault("kind", "graphics")
-                s["lineIds"] = [str(x) for x in s.get("lineIds") or []]
-                _normalize_emphasis(s)
-            errs = validate_plan(plan, story, catalog)
-            if errs:
-                log("plan_invalid", "director plan failed validation; using the deterministic plan", {"errors": errs[:8]})
-                plan = None
-            else:
-                plan["source"] = "model"
+            plan = _prepare_director_plan(plan, catalog)
+            last_errs = validate_plan(plan, story, catalog)
+            if last_errs:
+                log("plan_invalid", "director plan failed validation; requesting a targeted repair",
+                    {"errors": last_errs[:12]})
+                repair_user = json.dumps({
+                    "previous": plan,
+                    "errors": last_errs,
+                    "uploads": catalog_split(catalog),
+                    "lines": [l["id"] for l in story["lines"]],
+                    "instruction": (
+                        "Fix ONLY these validation errors. Keep every scene and decision that already "
+                        "satisfies the contract. Return the full corrected plan. Use exact asset ids."
+                    ),
+                })
+                plan, m = chat_json(
+                    "director", sys_, repair_user, max_tokens=12000,
+                    schema=schema_for("director"), schema_name=schema_name("director"),
+                )
+                log("model_call", "director plan repair", m)
+                repaired = True
+                plan = _prepare_director_plan(plan, catalog)
+                last_errs = validate_plan(plan, story, catalog)
+            if last_errs:
+                log("plan_invalid", "director plan still invalid after targeted repair; stopping",
+                    {"errors": last_errs[:12], "repaired": True})
+                raise StageContractError("director", last_errs, repaired=True)
+            plan["source"] = "model_repaired" if repaired else "model"
+        except StageContractError:
+            raise
         except LLMError as exc:
-            log("model_call_failed", f"director fell back to the deterministic plan: {exc}", {"step": "director"})
-            plan = None
+            log("model_call_failed", f"director plan failed: {exc}", {"step": "director"})
+            raise StageContractError("director", [f"model call failed: {exc}"], repaired=repaired) from exc
     if plan is None:
+        # Mock / no-model path only. Live films must not ship a deterministic substitute.
         plan = fallback_plan(project, story, catalog)
         validate_plan(plan, story, catalog)
+        plan["source"] = plan.get("source") or "fallback"
+        if not config.mock():
+            raise StageContractError("director", last_errs or ["no director plan was produced"], repaired=repaired)
     m = settings.get("musicSource") or settings.get("music") or "generated"
     plan["musicSource"] = {"upload": "user", "user": "user", "none": "none", "elevenlabs": "elevenlabs"}.get(m, "generated")
     w = plan.get("world") or {}

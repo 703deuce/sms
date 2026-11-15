@@ -14,6 +14,9 @@ import re
 from clips_worker.motion_studio.core.wordclock import Script, spoken_form, split_sentences, typed_spoken_lint
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
+from clips_worker.motion_studio.core.output_contracts import (
+    StageContractError, format_contract, schema_for, schema_name, validate_story,
+)
 
 WPM = 122
 
@@ -222,16 +225,33 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
                 "durationMs": a.get("durationMs"),
                 "moments": ((a.get("analysis") or {}).get("moments") or [])[:12]}
                for a in (catalog or [])]
-    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts, "uploads": uploads})
-    out, m = chat_json("story", sys_, user, max_tokens=16000)
+    sys_ = sys_ + "\n\n" + format_contract("story")
+    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts, "uploads": uploads,
+                       "assetIds": [u["assetId"] for u in uploads]})
+    out, m = chat_json("story", sys_, user, max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story script", m)
-    if not lines:
-        raise LLMError(f"story returned no lines (keys={sorted(out.keys()) if isinstance(out, dict) else type(out).__name__})")
-    return {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
-            "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
-            "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
+    draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
+             "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
+             "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
+    errs = validate_story(draft)
+    if errs:
+        log("story_invalid", "story failed validation; requesting a targeted repair", {"errors": errs[:12]})
+        out, m = chat_json(
+            "story", sys_, json.dumps({"previous": out, "errors": errs,
+                                       "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
+            max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"),
+        )
+        log("model_call", "story repair", m)
+        lines = _finalize(_extract_lines(out))
+        draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
+                 "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
+                 "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
+        errs = validate_story(draft)
+        if errs:
+            raise StageContractError("story", errs, repaired=True)
+    return draft
 
 
 def _data(rows, lines, origin: str) -> list[dict]:
@@ -307,15 +327,33 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
             "with `text` repeating the quote.\n" + WRITING_RULES +
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\",\"typed\",\"quote\"}]}"
             f" Length: about {target_words(length_min)} spoken words.")
-    out, m = chat_json("story", sys_, json.dumps({"title": title, "brief": brief, "catalog": cat}), max_tokens=16000)
+    sys_ = sys_ + "\n\n" + format_contract("story")
+    out, m = chat_json("story", sys_, json.dumps({"title": title, "brief": brief, "catalog": cat,
+                                                "assetIds": [c["assetId"] for c in cat]}),
+                       max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
     log("model_call", "story from footage", m)
-    if not lines:
-        raise LLMError(f"story returned no lines (keys={sorted(out.keys()) if isinstance(out, dict) else type(out).__name__})")
-    return {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
-            "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
-            "data": [], "sources": []}
+    draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
+             "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
+             "data": [], "sources": []}
+    errs = validate_story(draft)
+    if errs:
+        log("story_invalid", "footage story failed validation; requesting a targeted repair", {"errors": errs[:12]})
+        out, m = chat_json(
+            "story", sys_, json.dumps({"previous": out, "errors": errs,
+                                       "instruction": "Fix ONLY these validation errors. Return the full corrected story."}),
+            max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"),
+        )
+        log("model_call", "story repair", m)
+        lines = _finalize(_extract_lines(out))
+        draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
+                 "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
+                 "data": [], "sources": []}
+        errs = validate_story(draft)
+        if errs:
+            raise StageContractError("story", errs, repaired=True)
+    return draft
 
 
 
@@ -355,9 +393,13 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
             try:
                 story = (write_from_footage(brief, title, length_min, catalog, log) if workflow == "footage" and catalog
                          else write_from_idea(brief, title, length_min, research, s.get("tone", ""), log, catalog=catalog))
+            except StageContractError:
+                raise
             except LLMError as exc:
-                log("model_call_failed", f"story fell back: {exc}", {"step": "story"})
+                log("model_call_failed", f"story failed: {exc}", {"step": "story"})
+                raise StageContractError("story", [f"model call failed: {exc}"]) from exc
         if story is None:
+            # Mock / no-model path only.
             story = _fallback_script(brief, length_min, title, research, catalog=catalog)
     for d in story.get("data") or []:
         if d["provenance"]["origin"] == "model":

@@ -16,7 +16,27 @@ class LLMError(RuntimeError):
     pass
 
 
-def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, timeout_s: float = 240) -> tuple[dict, dict]:
+def _response_format(schema: dict | None, schema_name: str | None) -> dict:
+    """Use strict json_schema when a contract is provided.
+
+    Same shape as clips_worker/picker/llm.py, which already calls gpt-6-luna
+    with response_format.json_schema.strict. When no schema is given, keep
+    json_object so existing callers stay valid.
+    """
+    if schema:
+        return {
+            "type": "json_schema",
+            "json_schema": {
+                "name": (schema_name or "response")[:64],
+                "strict": True,
+                "schema": schema,
+            },
+        }
+    return {"type": "json_object"}
+
+
+def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, timeout_s: float = 240,
+              schema: dict | None = None, schema_name: str | None = None) -> tuple[dict, dict]:
     model = config.model_for(step)
     metrics = {"step": step, "model": model, "ok": False}
     if config.mock():
@@ -25,7 +45,9 @@ def chat_json(step: str, system: str, user: str, *, max_tokens: int = 8000, time
     if not key:
         raise LLMError("OPENAI_API_KEY is not configured")
     body = {"model": model, "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-            "response_format": {"type": "json_object"}}
+            "response_format": _response_format(schema, schema_name)}
+    if schema:
+        metrics["schema"] = schema_name or "response"
     if re.search(r"gpt-[56]|^o[134]", model, re.I):
         body["max_completion_tokens"] = max_tokens
         if re.search(r"gpt-6", model, re.I):

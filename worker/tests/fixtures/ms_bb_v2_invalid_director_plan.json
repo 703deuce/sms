@@ -1,0 +1,138 @@
+{
+  "projectId": "msp_f06a8ea2221c4c22b4db4a049d8d25c8",
+  "note": "Reconstructed from the plan_invalid event (id 283). The model output itself was not stored.",
+  "story": {
+    "title": "The Last Blockbuster",
+    "tone": "elegiac",
+    "chapters": [
+      {
+        "n": 1,
+        "title": "Rise"
+      }
+    ],
+    "lines": [
+      {
+        "id": "l1",
+        "chapter": 1,
+        "text": "Blockbuster rose.",
+        "hero": "ROSE",
+        "spoken": "Blockbuster rose."
+      },
+      {
+        "id": "l2",
+        "chapter": 1,
+        "text": "Netflix arrived.",
+        "hero": "NETFLIX",
+        "spoken": "Netflix arrived."
+      }
+    ]
+  },
+  "catalog": [
+    {
+      "id": "msa_102280a2546e43c1ba07661f852aaa64",
+      "filename": "05_blockbuster_membership_card.jpg",
+      "kind": "image",
+      "status": "ready"
+    },
+    {
+      "id": "msa_05e0549ae6594fa49e05c5cf60f3dcaa",
+      "filename": "12_netflix_dvd_envelope.jpg",
+      "kind": "image",
+      "status": "ready"
+    },
+    {
+      "id": "msa_3369c936c1824da28e83204359263f50",
+      "filename": "21_anchorage_blockbuster_exterior.jpg",
+      "kind": "image",
+      "status": "ready"
+    },
+    {
+      "id": "msa_d029cc6f569546659df5e74cb9750e5f",
+      "filename": "26_bend_sign_2024.jpg",
+      "kind": "image",
+      "status": "ready"
+    },
+    {
+      "id": "msa_afd4936fac80437ea0d4bfebd8ec2f4f",
+      "filename": "28_sandi_harding_aisles.jpg",
+      "kind": "image",
+      "status": "ready"
+    },
+    {
+      "id": "msa_bfe77a9fc6184bbdbbadab6357f1d37a",
+      "filename": "32_2010_bankruptcy_news.mp4",
+      "kind": "video",
+      "status": "ready",
+      "durationMs": 30000
+    }
+  ],
+  "plan": {
+    "world": {
+      "brief": "A test world brief",
+      "reason": "fixture",
+      "name": "The Last Blockbuster"
+    },
+    "style": {
+      "palette": {
+        "primary": "navy",
+        "text": "white"
+      },
+      "mood": "elegiac",
+      "reason": "incomplete palette"
+    },
+    "scenes": [
+      {
+        "index": 0,
+        "kind": "graphics",
+        "visualType": "title",
+        "lineIds": [
+          "l1"
+        ],
+        "description": "title",
+        "emphasis": [],
+        "reason": "open",
+        "transitionOut": "camera_move",
+        "assetId": "msa_05e0549ae6594fa49e05c5cf60f3dcaa"
+      },
+      {
+        "index": 1,
+        "kind": "graphics",
+        "visualType": "photo",
+        "lineIds": [
+          "l2"
+        ],
+        "description": "repeat",
+        "emphasis": [],
+        "reason": "repeat still",
+        "transitionOut": "camera_move",
+        "assetId": "msa_05e0549ae6594fa49e05c5cf60f3dcaa"
+      },
+      {
+        "index": 30,
+        "kind": "handoff",
+        "visualType": "handoff",
+        "lineIds": [],
+        "description": "bad handoff",
+        "emphasis": [],
+        "reason": "chapter break",
+        "transitionOut": "handoff",
+        "handoff": {
+          "assetId": "not-a-real-asset",
+          "inS": 0,
+          "outS": 30,
+          "audioMode": "clip"
+        }
+      }
+    ]
+  },
+  "expectedErrors": [
+    "style.palette needs bg/ink/accent/accent2/muted hex colours",
+    "asset msa_05e0549ae6594fa49e05c5cf60f3dcaa is assigned to more than one scene without a reuseReason",
+    "scene 30 handoff references a missing video asset",
+    "upload 05_blockbuster_membership_card.jpg is not assigned to any scene",
+    "upload 21_anchorage_blockbuster_exterior.jpg is not assigned to any scene",
+    "upload 26_bend_sign_2024.jpg is not assigned to any scene",
+    "upload 28_sandi_harding_aisles.jpg is not assigned to any scene",
+    "upload 32_2010_bankruptcy_news.mp4 is not assigned to any scene"
+  ]
+}

@@ -25,6 +25,12 @@ from clips_worker.motion_studio.directors.documentary.contracts import (
     FORBIDDEN_BLUEPRINT_KEYS,
     validate_blueprint,
 )
+from clips_worker.motion_studio.core.output_contracts import (
+    StageContractError,
+    format_contract,
+    schema_for,
+    schema_name,
+)
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
 
@@ -447,20 +453,43 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "styleMemory": project.get("styleMemory") or plan.get("styleMemory") or [],
     })
     try:
-        raw, m = chat_json("production_designer", sys_, user, max_tokens=12000)
+        sys_ = sys_ + "\n\n" + format_contract("production_designer")
+        raw, m = chat_json(
+            "production_designer", sys_, user, max_tokens=12000,
+            schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
+        )
         log("model_call", "production design", m)
         out = _merge_model_design(plan, story, catalog, inventory, raw)
         errs = validate_plan(out, story, catalog)
         berrs = validate_blueprint(out.get("blueprint"))
         if errs or berrs:
-            log("production_invalid", "production design failed validation; using the deterministic design",
-                {"errors": (errs or berrs)[:8]})
-            return fallback_production(project, story, catalog, plan)
+            log("production_invalid", "production design failed validation; requesting a targeted repair",
+                {"errors": (errs or berrs)[:12]})
+            repair_user = json.dumps({
+                "previous": raw,
+                "errors": (errs or []) + (berrs or []),
+                "instruction": "Fix ONLY these validation errors. Keep the rest of the design. Return the full corrected JSON.",
+            })
+            raw, m = chat_json(
+                "production_designer", sys_, repair_user, max_tokens=12000,
+                schema=schema_for("production_designer"), schema_name=schema_name("production_designer"),
+            )
+            log("model_call", "production design repair", m)
+            out = _merge_model_design(plan, story, catalog, inventory, raw)
+            errs = validate_plan(out, story, catalog)
+            berrs = validate_blueprint(out.get("blueprint"))
+        if errs or berrs:
+            problems = (errs or []) + (berrs or [])
+            log("production_invalid", "production design still invalid after targeted repair; stopping",
+                {"errors": problems[:12], "repaired": True})
+            raise StageContractError("production_designer", problems, repaired=True)
         out["productionSource"] = "model"
         return out
+    except StageContractError:
+        raise
     except LLMError as exc:
-        log("model_call_failed", f"production designer fell back: {exc}", {"step": "production_designer"})
-        return fallback_production(project, story, catalog, plan)
+        log("model_call_failed", f"production designer failed: {exc}", {"step": "production_designer"})
+        raise StageContractError("production_designer", [f"model call failed: {exc}"]) from exc
 
 
 def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory: list[dict], raw: dict) -> dict:

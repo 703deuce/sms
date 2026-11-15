@@ -216,12 +216,13 @@ def test_style_memory_and_future_engines():
 
 def test_jobs_and_config_source_have_the_hooks():
     jobs = (WORKER_ROOT / "clips_worker/motion_studio/pipeline/jobs.py").read_text()
-    assert "recover_render_code" in jobs
+    assert "run_preflight" in jobs
+    assert "StageContractError" in jobs
+    assert "recover_render_code" not in jobs
+    assert "FALLBACK_CODE" not in jobs
     assert "final_res_times" in jobs
     assert "keyframe_entries" in jobs
     assert "resume_produce" in jobs
-    assert "FALLBACK_CODE" in jobs  # last resort only
-    # Must not jump straight to generic FALLBACK_CODE on the first exception.
     tree = ast.parse(jobs)
     # compile_spec / elementEdit path exists
     assert "elementEdit" in jobs and "compile_spec" in jobs

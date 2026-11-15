@@ -124,7 +124,7 @@ RUN pip install --no-cache-dir pytest \
         /app/tests/test_asr_keyterms.py /app/tests/test_q4_intl_captions.py \
         /app/tests/test_audio_first_ingest.py /app/tests/test_stream_render_segment_checkpoint.py \
         /app/tests/test_motion_studio_core.py /app/tests/test_motion_studio_tts.py /app/tests/test_motion_studio_setup.py /app/tests/test_motion_studio_handoff.py /app/tests/test_motion_studio_faces.py /app/tests/test_motion_studio_api_manifest.py /app/tests/test_motion_studio_tools.py /app/tests/test_motion_studio_roles.py /app/tests/test_motion_studio_lint.py /app/tests/test_motion_studio_craft.py /app/tests/test_motion_studio_story_director.py /app/tests/test_motion_studio_production.py \
-        /app/tests/test_motion_studio_remaining.py \
+        /app/tests/test_motion_studio_remaining.py /app/tests/test_motion_studio_contracts.py \
         && REQUIRE_GL=1 python /app/scripts/gen_transition_shaders.py \
         && REQUIRE_GL=1 python -m pytest -q /app/tests/test_shader_transitions.py
 
