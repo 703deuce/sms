@@ -62,9 +62,27 @@ def _engineer_brief(ctx: dict) -> dict:
         }
     except Exception:  # noqa: BLE001
         caps = {}
+    blueprint = ctx.get("blueprint") or (ctx.get("scene") or {}).get("blueprint") or {}
+    scene_index = (ctx.get("scene") or {}).get("index")
+    # Supply the exact design for THIS scene, not 50 unrelated scene objectives.
+    scene_blueprint = {
+        "identity": blueprint.get("identity"),
+        "worlds": blueprint.get("worlds"),
+        "sceneBindings": [x for x in blueprint.get("sceneBindings") or []
+                          if x.get("sceneIndex") == scene_index],
+        "customObjects": [x for x in blueprint.get("customObjects") or []
+                          if x.get("sceneIndex") == scene_index],
+        "assetPlacements": [x for x in blueprint.get("assetPlacements") or []
+                            if x.get("sceneIndex") == scene_index],
+        "cameraPlan": blueprint.get("cameraPlan"),
+    }
     brief = {
         "role": "motion_engineer",
-        "blueprint": ctx.get("blueprint") or (ctx.get("scene") or {}).get("blueprint") or {},
+        "blueprint": scene_blueprint,
+        "sceneBinding": ctx.get("sceneBinding") or {},
+        "approvedCompositionPlan": (ctx.get("sceneBinding") or {}).get("compositionPlan"),
+        "requiredEffects": (ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
+        "cameraIntent": (ctx.get("sceneBinding") or {}).get("cameraIntent"),
         "scene": ctx["scene"],
         "duration": ctx["duration"],
         "durationS": ctx["duration"],

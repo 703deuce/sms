@@ -18,9 +18,12 @@ worlds or labels to copy onto a new subject. Bind media only via ctx.scene.asset
 subclasses (the film's ext.py) are invented per video. "The data is the world" is a heuristic
 when the story is a number moving, not a rule that every film is a chart.
 
-World. One camera move over ONE invented world for this topic. Every graphic lives on that
-world. A map, a price chart, an evidence board, a desk, a network, a city grid, or something
-new you invent — not a generic dark grid with slammed type. Steal the grammar, invent the set.
+World. This scene belongs to an APPROVED story-specific environment and film identity.
+A short film may travel through one space; a long film may have many distinct environments.
+Each scene is built from layered subject-specific clusters, materials, frames, connectors,
+original objects and camera targets required by its approved compositionPlan. The engine
+supplies primitives, not a fixed map/chart/desk template. Never substitute a generic gradient
+or single static photo for a plan that calls for a composed visual journey.
 
 Camera. Use film.shot(t, x, y, zoom, rot=..., radius=..., strength=...) so the spotlight
 travels with the camera (never leave the light behind). Keys every 0.6–3 s; the spline keeps
@@ -319,6 +322,27 @@ def designer_system(api_reference: str) -> str:
     return role + CRAFT_GUIDE + api_reference + WORKED_EXAMPLES
 
 
+TECHNICAL_COMPOSITION = """
+IMPLEMENTATION FIDELITY (non-negotiable):
+- Implement the explicit sceneBinding.compositionPlan, cameraIntent and requiredEffects.
+- An environment brief alone draws nothing. Supply model-authored geometry through
+  create_environment.backdrop.elements (each element has kind, position, size, fill,
+  opacity and z; optional repeat {count, offset}) and/or place_primitive/draw_path.
+- For each cluster: create actual media/graphic/primitive objects, connect them with
+  paths, then use layout_group and animate_property as needed.
+- Timed text/media entrances, camera travel and declared visual relationships must
+  appear in the rendered output, not only in the plan.
+- Supported property animation: position.x, position.y, scale, rotation, opacity.
+  Use from/to numeric values, startS/endS or word time anchors; the trusted compiler
+  performs frame math. Unimplemented effects are errors, not artistic simplifications.
+- For bespoke procedural visuals that cannot be represented by registered tools,
+  use Tier 3 original motion_core code after precise API validation. Do not hallucinate
+  functions. Custom code must serve the APPROVED composition and supplied assets only.
+- If a required effect cannot be built, return the structured limitation. Do not omit it,
+  replace it with a plain photo, or change the visual concept.
+- Retain narrative continuity without assuming all scenes share one world.
+"""
+
 def engineer_system(api_reference: str, tools_reference: str) -> str:
     """Technical-only Motion Engineer prompt: tools + exact API, no creative direction."""
     role = """You are the Motion Engineer for Transovo Motion Studio. You are a technical agent only.
@@ -334,4 +358,4 @@ Static-validate against the API contract. Word timing uses official word ids or 
 Express tool timing relative to the scene (startS/endS in seconds, startFrac/endFrac, or line anchors). Do not convert to frames; the engine converts from the real durationS and fps. Custom code uses ctx.duration and ctx.W() in seconds.
 All roles currently run on gpt-6-luna; do not mention or choose a model.
 """
-    return role + "\n" + (tools_reference or "") + "\n\n" + (api_reference or "")
+    return role + "\n" + TECHNICAL_COMPOSITION + "\n\n" + (tools_reference or "") + "\n\n" + (api_reference or "")
