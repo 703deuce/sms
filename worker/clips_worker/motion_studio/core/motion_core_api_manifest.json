@@ -2,7 +2,7 @@
   "schema": 1,
   "engineVersion": "cinematic-skill@bf43556+transovo-core-v1",
   "engineSha": "bf435561c6203f90f971300efe952b68b5ec3417",
-  "sourceHash": "6b79bb080a66530d6a15a479",
+  "sourceHash": "c2cf04ca62acc58560a08cd9",
   "files": [
     {
       "id": "engine",
@@ -17,7 +17,7 @@
     {
       "id": "world",
       "path": "core/world.py",
-      "sha256": "6702b86c1306b3cd"
+      "sha256": "1bd588da6b895210"
     },
     {
       "id": "api",
