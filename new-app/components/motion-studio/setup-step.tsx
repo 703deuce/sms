@@ -98,13 +98,22 @@ export function SetupStep({
       </div>
       <section className="rounded-xl border border-border bg-card px-5 shadow-xs" aria-label="Production settings">
         <div className="divide-y divide-border/70">
-          <Segmented
-            testId="ms-setting-length"
-            label={MS_LABELS.length}
-            value={s.lengthMin}
-            options={MS_LENGTHS.map((l) => ({ value: l.value, label: l.label, badge: l.beta ? 'Beta' : undefined }))}
-            onChange={(v) => onChange({ lengthMin: v })}
-          />
+          <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-[200px_1fr] sm:items-center" data-testid="ms-setting-length">
+            <label htmlFor="ms-length-minutes" className="text-sm font-medium">{MS_LABELS.length}</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <input id="ms-length-minutes" type="number" inputMode="numeric" min={1} max={35791} step={1}
+                aria-label="Documentary length in minutes" value={s.lengthMin}
+                onChange={(e) => { const n = Number(e.target.value); if (Number.isSafeInteger(n) && n >= 1 && n <= 35791) onChange({ lengthMin: n }) }}
+                className="h-9 w-24 rounded-lg border border-border bg-card px-3 text-sm" />
+              <span className="text-xs text-muted-foreground">minutes · any positive whole number</span>
+              {MS_LENGTHS.map((l) => (
+                <button key={l.value} type="button" onClick={() => onChange({ lengthMin: l.value })}
+                  className="rounded-md border border-border px-2 py-1 text-xs hover:bg-surface-raised">
+                  {l.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <Segmented testId="ms-setting-direction" label={MS_LABELS.visualDirection} value={s.visualDirection} options={MS_DIRECTIONS} onChange={(v) => onChange({ visualDirection: v })} />
           <Segmented testId="ms-setting-voiceover" label={MS_LABELS.voiceover} value={s.voiceover} options={MS_VOICEOVER} onChange={(v) => onChange({ voiceover: v })} />
           <div>

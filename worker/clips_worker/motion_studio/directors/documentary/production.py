@@ -73,7 +73,7 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
         an = a.get("analysis") or {}
         text = _blob(a)
         subject = (an.get("subject") or an.get("summary") or an.get("description") or a.get("filename") or a["id"])
-        subject = " ".join(str(subject).split())
+        subject = " ".join(str(subject).split())[:160]
         era = str(an.get("era") or "").strip()
         score = _token_overlap(a, blob)
         if score >= 2 or (a.get("kind") == "video" and (a.get("durationMs") or 0) > 2000):
@@ -101,7 +101,7 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
         rows.append({
             "assetId": a["id"], "kind": a.get("kind"), "filename": a.get("filename"),
             "subject": subject, "era": era or ev.get("era") or "", "relevance": relevance, "quality": quality,
-            "role": role, "moments": moments or ev.get("moments") or [],
+            "role": role, "moments": moments[:16] or ev.get("moments") or [],
             "evidence": ev,
         })
     return rows
@@ -144,7 +144,7 @@ def environments_from_story(story: dict, seed_world: dict | None = None) -> list
     for i, c in enumerate(ch_ids, 1):
         title = next((str(ch.get("title") or "") for ch in chapters
                       if int(ch.get("n") or ch.get("index") or 0) == c), "") or f"Sequence {i}"
-        sample = " ".join((l.get("hero") or l.get("text") or "") for l in by_ch[c])
+        sample = " ".join((l.get("hero") or l.get("text") or "")[:80] for l in by_ch[c][:3])
         worlds.append({
             "id": f"w{i}",
             "name": title,
@@ -441,13 +441,17 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "(map, price_chart, timeline, evidence_board, network, document_desk, abstract_field, city_grid are "
         "examples of capabilities, not the only options).\n"
         "Each world: {id, name, brief, reason, chapters, clusters}. All worlds share the film identity.\n"
-        "3. blueprint additions: customObjects [{id, name, purpose, sceneIndex}], "
+        "3. blueprint additions: customObjects [{id, name, purpose, sceneIndex, constructionBrief, materials, animationPlan}], "
         "assetPlacements [{sceneIndex, assetId, reason, reuseReason}], "
         "sceneBindings [{sceneIndex, worldId, objective, heldStillOk, evidenceBasis, toolBasis, "
-        "compositionPlan, cameraIntent, requiredEffects}], "
+        "compositionPlan, compositionElements, cameraShots, transitionIntent, cameraIntent, requiredEffects}], "
         "For each graphics scene: compositionPlan specifies exact layout, foreground/background layers, "
         "framed media, group relationships, paths, bespoke objects, camera choreography and timed reveals; "
         "cameraIntent is hold or travel; requiredEffects lists only the visual tools the design REQUIRES. "
+        "For compositionElements give each approved visible object a stable id (used unchanged as its tool objectId), "
+        "kind, purpose, description, layer, position, size, assetId, groupId, connectTo, motion, timingAnchor; "
+        "null is allowed for non-applicable fields. For cameraShots give id, purpose, fromTarget, toTarget, "
+        "movement, timingAnchor. Art direction must be buildable from these coordinates, layers and relationships. "
         "Do not use identical plans across unrelated scenes. Every required effect must survive rendering. "
         "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
@@ -499,7 +503,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             repair_user = json.dumps({
                 "previous": raw,
                 "errors": (errs or []) + (berrs or []),
-                "instruction": "Fix ONLY these validation errors. For asset wording errors, compare the quoted phrase against the actual onScreenText and description included in the error. Preserve other decisions. Return the full corrected JSON.",
+                "instruction": "Fix ONLY these validation errors. On-screen wording errors include the exact phrase and recorded onScreenText/description. Preserve all other decisions and return the complete corrected JSON.",
             })
             raw, m = chat_json(
                 "production_designer", sys_, repair_user, max_tokens=128000, timeout_s=360,
@@ -548,6 +552,9 @@ def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
             "evidenceBasis": b.get("evidenceBasis") or None,
             "toolBasis": b.get("toolBasis") or None,
             "compositionPlan": b.get("compositionPlan") or "",
+            "compositionElements": b.get("compositionElements") if isinstance(b.get("compositionElements"), list) else [],
+            "cameraShots": b.get("cameraShots") if isinstance(b.get("cameraShots"), list) else [],
+            "transitionIntent": b.get("transitionIntent"),
             "cameraIntent": b.get("cameraIntent"),
             "requiredEffects": b.get("requiredEffects") if isinstance(b.get("requiredEffects"), list) else [],
         })
@@ -572,6 +579,14 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
             errs.append(f"scene {idx} compositionPlan or explicit cameraIntent (hold/travel) is missing")
         if not isinstance(b.get("requiredEffects"), list):
             errs.append(f"scene {idx} requiredEffects must be an array")
+        elements = b.get("compositionElements") or []
+        if not elements and not b.get("heldStillOk"):
+            errs.append(f"scene {idx} requires compositionElements or a justified intentional still hold")
+        if b.get("cameraIntent") == "travel" and not b.get("cameraShots"):
+            errs.append(f"scene {idx} camera travel requires a cameraShots construction plan")
+        if any(not isinstance(e, dict) or not (e.get("id") and e.get("purpose") and e.get("kind"))
+               for e in elements):
+            errs.append(f"scene {idx} compositionElements require stable ids, purposes and kinds")
         if not (b.get("evidenceBasis") and b.get("toolBasis")):
             errs.append(
                 f"scene {idx} visual objective is not supported by the assigned asset's evidence or by registered tools"
@@ -693,6 +708,15 @@ def _apply_scene_revisions(plan: dict, revisions: list) -> None:
         b["objective"] = rev.get("objective") or rev.get("description") or b.get("objective") or scene.get("description") or ""
         b["evidenceBasis"] = rev.get("evidenceBasis") or b.get("evidenceBasis")
         b["toolBasis"] = rev.get("toolBasis") or b.get("toolBasis")
+        b["compositionPlan"] = rev.get("compositionPlan") or b.get("compositionPlan")
+        if isinstance(rev.get("compositionElements"), list):
+            b["compositionElements"] = rev["compositionElements"]
+        if isinstance(rev.get("cameraShots"), list):
+            b["cameraShots"] = rev["cameraShots"]
+        if rev.get("cameraIntent") in ("hold", "travel"):
+            b["cameraIntent"] = rev["cameraIntent"]
+        if isinstance(rev.get("requiredEffects"), list):
+            b["requiredEffects"] = rev["requiredEffects"]
         if rev.get("heldStillOk") is not None:
             b["heldStillOk"] = rev.get("heldStillOk")
         if rev.get("visualType"):

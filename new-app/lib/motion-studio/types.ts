@@ -8,7 +8,8 @@
 export type MsWorkflow = 'idea' | 'script' | 'footage'
 /** v1 is fixed to uploads_only (ST-UI-107); the enum keeps all three for the later picker. */
 export type MsMediaPolicy = 'auto_plus_uploads' | 'auto_only' | 'uploads_only'
-export type MsLengthMin = 3 | 5 | 10 | 15
+/** Any positive whole-minute duration supported by the render/storage clock. */
+export type MsLengthMin = number
 export type MsVisualDirection = 'cinematic' | 'explainer' | 'investigative' | 'technical_3d'
 export type MsVoiceover = 'ai' | 'upload'
 export type MsProductionMode = 'checkpoint' | 'auto'

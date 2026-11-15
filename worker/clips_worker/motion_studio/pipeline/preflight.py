@@ -55,7 +55,10 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
         from clips_worker.motion_studio.pipeline import db as _db_default
         db = _db_default
     lay = plan.get("layout") or {}
-    rows = {r["index"]: r for r in db.scenes(conn, pid)}
+    scene_rows = db.scenes(conn, pid)
+    rows = {r["index"]: r for r in scene_rows}
+    from clips_worker.motion_studio.tools.extensions import hydrate_project_components
+    approved_components = hydrate_project_components(proj, scene_rows, work)
     assets_meta = prepare_photos(conn, proj, work)
     ad = assets_dir(work)
     seed = int(hashlib.sha256(pid.encode()).hexdigest()[:6], 16)
@@ -78,6 +81,11 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
             "preflight": True,
             "ctxHash": render_hash_fn(ctx_by_index[sc["index"]]),
         }
+        # A passing re-preflight must not erase a previously approved component
+        # if its executable source is byte-identical; changed code requires approval again.
+        existing_approval = (row.get("qa") or {}).get("approvedComponent") or {}
+        if existing_approval.get("codeSha256") == hashlib.sha256(code.encode()).hexdigest():
+            qa_blob["approvedComponent"] = existing_approval
         if d.get("spec"):
             qa_blob["spec"] = d.get("spec")
         if d.get("tier") is not None:
@@ -88,6 +96,8 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
 
     def _design(sc, row):
         ctx = scene_context_fn(sc, lay, story, plan, assets_meta, seed)
+        ctx["projectId"] = pid
+        ctx["approvedComponents"] = approved_components
         ctx_by_index[sc["index"]] = ctx
         sdir = scratch_dir_fn(f"ms_pf_{pid[-8:]}_{sc['index']}_")
         try:

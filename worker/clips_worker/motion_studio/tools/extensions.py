@@ -87,3 +87,56 @@ def hydrate_approved_component(record: dict[str, Any]) -> dict[str, Any]:
     if digest != record.get("codeSha256") or version != "1.0+" + digest[:8]:
         return {"ok": False, "errors": [{"code": "COMPONENT_HASH_MISMATCH", "message": "stored code differs from approved version"}]}
     return register_component(name, code, interface=record.get("interface") or {}, visual_ok=True)
+
+
+def persist_project_component(project: dict, name: str, version: str, scratch: str) -> dict:
+    """Persist visually approved component with project-specific content address."""
+    import json
+    from pathlib import Path
+    from clips_worker.storage import upload_file
+    from clips_worker.motion_studio.pipeline.music_source import work_key
+    if not name.startswith(str(project["id"]) + "__"):
+        raise ValueError("component not owned by active project")
+    record = export_approved_component(name, version)
+    if record is None:
+        raise ValueError("component must be approved")
+    digest = record["codeSha256"]
+    key = f"{work_key(project)}/components/{digest}.json"
+    local = Path(scratch) / f"component_{digest}.json"
+    local.parent.mkdir(parents=True, exist_ok=True)
+    local.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+    upload_file(key, local, "application/json")
+    return {"name": name, "version": version, "storageKey": key, "codeSha256": digest}
+
+
+def hydrate_project_components(project: dict, rows: list[dict], scratch: str) -> list[dict]:
+    """Trusted db.scenes rows only: hydrate strictly project-owned approved components."""
+    import json
+    from pathlib import Path
+    from clips_worker.storage import download_object
+    from clips_worker.motion_studio.pipeline.music_source import work_key
+    prefix = f"{work_key(project)}/components/"
+    available, seen = [], set()
+    for scene in rows:
+        ref = (scene.get("qa") or {}).get("approvedComponent") or {}
+        key = ref.get("storageKey")
+        if not isinstance(key, str):
+            continue
+        if not key.startswith(prefix) or not key.endswith(".json"):
+            raise ValueError("component key escapes the project namespace")
+        if key in seen:
+            continue
+        seen.add(key)
+        local = Path(scratch) / f"approved_{ref.get('codeSha256')}.json"
+        local.parent.mkdir(parents=True, exist_ok=True)
+        download_object(key, local)
+        record = json.loads(local.read_text(encoding="utf-8"))
+        if (not record.get("name", "").startswith(str(project["id"]) + "__") or
+                record.get("codeSha256") != ref.get("codeSha256")):
+            raise ValueError("component metadata does not match project")
+        result = hydrate_approved_component(record)
+        if not result.get("ok"):
+            raise ValueError("component fails hash, approval or sandbox validation")
+        available.append({"name": record["name"], "version": record["version"],
+                          "interface": record.get("interface") or {}})
+    return available

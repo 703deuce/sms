@@ -143,7 +143,7 @@
   ],
   "package": "motion.studio.tools",
   "schema": 1,
-  "sourceHash": "6882f9d9a2cb493861139349",
+  "sourceHash": "a296a39b24449750caf61606",
   "tools": {
     "animate_camera": {
       "aliases": [],

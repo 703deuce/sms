@@ -231,7 +231,7 @@ def map_catalog() -> dict:
     for name in available_maps():
         data = load_map(name)
         out[name] = {"places": sorted(data.get("places") or {}),
-                     "regions": sorted(list(data.get("regions") or {}))[:40],
+                     "regions": sorted(list(data.get("regions") or {})),
                      "regionCount": len(data.get("regions") or {}),
                      "projection": (data.get("projection") or {}).get("type")}
     return out

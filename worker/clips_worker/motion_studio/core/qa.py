@@ -550,6 +550,61 @@ def final_res_check(scenes: list[dict] | None) -> dict:
     return _chk("F6", True, {}, "final-resolution typography and detail checked")
 
 
+
+def composition_fidelity_check(plan: dict | None, scenes: list[dict] | None) -> dict:
+    """Check planned objects and frame evidence; do not substitute visual busyness.
+
+    Approved native Tier-3 code remains valid after sandbox/probe QA, while its
+    internals require creative visual review rather than fake object-count tests.
+    """
+    bp = (plan or {}).get("blueprint") or {}
+    bindings = {b.get("sceneIndex"): b for b in bp.get("sceneBindings") or [] if isinstance(b, dict)}
+    rows = {r.get("index"): r for r in scenes or []}
+    issues, review = [], []
+    for sc in (plan or {}).get("scenes") or []:
+        if sc.get("kind") in ("handoff", "hardcut"):
+            continue
+        idx = sc.get("index")
+        bind = bindings.get(idx) or {}
+        row = rows.get(idx) or {}
+        if not bind:
+            issues.append(f"scene {idx}: no approved composition binding")
+            continue
+        if not row.get("renderKey"):
+            issues.append(f"scene {idx}: missing rendered segment")
+        checks = (row.get("qa") or {})
+        spec = checks.get("spec") or {}
+        if spec:
+            from clips_worker.motion_studio.tools.validate import validate_spec
+            audited = validate_spec(spec)
+            for e in audited:
+                if e.get("code") in {
+                    "MISSING_PLANNED_EFFECT", "MISSING_DESIGNED_ELEMENT", "WRONG_DESIGNED_ASSET",
+                    "MISSING_VISUAL_LINK", "MISSING_GROUP_RELATION", "CAMERA_INTENT_MISSING",
+                }:
+                    issues.append(f"scene {idx}: {e['message']}")
+            known = set(spec.get("objects") or {}) | set(spec.get("typography") or {}) | set(spec.get("environments") or {})
+            for element in bind.get("compositionElements") or []:
+                if isinstance(element, dict) and element.get("id") not in known:
+                    issues.append(f"scene {idx}: element {element.get('id')!r} missing from scene specification")
+        elif checks.get("tier") == 3:
+            probe = checks.get("checks") or []
+            if not probe or any(not a.get("pass") and a.get("severity") != "warn" for a in probe):
+                issues.append(f"scene {idx}: custom Tier-3 composition lacks passing render-time probes")
+            else:
+                review.append(idx)
+        else:
+            issues.append(f"scene {idx}: no structured spec or approved Tier-3 implementation")
+        if any(not a.get("pass") and a.get("severity") != "warn" for a in checks.get("finalRes") or []):
+            issues.append(f"scene {idx}: final-resolution visual probe failed")
+    if issues:
+        return _chk("F7", False, {"issues": issues, "tier3Review": review},
+                    "planned visual components/effects missing from actual scene render")
+    return _chk("F7", True, {"tier3Review": review},
+                "composition checked against rendered objects and final-resolution probes",
+                "warn" if review else "error")
+
+
 def film_quality(plan: dict | None, scenes: list[dict] | None, catalog: list[dict] | None = None,
                  story: dict | None = None) -> list[dict]:
     """Whole-film technical+allocation QA, reported separately from creative quality."""
@@ -560,6 +615,7 @@ def film_quality(plan: dict | None, scenes: list[dict] | None, catalog: list[dic
         empty_interval_check(scenes),
         unrelated_labels_check(plan, story),
         final_res_check(scenes),
+        composition_fidelity_check(plan, scenes),
     ]
 
 

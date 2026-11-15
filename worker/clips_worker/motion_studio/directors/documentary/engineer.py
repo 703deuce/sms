@@ -82,6 +82,9 @@ def _engineer_brief(ctx: dict) -> dict:
         "role": "motion_engineer",
         "blueprint": scene_blueprint,
         "sceneBinding": ctx.get("sceneBinding") or {},
+        "compositionElements": (ctx.get("sceneBinding") or {}).get("compositionElements") or [],
+        "cameraShots": (ctx.get("sceneBinding") or {}).get("cameraShots") or [],
+        "availableApprovedComponents": ctx.get("approvedComponents") or [],
         "approvedCompositionPlan": (ctx.get("sceneBinding") or {}).get("compositionPlan"),
         "requiredEffects": (ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
         "cameraIntent": (ctx.get("sceneBinding") or {}).get("cameraIntent"),
@@ -126,6 +129,8 @@ def _interpret(out: dict, ctx: dict) -> dict:
         allow_custom_code=config.custom_code_enabled(),
         camera_intent=(ctx.get("sceneBinding") or {}).get("cameraIntent"),
         required_effects=(ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
+        composition_elements=(ctx.get("sceneBinding") or {}).get("compositionElements") or [],
+        project_id=ctx.get("projectId"),
         anchors={
             "lines": {
                 l["id"]: {"startS": l.get("start"), "endS": l.get("end")}
@@ -153,12 +158,14 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
     rounds = 0
     limitation = None
     interpreted = None
+    last_raw_output = None
     if not config.mock():
         brief = _engineer_brief(ctx)
         try:
             out, m = chat_json("motion_engineer", SYSTEM, json.dumps(brief), max_tokens=128000,
                              schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer", m)
+            last_raw_output = out
             interpreted = _interpret(out, ctx)
             limitation = interpreted.get("limitation")
             code = interpreted.get("code")
@@ -234,6 +241,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=128000,
                            schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer fix round {rounds}", m)
+            last_raw_output = out
             interpreted = _interpret(out, ctx)
             limitation = interpreted.get("limitation")
             if limitation:
@@ -253,6 +261,10 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
         except LLMError as exc:
             log("model_call_failed", f"scene fix failed: {exc}", {"step": "scene_fix"})
             raise StageContractError("scene_fix", [f"model call failed: {exc}"], output=getattr(exc, "output", None)) from exc
+    if not passing and last_raw_output is not None and not config.mock():
+        log("engineer_invalid", f"scene {ctx['scene']['index'] + 1}: output did not meet approved composition",
+            {"stage": "motion_engineer", "errors": problems, "output": last_raw_output,
+             "repaired": rounds > 0})
     if passing and passing.get("code"):
         result = {
             "code": passing["code"], "codeHash": code_hash(passing["code"]), "model": model, "fixRounds": rounds,

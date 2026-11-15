@@ -375,9 +375,9 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
       if (input.uploads.some((u) => u.kind === 'audio' && /(vo|voice|narrat)/i.test(u.label))) project.settings.voiceover = 'upload'
       const music = project.assets.find((a) => a.role === 'music')
       if (music) project.audio.music = { source: 'upload', label: `Your music: ${music.label}`, assetId: music.id, status: 'planned' }
-      const lenMatch = /(\d{1,2})[- ]?min/i.exec(input.prompt)
+      const lenMatch = /\b(\d+)\s*(?:-\s*)?(?:minutes?|mins?)\b/i.exec(input.prompt)
       const len = lenMatch ? Number(lenMatch[1]) : null
-      if (len === 3 || len === 5 || len === 10 || len === 15) project.settings.lengthMin = len
+      if (len != null && Number.isSafeInteger(len) && len >= 1 && len <= 35791) project.settings.lengthMin = len
       if (/explainer/i.test(input.prompt)) project.settings.visualDirection = 'explainer'
       else if (/investigat/i.test(input.prompt)) project.settings.visualDirection = 'investigative'
       else if (/3d|technical/i.test(input.prompt)) project.settings.visualDirection = 'technical_3d'

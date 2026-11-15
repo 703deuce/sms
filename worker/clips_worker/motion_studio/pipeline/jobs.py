@@ -169,8 +169,13 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
                                 durationMs=r["durationMs"])
             except Exception as exc:  # noqa: BLE001
                 db.update_asset(conn, a["id"], status="failed", analysis={"error": type(exc).__name__, "message": str(exc)})
-                log("asset_failed", f"analysis failed for {a.get('filename')}: {type(exc).__name__}", {"assetId": a["id"], "error": str(exc)})
-                raise StageContractError("asset_analysis", [f"asset {a['id']}: {type(exc).__name__}: {exc}"]) from exc
+                log("asset_failed", f"analysis failed for {a.get('filename')}: {type(exc).__name__}", {"assetId": a["id"]})
+                if isinstance(exc, StageContractError):
+                    raise
+                raise StageContractError("analysis",
+                    [f"upload {a['id']} ({a.get('filename')}) could not be analyzed: {type(exc).__name__}: {exc}"],
+                    output={"assetId": a["id"], "filename": a.get("filename"),
+                            "error": type(exc).__name__}) from exc
         assets = db.assets(conn, pid)
         assets = _group_faces(conn, assets, log)
     catalog = [a for a in assets if a["status"] == "ready"]
@@ -457,6 +462,11 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
     else:
         assets_meta = _prepare_photos(conn, proj, work)
         ctx = scene_context(sc, lay, story, plan, assets_meta, seed)
+        from clips_worker.motion_studio.tools.extensions import (
+            hydrate_project_components, persist_project_component, register_component,
+        )
+        ctx["projectId"] = pid
+        ctx["approvedComponents"] = hydrate_project_components(proj, db.scenes(conn, pid), work)
         notes = str((scene.get("plan") or {}).get("userNotes") or "").strip()
         if notes:                          # inspector edits / director notes from the user (part of the ctx hash)
             ctx["scene"]["userNotes"] = notes
@@ -504,6 +514,17 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             Path(cp).write_text(code)
             upload_file(ck, Path(cp), "text/x-python")
             qa_blob = {"checks": d.get("checks") or [], "verdict": d.get("verdict"), "ctxHash": ctx_hash}
+            if d.get("tier") == 3 and d.get("verdict") == "pass" and d.get("checks"):
+                name = f"{pid}__scene_{scene['index']}_procedural"
+                reg = register_component(name, code, visual_ok=True)
+                if not reg.get("ok"):
+                    raise StageContractError("component_registration",
+                        [f"scene {scene['index']}: component failed validation"],
+                        output={"errors": reg.get("errors") or []})
+                qa_blob["approvedComponent"] = persist_project_component(
+                    proj, reg["name"], reg["version"], work)
+                log("component_approved", f"scene {scene['index'] + 1}: approved reusable component",
+                    {"name": reg["name"], "version": reg["version"]})
             if d.get("usedFallback") or d.get("degraded"):
                 qa_blob["degraded"] = True
                 qa_blob["degradeCause"] = d.get("degradeCause") or "framework fallback"

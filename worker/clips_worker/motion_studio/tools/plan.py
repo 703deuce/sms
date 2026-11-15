@@ -22,6 +22,8 @@ def compile_agent_output(
     anchors: dict | None = None,
     camera_intent: str | None = None,
     required_effects: list[str] | None = None,
+    composition_elements: list[dict] | None = None,
+    project_id: str | None = None,
 ) -> dict[str, Any]:
     """Prefer tool calls / a scene spec. Custom code is Tier 3 only. Limitations pass through."""
     payload = out or {}
@@ -36,6 +38,9 @@ def compile_agent_output(
         spec["cameraIntent"] = camera_intent
         spec["cameraRequired"] = camera_intent == "travel"
         spec["requiredEffects"] = list(required_effects or [])
+        spec["compositionElements"] = list(composition_elements or [])
+        if project_id:
+            spec["projectId"] = project_id
         if payload.get("tools"):
             spec, results = apply_calls(spec, payload["tools"])
             errors = [e for r in results for e in r.errors]

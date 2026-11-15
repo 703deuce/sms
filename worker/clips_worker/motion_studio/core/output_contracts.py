@@ -210,6 +210,9 @@ PRODUCTION_RULES.append({
         "objects, connections, reveals and visual relationships; cameraIntent must explicitly be hold, "
         "travel or none; requiredEffects must name the actual scene tools that MUST render. "
         "An intentional minimalist composition may have no optional effects, but it must be justified. "
+        "compositionElements lists each required visible component with an id matching the eventual "
+        "objectId/groupId/environmentId supplied to the Motion Engineer, plus layer, geometry, links, "
+        "assetId, motion and timing. cameraShots provides actual named camera targets for any journey. "
         "If you require a component, group, connection, transition, animation or camera journey, list it "
         "in requiredEffects. This is an implementation contract, not a style menu."
     ),
@@ -371,9 +374,33 @@ _CUSTOM_OBJECT = _obj({
     "name": {"type": ["string", "null"]},
     "purpose": {"type": ["string", "null"]},
     "sceneIndex": {"type": ["integer", "number", "null"]},
+    "constructionBrief": {"type": ["string", "null"]},
+    "materials": {"type": ["string", "null"]},
+    "animationPlan": {"type": ["string", "null"]},
+})
+_COMPOSITION_ELEMENT = _obj({
+    "id": {"type": "string"},
+    "kind": {"type": "string"},
+    "purpose": {"type": "string"},
+    "description": {"type": "string"},
+    "layer": {"type": "string"},
+    "position": {"anyOf": [_obj({"x": {"type": "number"}, "y": {"type": "number"}}), {"type": "null"}]},
+    "size": {"anyOf": [_obj({"width": {"type": ["number", "null"]}, "height": {"type": ["number", "null"]}}), {"type": "null"}]},
+    "assetId": {"type": ["string", "null"]},
+    "groupId": {"type": ["string", "null"]},
+    "connectTo": {"type": ["string", "null"]},
+    "motion": {"type": ["string", "null"]},
+    "timingAnchor": {"type": ["string", "null"]},
 })
 _SCENE_BINDING = _obj({
     "compositionPlan": {"type": "string"},
+    "compositionElements": {"type": "array", "items": _COMPOSITION_ELEMENT},
+    "cameraShots": {"type": "array", "items": _obj({
+        "id": {"type": "string"}, "purpose": {"type": "string"},
+        "fromTarget": {"type": ["string", "null"]}, "toTarget": {"type": ["string", "null"]},
+        "movement": {"type": "string"}, "timingAnchor": {"type": ["string", "null"]},
+    })},
+    "transitionIntent": {"type": ["string", "null"]},
     "cameraIntent": {"type": "string", "enum": ["hold", "travel", "none"]},
     "requiredEffects": {"type": "array", "items": {"type": "string", "enum": [
         "media", "environment_geometry", "group", "property_animation", "camera_travel",

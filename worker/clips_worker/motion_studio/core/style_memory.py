@@ -31,13 +31,13 @@ def record(plan: dict | None, previous: list[dict] | None = None) -> list[dict]:
     }
     out = list(previous or [])
     out.append(entry)
-    return out[-8:]
+    return out
 
 
 def prompt_excerpt(memory: list[dict] | None) -> str:
     if not memory:
         return "No recent productions are on file. Invent a distinct identity for this film; do not settle for a palette swap."
     lines = ["Recent production decisions (do not copy them; invent a distinct identity):"]
-    for i, row in enumerate(memory[-5:], 1):
+    for i, row in enumerate(memory, 1):
         lines.append(f"{i}. {row.get('throughLine') or 'untitled'} — camera {row.get('cameraPersonality') or 'n/a'}; materials {row.get('materials') or []}")
     return "\n".join(lines)

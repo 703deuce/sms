@@ -91,6 +91,7 @@ export const MS_WORKFLOWS: { id: MsWorkflow; label: string; description: string 
 ]
 
 export const MS_LENGTHS: { value: MsLengthMin; label: string; beta: boolean }[] = [
+  { value: 1, label: '1 min', beta: false },
   { value: 3, label: '3 min', beta: false },
   { value: 5, label: '5 min', beta: false },
   { value: 10, label: '10 min', beta: true },

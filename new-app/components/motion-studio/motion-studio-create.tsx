@@ -236,7 +236,7 @@ export function MotionStudioCreate({
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={MS_LABELS.promptPlaceholder}
-                maxLength={8000}
+                
                 rows={4}
                 className="min-h-28 resize-none border-0 bg-transparent px-4 pt-4 text-[15px] leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent"
                 onKeyDown={(e) => {

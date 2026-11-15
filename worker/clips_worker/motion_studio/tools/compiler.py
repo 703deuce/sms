@@ -107,7 +107,7 @@ def compile_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) 
 
     # Environments become backdrop primitives plus exactly the authored geometry.
     for eid, env in (spec.get("environments") or {}).items():
-        brief = " ".join(str(env.get("brief") or "").split()).replace("\\", "\\\\").replace('"', '\\"')
+        brief = " ".join(str(env.get("brief") or "").split())
         lines.append(f"    # environment {eid}: {brief}")
         backdrop = env.get("backdrop") or {}
         kind = (backdrop.get("kind") or "").lower()
@@ -395,6 +395,9 @@ def _emit_extension(spec: dict, oid: str, obj: dict) -> list[str]:
     if not rec:
         raise CompileError([{"code": "COMPONENT_UNAVAILABLE",
                              "message": f"approved custom component {obj.get('component')!r} is not loaded in this worker"}])
+    if spec.get("projectId") and not rec["name"].startswith(str(spec["projectId"]) + "__"):
+        raise CompileError([{"code": "COMPONENT_UNAUTHORIZED",
+                             "message": f"component {obj.get('component')!r} is not approved for this project"}])
     # Each component is a sandbox-verified motion_core build_scene. Scope its
     # definitions inside a unique factory, instantiate its actual Items, and
     # attach them to the host scene. Never substitute a comment placeholder.

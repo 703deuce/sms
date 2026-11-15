@@ -35,7 +35,10 @@ const stableId = (prefix: string, key: string) => prefix + createHash('sha256').
 const SIGN_TTL_S = 3600
 const MS_JOB_TYPES = ['DOC_PLAN', 'DOC_PRODUCE', 'MGD_RENDER_SEGMENT', 'DOC_ASSEMBLE']
 const STAGE_ORDER: MsStageId[] = ['story', 'assets', 'direct', 'graphics', 'assemble', 'review']
-const LENGTHS = [3, 5, 10, 15] as const
+const LENGTHS = [1, 3, 5, 10, 15] as const
+// rangeEndMs is stored as a 32-bit millisecond value in the clips project.
+const MAX_LENGTH_MIN = Math.floor(2_147_483_647 / 60_000)
+const validMinutes = (v: unknown): v is number => Number.isSafeInteger(v) && typeof v === 'number' && v >= 1 && v <= MAX_LENGTH_MIN
 const DIRECTIONS = ['cinematic', 'explainer', 'investigative', 'technical_3d'] as const
 const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_480p', renderSize: '480p', finalRenderSize: '480p', productionMode: 'checkpoint', music: 'generated', webResearch: false }
 const MUSIC_CHOICES: readonly MsMusicChoice[] = ['generated', 'upload', 'elevenlabs', 'none']
@@ -66,7 +69,7 @@ function assertEnabled() {
 
 export function motionStudioConfig() {
   return {
-    lengths: [...LENGTHS], betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
+    lengths: [...LENGTHS], lengthInput: { min: 1, max: MAX_LENGTH_MIN, step: 1 }, betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
     productionModes: ['checkpoint', 'auto'], formats: ['16:9_480p', '16:9_720p', '16:9_1080p', '16:9_2160p'], mediaPolicy: 'uploads_only',
     music: ['generated', 'upload', 'elevenlabs', 'none'],
     features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'blueprint' },
@@ -77,7 +80,11 @@ export function motionStudioConfig() {
 function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   const o = J(raw)
   const out = { ...prev }
-  if (o.lengthMin !== undefined && (LENGTHS as readonly number[]).includes(Number(o.lengthMin))) out.lengthMin = Number(o.lengthMin) as MsSettings['lengthMin']
+  if (o.lengthMin !== undefined) {
+    const minutes = Number(o.lengthMin)
+    if (!validMinutes(minutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
+    out.lengthMin = minutes
+  }
   if ((DIRECTIONS as readonly unknown[]).includes(o.visualDirection)) out.visualDirection = o.visualDirection
   if (o.voiceover === 'ai' || o.voiceover === 'upload') out.voiceover = o.voiceover
   if (o.productionMode === 'checkpoint' || o.productionMode === 'auto') out.productionMode = o.productionMode
@@ -213,8 +220,8 @@ export async function createProject(workspaceId: string, userId: string, body: u
   assertEnabled()
   const o = J(body)
   const workflow = (['idea', 'script', 'footage'].includes(o.workflow) ? o.workflow : 'idea') as MsWorkflow
-  const prompt = str(o.prompt ?? o.brief, 20000)
-  const script = str(o.script, 60000)
+  const prompt = typeof (o.prompt ?? o.brief) === 'string' ? String(o.prompt ?? o.brief).trim() : ''
+  const script = typeof o.script === 'string' ? o.script : ''
   if (o.mediaPolicy && o.mediaPolicy !== 'uploads_only')
     throw new MotionStudioError('INVALID', 'Only uploaded media is supported in this version.', 400)
   const uploads = parseUploads(o.uploads ?? o.uploadIds)
@@ -231,8 +238,13 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const settings: MsSettings = { ...DEFAULT_SETTINGS }
   const reqMusic = J(o.settings).music ?? o.music
   if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
-  const len = /(\d{1,2})[- ]?min/i.exec(prompt)
-  if (len && (LENGTHS as readonly number[]).includes(Number(len[1]))) settings.lengthMin = Number(len[1]) as MsSettings['lengthMin']
+  const requested = o.lengthMin ?? J(o.settings).lengthMin
+  const len = /\b(\d+)\s*(?:-\s*)?(?:minutes?|mins?)\b/i.exec(prompt)
+  const requestedMinutes = requested !== undefined ? Number(requested) : len ? Number(len[1]) : undefined
+  if (requestedMinutes !== undefined) {
+    if (!validMinutes(requestedMinutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
+    settings.lengthMin = requestedMinutes
+  }
   const id = createId('msp')
   const clipProjectId = createId('proj')
   const canvasUploadId = createId('upl')
@@ -248,7 +260,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
           fullVideo: true, blank: true, captions: { enabled: false, presetId: 'bold_pop', language: 'en' } })),
         rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'documentary', clipProjectId, clipId, title,
-        brief: prompt || script.slice(0, 2000), workflow,
+        brief: prompt || script, workflow,
         settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: 'uploads_only' }),
         status: 'setup', stage: 'story', stages: toPrismaJson({}), idempotencyKey: key } })
       await tx.studioActivityEvent.create({ data: { projectId: id, stage: 'story', kind: 'stage', message: 'Project created. Nothing renders until you create the plan.' } })

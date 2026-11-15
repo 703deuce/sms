@@ -160,6 +160,30 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
         problems.append({"code": "CAMERA_INTENT_MISMATCH", "message": "the approved design specifies a deliberate hold, not a camera journey"})
     for feature in sorted(required - present):
         problems.append({"code": "MISSING_PLANNED_EFFECT", "message": f"approved visual effect {feature!r} was not implemented"})
+    # Check every specifically designed element by stable id, not only the presence
+    # of one generic tool of the same family. An approved image cluster cannot
+    # silently become one unrelated photograph.
+    known = set(envs) | set(objects) | set(spec.get("typography") or {})
+    for element in spec.get("compositionElements") or []:
+        if not isinstance(element, dict):
+            problems.append({"code": "INVALID_COMPOSITION_ELEMENT", "message": "composition element must be an object"})
+            continue
+        eid = element.get("id")
+        if not eid or eid not in known:
+            problems.append({"code": "MISSING_DESIGNED_ELEMENT", "message": f"planned element {eid!r} was not built as an object/environment with the approved id"})
+            continue
+        if element.get("assetId") and objects.get(eid, {}).get("assetId") != element["assetId"]:
+            problems.append({"code": "WRONG_DESIGNED_ASSET", "message": f"planned element {eid!r} does not use approved asset {element['assetId']}"})
+        group = element.get("groupId")
+        if group and eid not in (objects.get(group) or {}).get("memberIds", []):
+            problems.append({"code": "MISSING_GROUP_RELATION", "message": f"planned element {eid!r} is not a member of {group!r}"})
+        linked = element.get("connectTo")
+        if linked and not any(p.get("kind") == "path" and (
+                {p.get("fromObjectId"), p.get("toObjectId")} == {eid, linked})
+                for p in objects.values()):
+            problems.append({"code": "MISSING_VISUAL_LINK", "message": f"planned elements {eid!r} and {linked!r} lack a connecting path"})
+        if element.get("motion") and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values()) and not spec.get("camera"):
+            problems.append({"code": "MISSING_ELEMENT_MOTION", "message": f"planned element {eid!r} has motion intent but no animation or camera choreography"})
     supported_props = {"position", "position.x", "position.y", "scale", "rotation", "opacity"}
     for aid, anim in (spec.get("animation") or {}).items():
         if anim.get("property") not in supported_props:
