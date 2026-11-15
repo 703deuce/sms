@@ -40,9 +40,9 @@ def build_music(project: dict, plan: dict, story: dict, lay: dict, work: str, us
             from clips_worker.storage import download_object
             raw = os.path.join(work, "eleven_music.mp3")
             download_object(prev["elevenKey"], Path(raw))
-            log("music", "reused the existing ElevenLabs music (no new paid call)", {"source": "elevenlabs"})
+            log("music", "reused the existing generated music (no new paid call)", {"source": "elevenlabs"})
         elif not config.elevenlabs_music_enabled() or config.mock():
-            log("music", "ElevenLabs music is off/mocked; using the generated score", {})
+            log("music", "generated music is off/mocked; using the story-beat score", {})
             src = "generated"
             raw = None
         else:
@@ -56,7 +56,7 @@ def build_music(project: dict, plan: dict, story: dict, lay: dict, work: str, us
             key = f"{work_key(project)}/eleven_music.mp3"
             upload_file(key, Path(raw), "audio/mpeg")
             prev = {"elevenKey": key, "lengthS": dur}
-            log("music_call", "ElevenLabs music generated (one call)", {"lengthS": round(dur, 1)})
+            log("music_call", "generated music created (one call)", {"lengthS": round(dur, 1)})
         if src == "elevenlabs" and raw:
             info = A.cut_uploaded_music(raw, out_wav, dur, work, start_on_beat=0.0)
             return {**info, "source": "elevenlabs", "elevenKey": prev.get("elevenKey"), "lengthS": dur, "path": out_wav}

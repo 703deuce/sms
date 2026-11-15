@@ -125,7 +125,7 @@ def tts_with_format_fallback(api_key: str, text: str, voice: dict, *, model_id: 
         lower = _lower(fmt)
         if not lower:
             raise
-        log("tts_format_fallback", f"ElevenLabs rejected {fmt} before generating; re-requesting once at {lower}",
+        log("tts_format_fallback", f"the voice service rejected {fmt} before generating; re-requesting once at {lower}",
             {"from": fmt, "to": lower, "tier": info.get("tier")})
         audio, alignment = _post(api_key, text, voice, model_id, lower, previous_text, next_text, session)  # no further retry
         fmt = lower

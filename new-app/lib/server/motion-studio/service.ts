@@ -1,6 +1,6 @@
 import 'server-only'
 import { createHash } from 'node:crypto'
-import { Prisma } from '@prisma/client'
+import * as PrismaPkg from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
 import { createId } from '@/lib/supabase/id'
 import { createReadableSignedUrl, storageDriverName, uploadSourceKey } from '@/lib/storage'
@@ -12,7 +12,7 @@ import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import type {
   MsActivityEvent, MsActivityStep, MsAllowance, MsAsset, MsAssetKind, MsChapter, MsEditorHandoff, MsProject, MsProjectStatus,
   MsProjectSummary, MsProposal, MsScene, MsSceneStatus, MsSelectionKind, MsSettings, MsStage, MsStageId, MsStageStatus, MsVisualType,
-  MsWorkflow,
+  MsWorkflow, MsMusicChoice,
 } from '@/lib/motion-studio/types'
 
 /**
@@ -21,13 +21,18 @@ import type {
  */
 
 const db = () => getPrisma()
+/** Interactive-transaction client. Typed structurally so this file also type-checks where `prisma generate` has not run (CI). */
+type Tx = Omit<ReturnType<typeof db>, '$transaction' | '$connect' | '$disconnect' | '$on' | '$use' | '$extends'>
+/** Prisma.DbNull without a type-level dependency on the generated `Prisma` namespace. */
+const DB_NULL = (PrismaPkg as unknown as { Prisma: { DbNull: unknown } }).Prisma.DbNull as never
 const stableId = (prefix: string, key: string) => prefix + createHash('sha256').update(key).digest('hex').slice(0, 28)
 const SIGN_TTL_S = 3600
 const MS_JOB_TYPES = ['DOC_PLAN', 'DOC_PRODUCE', 'MGD_RENDER_SEGMENT', 'DOC_ASSEMBLE']
 const STAGE_ORDER: MsStageId[] = ['story', 'assets', 'direct', 'graphics', 'assemble', 'review']
 const LENGTHS = [3, 5, 10, 15] as const
 const DIRECTIONS = ['cinematic', 'explainer', 'investigative', 'technical_3d'] as const
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint' }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_1080p', productionMode: 'checkpoint', music: 'generated' }
+const MUSIC_CHOICES: readonly MsMusicChoice[] = ['generated', 'upload', 'elevenlabs', 'none']
 const ENTER_MS = 1400
 const EXIT_MS = 1200
 
@@ -61,6 +66,8 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   if ((DIRECTIONS as readonly unknown[]).includes(o.visualDirection)) out.visualDirection = o.visualDirection
   if (o.voiceover === 'ai' || o.voiceover === 'upload') out.voiceover = o.voiceover
   if (o.productionMode === 'checkpoint' || o.productionMode === 'auto') out.productionMode = o.productionMode
+  if (MUSIC_CHOICES.includes(o.music)) out.music = o.music
+  out.music = out.music ?? 'generated'          // always explicit in the API (incl. 'none')
   out.format = '16:9_1080p'
   return out
 }
@@ -74,7 +81,7 @@ function feSettings(s: Json): MsSettings {
 async function claimKey(projectId: string, action: string, key: string | null | undefined): Promise<boolean> {
   if (!key) return true
   const tag = `${action}:${key.slice(0, 120)}`
-  return db().$transaction(async tx => {
+  return db().$transaction(async (tx: Tx) => {
     const rows = await tx.$queryRaw<{ settings: unknown }[]>`SELECT settings FROM "MotionStudioProject" WHERE id = ${projectId} FOR UPDATE`
     const s = J(rows[0]?.settings)
     const used: string[] = Array.isArray(s.idem) ? s.idem : []
@@ -86,7 +93,7 @@ async function claimKey(projectId: string, action: string, key: string | null | 
 
 /** Settings update under the row lock (shared protocol with the worker's finish_plan). */
 async function updateSettingsLocked(projectId: string, fn: (s: Json) => Json): Promise<Json> {
-  return db().$transaction(async tx => {
+  return db().$transaction(async (tx: Tx) => {
     const rows = await tx.$queryRaw<{ settings: unknown }[]>`SELECT settings FROM "MotionStudioProject" WHERE id = ${projectId} FOR UPDATE`
     const next = fn({ ...J(rows[0]?.settings) })
     await tx.motionStudioProject.update({ where: { id: projectId }, data: { settings: toPrismaJson(next) } })
@@ -121,8 +128,9 @@ async function loadUploads(workspaceId: string, ids: string[]): Promise<Map<stri
     select: { id: true, key: true, mime: true, filename: true, durationMs: true, width: true, height: true, status: true },
   })
   if (rows.length !== ids.length) throw new MotionStudioError('INVALID', 'One or more uploads were not found.', 400)
-  if (rows.some(r => r.status !== 'COMPLETE')) throw new MotionStudioError('INVALID', 'Finish uploading every file before continuing.', 400)
-  return new Map(rows.map(r => [r.id, { ...r, durationMs: r.durationMs ?? null, width: r.width ?? null, height: r.height ?? null }]))
+  type UpRow = (typeof rows)[number]
+  if (rows.some((r: UpRow) => r.status !== 'COMPLETE')) throw new MotionStudioError('INVALID', 'Finish uploading every file before continuing.', 400)
+  return new Map(rows.map((r: UpRow) => [r.id, { ...r, durationMs: r.durationMs ?? null, width: r.width ?? null, height: r.height ?? null }]))
 }
 
 function assetKind(mime: string, filename: string, hint?: MsAssetKind): 'video' | 'image' | 'audio' | 'script' {
@@ -186,6 +194,8 @@ export async function createProject(workspaceId: string, userId: string, body: u
   }
   const rows = await loadUploads(workspaceId, uploads.map(u => u.uploadId))
   const settings: MsSettings = { ...DEFAULT_SETTINGS }
+  const reqMusic = J(o.settings).music ?? o.music
+  if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
   const len = /(\d{1,2})[- ]?min/i.exec(prompt)
   if (len && (LENGTHS as readonly number[]).includes(Number(len[1]))) settings.lengthMin = Number(len[1]) as MsSettings['lengthMin']
   const id = createId('msp')
@@ -194,7 +204,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const clipId = stableId('clip_ms_', id)
   const title = str(o.title, 120)
   try {
-    await db().$transaction(async tx => {
+    await db().$transaction(async (tx: Tx) => {
       await tx.clipUpload.create({ data: { id: canvasUploadId, workspaceId, key: uploadSourceKey(workspaceId, canvasUploadId, 'mp4'),
         filename: 'Motion Studio documentary.mp4', bytes: BigInt(0), mime: 'video/mp4', status: 'PENDING', storageDriver: storageDriverName(), kind: 'source' } })
       await tx.clipProject.create({ data: { id: clipProjectId, workspaceId, createdById: userId, title: (title || prompt || 'Documentary').slice(0, 120),
@@ -204,12 +214,12 @@ export async function createProject(workspaceId: string, userId: string, body: u
         rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'documentary', clipProjectId, clipId, title,
         brief: prompt || script.slice(0, 2000), workflow,
-        settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: 'generated', script, mediaPolicy: 'uploads_only' }),
+        settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: 'uploads_only' }),
         status: 'setup', stage: 'story', stages: toPrismaJson({}), idempotencyKey: key } })
       await tx.studioActivityEvent.create({ data: { projectId: id, stage: 'story', kind: 'stage', message: 'Project created. Nothing renders until you create the plan.' } })
     })
   } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+    if ((err as { code?: unknown } | null)?.code === 'P2002') {
       const again = await db().motionStudioProject.findUnique({ where: { workspaceId_idempotencyKey: { workspaceId, idempotencyKey: key } } })
       if (again) return { project: await getProject(workspaceId, again.id), created: false }
     }
@@ -430,7 +440,7 @@ function allowanceFor(s: Json): MsAllowance {
       { id: 'script', label: 'Scriptwriting and direction', included: true, thirdParty: true, credits: null },
       { id: 'narration', label: s.voiceover === 'upload' ? 'Your narration (uploaded)' : 'AI narration', included: true, thirdParty: s.voiceover !== 'upload', credits: null },
       { id: 'graphics', label: 'Code-rendered motion graphics', included: true, thirdParty: false, credits: null },
-      { id: 'music', label: music === 'upload' ? 'Your music' : music === 'elevenlabs' ? 'Generated music (ElevenLabs)' : 'Score generated from the story beats', included: true, thirdParty: music === 'elevenlabs', credits: null },
+      { id: 'music', label: music === 'upload' ? 'Your music' : music === 'elevenlabs' ? 'Generated music' : music === 'none' ? 'No music' : 'Score generated from the story beats', included: music !== 'none', thirdParty: music === 'elevenlabs', credits: null },
       { id: 'render', label: 'Render, mix and QA', included: true, thirdParty: false, credits: null },
     ],
   }
@@ -469,7 +479,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
   const sourced = chapters.reduce((n, ch) => n + ch.lines.filter(l => l.sources.length).length, 0)
   const activity: MsActivityStep[] = [
     { id: 'story_research', status: stOf('story'), counts: chapters.length ? `${chapters.length} chapters · ${sourced} sourced claims` : null, latestAction: latest.story ?? null },
-    { id: 'uploads_analyzed', status: stOf('assets'), counts: `${assets.length} uploads · ${assets.filter(a => a.status === 'ready').length} analyzed · 0 missing visuals`, latestAction: latest.assets ?? null },
+    { id: 'uploads_analyzed', status: stOf('assets'), counts: `${assets.length} uploads · ${assets.filter((a: (typeof assets)[number]) => a.status === 'ready').length} analyzed · 0 missing visuals`, latestAction: latest.assets ?? null },
     { id: 'storyboard', status: stOf('direct'), counts: scenes.length ? `${scenes.length} scenes planned` : null, latestAction: latest.direct ?? null },
     { id: 'motion_graphics', status: stOf('graphics'), counts: scenes.length ? `${readyScenes} of ${scenes.length} rendered · QA checked` : null, latestAction: latest.graphics ?? null },
     { id: 'assembly_review', status: stOf('assemble') === 'done' ? stOf('review') : stOf('assemble'), counts: null, latestAction: latest.assemble ?? latest.review ?? null },
@@ -495,7 +505,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
       voice: { mode: c.s.voiceover === 'upload' ? 'upload' : 'ai', label: c.s.voiceover === 'upload' ? 'Your narration (uploaded)' : 'AI voice · documentary narrator',
         status: audioDone ? 'ready' : producing && row.narration ? 'rendering' : 'planned' },
       music: { source: c.s.music === 'upload' ? 'upload' : 'generated',
-        label: c.s.music === 'upload' ? 'Your music' : c.s.music === 'elevenlabs' ? 'Generated music' : 'Score generated from the story beats',
+        label: c.s.music === 'upload' ? 'Your music' : c.s.music === 'elevenlabs' ? 'Generated music' : c.s.music === 'none' ? 'No music' : 'Score generated from the story beats',
         status: audioDone ? 'ready' : producing && music ? 'rendering' : 'planned' },
     },
     durationMs: Number(ex?.durationMs) || sceneViews.at(-1)?.endMs || 0,
@@ -518,7 +528,7 @@ export async function listProjects(workspaceId: string, q: { limit?: string | nu
   const rows = await db().motionStudioProject.findMany({ where: { workspaceId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1,
     ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}) })
   const page = rows.slice(0, limit)
-  const projects = await Promise.all(page.map(async r => {
+  const projects = await Promise.all(page.map(async (r: (typeof page)[number]) => {
     const [sceneCount, thumb] = await Promise.all([
       db().motionStudioScene.count({ where: { projectId: r.id } }),
       db().motionStudioScene.findFirst({ where: { projectId: r.id, stillKey: { not: null } }, orderBy: { index: 'asc' }, select: { stillKey: true } }),
@@ -558,7 +568,7 @@ export async function patchProject(workspaceId: string, id: string, body: unknow
     const extra = J(o.settings)
     await updateSettingsLocked(id, s => ({
       ...s, ...next, automation: next.productionMode,
-      ...(['generated', 'upload', 'elevenlabs', 'none'].includes(extra.music) && (extra.music !== 'upload' || s.musicUploadKey) ? { music: extra.music } : {}),
+      music: MUSIC_CHOICES.includes(extra.music) && (extra.music !== 'upload' || s.musicUploadKey) ? extra.music : (s.music ?? 'generated'),
       ...(next.voiceover === 'upload' && !s.voiceoverUploadKey ? { voiceover: 'ai' } : {}),
     }))
     if (next.voiceover === 'upload' && !cur.voiceoverUploadKey)
@@ -616,7 +626,7 @@ export async function requestStoryChanges(workspaceId: string, id: string, body:
   if (!row.story) throw new MotionStudioError('CONFLICT', 'The story is not ready yet.', 409)
   if (!['awaiting_approval', 'review', 'failed'].includes(row.status)) throw new MotionStudioError('CONFLICT', 'Changes can be requested once the plan is ready.', 409)
   await updateSettingsLocked(id, s => ({ ...s, changeNote: note, lastChangeNote: note, approved: false, exportRequested: false }))
-  await db().motionStudioProject.update({ where: { id }, data: { status: 'running', stage: 'story', narration: Prisma.DbNull, errorCode: null, errorMessage: null, errorStage: null } })
+  await db().motionStudioProject.update({ where: { id }, data: { status: 'running', stage: 'story', narration: DB_NULL, errorCode: null, errorMessage: null, errorStage: null } })
   await event(id, 'story', 'decision', `Revising the story: “${note.slice(0, 140)}”. Unchanged scenes reuse their renders.`)
   await enqueue(row, 'DOC_PLAN', {}, 5)
   return getProject(workspaceId, id)
@@ -851,7 +861,7 @@ export async function listActivity(workspaceId: string, id: string, q: { after?:
     /warn|error|fail/.test(k) ? 'warning' : /decision|research_plan|plan_|reason|checkpoint_reason/.test(k) ? 'reasoning'
       : /^stage$|checkpoint|_ready$/.test(k) ? 'status' : 'action'
   return {
-    events: rows.map(r => ({ id: String(r.id), at: r.createdAt.toISOString(), stage: stageOf(r.stage), kind: kindOf(r.kind), text: r.message })),
+    events: rows.map((r: (typeof rows)[number]) => ({ id: String(r.id), at: r.createdAt.toISOString(), stage: stageOf(r.stage), kind: kindOf(r.kind), text: r.message })),
     cursor: rows.length ? String(rows[rows.length - 1].id) : (q.after ?? null),
   }
 }
