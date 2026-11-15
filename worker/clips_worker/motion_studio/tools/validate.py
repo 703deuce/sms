@@ -41,7 +41,20 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
     for bag in ("environments", "objects", "typography", "camera", "sound", "animation", "transitions", "extensions"):
         for key in (spec.get(bag) or {}):
             if key in seen and seen[key] != bag:
-                problems.append({"code": "ID_COLLISION", "message": f"id {key!r} is used in both {seen[key]} and {bag}."})
+                # A registered component is deliberately indexed in both bags:
+                # objects is the drawable scene graph, extensions is the approved
+                # component dependency index. It is one object, not two IDs.
+                # Do not permit unrelated records to hide behind this exception.
+                original = (spec.get("objects") or {}).get(key)
+                extension = (spec.get("extensions") or {}).get(key)
+                same_component = (
+                    {seen[key], bag} == {"objects", "extensions"}
+                    and isinstance(original, dict)
+                    and original.get("kind") == "extension"
+                    and original == extension
+                )
+                if not same_component:
+                    problems.append({"code": "ID_COLLISION", "message": f"id {key!r} is used in both {seen[key]} and {bag}."})
             seen[key] = bag
 
     known_objects = set(spec.get("objects") or {}) | set(spec.get("typography") or {}) | set(spec.get("extensions") or {})
