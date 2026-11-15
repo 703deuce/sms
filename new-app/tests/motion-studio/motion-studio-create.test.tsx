@@ -55,4 +55,19 @@ describe('Motion Studio create screen (FE-1)', () => {
     expect(screen.getByText('Example project')).toBeTruthy()
     expect(screen.getByTestId('ms-vision').textContent).toContain('Give Transovo an idea.')
   })
+
+  it('makes the whole Example project card one real link with nothing on top taking the click', async () => {
+    render(<MotionStudioCreate client={createMockMotionStudioClient({ storage: null })} initialView="projects" />)
+    const card = await screen.findByTestId('ms-project-card')
+    expect(card.tagName).toBe('A')
+    expect(card.getAttribute('href')).toBe('/app/motion-studio/ms_example_gamestop')
+    expect(card.textContent).toContain('GameStop: The Short Squeeze')
+    expect(card.textContent).toContain('Example project')
+    // Every child layer is decorative; the anchor itself is the hit target.
+    for (const child of Array.from(card.children)) expect(child.className).toContain('pointer-events-none')
+    expect(card.querySelector('button, a, [role="button"]')).toBeNull()
+    // Code-rendered cover, no hotlinked image.
+    expect(card.querySelector('[data-testid="ms-poster"]')?.getAttribute('data-kind')).toBe('chart')
+    expect(card.querySelector('img')).toBeNull()
+  })
 })

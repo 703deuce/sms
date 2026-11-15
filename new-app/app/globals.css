@@ -91,6 +91,15 @@
   --shadow-glow: 0 0 0 1px oklch(0.66 0.24 300 / 0.35), 0 8px 28px -6px oklch(0.66 0.24 300 / 0.45);
 
   --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-ken-burns: ken-burns 14s ease-in-out infinite alternate;
+  @keyframes ken-burns {
+    from {
+      transform: scale(1) translate(0, 0);
+    }
+    to {
+      transform: scale(1.12) translate(-2%, -1.5%);
+    }
+  }
   @keyframes shimmer {
     from {
       background-position: 200% 0;
@@ -105,6 +114,10 @@
   color-scheme: light;
   --radius: 0.75rem;
   --panel: oklch(0.96 0.003 285);
+  /* Motion Studio poster frames: simulated media, always dark like video in both themes. */
+  --ms-poster-bg: oklch(0.15 0.014 280);
+  --ms-poster-bg-2: oklch(0.24 0.03 285);
+  --ms-poster-ink: oklch(0.97 0.005 280);
   --background: oklch(0.985 0.002 280);
   --foreground: oklch(0.2 0.02 280);
   --card: oklch(1 0 0);

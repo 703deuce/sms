@@ -29,6 +29,7 @@ import { formatClock, relativeTime } from '@/lib/motion-studio/format'
 import type { MsAssetKind, MsMediaPolicy, MsProjectSummary, MsWorkflow } from '@/lib/motion-studio/types'
 import type { UploadProgress } from '@/lib/clips/upload'
 import { InlineError, MockDataNotice } from './motion-studio-shared'
+import { MotionPoster } from './motion-poster'
 
 const MODE_ICON: Record<MsWorkflow, typeof Lightbulb> = { idea: Lightbulb, script: FileText, footage: Film }
 
@@ -376,19 +377,27 @@ function ProjectsList({ projects, error, onRetry, onNew }: { projects: MsProject
       <h2 id="ms-projects-title" className="text-section-title">{MS_LABELS.myProjects}</h2>
       <ul className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4" data-testid="ms-projects">
         {projects.map((p) => (
-          <li key={p.id}>
+          <li key={p.id} className="relative">
             <Link
               href={`${MOTION_STUDIO_ROUTE}/${encodeURIComponent(p.id)}`}
-              className="group flex flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-all duration-150 hover:-translate-y-px hover:border-foreground/20 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none motion-reduce:hover:translate-y-0"
+              prefetch
+              aria-label={`Open ${p.title}${p.isExample ? ' (example project)' : ''}`}
+              data-testid="ms-project-card"
+              className="group relative isolate flex cursor-pointer flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs transition-[border-color,box-shadow] duration-150 hover:border-foreground/20 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
             >
-              <div className="relative grid aspect-video place-items-center bg-panel">
-                <Clapperboard className="size-6 text-muted-foreground/60" aria-hidden />
-                <span className="absolute right-2 bottom-2 rounded bg-black/70 px-1.5 py-0.5 font-mono text-xs text-white tabular-nums">{formatClock(p.durationMs)}</span>
+              {/* Decorative layers never take pointer events, so the whole card is the link target. */}
+              <div className="pointer-events-none relative aspect-video overflow-hidden bg-panel">
+                {p.thumbnailUrl ? (
+                  <img src={p.thumbnailUrl} alt="" className="size-full object-cover" draggable={false} />
+                ) : (
+                  <MotionPoster kind={p.posterKind ?? (p.workflow === 'footage' ? 'footage' : 'text')} seed={p.id} title={p.title} eyebrow="Documentary" showCaption={false} className="transition-transform duration-200 group-hover:scale-[1.02] motion-reduce:transition-none" />
+                )}
+                <Badge variant="onMedia" className="absolute right-2 bottom-2 font-mono tabular-nums">{formatClock(p.durationMs)}</Badge>
                 {p.isExample ? (
                   <Badge variant="onMedia" className="absolute top-2 left-2">{MS_LABELS.exampleProject}</Badge>
                 ) : null}
               </div>
-              <div className="flex flex-col gap-1.5 p-3">
+              <div className="pointer-events-none flex flex-col gap-1.5 p-3">
                 <p className="truncate text-sm font-medium" title={p.title}>{p.title}</p>
                 <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span className="tabular-nums">{p.sceneCount ? `${p.sceneCount} scenes` : 'Not planned yet'} · {relativeTime(p.updatedAt)}</span>
