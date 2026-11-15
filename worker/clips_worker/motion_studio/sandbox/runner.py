@@ -73,6 +73,30 @@ def main(job_path: str) -> int:
         ctx.rgb = lambda name, default=(240, 240, 240): ctx.palette.get(name, default)
         look = blocks.look_from_style(ctx_raw.get("style"))
         ctx.film = lambda drift=1.0, wobble=1.0: StudioFilm(float(ctx_raw["duration"]), int(ctx_raw.get("fps", 30)), look, drift, wobble)
+        # RE-11: stock maps for generated worlds (trusted helpers; files come from assets_dir / package).
+        from clips_worker.motion_studio.core import stock as _stock
+        from clips_worker.motion_studio.vendor.cinematic_skill.engine import GeoMap as _GeoMap
+        _map_cache = {}
+        ctx.maps = tuple(_stock.available_maps())
+        ctx.world = ((ctx_raw.get("scene") or {}).get("world")
+                     or (ctx_raw.get("style") or {}).get("world") or "")
+
+        def _mapdata(name="world"):
+            key = str(name or "world").lower()
+            if key not in _map_cache:
+                _map_cache[key] = _stock.load_map(key)
+            return _map_cache[key]
+
+        def _geo(name="world", K=20000, origin=(0, 0), look="explainer"):
+            return _GeoMap(_mapdata(name), K, origin=origin, look=look)
+
+        def _place(geomap, name):
+            return geomap.place(name)
+
+        def _ll(geomap, lat, lon):
+            return _stock.geo_ll(geomap, float(lat), float(lon))
+
+        ctx.geo, ctx.place, ctx.ll, ctx.map = _geo, _place, _ll, _mapdata
 
         mode = job.get("mode", "render")
         out = job.get("out")

@@ -1,5 +1,6 @@
 """Motion Studio core smoke tests (run in the worker image build): engine import, word clock, sandbox
 policy fails closed, fallback scene renders a probe still, handoff module imports, boundary rule."""
+import importlib.util
 import os
 import pathlib
 import re
@@ -30,6 +31,8 @@ def test_policy_fails_closed():
             check_code(bad)
 
 
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
 def test_fallback_probe_and_runtime_block():
     from clips_worker.motion_studio.core.fallback import FALLBACK_CODE
     from clips_worker.motion_studio.core.render import SandboxError, probe_stills
@@ -62,3 +65,56 @@ def test_registry_rejects_undeclared_capability():
     d.check({"world.canvas"})
     with pytest.raises(CapabilityError):
         d.check({"teleport.anything"})
+
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_motion_core_exports_world_items():
+    from clips_worker.motion_studio.core import api
+    for name in ("GeoMap", "RegionFill", "Board", "Print", "Route", "MapPin", "MAP_LOOKS"):
+        assert hasattr(api, name), name
+
+
+def test_stock_maps_and_places():
+    from clips_worker.motion_studio.core.stock import available_maps, load_map, project_ll
+    assert "world" in available_maps() and "us" in available_maps()
+    world = load_map("world")
+    assert "Chicago" in world["places"] and "Tokyo" in world["places"]
+    # projector is consistent with stored Chicago
+    x, y = project_ll(world, 41.88, -87.63)
+    stored = world["places"]["Chicago"]
+    assert abs(x - stored[0]) < 0.002 and abs(y - stored[1]) < 0.002
+    us = load_map("us")
+    assert "Washington" in us["places"] and "California" in (us.get("regions") or {})
+
+
+def test_fallback_code_follows_world():
+    from clips_worker.motion_studio.core.fallback import FALLBACK_CODE, FALLBACK_MAP, FALLBACK_CHART, fallback_code
+    assert "ctx.geo" in fallback_code({"scene": {"world": "map"}})
+    assert "LineSeries" in fallback_code({"scene": {"world": "price_chart"}})
+    assert fallback_code({"scene": {"world": "abstract_field"}}) == FALLBACK_CODE
+    assert "GeoMap" in FALLBACK_MAP or "ctx.geo" in FALLBACK_MAP
+    assert "LinearAxis" in FALLBACK_CHART
+
+
+
+@pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
+def test_fallback_map_probe():
+    from clips_worker.motion_studio.core.fallback import fallback_code
+    from clips_worker.motion_studio.core.render import probe_stills
+    from clips_worker.motion_studio.core.stock import materialize
+    words = [{"w": w, "s": 0.3 + i * 0.4, "e": 0.6 + i * 0.4, "line": "l1"}
+             for i, w in enumerate("it spread from Chicago to London".split())]
+    ctx = {"duration": 3.0, "fps": 30, "seed": 7,
+           "style": {"palette": {"bg": "#071412", "ink": "#e8f5ef", "accent": "#3ee6a1", "accent2": "#f5d76e", "muted": "#6d8a80"}},
+           "palette": {"bg": "#071412", "ink": "#e8f5ef", "accent": "#3ee6a1", "accent2": "#f5d76e", "muted": "#6d8a80"},
+           "lines": [{"id": "l1", "text": "It spread from Chicago to London", "spoken": "It spread from Chicago to London",
+                      "start": 0.3, "end": 2.6, "hero": "CHICAGO"}],
+           "words": words, "emphasis": [], "assets": {}, "data": [],
+           "scene": {"id": "s0", "index": 0, "visualType": "map", "world": "map", "description": "the map"}}
+    d = tempfile.mkdtemp()
+    assets = os.path.join(d, "assets")
+    materialize(assets)
+    res = probe_stills(fallback_code(ctx), ctx, d, [1.2], 480, 270, assets)
+    assert res.get("ok"), res
+    assert os.path.exists(res["stills"][0]["path"])

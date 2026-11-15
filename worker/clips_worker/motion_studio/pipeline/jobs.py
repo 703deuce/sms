@@ -165,6 +165,8 @@ def run_plan(conn, proj: dict, job: dict, p: dict) -> None:
 def _assets_dir(work: str) -> str:
     d = os.path.join(work, "assets")
     os.makedirs(os.path.join(d, "photos"), exist_ok=True)
+    from clips_worker.motion_studio.core.stock import materialize
+    materialize(d)
     return d
 
 

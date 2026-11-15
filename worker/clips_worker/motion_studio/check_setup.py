@@ -59,6 +59,15 @@ def run(render: bool = True) -> dict:
         add("fonts.licence_clean", not bad, json.dumps(man if bad else [f"{m['role']}={m['family']}" for m in man]))
     except Exception as e:  # noqa: BLE001
         add("fonts.licence_clean", False, type(e).__name__)
+    try:
+        from clips_worker.motion_studio.core.stock import available_maps, load_map
+        from clips_worker.motion_studio.core.api import GeoMap
+        maps = available_maps()
+        world = load_map("world") if "world" in maps else {}
+        add("maps.stock", "world" in maps and "Chicago" in (world.get("places") or {}) and GeoMap is not None,
+            f"{maps} places={len(world.get('places') or {})}")
+    except Exception as e:  # noqa: BLE001
+        add("maps.stock", False, type(e).__name__)
     if render:
         try:
             from clips_worker.motion_studio.core.fallback import FALLBACK_CODE

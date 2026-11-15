@@ -1,5 +1,6 @@
 """Framework fallback scene (ST-SBX-005/006): safe, always-renderable scene code built only from Part 1
-blocks. Runs through the same sandbox path as generated code, so there is one render path."""
+blocks (and stock maps). Chosen by the Director's world type so a map story
+falls back to a map, a price story to a chart, not always the same grid. Runs through the same sandbox path as generated code, so there is one render path."""
 
 FALLBACK_CODE = r'''
 from motion_core import *
@@ -63,3 +64,116 @@ def build_scene(ctx):
     film.cam(D, pos[-1][0] + 400, pos[-1][1] - 100, 0.5)
     return film
 '''
+
+
+FALLBACK_MAP = r"""
+from motion_core import *
+
+
+def build_scene(ctx):
+    film = ctx.film(drift=0.8, wobble=0.7)
+    ink = ctx.rgb("ink", (240, 240, 240))
+    acc = ctx.rgb("accent", (255, 196, 0))
+    acc2 = ctx.rgb("accent2", (90, 200, 255))
+    bg = ctx.rgb("bg", (12, 22, 24))
+    look = dict(sheet=tuple(max(0, int(c * 0.55)) for c in bg),
+                water=tuple(min(255, int(c * 1.3 + 8)) for c in bg),
+                land=tuple(min(255, int(c * 2.2 + 20)) for c in bg),
+                border=acc2, relief=0.18, neighbor=tuple(int(c * 0.8) for c in bg),
+                neighbor_line=acc2, dark=tuple(int(c * 0.45) for c in bg),
+                dark_line=acc, frame=acc2)
+    world = film.add(ctx.geo("world", K=20000, look=look))
+    lines = ctx.lines or []
+    names = list((world.data.get("places") or {}).keys())
+    # Prefer place names mentioned in the lines; otherwise a short world tour.
+    picked = []
+    blob = " ".join((ln.get("text") or "") + " " + (ln.get("hero") or "") for ln in lines).lower()
+    for n in names:
+        if n.lower() in blob and n not in picked:
+            picked.append(n)
+    if not picked:
+        picked = [n for n in ("Chicago", "London", "Tokyo", "Paris", "Lagos", "Sydney") if n in (world.data.get("places") or {})]
+    if not picked:
+        picked = names[:4]
+    pts = [ctx.place(world, n) for n in picked]
+    if pts:
+        film.cam(0.0, pts[0][0] - 400, pts[0][1] + 200, 0.28)
+    for i, (n, (x, y)) in enumerate(zip(picked, pts)):
+        t0 = 0.15 if not lines else max(0.0, float((lines[min(i, len(lines) - 1)]).get("start", 0.15)))
+        film.add(MapPin(x, y, n, t0))
+        if i:
+            film.add(Route(pts[i - 1], (x, y), max(0.0, t0 - 0.35), dur=0.7, rgb=acc))
+        film.shot(t0, x, y, 0.7, radius=2200, strength=0.35)
+        hero = ""
+        if i < len(lines):
+            hero = (lines[i].get("hero") or "").strip() or (lines[i].get("text") or "")[:28]
+        film.add(HeroSlam((hero or n).upper()[:28], x, y - 520, 280, t0 + 0.05, None, rgb=ink, glow=0.35))
+    if pts:
+        film.cam(ctx.duration, pts[-1][0] + 300, pts[-1][1] - 200, 0.35)
+    return film
+"""
+
+FALLBACK_CHART = r"""
+from motion_core import *
+
+
+def build_scene(ctx):
+    film = ctx.film(drift=0.9, wobble=0.8)
+    bg = ctx.rgb("bg", (8, 10, 16))
+    ink = ctx.rgb("ink", (240, 240, 240))
+    acc = ctx.rgb("accent", (80, 220, 140))
+    acc2 = ctx.rgb("accent2", (220, 70, 70))
+    muted = ctx.rgb("muted", (90, 100, 120))
+    lift = tuple(min(255, int(c * 1.8 + 10)) for c in bg)
+    film.add(GradientField([lift, bg, tuple(int(c * 0.4) for c in bg)], center=(0, 0), radius=18000))
+    film.add(GridField(spacing=360, rgb=muted, alpha=0.10, major=5))
+    film.add(NoiseTexture(seed=ctx.seed % 11 + 1, alpha=0.05, rgb=ink))
+    data = list(ctx.data or [])
+    vals = []
+    for d in data:
+        try:
+            vals.append(float(d.get("value")))
+        except (TypeError, ValueError):
+            pass
+    if not vals:
+        rng = ctx.rand
+        vals = [40 + rng.random() * 20]
+        for _ in range(7):
+            vals.append(max(2.0, vals[-1] * (0.85 + rng.random() * 0.5)))
+    xs = list(range(len(vals)))
+    axis = LinearAxis(0, max(len(vals) - 1, 1), -3200, 3200)
+    ymax = max(vals) * 1.15 or 1.0
+    yx = LinearAxis(0, ymax, 1400, -1400)
+    pts = [(axis(i), yx(v)) for i, v in enumerate(vals)]
+    lines = ctx.lines or []
+    t0 = float(lines[0]["start"]) if lines else 0.2
+    t1 = float(lines[-1]["end"]) if lines else min(ctx.duration, 3.0)
+    film.add(LineSeries(pts, t0, t1, acc, width=16, fill_to=yx(0)))
+    film.cam(0.0, 0, 0, 0.4)
+    for i, ln in enumerate(lines):
+        ts, te = float(ln.get("start", t0)), float(ln.get("end", t1))
+        hero = (ln.get("hero") or ln.get("text") or "")[:28].upper()
+        x = pts[min(i, len(pts) - 1)][0]
+        y = pts[min(i, len(pts) - 1)][1] - 400
+        film.shot(ts, x, y + 200, 0.7, radius=2000, strength=0.3)
+        film.add(HeroSlam(hero, x, y, 260, ts + 0.05, None, rgb=ink, glow=0.3))
+        if i < len(vals):
+            film.add(RollingNumber(x, y + 480, 200, 0, vals[min(i, len(vals) - 1)], ts + 0.2, min(te, ts + 1.2),
+                                   fmt="{:,.0f}", rgb=acc if vals[min(i, len(vals) - 1)] >= vals[0] else acc2))
+        film.cam(te, x + 120, y, 0.65)
+    film.cam(ctx.duration, pts[-1][0], pts[-1][1] - 200, 0.45)
+    return film
+"""
+
+
+def fallback_code(ctx: dict | None = None) -> str:
+    """Pick a world-appropriate framework scene so the fallback is not always the same grid."""
+    ctx = ctx or {}
+    scene = ctx.get("scene") or {}
+    world = str(scene.get("world") or ctx.get("world") or "").lower()
+    vt = str(scene.get("visualType") or "").lower()
+    if world in {"map", "city_grid"} or vt == "map":
+        return FALLBACK_MAP
+    if world in {"price_chart", "timeline"} or vt in {"data", "timeline"}:
+        return FALLBACK_CHART
+    return FALLBACK_CODE

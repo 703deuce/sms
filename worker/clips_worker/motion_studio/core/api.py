@@ -5,6 +5,10 @@
 Contract for generated code: define `build_scene(ctx)` returning `ctx.film()` populated with items and
 camera keys. Time anchors come from `ctx.W(line_id, word, nth=0, end=False)` (raises on a miss).
 """
+from clips_worker.motion_studio.vendor.cinematic_skill.engine import (  # noqa: F401  (world items for Part 2)
+    Board, Chalk, GeoMap, Holes, Ledger, LOOKS, MAP_LOOKS, OpenLedger, Print, RegionFill,
+)
+
 from clips_worker.motion_studio.core.world import (  # noqa: F401
     HOUSE, LinearAxis, StudioFilm, CR, keys_on_words, mercator, tile_positions,
 )
@@ -45,4 +49,14 @@ Custom items: subclass Item: __init__(t_in,t_out,z,sfx) ; bounds(res)->skia.Rect
 Rules: text cap height must be >= 40 px at 1080p (size*0.72*zoom/2 >= 40 -> at zoom 0.5 use size >= 230); keep text inside frame;
      never leave the frame as a lone hero on an empty field: always 3 layers (procedural background system, midground context, foreground hero);
      seeded randomness only (ctx.rand / seed=ctx.seed); no file, network or OS access; numpy/math/random/skia allowed.
+
+World / map items (use these; do not reimplement a map): GeoMap(data, K, origin=(0,0), look='explainer'|'period'|dict),
+     RegionFill(geomap, names, rgb, t_in, t_out=None, to_rgb=None, t_change=None),
+     Board(texture='cork_dark.png'|'slate.png'|'charcoal.png'|'paper.png'|'studio.png'|'night.png'|'blueprint.png'),
+     Print(key, x, y, w, rot=0, t_in, t_out=None, paper=False, pin=True, label=None), Ledger, OpenLedger, Chalk, Holes.
+     ctx.geo(name='world'|'us', K=20000, origin=(0,0), look=...) -> GeoMap already loaded from stock data.
+     ctx.place(geomap, 'Chicago') -> (x,y) for a named place (raises if missing).
+     ctx.ll(geomap, lat, lon) -> (x,y) for any WGS84 coordinate on that map.
+     ctx.maps is ('world','us'). Prefer inventing a look dict (sheet/water/land/border colours) from the story palette
+     rather than the default explainer/period looks. Add Route, MapPin, XMarker, StringLine between places.
 '''

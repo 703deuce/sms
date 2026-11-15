@@ -13,7 +13,7 @@ import json
 
 from clips_worker.motion_studio.core import qa
 from clips_worker.motion_studio.core.api import API_REFERENCE
-from clips_worker.motion_studio.core.fallback import FALLBACK_CODE
+from clips_worker.motion_studio.core.fallback import fallback_code
 from clips_worker.motion_studio.core.render import SandboxError, probe_stills
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
@@ -21,10 +21,16 @@ from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
 SYSTEM = """You are the Motion Designer for a cinematic motion-graphics documentary. Write ONE Python scene for the
 Transovo engine. Output JSON {"code": "<python source>"}. The code must `from motion_core import *` and define
 `build_scene(ctx)` returning `film = ctx.film()` populated with items and camera keys.
-Design fresh for THIS video and scene: invent the world (map, chart, timeline, board, network, etc.) from the
-scene description and the style spec; use custom Item subclasses when blocks don't fit. Every reveal must be
-anchored to spoken words via ctx.W(line_id, word) or the times in ctx.lines/ctx.words — never hard-coded seconds
-for story beats. Keep it under ~250 lines.
+Design fresh for THIS video and scene. Invent ONE continuous world from the story's subject (a map if the
+story moves place to place, a price/data chart if it is about a number moving, an evidence board, a network,
+a desk of documents, a city grid, or something new you invent). Do not reuse a generic dark grid with slammed
+type unless the Director's world is truly abstract. Prefer custom Item subclasses and a custom map look dict
+taken from the palette. When the world is a map, use ctx.geo("world") or ctx.geo("us"), ctx.place, ctx.ll,
+GeoMap, RegionFill, Route, MapPin — do not reimplement a map. When it is a chart, use LinearAxis, LineSeries,
+BarSeries, RollingNumber, and custom items, with real numbers from ctx.data only. Every reveal must be
+anchored to spoken words via ctx.W(line_id, word) or the times in ctx.lines/ctx.words — never hard-coded
+seconds for story beats. Three layers always (background system, midground context, foreground hero). Keep
+it under ~250 lines.
 """ + API_REFERENCE
 
 
@@ -58,8 +64,11 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
     rounds = 0
     history: list[str] = []
     if config.custom_code_enabled() and not config.mock():
+        from clips_worker.motion_studio.core.stock import map_catalog
         brief = {"scene": ctx["scene"], "duration": ctx["duration"], "style": ctx["style"], "lines": ctx["lines"],
                  "emphasis": ctx["emphasis"], "data": ctx["data"],
+                 "world": (ctx.get("scene") or {}).get("world"),
+                 "maps": map_catalog(),
                  "assets": {k: {kk: v.get(kk) for kk in ("kind", "w", "h", "description")} for k, v in ctx["assets"].items()}}
         if ctx["scene"].get("userNotes"):
             brief["userRequest"] = ("The user asked for these changes to this scene; honor them within the house rules: "
@@ -102,9 +111,11 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log) -> dic
         verdict = qa.scene_verdict(best["checks"])
         return {"code": best["code"], "codeHash": code_hash(best["code"]), "model": model, "fixRounds": rounds,
                 "usedFallback": False, "checks": best["checks"], "verdict": verdict, "cues": best.get("cues") or []}
-    res = probe_stills(FALLBACK_CODE, ctx, scratch, probe_times(ctx), 960, 540, assets_dir)
+    fb = fallback_code(ctx)
+    res = probe_stills(fb, ctx, scratch, probe_times(ctx), 960, 540, assets_dir)
     checks, _ = measure(res, ctx, 540)
-    exec_log("probe", True, None, None, code_hash(FALLBACK_CODE), "framework", res.get("durationMs"))
-    log("fallback", f"scene {ctx['scene']['index'] + 1}: framework fallback scene", {"rounds": rounds})
-    return {"code": FALLBACK_CODE, "codeHash": code_hash(FALLBACK_CODE), "model": "framework", "fixRounds": rounds,
+    exec_log("probe", True, None, None, code_hash(fb), "framework", res.get("durationMs"))
+    log("fallback", f"scene {ctx['scene']['index'] + 1}: framework fallback scene",
+        {"rounds": rounds, "world": (ctx.get("scene") or {}).get("world")})
+    return {"code": fb, "codeHash": code_hash(fb), "model": "framework", "fixRounds": rounds,
             "usedFallback": True, "checks": checks, "verdict": qa.scene_verdict(checks), "cues": res.get("cues") or []}
