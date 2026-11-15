@@ -364,6 +364,13 @@ def format_tools_reference(registry: ToolRegistry | None = None, compact: bool =
         lines.append(f"  Use when: {doc['whenToUse']}")
         lines.append(f"  Do not use when: {doc['whenNotToUse']}")
         lines.append(f"  Required: {req}. Optional: {opt}.")
+        for param in doc["parameters"]:
+            valid = f" Allowed values: {param['allowed']}." if param.get("allowed") is not None else ""
+            fallback = f" Default: {param['default']}." if param.get("default") is not None else ""
+            lines.append(f"  Arg {param['name']} ({param['type']}; "
+                         f"{'required' if param['required'] else 'optional'}): "
+                         f"{param['description']}{valid}{fallback}")
+        lines.append(f"  Limits: {doc['resourceLimits']}. Reversible: {doc['reversible']}")
         if compact:
             # one short example
             if doc["examples"]:
