@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
+import { MotionStudioEditorLanes } from '@/components/motion-studio/motion-studio-editor-lanes'
 import type { EditorPanelId } from './editor-rail'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import { editorMediaLoadFallbacks, type EditorMediaUrls } from '@/lib/server/clips/editor-clip-media'
@@ -51,6 +52,8 @@ export function EditorClipShell(props: {
   clipperStudio?: boolean
   initialPanel?: EditorPanelId
   initialProducerOpen?: boolean
+  /** Motion Studio project id (?motionStudio=) — opens the Compact Editor with the Motion Studio lanes. */
+  motionStudioProjectId?: string | null
 }) {
   const fallbacks = useMemo(
     () =>
@@ -186,10 +189,15 @@ export function EditorClipShell(props: {
         fullVideo={props.fullVideo}
         editorAssets={liveAssets}
         onEditorMediaError={onPrimaryMediaError}
-        compact={!props.fullVideo || props.initialPanel === 'captions'}
+        compact={!props.fullVideo || props.initialPanel === 'captions' || Boolean(props.motionStudioProjectId)}
         clipperStudio={props.clipperStudio === true}
         initialPanel={props.initialPanel}
         initialProducerOpen={props.initialProducerOpen}
+        motionStudioSlot={
+          props.motionStudioProjectId
+            ? (ctx) => <MotionStudioEditorLanes projectId={props.motionStudioProjectId as string} outputMs={ctx.outputMs} onSeek={ctx.seekOutput} />
+            : undefined
+        }
       />
     </ClipperSurfaceErrorBoundary>
   )
