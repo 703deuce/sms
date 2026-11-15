@@ -122,7 +122,11 @@ class _FragmentItem(Item):
         return None
 
     def cues(self):
-        return [cue for item in self.children for cue in item.cues()]
+        result = []
+        for item in self.children:
+            for cue in item.cues():
+                result.append(cue)
+        return result
 
     def draw(self, c, res, t):
         for item in sorted(self.children, key=lambda x: x.z):

@@ -406,7 +406,7 @@ def _emit_extension(spec: dict, oid: str, obj: dict) -> list[str]:
         raise CompileError([{"code": "COMPONENT_INVALID", "message": f"{oid}: missing build_scene(ctx)"}])
     args = obj.get("arguments") or {}
     result = [f"    def {name}(ctx):"]
-    result.extend("    " + line if line.strip() else "" for line in src)
+    result.extend("        " + line if line.strip() else "" for line in src)
     result.append("        return build_scene(ctx)")
     result.append(f"    ctx.component_args = {args!r}")
     result.append(f"    film_part_{name} = {name}(ctx)")
