@@ -1,0 +1,2419 @@
+{
+  "aliases": {
+    "place_photo": "place_media",
+    "place_type": "animate_text"
+  },
+  "intents": [
+    {
+      "intent": "push the camera",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "pull the camera",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "camera hold",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "pan the camera",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "track the camera",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "camera reveal",
+      "tool": "animate_camera"
+    },
+    {
+      "intent": "place a photo",
+      "tool": "place_media"
+    },
+    {
+      "intent": "place the photograph",
+      "tool": "place_media"
+    },
+    {
+      "intent": "put this photo",
+      "tool": "place_media"
+    },
+    {
+      "intent": "place footage",
+      "tool": "place_media"
+    },
+    {
+      "intent": "place the clip",
+      "tool": "place_media"
+    },
+    {
+      "intent": "create an environment",
+      "tool": "create_environment"
+    },
+    {
+      "intent": "invent a world",
+      "tool": "create_environment"
+    },
+    {
+      "intent": "create a desk environment",
+      "tool": "create_environment"
+    },
+    {
+      "intent": "create a chart",
+      "tool": "create_graphic"
+    },
+    {
+      "intent": "create a map graphic",
+      "tool": "create_graphic"
+    },
+    {
+      "intent": "draw a chart",
+      "tool": "create_graphic"
+    },
+    {
+      "intent": "transition between scenes",
+      "tool": "transition_scene"
+    },
+    {
+      "intent": "connect two scenes",
+      "tool": "transition_scene"
+    },
+    {
+      "intent": "add a music cue",
+      "tool": "compose_audio"
+    },
+    {
+      "intent": "add a sound effect",
+      "tool": "compose_audio"
+    },
+    {
+      "intent": "compose audio",
+      "tool": "compose_audio"
+    },
+    {
+      "intent": "draw a path",
+      "tool": "draw_path"
+    },
+    {
+      "intent": "animate typography",
+      "tool": "animate_text"
+    },
+    {
+      "intent": "animate text",
+      "tool": "animate_text"
+    },
+    {
+      "intent": "place kinetic type",
+      "tool": "animate_text"
+    },
+    {
+      "intent": "set a material",
+      "tool": "set_material"
+    },
+    {
+      "intent": "animate a property",
+      "tool": "animate_property"
+    },
+    {
+      "intent": "apply an effect",
+      "tool": "apply_effect"
+    },
+    {
+      "intent": "group a layout",
+      "tool": "layout_group"
+    },
+    {
+      "intent": "place a shape",
+      "tool": "place_primitive"
+    },
+    {
+      "intent": "place a primitive",
+      "tool": "place_primitive"
+    },
+    {
+      "intent": "register a custom component",
+      "tool": "register_component"
+    },
+    {
+      "intent": "use a registered component",
+      "tool": "use_component"
+    }
+  ],
+  "package": "motion.studio.tools",
+  "schema": 1,
+  "sourceHash": "46fca605163b8c8c34ff7740",
+  "tools": {
+    "animate_camera": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Validate the target, frame interval, camera constraints and easing type; generate camera keyframes on the specification; return the generated motionId. A hold may use startFrame == endFrame with easing='hold'.",
+      "defaults": "easing defaults to ease_in_out; rot defaults to 0.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "INVALID_RANGE": "Use a positive frame interval, or easing='hold' for a still camera.",
+        "MISSING_TARGET": "Place the focus target first, or omit focusTargetId.",
+        "PRECONDITION_FAILED": "Call create_environment first.",
+        "UNSUPPORTED_VALUE": "Use one of ['linear', 'ease_in_out', 'ease_out_cubic', 'ease_out_back', 'ease_in', 'ease_out', 'hold']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "easing": "ease_in_out",
+            "endFrame": 90,
+            "environmentId": "env_desk",
+            "focusTargetId": "media_1",
+            "from": {
+              "rot": 0,
+              "x": 0,
+              "y": 0,
+              "zoom": 0.35
+            },
+            "startFrame": 0,
+            "to": {
+              "rot": 0,
+              "x": 1250,
+              "y": 400,
+              "zoom": 0.7
+            }
+          },
+          "tool": "animate_camera"
+        }
+      ],
+      "name": "animate_camera",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Existing environment containing the camera. Defaults to the sole environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Inclusive start frame.",
+          "name": "startFrame",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End frame (exclusive of a later move). Must be > startFrame unless easing is hold.",
+          "name": "endFrame",
+          "required": true,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start pose {x, y, zoom, rot?}.",
+          "name": "from",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End pose {x, y, zoom, rot?}.",
+          "name": "to",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "allowed": [
+            "linear",
+            "ease_in_out",
+            "ease_out_cubic",
+            "ease_out_back",
+            "ease_in",
+            "ease_out",
+            "hold"
+          ],
+          "default": "ease_in_out",
+          "description": "Supported movement profile.",
+          "name": "easing",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional existing object to emphasize (spotlight).",
+          "name": "focusTargetId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable motion id. Generated if omitted.",
+          "name": "motionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "An environment exists.",
+        "focusTargetId, if set, refers to an existing object."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Create a deterministic camera movement within an existing environment. Used to direct attention toward objects, transition between visual clusters, or reveal relationships between subjects.",
+      "resourceLimits": "At most 80 camera moves per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "easing": {
+            "default": "ease_in_out",
+            "description": "Supported movement profile.",
+            "enum": [
+              "linear",
+              "ease_in_out",
+              "ease_out_cubic",
+              "ease_out_back",
+              "ease_in",
+              "ease_out",
+              "hold"
+            ],
+            "type": "string"
+          },
+          "endFrame": {
+            "description": "End frame (exclusive of a later move). Must be > startFrame unless easing is hold.",
+            "type": "integer"
+          },
+          "environmentId": {
+            "description": "Existing environment containing the camera. Defaults to the sole environment.",
+            "type": "string"
+          },
+          "focusTargetId": {
+            "description": "Optional existing object to emphasize (spotlight).",
+            "type": "string"
+          },
+          "from": {
+            "description": "Start pose {x, y, zoom, rot?}.",
+            "type": "object"
+          },
+          "motionId": {
+            "description": "Stable motion id. Generated if omitted.",
+            "type": "string"
+          },
+          "startFrame": {
+            "description": "Inclusive start frame.",
+            "type": "integer"
+          },
+          "to": {
+            "description": "End pose {x, y, zoom, rot?}.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "startFrame",
+          "endFrame",
+          "from",
+          "to"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+525ea7c1",
+      "whenNotToUse": "Do not use it to place objects, invent camera method names, or hold with a second film.shot() closer than 0.25 s on a new target.",
+      "whenToUse": "When the story needs a camera push, pull-back, pan, tracking movement, reveal or deliberate hold."
+    },
+    "animate_property": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Record a property animation on the specification and return its animationId.",
+      "defaults": "easing defaults to ease_in_out.",
+      "dependencies": [],
+      "errors": {
+        "INVALID_RANGE": "endFrame must be >= startFrame.",
+        "MISSING_TARGET": "Create the target first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "easing": "ease_out",
+            "endFrame": 20,
+            "from": 0,
+            "property": "opacity",
+            "startFrame": 0,
+            "targetId": "media_1",
+            "to": 1
+          },
+          "tool": "animate_property"
+        }
+      ],
+      "name": "animate_property",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Existing object, typography, environment or camera-move id.",
+          "name": "targetId",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Property to animate (x, y, opacity, rotation, scale, width, ...).",
+          "name": "property",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start value.",
+          "name": "from",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End value.",
+          "name": "to",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start frame.",
+          "name": "startFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End frame.",
+          "name": "endFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": [
+            "linear",
+            "ease_in_out",
+            "ease_out_cubic",
+            "ease_out_back",
+            "ease_in",
+            "ease_out",
+            "hold"
+          ],
+          "default": "ease_in_out",
+          "description": "Curve.",
+          "name": "easing",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "animationId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "targetId exists.",
+        "endFrame >= startFrame when both are set."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Animate an arbitrary property of an existing object along a validated curve (position, opacity, rotation, scale, width, etc.).",
+      "resourceLimits": "Counts toward the object/animation envelope of the scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "animationId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "easing": {
+            "default": "ease_in_out",
+            "description": "Curve.",
+            "enum": [
+              "linear",
+              "ease_in_out",
+              "ease_out_cubic",
+              "ease_out_back",
+              "ease_in",
+              "ease_out",
+              "hold"
+            ],
+            "type": "string"
+          },
+          "endFrame": {
+            "description": "End frame.",
+            "type": "integer"
+          },
+          "from": {
+            "description": "Start value.",
+            "type": "number"
+          },
+          "property": {
+            "description": "Property to animate (x, y, opacity, rotation, scale, width, ...).",
+            "type": "string"
+          },
+          "startFrame": {
+            "description": "Start frame.",
+            "type": "integer"
+          },
+          "targetId": {
+            "description": "Existing object, typography, environment or camera-move id.",
+            "type": "string"
+          },
+          "to": {
+            "description": "End value.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "targetId",
+          "property"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 2,
+      "version": "1.0+625b9d3b",
+      "whenNotToUse": "Prefer animate_camera for camera moves. Do not invent property names the compiler cannot bind.",
+      "whenToUse": "When a custom motion path or fade is required on an object the higher-level tools do not already express."
+    },
+    "animate_text": {
+      "aliases": [
+        "place_type"
+      ],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Add a typography object to the specification and return its typeId. The compiler emits HeroSlam, LowerThird, BigText or Item text timed with ctx.W / word ids.",
+      "defaults": "size defaults to 120; role defaults to title.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "PRECONDITION_FAILED": "Call create_environment first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "anchorWordId": "word_214",
+            "position": {
+              "x": 0,
+              "y": -400
+            },
+            "role": "kinetic",
+            "size": 160,
+            "text": "The last store"
+          },
+          "tool": "animate_text"
+        }
+      ],
+      "name": "animate_text",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "The string to display.",
+          "name": "text",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World position {x, y}.",
+          "name": "position",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": 120,
+          "description": "Type size in world pixels.",
+          "name": "size",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Weight, tracking, and palette-key color hints.",
+          "name": "style",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable word-timing id to sync the entrance.",
+          "name": "anchorWordId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Entrance {type, anchorWordId?}.",
+          "name": "entrance",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": "title",
+          "description": "title | label | lower_third | kinetic.",
+          "name": "role",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "typeId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 40,
+          "description": "Z-order.",
+          "name": "z",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "preconditions": [
+        "An environment exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Place and time typography, including narration-synchronized kinetic type, using official word-timing ids.",
+      "resourceLimits": "At most 200 typography/objects per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "anchorWordId": {
+            "description": "Stable word-timing id to sync the entrance.",
+            "type": "string"
+          },
+          "entrance": {
+            "description": "Entrance {type, anchorWordId?}.",
+            "type": "object"
+          },
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "position": {
+            "description": "World position {x, y}.",
+            "type": "object"
+          },
+          "role": {
+            "default": "title",
+            "description": "title | label | lower_third | kinetic.",
+            "type": "string"
+          },
+          "size": {
+            "default": 120,
+            "description": "Type size in world pixels.",
+            "type": "number"
+          },
+          "style": {
+            "description": "Weight, tracking, and palette-key color hints.",
+            "type": "object"
+          },
+          "text": {
+            "description": "The string to display.",
+            "type": "string"
+          },
+          "typeId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "z": {
+            "default": 40,
+            "description": "Z-order.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+d775b5b6",
+      "whenNotToUse": "Do not use it to place a photo or to invent a word clock. Time anchors must be official word ids or explicit frames.",
+      "whenToUse": "When the blueprint calls for a title, lower third, label, or word-synced kinetic line."
+    },
+    "apply_effect": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Record the effect on the specification and return its effectId. The compiler emits film.focus/shot/shake/damp or a grain item, honoring the 0.25 s spotlight rule.",
+      "defaults": "params default to empty.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "PRECONDITION_FAILED": "Call create_environment first.",
+        "UNSUPPORTED_VALUE": "Use one of ['spotlight', 'grain', 'shake', 'damp', 'hold']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "kind": "spotlight",
+            "params": {
+              "strength": 0.55
+            },
+            "startFrame": 24,
+            "targetId": "media_1"
+          },
+          "tool": "apply_effect"
+        }
+      ],
+      "name": "apply_effect",
+      "parameters": [
+        {
+          "allowed": [
+            "spotlight",
+            "grain",
+            "shake",
+            "damp",
+            "hold"
+          ],
+          "default": null,
+          "description": "Effect kind.",
+          "name": "kind",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional object to attach the effect to.",
+          "name": "targetId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start frame.",
+          "name": "startFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End frame.",
+          "name": "endFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Kind-specific parameters (radius, strength, amplitude).",
+          "name": "params",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "effectId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "An environment exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Apply a deterministic effect (spotlight, grain, shake, damp, hold) with validated parameters. Spotlight keys on different targets must remain at least 0.25 s apart.",
+      "resourceLimits": "At most 200 effect/objects per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "effectId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "endFrame": {
+            "description": "End frame.",
+            "type": "integer"
+          },
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Effect kind.",
+            "enum": [
+              "spotlight",
+              "grain",
+              "shake",
+              "damp",
+              "hold"
+            ],
+            "type": "string"
+          },
+          "params": {
+            "description": "Kind-specific parameters (radius, strength, amplitude).",
+            "type": "object"
+          },
+          "startFrame": {
+            "description": "Start frame.",
+            "type": "integer"
+          },
+          "targetId": {
+            "description": "Optional object to attach the effect to.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+68838b2b",
+      "whenNotToUse": "Do not stack two spotlights on different targets closer than 0.25 s. A camera hold should use animate_camera with easing='hold', not a second shot key.",
+      "whenToUse": "When the blueprint calls for a spotlight, grain, camera shake, damp or a deliberate hold effect."
+    },
+    "compose_audio": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Record a sound event on the specification and return its soundId. The compiler emits film.cue(...) for effect roles; beds and voice remain with the authorized audio pipeline.",
+      "defaults": "gain defaults to 1.0.",
+      "dependencies": [],
+      "errors": {
+        "LIMIT_EXCEEDED": "Remove an unused cue.",
+        "UNSUPPORTED_VALUE": "Use one of ['music', 'voice', 'effect', 'cue', 'silence']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "cue": "whoosh",
+            "gain": 0.8,
+            "role": "cue",
+            "startFrame": 0
+          },
+          "tool": "compose_audio"
+        }
+      ],
+      "name": "compose_audio",
+      "parameters": [
+        {
+          "allowed": [
+            "music",
+            "voice",
+            "effect",
+            "cue",
+            "silence"
+          ],
+          "default": null,
+          "description": "Audio role.",
+          "name": "role",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Effect kind for role=cue or role=effect (must be a known film.cue kind when set).",
+          "name": "cue",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 1.0,
+          "description": "Linear gain.",
+          "name": "gain",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start frame.",
+          "name": "startFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End frame.",
+          "name": "endFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable word-timing id.",
+          "name": "anchorWordId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "True if this is a continuous bed (handled by the authorized mixer).",
+          "name": "bed",
+          "required": false,
+          "type": "boolean"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "soundId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records. Do not write audio files or bypass the mixer's authorization.",
+      "purpose": "Add music, voice, silence or effect cues to the scene specification. Does not invent an audio engine; it records intent for the deterministic mixer and film.cue.",
+      "resourceLimits": "At most 80 audio events per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "anchorWordId": {
+            "description": "Stable word-timing id.",
+            "type": "string"
+          },
+          "bed": {
+            "description": "True if this is a continuous bed (handled by the authorized mixer).",
+            "type": "boolean"
+          },
+          "cue": {
+            "description": "Effect kind for role=cue or role=effect (must be a known film.cue kind when set).",
+            "type": "string"
+          },
+          "endFrame": {
+            "description": "End frame.",
+            "type": "integer"
+          },
+          "gain": {
+            "default": 1.0,
+            "description": "Linear gain.",
+            "type": "number"
+          },
+          "role": {
+            "description": "Audio role.",
+            "enum": [
+              "music",
+              "voice",
+              "effect",
+              "cue",
+              "silence"
+            ],
+            "type": "string"
+          },
+          "soundId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "startFrame": {
+            "description": "Start frame.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+0a21ca88",
+      "whenNotToUse": "Do not use it to synthesize audio, write files, or override the authorized mixer / true-peak limiter.",
+      "whenToUse": "When the blueprint calls for a cue, a bed, a paused-narration window, or a word-anchored sound."
+    },
+    "create_environment": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Validate palette keys and limits, add an environment to the specification, and return its environmentId.",
+      "defaults": "size defaults to 3840x2160; palette and materials default to empty and are filled from film identity later.",
+      "dependencies": [],
+      "errors": {
+        "INVALID_DATA": "Choose a new environmentId; do not collide with an existing one.",
+        "LIMIT_EXCEEDED": "Remove an unused environment or split the scene.",
+        "UNSUPPORTED_VALUE": "Use only palette keys bg, ink, accent, accent2, muted."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "backdrop": {
+              "from": "bg",
+              "kind": "gradient",
+              "to": "muted"
+            },
+            "brief": "A worn physical desk under a practical lamp, papers at the edges, room for a single print.",
+            "environmentId": "env_desk",
+            "materials": [
+              "paper",
+              "wood grain"
+            ]
+          },
+          "tool": "create_environment"
+        }
+      ],
+      "name": "create_environment",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id for this environment. Generated if omitted.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Story-driven description of the space (invented, not a template name).",
+          "name": "brief",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Materials, light, and finish notes from the film identity.",
+          "name": "artDirection",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional palette overrides; keys must be bg, ink, accent, accent2, muted.",
+          "name": "palette",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World size {width, height} in 4K world pixels.",
+          "name": "size",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Free-form material notes (paper, wood, grain, glass, etc.).",
+          "name": "materials",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
+          "name": "backdrop",
+          "required": false,
+          "type": "object"
+        }
+      ],
+      "preconditions": [
+        "A scene specification exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Create a custom visual space for this scene. Environments are invented for the story; this is not a world-type template picker.",
+      "resourceLimits": "At most 16 environments per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "artDirection": {
+            "description": "Materials, light, and finish notes from the film identity.",
+            "type": "object"
+          },
+          "backdrop": {
+            "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
+            "type": "object"
+          },
+          "brief": {
+            "description": "Story-driven description of the space (invented, not a template name).",
+            "type": "string"
+          },
+          "environmentId": {
+            "description": "Stable id for this environment. Generated if omitted.",
+            "type": "string"
+          },
+          "materials": {
+            "description": "Free-form material notes (paper, wood, grain, glass, etc.).",
+            "type": "array"
+          },
+          "palette": {
+            "description": "Optional palette overrides; keys must be bg, ink, accent, accent2, muted.",
+            "type": "object"
+          },
+          "size": {
+            "description": "World size {width, height} in 4K world pixels.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "brief"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+9d2cd30d",
+      "whenNotToUse": "Do not call it to pick a stock city tour or a fixed WORLD_TYPES enum entry. Do not use it to place media or move the camera.",
+      "whenToUse": "When the scene needs a visual space (desk, map space, invented interior, graphic field, etc.) before objects are placed."
+    },
+    "create_graphic": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Verify required data, add a graphic object to the specification, and return its objectId. The compiler maps kinds onto motion_core classes (LineSeries, BarSeries, MapPin, Route, Callout, etc.).",
+      "defaults": "position defaults to the origin; entrance defaults to reveal.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "INVALID_DATA": "Pass verified numeric or geographic data from the blueprint.",
+        "PRECONDITION_FAILED": "Call create_environment first.",
+        "UNSUPPORTED_VALUE": "Use one of ['chart_line', 'chart_bar', 'map', 'callout', 'counter', 'panel', 'stamp', 'pin', 'route', 'card']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "data": [
+              {
+                "x": "2019",
+                "y": 4.2
+              },
+              {
+                "x": "2020",
+                "y": 8.1
+              },
+              {
+                "x": "2021",
+                "y": 12.0
+              }
+            ],
+            "height": 900,
+            "kind": "chart_line",
+            "position": {
+              "x": 0,
+              "y": 200
+            },
+            "title": "Revenue",
+            "width": 2200
+          },
+          "tool": "create_graphic"
+        }
+      ],
+      "name": "create_graphic",
+      "parameters": [
+        {
+          "allowed": [
+            "chart_line",
+            "chart_bar",
+            "map",
+            "callout",
+            "counter",
+            "panel",
+            "stamp",
+            "pin",
+            "route",
+            "card"
+          ],
+          "default": null,
+          "description": "Graphic kind.",
+          "name": "kind",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Verified series or structured data from the blueprint.",
+          "name": "data",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Verified named or coordinate places for map graphics.",
+          "name": "places",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Verified path for a route.",
+          "name": "path",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World position {x, y}.",
+          "name": "position",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Width in world pixels.",
+          "name": "width",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Height in world pixels.",
+          "name": "height",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Color and typography hints using official palette keys.",
+          "name": "style",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional title.",
+          "name": "title",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Entrance {type, anchorWordId?}.",
+          "name": "entrance",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable object id.",
+          "name": "objectId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 25,
+          "description": "Z-order.",
+          "name": "z",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "preconditions": [
+        "An environment exists.",
+        "Chart/map kinds include verified data from the blueprint."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records. Do not fabricate series values.",
+      "purpose": "Create a chart, map, callout, counter or other structured graphic from verified data and arguments.",
+      "resourceLimits": "At most 200 objects per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "data": {
+            "description": "Verified series or structured data from the blueprint.",
+            "type": "array"
+          },
+          "entrance": {
+            "description": "Entrance {type, anchorWordId?}.",
+            "type": "object"
+          },
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "height": {
+            "description": "Height in world pixels.",
+            "type": "number"
+          },
+          "kind": {
+            "description": "Graphic kind.",
+            "enum": [
+              "chart_line",
+              "chart_bar",
+              "map",
+              "callout",
+              "counter",
+              "panel",
+              "stamp",
+              "pin",
+              "route",
+              "card"
+            ],
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Stable object id.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Verified path for a route.",
+            "type": "array"
+          },
+          "places": {
+            "description": "Verified named or coordinate places for map graphics.",
+            "type": "array"
+          },
+          "position": {
+            "description": "World position {x, y}.",
+            "type": "object"
+          },
+          "style": {
+            "description": "Color and typography hints using official palette keys.",
+            "type": "object"
+          },
+          "title": {
+            "description": "Optional title.",
+            "type": "string"
+          },
+          "width": {
+            "description": "Width in world pixels.",
+            "type": "number"
+          },
+          "z": {
+            "default": 25,
+            "description": "Z-order.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+57872a38",
+      "whenNotToUse": "Do not invent numeric or geographic data. Do not use this to place a photo (use place_media) or to write a new procedural component (use the extension path).",
+      "whenToUse": "When the blueprint calls for a chart, map annotation, callout, pin, route, stamp or similar graphic built from approved data."
+    },
+    "draw_path": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Validate the point list, add a path object to the specification, and return its objectId. The compiler emits Connector, StringLine, Route or a path Item.",
+      "defaults": "width defaults to 6; entrance defaults to none.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "INVALID_ARGUMENT": "Pass at least two points: [{x,y}, ...].",
+        "PRECONDITION_FAILED": "Call create_environment first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "points": [
+              {
+                "x": 0,
+                "y": 0
+              },
+              {
+                "x": 800,
+                "y": 40
+              },
+              {
+                "x": 1400,
+                "y": -20
+              }
+            ],
+            "style": {
+              "look": "string"
+            },
+            "width": 8
+          },
+          "tool": "draw_path"
+        }
+      ],
+      "name": "draw_path",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "List of {x, y} points. Required unless path is set.",
+          "name": "points",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Alias of points.",
+          "name": "path",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": 6,
+          "description": "Stroke width.",
+          "name": "width",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stroke style (palette key, dash, sag).",
+          "name": "style",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Entrance {type, anchorWordId?}.",
+          "name": "entrance",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "objectId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 15,
+          "description": "Z-order.",
+          "name": "z",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "preconditions": [
+        "An environment exists.",
+        "At least two points are provided."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Draw a free path (route, string, underline, handwritten mark) from points or a curve in the environment.",
+      "resourceLimits": "At most 400 primitives per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "entrance": {
+            "description": "Entrance {type, anchorWordId?}.",
+            "type": "object"
+          },
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Alias of points.",
+            "type": "array"
+          },
+          "points": {
+            "description": "List of {x, y} points. Required unless path is set.",
+            "type": "array"
+          },
+          "style": {
+            "description": "Stroke style (palette key, dash, sag).",
+            "type": "object"
+          },
+          "width": {
+            "default": 6,
+            "description": "Stroke width.",
+            "type": "number"
+          },
+          "z": {
+            "default": 15,
+            "description": "Z-order.",
+            "type": "number"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 2,
+      "version": "1.0+0385b8d4",
+      "whenNotToUse": "Do not use it to move the camera or to invent a skia drawing call.",
+      "whenToUse": "When the design needs a custom path that is not a stock chart or map tool output."
+    },
+    "layout_group": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Record a group and return its groupId. Layout names are composition hints, not fixed templates.",
+      "defaults": "layout defaults to free.",
+      "dependencies": [],
+      "errors": {
+        "MISSING_TARGET": "Place each member first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "layout": "cluster",
+            "memberIds": [
+              "media_1",
+              "type_1"
+            ],
+            "position": {
+              "x": 0,
+              "y": 0
+            }
+          },
+          "tool": "layout_group"
+        }
+      ],
+      "name": "layout_group",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Existing object or typography ids.",
+          "name": "memberIds",
+          "required": true,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": "free",
+          "description": "free | row | column | stack | cluster.",
+          "name": "layout",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Group origin {x, y}.",
+          "name": "position",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "groupId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "Every memberId exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Group existing objects into a composition (free, row, column, stack, cluster) without freezing them into a template.",
+      "resourceLimits": "At most 200 objects per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "groupId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "layout": {
+            "default": "free",
+            "description": "free | row | column | stack | cluster.",
+            "type": "string"
+          },
+          "memberIds": {
+            "description": "Existing object or typography ids.",
+            "type": "array"
+          },
+          "position": {
+            "description": "Group origin {x, y}.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "memberIds"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+7f57cd58",
+      "whenNotToUse": "Do not use it to create objects; place them first.",
+      "whenToUse": "When several placed objects should move or be composed as a unit."
+    },
+    "place_media": {
+      "aliases": [
+        "place_photo"
+      ],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Validate the environment, asset, position and limits; add a media object to the specification; return the objectId. The compiler emits a PhotoFrame (or footage handoff placement on the same rect).",
+      "defaults": "presentation defaults to physical_print; rotation defaults to 0; entrance defaults to reveal.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "INVALID_ARGUMENT": "Pass position {x, y} and a supported presentation.",
+        "LIMIT_EXCEEDED": "Remove an unused placement or split the scene.",
+        "PRECONDITION_FAILED": "Call create_environment first.",
+        "UNKNOWN_ASSET": "Use an asset id from the approved catalog or blueprint."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "assetId": "photo_7",
+            "entrance": {
+              "anchorWordId": "word_214",
+              "type": "reveal"
+            },
+            "position": {
+              "x": 1250,
+              "y": 400
+            },
+            "presentation": "physical_print",
+            "rotation": -3,
+            "sceneId": "scene_12",
+            "width": 1800
+          },
+          "tool": "place_media"
+        }
+      ],
+      "name": "place_media",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Must match the specification's sceneId when provided.",
+          "name": "sceneId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Approved catalog/blueprint asset id.",
+          "name": "assetId",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": [
+            "physical_print",
+            "print",
+            "framed",
+            "glass",
+            "tv",
+            "screen",
+            "filmstrip",
+            "plain",
+            "full_bleed",
+            "footage",
+            "clip"
+          ],
+          "default": "physical_print",
+          "description": "How the media sits in the world.",
+          "name": "presentation",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World position {x, y}.",
+          "name": "position",
+          "required": true,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Requested width in world pixels (clamped to source resolution by the engine).",
+          "name": "width",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional height; otherwise preserved from the asset aspect.",
+          "name": "height",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": 0,
+          "description": "Rotation in degrees.",
+          "name": "rotation",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Normalized crop [cx0, cy0, cx1, cy1].",
+          "name": "crop",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Entrance {type, anchorWordId?}.",
+          "name": "entrance",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment; defaults to the sole environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable object id. Generated if omitted.",
+          "name": "objectId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 20,
+          "description": "Z-order.",
+          "name": "z",
+          "required": false,
+          "type": "number"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional callout label.",
+          "name": "label",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional caption.",
+          "name": "title",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "An environment exists.",
+        "assetId refers to an approved catalog/blueprint asset when the catalog is attached."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records. Do not pick random media or substitute an unassigned still.",
+      "purpose": "Position a photograph or footage item in an environment. The agent chooses placement, presentation and entrance; trusted code loads, crops and renders.",
+      "resourceLimits": "At most 80 media placements per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "assetId": {
+            "description": "Approved catalog/blueprint asset id.",
+            "type": "string"
+          },
+          "crop": {
+            "description": "Normalized crop [cx0, cy0, cx1, cy1].",
+            "type": "array"
+          },
+          "entrance": {
+            "description": "Entrance {type, anchorWordId?}.",
+            "type": "object"
+          },
+          "environmentId": {
+            "description": "Target environment; defaults to the sole environment.",
+            "type": "string"
+          },
+          "height": {
+            "description": "Optional height; otherwise preserved from the asset aspect.",
+            "type": "number"
+          },
+          "label": {
+            "description": "Optional callout label.",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Stable object id. Generated if omitted.",
+            "type": "string"
+          },
+          "position": {
+            "description": "World position {x, y}.",
+            "type": "object"
+          },
+          "presentation": {
+            "default": "physical_print",
+            "description": "How the media sits in the world.",
+            "enum": [
+              "physical_print",
+              "print",
+              "framed",
+              "glass",
+              "tv",
+              "screen",
+              "filmstrip",
+              "plain",
+              "full_bleed",
+              "footage",
+              "clip"
+            ],
+            "type": "string"
+          },
+          "rotation": {
+            "default": 0,
+            "description": "Rotation in degrees.",
+            "type": "number"
+          },
+          "sceneId": {
+            "description": "Must match the specification's sceneId when provided.",
+            "type": "string"
+          },
+          "title": {
+            "description": "Optional caption.",
+            "type": "string"
+          },
+          "width": {
+            "description": "Requested width in world pixels (clamped to source resolution by the engine).",
+            "type": "number"
+          },
+          "z": {
+            "default": 20,
+            "description": "Z-order.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "assetId",
+          "position"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+a6a5bd8e",
+      "whenNotToUse": "Do not use it to invent an asset that is not in the catalog, or to draw a chart or typography.",
+      "whenToUse": "When an approved still or clip should appear in the scene (print on a desk, framed still, screen, footage window, full-bleed plate)."
+    },
+    "place_primitive": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Add a primitive object to the specification and return its objectId. Combinations are arbitrary; this is not a template.",
+      "defaults": "position defaults to the origin.",
+      "dependencies": [
+        "create_environment"
+      ],
+      "errors": {
+        "PRECONDITION_FAILED": "Call create_environment first.",
+        "UNSUPPORTED_VALUE": "Use one of ['rect', 'rrect', 'circle', 'line', 'path', 'texture', 'grain', 'dot_field']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "kind": "rrect",
+            "material": {
+              "fill": "bg",
+              "stroke": "ink"
+            },
+            "position": {
+              "x": 0,
+              "y": 0
+            },
+            "size": {
+              "height": 900,
+              "radius": 24,
+              "width": 1600
+            }
+          },
+          "tool": "place_primitive"
+        }
+      ],
+      "name": "place_primitive",
+      "parameters": [
+        {
+          "allowed": [
+            "rect",
+            "rrect",
+            "circle",
+            "line",
+            "path",
+            "texture",
+            "grain",
+            "dot_field"
+          ],
+          "default": null,
+          "description": "Primitive kind.",
+          "name": "kind",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World position {x, y}.",
+          "name": "position",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "{width, height, radius, ...}.",
+          "name": "size",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Optional path points.",
+          "name": "path",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Fill, stroke, texture, grain.",
+          "name": "material",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "objectId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": 5,
+          "description": "Z-order.",
+          "name": "z",
+          "required": false,
+          "type": "number"
+        }
+      ],
+      "preconditions": [
+        "An environment exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Place a primitive shape, path, or texture so the agent can compose entirely new visual structures from validated instructions.",
+      "resourceLimits": "At most 400 primitives per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "kind": {
+            "description": "Primitive kind.",
+            "enum": [
+              "rect",
+              "rrect",
+              "circle",
+              "line",
+              "path",
+              "texture",
+              "grain",
+              "dot_field"
+            ],
+            "type": "string"
+          },
+          "material": {
+            "description": "Fill, stroke, texture, grain.",
+            "type": "object"
+          },
+          "objectId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "path": {
+            "description": "Optional path points.",
+            "type": "array"
+          },
+          "position": {
+            "description": "World position {x, y}.",
+            "type": "object"
+          },
+          "size": {
+            "description": "{width, height, radius, ...}.",
+            "type": "object"
+          },
+          "z": {
+            "default": 5,
+            "description": "Z-order.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 2,
+      "version": "1.0+dd0b4fdb",
+      "whenNotToUse": "Prefer place_media, create_graphic, or animate_text when those already express the design. Do not use this to call skia directly.",
+      "whenToUse": "When building a custom composition from shapes, paths and textures rather than a higher-level media/graphic tool."
+    },
+    "set_material": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Merge the material onto the target and return the targetId.",
+      "defaults": "Materials merge onto any existing material dict.",
+      "dependencies": [],
+      "errors": {
+        "MISSING_TARGET": "Create the target first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "material": {
+              "fill": "bg",
+              "grain": 0.08
+            },
+            "targetId": "prim_1"
+          },
+          "tool": "set_material"
+        }
+      ],
+      "name": "set_material",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Existing environment, object, or typography id.",
+          "name": "targetId",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Material fields to merge (fill, stroke, texture, grain, opacity).",
+          "name": "material",
+          "required": true,
+          "type": "object"
+        }
+      ],
+      "preconditions": [
+        "targetId exists in the specification."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Apply or update a material (fill, stroke, texture, grain, finish) on an existing object, typography item, or environment.",
+      "resourceLimits": "One material merge per call; object limits still apply.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "material": {
+            "description": "Material fields to merge (fill, stroke, texture, grain, opacity).",
+            "type": "object"
+          },
+          "targetId": {
+            "description": "Existing environment, object, or typography id.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetId",
+          "material"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 2,
+      "version": "1.0+13e17044",
+      "whenNotToUse": "Do not invent palette keys. Do not use this to move or create objects.",
+      "whenToUse": "When the design needs a custom finish on an object that already exists in the specification."
+    },
+    "transition_scene": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
+      "behavior": "Record a versioned transition on the specification and return its transitionId. The compiler and assembler honor the type and shared object ids.",
+      "defaults": "type defaults to cut; toSceneId defaults to this scene.",
+      "dependencies": [],
+      "errors": {
+        "INVALID_RANGE": "endFrame must be >= startFrame.",
+        "UNSUPPORTED_VALUE": "Use one of ['cut', 'dissolve', 'match_cut', 'shared_element', 'fade', 'wipe']."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "endFrame": 12,
+            "fromSceneId": "scene_11",
+            "sharedObjectIds": [
+              "media_1"
+            ],
+            "startFrame": 0,
+            "toSceneId": "scene_12",
+            "type": "shared_element"
+          },
+          "tool": "transition_scene"
+        }
+      ],
+      "name": "transition_scene",
+      "parameters": [
+        {
+          "allowed": [
+            "cut",
+            "dissolve",
+            "match_cut",
+            "shared_element",
+            "fade",
+            "wipe"
+          ],
+          "default": "cut",
+          "description": "Transition type (parameterized, not a fixed pack).",
+          "name": "type",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Outgoing scene id.",
+          "name": "fromSceneId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Incoming scene id.",
+          "name": "toSceneId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Start frame of the transition window.",
+          "name": "startFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "End frame of the transition window.",
+          "name": "endFrame",
+          "required": false,
+          "type": "integer"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Objects that persist across the transition.",
+          "name": "sharedObjectIds",
+          "required": false,
+          "type": "array"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Type-specific parameters (duration, direction, etc.).",
+          "name": "params",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "transitionId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "fromSceneId / toSceneId refer to planned scenes when provided."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records.",
+      "purpose": "Connect this scene to another (or its own in/out) with a parameterized transition, including shared-element continuity. Not a fixed transition template pack.",
+      "resourceLimits": "At most 16 transitions per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "endFrame": {
+            "description": "End frame of the transition window.",
+            "type": "integer"
+          },
+          "fromSceneId": {
+            "description": "Outgoing scene id.",
+            "type": "string"
+          },
+          "params": {
+            "description": "Type-specific parameters (duration, direction, etc.).",
+            "type": "object"
+          },
+          "sharedObjectIds": {
+            "description": "Objects that persist across the transition.",
+            "type": "array"
+          },
+          "startFrame": {
+            "description": "Start frame of the transition window.",
+            "type": "integer"
+          },
+          "toSceneId": {
+            "description": "Incoming scene id.",
+            "type": "string"
+          },
+          "transitionId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "type": {
+            "default": "cut",
+            "description": "Transition type (parameterized, not a fixed pack).",
+            "enum": [
+              "cut",
+              "dissolve",
+              "match_cut",
+              "shared_element",
+              "fade",
+              "wipe"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 1,
+      "version": "1.0+20d142e8",
+      "whenNotToUse": "Do not use it to move the camera inside a scene (animate_camera) or to invent a transition that contradicts the editorial plan.",
+      "whenToUse": "When the editorial plan or blueprint specifies how this scene should enter, exit, or share an element with a neighbor."
+    },
+    "use_component": {
+      "aliases": [],
+      "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish. Registration of new code is a separate authorized path.",
+      "behavior": "Reject any raw code argument. Record a use of the registered component on the specification and return its objectId. The compiler instantiates the registered component.",
+      "defaults": "componentArguments default to empty.",
+      "dependencies": [
+        "create_environment",
+        "register_component (trusted extension path)"
+      ],
+      "errors": {
+        "AUTHORIZATION": "Register the component through the trusted extension path first.",
+        "PRECONDITION_FAILED": "Call create_environment first."
+      },
+      "examples": [
+        {
+          "arguments": {
+            "component": "ticker",
+            "componentArguments": {
+              "symbol": "GME"
+            },
+            "componentVersion": "1.0+abc",
+            "position": {
+              "x": 0,
+              "y": 200
+            }
+          },
+          "tool": "use_component"
+        }
+      ],
+      "name": "use_component",
+      "parameters": [
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Registered component name.",
+          "name": "component",
+          "required": true,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Forbidden. Raw source is not accepted here; register the component through the trusted extension path first.",
+          "name": "code",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Registered version. Defaults to the latest registered version.",
+          "name": "componentVersion",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Structured arguments declared by the component interface.",
+          "name": "componentArguments",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "World position {x, y}.",
+          "name": "position",
+          "required": false,
+          "type": "object"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Target environment.",
+          "name": "environmentId",
+          "required": false,
+          "type": "string"
+        },
+        {
+          "allowed": null,
+          "default": null,
+          "description": "Stable id.",
+          "name": "objectId",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "preconditions": [
+        "The component name and version are registered.",
+        "An environment exists."
+      ],
+      "prohibited": "Do not invent engine method names, call skia or other low-level drawing APIs, edit renderer internals, or write database or storage records. Passing raw code is an authorization error.",
+      "purpose": "Place an already registered custom visual component (for example a validated ticker) through a deterministic call. This does not accept raw source.",
+      "resourceLimits": "At most 200 objects per scene.",
+      "reversible": true,
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "Forbidden. Raw source is not accepted here; register the component through the trusted extension path first.",
+            "type": "string"
+          },
+          "component": {
+            "description": "Registered component name.",
+            "type": "string"
+          },
+          "componentArguments": {
+            "description": "Structured arguments declared by the component interface.",
+            "type": "object"
+          },
+          "componentVersion": {
+            "description": "Registered version. Defaults to the latest registered version.",
+            "type": "string"
+          },
+          "environmentId": {
+            "description": "Target environment.",
+            "type": "string"
+          },
+          "objectId": {
+            "description": "Stable id.",
+            "type": "string"
+          },
+          "position": {
+            "description": "World position {x, y}.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "component"
+        ],
+        "type": "object"
+      },
+      "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
+      "tier": 3,
+      "version": "1.0+88e7c7ef",
+      "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path \u2014 that is the extension registrar after lint, sandbox and visual tests.",
+      "whenToUse": "When a previously registered extension (validated, versioned, documented) should appear in this scene."
+    }
+  }
+}

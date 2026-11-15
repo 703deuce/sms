@@ -1,6 +1,7 @@
 """Motion Designer prompt teaches engine craft and worked film examples."""
 import pathlib
 
+from clips_worker.motion_studio.core.api_manifest import format_api_reference
 from clips_worker.motion_studio.core.craft import (
     CRAFT_GUIDE,
     EXAMPLE_BOARD,
@@ -9,21 +10,20 @@ from clips_worker.motion_studio.core.craft import (
     SCENE_SKELETON,
     WORKED_EXAMPLES,
     designer_system,
+    engineer_system,
 )
+from clips_worker.motion_studio.tools.registry import format_tools_reference
+
 from clips_worker.motion_studio.sandbox.policy import check_code
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 API_SRC = (ROOT / "clips_worker/motion_studio/core/api.py").read_text()
 DESIGNER_SRC = (ROOT / "clips_worker/motion_studio/directors/documentary/designer.py").read_text()
+ENGINEER_SRC = (ROOT / "clips_worker/motion_studio/directors/documentary/engineer.py").read_text()
 
 
 def _api_reference() -> str:
-    marker = "API_REFERENCE ="
-    start = API_SRC.index(marker)
-    q = "'''" if "API_REFERENCE = '''" in API_SRC else '"""'
-    a = API_SRC.index(q, start) + len(q)
-    b = API_SRC.index(q, a)
-    return API_SRC[a:b]
+    return format_api_reference()
 
 
 def _example_code(block: str) -> str:
@@ -34,7 +34,9 @@ def _example_code(block: str) -> str:
 def test_designer_prompt_includes_craft_guide_and_examples():
     api = _api_reference()
     system = designer_system(api)
-    assert "designer_system(API_REFERENCE)" in DESIGNER_SRC
+    assert "from clips_worker.motion_studio.directors.documentary.engineer import" in DESIGNER_SRC
+    assert "engineer_system" in ENGINEER_SRC
+    assert "format_tools_reference" in ENGINEER_SRC
     assert CRAFT_GUIDE in system
     assert SCENE_SKELETON in system
     assert EXAMPLE_BOARD in system
@@ -46,7 +48,6 @@ def test_designer_prompt_includes_craft_guide_and_examples():
         "one hero per beat",
         "spoken word",
         "ctx.w(",
-        "typed",
         "riser",
         "spotlight",
         "ctx.geo",
@@ -80,3 +81,23 @@ def test_motion_core_exports_craft_surface():
     for name in ("Cached", "CREAM", "WHITE", "RUST", "MUSTARD", "HILITE", "Print", "PaperDoc",
                  "BigText", "GeoMap", "RegionFill", "per_frame_grain"):
         assert name in API_SRC, name
+
+
+def test_engineer_prompt_is_technical_and_tool_first():
+    api = _api_reference()
+    tools = format_tools_reference()
+    system = engineer_system(api, tools)
+    low = system.lower()
+    assert "motion engineer" in low
+    assert "technical" in low
+    assert "registered" in low and "tools" in low
+    assert "limitation" in low
+    assert "place_media" in low and "animate_camera" in low
+    assert "do not invent the creative concept" in low
+    assert "wright flyer" not in low
+    assert "you decide what, where, when and why" not in low
+    assert "already in scope" in low or "already in scope" in api.lower()
+    assert "no 'rgb' argument" in api.lower() or "no rgb argument" in api.lower()
+    assert "dark_line" in api
+    assert "0.25" in api
+    assert len(system) < 28_000, f"engineer system prompt is {len(system)} chars"

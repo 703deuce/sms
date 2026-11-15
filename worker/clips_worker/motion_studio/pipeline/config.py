@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import os
 
-STEPS = ("story", "research_plan", "director", "production_designer", "scene_code", "scene_fix", "storyboard", "critic", "analysis", "chat")
+STEPS = ("story", "research_plan", "director", "production_designer", "motion_engineer", "scene_code", "scene_fix", "storyboard", "visual_reviewer", "critic", "analysis", "chat")
 DEFAULT_MODEL = "gpt-6-luna"
 
 
@@ -36,18 +36,30 @@ def apply_project_settings(settings: dict | None) -> None:
 def model_for(step: str, settings: dict | None = None) -> str:
     """Resolve the model for a pipeline step. Precedence: explicit settings,
     then project settings.models / model_<step>, then MOTION_STUDIO_MODEL_<STEP>,
-    then MOTION_STUDIO_MODEL, then DEFAULT_MODEL (gpt-6-luna). No automatic escalation."""
+    then MOTION_STUDIO_MODEL, then DEFAULT_MODEL (gpt-6-luna). No automatic escalation.
+
+    Per-stage keys are the switch for a later model comparison. All roles default
+    to gpt-6-luna. `motion_engineer` falls back to the `scene_code` key when no
+    dedicated engineer key is set, so existing config keeps working.
+    """
     src = settings if settings is not None else _project_settings
     models = src.get("models") if isinstance((src or {}).get("models"), dict) else {}
-    for v in (
-        (models or {}).get(step),
-        (src or {}).get(f"model_{step}"),
-        os.environ.get(f"MOTION_STUDIO_MODEL_{step.upper()}"),
-        os.environ.get("MOTION_STUDIO_MODEL"),
-    ):
-        if isinstance(v, str) and v.strip():
-            return v.strip()
+    keys = [step]
+    if step == "motion_engineer" and not (models or {}).get("motion_engineer"):
+        keys.append("scene_code")
+    for key in keys:
+        for v in (
+            (models or {}).get(key),
+            (src or {}).get(f"model_{key}"),
+            os.environ.get(f"MOTION_STUDIO_MODEL_{key.upper()}"),
+        ):
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    global_model = os.environ.get("MOTION_STUDIO_MODEL")
+    if isinstance(global_model, str) and global_model.strip():
+        return global_model.strip()
     return DEFAULT_MODEL
+
 
 
 def reasoning_for(step: str) -> str:

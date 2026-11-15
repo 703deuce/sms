@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import ast
 
+from clips_worker.motion_studio.core.api_manifest import load_manifest
+
 ALLOWED_IMPORTS = {"math", "random", "numpy", "skia", "colorsys", "itertools", "functools", "statistics",
                    "dataclasses", "typing", "motion_core", "bisect", "collections"}
 BANNED_NAMES = {"__import__", "eval", "exec", "compile", "open", "globals", "locals", "vars", "getattr", "setattr",
@@ -97,6 +99,40 @@ def _const_str(node: ast.AST) -> str | None:
     return None
 
 
+
+def _manifest_lint_context() -> dict:
+    try:
+        m = load_manifest()
+    except Exception:  # noqa: BLE001
+        m = {}
+    exports = set(m.get("exports") or []) | set(m.get("preloaded") or PRELOADED_NAMES) | set(MOTION_CORE_NAMES)
+    palette = set(m.get("paletteKeys") or PALETTE_KEYS)
+    kwargs_for = {}
+    for name, rec in (m.get("symbols") or {}).items():
+        if rec.get("kwargs"):
+            kwargs_for[name] = set(rec["kwargs"])
+    arity_for = {}
+    forbidden_arity = {}
+    for name, rec in (m.get("skiaSurface") or {}).items():
+        if rec.get("arity"):
+            arity_for[name] = set(rec["arity"])
+        if rec.get("forbiddenArities"):
+            forbidden_arity[name] = set(rec["forbiddenArities"])
+    return {
+        "exports": exports,
+        "palette": palette,
+        "kwargs_for": kwargs_for,
+        "arity_for": arity_for,
+        "forbidden_arity": forbidden_arity,
+        "manifest": m,
+    }
+
+
+def _prob(node: ast.AST, msg: str) -> str:
+    lineno = getattr(node, "lineno", None)
+    return f"line {lineno}: {msg}" if lineno else msg
+
+
 def lint_scene(code: str) -> list[str]:
     """Pre-render AST checks: undefined names, bad signatures, unknown palette keys.
 
@@ -109,7 +145,8 @@ def lint_scene(code: str) -> list[str]:
     except SyntaxError as exc:
         return [f"syntax error line {exc.lineno}: {exc.msg}"]
 
-    defined: set[str] = set(SAFE_BUILTINS) | set(PRELOADED_NAMES) | set(MOTION_CORE_NAMES)
+    ctxm = _manifest_lint_context()
+    defined: set[str] = set(SAFE_BUILTINS) | set(PRELOADED_NAMES) | set(ctxm["exports"])
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for a in node.names:
@@ -120,7 +157,9 @@ def lint_scene(code: str) -> list[str]:
                     defined |= MOTION_CORE_NAMES
                 else:
                     defined.add(a.asname or a.name)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+        elif isinstance(node, ast.ClassDef):
+            defined.add(node.name)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             defined.add(node.name)
             for arg in node.args.args + node.args.kwonlyargs:
                 defined.add(arg.arg)
@@ -149,46 +188,56 @@ def lint_scene(code: str) -> list[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) and node.id not in defined:
             # Common false positives: comprehension targets are Stores first in the same tree
-            problems.append(f"undefined name {node.id!r} — it is not in the sandbox or motion_core "
+            problems.append(f"line {node.lineno}: undefined name {node.id!r} — it is not in the sandbox or motion_core "
                             f"(preloaded: skia, random, math, numpy/np)")
         if isinstance(node, ast.Call):
             name = _call_name(node.func)
-            if name == "StringLine":
-                bad = [k.arg for k in node.keywords if k.arg == "rgb"]
-                if bad:
-                    problems.append(
-                        "StringLine has no 'rgb' argument; it is a red thread. "
-                        "Signature: StringLine(a, b, t_in, dur=1.0, sag=0.05, width=9, z=None, "
-                        "pins=True, t_out=None, persist=False, hold=5.0, sfx=True). "
-                        "Use Connector(..., rgb=...) to colour a line."
-                    )
-            if name == "drawRoundRect":
+            if name and name in ctxm["kwargs_for"]:
+                allowed = ctxm["kwargs_for"][name]
+                for k in node.keywords:
+                    if k.arg and k.arg not in allowed:
+                        sig = ((ctxm["manifest"].get("symbols") or {}).get(name) or {}).get("signature") or name
+                        hint = ""
+                        if name == "StringLine" and k.arg == "rgb":
+                            hint = " The string is a red thread; use Connector(..., rgb=...) to colour a line."
+                        problems.append(_prob(
+                            node,
+                            f"{name} has no {k.arg!r} argument. Signature: {sig}.{hint}",
+                        ))
+            if name and name in ctxm["forbidden_arity"]:
                 npos = len(node.args)
-                # Correct: (rect, rx, ry, paint) — 4 positional. Wrong: (x, y, w, h, r, paint) — 6.
-                if npos >= 6:
-                    problems.append(
-                        "c.drawRoundRect(x, y, w, h, r, paint) is the wrong arity. "
-                        "Use c.drawRRect(rrect(x, y, w, h, r), paint) or "
-                        "c.drawRoundRect(skia.Rect.MakeXYWH(x, y, w, h), rx, ry, paint)."
-                    )
+                if npos in ctxm["forbidden_arity"][name] or (
+                    ctxm["arity_for"].get(name) and npos not in ctxm["arity_for"][name] and npos >= max(ctxm["forbidden_arity"][name])
+                ):
+                    rec = (ctxm["manifest"].get("skiaSurface") or {}).get(name) or {}
+                    problems.append(_prob(
+                        node,
+                        f"{name} was called with {npos} positional arguments; "
+                        f"valid arity is {sorted(ctxm['arity_for'].get(name) or [])}. "
+                        f"Signature: {rec.get('signature') or name}. "
+                        + (f"Prefer: {rec['prefer']}. " if rec.get("prefer") else "")
+                        + (f"WRONG: {rec['wrong']}" if rec.get("wrong") else ""),
+                    ))
+            elif name and name in ctxm["arity_for"] and name in (ctxm["forbidden_arity"] or {name: []}):
+                pass
             if name == "rgb" and node.args:
-                # ctx.rgb("dark_line")
                 key = _const_str(node.args[0])
-                if key is not None and key not in PALETTE_KEYS:
-                    problems.append(
+                if key is not None and key not in ctxm["palette"]:
+                    problems.append(_prob(
+                        node,
                         f"unknown palette key {key!r} passed to ctx.rgb. "
-                        f"Only {sorted(PALETTE_KEYS)} exist. Mix from those or use CREAM/WHITE/"
-                        f"RUST/MUSTARD/HILITE/RED/INK/TEAL."
-                    )
+                        f"Only {sorted(ctxm['palette'])} exist. Mix from those or use CREAM/WHITE/"
+                        f"RUST/MUSTARD/HILITE/RED/INK/TEAL.",
+                    ))
             if name == "get" and node.args and isinstance(node.func, ast.Attribute):
-                # ctx.palette.get("dark_line")
                 if isinstance(node.func.value, ast.Attribute) and node.func.value.attr == "palette":
                     key = _const_str(node.args[0])
-                    if key is not None and key not in PALETTE_KEYS:
-                        problems.append(
+                    if key is not None and key not in ctxm["palette"]:
+                        problems.append(_prob(
+                            node,
                             f"unknown palette key {key!r} on ctx.palette.get. "
-                            f"Only {sorted(PALETTE_KEYS)} exist."
-                        )
+                            f"Only {sorted(ctxm['palette'])} exist.",
+                        ))
         if isinstance(node, ast.Subscript):
             # ctx.palette["dark_line"] or palette["dark_line"]
             sl = node.slice
@@ -197,10 +246,11 @@ def lint_scene(code: str) -> list[str]:
             is_palette = (isinstance(holder, ast.Name) and holder.id == "palette") or (
                 isinstance(holder, ast.Attribute) and holder.attr == "palette"
             )
-            if is_palette and key is not None and key not in PALETTE_KEYS:
-                problems.append(
-                    f"unknown palette key {key!r}. Only {sorted(PALETTE_KEYS)} exist."
-                )
+            if is_palette and key is not None and key not in ctxm["palette"]:
+                problems.append(_prob(
+                    node,
+                    f"unknown palette key {key!r}. Only {sorted(ctxm['palette'])} exist.",
+                ))
 
     # Dedup while preserving order (undefined names can appear many times)
     seen, out = set(), []

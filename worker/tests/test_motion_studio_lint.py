@@ -55,7 +55,7 @@ def test_model_for_honours_env_and_project_settings(monkeypatch):
 def test_design_scene_source_tracks_passing_separately():
     import pathlib
     root = pathlib.Path(__file__).resolve().parents[1]
-    src = (root / "clips_worker/motion_studio/directors/documentary/designer.py").read_text()
+    src = (root / "clips_worker/motion_studio/directors/documentary/engineer.py").read_text()
     fn = src[src.index("def design_scene"):]
     assert "passing" in fn and "failed" in fn
     assert "usedFallback" in fn
@@ -67,9 +67,12 @@ def test_design_scene_source_tracks_passing_separately():
 
 def test_designer_prompt_teaches_core_vs_custom_and_sandbox_contract():
     import pathlib
+    from clips_worker.motion_studio.core.api_manifest import format_api_reference
+    from clips_worker.motion_studio.core.craft import engineer_system
+    from clips_worker.motion_studio.tools.registry import format_tools_reference
     root = pathlib.Path(__file__).resolve().parents[1]
     craft = (root / "clips_worker/motion_studio/core/craft.py").read_text().lower()
-    api = (root / "clips_worker/motion_studio/core/api.py").read_text().lower()
+    api = format_api_reference().lower()
     assert "core vs custom" in craft
     assert "held photograph" in craft
     assert "no rgb argument" in api or "no 'rgb' argument" in api
@@ -77,3 +80,5 @@ def test_designer_prompt_teaches_core_vs_custom_and_sandbox_contract():
     assert "0.25" in api
     assert "drawroundrect" in api or "drawrrect" in api
     assert "skia" in api and "already in scope" in (api + craft)
+    system = engineer_system(format_api_reference(), format_tools_reference()).lower()
+    assert "already in scope" in system or "already in scope" in api
