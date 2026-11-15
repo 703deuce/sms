@@ -24,7 +24,7 @@ export async function requireMotionStudioCaller(request: Request): Promise<Motio
   let workspaceId = memberships[0].workspaceId
   try {
     const pinned = await resolveWorkspaceId()
-    if (memberships.some(m => m.workspaceId === pinned)) workspaceId = pinned
+    if (memberships.some((m: (typeof memberships)[number]) => m.workspaceId === pinned)) workspaceId = pinned
   } catch {
     /* pinned workspace unavailable: keep the caller's own membership */
   }

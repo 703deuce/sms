@@ -91,7 +91,7 @@ def narrate(project: dict, story: dict, work: str, upload_key: str, log) -> dict
             raw = words_from_alignment(alignment, offset_s=0.0, scene_slot=ci)
             words = align_words_to_lines(raw, sc)
             dur = _probe_dur(path)
-            log("tts_call", f"ElevenLabs chapter {ci + 1}: {len(text)} chars", {"chapter": ci + 1, "chars": len(text), "model": used_model})
+            log("tts_call", f"narration chapter {ci + 1}: {len(text)} chars", {"chapter": ci + 1, "chars": len(text), "model": used_model})
         key = f"{upload_key}/vo_ch{ci:02d}.mp3"
         upload_file(key, Path(path), "audio/mpeg")
         out["chapters"].append({"index": ci, "lineIds": [l["id"] for l in lines], "key": key, "localPath": path,
