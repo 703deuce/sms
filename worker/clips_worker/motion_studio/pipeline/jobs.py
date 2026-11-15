@@ -659,6 +659,9 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
             else:
                 log("norm_reencode", f"scene {sc['index'] + 1}: re-encoded to {W}x{H} @ {fps} fps", {})
             norm.append(dst)
+    # Render only explicitly authored inter-scene transitions, preserving exact timeline frames.
+    from clips_worker.motion_studio.pipeline.transitions import transition_segments
+    norm = transition_segments(norm, lay["scenes"], rows, work, fps, crf, preset, log)
     lst = os.path.join(work, "concat.txt")
     Path(lst).write_text("".join(f"file '{n}'\n" for n in norm))
     picture = os.path.join(work, "picture.mp4")
