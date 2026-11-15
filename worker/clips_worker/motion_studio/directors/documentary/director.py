@@ -125,10 +125,19 @@ def _assign_stills(scenes: list[dict], catalog: list[dict], story: dict) -> list
     if not photos:
         return []
     lines_by_id = {l["id"]: l for l in story.get("lines") or []}
-    used: set[str] = set()
-    placements: list[dict] = []
+    # Honour existing official assignments so a second pass (Production Designer) does not re-place stills.
+    used: set[str] = {s["assetId"] for s in scenes if s.get("assetId")}
+    placements: list[dict] = [
+        {"sceneIndex": s.get("index"), "assetId": s["assetId"],
+         "reason": s.get("reason") or "already assigned", "reuseReason": s.get("reuseReason")}
+        for s in scenes if s.get("assetId")
+    ]
 
     def bind(scene: dict, asset: dict, why: str) -> None:
+        if scene.get("assetId") and scene.get("assetId") != asset["id"]:
+            return
+        if asset["id"] in used and scene.get("assetId") != asset["id"]:
+            return
         scene["assetId"] = asset["id"]
         if scene.get("visualType") not in ("title", "photo", "handoff"):
             scene["visualType"] = "photo"

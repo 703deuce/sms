@@ -333,17 +333,34 @@ def run_segment(conn, proj: dict, job: dict, p: dict) -> None:
             db.sandbox_exec(conn, pid, scene["id"], mode, ok, kind, err, chash, model, ms)
         if code is None:
             d = agent.design_scene(ctx, sdir, assets_dir, log, exec_log)
-            code = d["code"]
+            code = d.get("code")
+            if not code:
+                # Limitation or a failed engineer pass still needs a renderable, flagged scene.
+                from clips_worker.motion_studio.core.fallback import fallback_code
+                code = fallback_code(ctx)
+                d = {**d, "code": code, "codeHash": hashlib.sha256(code.encode()).hexdigest()[:24], "usedFallback": True,
+                     "degraded": True, "model": d.get("model") or "framework",
+                     "degradeCause": d.get("degradeCause") or (
+                         "limitation: " + ((d.get("limitation") or {}).get("reason") or "design cannot be built")
+                         if d.get("limitation") else "scene implementation missing"
+                     )}
             ck = f"{key_base}/generated/scene_{scene['index']:03d}_{d['codeHash']}.py"
             cp = os.path.join(work, f"scene_{scene['index']:03d}.py")
             Path(cp).write_text(code)
             upload_file(ck, Path(cp), "text/x-python")
-            qa_blob = {"checks": d["checks"], "verdict": d["verdict"], "ctxHash": ctx_hash}
+            qa_blob = {"checks": d.get("checks") or [], "verdict": d.get("verdict"), "ctxHash": ctx_hash}
             if d.get("usedFallback") or d.get("degraded"):
                 qa_blob["degraded"] = True
                 qa_blob["degradeCause"] = d.get("degradeCause") or "framework fallback"
-            db.update_scene(conn, scene["id"], codeKey=ck, codeHash=d["codeHash"], model=d["model"], fixRounds=d["fixRounds"],
-                            usedFallback=d["usedFallback"], qa=qa_blob)
+            if d.get("limitation"):
+                qa_blob["limitation"] = d["limitation"]
+                qa_blob["needsProductionRevision"] = True
+            if d.get("spec"):
+                qa_blob["spec"] = d.get("spec")
+            if d.get("tier") is not None:
+                qa_blob["tier"] = d.get("tier")
+            db.update_scene(conn, scene["id"], codeKey=ck, codeHash=d["codeHash"], model=d["model"], fixRounds=d.get("fixRounds") or 0,
+                            usedFallback=bool(d.get("usedFallback")), qa=qa_blob)
         rh = _render_hash("scene-v1", hashlib.sha256(code.encode()).hexdigest(), ctx_hash, W, H)
         if scene.get("renderHash") == rh and scene.get("renderKey") and not p.get("force"):
             log("cache_hit", f"scene {scene['index'] + 1}: unchanged (cached)", {})
@@ -557,6 +574,11 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
     qa_dir = os.path.join(work, "qa")
     art = qa.export_qa_artifacts(master, qa_dir, lay, story, plan, codes)
     checks.extend(art["checks"])
+    scene_rows = list(rows.values())
+    catalog = db.assets(conn, pid)
+    checks.extend(qa.film_quality(plan, scene_rows, catalog))
+    from clips_worker.motion_studio.core.reviewer import review_film
+    review = review_film(checks=checks, scenes=scene_rows, plan=plan, audio=meas)
     # 8) uploads: canvas (editor main source), words, exports, ledger, QA artifacts
     kb = work_key(proj)
     version = int(proj.get("timelineVersion") or 0) + 1
@@ -605,18 +627,26 @@ def run_assemble(conn, proj: dict, job: dict, p: dict) -> None:
         qa_keys.append({"name": name, "key": qk})
     if qa_keys:
         log("qa_artifacts", f"{len(qa_keys)} QA stills / contact sheet / strips uploaded", {"count": len(qa_keys)})
-    manifest = [manifest_entry(a["id"], a["kind"], a["filename"], used_in=[f"s{s['index']}" for s in lay["scenes"]
-                                                                         if (s.get("handoff") or {}).get("assetId") == a["id"]]) for a in assets]
+    usage = (plan.get("assetUsageManifest")
+             or (plan.get("blueprint") or {}).get("assetUsageManifest") or {})
+    if usage.get("entries"):
+        manifest = usage["entries"]
+    else:
+        manifest = [manifest_entry(a["id"], a["kind"], a["filename"], used_in=[f"s{s['index']}" for s in lay["scenes"]
+                                                                             if (s.get("handoff") or {}).get("assetId") == a["id"]]) for a in assets]
     ext = editor_extension(pid, lay, story, plan, handoffs, music, version, {i: r.get("renderHash") for i, r in rows.items()})
     edits_patch = {"markers": chapter_markers(lay, story), "motionStudio": ext}
     music_rec = {k: v for k, v in music.items() if k != "path"}
+    qa_ok = qa.film_pass(checks, scene_rows) and review.get("pass", True)
     export_info = {"version": version, "masterKey": master_key, "smallKey": small_key, "creditsKey": f"{kb}/credits_v{version}.txt",
                    "durationMs": int(total * 1000), "frames": lay["frames"], "width": W, "height": H, "manifest": manifest,
-                   "editsPatch": edits_patch, "loudness": meas, "qaArtifacts": qa_keys, "editorStems": editor_stems}
+                   "assetUsageManifest": usage or None,
+                   "editsPatch": edits_patch, "loudness": meas, "qaArtifacts": qa_keys, "editorStems": editor_stems,
+                   "review": review}
     db.update_project(conn, pid, status="review", stage="review", exportInfo=export_info, music=music_rec,
-                      qa={"checks": checks, "pass": all(c["pass"] or c.get("severity") == "warn" for c in checks)},
+                      qa={"checks": checks, "pass": qa_ok, "review": review},
                       timelineVersion=version, errorCode=None, errorMessage=None, errorStage=None)
     stages = (db.get_project(conn, pid) or {}).get("stages") or {}
-    stages.update({"assemble": "done", "review": "running"})
+    stages.update({"assemble": "done", "review": "needs_review" if not qa_ok else "running"})
     db.update_project(conn, pid, stages=stages)
     log("review", f"ready for review: {total:.1f}s, {len(lay['scenes'])} scenes", {"version": version})

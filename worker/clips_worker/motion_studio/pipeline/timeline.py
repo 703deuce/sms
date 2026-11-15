@@ -112,6 +112,20 @@ def layout(plan: dict, narration: dict, story: dict, fps: int = HOUSE["fps"]) ->
 
 
 
+
+def _scene_environment(plan: dict, planned: dict) -> dict:
+    """The bound custom environment for this scene — not a WORLD_TYPES menu entry."""
+    worlds = list((plan or {}).get("worlds") or ((plan or {}).get("blueprint") or {}).get("worlds") or [])
+    wid = planned.get("worldId") if isinstance(planned, dict) else None
+    env = next((w for w in worlds if isinstance(w, dict) and w.get("id") == wid), None)
+    if env is None and worlds:
+        env = worlds[0] if isinstance(worlds[0], dict) else None
+    if isinstance(env, dict):
+        return {"id": env.get("id"), "name": env.get("name"), "brief": env.get("brief"), "reason": env.get("reason")}
+    world = (plan or {}).get("world") if isinstance((plan or {}).get("world"), dict) else {}
+    return {"id": None, "name": world.get("name"), "brief": world.get("brief"), "reason": world.get("reason")}
+
+
 def _world_type(plan: dict) -> str | None:
     world = (plan or {}).get("world")
     if isinstance(world, str) and world.strip():
@@ -213,19 +227,27 @@ def scene_context(sc: dict, lay: dict, story: dict, plan: dict, assets_meta: dic
     planned = next((p for p in plan["scenes"] if p["index"] == sc["index"]), {})
     data = [d for d in story.get("data") or [] if d.get("lineId") in sc["lineIds"]]
     emph = _match_emphasis(_emphasis_items(planned.get("emphasis"), sc.get("lineIds") or []), words)
-    world = _world_type(plan)
+    env = _scene_environment(plan, planned if isinstance(planned, dict) else {})
     asset_id = (planned.get("assetId") or ((planned.get("handoff") or {}).get("assetId") if isinstance(planned.get("handoff"), dict) else None)) if isinstance(planned, dict) else None
     if not isinstance(asset_id, str):
         asset_id = None
     assets = assets_for_scene(planned if isinstance(planned, dict) else {}, assets_meta, plan, sc.get("index"))
+    blueprint = (plan or {}).get("blueprint") or {}
+    binding = next((b for b in (blueprint.get("sceneBindings") or []) if b.get("sceneIndex") == sc.get("index")), None)
     return {"duration": round(t1 - t0, 4), "fps": lay["fps"], "seed": seed + sc["index"] * 7919,
             "style": plan["style"], "palette": plan["style"]["palette"], "lines": lines, "words": words, "emphasis": emph,
-            "assets": assets, "data": data, "blueprint": (plan or {}).get("blueprint") or {},
+            "assets": assets, "data": data, "blueprint": blueprint,
+            "identity": plan.get("identity") or blueprint.get("identity") or {},
+            "worlds": plan.get("worlds") or blueprint.get("worlds") or [],
+            "assetUsage": blueprint.get("assetUsageManifest") or plan.get("assetUsageManifest") or {},
+            "cameraPlan": blueprint.get("cameraPlan") or {},
+            "sceneBinding": binding,
             "scene": {"id": f"s{sc['index']}", "index": sc["index"], "kind": sc.get("kind") or planned.get("kind"),
                       "visualType": sc["visualType"], "description": planned.get("description", "") if isinstance(planned, dict) else "",
                       "blocks": (planned.get("blocks") or []) if isinstance(planned, dict) else [],
-                      "world": world, "assetId": asset_id,
-                      "worldId": (planned.get("worldId") if isinstance(planned, dict) else None)}}
+                      "world": env, "environment": env, "assetId": asset_id,
+                      "worldId": (planned.get("worldId") if isinstance(planned, dict) else None) or (env or {}).get("id"),
+                      "objective": (binding or {}).get("objective") or (planned.get("description") if isinstance(planned, dict) else "")}}
 
 
 

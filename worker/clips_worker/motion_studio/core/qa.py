@@ -398,3 +398,73 @@ def export_qa_artifacts(master: str, dest: str, lay: dict, story: dict, plan: di
         spoken_number_check(story, codes or {}, plan),
     ]
     return {"checks": checks, "files": files, "stills": stills}
+
+
+def degraded_scenes_check(scenes: list[dict] | None) -> dict:
+    """A completed film must not silently ship fallback or otherwise degraded scenes."""
+    bad = []
+    for s in scenes or []:
+        qa_blob = s.get("qa") or {}
+        if s.get("usedFallback") or qa_blob.get("degraded") or qa_blob.get("verdict") == "degraded":
+            bad.append({"index": s.get("index"), "cause": qa_blob.get("degradeCause") or "framework fallback"})
+    return _chk("F1", not bad, bad, ("degraded scenes: " + ", ".join(f"s{b['index']}" for b in bad)) if bad else "no degraded scenes")
+
+
+def unexplained_repetition_check(plan: dict | None) -> dict:
+    """The same still/clip repeating without a narrative reuseReason fails film QA."""
+    manifest = ((plan or {}).get("assetUsageManifest")
+                or ((plan or {}).get("blueprint") or {}).get("assetUsageManifest") or {})
+    bad = []
+    for e in manifest.get("entries") or []:
+        uses = e.get("usedIn") or []
+        if len(uses) > 1 and any(not u.get("reuseReason") for u in uses[1:]):
+            bad.append(e.get("assetId"))
+    if not manifest:
+        # Fall back to scene assignments when the manifest is missing.
+        seen = {}
+        for s in (plan or {}).get("scenes") or []:
+            aid = s.get("assetId") or ((s.get("handoff") or {}).get("assetId") if isinstance(s.get("handoff"), dict) else None)
+            if not aid:
+                continue
+            seen.setdefault(aid, []).append(s)
+        for aid, rows in seen.items():
+            if len(rows) > 1 and any(not r.get("reuseReason") for r in rows[1:]):
+                bad.append(aid)
+    return _chk("F2", not bad, bad, ("unexplained repeats: " + ", ".join(str(x) for x in bad)) if bad else "no unexplained repeats")
+
+
+def unused_uploads_check(plan: dict | None, catalog: list[dict] | None = None) -> dict:
+    """Every relevant ready upload should appear in the authoritative usage manifest."""
+    manifest = ((plan or {}).get("assetUsageManifest")
+                or ((plan or {}).get("blueprint") or {}).get("assetUsageManifest") or {})
+    unused = list(manifest.get("unused") or [])
+    if catalog and not manifest:
+        used = set()
+        for s in (plan or {}).get("scenes") or []:
+            if s.get("assetId"):
+                used.add(s["assetId"])
+            h = s.get("handoff") or {}
+            if isinstance(h, dict) and h.get("assetId"):
+                used.add(h["assetId"])
+        unused = [a["id"] for a in catalog if a.get("id") not in used and a.get("kind") in ("image", "video")]
+    return _chk("F3", not unused, unused, ("unused uploads: " + ", ".join(unused)) if unused else "every inventory upload is used")
+
+
+def film_quality(plan: dict | None, scenes: list[dict] | None, catalog: list[dict] | None = None) -> list[dict]:
+    """Whole-film technical+allocation QA, reported separately from creative quality."""
+    return [
+        degraded_scenes_check(scenes),
+        unexplained_repetition_check(plan),
+        unused_uploads_check(plan, catalog),
+    ]
+
+
+def film_pass(checks: list[dict], scenes: list[dict] | None = None) -> bool:
+    if any(not (c.get("pass") or c.get("severity") == "warn") for c in checks or []):
+        return False
+    if scenes and any(
+        s.get("usedFallback") or (s.get("qa") or {}).get("degraded") or (s.get("qa") or {}).get("verdict") == "degraded"
+        for s in scenes
+    ):
+        return False
+    return True

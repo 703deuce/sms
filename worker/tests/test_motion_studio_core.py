@@ -225,7 +225,12 @@ def test_scene_context_accepts_string_emphasis_and_passes_asset_id():
     ctx0 = scene_context({"index": 0, "kind": "graphics", "visualType": "title",
                           "startS": 0.0, "endS": 3.0, "lineIds": ["l1"]},
                          lay, story, plan, {}, 1)
-    assert ctx0["scene"]["world"] == "city_grid"
+    world = ctx0["scene"]["world"]
+    if isinstance(world, dict):
+        assert (world.get("name") or world.get("type")) == "city_grid"
+    else:
+        assert world == "city_grid"
+    assert ctx0["blueprint"] is not None
     assert any(e["word"] == "Movie night" for e in ctx0["emphasis"])
     bag = {"msa_photo1": {"kind": "photo", "w": 100, "h": 80},
            "msa_photo2": {"kind": "photo", "w": 80, "h": 80}}
