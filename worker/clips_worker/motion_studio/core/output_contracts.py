@@ -186,7 +186,33 @@ PRODUCTION_RULES: list[Rule] = [
         "contract": "Keep the plan's style.palette keys bg, ink, accent, accent2, muted as #RRGGBB hex colours unless a change is clearly justified.",
         "tokens": ["bg", "ink", "accent", "accent2", "muted", "#RRGGBB"],
     },
+    {
+        "id": "evidence_and_tools",
+        "message": "visual objective is not supported by the assigned asset's evidence or by registered tools",
+        "contract": (
+            "Every visual objective MUST be supported by the assigned asset's evidence "
+            "(what the analysis records the image or video actually shows — including on-screen text) "
+            "AND by registered tools or a declared custom-object extension. "
+            "Do not require a still to display wording, objects, or a state the analysis does not record. "
+            "PhotoFrame and similar media treatments apply to the whole image; typography sits on top. "
+            "There is no per-element or per-letter fade of pixels inside an upload unless a registered tool "
+            "or a declared customObject says so. On each sceneBinding, record evidenceBasis and toolBasis. Anything beyond the assets actually in hand must be labeled illustrative, built from registered tools, and given a provenance."
+        ),
+        "tokens": ["evidence", "registered tools", "custom-object", "evidenceBasis", "toolBasis", "whole image"],
+    },
 ]
+
+DIRECTOR_RULES.append({
+    "id": "evidence_match",
+    "message": "which the assigned asset's analysis does not record",
+    "contract": (
+        "Every visual objective or scene description that depends on an asset MUST match that asset's analysis "
+        "(what the image or video actually shows, including on-screen text). Do not invent details the analysis "
+        "does not record. Anything beyond the assets actually in hand must be explicitly illustrative, built "
+        "from registered engine tools, and labeled with provenance."
+    ),
+    "tokens": ["analysis", "in hand", "illustrative", "provenance", "on-screen"],
+})
 
 STORY_RULES: list[Rule] = [
     {
@@ -206,6 +232,21 @@ STORY_RULES: list[Rule] = [
         "message": "story must include chapters",
         "contract": "Return chapters as [{n, title}] covering every line's chapter.",
         "tokens": ["chapters", "title"],
+    },
+    {
+        "id": "from_assets_in_hand",
+        "message": "is in hand but is not cited by any story line",
+        "contract": (
+            "Build the story ONLY from assets actually in hand (the catalog of ready uploads and any media "
+            "that was actually acquired). Never claim a visual from an asset that was requested but is not "
+            "in the catalog. Every line or beat that claims a visual must set visualAssetId to the asset "
+            "that shows it. Video clips in hand must anchor the sequences they support and be cited. "
+            "Every asset in hand should earn at least one line. Beats that go beyond the assets in hand "
+            "must be labeled illustrative, built from registered engine tools or typography, and given a "
+            "provenance. Wishes for media that is not in hand go on missingAssets and must not be narrated "
+            "as if the footage exists."
+        ),
+        "tokens": ["in hand", "visualAssetId", "missingAssets", "illustrative", "provenance", "clips"],
     },
 ]
 
@@ -291,6 +332,8 @@ _DIRECTOR_SCENE = _obj({
     "assetId": {"type": ["string", "null"]},
     "reuseReason": {"type": ["string", "null"]},
     "handoff": {"anyOf": [_HANDOFF, {"type": "null"}]},
+    "illustrative": {"type": ["boolean", "null"]},
+    "visualProvenance": {"type": ["string", "null"]},
 })
 _MINIMAL = _obj({
     "sceneIndex": {"type": ["integer", "number", "null"]},
@@ -307,6 +350,10 @@ _SCENE_BINDING = _obj({
     "worldId": {"type": ["string", "null"]},
     "objective": {"type": ["string", "null"]},
     "heldStillOk": {"type": ["boolean", "null"]},
+    "assetId": {"type": ["string", "null"]},
+    "visualType": {"type": ["string", "null"]},
+    "evidenceBasis": {"type": ["string", "null"]},
+    "toolBasis": {"type": ["string", "null"]},
 })
 _MISSING_NEED = _obj({
     "sceneIndex": {"type": ["integer", "number", "null"]},
@@ -402,6 +449,14 @@ STORY_SCHEMA = _obj({
         "hero": {"type": ["string", "null"]},
         "typed": {"type": ["string", "null"]},
         "quote": {"type": ["boolean", "null"]},
+        "visualAssetId": {"type": ["string", "null"]},
+        "illustrative": {"type": ["boolean", "null"]},
+        "provenance": {"type": ["string", "null"]},
+    })},
+    "missingAssets": {"type": ["array", "null"], "items": _obj({
+        "need": {"type": ["string", "null"]},
+        "reason": {"type": ["string", "null"]},
+        "assetId": {"type": ["string", "null"]},
     })},
 })
 
@@ -438,9 +493,42 @@ REVIEWER_SCHEMA = _obj({
 })
 
 
+
+_SCENE_REVISION = _obj({
+    "sceneIndex": {"type": ["integer", "number"]},
+    "description": {"type": "string"},
+    "reason": {"type": ["string", "null"]},
+    "objective": {"type": "string"},
+    "evidenceBasis": {"type": "string"},
+    "toolBasis": {"type": "string"},
+    "heldStillOk": {"type": ["boolean", "null"]},
+    "visualType": {"type": ["string", "null"]},
+    "customObjects": {"type": "array", "items": _CUSTOM_OBJECT},
+})
+
+REVISION_RULES: list[Rule] = [
+    {
+        "id": "evidence_and_tools",
+        "message": "visual objective is not supported by the assigned asset's evidence or by registered tools",
+        "contract": (
+            "Revise ONLY the limited scenes. Each revised objective MUST be supported by the assigned "
+            "asset's evidence and by registered tools or a declared custom-object extension. "
+            "Do not invent wording, objects, or a state the analysis does not record. "
+            "Prefer a whole-image treatment or typography on top when a per-element pixel edit is not available. "
+            "Keep official assetId assignments. Record evidenceBasis and toolBasis."
+        ),
+        "tokens": ["evidence", "registered tools", "custom-object", "evidenceBasis", "toolBasis", "limited scenes"],
+    },
+]
+
+REVISION_SCHEMA = _obj({
+    "sceneRevisions": {"type": "array", "items": _SCENE_REVISION},
+})
+
 STAGES: dict[str, dict[str, Any]] = {
     "director": {"schema": DIRECTOR_SCHEMA, "rules": DIRECTOR_RULES, "schema_name": "director_plan"},
     "production_designer": {"schema": PRODUCTION_SCHEMA, "rules": PRODUCTION_RULES, "schema_name": "production_design"},
+    "production_revision": {"schema": REVISION_SCHEMA, "rules": REVISION_RULES, "schema_name": "production_revision"},
     "story": {"schema": STORY_SCHEMA, "rules": STORY_RULES, "schema_name": "story"},
     "motion_engineer": {"schema": ENGINEER_SCHEMA, "rules": ENGINEER_RULES, "schema_name": "motion_engineer"},
     "reviewer": {"schema": REVIEWER_SCHEMA, "rules": REVIEWER_RULES, "schema_name": "visual_reviewer"},
@@ -602,25 +690,29 @@ def normalize_director_plan(plan: dict, catalog: list[dict]) -> dict:
 
 
 def catalog_split(catalog: list[dict]) -> dict[str, list[dict]]:
-    """Uploads payload for model calls: exact asset ids, stills and videos separated."""
+    """Uploads payload for model calls: only assets actually in hand, with analysis evidence."""
+    from clips_worker.motion_studio.core.designer_capabilities import asset_evidence, assets_in_hand
     stills, videos = [], []
-    for a in catalog or []:
+    hand = assets_in_hand(catalog)
+    for a in hand:
+        ev = asset_evidence(a)
         rec = {
             "assetId": a.get("id"),
             "kind": a.get("kind"),
             "filename": a.get("filename"),
             "durationMs": a.get("durationMs"),
-            "summary": ((a.get("analysis") or {}).get("summary") if isinstance(a.get("analysis"), dict) else None),
+            "summary": ev.get("summary") or ev.get("description"),
+            "evidence": ev,
         }
         if a.get("kind") == "video":
-            rec["durationS"] = round((a.get("durationMs") or 0) / 1000.0, 3) if a.get("durationMs") else None
+            rec["durationS"] = round((a.get("durationMs") or 0) / 1000.0, 3) if a.get("durationMs") else ev.get("durationS")
             videos.append(rec)
-        elif a.get("kind") in ("image", "photo", "still"):
+        else:
             stills.append(rec)
-    return {"stills": stills, "videos": videos, "allAssetIds": [a.get("id") for a in catalog or []]}
+    return {"stills": stills, "videos": videos, "allAssetIds": [a.get("id") for a in hand]}
 
 
-def validate_story(story: dict | None) -> list[str]:
+def validate_story(story: dict | None, catalog: list | None = None) -> list[str]:
     errs: list[str] = []
     if not isinstance(story, dict):
         return ["story must be an object"]
@@ -637,6 +729,9 @@ def validate_story(story: dict | None) -> list[str]:
                 errs.append(f"story line {i} is missing a chapter")
     if not story.get("chapters"):
         errs.append("story must include chapters")
+    if catalog:
+        from clips_worker.motion_studio.core.designer_capabilities import validate_story_assets
+        errs.extend(validate_story_assets(story, catalog))
     return errs
 
 

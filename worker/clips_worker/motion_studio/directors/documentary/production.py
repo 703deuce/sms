@@ -26,6 +26,7 @@ from clips_worker.motion_studio.directors.documentary.contracts import (
     FORBIDDEN_BLUEPRINT_KEYS,
     validate_blueprint,
 )
+from clips_worker.motion_studio.core.designer_capabilities import asset_evidence, assets_in_hand, format_designer_capabilities, validate_visuals_against_assets
 from clips_worker.motion_studio.core.output_contracts import (
     StageContractError,
     format_contract,
@@ -66,8 +67,8 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
     """Tag each upload with subject, era, relevance, quality, role, and usable moments."""
     blob = _story_blob(story)
     rows = []
-    for a in catalog or []:
-        if a.get("kind") not in ("image", "video"):
+    for a in assets_in_hand(catalog):
+        if a.get("kind") not in ("image", "video", "photo", "still"):
             continue
         an = a.get("analysis") or {}
         text = _blob(a)
@@ -96,10 +97,12 @@ def inventory_from_catalog(catalog: list[dict], story: dict) -> list[dict]:
             dur = max(0.0, (a.get("durationMs") or 0) / 1000.0)
             if dur >= 1.0:
                 moments = [{"inS": 0.0, "outS": round(dur, 3), "reason": "full clip is the usable stretch"}]
+        ev = asset_evidence(a)
         rows.append({
             "assetId": a["id"], "kind": a.get("kind"), "filename": a.get("filename"),
-            "subject": subject, "era": era, "relevance": relevance, "quality": quality,
-            "role": role, "moments": moments[:16],
+            "subject": subject, "era": era or ev.get("era") or "", "relevance": relevance, "quality": quality,
+            "role": role, "moments": moments[:16] or ev.get("moments") or [],
+            "evidence": ev,
         })
     return rows
 
@@ -374,6 +377,8 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
             "assetId": s.get("assetId") or h.get("assetId"),
             "objective": s.get("description") or s.get("reason") or "",
             "heldStillOk": s.get("visualType") == "photo",
+            "evidenceBasis": "mock-only: uses the official upload as analyzed (not used on the live path)",
+            "toolBasis": "mock-only: PhotoFrame or footage handoff (not used on the live path)",
         })
     plan["identity"] = identity
     plan["worlds"] = worlds
@@ -437,7 +442,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Each world: {id, name, brief, reason, chapters, clusters}. All worlds share the film identity.\n"
         "3. blueprint additions: customObjects [{id, name, purpose, sceneIndex}], "
         "assetPlacements [{sceneIndex, assetId, reason, reuseReason}], "
-        "sceneBindings [{sceneIndex, worldId, objective, heldStillOk}], "
+        "sceneBindings [{sceneIndex, worldId, objective, heldStillOk, evidenceBasis, toolBasis}], "
         "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
         "Every ready upload in the inventory should appear at least once. Repeats require a narrative reuseReason. "
@@ -448,6 +453,10 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Art direction is more than a palette; invent typography, materials, camera personality and motifs. "
         "Do not spend the most expensive treatment on every beat — prefer held photographs, registered tools "
         "and the generated score unless a paid or custom-code pass is genuinely required. "
+        "Every visual objective must be supported by the assigned asset's evidence (inventory.evidence: "
+        "what the analysis says the image or clip actually shows, including on-screen text) and by the "
+        "engine/tool capabilities you are given, or a declared customObject. Do not require an upload to "
+        "show wording or a state the evidence does not record. Record evidenceBasis and toolBasis on each sceneBinding. "
         + style_memory.prompt_excerpt(project.get("styleMemory") or plan.get("styleMemory"))
     )
     user = json.dumps({
@@ -461,6 +470,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                                      "assetId": s.get("assetId"), "handoff": s.get("handoff"), "reason": s.get("reason")}
                                     for s in plan.get("scenes") or []]},
         "inventory": inventory,
+        "capabilities": format_designer_capabilities(),
         "visualApproachesNote": (
             "Invent the visual approach for THIS film and record it on identity. "
             "Do not pick from a fixed menu of looks."
@@ -476,7 +486,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         log("model_call", "production design", m)
         out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
         errs = validate_plan(out, story, catalog)
-        berrs = validate_blueprint(out.get("blueprint"))
+        berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
             log("production_invalid", "production design failed validation; requesting a targeted repair",
                 {"errors": (errs or berrs)[:12], "output": raw})
@@ -492,7 +502,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             log("model_call", "production design repair", m)
             out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
             errs = validate_plan(out, story, catalog)
-            berrs = validate_blueprint(out.get("blueprint"))
+            berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
             problems = (errs or []) + (berrs or [])
             log("production_invalid", "production design still invalid after targeted repair; stopping",
@@ -506,6 +516,183 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         log("model_call_failed", f"production designer failed: {exc}", {"step": "production_designer"})
         raise StageContractError("production_designer", [f"model call failed: {exc}"]) from exc
 
+
+
+
+def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
+    by_idx = {}
+    if isinstance(raw_bindings, list):
+        for b in raw_bindings:
+            if isinstance(b, dict) and b.get("sceneIndex") is not None:
+                by_idx[int(b["sceneIndex"])] = b
+    out = []
+    for s in scenes:
+        b = by_idx.get(s.get("index")) or {}
+        hid = (s.get("handoff") or {}).get("assetId")
+        held = b.get("heldStillOk")
+        if held is None:
+            held = s.get("visualType") == "photo"
+        out.append({
+            "sceneIndex": s.get("index"),
+            "worldId": b.get("worldId") or s.get("worldId"),
+            "visualType": b.get("visualType") or s.get("visualType"),
+            "assetId": b.get("assetId") or s.get("assetId") or hid,
+            "objective": b.get("objective") or s.get("description") or "",
+            "heldStillOk": held,
+            "evidenceBasis": b.get("evidenceBasis") or None,
+            "toolBasis": b.get("toolBasis") or None,
+        })
+    return out
+
+
+def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> list[str]:
+    """Live-path check: each graphics beat records how the asset and tools support it."""
+    errs: list[str] = []
+    bindings = (plan.get("blueprint") or {}).get("sceneBindings") or []
+    scenes = {s.get("index"): s for s in plan.get("scenes") or []}
+    for b in bindings:
+        if not isinstance(b, dict):
+            continue
+        idx = b.get("sceneIndex")
+        scene = scenes.get(idx) or {}
+        if scene.get("kind") in ("handoff", "hardcut"):
+            continue
+        if not scene and not (b.get("objective") or b.get("assetId")):
+            continue
+        if not (b.get("evidenceBasis") and b.get("toolBasis")):
+            errs.append(
+                f"scene {idx} visual objective is not supported by the assigned asset's evidence or by registered tools"
+            )
+    if catalog:
+        items = []
+        for b in bindings:
+            if not isinstance(b, dict):
+                continue
+            items.append({
+                "label": f"scene {b.get('sceneIndex')} objective",
+                "text": b.get("objective") or "",
+                "assetId": b.get("assetId") or (scenes.get(b.get("sceneIndex")) or {}).get("assetId"),
+                "illustrative": bool(b.get("illustrative") or (b.get("toolBasis") or "").startswith("illustrative")),
+            })
+        errs.extend(validate_visuals_against_assets(items, catalog))
+    return errs
+
+
+def revise_limited_scenes(project: dict, story: dict, catalog: list[dict], plan: dict,
+                          limitations: list[dict], log) -> dict:
+    """One targeted Production Designer revision of only the limited scenes.
+
+    Fed the engineer's limitation, the assigned asset's analysis, and the real
+    capability list. Official assetIds are kept. Mock mode returns the plan unchanged.
+    """
+    if not limitations:
+        return plan
+    if config.mock():
+        log("production_revision", "mock: skipping limitation revision", {"scenes": [x.get("sceneIndex") for x in limitations]})
+        return plan
+    inventory = inventory_from_catalog(catalog, story)
+    inv_by_id = {r["assetId"]: r for r in inventory}
+    scenes = {s.get("index"): s for s in plan.get("scenes") or []}
+    bindings = {b.get("sceneIndex"): b for b in ((plan.get("blueprint") or {}).get("sceneBindings") or []) if isinstance(b, dict)}
+    limited = []
+    for item in limitations:
+        idx = item.get("sceneIndex")
+        if idx is None:
+            continue
+        scene = scenes.get(idx) or {}
+        aid = item.get("assetId") or scene.get("assetId") or (scene.get("handoff") or {}).get("assetId")
+        limited.append({
+            "sceneIndex": idx,
+            "kind": scene.get("kind"),
+            "visualType": scene.get("visualType"),
+            "description": scene.get("description"),
+            "reason": scene.get("reason"),
+            "objective": (bindings.get(idx) or {}).get("objective") or scene.get("description"),
+            "assetId": aid,
+            "evidence": (inv_by_id.get(aid) or {}).get("evidence") or asset_evidence(next((a for a in catalog if a.get("id") == aid), {})),
+            "limitation": {
+                "reason": item.get("reason") or ((item.get("limitation") or {}).get("reason") if isinstance(item.get("limitation"), dict) else ""),
+                "missingTools": item.get("missingTools") or [],
+                "missingAssets": item.get("missingAssets") or [],
+                "unblock": item.get("unblock") or "",
+            },
+        })
+    if not limited:
+        return plan
+    sys_ = (
+        "You are the Production Designer revising ONLY the scenes the Motion Engineer could not build. "
+        "You write NO Python. Keep every official assetId. Rewrite each limited scene's objective, description, "
+        "and treatment so it is supported by that asset's evidence and by registered tools or a declared "
+        "customObject. Do not invent wording, objects, or a state the analysis does not record. "
+        "If a requested effect needs per-element pixel edits that the engine does not have, switch to a "
+        "whole-image treatment or typography on top. Record evidenceBasis and toolBasis. "
+        "Return JSON with a sceneRevisions array for the limited scenes only.\n\n"
+        + format_contract("production_revision")
+        + "\n\n" + format_designer_capabilities()
+    )
+    user = json.dumps({
+        "instruction": "Revise ONLY these limited scenes. Keep official asset assignments. Return the full sceneRevisions array.",
+        "limitedScenes": limited,
+        "identity": plan.get("identity") or (plan.get("blueprint") or {}).get("identity"),
+    })
+    try:
+        raw, m = chat_json(
+            "production_designer", sys_, user, max_tokens=16000, timeout_s=360,
+            schema=schema_for("production_revision"), schema_name=schema_name("production_revision"),
+        )
+        log("model_call", "production limitation revision", m)
+    except LLMError as exc:
+        log("model_call_failed", f"production revision failed: {exc}", {"step": "production_revision"})
+        raise StageContractError("production_designer", [f"limitation revision failed: {exc}"]) from exc
+    revisions = (raw or {}).get("sceneRevisions") if isinstance(raw, dict) else None
+    if not isinstance(revisions, list) or not revisions:
+        raise StageContractError("production_designer", ["limitation revision returned no sceneRevisions"], output=raw)
+    _apply_scene_revisions(plan, revisions)
+    log("production_revision", f"revised {len(revisions)} limited scene(s) for a second engineer pass",
+        {"scenes": [r.get("sceneIndex") for r in revisions if isinstance(r, dict)]})
+    return plan
+
+
+def _apply_scene_revisions(plan: dict, revisions: list) -> None:
+    scenes = {s.get("index"): s for s in plan.get("scenes") or []}
+    bp = plan.setdefault("blueprint", {})
+    bindings = list(bp.get("sceneBindings") or [])
+    by_idx = {b.get("sceneIndex"): dict(b) for b in bindings if isinstance(b, dict)}
+    objects = list(bp.get("customObjects") or plan.get("customObjects") or [])
+    for rev in revisions:
+        if not isinstance(rev, dict):
+            continue
+        try:
+            idx = int(rev.get("sceneIndex"))
+        except (TypeError, ValueError):
+            continue
+        scene = scenes.get(idx)
+        if scene is None or scene.get("kind") in ("handoff", "hardcut"):
+            continue
+        if rev.get("description"):
+            scene["description"] = rev["description"]
+        if rev.get("reason"):
+            scene["reason"] = rev["reason"]
+        if rev.get("visualType"):
+            scene["visualType"] = rev["visualType"]
+        # Official assetId is not moved by a limitation revision.
+        b = by_idx.get(idx) or {"sceneIndex": idx, "assetId": scene.get("assetId"), "worldId": scene.get("worldId")}
+        b["objective"] = rev.get("objective") or rev.get("description") or b.get("objective") or scene.get("description") or ""
+        b["evidenceBasis"] = rev.get("evidenceBasis") or b.get("evidenceBasis")
+        b["toolBasis"] = rev.get("toolBasis") or b.get("toolBasis")
+        if rev.get("heldStillOk") is not None:
+            b["heldStillOk"] = rev.get("heldStillOk")
+        if rev.get("visualType"):
+            b["visualType"] = rev["visualType"]
+        b["assetId"] = scene.get("assetId") or b.get("assetId")
+        by_idx[idx] = b
+        for obj in rev.get("customObjects") or []:
+            if isinstance(obj, dict):
+                obj.setdefault("sceneIndex", idx)
+                objects.append(obj)
+    bp["sceneBindings"] = [by_idx[k] for k in sorted(by_idx, key=lambda x: (x is None, x))]
+    bp["customObjects"] = objects
+    plan["customObjects"] = objects
 
 
 def _still_ids(catalog: list[dict]) -> set[str]:
@@ -643,13 +830,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
 
     objects = raw.get("customObjects") if isinstance(raw.get("customObjects"), list) else []
     needs = raw.get("missingNeeds") if isinstance(raw.get("missingNeeds"), list) else _missing_needs(plan, inventory, story)
-    bindings = raw.get("sceneBindings") or []
-    if not isinstance(bindings, list) or not bindings:
-        bindings = [{"sceneIndex": s.get("index"), "worldId": s.get("worldId"),
-                     "visualType": s.get("visualType"),
-                     "assetId": s.get("assetId") or (s.get("handoff") or {}).get("assetId"),
-                     "objective": s.get("description") or "",
-                     "heldStillOk": s.get("visualType") == "photo"} for s in plan["scenes"]]
+    bindings = _normalize_bindings(raw.get("sceneBindings"), plan["scenes"])
 
     plan["identity"] = identity
     plan["worlds"] = worlds

@@ -165,6 +165,9 @@ def test_write_from_idea_prompt_still_writes_without_research():
     assert "research notes are empty" in text
     assert "every still and clip should earn at least one line" in text
     assert "uploads" in text
+    assert "assets actually in hand" in text or "assetsInHand" in text
+    assert "visualAssetId" in text
+    assert "missingAssets" in text
     assert "Every numeric line must cite a research URL" not in text
     assert "Every factual claim must cite at least one source URL" not in text
 

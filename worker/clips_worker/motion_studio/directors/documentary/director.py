@@ -8,6 +8,7 @@ import json
 import random
 import re
 
+from clips_worker.motion_studio.core.designer_capabilities import assets_in_hand, validate_visuals_against_assets
 from clips_worker.motion_studio.core.output_contracts import (
     StageContractError,
     catalog_split,
@@ -397,10 +398,8 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
                     still_counts[aid] = still_counts.get(aid, 0) + (0 if s.get("reuseReason") else 1)
                     if still_counts[aid] > 1:
                         errs.append(f"asset {aid} is assigned to more than one scene without a reuseReason")
-    for a in catalog:
-        if a.get("kind") not in ("image", "video"):
-            continue
-        if a.get("status") not in (None, "ready", "ok", "complete"):
+    for a in assets_in_hand(catalog):
+        if a.get("kind") not in ("image", "video", "photo", "still"):
             continue
         if a.get("kind") == "video" and (a.get("durationMs") or 0) <= 2000:
             continue
@@ -419,6 +418,26 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
     if not (world.get("brief") or world.get("reason") or world.get("name") or world.get("type")):
         errs.append("plan is missing a world brief")
     errs.extend(validate_creative_plan(plan, story, catalog))
+    items = []
+    for s in plan.get("scenes") or []:
+        aid = s.get("assetId") or ((s.get("handoff") or {}).get("assetId") if isinstance(s.get("handoff"), dict) else None)
+        text = " ".join(str(x) for x in (s.get("description"), s.get("reason"), s.get("objective")) if x)
+        items.append({
+            "label": f"scene {s.get('index')} description",
+            "text": text,
+            "assetId": aid,
+            "illustrative": bool(s.get("illustrative") or (s.get("visualProvenance") or "").startswith("illustrative")),
+        })
+    for b in (plan.get("blueprint") or {}).get("sceneBindings") or []:
+        if not isinstance(b, dict):
+            continue
+        items.append({
+            "label": f"scene {b.get('sceneIndex')} objective",
+            "text": b.get("objective") or "",
+            "assetId": b.get("assetId"),
+            "illustrative": bool(b.get("illustrative")),
+        })
+    errs.extend(validate_visuals_against_assets(items, catalog, unknown_asset='skip'))
     return errs
 
 
@@ -443,6 +462,11 @@ def director_system() -> str:
         "emphasis as [{lineId, word}] "
         "with words that are literally in that line, a reason (including the grouping choice), and transitionOut. "
         "Use the exact assetId values from uploads.stills and uploads.videos — never filenames. "
+        "Build the film from assets actually in hand (the catalog you are given). "
+        "Every visual description that depends on an asset must match that asset's analysis evidence "
+        "(what the image or video actually shows, including on-screen text). Do not invent wording or a state "
+        "the analysis does not record. Honor the story's visualAssetId citations. Anything beyond the assets "
+        "in hand must be explicitly illustrative, built from registered engine tools, and labeled with visualProvenance. "
         "A logo, wordmark, brand mark or lockup belongs on the title or the end card. "
         "Put any spoken setup in the previous graphics scene — lineIds on a clip-audio handoff should be empty. "
         "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
@@ -470,13 +494,16 @@ def _director_user(project: dict, story: dict, catalog: list[dict]) -> str:
         "tone": story.get("tone"),
         "aspect": settings.get("aspect", "16:9"),
         "visualDirection": settings.get("visualDirection"),
-        "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero")} for l in story["lines"]],
+        "lines": [{k: l[k] for k in ("id", "chapter", "text", "hero", "visualAssetId", "illustrative", "provenance") if k in l and l.get(k) is not None}
+                  for l in story["lines"]],
         "data": story.get("data"),
         "uploads": uploads,
         "assetIds": uploads["allAssetIds"],
         "instruction": (
-            "Assign every still in uploads.stills and every video in uploads.videos. "
-            "Copy assetId values verbatim into scene.assetId or handoff.assetId."
+            "Assign every still in uploads.stills and every video in uploads.videos (assets actually in hand). "
+            "Copy assetId values verbatim into scene.assetId or handoff.assetId. "
+            "Match each visual description to that asset's evidence. Honor story visualAssetId citations. "
+            "Label visuals that are not from an in-hand asset as illustrative with visualProvenance."
         ),
     })
 

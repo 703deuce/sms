@@ -270,3 +270,64 @@ def test_merge_restores_official_stills_dropped_by_production_but_does_not_fill_
     # The official still is back on its original scene because photo_7 remains on scene 0.
     assert out["scenes"][1]["assetId"] == "photo_8"
     assert out["scenes"][0]["assetId"] == "photo_7"
+
+
+
+def test_inventory_includes_asset_evidence_and_skips_requested_media():
+    from clips_worker.motion_studio.core.designer_capabilities import format_designer_capabilities
+    catalog = _catalog() + [
+        {"id": "photo_8", "kind": "image", "filename": "sign.jpg", "status": "ready",
+         "analysis": {"summary": "a lit OPEN neon sign", "onScreenText": ["OPEN"], "tags": ["sign"]},
+         "localPath": "/secret/path.jpg", "model": "should-not-leak", "watchModel": "nope"},
+        {"id": "wish_9", "kind": "video", "filename": "parade.mp4", "status": "requested",
+         "analysis": {"summary": "not acquired"}},
+    ]
+    # give photo_8 analysis via the last ready still; inventory must include evidence
+    # and must not leak paths or include the requested clip.
+    story = _story()
+    inv = inventory_from_catalog(catalog, story)
+    ids = {r["assetId"] for r in inv}
+    assert "photo_8" in ids
+    assert "wish_9" not in ids
+    ev = next(r["evidence"] for r in inv if r["assetId"] == "photo_8")
+    assert "OPEN" in ev.get("onScreenText")
+    assert ev.get("summary")
+    blob = str(inv)
+    assert "localPath" not in blob and "/secret/" not in blob
+    assert "should-not-leak" not in blob
+    caps = format_designer_capabilities()
+    low = caps.lower()
+    assert "place_media" in low
+    assert "photoframe" in low or "photo frame" in low or "whole-image" in low or "whole image" in low
+    assert "registered" in low or "animate_camera" in low
+
+
+def test_apply_scene_revisions_only_changes_limited_scenes():
+    from clips_worker.motion_studio.directors.documentary.production import _apply_scene_revisions
+    plan = {
+        "scenes": [
+            {"index": 0, "kind": "graphics", "description": "hold the shop", "assetId": "photo_7", "reason": "official"},
+            {"index": 1, "kind": "graphics", "description": "hold the other wall", "assetId": "photo_8", "reason": "official"},
+        ],
+        "blueprint": {
+            "sceneBindings": [
+                {"sceneIndex": 0, "assetId": "photo_7", "objective": "hold the shop"},
+                {"sceneIndex": 1, "assetId": "photo_8", "objective": "hold the other wall"},
+            ],
+            "customObjects": [],
+        },
+    }
+    _apply_scene_revisions(plan, [{
+        "sceneIndex": 0,
+        "description": 'Hold the shop front, the sign reading "OPEN".',
+        "objective": 'Hold the shop front, the sign reading "OPEN".',
+        "reason": "the analysis shows OPEN, tools support a hold",
+        "evidenceBasis": "onScreenText includes OPEN",
+        "toolBasis": "place_media PhotoFrame hold",
+    }])
+    assert plan["scenes"][0]["description"].startswith("Hold the shop front")
+    assert plan["scenes"][0]["assetId"] == "photo_7"
+    assert plan["scenes"][1]["description"] == "hold the other wall"
+    assert plan["scenes"][1]["assetId"] == "photo_8"
+    b0 = next(b for b in plan["blueprint"]["sceneBindings"] if b["sceneIndex"] == 0)
+    assert b0["evidenceBasis"] and b0["toolBasis"]

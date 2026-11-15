@@ -14,6 +14,7 @@ import re
 from clips_worker.motion_studio.core.wordclock import Script, spoken_form, split_sentences, typed_spoken_lint
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
+from clips_worker.motion_studio.core.designer_capabilities import catalog_records
 from clips_worker.motion_studio.core.output_contracts import (
     StageContractError, format_contract, schema_for, schema_name, validate_story,
 )
@@ -68,10 +69,16 @@ def _finalize(lines: list[dict]) -> list[dict]:
         sp = " ".join(str(r.get("spoken") or "").split()) or spoken_form(text)
         if re.search(r"\d", sp):
             sp = spoken_form(sp)
+        aid = r.get("visualAssetId") or r.get("assetId")
+        if isinstance(r.get("quote"), dict) and r["quote"].get("assetId"):
+            aid = aid or r["quote"].get("assetId")
         out.append({"id": f"l{len(out) + 1}", "chapter": int(r.get("chapter") or 1), "text": text, "spoken": sp,
                     "hero": str(r.get("hero") or "")[:40], "typed": str(r.get("typed") or "")[:60],
                     "sources": [s for s in (r.get("sources") or []) if isinstance(s, str) and s.startswith("http")][:4],
-                    "quote": r.get("quote") if isinstance(r.get("quote"), dict) else None})
+                    "quote": r.get("quote") if isinstance(r.get("quote"), dict) else None,
+                    "visualAssetId": aid or None,
+                    "illustrative": bool(r.get("illustrative")) if r.get("illustrative") is not None else False,
+                    "provenance": (str(r.get("provenance"))[:240] if r.get("provenance") else ("illustrative" if r.get("illustrative") else None))})
     return out
 
 
@@ -168,23 +175,28 @@ def _fallback_script(brief: str, length_min: int, title: str, research: dict | N
         ("This is how it happened.", "HOW IT HAPPENED", 3),
     ]
     rows = [{"text": t, "hero": h or _heuristic_hero(t), "chapter": c} for t, h, c in base]
-    # When uploads exist, add a unique line for each so the story can bind to them later.
+    # When assets are actually in hand, add a unique cited line for each (do not invent beyond the analysis).
     extras = []
-    for a in catalog or []:
-        an = a.get("analysis") or {}
-        label = (an.get("summary") or an.get("description") or a.get("filename") or a.get("id") or "").strip()
+    for rec in catalog_records(catalog):
+        ev = rec.get("evidence") or {}
+        label = (ev.get("summary") or ev.get("description") or rec.get("filename") or rec.get("assetId") or "").strip()
         label = " ".join(str(label).split())
         if not label:
             continue
-        # Keep it short; do not invent facts beyond naming the uploaded subject.
         sentence = f"There is also this: {label.rstrip('.')}."
         if any(sentence == r["text"] for r in rows + extras):
             continue
-        extras.append({"text": sentence, "hero": _heuristic_hero(sentence), "chapter": 3})
-    rows.extend(extras[:8])
+        extras.append({"text": sentence, "hero": _heuristic_hero(sentence), "chapter": 3,
+                        "visualAssetId": rec["assetId"]})
+    # Base connective lines are illustrative when they do not cite an asset.
+    if extras:
+        for r in rows:
+            r.setdefault("illustrative", True)
+            r.setdefault("provenance", "illustrative")
+    rows.extend(extras)
     return {"title": title or topic[:60], "logline": topic, "tone": "curious",
             "chapters": [{"n": i, "title": f"Part {i}"} for i in sorted({r['chapter'] for r in rows})],
-            "lines": _finalize(rows), "sources": [], "data": [], "template": True}
+            "lines": _finalize(rows), "sources": [], "data": [], "missingAssets": [], "template": True}
 
 
 def plan_research(brief: str, title: str, log) -> list[dict]:
@@ -217,22 +229,22 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
             "Do not invent figures that are not in the idea or the research notes. Numbers that appear in the idea may be used. "
             "If research notes include sources, cite those URLs on numeric lines; if notes are empty, still return a full lines "
             "array and leave sources as []. Never return an empty lines list. "
-            "When uploads are provided, write the story around them: every still and clip should earn at least one line "
-            "that names the subject, place, or object the file actually shows, so a later scene can bind to it. "
-            "Do not ignore the catalog or invent visuals that contradict what was uploaded.\n"
+            "The story is built FROM the assets actually in hand (the catalog you are given: user uploads "
+            "and any media that was actually acquired). Do not assume media that was requested but is not in this catalog. "
+            "When assets are in hand, write the story around them: every still and clip should earn at least one line "
+            "that names the subject, place, or object the file actually shows, and that line must set visualAssetId to that asset. "
+            "Video clips in hand anchor the sequences they support. Do not invent wording, people, or a state the analysis evidence does not record. "
+            "Beats that go beyond the assets in hand must be labeled illustrative=true with a provenance (registered engine tools or typography). "
+            "Wishes for media that is not in hand go on missingAssets and must not be narrated as if they exist.\n"
             "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\","
             "\"typed\",\"sources\":[url]}],\"data\":[{\"label\",\"value\",\"unit\",\"lineIndex\",\"sources\":[url]}]}."
             f" Length: about {target_words(length_min)} spoken words.")
-    uploads = [{"assetId": a["id"], "kind": a["kind"], "filename": a.get("filename"),
-                "summary": (a.get("analysis") or {}).get("summary") or (a.get("analysis") or {}).get("description"),
-                "tags": ((a.get("analysis") or {}).get("tags") or [])[:12],
-                "era": (a.get("analysis") or {}).get("era"),
-                "durationMs": a.get("durationMs"),
-                "moments": ((a.get("analysis") or {}).get("moments") or [])[:12]}
-               for a in (catalog or [])]
+    uploads = catalog_records(catalog)
     sys_ = sys_ + "\n\n" + format_contract("story")
-    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts, "uploads": uploads,
-                       "assetIds": [u["assetId"] for u in uploads]})
+    user = json.dumps({"title": title, "brief": brief, "tone": tone_hint, "research": facts,
+                       "assetsInHand": uploads, "uploads": uploads,
+                       "assetIds": [u["assetId"] for u in uploads],
+                       "instruction": "Build the story only from assetsInHand. Cite visualAssetId. Put wishes that are not in hand on missingAssets."})
     out, m = chat_json("story", sys_, user, max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
@@ -240,7 +252,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
     draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
              "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
              "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
-    errs = validate_story(draft)
+    errs = validate_story(draft, catalog=catalog)
     if errs:
         log("story_invalid", "story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
@@ -253,7 +265,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
         draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
                  "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
                  "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
-        errs = validate_story(draft)
+        errs = validate_story(draft, catalog=catalog)
         if errs:
             raise StageContractError("story", errs, repaired=True, output=out)
     return draft
@@ -323,19 +335,25 @@ def _heuristic_hero(text: str) -> str:
 
 
 def write_from_footage(brief: str, title: str, length_min: int, catalog: list[dict], log) -> dict:
-    cat = [{"assetId": a["id"], "kind": a["kind"], "filename": a.get("filename"),
-            "summary": (a.get("analysis") or {}).get("summary"),
-            "transcript": ((a.get("analysis") or {}).get("transcriptText") or "")[:4000],
-            "moments": ((a.get("analysis") or {}).get("moments") or [])[:20],
-            "people": ((a.get("analysis") or {}).get("people") or [])[:8]} for a in catalog]
-    sys_ = ("You are the Story agent. Build a documentary narration around the user's uploaded footage. Lines are either "
-            "narration, or a quote from an uploaded clip: {\"quote\":{\"assetId\",\"text\":<exact words from the transcript>}} "
-            "with `text` repeating the quote.\n" + WRITING_RULES +
-            "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\",\"typed\",\"quote\"}]}"
+    cat = catalog_records(catalog)
+    sys_ = ("You are the Story agent. Build a documentary narration FROM the assets actually in hand "
+            "(the catalog of uploaded and actually acquired media). Never claim footage that was requested "
+            "but is not in this catalog. Lines are either narration that cites visualAssetId, a quote from "
+            "an in-hand clip: {\"quote\":{\"assetId\",\"text\":<exact words from the transcript>}} "
+            "with `text` repeating the quote, or an illustrative beat (illustrative=true, provenance) built "
+            "from typography or registered engine tools. Video clips in hand anchor the sequences they support. "
+            "Every still and clip should earn at least one line. Wishes that are not in hand go on missingAssets "
+            "and must not be narrated as if they exist. Do not invent wording the analysis evidence does not record.\n"
+            + WRITING_RULES +
+            "\nReturn JSON {\"title\",\"logline\",\"tone\",\"chapters\":[{\"n\",\"title\"}],"
+            "\"lines\":[{\"chapter\",\"text\",\"spoken\",\"hero\",\"typed\",\"quote\",\"visualAssetId\",\"illustrative\",\"provenance\"}],"
+            "\"missingAssets\":[{\"need\",\"reason\"}]}"
             f" Length: about {target_words(length_min)} spoken words.")
     sys_ = sys_ + "\n\n" + format_contract("story")
-    out, m = chat_json("story", sys_, json.dumps({"title": title, "brief": brief, "catalog": cat,
-                                                "assetIds": [c["assetId"] for c in cat]}),
+    out, m = chat_json("story", sys_, json.dumps({"title": title, "brief": brief, "assetsInHand": cat,
+                                                "catalog": cat,
+                                                "assetIds": [c["assetId"] for c in cat],
+                                                "instruction": "Build the story only from assetsInHand. Cite visualAssetId. Put wishes that are not in hand on missingAssets."}),
                        max_tokens=16000, schema=schema_for("story"), schema_name=schema_name("story"))
     lines = _finalize(_extract_lines(out))
     m = {**m, "keys": sorted(out.keys()) if isinstance(out, dict) else [], "lineCount": len(lines)}
@@ -343,7 +361,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
     draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
              "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
              "data": [], "sources": []}
-    errs = validate_story(draft)
+    errs = validate_story(draft, catalog=catalog)
     if errs:
         log("story_invalid", "footage story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
@@ -356,7 +374,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
         draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
                  "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
                  "data": [], "sources": []}
-        errs = validate_story(draft)
+        errs = validate_story(draft, catalog=catalog)
         if errs:
             raise StageContractError("story", errs, repaired=True, output=out)
     return draft

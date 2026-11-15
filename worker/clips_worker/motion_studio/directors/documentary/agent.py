@@ -2,7 +2,7 @@
 from clips_worker.motion_studio.directors.documentary.designer import design_scene  # noqa: F401
 from clips_worker.motion_studio.directors.documentary.contracts import validate_blueprint
 from clips_worker.motion_studio.directors.documentary.director import direct as direct_editorial, validate_plan
-from clips_worker.motion_studio.directors.documentary.production import design_production
+from clips_worker.motion_studio.directors.documentary.production import design_production, revise_limited_scenes  # noqa: F401
 from clips_worker.motion_studio.directors.documentary.story import build_story  # noqa: F401
 
 
