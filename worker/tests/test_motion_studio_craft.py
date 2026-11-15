@@ -1,4 +1,4 @@
-"""Motion Designer prompt teaches engine craft and worked film examples."""
+"""Motion Designer prompt teaches engine craft and topic-neutral grammar sketches."""
 import pathlib
 
 from clips_worker.motion_studio.core.api_manifest import format_api_reference
@@ -55,10 +55,9 @@ def test_designer_prompt_includes_craft_guide_and_examples():
         "glowpin",
         "pricechart",
         "source of truth",
-        "illustrations",
-        "never the only templates",
+        "grammar only",
+        "ctx.scene.assetid",
         "starter skeleton",
-        "wright flyer",
         "data is the world",
         "paperdoc",
         "three",

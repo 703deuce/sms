@@ -26,7 +26,7 @@ export const MS_LABELS = {
   myProjects: 'My projects',
   headline: 'What are we creating today?',
   subhead: 'Turn an idea, script, or footage into a cinematic documentary.',
-  promptPlaceholder: 'Make a documentary about the GameStop short squeeze in 2021.',
+  promptPlaceholder: 'Describe the documentary you want to make. You can attach photos and clips.',
   attach: 'Add photos, footage, script or audio',
   start: 'Start',
   modeIdea: 'Start with idea',

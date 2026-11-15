@@ -101,7 +101,7 @@ def _world_from_story(story: dict) -> dict:
     """Invent a brief from the story — a starting point, not a type the director must pick."""
     title = (story.get("title") or "this story").strip() or "this story"
     blob = " ".join(l.get("text") or "" for l in story.get("lines") or [])
-    if story.get("data") or re.search(r"\b(price|stock|market|percent|squeeze|share|trade)\b", blob, re.I):
+    if story.get("data") or re.search(r"\b(price|stock|market|percent|share|trade)\b", blob, re.I):
         brief = (f"A data-driven environment for {title}: the figures and counts in the script "
                  "are the landscape the camera travels.")
         reason = "deterministic: the story is told through figures"
@@ -287,6 +287,11 @@ def fallback_plan(project: dict, story: dict, catalog: list[dict]) -> dict:
             "style": {"palette": pal, "mood": story.get("tone") or "curious", "grain": 0.06, "glow": 0.35, "vignette": 0.35,
                       "fonts": {"display": "cond", "label": "label", "body": "serif"}, "reason": "seeded from project + script"},
             "scenes": scenes, "blueprint": blueprint, "musicAnchors": _default_anchors(lines),
+            "music": {
+                "mood": story.get("tone") or "curious",
+                "brief": "Mock-only deterministic bed; live films must invent their score.",
+                "reason": "mock/deterministic fallback — not used on the live path",
+            },
             "deliberateMinimal": [], "source": "fallback"}
 
 
@@ -342,6 +347,14 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
     pal = (plan.get("style") or {}).get("palette") or {}
     if not all(_hex(pal.get(k)) for k in ("bg", "ink", "accent", "accent2", "muted")):
         errs.append("style.palette needs bg/ink/accent/accent2/muted hex colours")
+    fonts = (plan.get("style") or {}).get("fonts") or {}
+    if not all(fonts.get(k) for k in ("display", "label", "body")):
+        errs.append("style.fonts needs display, label, and body roles")
+    music = plan.get("music") or {}
+    if not (music.get("mood") and music.get("reason")):
+        errs.append("plan is missing a music mood and reason")
+    if not (plan.get("style") or {}).get("reason"):
+        errs.append("style is missing a reason")
     assets = {a["id"]: a for a in catalog}
     still_counts: dict[str, int] = {}
     assigned: set[str] = set()
@@ -363,16 +376,17 @@ def validate_plan(plan: dict, story: dict, catalog: list[dict]) -> list[str]:
                     h["outS"] = round(dur or 2.0, 3)
                 if float(h["outS"]) - float(h["inS"]) < 1.0:
                     errs.append(f"scene {s.get('index')} clip stretch is shorter than one second")
-            if (h.get("audioMode") or "clip") not in ("clip", "bed", "mute"):
-                h["audioMode"] = "clip"
-            h.setdefault("audioMode", "clip")
+            if not h.get("audioMode"):
+                errs.append(f"scene {s.get('index')} handoff is missing audioMode (clip, bed, or mute) and a reason")
+            elif h.get("audioMode") not in ("clip", "bed", "mute"):
+                errs.append(f"scene {s.get('index')} audioMode must be clip, bed, or mute")
             if s["kind"] == "hardcut" and not h.get("cutJustification"):
                 errs.append(f"scene {s.get('index')} hard cut needs a justification")
             if h.get("surface") not in SURFACES:
-                h["surface"] = "photo"
+                errs.append(f"scene {s.get('index')} handoff needs a surface (photo, tv, or newspaper) and why it belongs")
         else:
             if s.get("visualType") not in VISUAL_TYPES:
-                s["visualType"] = "abstract"
+                errs.append(f"scene {s.get('index')} needs a visualType decided for this beat")
             aid = s.get("assetId")
             if aid:
                 a = assets.get(aid)
@@ -417,19 +431,24 @@ def director_system() -> str:
         "You write NO rendering code and you do not pick a world type from a menu. "
         "Visual identity and custom environments are invented later by the Production Designer. "
         "Type and numbers must land on the spoken word. "
-        "Footage uses a RETURN handoff by default; hard cuts need a justification. "
-        "From the story's SUBJECT and STRUCTURE derive the scene list and a starting style palette. "
-        "Rules: scenes cover every line id exactly once in order (group 1-4 lines, ~6-15 s each); "
-        f"each scene has visualType {list(VISUAL_TYPES)}, a one-sentence description of what the frame shows "
-        "(3 layers: procedural background, midground context, foreground hero), emphasis as [{lineId, word}] "
-        "with words that are literally in that line, a reason, and transitionOut. "
+        "For uploaded footage, decide audioMode (clip: narration pauses and the clip's sound plays; "
+        "bed: narration continues; mute: picture only) and transitionOut, and record why. "
+        "Hard cuts need a justification. Do not assume a stock RETURN or a default transition. "
+        "From the story's SUBJECT and STRUCTURE derive the scene list, a style palette, typography, "
+        "and a music decision, each with a reason that belongs to THIS film. "
+        "Rules: scenes cover every line id exactly once in order. You decide how many lines each scene "
+        "covers and why (a single word or line may be its own scene; a longer passage may stay together "
+        "when it is one beat). Do not use a fixed group size or a stock duration band. "
+        f"each scene has visualType {list(VISUAL_TYPES)}, a one-sentence description of what the frame shows, "
+        "emphasis as [{lineId, word}] "
+        "with words that are literally in that line, a reason (including the grouping choice), and transitionOut. "
         "Use the exact assetId values from uploads.stills and uploads.videos — never filenames. "
         "A logo, wordmark, brand mark or lockup belongs on the title or the end card. "
         "Put any spoken setup in the previous graphics scene — lineIds on a clip-audio handoff should be empty. "
         "handoff {assetId, inS, outS, surface: photo|tv|newspaper, exitStyle: mirror|asymmetric, exitReason, "
         "audioMode: clip (footage sound, narration pauses) | bed (narration continues over it)}. "
         "Hard cuts (kind 'hardcut') need cutJustification. "
-        "musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. "
+        "musicAnchors: {pulse, build, peak, crash (optional), resolve} each {lineId, word}. music: {mood, brief, reason} invented for this film — not a stock rise-and-resolve score. "
         "\n\n" + format_contract("director")
     )
 

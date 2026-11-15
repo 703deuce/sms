@@ -223,7 +223,7 @@ def rolling_numbers_from_code(code: str) -> list[dict]:
 def spoken_number_check(story: dict, codes: dict[int, str], plan: dict | None = None) -> dict:
     """N1 / ST-RW-003: an on-screen RollingNumber must match the number the line actually speaks.
 
-    Catches the class of error in the Keef film ($2.2M on screen vs 'six million' spoken).
+    Catches a spoken-number / on-screen-number mismatch (e.g. a rounded figure spoken vs a different figure drawn).
     """
     by_id = {l["id"]: l for l in story.get("lines") or []}
     data_by_line = {}

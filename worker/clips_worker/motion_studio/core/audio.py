@@ -1,12 +1,11 @@
 """Part 1 / RE-10 (#1207) + RE-12 (#1209): synthesized SFX, beat-keyed generated score, uploaded-music
 beat cut, sidechain duck and two-pass loudnorm (-15 LUFS / TP -1.5 / LRA 11).
 
-The default score is a numpy bed in the style of the GME reference `music.py` (nothing to license):
-a drone/pad bed, a hat pulse that enters on a story beat, a kick that builds into the peak, everything
-cuts at the crash word, and a pad swell resolves under the final hold. Anchors are program-time seconds
-from the word clock (the Director picks them). Parameters (bpm, key, mode, instruments, mood) are
-derived from a seed = hash(project + script), so the same script is bit-identical and different
-scripts differ (RE-12).
+The generated score is a numpy bed (nothing to license): a drone/pad bed plus hat/kick figures
+whose timing follows the Director's musicAnchors. Mood, brief, and reason come from the plan
+(the Director decides them per film). Synthesis parameters (bpm, key, mode, instruments) are
+derived from that mood plus a seed = hash(project + script), so the same script is bit-identical
+and different scripts differ (RE-12). The engine does not invent a stock rise-and-resolve mood.
 """
 from __future__ import annotations
 
@@ -52,25 +51,24 @@ def music_seed(project_id: str, script_text: str) -> int:
     return int(hashlib.sha256(f"{project_id}\n{script_text}".encode()).hexdigest()[:8], 16)
 
 
-def score_params(seed: int, tone: str = "", world: str = "", title: str = "") -> dict:
-    """RE-12: tempo, key/mode, instrumentation, mood derived from the script seed + tone + world."""
+def score_params(seed: int, tone: str = "", world: str = "", title: str = "", *,
+                 mood: str | None = None, brief: str = "") -> dict:
+    """RE-12: tempo/key/instruments are HOW, derived from the Director's mood plus a seed.
+
+    mood is a per-film decision (plan.music.mood, else style.mood, else story tone).
+    The engine does not sniff titles or world types for a hidden mood.
+    """
     r = random.Random(seed)
-    blob = " ".join(x for x in (tone, world, title) if x).lower()
-    dark = any(k in blob for k in ("dark", "tense", "crime", "crash", "investig", "serious", "tragic", "war",
-                                   "drill", "squeeze", "short", "trial", "hearing"))
-    bright = any(k in blob for k in ("uplift", "hope", "inspir", "playful", "bright", "fun", "triumph"))
-    chart = any(k in blob for k in ("price", "chart", "market", "stock", "finance", "trade"))
-    mapped = any(k in blob for k in ("map", "city", "country", "route", "border"))
-    mode = "major" if bright else "minor" if dark or chart else r.choice(["minor", "minor", "dorian", "major"])
-    lo, hi = (78, 100) if dark or chart else (92, 118) if bright else (84, 108)
-    if mapped and not dark:
-        lo, hi = (86, 104)
+    chosen = (mood or tone or "").strip().lower()
+    dark = any(k in chosen for k in ("dark", "tense", "somber", "tragic", "grim", "severe", "elegiac", "mourn"))
+    bright = any(k in chosen for k in ("uplift", "hope", "inspir", "playful", "bright", "fun", "triumph", "joyful", "warm"))
+    mode = "major" if bright else "minor" if dark else r.choice(["minor", "dorian", "major"])
+    lo, hi = (78, 100) if dark else (92, 118) if bright else (84, 108)
     inst_pool = ["drone", "pad", "hat", "kick", "pluck", "sub", "pulse_bass", "bell"]
     inst = ["pad", "hat", "kick"] + r.sample([i for i in inst_pool if i not in ("pad", "hat", "kick")], k=r.randint(1, 3))
-    if chart and "sub" not in inst:
-        inst.append("sub")
     return {"bpm": r.randint(lo, hi), "key": r.choice(list(NOTE)), "mode": mode, "instruments": sorted(set(inst)),
-            "mood": "dark" if dark else "bright" if bright else ("driving" if chart else r.choice(["tense", "curious", "driving", "reflective"])),
+            "mood": chosen or "unspecified",
+            "brief": (brief or "")[:200],
             "seed": seed, "padCutoff": r.choice([380, 420, 520, 650]), "swing": round(r.uniform(0, 0.08), 3),
             "world": (world or "")[:40]}
 

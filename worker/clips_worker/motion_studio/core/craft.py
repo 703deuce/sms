@@ -2,8 +2,8 @@
 
 Distilled from the Cinematic Skill manual (SKILL.md, references/, scripts/) — the source of
 truth for what the engine can do — plus handover 6A/6B/6C (core vs custom) and the reference
-workflow S1–S16. Worked examples (starter skeleton, Wright Flyer, Keef map, GME chart) are
-illustrations of grammar, never the only templates. Kept tight for the token budget.
+workflow S1–S16. Worked examples are grammar sketches only: clearly non-copyable, topic-neutral,
+and varied. They must not leak places, labels, palettes, or asset picks into a new film.
 """
 from __future__ import annotations
 
@@ -12,8 +12,8 @@ CRAFT (how a film in this engine is actually made — follow these, not just the
 
 Source of truth. The engine manual (capabilities in motion_core and this guide) defines what
 is possible. Invent a NEW world from those capabilities for THIS topic. The starter skeleton,
-the Wright Flyer board, the Keef map, and the GameStop chart are ILLUSTRATIONS of grammar —
-never the only templates, and never worlds to copy onto a new subject. Shared core blocks
+the worked examples below are GRAMMAR SKETCHES only — not films, not looks, and never
+worlds or labels to copy onto a new subject. Bind media only via ctx.scene.assetId. Shared core blocks
 (word clock, camera, type, charts, maps, stamps, prints, cues) are reused; custom Item
 subclasses (the film's ext.py) are invented per video. "The data is the world" is a heuristic
 when the story is a number moving, not a rule that every film is a chart.
@@ -88,15 +88,16 @@ px). Use text(), paint(), ramp(), ease_*, spring(), rrect(). Seeded randomness o
 (ctx.rand / seed=ctx.seed). No files, network, or OS.
 '''
 
-# Compact map-world grammar, adapted from keef/scene.py to motion_core.
-# Invent a new map look and places for a new topic — do not reuse this Chicago story.
+# Compact map-world grammar. Topic-neutral; places come only from this narration.
 EXAMPLE_MAP = r'''
-# EXAMPLE A — map world grammar (from a place-rooted film). Invent your own look and places.
+# GRAMMAR SKETCH ONLY — not a look, not a film, not a route to copy.
+# Do not reuse labels, places, colours, or camera keys. Pin only places THIS
+# narration actually names (via ctx.place). If none are named, skip the pins.
 from motion_core import *
 class GlowPin(Item):
-    def __init__(self, x, y, label, t_in, t_out=None, side="right", size=1.0, label_size=150, rgb=(214, 38, 30)):
+    def __init__(self, x, y, label, t_in, t_out=None, side="right", size=1.0, label_size=150, rgb=(240, 240, 240), ink=(240, 240, 240)):
         super().__init__(t_in=t_in, t_out=t_out, z=30, sfx=True)
-        self.x, self.y, self.label, self.side, self.k, self.ls, self.rgb = x, y, label, side, size, label_size, rgb
+        self.x, self.y, self.label, self.side, self.k, self.ls, self.rgb, self.ink = x, y, label, side, size, label_size, rgb, ink
     def bounds(self, res):
         L = len(self.label or "") * self.ls * 0.8 + 600 * self.k
         return skia.Rect.MakeLTRB(self.x - L, self.y - 600 * self.k, self.x + L, self.y + 600 * self.k)
@@ -111,36 +112,44 @@ class GlowPin(Item):
         if self.label:
             s = 1 if self.side == "right" else -1
             n = len(self.label) * ease_out_cubic(ramp(t, self.t_in + 0.15, 0.04 * len(self.label) + 0.15))
-            text(c, res, self.label, self.x + s * 110 * k, self.y + self.ls * 0.36, self.ls, "mono", CREAM, a, 0.12,
+            text(c, res, self.label, self.x + s * 110 * k, self.y + self.ls * 0.36, self.ls, "mono", self.ink, a, 0.12,
                  "left" if s > 0 else "right", reveal=n + 0.999)
 def build_scene(ctx):
     W, film = ctx.W, ctx.film()
-    ink, acc = ctx.rgb("ink", CREAM), ctx.rgb("accent", (214, 38, 30))
-    look = dict(sheet=tuple(max(0, int(c * 0.12)) for c in ctx.rgb("bg", (9, 22, 24))),
-                water=tuple(max(0, int(c * 0.18)) for c in ctx.rgb("bg", (9, 22, 24))),
-                land=(36, 70, 72), border=(96, 138, 134), relief=0.18)
+    ink, acc = ctx.rgb("ink"), ctx.rgb("accent")
+    look = dict(sheet=tuple(max(0, int(c * 0.12)) for c in ctx.rgb("bg")),
+                water=tuple(max(0, int(c * 0.18)) for c in ctx.rgb("bg")),
+                land=ctx.rgb("muted"), border=ctx.rgb("accent2"), relief=0.18)
     world = film.add(ctx.geo("world", K=10000, look=look))
-    cx, cy = ctx.place(world, "Chicago")
-    ldn, bk = ctx.place(world, "London"), ctx.place(world, "Brooklyn")
+    blob = " ".join((ln.get("text") or "") + " " + (ln.get("hero") or "") for ln in (ctx.lines or [])).lower()
+    named = []
+    for place in (world.data or {}).get("places") or []:
+        if str(place).lower() in blob:
+            named.append(place)
+    if not named:
+        if ctx.lines and ctx.lines[0].get("hero"):
+            film.add(HeroSlam(ctx.lines[0]["hero"], 0, 0, 280, W(ctx.lines[0]["id"], ctx.lines[0]["hero"].split()[0]),
+                              font="serif", rgb=ink, glow=0.3))
+        film.cam(0, 0, 0, 0.45)
+        film.cam(ctx.duration, 0, 0, 0.4)
+        return film
+    origin = ctx.place(world, named[0])
     lid = ctx.lines[0]["id"] if ctx.lines else "l1"
-    film.add(GlowPin(cx, cy, "SOUTH SIDE, CHICAGO", t_in=W(lid, ctx.lines[0]["hero"].split()[0]) if ctx.lines and ctx.lines[0].get("hero") else 0.2,
-                     label_size=210, size=1.8, rgb=acc))
-    film.add(HeroSlam("DRILL", cx + 9000, cy - 1800, 1000, W(lid, ctx.words[0]["w"]) if ctx.words else 0.4, font="serif", rgb=ink, glow=0.4))
-    film.add(Route((cx, cy), ldn, t_in=ctx.lines[-1]["start"] if ctx.lines else 1.0, dur=1.3, width=70, rgb=acc))
-    film.add(GlowPin(*ldn, "LONDON", t_in=ctx.lines[-1]["start"] + 0.4 if ctx.lines else 1.5, size=3.0, label_size=320, rgb=acc))
-    film.add(Route((cx, cy), bk, t_in=ctx.lines[-1]["start"] + 0.5 if ctx.lines else 1.6, dur=0.6, width=60, rgb=acc))
-    film.shot(0.0, cx, cy - 2300, 0.85, -1.0, strength=0.5)
-    film.shot(0.8, cx + 100, cy - 1200, 0.62, 0.0, radius=3400, strength=0.4)
-    film.shot(ctx.duration * 0.7, cx + 7800, cy - 900, 0.23, -0.2, radius=12000, strength=0.15)  # pull wide as it spreads
-    film.shot(ctx.duration, cx + 8600, cy - 700, 0.20, 0.0, radius=16000, strength=0.1)
-    if ctx.lines:
-        film.cue("riser", max(0.0, ctx.lines[-1]["start"] - 1.3), 0.45, dur=1.3)
-        film.cue("boom", ctx.lines[-1]["start"], 0.6)
+    t0 = W(lid, ctx.lines[0]["hero"].split()[0]) if ctx.lines and ctx.lines[0].get("hero") else 0.2
+    film.add(GlowPin(*origin, str(named[0]).upper(), t_in=t0, label_size=210, size=1.8, rgb=acc, ink=ink))
+    if ctx.lines and ctx.lines[0].get("hero"):
+        film.add(HeroSlam(ctx.lines[0]["hero"], origin[0] + 9000, origin[1] - 1800, 800, t0, font="serif", rgb=ink, glow=0.4))
+    if len(named) > 1:
+        dest = ctx.place(world, named[1])
+        t1 = ctx.lines[-1]["start"] if ctx.lines else 1.0
+        film.add(Route(origin, dest, t_in=t1, dur=1.3, width=70, rgb=acc))
+        film.add(GlowPin(*dest, str(named[1]).upper(), t_in=t1 + 0.4, size=2.0, label_size=240, rgb=acc, ink=ink))
+    film.shot(0.0, origin[0], origin[1] - 2300, 0.85, -1.0, strength=0.5)
+    film.shot(ctx.duration, origin[0], origin[1] - 700, 0.35, 0.0, radius=12000, strength=0.1)
     return film
 '''
 
-# Compact custom chart Item, adapted from round2_cinematic/gme/ext.py CandleChart
-# plus the climb-the-spike camera and RollingNumber-on-the-spoken-word from gme/scene.py.
+# Compact custom chart Item grammar. Numbers and labels come only from ctx.data and this narration.
 EXAMPLE_CHART = r'''
 # EXAMPLE B — custom chart world Item (from a numbers-as-the-world film). Plot only ctx.data.
 from motion_core import *
@@ -246,49 +255,40 @@ def build_scene(ctx):
 '''
 
 EXAMPLE_BOARD = r'''
-# EXAMPLE C — documentary board grammar (from the Wright Flyer worked example). Invent new clusters
-# and places for THIS topic. Map in the middle; clusters off the cork, tied to a place with StringLine.
+# GRAMMAR SKETCH ONLY — not a look or a composition to copy.
+# Bind a still only via the official ctx.scene.assetId. Never pick next(iter(ctx.assets)).
+# Cluster labels come from THIS scene's narration, not stock captions.
 from motion_core import *
 def build_scene(ctx):
     W, film = ctx.W, ctx.film()
-    us = film.add(ctx.geo("us", K=60000, look=dict(sheet=(30, 28, 24), water=(42, 58, 62), land=(78, 92, 70), border=(160, 140, 90))))
-    # Prefer ctx.place; fall back to ctx.ll if the name is missing from the stock map.
-    def at(name, lat, lon):
-        try: return ctx.place(us, name)
-        except Exception: return ctx.ll(us, lat, lon)
-    kdh = at("Kill Devil Hills", 36.0, -75.67)
-    lines = ctx.lines or []
-    lid = lines[0]["id"] if lines else "l1"
-    t0 = lines[0]["start"] if lines else 0.2
-    word = (lines[0].get("hero") or (ctx.words[0]["w"] if ctx.words else "the")).split()[0]
-    try: tw = W(lid, word)
-    except Exception: tw = t0
-    CX = kdh[0] + 8000
-    film.add(RegionFill(us, ["North Carolina"], RUST, tw, to_rgb=MUSTARD, t_change=min(ctx.duration, tw + 4)))
-    film.add(XMarker(*kdh, "KILL DEVIL HILLS", t_in=tw, side="left", size=3.0, label_size=150))
-    key = (ctx.scene or {}).get("assetId") if ctx.scene else None
-    if not key and ctx.assets:
-        key = next(iter(ctx.assets))
+    ink, acc = ctx.rgb("ink"), ctx.rgb("accent")
+    bg = ctx.rgb("bg")
+    CX, CY = 0, 0
+    def at(dx, dy):
+        return (CX + dx, CY + dy)
+    key = (ctx.scene or {}).get("assetId")
+    heroes = [ln.get("hero") or ln.get("text") or "" for ln in (ctx.lines or []) if (ln.get("hero") or ln.get("text"))]
+    # Two clusters derived from this scene's lines, connected by a string — grammar only.
+    left, right = at(-2400, -400), at(2400, 400)
+    film.add(Card(*left, 2200, 1600, t_in=0.1, fill=bg, stroke=acc))
+    film.add(Card(*right, 2200, 1600, t_in=0.2, fill=bg, stroke=acc))
     if key:
-        photo = film.add(PhotoFrame(key, CX, 300, 2600, rot=-1.2, t_in=t0 + 0.1, skin="print"))
-    film.add(StringLine(kdh, (CX - 1250, -560), t_in=t0 + 0.2, dur=0.7, sag=0.03, width=16, persist=True))
-    film.add(HeroSlam("TWELVE SECONDS", CX, -2300, 800, min(ctx.duration * 0.35, t0 + 2.0), font="cond", rgb=CREAM, glow=0.3))
-    # A typeset recreation quotes only real words; highlight the phrase on the spoken beat.
-    doc = film.add(PaperDoc(CX + 4000, -2000, 2500, 3200, rot=1.4, t_in=t0 + 1.0,
-                            header=(("A REAL LETTER", 130, "serif"),), sentence="I am an enthusiast, but not a crank."))
-    film.add(Stamp("FAILED", CX + 4200, -400, size=300, rot=-8, t_in=min(ctx.duration * 0.7, t0 + 3.0), rgb=RED))
-    film.shot(0.0, CX, -2150, 1.0, -1.0, strength=0.5)
-    film.shot(tw + 0.4, (kdh[0] + CX) / 2, -1100, 0.33, 0.0, radius=7000, strength=0.3)
-    film.shot(t0 + 1.2, CX, 250, 1.12, -0.6)
-    film.shot(ctx.duration, CX, -800, 0.28, 0.0, radius=16000, strength=0.15)
-    film.cue("boom", min(ctx.duration * 0.35, t0 + 2.0), 0.55)
+        film.add(PhotoFrame(key, *left, 1800, rot=-1.0, t_in=0.15, skin="print"))
+    if heroes:
+        t0 = W(ctx.lines[0]["id"], heroes[0].split()[0]) if ctx.lines else 0.2
+        film.add(HeroSlam(heroes[0][:32], *right, 420, t0, font="cond", rgb=ink, glow=0.25))
+    if len(heroes) > 1:
+        t1 = W(ctx.lines[-1]["id"], heroes[-1].split()[0]) if ctx.lines else 0.8
+        film.add(StringLine((*left, *right), t_in=t1, rgb=acc))
+    film.cam(0, CX, CY, 0.55)
+    film.cam(ctx.duration, CX, CY, 0.45)
     return film
 '''
 
 WORKED_EXAMPLES = (
     "\nSOURCE OF TRUTH AND ILLUSTRATIONS: the engine manual (motion_core + CRAFT above) is what is\n"
-    "possible. Invent a new world from those capabilities. The skeleton, Wright Flyer board, Keef map,\n"
-    "and GameStop chart are illustrations of grammar — never the only templates, never worlds to copy:\n"
+    "possible. Invent a new world from those capabilities. The sketches below show API grammar only —\n"
+    "do not copy places, labels, palettes, camera paths, or asset picks. Bind media only via ctx.scene.assetId:\n"
     + SCENE_SKELETON + "\n" + EXAMPLE_BOARD + "\n" + EXAMPLE_MAP + "\n" + EXAMPLE_CHART
 )
 
@@ -309,7 +309,7 @@ def designer_system(api_reference: str) -> str:
         "are tools, not templates. A held photograph can beat chaotic motion — do not add movement for "
         "its own sake. "
         "The engine manual (motion_core + the craft guide) is the source of truth for what is possible. "
-        "The starter skeleton, Wright Flyer, Keef map, and GameStop chart are illustrations of grammar — "
+        "The starter skeleton and sketches below illustrate API grammar only — never looks, places, or "
         "never the only templates, and never worlds to copy onto a new subject. When the environment "
         "uses a map, use ctx.geo / ctx.place / ctx.ll, GeoMap, RegionFill, Route, "
         "MapPin — do not reimplement a map. When it uses a chart, subclass Item with real numbers from "

@@ -26,9 +26,16 @@ def test_blueprint_rejects_scene_python_and_db_writes():
     ok = {
         "version": CONTRACT_VERSION,
         "filmIdentity": {"palette": {"bg": [10, 10, 10]}},
+        "identity": {"typography": "serif body, condensed display", "concept": "a worn desk",
+                     "cameraPersonality": "slow close-ups", "throughLine": "the papers on the desk"},
         "environments": [{"id": "env_desk", "brief": "a worn desk"}],
+        "worlds": [{"id": "env_desk", "name": "the desk", "brief": "a worn desk", "reason": "the story lives in the papers"}],
         "scenes": [{"id": "scene_12", "environmentId": "env_desk"}],
         "assetSelections": [{"assetId": "photo_7", "role": "print"}],
+        "cameraRoute": "drift across the desk, then hold on the letter",
+        "cameraRouteReason": "the letter is the beat",
+        "audioDirection": "narration over a quiet bed",
+        "audioDirectionReason": "no clip sound in this scene",
     }
     assert validate_blueprint(ok) == []
     bad = dict(ok)

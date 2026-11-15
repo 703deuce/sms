@@ -2294,7 +2294,7 @@
           "arguments": {
             "component": "ticker",
             "componentArguments": {
-              "symbol": "GME"
+              "symbol": "TICKER"
             },
             "componentVersion": "1.0+abc",
             "position": {

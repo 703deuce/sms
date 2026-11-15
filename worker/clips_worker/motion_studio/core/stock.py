@@ -51,7 +51,7 @@ US_PLACES: dict[str, tuple[float, float]] = {
     "Atlanta": (33.75, -84.39), "Dallas": (32.78, -96.80), "Denver": (39.74, -104.99),
     "Phoenix": (33.45, -112.07), "Philadelphia": (39.95, -75.17), "Detroit": (42.33, -83.05),
     "Minneapolis": (44.98, -93.27), "New Orleans": (29.95, -90.07), "Las Vegas": (36.17, -115.14),
-    "Dayton": (39.76, -84.19), "Kill Devil Hills": (36.03, -75.67),
+    "Dayton": (39.76, -84.19),
 }
 
 TEXTURES = ("cork.png", "cork_dark.png", "paper.png", "slate.png", "charcoal.png",

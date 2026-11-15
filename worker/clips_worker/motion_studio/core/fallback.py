@@ -92,7 +92,7 @@ def build_scene(ctx):
     lines = ctx.lines or []
     names = list((world.data.get("places") or {}).keys())
     # Only pin places the narration actually names. Never tour stock cities
-    # that are not in this story (no Chicago / London / Sydney default run).
+    # that are not named in this story (no stock city tour).
     picked = []
     blob = " ".join((ln.get("text") or "") + " " + (ln.get("hero") or "") for ln in lines).lower()
     for n in names:

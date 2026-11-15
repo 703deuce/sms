@@ -56,7 +56,7 @@ describe('live is the default client', () => {
     expect(screen.getByText('Your session has ended. Refresh the page to sign in again.')).toBeTruthy()
     expect(screen.getByText('Refresh')).toBeTruthy()
     expect(screen.queryByTestId('motion-studio-mock-notice')).toBeNull()
-    expect(screen.queryByText('GameStop: The Short Squeeze')).toBeNull()
+    expect(screen.queryByText('Example documentary')).toBeNull()
   })
 
   it('live Example workspace: Example notice instead of the preview-data banner', async () => {

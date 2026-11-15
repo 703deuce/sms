@@ -10,7 +10,7 @@ export { createMockMotionStudioClient } from './mock-client'
 export { buildMotionTracks } from './timeline'
 
 /** FE-only example project (contract v1.1: `isExample` is always false on the backend). */
-export const MS_EXAMPLE_PROJECT_ID = 'ms_example_gamestop'
+export const MS_EXAMPLE_PROJECT_ID = 'ms_example_documentary'
 export const isExampleProjectId = (id: string) => id === MS_EXAMPLE_PROJECT_ID
 
 /**

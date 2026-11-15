@@ -22,11 +22,19 @@ def music_brief(plan: dict | None, story: dict | None = None) -> str:
     plan = plan or {}
     story = story or {}
     parts: list[str] = []
+    music = plan.get("music") or {}
+    for key in ("mood", "brief", "reason"):
+        val = music.get(key)
+        if val:
+            parts.append(str(val))
     ident = plan.get("identity") or plan.get("identityPackage") or {}
     for key in ("mood", "throughLine", "concept", "cameraPersonality", "storytellingApproach"):
         val = ident.get(key)
         if val:
             parts.append(str(val))
+    style = plan.get("style") or {}
+    if style.get("mood"):
+        parts.append(str(style["mood"]))
     world = plan.get("world")
     if isinstance(world, dict):
         parts.append(str(world.get("brief") or world.get("name") or world.get("reason") or ""))
@@ -134,9 +142,7 @@ def camera_continuity_plan(plan: dict | None, story: dict | None = None) -> dict
         except (TypeError, ValueError):
             dur = None
         reading = 6.0 if hold else (max(2.0, min(5.0, dur)) if dur else 3.0)
-        why = scene.get("camera") or existing.get("personality") or (
-            "Hold the photograph so it can be read" if hold else "A motivated move to the next story beat, not motion for its own sake."
-        )
+        why = (scene.get("camera") or scene.get("cameraReason") or existing.get("reason") or existing.get("personality") or ident.get("cameraPersonality") or scene.get("reason"))
         beats.append({
             "sceneIndex": scene.get("index"),
             "sceneId": scene.get("id"),
@@ -148,8 +154,9 @@ def camera_continuity_plan(plan: dict | None, story: dict | None = None) -> dict
     return {
         "contractVersion": CONTRACT_VERSION,
         "personality": ident.get("cameraPersonality") or existing.get("personality"),
-        "rule": existing.get("rule") or "Motivated moves and holds only. A held photograph can beat chaotic motion.",
-        "route": existing.get("route") or "Follow the sequence of environments.",
+        "rule": existing.get("rule"),
+        "route": existing.get("route"),
+        "reason": existing.get("reason"),
         "beats": beats,
     }
 

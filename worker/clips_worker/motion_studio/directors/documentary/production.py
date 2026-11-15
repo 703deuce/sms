@@ -173,12 +173,11 @@ def _identity_from_plan(plan: dict, story: dict, worlds: list[dict]) -> dict:
     return {
         "concept": (worlds[0].get("brief") if len(worlds) == 1 else
                     f"One art direction for {title}, carried across {len(worlds)} custom environments."),
-        "typography": style.get("fonts") or {"display": "cond", "label": "label", "body": "serif"},
+        "typography": style.get("fonts") or None,
         "materials": "Invented from the surfaces and objects this story actually names.",
         "palette": (style.get("palette") or {}),
-        "cameraPersonality": ("Deliberate, motivated moves and holds. A held photograph can beat chaotic motion; "
-                              "do not add movement for its own sake."),
-        "transitionLanguage": "RETURN handoffs into footage; camera travel between clusters inside an environment.",
+        "cameraPersonality": style.get("cameraPersonality") or None,
+        "transitionLanguage": style.get("transitionLanguage") or None,
         "motifs": [],
         "throughLine": story.get("logline") or title,
     }
@@ -291,14 +290,14 @@ def finalize_production(plan: dict, story: dict, catalog: list[dict], inventory:
         "inventory": inventory,
         "assetUsageManifest": manifest,
         "cameraPlan": bp.get("cameraPlan") or {
-            "route": bp.get("cameraRoute") or "Follow the sequence of environments; motivated moves only.",
+            "route": bp.get("cameraRoute") or None,
+            "reason": bp.get("cameraRouteReason") or None,
             "personality": identity.get("cameraPersonality"),
-            "rule": "Motivated moves and holds only. A held photograph can beat chaotic motion.",
         },
-        "composition": bp.get("composition") or "Story-driven clusters; one hero per beat.",
+        "composition": bp.get("composition"),
         "animationIntent": bp.get("animationIntent") or identity.get("cameraPersonality"),
         "transitions": bp.get("transitions") or {
-            "language": identity.get("transitionLanguage") or "RETURN handoffs into footage.",
+            "language": identity.get("transitionLanguage") or None,
         },
         "provenance": bp.get("provenance") or {
             "default": "user_upload",
@@ -347,6 +346,14 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
     worlds = environments_from_story(story, seed)
     _bind_scenes_to_worlds(plan["scenes"], worlds, story)
     identity = _identity_from_plan(plan, story, worlds)
+    identity["typography"] = identity.get("typography") or (plan.get("style") or {}).get("fonts") or {
+        "display": "cond", "label": "label", "body": "serif",
+    }
+    identity["cameraPersonality"] = identity.get("cameraPersonality") or (
+        "Mock-only camera: motivated holds and moves; not used on the live path."
+    )
+    identity["concept"] = identity.get("concept") or (worlds[0].get("brief") if worlds else "mock production design")
+    identity["throughLine"] = identity.get("throughLine") or story.get("logline") or story.get("title") or "this film"
     objects = _custom_objects(plan, story)
     needs = _missing_needs(plan, inventory, story)
     placements = []
@@ -374,7 +381,7 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
     plan["world"] = {
         "name": identity.get("throughLine") or (worlds[0]["name"] if worlds else story.get("title") or "the film"),
         "brief": identity.get("concept") or (worlds[0].get("brief") if worlds else ""),
-        "reason": "film identity plus 1..N custom environments; not a world-type menu",
+        "reason": identity.get("concept") or (worlds[0].get("reason") if worlds else "") or "production design for this film",
         "worlds": [w["id"] for w in worlds],
     }
     plan["blueprint"] = {
@@ -386,8 +393,10 @@ def fallback_production(project: dict, story: dict, catalog: list[dict], plan: d
         "customObjects": objects,
         "missingNeeds": needs,
         "sceneBindings": bindings,
-        "cameraRoute": "Follow the sequence of environments; motivated moves only.",
-        "audioDirection": "Narration pauses during clip-mode footage; score follows the identity, not a world-type label.",
+        "cameraRoute": "Mock-only route following the bound environments (not used on the live path).",
+        "cameraRouteReason": "mock/deterministic fallback — live films require a Production Designer decision",
+        "audioDirection": "Mock-only: narration pauses during clip-mode footage.",
+        "audioDirectionReason": "mock/deterministic fallback — live films require a Production Designer decision",
     }
     plan["productionSource"] = "fallback"
     inventory = inventory or inventory_from_catalog(catalog, story)
@@ -451,7 +460,10 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                                      "assetId": s.get("assetId"), "handoff": s.get("handoff"), "reason": s.get("reason")}
                                     for s in plan.get("scenes") or []]},
         "inventory": inventory,
-        "visualApproaches": style_memory.APPROACHES,
+        "visualApproachesNote": (
+            "Invent the visual approach for THIS film and record it on identity. "
+            "Do not pick from a fixed menu of looks."
+        ),
         "styleMemory": project.get("styleMemory") or plan.get("styleMemory") or [],
     })
     try:
@@ -496,20 +508,12 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
 
 def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory: list[dict], raw: dict) -> dict:
     raw = raw if isinstance(raw, dict) else {}
-    identity = raw.get("identity") if isinstance(raw.get("identity"), dict) else _identity_from_plan(plan, story, [])
-    worlds = raw.get("worlds") if isinstance(raw.get("worlds"), list) and raw.get("worlds") else None
-    if not worlds:
-        worlds = environments_from_story(story, plan.get("world") if isinstance(plan.get("world"), dict) else None)
-    for i, w in enumerate(worlds, 1):
-        if not isinstance(w, dict):
-            continue
-        w.setdefault("id", f"w{i}")
-        w.setdefault("name", f"Environment {i}")
-        w.setdefault("brief", "")
-        w.setdefault("chapters", [])
+    identity = raw.get("identity") if isinstance(raw.get("identity"), dict) else {}
+    worlds = raw.get("worlds") if isinstance(raw.get("worlds"), list) else []
     worlds = [w for w in worlds if isinstance(w, dict)]
-    if not worlds:
-        worlds = environments_from_story(story)
+    for i, w in enumerate(worlds, 1):
+        if not w.get("id"):
+            w["id"] = f"w{i}"
     _bind_scenes_to_worlds(plan.setdefault("scenes", []), worlds, story)
 
     placements = raw.get("assetPlacements") or (raw.get("blueprint") or {}).get("assetPlacements") or []
@@ -535,10 +539,8 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
     for k, s in enumerate(plan["scenes"]):
         s["index"] = k
 
-    objects = raw.get("customObjects") or []
-    if not isinstance(objects, list) or not objects:
-        objects = _custom_objects(plan, story)
-    needs = raw.get("missingNeeds") or _missing_needs(plan, inventory, story)
+    objects = raw.get("customObjects") if isinstance(raw.get("customObjects"), list) else []
+    needs = raw.get("missingNeeds") if isinstance(raw.get("missingNeeds"), list) else _missing_needs(plan, inventory, story)
     bindings = raw.get("sceneBindings") or []
     if not isinstance(bindings, list) or not bindings:
         bindings = [{"sceneIndex": s.get("index"), "worldId": s.get("worldId"),
@@ -552,7 +554,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
     plan["world"] = {
         "name": identity.get("throughLine") or (worlds[0]["name"] if worlds else story.get("title") or "the film"),
         "brief": identity.get("concept") or (worlds[0].get("brief") if worlds else ""),
-        "reason": "film identity plus 1..N custom environments; not a world-type menu",
+        "reason": identity.get("concept") or (worlds[0].get("reason") if worlds else "") or "production design for this film",
         "worlds": [w["id"] for w in worlds],
     }
     plan["blueprint"] = {
@@ -573,7 +575,9 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
         "customObjects": objects,
         "missingNeeds": needs,
         "sceneBindings": bindings,
-        "cameraRoute": (raw.get("cameraRoute") or "Follow the sequence of environments; motivated moves only."),
-        "audioDirection": raw.get("audioDirection") or "Narration pauses during clip-mode footage.",
+        "cameraRoute": raw.get("cameraRoute") or None,
+        "cameraRouteReason": raw.get("cameraRouteReason") or None,
+        "audioDirection": raw.get("audioDirection") or None,
+        "audioDirectionReason": raw.get("audioDirectionReason") or None,
     }
     return finalize_production(plan, story, catalog, inventory)

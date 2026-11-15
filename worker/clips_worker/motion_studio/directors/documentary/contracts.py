@@ -140,6 +140,29 @@ def validate_blueprint(blueprint: dict[str, Any] | None) -> list[str]:
     blob = _walk_strings(blueprint)
     if "def build_scene(" in blob or "from motion_core import" in blob:
         problems.append("Production Designer must not emit scene Python in the blueprint.")
+    identity = blueprint.get("identity") or {}
+    typo = identity.get("typography")
+    if not typo:
+        problems.append("identity package is missing typography, concept, or cameraPersonality")
+    elif not (identity.get("concept") and identity.get("cameraPersonality")):
+        problems.append("identity package is missing typography, concept, or cameraPersonality")
+    worlds = blueprint.get("worlds") or []
+    if not worlds:
+        problems.append("no story-driven environment brief")
+    for w in worlds:
+        if not isinstance(w, dict):
+            continue
+        if not (w.get("brief") and w.get("reason")):
+            problems.append("no story-driven environment brief")
+            break
+    if not (blueprint.get("cameraRoute") or (blueprint.get("cameraPlan") or {}).get("route")):
+        problems.append("cameraRoute is missing")
+    if not (blueprint.get("cameraRouteReason") or (blueprint.get("cameraPlan") or {}).get("reason")):
+        problems.append("cameraRoute is missing a reason")
+    if not blueprint.get("audioDirection"):
+        problems.append("audioDirection is missing")
+    if not blueprint.get("audioDirectionReason"):
+        problems.append("audioDirection is missing a reason")
     return problems
 
 

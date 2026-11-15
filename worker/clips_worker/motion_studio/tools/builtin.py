@@ -1048,7 +1048,7 @@ def all_tools() -> list[Tool]:
             ],
             examples=[{
                 "tool": "use_component",
-                "arguments": {"component": "ticker", "componentVersion": "1.0+abc", "componentArguments": {"symbol": "GME"}, "position": {"x": 0, "y": 200}},
+                "arguments": {"component": "ticker", "componentVersion": "1.0+abc", "componentArguments": {"symbol": "TICKER"}, "position": {"x": 0, "y": 200}},
             }],
             apply_fn=_use_component,
         ),

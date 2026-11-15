@@ -187,10 +187,14 @@ def test_merge_does_not_keep_a_video_on_a_graphics_scene_or_fill_stills_silently
     }
     dirty = _merge_model_design(editorial, story, catalog, inventory_from_catalog(catalog, story), {
         "identity": {"concept": "a shop", "typography": "condensed", "materials": None, "palette": None,
-                     "cameraPersonality": None, "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
+                     "cameraPersonality": "slow push on stills", "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
         "worlds": [{"id": "w1", "name": "Shop", "brief": "the shop", "reason": "set", "chapters": None, "clusters": None}],
         "assetPlacements": [{"sceneIndex": 1, "assetId": "clip_1", "reason": "wrongly placed a video on a graphics scene"}],
         "customObjects": [], "sceneBindings": [], "missingNeeds": [],
+        "cameraRoute": "push in on the shop front, then hold",
+        "cameraRouteReason": "the stills should be read, not flown past",
+        "audioDirection": "narration pauses on the aisle clip",
+        "audioDirectionReason": "the clip should be heard as itself",
     })
     # The video must not stick on the graphics scene, and leftover stills must not be auto-filled.
     assert dirty["scenes"][1].get("assetId") != "clip_1"
@@ -200,9 +204,13 @@ def test_merge_does_not_keep_a_video_on_a_graphics_scene_or_fill_stills_silently
     # merge itself must also be safe if given a previously mutated plan-like dict.
     clean = _merge_model_design(editorial, story, catalog, inventory_from_catalog(catalog, story), {
         "identity": {"concept": "a shop", "typography": "condensed", "materials": None, "palette": None,
-                     "cameraPersonality": None, "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
+                     "cameraPersonality": "slow push on stills", "transitionLanguage": None, "motifs": None, "throughLine": "stay"},
         "worlds": [{"id": "w1", "name": "Shop", "brief": "the shop", "reason": "set", "chapters": None, "clusters": None}],
         "assetPlacements": [], "customObjects": [], "sceneBindings": [], "missingNeeds": [],
+        "cameraRoute": "push in on the shop front, then hold",
+        "cameraRouteReason": "the stills should be read, not flown past",
+        "audioDirection": "narration pauses on the aisle clip",
+        "audioDirectionReason": "the clip should be heard as itself",
     })
     assert clean["scenes"][1].get("assetId") in (None, "photo_7")
     assert clean["scenes"][0]["assetId"] == "photo_7"

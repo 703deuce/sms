@@ -166,12 +166,10 @@ def build_scene(ctx):
 def build_scene(ctx):
     film = ctx.film()
     key = (ctx.scene or {}).get("assetId")
-    if not key and ctx.assets:
-        key = next(iter(ctx.assets))
     if key:
         film.add(PhotoFrame(key, 0, 0, 1600, rot=-1.0, t_in=0.1, skin="print"))
-    else:
-        film.add(HeroSlam("STILL", 0, 0, 280, 0.1, None, rgb=ctx.rgb("ink")))
+    elif ctx.lines and ctx.lines[0].get("hero"):
+        film.add(HeroSlam(ctx.lines[0]["hero"], 0, 0, 280, 0.1, None, rgb=ctx.rgb("ink")))
     film.cam(0, 0, 0, 0.45)
     film.cam(ctx.duration, 0, 0, 0.4)
     return film

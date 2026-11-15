@@ -78,7 +78,7 @@ def layout(plan: dict, narration: dict, story: dict, fps: int = HOUSE["fps"]) ->
                 h["audioMode"] = "bed"
                 total = max(vo_dur, enter + clip_len + exit_)
             else:
-                # Default (and Keef-style RETURN): narration pauses, the clip plays in full.
+                # When audioMode is clip: narration pauses and the uploaded clip plays in full.
                 h["audioMode"] = mode if mode in ("clip", "mute") else "clip"
                 total = enter + clip_len + exit_
                 segs = []  # do not lay VO over the footage

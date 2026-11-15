@@ -1,11 +1,11 @@
 /**
  * BE-10 / FE-7: AI Director chat edits, expressed as typed operations on the film's blueprint.
  *
- * A Motion Studio film is built from the same things as the GameStop and Chief Keef reference films
- * (round2_cinematic/gme/scene.py, keef/scene.py, the insert tests, music.py): ONE world (type + look), scenes that
- * each show one hero per line, emphasis words where hits land on the spoken word, a camera path, footage inserts
- * (approach -> play -> return / hard cut) and a score with anchors (pulse, build, peak, crash, resolve). The Director
- * proposes edits to exactly those pieces; accepting applies them to the plan and re-renders only what they touch:
+ * A Motion Studio film is built from a plan the Director and Production Designer invent per film:
+ * environments and look, scenes that each show one hero per line, emphasis words that land on the
+ * spoken word, a camera path, footage inserts (approach -> play -> return / hard cut) and a score
+ * with anchors the Director chooses (pulse, build, peak, crash, resolve). Chat edits propose changes
+ * to exactly those pieces; accepting applies them to the plan and re-renders only what they touch:
  *
  *   scene / emphasis / camera        -> that scene's segment
  *   world / look (mood, grain, glow) -> every graphics segment (palette also re-colours footage frames)

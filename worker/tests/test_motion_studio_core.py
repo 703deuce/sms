@@ -129,16 +129,19 @@ def test_fallback_map_probe():
 
 
 @pytest.mark.skipif(importlib.util.find_spec('skia') is None, reason='skia not installed')
-def test_score_params_are_seeded_and_world_aware():
+def test_score_params_are_seeded_and_mood_aware():
     from clips_worker.motion_studio.core.audio import music_seed, score_params
     a = score_params(music_seed("p1", "hello story"), "curious")
     b = score_params(music_seed("p1", "hello story"), "curious")
     c = score_params(music_seed("p1", "a completely different script about collapse"), "curious")
     assert a == b
     assert a["bpm"] != c["bpm"] or a["key"] != c["key"] or a["instruments"] != c["instruments"]
-    chart = score_params(1, "curious", "price_chart", "The squeeze")
-    assert "sub" in chart["instruments"] or chart["mood"] == "driving"
-    assert chart["mode"] in {"minor", "dorian", "major"}
+    dark = score_params(1, "curious", mood="dark")
+    assert dark["mood"] == "dark"
+    assert dark["mode"] == "minor"
+    bright = score_params(1, "curious", mood="uplifting")
+    assert bright["mood"] == "uplifting"
+    assert bright["mode"] == "major"
 
 
 def test_policy_allows_item_subclass_init_but_not_other_dunders():

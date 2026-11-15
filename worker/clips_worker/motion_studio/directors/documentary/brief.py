@@ -7,7 +7,7 @@ REQUIRED = ("topic", "angle", "lengthMin", "engineVersion", "scriptRules", "voic
 HARD_RULES = [
     "Every time anchor comes from the word clock (W(line, word)); never hand-typed times.",
     "Text cap height >= 40 px at 1080p and fully inside the frame.",
-    "Three layers in every frame (procedural background, midground context, foreground hero) unless deliberateMinimal has a reason.",
+    "Composition is a per-film decision. If a frame is deliberately minimal, record it in deliberateMinimal with a reason.",
     "One spotlight hero per beat.",
     "No file, network or OS access from scene code; seeded randomness only.",
     "Numbers on screen must match the data provenance record.",

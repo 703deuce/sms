@@ -101,11 +101,13 @@ def test_normalize_coerces_hex_and_resolves_handoff_filenames():
     assert resolve_asset_id("clip.mp4", catalog) == "msa_vid"
     plan = {
         "world": {"brief": "b", "reason": "r", "name": "n"},
-        "style": {"palette": pal, "mood": "m", "reason": "r"},
+        "style": {"palette": pal, "mood": "m", "reason": "r",
+                  "fonts": {"display": "cond", "label": "label", "body": "serif"}},
+        "music": {"mood": "m", "brief": "a short bed", "reason": "matches the tone"},
         "scenes": [{
             "index": 0, "kind": "handoff", "visualType": "handoff", "lineIds": [], "description": "c",
             "emphasis": [], "reason": "play the clip", "transitionOut": "handoff",
-            "handoff": {"assetId": "clip.mp4", "inS": 0, "outS": 30, "audioMode": "clip"},
+            "handoff": {"assetId": "clip.mp4", "inS": 0, "outS": 30, "audioMode": "clip", "surface": "photo"},
         }],
     }
     out = normalize_director_plan(plan, catalog)

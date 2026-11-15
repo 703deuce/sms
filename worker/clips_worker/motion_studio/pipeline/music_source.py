@@ -50,8 +50,11 @@ def build_music(project: dict, plan: dict, story: dict, lay: dict, work: str, us
         else:
             from clips_worker.elevenlabs import generate_music_for_length
             from clips_worker.storage import upload_file
-            prompt = (f"Instrumental documentary score, {story.get('tone') or 'cinematic'} mood, builds to a peak then resolves; "
-                      f"no vocals. Subject: {story.get('title') or ''}")[:600]
+            music = plan.get("music") or {}
+            mood = music.get("mood") or (plan.get("style") or {}).get("mood") or story.get("tone") or "instrumental"
+            brief = music.get("brief") or music_brief(plan, story)
+            prompt = (f"Instrumental documentary score. Mood: {mood}. {brief} "
+                      f"No vocals. Subject: {story.get('title') or ''}").strip()[:600]
             audio_bytes, usage = generate_music_for_length(prompt, int(dur * 1000), True)
             raw = os.path.join(work, "eleven_music.mp3")
             Path(raw).write_bytes(audio_bytes)
@@ -62,7 +65,14 @@ def build_music(project: dict, plan: dict, story: dict, lay: dict, work: str, us
         if src == "elevenlabs" and raw:
             info = A.cut_uploaded_music(raw, out_wav, dur, work, start_on_beat=0.0)
             return {**info, "source": "elevenlabs", "elevenKey": prev.get("elevenKey"), "lengthS": dur, "path": out_wav}
-    params = A.score_params(A.music_seed(project["id"], " ".join(l["text"] for l in story["lines"])), story.get("tone") or "", music_brief(plan, story), story.get("title") or "")
+    music = plan.get("music") or {}
+    mood = music.get("mood") or (plan.get("style") or {}).get("mood") or story.get("tone") or ""
+    brief = music.get("brief") or music_brief(plan, story)
+    params = A.score_params(
+        A.music_seed(project["id"], " ".join(l["text"] for l in story["lines"])),
+        mood, brief, story.get("title") or "",
+        mood=mood, brief=brief,
+    )
     anchors = anchors_in_program(plan, lay)
     info = A.generate_score(out_wav, dur, anchors, params)
     log("music", f"generated score: {params['bpm']} bpm {params['key']} {params['mode']} ({', '.join(params['instruments'])})",

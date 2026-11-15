@@ -141,12 +141,12 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
 
   function seedExample() {
     const t = now() - 3 * 86_400_000
-    const pid = 'ms_example_gamestop'
+    const pid = 'ms_example_documentary'
     const project = baseProject({
       pid,
       t,
-      title: 'GameStop: The Short Squeeze',
-      prompt: 'Make a 5-minute documentary about the GameStop short squeeze in 2021. Netflix-style financial documentary.',
+      title: 'Example documentary',
+      prompt: 'Make a short documentary from an idea and the photos or clips you upload.',
       workflow: 'idea',
       assets: [],
       example: true,

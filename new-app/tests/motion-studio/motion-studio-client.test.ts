@@ -127,7 +127,7 @@ describe('Motion Studio config, tracks and nav', () => {
     expect(formatMsCredits(null)).toBe('Included')
     expect(formatMsCredits(12)).toBe('12 credits')
     expect(MS_LABELS.headline).toBe('What are we creating today?')
-    expect(MS_LABELS.promptPlaceholder).toBe('Make a documentary about the GameStop short squeeze in 2021.')
+    expect(MS_LABELS.promptPlaceholder).toBe('Describe the documentary you want to make. You can attach photos and clips.')
     for (const v of Object.values(MS_LABELS)) expect(v).not.toMatch(/\$/)
   })
 

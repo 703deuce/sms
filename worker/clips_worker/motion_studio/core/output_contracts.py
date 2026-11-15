@@ -53,16 +53,36 @@ DIRECTOR_RULES: list[Rule] = [
         "message": "style.palette needs bg/ink/accent/accent2/muted hex colours",
         "contract": (
             "style.palette MUST include exactly the keys bg, ink, accent, accent2, muted, "
-            "each a #RRGGBB hex colour (six hex digits with a leading #), for example "
-            '{"bg":"#0d1018","ink":"#f2f0ea","accent":"#ffc400","accent2":"#5ac8ff","muted":"#7a8296"}.'
+            "each a #RRGGBB hex colour (six hex digits with a leading #). Invent this film's "
+            "colours and record why in style.reason. Do not reuse a stock or example palette."
         ),
         "tokens": ["bg", "ink", "accent", "accent2", "muted", "#RRGGBB", "style.palette"],
     },
     {
         "id": "line_coverage",
         "message": "scenes must cover every line id exactly once, in order",
-        "contract": "scenes must cover every line id exactly once, in order (group 1-4 lines per graphics scene).",
+        "contract": "scenes must cover every line id exactly once, in order. The Director decides how many lines each scene covers and records why in that scene's reason — a single word or line may be its own scene; a longer passage may stay together when it is one beat. Do not use a fixed group size.",
         "tokens": ["exactly once", "in order", "line id"],
+    },
+    {
+        "id": "music_decision",
+        "message": "plan is missing a music mood and reason",
+        "contract": (
+            "music MUST be an object {mood, brief, reason} decided for THIS film. "
+            "mood is the score's emotional colour; brief describes instrumentation and shape; "
+            "reason records why this score belongs to this story. Do not reuse a stock rise-and-resolve pattern."
+        ),
+        "tokens": ["music", "mood", "brief", "reason"],
+    },
+    {
+        "id": "style_fonts",
+        "message": "style.fonts needs display, label, and body roles",
+        "contract": (
+            "style.fonts MUST choose display, label, and body from the engine font roles "
+            "(cond, label, labelm, mono, serif, hand, anton). Invent the pairing for this film "
+            "and mention it in style.reason. Do not default to a canned cond/serif stack."
+        ),
+        "tokens": ["style.fonts", "display", "label", "body"],
     },
     {
         "id": "every_upload",
@@ -128,15 +148,37 @@ PRODUCTION_RULES: list[Rule] = [
     },
     {
         "id": "identity",
-        "message": "identity package is missing",
-        "contract": "identity must include typography, concept, throughLine or cameraPersonality.",
+        "message": "identity package is missing typography, concept, or cameraPersonality",
+        "contract": (
+            "identity MUST include typography (this film's display/label/body pairing or a typography brief), "
+            "concept, throughLine, and cameraPersonality — each invented for this film, each with intent "
+            "the viewer can see. Do not fall back to a canned cond/serif stack or a stock camera sentence."
+        ),
         "tokens": ["typography", "concept", "throughLine", "cameraPersonality"],
     },
     {
         "id": "world_brief",
         "message": "no story-driven environment brief",
-        "contract": "Each world needs id, name, brief and reason — a story-driven environment, not a stock type menu.",
+        "contract": "Each world needs id, name, brief and reason — a story-driven environment invented for this film, not a stock type menu.",
         "tokens": ["brief", "reason", "world"],
+    },
+    {
+        "id": "camera_route",
+        "message": "cameraRoute is missing",
+        "contract": (
+            "cameraRoute and cameraRouteReason are required. Describe how the camera moves through THIS film's "
+            "environments and why. Do not reuse a stock route such as 'follow the sequence of environments'."
+        ),
+        "tokens": ["cameraRoute", "cameraRouteReason"],
+    },
+    {
+        "id": "audio_direction",
+        "message": "audioDirection is missing",
+        "contract": (
+            "audioDirection and audioDirectionReason are required. Decide how narration, footage sound, and "
+            "score share the soundtrack for this film, and why."
+        ),
+        "tokens": ["audioDirection", "audioDirectionReason"],
     },
     {
         "id": "palette_keep",
@@ -299,6 +341,11 @@ DIRECTOR_SCHEMA = _obj({
         "crash": {"anyOf": [_ANCHOR, {"type": "null"}]},
         "resolve": {"anyOf": [_ANCHOR, {"type": "null"}]},
     }),
+    "music": _obj({
+        "mood": {"type": "string"},
+        "brief": {"type": "string"},
+        "reason": {"type": "string"},
+    }),
     "deliberateMinimal": {"type": "array", "items": _MINIMAL},
 })
 
@@ -334,6 +381,10 @@ PRODUCTION_SCHEMA = _obj({
     })},
     "sceneBindings": {"type": "array", "items": _SCENE_BINDING},
     "missingNeeds": {"type": "array", "items": _MISSING_NEED},
+    "cameraRoute": {"type": "string"},
+    "cameraRouteReason": {"type": "string"},
+    "audioDirection": {"type": "string"},
+    "audioDirectionReason": {"type": "string"},
 })
 
 STORY_SCHEMA = _obj({

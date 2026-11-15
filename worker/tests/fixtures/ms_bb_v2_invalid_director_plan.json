@@ -78,7 +78,12 @@
         "text": "white"
       },
       "mood": "elegiac",
-      "reason": "incomplete palette"
+      "reason": "incomplete palette",
+      "fonts": {
+        "display": "cond",
+        "label": "label",
+        "body": "serif"
+      }
     },
     "scenes": [
       {
@@ -120,10 +125,16 @@
           "assetId": "not-a-real-asset",
           "inS": 0,
           "outS": 30,
-          "audioMode": "clip"
+          "audioMode": "clip",
+          "surface": "photo"
         }
       }
-    ]
+    ],
+    "music": {
+      "mood": "elegiac",
+      "brief": "fixture score decision so this file only tests the four intended error classes",
+      "reason": "test fixture"
+    }
   },
   "expectedErrors": [
     "style.palette needs bg/ink/accent/accent2/muted hex colours",
