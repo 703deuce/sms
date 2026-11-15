@@ -23,6 +23,9 @@ def compile_agent_output(
     camera_intent: str | None = None,
     required_effects: list[str] | None = None,
     composition_elements: list[dict] | None = None,
+    planned_camera_shots: list[dict] | None = None,
+    world_elements: list[dict] | None = None,
+    transition_intent: str | None = None,
     project_id: str | None = None,
 ) -> dict[str, Any]:
     """Prefer tool calls / a scene spec. Custom code is Tier 3 only. Limitations pass through."""
@@ -39,6 +42,9 @@ def compile_agent_output(
         spec["cameraRequired"] = camera_intent == "travel"
         spec["requiredEffects"] = list(required_effects or [])
         spec["compositionElements"] = list(composition_elements or [])
+        spec["plannedCameraShots"] = list(planned_camera_shots or [])
+        spec["requiredWorldElements"] = list(world_elements or [])
+        spec["approvedTransitionIntent"] = transition_intent
         if project_id:
             spec["projectId"] = project_id
         if payload.get("tools"):
@@ -65,6 +71,12 @@ def compile_agent_output(
         }
 
     if payload.get("code"):
+        if composition_elements or planned_camera_shots or world_elements:
+            return {"ok": False, "limitation": None, "tier": 3, "code": None, "spec": None,
+                    "errors": [{"code": "UNVERIFIABLE_CUSTOM_COMPOSITION",
+                                "message": "Tier-3 freeform source cannot prove the named composition elements, "
+                                           "drawable world shapes or camera shot endpoints. Use registered tools "
+                                           "and a registered custom_component where needed; do not substitute a generic scene."}]}
         # The custom-code route cannot silently substitute a static scene for a planned camera journey.
         if camera_intent == "travel" and not any(token in str(payload["code"]) for token in ("film.cam(", "film.shot(")):
             return {"ok": False, "limitation": None, "tier": 3, "code": None, "spec": None,

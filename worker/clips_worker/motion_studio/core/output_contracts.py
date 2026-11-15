@@ -159,7 +159,7 @@ PRODUCTION_RULES: list[Rule] = [
     {
         "id": "world_brief",
         "message": "no story-driven environment brief",
-        "contract": "Each world needs id, name, brief and reason — a story-driven environment invented for this film, not a stock type menu.",
+        "contract": "Each world needs id, name, brief, reason, constructionPlan and environmentElements with drawable rect/rrect/surface/circle/line/path geometry, not only poetic prose. Make real layered depth for the film.",
         "tokens": ["brief", "reason", "world"],
     },
     {
@@ -214,7 +214,9 @@ PRODUCTION_RULES.append({
         "objectId/groupId/environmentId supplied to the Motion Engineer, plus layer, geometry, links, "
         "assetId, motion and timing. cameraShots provides actual named camera targets for any journey. "
         "If you require a component, group, connection, transition, animation or camera journey, list it "
-        "in requiredEffects. This is an implementation contract, not a style menu."
+        "in requiredEffects and author its actual named implementation in compositionElements, cameraShots "
+        "with numeric fromPose/toPose, transitionIntent or customObjects. A required effect cannot be optional "
+        "in compositionPlan. A hold needs holdReason. This is an implementation contract, not a style menu."
     ),
     "tokens": ["compositionPlan", "cameraIntent", "requiredEffects"],
 })
@@ -392,6 +394,22 @@ _COMPOSITION_ELEMENT = _obj({
     "motion": {"type": ["string", "null"]},
     "timingAnchor": {"type": ["string", "null"]},
 })
+_WORLD_ELEMENT = _obj({
+    "id": {"type": "string"},
+    "kind": {"type": "string", "enum": ["rect", "rrect", "surface", "circle", "line", "path"]},
+    "purpose": {"type": "string"},
+    "position": _obj({"x": {"type": "number"}, "y": {"type": "number"}}),
+    "size": _obj({"width": {"type": "number"}, "height": {"type": "number"}}),
+    "fill": {"type": "string"},
+    "opacity": {"type": "number"},
+    "z": {"type": "integer"},
+    "rotation": {"type": "number"},
+    "points": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
+})
+_CAMERA_POSE = _obj({
+    "x": {"type": "number"}, "y": {"type": "number"},
+    "zoom": {"type": "number"}, "rot": {"type": "number"},
+})
 _SCENE_BINDING = _obj({
     "compositionPlan": {"type": "string"},
     "compositionElements": {"type": "array", "items": _COMPOSITION_ELEMENT},
@@ -399,7 +417,10 @@ _SCENE_BINDING = _obj({
         "id": {"type": "string"}, "purpose": {"type": "string"},
         "fromTarget": {"type": ["string", "null"]}, "toTarget": {"type": ["string", "null"]},
         "movement": {"type": "string"}, "timingAnchor": {"type": ["string", "null"]},
+        "fromPose": {"anyOf": [_CAMERA_POSE, {"type": "null"}]},
+        "toPose": {"anyOf": [_CAMERA_POSE, {"type": "null"}]},
     })},
+    "holdReason": {"type": ["string", "null"]},
     "transitionIntent": {"type": ["string", "null"]},
     "cameraIntent": {"type": "string", "enum": ["hold", "travel", "none"]},
     "requiredEffects": {"type": "array", "items": {"type": "string", "enum": [
@@ -478,6 +499,8 @@ PRODUCTION_SCHEMA = _obj({
         "reason": {"type": "string"},
         "chapters": _STRING_OR_NUM_LIST,
         "clusters": _STRING_OR_NUM_LIST,
+        "constructionPlan": {"type": "string"},
+        "environmentElements": {"type": "array", "items": _WORLD_ELEMENT},
     })},
     "customObjects": {"type": "array", "items": _CUSTOM_OBJECT},
     "assetPlacements": {"type": "array", "items": _obj({
@@ -564,6 +587,13 @@ _SCENE_REVISION = _obj({
     "heldStillOk": {"type": ["boolean", "null"]},
     "visualType": {"type": ["string", "null"]},
     "customObjects": {"type": "array", "items": _CUSTOM_OBJECT},
+    "compositionPlan": {"type": "string"},
+    "compositionElements": {"type": "array", "items": _COMPOSITION_ELEMENT},
+    "cameraShots": _SCENE_BINDING["properties"]["cameraShots"],
+    "holdReason": {"type": ["string", "null"]},
+    "cameraIntent": {"type": "string", "enum": ["hold", "travel", "none"]},
+    "requiredEffects": _SCENE_BINDING["properties"]["requiredEffects"],
+    "transitionIntent": {"type": ["string", "null"]},
 })
 
 REVISION_RULES: list[Rule] = [
@@ -574,8 +604,10 @@ REVISION_RULES: list[Rule] = [
             "Revise ONLY the limited scenes. Each revised objective MUST be supported by the assigned "
             "asset's evidence and by registered tools or a declared custom-object extension. "
             "Do not invent wording, objects, or a state the analysis does not record. "
-            "Prefer a whole-image treatment or typography on top when a per-element pixel edit is not available. "
-            "Keep official assetId assignments. Record evidenceBasis and toolBasis."
+            "Repair exact failed compositionPlan, compositionElements, cameraShots with numeric poses, "
+            "requiredEffects, transitionIntent and holdReason. Do not downgrade a director-required camera "
+            "move to hold or silently drop a required effect. Keep official assetId assignments. "
+            "Record evidenceBasis and toolBasis."
         ),
         "tokens": ["evidence", "registered tools", "custom-object", "evidenceBasis", "toolBasis", "limited scenes"],
     },

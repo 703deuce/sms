@@ -329,6 +329,18 @@ def run_produce(conn, proj: dict, job: dict, p: dict) -> None:
         pre.record_checkpoint(plan, "produce_layout", {"durationS": lay.get("durationS"), "scenes": len(lay.get("scenes") or [])})
         db.update_project(conn, pid, plan=plan)
         log("layout", f"program: {lay['durationS']:.1f}s, {len(lay['scenes'])} scenes", {"frames": lay["frames"]})
+    # The narration clock and unshortened user footage define the true program
+    # length. Do not silently drift from a requested 3-minute film to 4 minutes.
+    if settings.get("lengthMin") is not None:
+        target = float(settings["lengthMin"]) * 60.0
+        actual = float(lay["durationS"])
+        if target > 0 and actual > target * 1.08:
+            raise StageContractError(
+                "duration", [f"requested {target:.1f}s but timeline is {actual:.1f}s "
+                             f"(+{actual-target:.1f}s), including narration, scene spacing and "
+                             "untrimmed handoffs; revise the story/director timing or raise the "
+                             "requested duration. No scenes or uploaded clips were silently cut."]
+            )
     db.set_stage(conn, pid, "graphics")
     rows = db.scenes(conn, pid)
     by_index = {r["index"]: r for r in rows}

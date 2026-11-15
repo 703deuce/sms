@@ -42,6 +42,9 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
     if validate_blueprint:
         for err in validate_blueprint(plan.get("blueprint")):
             errors.append(f"blueprint: {err}")
+    if proj.get("director") in (None, "documentary"):
+        from clips_worker.motion_studio.directors.documentary.production import validate_scene_objectives
+        errors.extend(f"production design: {err}" for err in validate_scene_objectives(plan, catalog))
     if (plan.get("source") or "") == "fallback" or (plan.get("productionSource") or "") == "fallback":
         errors.append("plan: a fallback/deterministic substitute was used; test runs must not ship that")
 
@@ -90,9 +93,28 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
             qa_blob["spec"] = d.get("spec")
         if d.get("tier") is not None:
             qa_blob["tier"] = d.get("tier")
+        if d.get("engineerAttempts"):
+            qa_blob["engineerAttempts"] = d["engineerAttempts"]
         db.update_scene(conn, row["id"], codeKey=ck, codeHash=chash, model=d.get("model"),
                         fixRounds=d.get("fixRounds") or 0, usedFallback=False, qa=qa_blob, status="preflight")
         return True
+
+    def _save_failure(sc, row, reason, d=None, exc=None):
+        """Persist each failed scene attempt, source and exact blockers to scene QA."""
+        qa = dict(row.get("qa") or {})
+        qa.update({"preflight": True, "failedReason": reason,
+                   "engineerAttempts": (d or {}).get("engineerAttempts") or qa.get("engineerAttempts") or []})
+        if (d or {}).get("failedCode"):
+            qa["failedEngineerCode"] = d["failedCode"]
+        if (d or {}).get("failedProblems"):
+            qa["failedEngineerProblems"] = d["failedProblems"]
+        if (d or {}).get("spec"):
+            qa["failedEngineerSpec"] = d["spec"]
+        if exc is not None and getattr(exc, "output", None) is not None:
+            qa["rawEngineerOutput"] = exc.output
+        db.update_scene(conn, row["id"], status="failed", error=reason[:1000], qa=qa,
+                        fixRounds=(d or {}).get("fixRounds") or 0)
+        row["qa"] = qa
 
     def _design(sc, row):
         ctx = scene_context_fn(sc, lay, story, plan, assets_meta, seed)
@@ -102,13 +124,15 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
         sdir = scratch_dir_fn(f"ms_pf_{pid[-8:]}_{sc['index']}_")
         try:
             d = design_scene(ctx, sdir, ad, log, exec_log, preflight=True)
-        except Exception as exc:  # noqa: BLE001 — collect all scene failures, then fail the gate
-            msg = f"scene {sc.get('index')}: {type(exc).__name__}: {exc}"
+        except Exception as exc:  # noqa: BLE001 — collect every scene's failure
+            msg = f"scene {int(sc.get('index') or 0) + 1} (index {sc.get('index')}): {type(exc).__name__}: {exc}"
+            _save_failure(sc, row, msg, exc=exc)
             return "error", msg, {"stage": "motion_engineer", "sceneIndex": sc.get("index"), "errors": [msg]}, None
         lim = d.get("limitation") if isinstance(d.get("limitation"), dict) else None
         is_lim = bool(lim) or d.get("verdict") == "limitation"
         if is_lim:
             cause = d.get("degradeCause") or (lim or {}).get("reason") or "scene failed lint/compile"
+            _save_failure(sc, row, f"scene {int(sc.get('index') or 0) + 1}: {cause}", d=d)
             payload = {
                 "sceneIndex": sc.get("index"),
                 "reason": cause,
@@ -121,10 +145,20 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
             return "limitation", cause, {"stage": "motion_engineer", "sceneIndex": sc.get("index"),
                                          "errors": [cause], "problems": d.get("failedProblems") or []}, payload, d
         if not d.get("code") or d.get("degraded") or d.get("usedFallback") or d.get("verdict") in {"failed", "degraded"}:
+            problems = d.get("failedProblems") or []
             cause = d.get("degradeCause") or "scene failed lint/compile"
-            msg = f"scene {sc.get('index')}: {cause}"
-            return "error", msg, {"stage": "motion_engineer", "sceneIndex": sc.get("index"),
-                                  "errors": [cause], "problems": d.get("failedProblems") or []}, None
+            specific = "; ".join(problems) if problems else cause
+            msg = f"scene {int(sc.get('index') or 0) + 1} (index {sc.get('index')}): {specific}"
+            _save_failure(sc, row, msg, d=d)
+            payload = {"sceneIndex": sc.get("index"), "reason": msg,
+                       "failedRequirements": problems,
+                       "missingTools": [], "missingAssets": [], "assetId": sc.get("assetId"),
+                       "unblock": "Revise the exact unsatisfied requirement",
+                       "limitation": {"reason": msg}}
+            # One engineer implementation failure triggers one targeted designer revision,
+            # while every other scene still gets preflighted and all failures are reported.
+            return "limitation", msg, {"stage": "motion_engineer", "sceneIndex": sc.get("index"),
+                                       "errors": [msg], "problems": problems}, payload, d
         return "ok", d, None, None
 
     ctx_by_index: dict = {}
@@ -180,7 +214,7 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
                     _persist(sc, row, rest[0])
                 elif status == "limitation":
                     cause, deg, payload, _d = rest
-                    errors.append(f"scene {sc.get('index')}: {cause}")
+                    errors.append(f"scene {int(sc.get('index') or 0) + 1} (index {sc.get('index')}): {cause}")
                     if deg:
                         degradations.append(deg)
                     still.append(payload)
@@ -192,7 +226,7 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
             pending = still
     elif pending:
         for item in pending:
-            errors.append(f"scene {item['sc'].get('index')}: {item['cause']}")
+            errors.append(item["cause"])
             if item.get("deg"):
                 degradations.append(item["deg"])
 
@@ -215,6 +249,8 @@ def run_preflight(conn, proj: dict, work: str, log, *, prepare_photos, assets_di
         "revisedScenes": revised_scenes,
     }
     if production_revisions:
+        from clips_worker.motion_studio.directors.documentary.production import validate_scene_objectives
+        errors.extend(f"revised production design: {err}" for err in validate_scene_objectives(plan, catalog))
         report["plan"] = plan
         db.update_project(conn, pid, plan=plan)
     if errors:

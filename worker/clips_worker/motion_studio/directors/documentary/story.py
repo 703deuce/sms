@@ -34,7 +34,20 @@ WRITING_RULES = """Narration-writing rules (documentary):
 
 
 def target_words(length_min: int) -> int:
-    return int(max(1, length_min) * WPM)
+    # Leave editorial breathing space for scene boundaries, handoffs and chapter pauses.
+    return int(max(1, length_min) * WPM * 0.91)
+
+
+def _duration_issues(story: dict, length_min: int) -> list[str]:
+    """Ask the Story agent to fit the user-specified runtime before TTS costs occur."""
+    words = sum(len(str(l.get("spoken") or l.get("text") or "").split()) for l in story.get("lines") or [])
+    estimated = words / WPM * 60 + 0.9 * len(story.get("chapters") or [])
+    target = max(1, length_min) * 60
+    if estimated > target * 1.05:
+        return [f"requested {target:.0f}s but narration alone estimates {estimated:.1f}s "
+                f"({words} spoken words); shorten narration to roughly {target_words(length_min)} words, "
+                "retaining grounded claims and assigned uploads"]
+    return []
 
 
 
@@ -252,7 +265,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
     draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
              "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
              "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
-    errs = validate_story(draft, catalog=catalog)
+    errs = validate_story(draft, catalog=catalog) + _duration_issues(draft, length_min)
     if errs:
         log("story_invalid", "story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
@@ -265,7 +278,7 @@ def write_from_idea(brief: str, title: str, length_min: int, research: dict, ton
         draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
                  "tone": str(out.get("tone") or tone_hint or "curious")[:60], "chapters": out.get("chapters") or [],
                  "lines": lines, "data": _data(out.get("data"), lines, "research"), "sources": research.get("sources", [])}
-        errs = validate_story(draft, catalog=catalog)
+        errs = validate_story(draft, catalog=catalog) + _duration_issues(draft, length_min)
         if errs:
             raise StageContractError("story", errs, repaired=True, output=out)
     return draft
@@ -361,7 +374,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
     draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
              "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
              "data": [], "sources": []}
-    errs = validate_story(draft, catalog=catalog)
+    errs = validate_story(draft, catalog=catalog) + _duration_issues(draft, length_min)
     if errs:
         log("story_invalid", "footage story failed validation; requesting a targeted repair", {"errors": errs[:12], "output": out})
         out, m = chat_json(
@@ -374,7 +387,7 @@ def write_from_footage(brief: str, title: str, length_min: int, catalog: list[di
         draft = {"title": str(out.get("title") or title)[:120], "logline": str(out.get("logline") or "")[:400],
                  "tone": str(out.get("tone") or "curious")[:60], "chapters": out.get("chapters") or [], "lines": lines,
                  "data": [], "sources": []}
-        errs = validate_story(draft, catalog=catalog)
+        errs = validate_story(draft, catalog=catalog) + _duration_issues(draft, length_min)
         if errs:
             raise StageContractError("story", errs, repaired=True, output=out)
     return draft
@@ -437,6 +450,12 @@ def build_story(project: dict, catalog: list[dict], log) -> dict:
     story["lint"] = _lint(story["lines"])
     story["wordCount"] = sum(len(l["spoken"].split()) for l in story["lines"])
     story["estimatedDurationS"] = round(story["wordCount"] / WPM * 60 + 0.9 * len(story.get("chapters") or []), 1)
+    if not config.mock() and s.get("lengthMin") is not None:
+        issues = _duration_issues(story, length_min)
+        if issues:
+            if workflow == "script":
+                issues = [f"supplied script cannot fit the requested {length_min} minutes unchanged: " + issues[0]]
+            raise StageContractError("story_duration", issues, output={"story": story})
     claims_missing = [l["id"] for l in story["lines"] if workflow == "idea" and research.get("results") and re.search(r"\d", l["text"]) and not l["sources"]]
     story["unsourcedNumericLines"] = claims_missing
     return story

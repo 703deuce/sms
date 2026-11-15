@@ -9,6 +9,26 @@ from clips_worker.motion_studio.tools.spec import SPEC_VERSION
 PALETTE_KEYS = frozenset({"bg", "ink", "accent", "accent2", "muted"})
 
 
+def _same_pose(a: object, b: object) -> bool:
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    try:
+        return all(abs(float(a[k]) - float(b[k])) < (0.002 if k in ("zoom", "rot") else 0.6)
+                   for k in ("x", "y", "zoom", "rot"))
+    except (ValueError, TypeError, KeyError):
+        return False
+
+
+def _camera_moved(a: object, b: object) -> bool:
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    try:
+        return (float(a["zoom"]) > 0 and float(b["zoom"]) > 0
+                and not _same_pose(a, b))
+    except (ValueError, TypeError, KeyError):
+        return False
+
+
 def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None) -> list[dict[str, str]]:
     """Return structured problems (empty if the spec may be compiled)."""
     problems: list[dict[str, str]] = []
@@ -143,7 +163,7 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
         present.add("property_animation")
     if spec.get("typography"):
         present.add("typography")
-    if spec.get("transitions"):
+    if any(tr.get("type") not in (None, "cut") for tr in (spec.get("transitions") or {}).values()):
         present.add("transition")
     if spec.get("extensions") or any(o.get("kind") == "extension" for o in objects.values()):
         present.add("custom_component")
@@ -152,14 +172,62 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
     if any(o.get("kind") in ("graphic", "primitive") for o in objects.values()):
         present.add("graphic")
     moves = list((spec.get("camera") or {}).values())
-    if any(c.get("from") != c.get("to") and c.get("easing") != "hold" for c in moves):
+    if any(_camera_moved(c.get("from"), c.get("to")) and c.get("easing") != "hold" for c in moves):
         present.add("camera_travel")
+    if spec.get("approvedTransitionIntent") and "transition" not in present:
+        problems.append({"code": "MISSING_APPROVED_TRANSITION",
+                         "message": f"transitionIntent {spec['approvedTransitionIntent']!r} has no actual dissolve/wipe transition_scene call (cuts are not effects)"})
     if spec.get("cameraIntent") == "travel" and "camera_travel" not in present:
         problems.append({"code": "CAMERA_INTENT_MISSING", "message": "the approved design requires a moving camera; use animate_camera with distinct poses"})
     if spec.get("cameraIntent") == "hold" and "camera_travel" in present:
         problems.append({"code": "CAMERA_INTENT_MISMATCH", "message": "the approved design specifies a deliberate hold, not a camera journey"})
     for feature in sorted(required - present):
-        problems.append({"code": "MISSING_PLANNED_EFFECT", "message": f"approved visual effect {feature!r} was not implemented"})
+        remedy = {
+            "graphic": "call create_graphic or place_primitive with an approved drawable element id",
+            "environment_geometry": "call create_environment with backdrop.elements for approved physical world objects",
+            "camera_travel": "call animate_camera with genuinely distinct from/to camera poses",
+            "property_animation": "call animate_property on the approved object",
+            "transition": "call transition_scene with approved adjacent scene ids",
+            "group": "call layout_group with approved memberIds",
+            "custom_component": "register/place the approved custom component",
+            "media": "call place_media with the approved assetId",
+        }.get(feature, f"implement the approved {feature} using a supported registered tool")
+        problems.append({"code": "MISSING_PLANNED_EFFECT",
+                         "message": f"required effect {feature!r} is absent from the compiled scene graph; {remedy}"})
+    expected_world = spec.get("requiredWorldElements") or []
+    built_world = [el for e in envs.values() for el in
+                   ((e.get("backdrop") or {}).get("elements") or []) + (e.get("geometry") or [])]
+    world_by_id = {el.get("id"): el for el in built_world if isinstance(el, dict) and el.get("id")}
+    for intended in expected_world:
+        if not isinstance(intended, dict):
+            continue
+        eid = intended.get("id")
+        actual = world_by_id.get(eid)
+        if actual is None:
+            problems.append({"code": "MISSING_WORLD_ELEMENT",
+                             "message": f"approved world object {eid!r} is absent; copy it into create_environment.backdrop.elements"})
+        elif actual.get("kind") != intended.get("kind"):
+            problems.append({"code": "WORLD_ELEMENT_CHANGED",
+                             "message": f"world object {eid!r}: approved kind {intended.get('kind')!r} differs from {actual.get('kind')!r}"})
+        elif any(actual.get(k) != intended.get(k)
+                 for k in ("position", "size", "fill", "opacity", "z", "rotation")):
+            problems.append({"code": "WORLD_GEOMETRY_CHANGED",
+                             "message": f"world object {eid!r}: copy the approved position, size, fill, opacity, depth and rotation exactly"})
+    for shot in spec.get("plannedCameraShots") or []:
+        if not isinstance(shot, dict):
+            continue
+        frm, to = shot.get("fromPose"), shot.get("toPose")
+        if not _camera_moved(frm, to):
+            continue
+        if not any(_same_pose(frm, m.get("from")) and _same_pose(to, m.get("to"))
+                   and m.get("easing") != "hold" for m in moves):
+            problems.append({"code": "MISSING_CAMERA_SHOT",
+                             "message": f"approved camera shot {shot.get('id')!r} has no real animate_camera "
+                                        f"with matching numeric fromPose/toPose"})
+    for aid, motion in (spec.get("animation") or {}).items():
+        if motion.get("from") == motion.get("to"):
+            problems.append({"code": "NOOP_ANIMATION",
+                             "message": f"animation {aid!r} has identical start/end values and produces no visible movement"})
     # Check every specifically designed element by stable id, not only the presence
     # of one generic tool of the same family. An approved image cluster cannot
     # silently become one unrelated photograph.
@@ -182,7 +250,7 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
                 {p.get("fromObjectId"), p.get("toObjectId")} == {eid, linked})
                 for p in objects.values()):
             problems.append({"code": "MISSING_VISUAL_LINK", "message": f"planned elements {eid!r} and {linked!r} lack a connecting path"})
-        if element.get("motion") and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values()) and not spec.get("camera"):
+        if element.get("motion") and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values()):
             problems.append({"code": "MISSING_ELEMENT_MOTION", "message": f"planned element {eid!r} has motion intent but no animation or camera choreography"})
     supported_props = {"position", "position.x", "position.y", "scale", "rotation", "opacity"}
     for aid, anim in (spec.get("animation") or {}).items():

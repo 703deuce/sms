@@ -67,6 +67,9 @@ def _engineer_brief(ctx: dict) -> dict:
     blueprint = ctx.get("blueprint") or (ctx.get("scene") or {}).get("blueprint") or {}
     scene_index = (ctx.get("scene") or {}).get("index")
     # Supply the exact design for THIS scene, not 50 unrelated scene objectives.
+    binding = ctx.get("sceneBinding") or {}
+    world = next((w for w in blueprint.get("worlds") or [] if isinstance(w, dict)
+                  and w.get("id") == binding.get("worldId")), {})
     scene_blueprint = {
         "identity": blueprint.get("identity"),
         "worlds": blueprint.get("worlds"),
@@ -82,11 +85,14 @@ def _engineer_brief(ctx: dict) -> dict:
         "role": "motion_engineer",
         "blueprint": scene_blueprint,
         "sceneBinding": ctx.get("sceneBinding") or {},
-        "compositionElements": (ctx.get("sceneBinding") or {}).get("compositionElements") or [],
-        "cameraShots": (ctx.get("sceneBinding") or {}).get("cameraShots") or [],
+        "compositionElements": binding.get("compositionElements") or [],
+        "approvedWorld": world,
+        "approvedWorldElements": world.get("environmentElements") or [],
+        "cameraShots": binding.get("cameraShots") or [],
         "availableApprovedComponents": ctx.get("approvedComponents") or [],
         "approvedCompositionPlan": (ctx.get("sceneBinding") or {}).get("compositionPlan"),
-        "requiredEffects": (ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
+        "requiredEffects": binding.get("requiredEffects") or [],
+        "transitionIntent": binding.get("transitionIntent"),
         "cameraIntent": (ctx.get("sceneBinding") or {}).get("cameraIntent"),
         "scene": ctx["scene"],
         "duration": ctx["duration"],
@@ -106,7 +112,14 @@ def _engineer_brief(ctx: dict) -> dict:
             "durationS, fps and durationFrames are the exact length of THIS scene after layout/TTS timing. "
             "Express tool timing relative to the scene: startS/endS (seconds from 0), startFrac/endFrac (0..1), "
             "or a line/word anchor. Do not convert to frames; the engine converts from the real duration. "
-            "A move or hold that lasts the whole scene uses startS=0 and endS='end' or endFrac=1."
+            "A move or hold that lasts the whole scene uses startS=0 and endS='end' or endFrac=1. "
+            "Copy approvedWorld.environmentElements into create_environment.backdrop.elements using "
+            "the same shape IDs, geometry, fill, opacity and z; a prose backdrop is NOT a drawable world. "
+            "Construct EVERY compositionElement with its exact objectId using registered tools. "
+            "For cameraShots, use animate_camera with exact numeric fromPose and toPose. "
+            "For required graphic, execute create_graphic or place_primitive, not a text note. "
+            "Required transitions need transition_scene with the adjacent sN scene ids. "
+            "For any unsupportable effect, return a precise limitation, not a substitute hold."
         ),
     }
     # Maps remain available as engine capabilities, not as a world to invent.
@@ -129,6 +142,10 @@ def _interpret(out: dict, ctx: dict) -> dict:
         allow_custom_code=config.custom_code_enabled(),
         camera_intent=(ctx.get("sceneBinding") or {}).get("cameraIntent"),
         required_effects=(ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
+        planned_camera_shots=(ctx.get("sceneBinding") or {}).get("cameraShots") or [],
+        transition_intent=(ctx.get("sceneBinding") or {}).get("transitionIntent"),
+        world_elements=next((w.get("environmentElements") or [] for w in ctx.get("worlds") or []
+                             if isinstance(w, dict) and w.get("id") == (ctx.get("sceneBinding") or {}).get("worldId")), []),
         composition_elements=(ctx.get("sceneBinding") or {}).get("compositionElements") or [],
         project_id=ctx.get("projectId"),
         anchors={
@@ -159,6 +176,23 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
     limitation = None
     interpreted = None
     last_raw_output = None
+    attempts: list[dict] = []
+
+    def _record_failed_attempt(reason: list[str], candidate: dict | None = None) -> None:
+        entry = {"sceneIndex": ctx["scene"]["index"], "attempt": len(attempts) + 1,
+                 "fixRound": rounds, "raw": last_raw_output,
+                 "code": (candidate or {}).get("code") if candidate is not None else code,
+                 "spec": (candidate or {}).get("spec") if candidate is not None else spec,
+                 "errors": list(reason)}
+        attempts.append(entry)
+        # Persist every raw attempt in project QA even when preflight later raises.
+        log("engineer_attempt_invalid",
+            f"scene {ctx['scene']['index'] + 1} attempt {entry['attempt']} failed: " +
+            "; ".join(entry["errors"][:3]),
+            {"contractStage": "motion_engineer", "sceneIndex": ctx["scene"]["index"],
+             "errors": [f"scene {ctx['scene']['index']} attempt {entry['attempt']}: {p}" for p in entry["errors"]],
+             "output": entry, "repaired": rounds > 0})
+
     if not config.mock():
         brief = _engineer_brief(ctx)
         try:
@@ -218,6 +252,8 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                               "trace": trace, "spec": spec}
         if passing:
             break
+        _record_failed_attempt((failed or {}).get("problems") or problems or
+                               [str((limitation or {}).get("reason") or "no renderable scene")], failed)
         if limitation:
             break
         if rounds >= config.fix_rounds():
@@ -230,12 +266,24 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                 "previous_code": code,
                 "previous_spec": spec,
                 "problems": problems,
+                "approvedRequiredEffects": (ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
+                "approvedCompositionElements": (ctx.get("sceneBinding") or {}).get("compositionElements") or [],
+                "approvedCameraShots": (ctx.get("sceneBinding") or {}).get("cameraShots") or [],
+                "exactUnmetRequirements": [p for p in problems
+                                          if any(tag in p for tag in
+                                                 ("MISSING_PLANNED_EFFECT", "MISSING_DESIGNED_ELEMENT",
+                                                  "CAMERA_INTENT", "MISSING_WORLD", "MISSING_ELEMENT_MOTION"))],
                 "traceback": (failed or {}).get("trace") or problems,
                 "api": api_excerpt_for(problems + ((failed or {}).get("trace") or []), code or None),
                 "instruction": (
                     "Fix ONLY these problems. Prefer corrected tool calls. "
                     "The traceback and API excerpt are complete. Do not change the approved design. "
-                    "If the design cannot be implemented, return a structured limitation."
+                    "For each MISSING_PLANNED_EFFECT, execute the exact missing tool: "
+                    "graphic -> create_graphic/place_primitive; environment_geometry -> create_environment "
+                    "with backdrop.elements; camera_travel -> animate_camera with DISTINCT numeric poses; "
+                    "property_animation -> animate_property; transition -> transition_scene. "
+                    "Never delete requiredEffects or swap the approved design for a hold. "
+                    "If impossible, return a precise structured limitation."
                 ),
             }
             out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=128000,
@@ -271,6 +319,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             "usedFallback": False, "checks": passing["checks"], "verdict": qa.scene_verdict(passing["checks"]),
             "cues": passing.get("cues") or [], "tier": passing.get("tier"), "spec": passing.get("spec") or spec,
             "dependencies": (interpreted or {}).get("dependencies") or [],
+            "engineerAttempts": attempts,
         }
         return result
     if limitation:
@@ -280,6 +329,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             "code": None, "codeHash": None, "model": model, "fixRounds": rounds,
             "usedFallback": False, "degraded": True, "degradeCause": "limitation: " + (limitation.get("reason") or ""),
             "checks": [], "verdict": "limitation", "cues": [], "limitation": limitation, "spec": spec,
+            "engineerAttempts": attempts,
         }
         return out
     if failed and failed.get("checks") and any(c.get("id") == "A14" and not c.get("pass") for c in failed["checks"]):
@@ -296,7 +346,8 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
         {"rounds": rounds, "cause": cause, "preflight": preflight})
     out = {"code": None, "codeHash": None, "model": model, "fixRounds": rounds,
            "usedFallback": False, "degraded": True, "degradeCause": cause, "checks": (failed or {}).get("checks") or [],
-           "verdict": "failed", "cues": [], "spec": spec}
+           "verdict": "failed", "cues": [], "spec": spec, "engineerAttempts": attempts,
+           "failedProblems": (failed or {}).get("problems") or problems}
     if failed and failed.get("code"):
         out["failedCode"] = failed["code"]
         out["failedProblems"] = failed.get("problems") or problems

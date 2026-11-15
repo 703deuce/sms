@@ -423,7 +423,10 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         return out
 
     editorial = copy.deepcopy(plan)
+    # The Film Director's existing camera beats are upstream requirements, not suggestions.
+    editorial["editorialCameraPlan"] = plan.get("cameraPlan") or pre.camera_continuity_plan(plan, story)
     inventory = inventory_from_catalog(catalog, story)
+    from clips_worker.motion_studio.core.craft import CRAFT_GUIDE, WORKED_EXAMPLES
     sys_ = (
         "You are the Production Designer for a cinematic motion-graphics documentary. "
         "You are a creative-only role: wildly inventive about visual identity, environments, objects, "
@@ -434,24 +437,24 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Return JSON with three levels:\n"
         "1. identity: {concept, typography, materials, palette (keep the plan's palette unless it is wrong), "
         "cameraPersonality, transitionLanguage, motifs, throughLine}. "
-        "A held photograph can beat chaotic motion; do not prescribe movement for its own sake.\n"
+        "A held photograph is a deliberate exception, with a scene-specific holdReason; never choose hold merely because media is a photo. Respect moving beats in editorialCameraPlan.\n"
         "2. worlds: 1..N custom environments. The count is story-driven — a short film may need one; a longer "
         "film may need several acts (for example, distinct historical eras). Never schedule an environment "
         "change on a fixed cadence, and never pick from a menu of stock world types "
         "(map, price_chart, timeline, evidence_board, network, document_desk, abstract_field, city_grid are "
         "examples of capabilities, not the only options).\n"
-        "Each world: {id, name, brief, reason, chapters, clusters}. All worlds share the film identity.\n"
+        "Each world: {id, name, brief, reason, chapters, clusters, constructionPlan, environmentElements}. Build actual scene geometry: layered spatial planes, perspective/pseudo-3D depth, map geography, routes or other original primitives as appropriate to the story; no empty backdrop with prose alone. Give every world a concrete implementation plan and drawable elements with IDs and coordinates. All worlds share the film identity.\n"
         "3. blueprint additions: customObjects [{id, name, purpose, sceneIndex, constructionBrief, materials, animationPlan}], "
         "assetPlacements [{sceneIndex, assetId, reason, reuseReason}], "
         "sceneBindings [{sceneIndex, worldId, objective, heldStillOk, evidenceBasis, toolBasis, "
-        "compositionPlan, compositionElements, cameraShots, transitionIntent, cameraIntent, requiredEffects}], "
+        "compositionPlan, compositionElements, cameraShots, holdReason, transitionIntent, cameraIntent, requiredEffects}], "
         "For each graphics scene: compositionPlan specifies exact layout, foreground/background layers, "
         "framed media, group relationships, paths, bespoke objects, camera choreography and timed reveals; "
-        "cameraIntent is hold or travel; requiredEffects lists only the visual tools the design REQUIRES. "
+        "cameraIntent is hold or travel; requiredEffects lists ONLY effects with concrete operations in compositionElements, environmentElements, cameraShots and transitionIntent. Never say may/might/could/optional/consider next to a required effect. "
         "For compositionElements give each approved visible object a stable id (used unchanged as its tool objectId), "
         "kind, purpose, description, layer, position, size, assetId, groupId, connectTo, motion, timingAnchor; "
         "null is allowed for non-applicable fields. For cameraShots give id, purpose, fromTarget, toTarget, "
-        "movement, timingAnchor. Art direction must be buildable from these coordinates, layers and relationships. "
+        "movement, timingAnchor, fromPose {x,y,zoom,rot}, toPose {x,y,zoom,rot}. Moving shots MUST change a numeric pose and must use actual object targets. For holds give holdReason; never replace a moving editorial camera beat with a hold. Art direction must be buildable from these coordinates, layers and relationships. "
         "Do not use identical plans across unrelated scenes. Every required effect must survive rendering. "
         "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
@@ -461,13 +464,19 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "Uploaded clips play their planned stretch in full with audioMode 'clip' and narration paused. "
         "No subject-specific special cases. "
         "Art direction is more than a palette; invent typography, materials, camera personality and motifs. "
-        "Do not spend the most expensive treatment on every beat — prefer held photographs, registered tools "
+        "Use visual storytelling proportionately: photograph clusters, real geometry, timed graphic animation, camera journeys and scene transitions when the narrative calls for them. Prefer registered tools "
         "and the generated score unless a paid or custom-code pass is genuinely required. "
         "Every visual objective must be supported by the assigned asset's evidence (inventory.evidence: "
         "what the analysis says the image or clip actually shows, including on-screen text) and by the "
         "engine/tool capabilities you are given, or a declared customObject. Do not require an upload to "
         "show wording or a state the evidence does not record. Record evidenceBasis and toolBasis on each sceneBinding. "
         + style_memory.prompt_excerpt(project.get("styleMemory") or plan.get("styleMemory"))
+        + "\n\nCINEMATIC SKILL REFERENCE (visual design only, no Python in your response):\n"
+        + CRAFT_GUIDE + "\n\n" + WORKED_EXAMPLES
+        + "\nREFERENCE PATTERNS (not presets): map fly-through: real map coordinates, authored route and camera "
+        "poses between labeled clusters; perspective-grid world: authored floor/wall grid and multiple "
+        "depth layers, moving items, reframing camera. Adapt the construction to the actual story "
+        "instead of copying either example. A world must be drawable, not just described."
     )
     user = json.dumps({
         "title": story.get("title"), "tone": story.get("tone"), "logline": story.get("logline"),
@@ -477,9 +486,12 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "existingPlan": {"style": plan.get("style"), "world": plan.get("world"),
                          "scenes": [{"index": s.get("index"), "kind": s.get("kind"), "visualType": s.get("visualType"),
                                      "lineIds": s.get("lineIds"), "description": s.get("description"),
-                                     "assetId": s.get("assetId"), "handoff": s.get("handoff"), "reason": s.get("reason")}
+                                     "assetId": s.get("assetId"), "handoff": s.get("handoff"), "reason": s.get("reason"),
+                                      "transitionOut": s.get("transitionOut"), "camera": s.get("camera")}
                                     for s in plan.get("scenes") or []]},
         "inventory": inventory,
+        "editorialCameraPlan": editorial.get("editorialCameraPlan"),
+        "requestedDurationS": float((project.get("settings") or {}).get("lengthMin") or 3) * 60,
         "capabilities": format_designer_capabilities(),
         "visualApproachesNote": (
             "Invent the visual approach for THIS film and record it on identity. "
@@ -541,7 +553,7 @@ def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
         hid = (s.get("handoff") or {}).get("assetId")
         held = b.get("heldStillOk")
         if held is None:
-            held = s.get("visualType") == "photo"
+            held = False
         out.append({
             "sceneIndex": s.get("index"),
             "worldId": b.get("worldId") or s.get("worldId"),
@@ -554,6 +566,7 @@ def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
             "compositionPlan": b.get("compositionPlan") or "",
             "compositionElements": b.get("compositionElements") if isinstance(b.get("compositionElements"), list) else [],
             "cameraShots": b.get("cameraShots") if isinstance(b.get("cameraShots"), list) else [],
+            "holdReason": b.get("holdReason"),
             "transitionIntent": b.get("transitionIntent"),
             "cameraIntent": b.get("cameraIntent"),
             "requiredEffects": b.get("requiredEffects") if isinstance(b.get("requiredEffects"), list) else [],
@@ -561,10 +574,38 @@ def _normalize_bindings(raw_bindings, scenes: list[dict]) -> list[dict]:
     return out
 
 
+
+def _distinct_camera_poses(a: dict | None, b: dict | None) -> bool:
+    """A zoom-only, pan-only or rotation-only change is valid; identical keys are a hold."""
+    if not isinstance(a, dict) or not isinstance(b, dict):
+        return False
+    try:
+        return (float(a["zoom"]) > 0 and float(b["zoom"]) > 0 and
+                any(abs(float(a[k]) - float(b[k])) > (0.001 if k in ("zoom", "rot") else 0.5)
+                    for k in ("x", "y", "zoom", "rot")))
+    except (KeyError, ValueError, TypeError):
+        return False
+
+
+def _beat_requires_travel(beat: dict) -> bool:
+    if beat.get("move") is True or beat.get("travel") is True:
+        return True
+    if beat.get("cameraIntent") == "travel" or beat.get("intent") == "travel":
+        return True
+    return beat.get("hold") is False and beat.get("hold") is not None
+
+
 def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> list[str]:
     """Live-path check: each graphics beat records how the asset and tools support it."""
     errs: list[str] = []
     bindings = (plan.get("blueprint") or {}).get("sceneBindings") or []
+    bp = plan.get("blueprint") or {}
+    worlds = {w.get("id"): w for w in bp.get("worlds") or [] if isinstance(w, dict)}
+    camera_beats = {b.get("sceneIndex"): b for b in
+                    ((plan.get("editorialCameraPlan") or {}).get("beats") or [])
+                    if isinstance(b, dict)}
+    custom = {o.get("sceneIndex") for o in bp.get("customObjects") or [] if isinstance(o, dict)}
+    optional = re.compile(r"\b(?:may|might|could|optionally|optional|consider)\b", re.I)
     scenes = {s.get("index"): s for s in plan.get("scenes") or []}
     for b in bindings:
         if not isinstance(b, dict):
@@ -580,6 +621,64 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
         if not isinstance(b.get("requiredEffects"), list):
             errs.append(f"scene {idx} requiredEffects must be an array")
         elements = b.get("compositionElements") or []
+        idx = int(idx) if idx is not None else -1
+        world = worlds.get(b.get("worldId")) or {}
+        world_geometry = world.get("environmentElements") or []
+        if not world.get("constructionPlan") or not world_geometry:
+            errs.append(f"scene {idx}: world {b.get('worldId')!r} needs a physical constructionPlan and drawable environmentElements")
+        if any(not isinstance(e, dict) or not e.get("id") or not e.get("kind") for e in world_geometry):
+            errs.append(f"scene {idx}: environmentElements must name drawable kinds with stable ids")
+        approved = set(b.get("requiredEffects") or [])
+        kinds = {str(e.get("kind") or "").lower() for e in elements if isinstance(e, dict)}
+        ids = {e.get("id") for e in elements if isinstance(e, dict)}
+        poses = b.get("cameraShots") or []
+        moving = [shot for shot in poses if isinstance(shot, dict) and
+                  _distinct_camera_poses(shot.get("fromPose"), shot.get("toPose"))]
+        editorial = camera_beats.get(idx) or {}
+        if editorial and _beat_requires_travel(editorial) and b.get("cameraIntent") != "travel":
+            errs.append(f"scene {idx}: Film Director camera beat requires movement, but Production Designer set {b.get('cameraIntent')!r}")
+        if b.get("cameraIntent") == "travel":
+            if not moving:
+                errs.append(f"scene {idx}: cameraIntent=travel needs actual fromPose/toPose with different x/y/zoom/rot")
+            if "camera_travel" not in approved:
+                errs.append(f"scene {idx}: moving camera is missing camera_travel in requiredEffects")
+        if b.get("cameraIntent") == "hold":
+            if editorial and _beat_requires_travel(editorial):
+                errs.append(f"scene {idx}: hold contradicts the Director's moving camera beat")
+            if not b.get("holdReason"):
+                errs.append(f"scene {idx}: camera hold requires a deliberate, scene-specific holdReason")
+        if "camera_travel" in approved and not moving:
+            errs.append(f"scene {idx}: required camera_travel has no moving camera shot with distinct poses")
+        if "graphic" in approved and not (kinds & {"graphic", "primitive"}):
+            errs.append(f"scene {idx}: required graphic has no explicit graphic/primitive compositionElement")
+        if "group" in approved and not any(e.get("groupId") for e in elements if isinstance(e, dict)):
+            errs.append(f"scene {idx}: required group has no element membership")
+        if "property_animation" in approved and not any(e.get("motion") for e in elements if isinstance(e, dict)):
+            errs.append(f"scene {idx}: required property_animation has no explicitly animated element")
+        if "transition" in approved and not b.get("transitionIntent"):
+            errs.append(f"scene {idx}: required transition has no authored transitionIntent")
+        if b.get("transitionIntent") and "transition" not in approved:
+            errs.append(f"scene {idx}: transitionIntent is authored but transition not in requiredEffects")
+        if "custom_component" in approved and idx not in custom:
+            errs.append(f"scene {idx}: required custom_component has no authored customObject")
+        if "environment_geometry" in approved and not world_geometry:
+            errs.append(f"scene {idx}: required environment_geometry has no authored drawable world geometry")
+        if "connector" in approved and not any(e.get("connectTo") for e in elements if isinstance(e, dict)):
+            errs.append(f"scene {idx}: required connector has no explicit element link")
+        if "typography" in approved and not (kinds & {"text", "typography", "title", "label"}):
+            errs.append(f"scene {idx}: required typography has no text compositionElement")
+        if optional.search(str(b.get("compositionPlan") or "")):
+            for effect in approved:
+                if re.search(r"\b(?:may|might|could|optionally|optional|consider)\b[^.!?;]{0,100}\b" +
+                             re.escape(effect.replace("_", r"\s+")) + r"\b",
+                             str(b.get("compositionPlan") or ""), re.I):
+                    errs.append(f"scene {idx}: required {effect!r} is described as optional in compositionPlan")
+        for shot in poses:
+            if not isinstance(shot, dict):
+                continue
+            for ref in ("fromTarget", "toTarget"):
+                if shot.get(ref) and shot[ref] not in ids and shot[ref] not in {e.get("id") for e in world_geometry if isinstance(e, dict)}:
+                    errs.append(f"scene {idx}: camera shot references {ref}={shot[ref]!r} without a designed element")
         if not elements and not b.get("heldStillOk"):
             errs.append(f"scene {idx} requires compositionElements or a justified intentional still hold")
         if b.get("cameraIntent") == "travel" and not b.get("cameraShots"):
@@ -591,6 +690,18 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
             errs.append(
                 f"scene {idx} visual objective is not supported by the assigned asset's evidence or by registered tools"
             )
+    graphics = [b for b in bindings if isinstance(b, dict) and
+                (scenes.get(b.get("sceneIndex")) or {}).get("kind") not in ("handoff", "hardcut")]
+    if len(graphics) >= 4:
+        if not any(b.get("cameraIntent") == "travel" for b in graphics):
+            errs.append("film-wide camera progression: no planned camera travel at all; "
+                        "author motivated journeys instead of a static slideshow")
+        if not any("property_animation" in (b.get("requiredEffects") or []) for b in graphics):
+            errs.append("film-wide progression: no visible element animation; author a "
+                        "story-motivated and actually buildable property_animation")
+        if not any("transition" in (b.get("requiredEffects") or []) for b in graphics):
+            errs.append("film-wide progression: no authored inter-scene transition; "
+                        "select a meaningful supported transition instead of only hard cuts")
     if catalog:
         items = []
         for b in bindings:
@@ -638,6 +749,10 @@ def revise_limited_scenes(project: dict, story: dict, catalog: list[dict], plan:
             "objective": (bindings.get(idx) or {}).get("objective") or scene.get("description"),
             "assetId": aid,
             "evidence": (inv_by_id.get(aid) or {}).get("evidence") or asset_evidence(next((a for a in catalog if a.get("id") == aid), {})),
+            "approvedSceneBinding": bindings.get(idx) or {},
+            "approvedWorld": next((w for w in plan.get("worlds") or []
+                                   if isinstance(w, dict) and w.get("id") == (bindings.get(idx) or {}).get("worldId")), {}),
+            "failedRequirements": item.get("failedRequirements") or [],
             "limitation": {
                 "reason": item.get("reason") or ((item.get("limitation") or {}).get("reason") if isinstance(item.get("limitation"), dict) else ""),
                 "missingTools": item.get("missingTools") or [],
@@ -652,14 +767,21 @@ def revise_limited_scenes(project: dict, story: dict, catalog: list[dict], plan:
         "You write NO Python. Keep every official assetId. Rewrite each limited scene's objective, description, "
         "and treatment so it is supported by that asset's evidence and by registered tools or a declared "
         "customObject. Do not invent wording, objects, or a state the analysis does not record. "
-        "If a requested effect needs per-element pixel edits that the engine does not have, switch to a "
-        "whole-image treatment or typography on top. Record evidenceBasis and toolBasis. "
+        "Repair the exact failed tool/geometry requirement. Graphic means an approved drawable primitive "
+        "with create_graphic/place_primitive; world means physical environment geometry; "
+        "travel means real distinct camera poses; motion means animate_property; "
+        "transition means transition_scene. Never quietly drop a required effect, official asset "
+        "or Director-mandated camera journey. Return the complete compositionPlan, "
+        "compositionElements, cameraShots, cameraIntent, holdReason, transitionIntent, "
+        "requiredEffects, evidenceBasis and toolBasis. "
         "Return JSON with a sceneRevisions array for the limited scenes only.\n\n"
         + format_contract("production_revision")
         + "\n\n" + format_designer_capabilities()
     )
+    from clips_worker.motion_studio.core.craft import CRAFT_GUIDE, WORKED_EXAMPLES
+    sys_ += "\n\nCINEMATIC CRAFT REFERENCE (visual intent only; write NO Python):\n" + CRAFT_GUIDE + WORKED_EXAMPLES
     user = json.dumps({
-        "instruction": "Revise ONLY these limited scenes. Keep official asset assignments. Return the full sceneRevisions array.",
+        "instruction": "Revise ONLY these limited scenes and fix each exact requirement, preserving official assets and camera intent. Return the full sceneRevisions array.",
         "limitedScenes": limited,
         "identity": plan.get("identity") or (plan.get("blueprint") or {}).get("identity"),
     })
@@ -676,6 +798,11 @@ def revise_limited_scenes(project: dict, story: dict, catalog: list[dict], plan:
     if not isinstance(revisions, list) or not revisions:
         raise StageContractError("production_designer", ["limitation revision returned no sceneRevisions"], output=raw)
     _apply_scene_revisions(plan, revisions)
+    remaining = validate_scene_objectives(plan, catalog)
+    if remaining:
+        log("production_invalid", "targeted revision still contradicts approved design",
+            {"errors": remaining, "output": raw})
+        raise StageContractError("production_designer", remaining, repaired=True, output=raw)
     log("production_revision", f"revised {len(revisions)} limited scene(s) for a second engineer pass",
         {"scenes": [r.get("sceneIndex") for r in revisions if isinstance(r, dict)]})
     return plan
@@ -713,6 +840,8 @@ def _apply_scene_revisions(plan: dict, revisions: list) -> None:
             b["compositionElements"] = rev["compositionElements"]
         if isinstance(rev.get("cameraShots"), list):
             b["cameraShots"] = rev["cameraShots"]
+        if rev.get("holdReason") is not None:
+            b["holdReason"] = rev["holdReason"]
         if rev.get("cameraIntent") in ("hold", "travel"):
             b["cameraIntent"] = rev["cameraIntent"]
         if isinstance(rev.get("requiredEffects"), list):
@@ -721,6 +850,8 @@ def _apply_scene_revisions(plan: dict, revisions: list) -> None:
             b["heldStillOk"] = rev.get("heldStillOk")
         if rev.get("visualType"):
             b["visualType"] = rev["visualType"]
+        if rev.get("transitionIntent") is not None:
+            b["transitionIntent"] = rev["transitionIntent"]
         b["assetId"] = scene.get("assetId") or b.get("assetId")
         by_idx[idx] = b
         for obj in rev.get("customObjects") or []:
@@ -887,6 +1018,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
     objects = raw.get("customObjects") if isinstance(raw.get("customObjects"), list) else []
     needs = raw.get("missingNeeds") if isinstance(raw.get("missingNeeds"), list) else _missing_needs(plan, inventory, story)
     bindings = _normalize_bindings(raw.get("sceneBindings"), plan["scenes"])
+    plan["editorialCameraPlan"] = plan.get("editorialCameraPlan") or pre.camera_continuity_plan(plan, story)
 
     plan["identity"] = identity
     plan["worlds"] = worlds

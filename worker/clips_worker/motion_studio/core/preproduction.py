@@ -127,38 +127,52 @@ def annotate_provenance(plan: dict | None) -> dict:
 
 
 def camera_continuity_plan(plan: dict | None, story: dict | None = None) -> dict:
-    """Per-scene camera beats: why the move, what to notice, reading time, hold."""
+    """Carry binding editorial camera beats through production without recasting photos as holds.
+
+    The Director's explicit hold/move beats win. Designer cameraShots are recorded
+    separately; a photograph is not a reason to suppress motion.
+    """
     plan = plan or {}
     ident = plan.get("identity") or plan.get("identityPackage") or {}
-    existing = (plan.get("blueprint") or {}).get("cameraPlan") or plan.get("cameraPlan") or {}
+    upstream = (plan.get("editorialCameraPlan") or (plan.get("blueprint") or {}).get("cameraPlan")
+                or plan.get("cameraPlan") or {})
+    original_beats = {b.get("sceneIndex"): b for b in upstream.get("beats") or [] if isinstance(b, dict)}
+    bindings = {b.get("sceneIndex"): b for b in (plan.get("blueprint") or {}).get("sceneBindings") or []
+                if isinstance(b, dict)}
     beats = []
     for scene in plan.get("scenes") or []:
-        vt = str(scene.get("visualType") or "")
-        hold = bool(scene.get("heldStillOk") or vt == "photo" or (scene.get("kind") in ("photo",)))
-        start = scene.get("startMs")
-        end = scene.get("endMs")
+        idx = scene.get("index")
+        orig = original_beats.get(idx) or {}
+        bind = bindings.get(idx) or {}
+        start, end = scene.get("startMs"), scene.get("endMs")
         try:
-            dur = (float(end) - float(start)) / 1000 if end is not None and start is not None else None
+            dur = (float(end) - float(start)) / 1000 if start is not None and end is not None else None
         except (TypeError, ValueError):
             dur = None
-        reading = 6.0 if hold else (max(2.0, min(5.0, dur)) if dur else 3.0)
-        why = (scene.get("camera") or scene.get("cameraReason") or existing.get("reason") or existing.get("personality") or ident.get("cameraPersonality") or scene.get("reason"))
+        explicit = orig.get("hold") if isinstance(orig.get("hold"), bool) else None
+        intent = bind.get("cameraIntent")
+        # Report the actual approved designer intent when the Director had no opinion.
+        hold = explicit if explicit is not None else (intent == "hold" if intent in ("hold", "travel") else None)
         beats.append({
-            "sceneIndex": scene.get("index"),
+            "sceneIndex": idx,
             "sceneId": scene.get("id"),
-            "why": why,
-            "notice": scene.get("description") or scene.get("reason") or scene.get("lineText") or "",
-            "readingTimeS": round(float(reading), 2),
+            "why": orig.get("why") or scene.get("cameraReason") or upstream.get("reason") or scene.get("reason"),
+            "notice": orig.get("notice") or scene.get("description") or scene.get("reason") or "",
+            "readingTimeS": orig.get("readingTimeS") or round(max(2., min(5., dur)) if dur else 3., 2),
             "hold": hold,
+            "cameraIntent": intent,
+            "holdReason": bind.get("holdReason"),
+            "cameraShots": bind.get("cameraShots") or [],
         })
     return {
         "contractVersion": CONTRACT_VERSION,
-        "personality": ident.get("cameraPersonality") or existing.get("personality"),
-        "rule": existing.get("rule"),
-        "route": existing.get("route"),
-        "reason": existing.get("reason"),
+        "personality": ident.get("cameraPersonality") or upstream.get("personality"),
+        "rule": upstream.get("rule"),
+        "route": upstream.get("route"),
+        "reason": upstream.get("reason"),
         "beats": beats,
     }
+
 
 
 def sequence_review(plan: dict | None, scenes: list[dict] | None = None) -> dict:
