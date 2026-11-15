@@ -40,7 +40,9 @@ def check_code(code: str) -> ast.Module:
         elif isinstance(node, ast.Name) and node.id in BANNED_NAMES:
             raise PolicyViolation(f"name not allowed: {node.id}")
         elif isinstance(node, ast.Attribute) and node.attr.startswith("__") and node.attr.endswith("__"):
-            raise PolicyViolation(f"dunder attribute not allowed: {node.attr}")
+            # Custom Item subclasses must call super().__init__; all other dunders stay banned.
+            if node.attr != "__init__":
+                raise PolicyViolation(f"dunder attribute not allowed: {node.attr}")
         elif isinstance(node, ast.Attribute) and node.attr in ("f_globals", "f_locals", "gi_frame", "cr_frame", "tb_frame", "f_back"):
             raise PolicyViolation(f"frame access not allowed: {node.attr}")
         elif isinstance(node, (ast.Global, ast.Nonlocal)):

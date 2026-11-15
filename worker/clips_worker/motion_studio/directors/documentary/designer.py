@@ -13,25 +13,13 @@ import json
 
 from clips_worker.motion_studio.core import qa
 from clips_worker.motion_studio.core.api import API_REFERENCE
+from clips_worker.motion_studio.core.craft import designer_system
 from clips_worker.motion_studio.core.fallback import fallback_code
 from clips_worker.motion_studio.core.render import SandboxError, probe_stills
 from clips_worker.motion_studio.pipeline import config
 from clips_worker.motion_studio.pipeline.llm import LLMError, chat_json
 
-SYSTEM = """You are the Motion Designer for a cinematic motion-graphics documentary. Write ONE Python scene for the
-Transovo engine. Output JSON {"code": "<python source>"}. The code must `from motion_core import *` and define
-`build_scene(ctx)` returning `film = ctx.film()` populated with items and camera keys.
-Design fresh for THIS video and scene. Invent ONE continuous world from the story's subject (a map if the
-story moves place to place, a price/data chart if it is about a number moving, an evidence board, a network,
-a desk of documents, a city grid, or something new you invent). Do not reuse a generic dark grid with slammed
-type unless the Director's world is truly abstract. Prefer custom Item subclasses and a custom map look dict
-taken from the palette. When the world is a map, use ctx.geo("world") or ctx.geo("us"), ctx.place, ctx.ll,
-GeoMap, RegionFill, Route, MapPin — do not reimplement a map. When it is a chart, use LinearAxis, LineSeries,
-BarSeries, RollingNumber, and custom items, with real numbers from ctx.data only. Every reveal must be
-anchored to spoken words via ctx.W(line_id, word) or the times in ctx.lines/ctx.words — never hard-coded
-seconds for story beats. Three layers always (background system, midground context, foreground hero). Keep
-it under ~250 lines.
-""" + API_REFERENCE
+SYSTEM = designer_system(API_REFERENCE)
 
 
 def code_hash(code: str) -> str:

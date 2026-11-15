@@ -6,7 +6,8 @@ Contract for generated code: define `build_scene(ctx)` returning `ctx.film()` po
 camera keys. Time anchors come from `ctx.W(line_id, word, nth=0, end=False)` (raises on a miss).
 """
 from clips_worker.motion_studio.vendor.cinematic_skill.engine import (  # noqa: F401  (world items for Part 2)
-    Board, Chalk, GeoMap, Holes, Ledger, LOOKS, MAP_LOOKS, OpenLedger, Print, RegionFill,
+    Board, Cached, Chalk, GeoMap, Holes, Ledger, LOOKS, MAP_LOOKS, OpenLedger, Print, RegionFill,
+    CREAM, WHITE, RUST, MUSTARD, HILITE, RED, INK, TEAL,
 )
 
 from clips_worker.motion_studio.core.world import (  # noqa: F401
@@ -16,8 +17,8 @@ from clips_worker.motion_studio.core.blocks import (  # noqa: F401
     BarSeries, BigText, Callout, Card, ChapterCard, Connector, Counter, DotField, EmphasisMark, FieldSpread, FilmFrame,
     GradientField, GridField, HeroSlam, Item, LineSeries, LowerThird, MapPin, NoiseTexture, Panel, PaperDoc, PenMark,
     ParticleDrift, PhotoFrame, RollingNumber, Route, ScreenItem, Stamp, StringLine, XMarker, SAMPLING, clamp, color,
-    ease_in_out, ease_out_back, ease_out_cubic, hexrgb, legible, look_from_style, paint, partial_path, ramp, rot_point,
-    rrect, spring, text, text_width,
+    ease_in_out, ease_out_back, ease_out_cubic, hexrgb, legible, look_from_style, paint, partial_path, per_frame_grain,
+    ramp, rot_point, rrect, spring, text, text_width,
 )
 
 __all__ = [n for n in dir() if not n.startswith("_")]
@@ -30,8 +31,11 @@ ctx: duration, fps, width, height, seed, style (dict), palette {bg,ink,accent,ac
      scene {id,visualType,description,blocks}, ctx.W(line_id, word, nth=0, end=False)->seconds (raises if missing),
      ctx.film(drift=1.0, wobble=1.0) -> StudioFilm, ctx.rgb(name)->(r,g,b), ctx.rand -> seeded random.Random
 StudioFilm: add(item); cam(t,x,y,zoom,rot=0); shot(t,x,y,zoom,rot=0,radius=None,strength=0.55) (camera+spotlight, ONE hero per beat);
-     focus(t,x,y,radius,strength); shake(t,amp=14,dur=0.35); cue(kind,t,gain=1.0) (kinds: pop whoosh slide impact boom ticks riser stamp shimmer drop marker pencil);
-     damp(t0,t1,factor=0.15). Need >= 2 camera keys spanning 0..duration. Typical zoom 0.25 (wide) .. 1.6 (tight).
+     focus(t,x,y,radius,strength); shake(t,amp=14,dur=0.35); cue(kind,t,gain=1.0, dur=None)
+     (kinds: pop whoosh slide impact boom ticks riser stamp shimmer drop marker pencil tick snip click heartbeat clock;
+      riser peaks at t+dur — start it ~1.3s before the hit). damp(t0,t1,factor=0.15). Need >= 2 camera keys spanning 0..duration.
+     Typical zoom 0.25 (wide) .. 1.6 (tight). ctx.film() already has organic drift + handheld wobble; do not set fade_in/fade_out.
+     Colours: CREAM WHITE RUST MUSTARD HILITE RED INK TEAL, or invent from ctx.palette. LOOKS / MAP_LOOKS are starting points; prefer a look dict from the palette.
 Background systems (z<0): GradientField(colors,center=(0,0),radius=12000,linear=False), GridField(spacing=400,rgb,alpha=0.06,major=5),
      ParticleDrift(area=(x,y,w,h),n=160,rgb,alpha=0.25,r=(6,26),speed=40,seed=3), NoiseTexture(seed,alpha=0.08,rgb)
 Blocks: HeroSlam(s,x,y,size,t_in,t_out=None,font='cond',rgb,glow=0.4,words=[(word,t),...])
@@ -41,7 +45,12 @@ Blocks: HeroSlam(s,x,y,size,t_in,t_out=None,font='cond',rgb,glow=0.4,words=[(wor
      PhotoFrame(key,x,y,w,rot=0,t_in=0,t_out=None,skin('print'|'glass'|'tv'|'filmstrip'|'plain'),title='',label='',crop=None)
      Panel(x,y,w,h,t_in,title='',content=fn(c,res,t,w,h,a),accent)  LineSeries(pts,t0,t1,rgb,width=14,fill_to=None)
      BarSeries(xs,heights,base_y,width,t0,stagger=0.08,rgb,labels=None)  LowerThird(name,role,t_in,t_out)  ChapterCard(n,title,t_in,t_out)
-     Engine items: BigText, Counter, MapPin(x,y,label,t_in), Route(a,b,t_in,dur), StringLine, PenMark, Stamp(text,x,y,size,rot,t_in), Card, PaperDoc, DotField
+     Engine items: BigText(text,x,y,size,t_in, type_on=0, hit=None, bar=None, bar_h=None, grunge=True),
+     Counter(x,y,size,value,t_in,prefix,suffix,caption,dur), MapPin(x,y,label,t_in), Route(a,b,t_in,dur),
+     StringLine(a,b,t_in, persist=False), PenMark(kind,x,y,w,h,t_in) (ellipse|underline|strike|arrow|highlight),
+     Stamp(text,x,y,size,rot,t_in), Card, PaperDoc (phrase_spans(res, phrase) for highlights), DotField, FilmFrame(print,t_in),
+     Print(key,x,y,w,rot,t_in, paper=False, pin=True, label=None, label_t=None), XMarker, Chalk, Holes, Ledger, OpenLedger.
+     Cached: subclass for a big static drawing (street plan, floor, chart grid) so it is drawn once and reused.
 Axes/projection: LinearAxis(v0,v1,p0,p1,log=False)(v)->world coord, .ticks(n); mercator(lon,lat,scale=20000)
 Custom items: subclass Item: __init__(t_in,t_out,z,sfx) ; bounds(res)->skia.Rect|None ; draw(c,res,t) using skia canvas c (world coords);
      ALWAYS draw text with text(c,res,s,x,y,size,font,rgb,a,track=0,align='left'|'center'|'right') (fonts: cond label labelm mono serif).

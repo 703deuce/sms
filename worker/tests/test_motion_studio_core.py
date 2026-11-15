@@ -132,3 +132,28 @@ def test_score_params_are_seeded_and_world_aware():
     chart = score_params(1, "curious", "price_chart", "The squeeze")
     assert "sub" in chart["instruments"] or chart["mood"] == "driving"
     assert chart["mode"] in {"minor", "dorian", "major"}
+
+
+def test_policy_allows_item_subclass_init_but_not_other_dunders():
+    from clips_worker.motion_studio.sandbox.policy import PolicyViolation, check_code
+    ok = """from motion_core import *
+class Pin(Item):
+    def __init__(self, x, y, t_in):
+        super().__init__(t_in=t_in, t_out=None, z=30, sfx=True)
+        self.x, self.y = x, y
+    def bounds(self, res):
+        return None
+    def draw(self, c, res, t):
+        pass
+def build_scene(ctx):
+    return ctx.film()
+"""
+    check_code(ok)
+    for bad in ("def build_scene(ctx):\n    return ctx.__class__",
+                "def build_scene(ctx):\n    return ().__class__.__name__"):
+        try:
+            check_code(bad)
+        except PolicyViolation:
+            pass
+        else:
+            raise AssertionError("expected PolicyViolation for " + bad)
