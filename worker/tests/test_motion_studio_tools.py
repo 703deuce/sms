@@ -1,6 +1,8 @@
 """Tool registry, scene spec, compiler, and tool-awareness tests (spec 6)."""
 from __future__ import annotations
 
+import ast
+
 from clips_worker.motion_studio.sandbox.policy import check_code, lint_scene
 from clips_worker.motion_studio.tools import (
     apply_calls,
@@ -94,7 +96,18 @@ def test_place_media_spec_example_compiles_and_lints():
     code = compile_spec(spec, catalog_ids=["photo_7"])
     assert lint_scene(code) == []
     check_code(code)
-    assert "getattr" not in code and "os." not in code and "__import__" not in code
+    # Check actual forbidden symbols, not substrings of safe expressions such as pos.get(...).
+    nodes = list(ast.walk(ast.parse(code)))
+    banned_names = {"getattr", "__import__", "os"}
+    assert not (banned_names & {n.id for n in nodes if isinstance(n, ast.Name)})
+    assert not any(
+        isinstance(n, ast.Import) and any(a.name.split(".")[0] == "os" for a in n.names)
+        for n in nodes
+    )
+    assert not any(
+        isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "os"
+        for n in nodes
+    )
     assert "PhotoFrame" in code and "film.cam(" in code
     assert "WORLD_TYPES" not in code
 

@@ -148,7 +148,7 @@
     "animate_camera": {
       "aliases": [],
       "authorization": "Planning only: this tool updates the in-memory scene specification. It must not write the database, touch storage, download media, render, or publish.",
-      "behavior": "Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors — do not compute frames.",
+      "behavior": "Validate the target, timing window, camera constraints and easing type; convert relative times to frames from the real scene duration; generate camera keyframes on the specification; return the generated motionId. A hold may use a zero-length window with easing='hold'. Prefer startS/endS, startFrac/endFrac, or line anchors \u2014 do not compute frames.",
       "defaults": "easing defaults to ease_in_out; rot defaults to 0.",
       "dependencies": [
         "create_environment"
@@ -392,7 +392,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+a8b292e3",
+      "version": "1.0+b901dda3",
       "whenNotToUse": "Do not use it to place objects, invent camera method names, or hold with a second film.shot() closer than 0.25 s on a new target.",
       "whenToUse": "When the story needs a camera push, pull-back, pan, tracking movement, reveal or deliberate hold."
     },
@@ -557,7 +557,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+5666de26",
+      "version": "1.0+bed4024a",
       "whenNotToUse": "Prefer animate_camera for camera moves. Do not invent property names the compiler cannot bind.",
       "whenToUse": "When a custom motion path or fade is required on an object the higher-level tools do not already express."
     },
@@ -733,7 +733,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+9beb1047",
+      "version": "1.0+d08baa38",
       "whenNotToUse": "Do not use it to place a photo or to invent a word clock. Time anchors must be official word ids or explicit frames.",
       "whenToUse": "When the blueprint calls for a title, lower third, label, or word-synced kinetic line."
     },
@@ -880,7 +880,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+0eac7a28",
+      "version": "1.0+d32de7d4",
       "whenNotToUse": "Do not stack two spotlights on different targets closer than 0.25 s. A camera hold should use animate_camera with easing='hold', not a second shot key.",
       "whenToUse": "When the blueprint calls for a spotlight, grain, camera shake, damp or a deliberate hold effect."
     },
@@ -931,7 +931,7 @@
         },
         {
           "allowed": null,
-          "default": 1,
+          "default": 1.0,
           "description": "Linear gain.",
           "name": "gain",
           "required": false,
@@ -1003,7 +1003,7 @@
             "type": "integer"
           },
           "gain": {
-            "default": 1,
+            "default": 1.0,
             "description": "Linear gain.",
             "type": "number"
           },
@@ -1034,7 +1034,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+5b038809",
+      "version": "1.0+45af1e0a",
       "whenNotToUse": "Do not use it to synthesize audio, write files, or override the authorized mixer / true-peak limiter.",
       "whenToUse": "When the blueprint calls for a cue, a bed, a paused-narration window, or a word-anchored sound."
     },
@@ -1120,7 +1120,7 @@
         {
           "allowed": null,
           "default": null,
-          "description": "Backdrop hints (color, gradient, texture) — primitives, not a world template.",
+          "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
           "name": "backdrop",
           "required": false,
           "type": "object"
@@ -1141,7 +1141,7 @@
             "type": "object"
           },
           "backdrop": {
-            "description": "Backdrop hints (color, gradient, texture) — primitives, not a world template.",
+            "description": "Backdrop hints (color, gradient, texture) \u2014 primitives, not a world template.",
             "type": "object"
           },
           "brief": {
@@ -1172,7 +1172,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+70f1cedd",
+      "version": "1.0+faefce08",
       "whenNotToUse": "Do not call it to pick a stock city tour or a fixed WORLD_TYPES enum entry. Do not use it to place media or move the camera.",
       "whenToUse": "When the scene needs a visual space (desk, map space, invented interior, graphic field, etc.) before objects are placed."
     },
@@ -1203,7 +1203,7 @@
               },
               {
                 "x": "2021",
-                "y": 12
+                "y": 12.0
               }
             ],
             "height": 900,
@@ -1420,7 +1420,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+34d5f08e",
+      "version": "1.0+04190479",
       "whenNotToUse": "Do not invent numeric or geographic data. Do not use this to place a photo (use place_media) or to write a new procedural component (use the extension path).",
       "whenToUse": "When the blueprint calls for a chart, map annotation, callout, pin, route, stamp or similar graphic built from approved data."
     },
@@ -1579,7 +1579,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+ee534d3d",
+      "version": "1.0+656fd6a6",
       "whenNotToUse": "Do not use it to move the camera or to invent a skia drawing call.",
       "whenToUse": "When the design needs a custom path that is not a stock chart or map tool output."
     },
@@ -1678,7 +1678,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+e59ffe0c",
+      "version": "1.0+912db30a",
       "whenNotToUse": "Do not use it to create objects; place them first.",
       "whenToUse": "When several placed objects should move or be composed as a unit."
     },
@@ -1937,7 +1937,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+5d92cb39",
+      "version": "1.0+58b4bc1a",
       "whenNotToUse": "Do not use it to invent an asset that is not in the catalog, or to draw a chart or typography.",
       "whenToUse": "When an approved still or clip should appear in the scene (print on a desk, framed still, screen, footage window, full-bleed plate)."
     },
@@ -2111,7 +2111,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+e659beb7",
+      "version": "1.0+669c9153",
       "whenNotToUse": "Prefer place_media, create_graphic, or animate_text when those already express the design. Do not use this to call skia directly.",
       "whenToUse": "When building a custom composition from shapes, paths and textures rather than a higher-level media/graphic tool."
     },
@@ -2182,7 +2182,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 2,
-      "version": "1.0+91ee8106",
+      "version": "1.0+d8e97b64",
       "whenNotToUse": "Do not invent palette keys. Do not use this to move or create objects.",
       "whenToUse": "When the design needs a custom finish on an object that already exists in the specification."
     },
@@ -2366,7 +2366,7 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 1,
-      "version": "1.0+0b4940b7",
+      "version": "1.0+05ada65f",
       "whenNotToUse": "Do not use it to move the camera inside a scene (animate_camera) or to invent a transition that contradicts the editorial plan.",
       "whenToUse": "When the editorial plan or blueprint specifies how this scene should enter, exit, or share an element with a neighbor."
     },
@@ -2505,8 +2505,8 @@
       },
       "sideEffects": "Mutates the scene specification only. Re-compile to refresh the render plan. No live production writes.",
       "tier": 3,
-      "version": "1.0+edeaf8c2",
-      "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path — that is the extension registrar after lint, sandbox and visual tests.",
+      "version": "1.0+0f0f0ec5",
+      "whenNotToUse": "Do not pass raw Python. Do not use this as the first-time authoring path \u2014 that is the extension registrar after lint, sandbox and visual tests.",
       "whenToUse": "When a previously registered extension (validated, versioned, documented) should appear in this scene."
     }
   }

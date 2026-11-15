@@ -44,7 +44,7 @@ def _catalog():
 
 def test_agent_direct_calls_production_designer():
     from pathlib import Path
-    src = Path("clips_worker/motion_studio/directors/documentary/agent.py").read_text()
+    src = (Path(__file__).resolve().parents[1] / "clips_worker/motion_studio/directors/documentary/agent.py").read_text()
     assert "design_production" in src
     assert "direct_editorial" in src
 
