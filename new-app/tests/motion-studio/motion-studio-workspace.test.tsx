@@ -29,6 +29,15 @@ describe('Motion Studio workspace (FE-5/6/7)', () => {
     expect(document.body.innerHTML).not.toMatch(/(src|href)="https?:/)
   })
 
+  it('shows a clean Project not found state with a link back for unknown / other-workspace ids', async () => {
+    const client = createMockMotionStudioClient({ storage: null })
+    render(<MotionStudioWorkspace projectId="ms_someone_elses" client={client} pollMs={0} />)
+    await waitFor(() => expect(screen.getByTestId('ms-not-found')).toBeTruthy())
+    expect(screen.getByText('Project not found')).toBeTruthy()
+    expect(screen.getByTestId('ms-not-found-back').getAttribute('href')).toBe('/app/motion-studio')
+    expect(screen.queryByText('Retry')).toBeNull()
+  })
+
   it('editor lanes mount inside the Compact Editor slot and follow the editor playhead', async () => {
     const client = createMockMotionStudioClient({ storage: null })
     const onSeek = vi.fn()

@@ -73,7 +73,10 @@ type Fetcher = typeof fetch
 async function request<T>(fetcher: Fetcher, path: string, init?: RequestInit): Promise<T> {
   const method = init?.method ?? 'GET'
   console.info('[motion-studio:ui] request', { step: 'begin', method, path })
+  // Same-origin session cookie auth: every /api/motion-studio/* route is 401 without a session and
+  // 404 for another workspace's ids (backend contract, New).
   const res = await fetcher(`${MOTION_STUDIO_API_BASE}${path}`, {
+    credentials: 'same-origin',
     ...init,
     headers: { ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...(init?.headers ?? {}) },
   })
@@ -86,7 +89,14 @@ async function request<T>(fetcher: Fetcher, path: string, init?: RequestInit): P
   if (!res.ok) {
     const rec = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
     const code = typeof rec.code === 'string' ? rec.code : 'REQUEST_FAILED'
-    const message = typeof rec.error === 'string' ? rec.error : 'Motion Studio request failed.'
+    const message =
+      res.status === 401
+        ? 'Your session has ended. Refresh the page to sign in again.'
+        : res.status === 404
+          ? 'Project not found.'
+          : typeof rec.error === 'string'
+            ? rec.error
+            : 'Motion Studio request failed.'
     console.info('[motion-studio:ui] request', { step: 'error', method, path, status: res.status, code })
     throw new MotionStudioHttpError(res.status, code, message)
   }
