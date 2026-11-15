@@ -235,16 +235,17 @@ def asset_usage_manifest(plan: dict, inventory: list[dict]) -> dict:
     used: dict[str, list[dict]] = {}
     for s in plan.get("scenes") or []:
         idx = s.get("index")
-        still = s.get("assetId")
+        stills = list(dict.fromkeys((s.get("assetIds") or []) + ([s["assetId"]] if s.get("assetId") else [])))
         clip = (s.get("handoff") or {}).get("assetId") if isinstance(s.get("handoff"), dict) else None
-        for aid, role in ((still, "still"), (clip, "footage")):
-            if not aid:
-                continue
+        for aid, role in ([(a, "still") for a in stills] + ([(clip, "footage")] if clip else [])):
             recs = used.setdefault(aid, [])
             recs.append({
                 "sceneIndex": idx,
                 "role": role,
-                "reuseReason": s.get("reuseReason") if recs else None,
+                "reuseReason": next(
+                    (p.get("reuseReason") for p in (plan.get("blueprint") or {}).get("assetPlacements") or []
+                     if p.get("sceneIndex") == idx and p.get("assetId") == aid), None
+                ) or (s.get("reuseReason") if recs else None),
             })
     entries = []
     for rec in inventory or []:
@@ -817,28 +818,47 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
     official = _official_still_sites(plan.get("scenes") or [], catalog)
     placements = raw.get("assetPlacements") or (raw.get("blueprint") or {}).get("assetPlacements") or []
     assets = {a["id"]: a for a in catalog}
+    # Preserve every approved still placement: a scene can contain an entire visual cluster.
+    # Previously each placement overwrote scene.assetId and the last image won.
+    verified_placements: list[dict] = []
+    seen_placements: set[tuple[int, str]] = set()
+    by_index = {s.get("index"): s for s in plan["scenes"]}
     if isinstance(placements, list):
         for pl in placements:
             if not isinstance(pl, dict):
                 continue
             idx, aid = pl.get("sceneIndex"), pl.get("assetId")
             asset = assets.get(aid)
-            if not isinstance(idx, int) or not asset:
+            scene = by_index.get(idx) if isinstance(idx, int) else None
+            if (not scene or scene.get("kind") in ("handoff", "hardcut") or
+                    not asset or asset.get("kind") not in ("image", "photo", "still")):
                 continue
-            # Graphics scenes may only receive stills. Videos belong on handoff.assetId.
-            if asset.get("kind") not in ("image", "photo", "still"):
-                continue
-            for s in plan["scenes"]:
-                if s.get("index") == idx and s.get("kind") not in ("handoff", "hardcut"):
-                    s["assetId"] = aid
-                    if pl.get("reuseReason"):
-                        s["reuseReason"] = pl["reuseReason"]
-                    break
-    # Restore official Director stills dropped by incomplete placements.
-    # Do not deterministically fill leftover stills the Director left unassigned.
+            if (idx, aid) not in seen_placements:
+                seen_placements.add((idx, aid))
+                verified_placements.append({
+                    "sceneIndex": idx, "assetId": aid,
+                    "reason": pl.get("reason") or scene.get("reason") or "approved visual placement",
+                    "reuseReason": pl.get("reuseReason"),
+                })
+            if not scene.get("assetId"):
+                scene["assetId"] = aid
+            if pl.get("reuseReason") and scene.get("assetId") == aid:
+                scene["reuseReason"] = pl["reuseReason"]
+    # Restore Director's official stills without deleting additional approved placements.
     _restore_official_stills(official, plan["scenes"])
-    for k, s in enumerate(plan["scenes"]):
-        s["index"] = k
+    for k, scene in enumerate(plan["scenes"]):
+        scene["index"] = k
+        if scene.get("kind") in ("handoff", "hardcut"):
+            continue
+        aid = scene.get("assetId")
+        if aid and (k, aid) not in seen_placements:
+            verified_placements.append({
+                "sceneIndex": k, "assetId": aid,
+                "reason": scene.get("reason") or "original Director assignment",
+                "reuseReason": scene.get("reuseReason"),
+            })
+            seen_placements.add((k, aid))
+        scene["assetIds"] = [p["assetId"] for p in verified_placements if p["sceneIndex"] == k]
 
     objects = raw.get("customObjects") if isinstance(raw.get("customObjects"), list) else []
     needs = raw.get("missingNeeds") if isinstance(raw.get("missingNeeds"), list) else _missing_needs(plan, inventory, story)
@@ -856,11 +876,7 @@ def _merge_model_design(plan: dict, story: dict, catalog: list[dict], inventory:
         "identity": identity,
         "worlds": worlds,
         "inventory": inventory,
-        "assetPlacements": [
-            {"sceneIndex": s.get("index"), "assetId": s["assetId"], "reason": s.get("reason") or "official assignment",
-             "reuseReason": s.get("reuseReason")}
-            for s in plan["scenes"] if s.get("assetId")
-        ],
+        "assetPlacements": verified_placements,
         "handoffs": [
             {"sceneIndex": s.get("index"), "assetId": (s.get("handoff") or {}).get("assetId"),
              "inS": (s.get("handoff") or {}).get("inS"), "outS": (s.get("handoff") or {}).get("outS"),
