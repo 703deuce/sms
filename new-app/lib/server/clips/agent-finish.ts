@@ -4,6 +4,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, createReadableSignedUrl, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
+import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 const prisma = () => getPrisma()
 const object = (v: unknown): Record<string, unknown> =>
@@ -258,6 +260,33 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     throw problem('Invalid output duration.',400)
   }
   const now=new Date()
+  // Build editable layers from the returned manifest before the short DB commit.
+  // If no manifest is supplied, the original clip stays editable and the
+  // enhanced master is still saved as the finished preview/download.
+  const existing=await prisma().clip.findFirst({where:{
+    id:job.clipId,projectId:job.projectId,workspaceId:job.workspaceId,deletedAt:null,
+  },select:{edits:true}})
+  if (!existing) throw problem('Source clip was removed.',404)
+  const base=existing.edits as unknown as ClipEditsV2
+  let imported:ClipEditsV2|null=null
+  if (items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
+    try {
+      imported=await importAgentTimeline({
+        workspaceId:job.workspaceId,motionProjectId:job.clipId,clipProjectId:job.projectId,
+        durationMs,base,directArtifacts:items(job.artifacts),
+      })
+      // Clip-finishing must not silence the original dialogue even when
+      // the manifest contains separately uploaded effects or stems.
+      if (imported) imported={...imported,
+        audioMuteRanges:base.audioMuteRanges,
+        audio:{...base.audio,sfx:[...(base.audio?.sfx??[]),...(imported.audio?.sfx??[])]},
+      }
+    }catch(err){
+      console.warn('[clip-agent] editable_manifest_fallback',{
+        jobId:id,error:err instanceof Error?err.name:'unknown',
+      })
+    }
+  }
   const result=await prisma().$transaction(async tx=>{
     const clip=await tx.clip.findFirst({where:{
       id:job.clipId,projectId:job.projectId,workspaceId:job.workspaceId,deletedAt:null,
@@ -270,9 +299,11 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     }].slice(-20)
     await tx.clip.update({where:{id:clip.id},data:{
       previewKey:video.key,storageDriver:storageDriverName(),
+      ...(imported?{edits:toPrismaJson(imported),editsSaveVersion:{increment:1}}:{}),
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
-        agentFinishedVersions:versions,agentFinishActiveJobId:id}),
+        agentFinishedVersions:versions,agentFinishActiveJobId:id,
+        agentFinishEditableLayersImported:Boolean(imported)}),
     }})
     // The original editable clip timeline is deliberately preserved. This output
     // is an enhanced master preview/download, never destructive replacement.
