@@ -22,12 +22,14 @@ from clips_worker.motion_studio.tools.plan import compile_agent_output
 
 DURATION = 4.0
 FPS = 24
+# Explicit full-frame camera pose, held steady for all of Stage 1.
+WORLD_HOLD_POSE = {"x": 0, "y": 0, "zoom": 1.0, "rot": 0}
 PALETTE = {
-    "bg": "#090F1D",
+    "bg": "#071120",
     "ink": "#EFF7FF",
-    "accent": "#41D6FF",
+    "accent": "#4DE0FF",
     "accent2": "#EFAD63",
-    "muted": "#314C72",
+    "muted": "#4F789D",
 }
 
 
@@ -45,32 +47,61 @@ def world_elements() -> list[dict]:
             "z": z, "rotation": 0, **options,
         })
 
-    # World coordinate system is 3840x2160; perspective converges on the horizon.
-    shape("night_sky", "rect", 0, 0, 5400, 3300, "#070D1A", -900)
-    shape("distant_glow", "rrect", 0, -420, 1900, 480, "#102D49", -850,
-          radius=210, opacity=0.75, blur=60)
-    shape("horizon", "rect", 0, -200, 4400, 6, "#3AA2C9", -800, opacity=0.7)
-    shape("floor_plane", "rect", 0, 900, 5200, 2180, "#0B192B", -790)
-    # Receding perspective lanes, physically laid out as independent path objects.
-    for i, base_x in enumerate(range(-2400, 2401, 300)):
-        shape(f"lane_{i:02d}", "path", 0, 0, 0, 0, "#2287B0", -750,
-              points=[[0, -200], [base_x, 2020]], strokeWidth=5,
-              opacity=0.35 if i % 2 else 0.65)
-    # Horizontal floor cross-sections compress as they approach the vanishing point.
-    for i, y in enumerate((-160, -105, -25, 100, 285, 570, 990, 1510, 2060)):
-        spread = (y + 240) * 1.4
-        shape(f"cross_{i:02d}", "path", 0, 0, 0, 0, "#1F718E", -745,
-              points=[[-spread, y], [spread, y]], strokeWidth=4,
-              opacity=0.28 + i * 0.045)
-    # Layered skyline silhouettes demonstrate authored foreground and background.
-    for i, (x, h) in enumerate(((-1250, 390), (-980, 690), (-740, 480),
-                                (660, 470), (940, 790), (1230, 530))):
-        shape(f"tower_{i:02d}", "rect", x, -200 - h / 2, 160, h,
-              "#132C45", -770 + i, opacity=0.85)
-        shape(f"tower_glint_{i:02d}", "rect", x + 49, -200 - h / 2, 6, h * 0.72,
-              "#3FA9D0", -760 + i, opacity=0.7)
-    shape("vanishing_core", "circle", 0, -200, 145, 145, "#62DDF5", -710,
-          radius=72, opacity=0.75, blur=20)
+    # Full-bleed world, authored 2D perspective rather than simulated 3D claims.
+    shape("night_sky", "rect", 0, -200, 6800, 3900, "#07111F", -950)
+    shape("upper_haze", "rrect", 0, -720, 3100, 820, "#183B58", -930,
+          radius=380, opacity=0.95, blur=160)
+    shape("skyline_haze", "rrect", 0, -160, 3800, 350, "#235473", -910,
+          radius=150, opacity=0.65, blur=80)
+    shape("distant_horizon_strip", "rect", 0, -215, 6600, 12, "#57D9F4", -880,
+          opacity=0.9)
+    shape("floor_plane", "rect", 0, 1500, 7400, 3420, "#10263A", -870)
+    shape("floor_deep_glow", "rrect", 0, 900, 3500, 1250, "#153C58", -865,
+          radius=400, opacity=0.38, blur=100)
+
+    # Three visual depths: far skyline, luminous perspective floor, near markers.
+    towers = [
+        (-1620, 390, 145, "#203F59", -858),
+        (-1350, 640, 190, "#1B3C58", -856),
+        (-1070, 500, 165, "#234864", -854),
+        (-740, 760, 185, "#214560", -852),
+        (690, 790, 190, "#214560", -850),
+        (1040, 530, 185, "#234864", -848),
+        (1370, 700, 200, "#1B3C58", -846),
+        (1670, 440, 150, "#203F59", -844),
+    ]
+    for i, (x, h, width, fill, z) in enumerate(towers):
+        shape(f"tower_{i:02d}", "rect", x, -215 - h / 2, width, h,
+              fill, z, opacity=0.95)
+        shape(f"tower_rim_{i:02d}", "rect", x - width * 0.45, -215 - h / 2,
+              7, h * 0.9, "#57C3E1", z + 1, opacity=0.8)
+        shape(f"tower_roof_{i:02d}", "rect", x, -215 - h, width + 16, 7,
+              "#5ECFEB", z + 1, opacity=0.8)
+        for level in range(2):
+            shape(f"window_{i:02d}_{level}", "rect", x + width * 0.2,
+                  -215 - (level + 1) * h / 3, 12, 28,
+                  "#B0F1FF", z + 2, opacity=0.8)
+
+    for i, base_x in enumerate(range(-3300, 3301, 220)):
+        shape(f"lane_{i:02d}", "path", 0, 0, 0, 0, "#4CCDEB", -810,
+              points=[[0, -215], [base_x, 2240]], strokeWidth=7,
+              opacity=0.52 if i % 2 else 0.88)
+    for i, y in enumerate((-185, -145, -90, -5, 125, 315, 585, 950, 1440, 2020)):
+        spread = (y + 245) * 2.0
+        shape(f"cross_{i:02d}", "path", 0, 0, 0, 0, "#3EBCD9", -808,
+              points=[[-spread, y], [spread, y]], strokeWidth=7,
+              opacity=min(0.95, 0.45 + i * 0.052))
+    for i, x in enumerate((-1450, -990, 990, 1450)):
+        shape(f"foreground_pier_{i}", "rect", x, 650, 24, 980,
+              "#2F7997", -790, opacity=0.8)
+        shape(f"foreground_cap_{i}", "rect", x, 155, 108, 30,
+              "#94EFFF", -788, opacity=0.95)
+        shape(f"foreground_foot_{i}", "circle", x, 1140, 115, 115,
+              "#46B9D8", -787, radius=58, opacity=0.8)
+    shape("vanishing_halo", "circle", 0, -215, 380, 380, "#3BA8CB", -775,
+          radius=190, opacity=0.52, blur=60)
+    shape("vanishing_core", "circle", 0, -215, 125, 125, "#D3FAFF", -770,
+          radius=62, opacity=1.0, blur=10)
     return elements
 
 
@@ -84,15 +115,30 @@ def stage1_fixture() -> dict:
             "constructionPlan": "Draw depth using authored floor paths, vanishing lines, and layered towers.",
             "environmentElements": elements,
         },
-        "tools": [{
-            "tool": "create_environment",
-            "arguments": {
-                "environmentId": "world_grid",
-                "brief": "Original perspective-grid environment; actual shapes, not backdrop prose.",
-                "size": {"width": 3840, "height": 2160},
-                "backdrop": {"kind": "geometry", "elements": elements},
+        "tools": [
+            {
+                "tool": "create_environment",
+                "arguments": {
+                    "environmentId": "world_grid",
+                    "brief": "Full-frame perspective-grid environment with layered real geometry.",
+                    "size": {"width": 3840, "height": 2160},
+                    "backdrop": {"kind": "geometry", "elements": elements},
+                },
             },
-        }],
+            {
+                # This is a static pose, not Stage 2 camera movement.
+                "tool": "animate_camera",
+                "arguments": {
+                    "environmentId": "world_grid",
+                    "motionId": "stage1_static_framing",
+                    "startS": 0,
+                    "endS": DURATION,
+                    "from": WORLD_HOLD_POSE,
+                    "to": WORLD_HOLD_POSE,
+                    "easing": "linear",
+                },
+            },
+        ],
     }
 
 
@@ -129,6 +175,7 @@ def deterministic(output: Path) -> tuple[str, dict, dict]:
     fixture = stage1_fixture()
     save_json(output / "designer_blueprint.json", fixture["world"])
     save_json(output / "tool_calls.json", fixture["tools"])
+    save_json(output / "framing.json", {"pose": WORLD_HOLD_POSE, "intent": "static hold"})
     result = compile_agent_output(
         {"tools": fixture["tools"]}, scene_id="lab_stage1",
         fps=FPS, duration_s=DURATION,
@@ -141,6 +188,9 @@ def deterministic(output: Path) -> tuple[str, dict, dict]:
               {k: v for k, v in result.items() if k != "code"})
     if not result["ok"] or not result.get("code"):
         raise RuntimeError("Stage 1 tool/compiler failure: " + json.dumps(result["errors"]))
+    camera = list((result["spec"].get("camera") or {}).values())
+    if len(camera) != 1 or camera[0].get("from") != camera[0].get("to"):
+        raise RuntimeError("Stage 1 must use one fixed camera pose, with no travel.")
     ctx = scene_context(world=fixture["world"])
     return result["code"], result["spec"], ctx
 
@@ -241,7 +291,13 @@ def main() -> int:
             result = render_scene(code, ctx, str(video), scratch, width, height,
                                   workers=1, assets_dir=str(assets))
         save_json(output / "render_result.json", result)
+        import subprocess
+        poster = output / ("stage1_world_agent_frame.png" if args.mode == "agent"
+                           else "stage1_world_frame.png")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1",
+                        "-i", str(video), "-frames:v", "1", str(poster)], check=True)
         print(f"[lab] VIDEO: {video}", flush=True)
+        print(f"[lab] FRAME: {poster}", flush=True)
         print("[lab] Stop after Stage 1. Watch the MP4 before proceeding.", flush=True)
         return 0
     except Exception as exc:

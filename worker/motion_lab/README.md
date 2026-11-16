@@ -25,11 +25,11 @@ From the repo root:
 python worker/motion_lab/run.py world
 ```
 
-This runs actual `create_environment` -> `compile_agent_output` -> `compile_spec` -> sandbox `render_scene` on a short **4-second, 960×540** scene with an authored perspective grid, horizon, and layered silhouettes.
+This runs actual `create_environment` -> `compile_agent_output` -> `compile_spec` -> sandbox `render_scene` on a short **4-second, 960×540** scene with a full-frame high-contrast perspective grid, horizon, layered city silhouettes, and foreground depth markers. The deterministic scenario specifies an **explicit fixed camera at zoom 1.0** instead of the compiler's default 0.4 zoom; no travel is introduced.
 
 Watch: `worker/motion_lab/outputs/stage1_world.mp4`.
 
-The output directory also contains `designer_blueprint.json` (the world fixture), `tool_calls.json`, `scene_spec.json`, `compiled_scene.py`, `scene_context.json`, `compiler_result.json` and `render_result.json`. A failure writes `failure.json`, retaining its traceback. This deterministic pass **does not call an LLM**; it isolates engine correctness.
+Inspect `worker/motion_lab/outputs/stage1_world_frame.png`, decoded directly from the real video, alongside the MP4. The output directory also contains `designer_blueprint.json` (the world fixture), `tool_calls.json`, `scene_spec.json`, `compiled_scene.py`, `scene_context.json`, `compiler_result.json` and `render_result.json`. A failure writes `failure.json`, retaining its traceback. This deterministic pass **does not call an LLM**; it isolates engine correctness.
 
 ## Stage 1B — production agents on the exact same isolated path
 
