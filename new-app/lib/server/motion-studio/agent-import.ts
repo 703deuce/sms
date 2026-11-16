@@ -5,7 +5,7 @@ import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
 import type { ClipMediaSource } from '@/lib/clips/editor/sources'
-import { sceneSplitsMs } from '@/lib/motion-studio/editor-timeline'
+import { agentCanvasVideoLayout } from '@/lib/motion-studio/editor-timeline'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipAudioSfx } from '@/lib/clips/audio'
 import type { Marker } from '@/lib/clips/editor/markers'
@@ -222,11 +222,10 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
   // VideoSplits cut the authoritative full-length MP4 without changing its
   // sound or source timeline. SourceSegments override the canvas picture and
   // must NOT be populated from partial scene asset deliveries.
-  const videoSplits = sceneSplitsMs(motionStudio, args.durationMs)
-  const manualSourceSegments = (args.base.sourceSegments ?? []).filter(e=>!e.id.startsWith('ms_'))
+  const canvasLayout = agentCanvasVideoLayout(args.base, motionStudio, args.durationMs)
   console.info('[motion-studio:manifest] imported_canvas', {
     projectId: args.motionProjectId, durationMs: args.durationMs,
-    scenes: sceneElements.length, splits: videoSplits.length,
+    scenes: sceneElements.length, splits: canvasLayout.videoSplits?.length ?? 0,
     audioStems: sfx.length,
   })
   // Preserve the full master as the default picture/canvas. Only replace its
@@ -247,8 +246,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
   return { ...args.base,
     ...(replaceAudio ? { audioMuteRanges: [[0,args.durationMs] as [number,number]],
       audio: { ...args.base.audio, music:null, sfx } } : {}),
-    sources:[...manualSources,...sources], sourceSegments:manualSourceSegments,
-    videoSplits,
+    sources:[...manualSources,...sources], ...canvasLayout,
     broll:[...manualBroll,...broll], textItems:[...manualText,...textItems],
     tracks:[...manualTracks,...tracks],
     markers:[...(args.base.markers??[]).filter(m=>!String(m.id).startsWith('ms_ch_')),...manifest.chapters],
