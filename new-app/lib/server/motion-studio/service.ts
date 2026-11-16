@@ -81,6 +81,7 @@ export function motionStudioConfig() {
 function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   const o = J(raw)
   const out = { ...prev }
+  if (o.durationSeconds !== undefined && [30,60,120,180,300].includes(Number(o.durationSeconds))) out.durationSeconds = Number(o.durationSeconds)
   if (o.lengthMin !== undefined) {
     const minutes = Number(o.lengthMin)
     if (!validMinutes(minutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
@@ -223,8 +224,8 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const workflow = (['idea', 'script', 'footage'].includes(o.workflow) ? o.workflow : 'idea') as MsWorkflow
   const prompt = typeof (o.prompt ?? o.brief) === 'string' ? String(o.prompt ?? o.brief).trim() : ''
   const script = typeof o.script === 'string' ? o.script : ''
-  if (o.mediaPolicy && o.mediaPolicy !== 'uploads_only')
-    throw new MotionStudioError('INVALID', 'Only uploaded media is supported in this version.', 400)
+  if (o.mediaPolicy && !['uploads_only','auto_plus_uploads','auto_only'].includes(String(o.mediaPolicy)))
+    throw new MotionStudioError('INVALID', 'Unsupported media policy.', 400)
   const uploads = parseUploads(o.uploads ?? o.uploadIds)
   if (!prompt && !script && !uploads.length) throw new MotionStudioError('INVALID', 'Describe the documentary, paste a script or add media.', 400)
   if (workflow === 'footage' && !uploads.length) throw new MotionStudioError('INVALID', 'Add the footage to edit.', 400)
@@ -242,9 +243,15 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const requested = o.lengthMin ?? J(o.settings).lengthMin
   const len = /\b(\d+)\s*(?:-\s*)?(?:minutes?|mins?)\b/i.exec(prompt)
   const requestedMinutes = requested !== undefined ? Number(requested) : len ? Number(len[1]) : undefined
-  if (requestedMinutes !== undefined) {
+  if (requestedMinutes !== undefined && o.durationSeconds == null) {
     if (!validMinutes(requestedMinutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
     settings.lengthMin = requestedMinutes
+  }
+  const requestedSeconds = Number(o.durationSeconds)
+  if (o.durationSeconds !== undefined) {
+    if (![30, 60, 120, 180, 300].includes(requestedSeconds)) throw new MotionStudioError('INVALID','Choose 30 seconds, 1, 2, 3 or 5 minutes.',400)
+    settings.durationSeconds = requestedSeconds
+    settings.lengthMin = Math.ceil(requestedSeconds / 60)
   }
   const id = createId('msp')
   const clipProjectId = createId('proj')
@@ -262,7 +269,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
         rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'documentary', clipProjectId, clipId, title,
         brief: prompt || script, workflow,
-        settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: 'uploads_only' }),
+        settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads' }),
         status: 'setup', stage: 'story', stages: toPrismaJson({}), idempotencyKey: key } })
       await tx.studioActivityEvent.create({ data: { projectId: id, stage: 'story', kind: 'stage', message: 'Project created. Nothing renders until you create the plan.' } })
     })
@@ -620,7 +627,7 @@ export async function getProject(workspaceId: string, id: string): Promise<MsPro
   return {
     id: row.id, title: row.title || str(c.story?.title, 120) || 'Documentary', isExample: false,
     createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString(), workflow: row.workflow as MsWorkflow,
-    prompt: row.brief, mediaPolicy: 'uploads_only', settings: feSettings(c.s), status, stages, activity,
+    prompt: row.brief, mediaPolicy: ['uploads_only','auto_only'].includes(String(c.s.mediaPolicy)) ? c.s.mediaPolicy as MsProject['mediaPolicy'] : 'auto_plus_uploads', settings: feSettings(c.s), status, stages, activity,
     story: c.story ? { chapters, approved: Boolean(c.s.approved) || (c.s.productionMode === 'auto'), preservedUserScript: Boolean(c.story.verbatim),
       changeRequest: (c.s.lastChangeNote as string | undefined) ?? null } : null,
     scenes: sceneViews, assets: assetViews, missingVisuals: [],
