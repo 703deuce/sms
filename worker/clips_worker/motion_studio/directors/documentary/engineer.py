@@ -113,8 +113,19 @@ def _engineer_brief(ctx: dict) -> dict:
             "Express tool timing relative to the scene: startS/endS (seconds from 0), startFrac/endFrac (0..1), "
             "or a line/word anchor. Do not convert to frames; the engine converts from the real duration. "
             "A move or hold that lasts the whole scene uses startS=0 and endS='end' or endFrac=1. "
+            "TOOL ORDER IS REQUIRED: create_environment must be the FIRST tool call; "
+            "then create individual drawable scene objects, then layout_group, then animate_property, "
+            "then transition_scene/animate_camera as approved. "
             "Copy approvedWorld.environmentElements into create_environment.backdrop.elements using "
             "the same shape IDs, geometry, fill, opacity and z; a prose backdrop is NOT a drawable world. "
+            "Do not call layout_group or animate_property on those environment shape IDs: "
+            "backdrop.elements are not individually registered objects. If grouping or animating "
+            "a particular shape is required, first create a real object via place_primitive or another "
+            "registered object tool with that ID, then use that object ID. "
+            "animate_property accepts targetId/property/from/to/startFrame/endFrame/easing/animationId: "
+            "it does NOT accept startS/endS in the registered schema. Convert seconds to frames using fps "
+            "for animate_property ONLY (e.g. 1.0s at 24fps = startFrame 24). "
+            "The registered environment geometry tool is the only route for static world artwork. "
             "Construct EVERY compositionElement with its exact objectId using registered tools. "
             "For cameraShots, use animate_camera with exact numeric fromPose and toPose. "
             "For required graphic, execute create_graphic or place_primitive, not a text note. "
@@ -201,6 +212,10 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer", m)
             last_raw_output = out
             interpreted = _interpret(out, ctx)
+            if interpreted.get("toolAdjustments"):
+                log("engineer_tool_normalization", "Applied mechanical tool-call normalization", {
+                    "sceneIndex": ctx["scene"]["index"],
+                    "adjustments": interpreted["toolAdjustments"]})
             limitation = interpreted.get("limitation")
             code = interpreted.get("code")
             spec = interpreted.get("spec")
@@ -266,6 +281,17 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                 "previous_code": code,
                 "previous_spec": spec,
                 "problems": problems,
+                "registeredToolOrdering": [
+                    "1. create_environment with exact approvedWorldElements in backdrop.elements",
+                    "2. create named drawable scene objects (place_primitive/create_graphic/place_media/animate_text)",
+                    "3. layout_group only existing OBJECT ids (not environment backdrop shape ids)",
+                    "4. animate_property only existing object ids, with startFrame/endFrame not startS/endS",
+                    "5. camera and transitions using exact approved blueprint",
+                ],
+                "approvedWorldElements": next(
+                    (w.get("environmentElements") or [] for w in (ctx.get("worlds") or [])
+                     if w.get("id") == (ctx.get("sceneBinding") or {}).get("worldId")), []),
+                "actualToolSchema": format_tools_reference(),
                 "approvedRequiredEffects": (ctx.get("sceneBinding") or {}).get("requiredEffects") or [],
                 "approvedCompositionElements": (ctx.get("sceneBinding") or {}).get("compositionElements") or [],
                 "approvedCameraShots": (ctx.get("sceneBinding") or {}).get("cameraShots") or [],
@@ -291,6 +317,10 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer fix round {rounds}", m)
             last_raw_output = out
             interpreted = _interpret(out, ctx)
+            if interpreted.get("toolAdjustments"):
+                log("engineer_tool_normalization", "Applied mechanical tool-call normalization", {
+                    "sceneIndex": ctx["scene"]["index"], "fixRound": rounds,
+                    "adjustments": interpreted["toolAdjustments"]})
             limitation = interpreted.get("limitation")
             if limitation:
                 code = None

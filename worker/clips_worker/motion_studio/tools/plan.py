@@ -11,6 +11,117 @@ from clips_worker.motion_studio.tools.spec import attach_scene_timing, clamp_spe
 from clips_worker.motion_studio.tools.validate import validate_spec
 
 
+def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list[dict],
+                            duration_s: float | None, fps: int) -> tuple[list[dict], list[dict], list[dict]]:
+    """Mechanical correction at the tool boundary; never change creative choices.
+
+    Designer-owned background primitives belong to create_environment.backdrop.elements.
+    They are not individually addressable scene objects for layout_group/animate_property.
+    Return precise errors when the engineer asks for an unsupported operation.
+    """
+    prepared: list[dict] = []
+    changes: list[dict] = []
+    problems: list[dict] = []
+    original = [dict(row) if isinstance(row, dict) else row for row in calls]
+    world_by_id = {e["id"]: e for e in approved_world if isinstance(e, dict) and e.get("id")}
+    creators = [(i, row) for i, row in enumerate(original)
+                if isinstance(row, dict) and row.get("tool") == "create_environment"]
+    if approved_world and not creators:
+        problems.append({"code": "MISSING_ENVIRONMENT_TOOL",
+                         "message": "Designer-approved world requires create_environment FIRST; "
+                                    "copy all approvedWorldElements into backdrop.elements."})
+        return [], changes, problems
+    if len(creators) == 1 and creators[0][0] != 0:
+        i, env_call = creators[0]
+        original = [env_call] + original[:i] + original[i + 1:]
+        changes.append({"kind": "order", "tool": "create_environment", "fromIndex": i, "toIndex": 0,
+                        "reason": "environment must exist before scene objects"})
+    if approved_world and len(creators) > 1:
+        problems.append({"code": "AMBIGUOUS_WORLD_TARGET",
+                         "message": "Multiple create_environment calls require explicit approved-world allocation; "
+                                    "cannot infer which environment owns the Designer's elements."})
+        return [], changes, problems
+
+    # Relevant live compiler API is frame-based for animate_property even when
+    # narration-facing instructions prefer seconds.
+    for i, raw in enumerate(original):
+        if not isinstance(raw, dict):
+            prepared.append(raw)
+            continue
+        row = dict(raw)
+        args = row.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except (ValueError, TypeError):
+                prepared.append(row)
+                continue
+        if not isinstance(args, dict):
+            prepared.append(row)
+            continue
+        args = dict(args)
+        tool = row.get("tool")
+        if tool == "create_environment" and approved_world:
+            backdrop = dict(args.get("backdrop") or {})
+            existing = backdrop.get("elements") or []
+            if not isinstance(existing, list):
+                problems.append({"code": "INVALID_WORLD_GEOMETRY",
+                                 "message": "create_environment.backdrop.elements must be an array."})
+                continue
+            claimed = {e.get("id"): e for e in existing if isinstance(e, dict) and e.get("id")}
+            conflicts = [eid for eid, element in world_by_id.items()
+                         if eid in claimed and claimed[eid] != element]
+            if conflicts:
+                problems.append({"code": "WORLD_GEOMETRY_CHANGED",
+                                 "message": "Engineer altered Designer-approved world shapes: " +
+                                            ", ".join(conflicts) + "; use exact approvedWorldElements."})
+                continue
+            missing = [e for eid, e in world_by_id.items() if eid not in claimed]
+            if missing:
+                backdrop["elements"] = existing + missing
+                args["backdrop"] = backdrop
+                changes.append({"kind": "restore_approved_world", "tool": tool,
+                                "ids": [e["id"] for e in missing],
+                                "reason": "Designer-owned geometry is required input, not a new creative choice"})
+        if tool == "animate_property":
+            for start, dest in (("startS", "startFrame"), ("endS", "endFrame")):
+                if start not in args:
+                    continue
+                if dest in args:
+                    problems.append({"code": "AMBIGUOUS_ANIMATION_TIMING",
+                                     "message": f"animate_property supplied both {start} and {dest}; use one time unit."})
+                    continue
+                try:
+                    seconds = float(args[start])
+                    frame = round(seconds * fps)
+                    if seconds < 0 or (duration_s is not None and seconds > duration_s + 0.001):
+                        raise ValueError("outside scene")
+                except (TypeError, ValueError):
+                    problems.append({"code": "INVALID_ANIMATION_TIME",
+                                     "message": f"animate_property.{start} must be a finite, nonnegative "
+                                                "second value within scene duration."})
+                    continue
+                args[dest] = frame
+                del args[start]
+                changes.append({"kind": "timing", "tool": tool, "callIndex": i,
+                                "from": start, "to": dest, "frame": frame})
+        if tool == "layout_group":
+            referenced = set(args.get("memberIds") or [])
+            backdrop_ids = sorted(referenced & set(world_by_id))
+            if backdrop_ids:
+                problems.append({"code": "WORLD_GEOMETRY_NOT_GROUPABLE",
+                                 "message": "layout_group can only reference objects created with place_media, "
+                                            "place_primitive, create_graphic, animate_text or layout_group. "
+                                            "The following are backdrop geometry IDs, not scene objects: " +
+                                            ", ".join(backdrop_ids) +
+                                            ". Keep these in create_environment.backdrop.elements; "
+                                            "to animate/group them, author corresponding supported scene objects "
+                                            "using their exact IDs first."})
+        row["arguments"] = args
+        prepared.append(row)
+    return prepared, changes, problems
+
+
 def compile_agent_output(
     out: dict[str, Any] | None,
     *,
@@ -48,10 +159,18 @@ def compile_agent_output(
         if project_id:
             spec["projectId"] = project_id
         if payload.get("tools"):
-            spec, results = apply_calls(spec, payload["tools"])
+            prepared, adjustments, early_errors = _prepare_engineer_tools(
+                payload["tools"], approved_world=list(world_elements or []),
+                duration_s=duration_s, fps=fps)
+            if early_errors:
+                return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec,
+                        "errors": early_errors, "toolAdjustments": adjustments}
+            spec, results = apply_calls(spec, prepared)
             errors = [e for r in results for e in r.errors]
             if errors:
-                return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec, "errors": errors, "results": [r.as_dict() for r in results]}
+                return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec,
+                        "errors": errors, "results": [r.as_dict() for r in results],
+                        "toolAdjustments": adjustments}
         clamp_spec_timing(spec)
         problems = validate_spec(spec, catalog_ids=catalog_ids)
         if problems:
@@ -68,6 +187,7 @@ def compile_agent_output(
             "spec": spec,
             "errors": [],
             "dependencies": payload.get("dependencies") or _dependencies(spec),
+            "toolAdjustments": adjustments if payload.get("tools") else [],
         }
 
     if payload.get("code"):
