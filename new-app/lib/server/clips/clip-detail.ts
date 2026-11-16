@@ -128,7 +128,10 @@ export async function getClipEditorWords(
   return { words, bounds: { clipStartMs: clip.startMs, clipEndMs: clip.endMs, ...bounds } }
 }
 
-export async function getClipEditorPayload(workspaceId: string, clipId: string) {
+export async function getClipEditorPayload(workspaceId: string, clipId: string, options?: { fastMotionStudio?: boolean }) {
+  // The autonomous producer may attach hundreds of media references. Do not
+  // block the initial editor shell on optional transcript/crop/filmstrip reads.
+  const fastMotionStudio = options?.fastMotionStudio === true
   const detailStartedAt = Date.now()
   const prisma = getPrisma()
   const row = await prisma.clip.findFirst({
@@ -199,10 +202,10 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceSegEndMs: clip.sourceSegEndMs,
     previewKey: clip.previewKey,
   })
-  const projectTranscriptP = loadProjectTranscript(storage, project)
-  const clipWordsP = preloadClipWordJson(storage, workspaceId, clip)
-  const cropTrackJsonP = storage.getJson<unknown>(cropTrackKey).catch(() => null)
-  const cropRawP = clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null)
+  const projectTranscriptP = fastMotionStudio ? Promise.resolve([] as ClipWord[]) : loadProjectTranscript(storage, project)
+  const clipWordsP = fastMotionStudio ? Promise.resolve(null) : preloadClipWordJson(storage, workspaceId, clip)
+  const cropTrackJsonP = fastMotionStudio ? Promise.resolve(null) : storage.getJson<unknown>(cropTrackKey).catch(() => null)
+  const cropRawP = !fastMotionStudio && clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null)
   const segmentSizeP = sourceSegKey
     ? storage.getObjectSizeBytes(sourceSegKey).catch(() => null)
     : Promise.resolve(null)
@@ -254,9 +257,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     sourceKey
       ? createCachedSignedDownloadUrl(storage, sourceKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
       : Promise.resolve(null),
-    Promise.all([projectTranscriptP, clipWordsP]).then(([pt, clipWords]) =>
+    (fastMotionStudio ? Promise.resolve([] as ClipWord[]) : Promise.all([projectTranscriptP, clipWordsP]).then(([pt, clipWords]) =>
       resolveEditorWords(storage, workspaceId, clip, pt, { preloadedClipWords: clipWords }),
-    ),
+    )), 
     cropTrackJsonP.then((track) =>
       track
         ? createCachedSignedDownloadUrl(storage, cropTrackKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
@@ -264,9 +267,9 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string) 
     ),
     boundsP.then((b) => {
       const edits = normalizeEdits(clip.edits, b)
-      return edits.broll?.length ? resolveBrollMedia(edits.broll) : Promise.resolve([])
+      return !fastMotionStudio && edits.broll?.length ? resolveBrollMedia(edits.broll) : Promise.resolve([])
     }),
-    resolveEditorAssets(storage, clip.aiMeta, clipVersionHint),
+    fastMotionStudio ? Promise.resolve({ fullVideo: true, peaksUrl: null, filmstrip: null }) : resolveEditorAssets(storage, clip.aiMeta, clipVersionHint),
     Promise.all([segmentSizeP]).then(([size]) => {
       const segmentExists =
         Boolean(sourceSegKey) && sourceSegStartMs != null && size != null
