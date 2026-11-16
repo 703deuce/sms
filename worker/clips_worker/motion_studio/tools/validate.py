@@ -250,7 +250,11 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
         if group and eid not in (objects.get(group) or {}).get("memberIds", []):
             problems.append({"code": "MISSING_GROUP_RELATION", "message": f"planned element {eid!r} is not a member of {group!r}"})
         linked = element.get("connectTo")
-        if linked and not any(p.get("kind") == "path" and (
+        # connectTo is a spatial relationship unless the creative design
+        # explicitly requires a drawn connector. draw_path does not store
+        # fromObjectId/toObjectId, so demanding those fields on every
+        # composition anchor made ordinary typography impossible to approve.
+        if linked and "connector" in required and not any(p.get("kind") == "path" and (
                 {p.get("fromObjectId"), p.get("toObjectId")} == {eid, linked})
                 for p in objects.values()):
             problems.append({"code": "MISSING_VISUAL_LINK", "message": f"planned elements {eid!r} and {linked!r} lack a connecting path"})
@@ -268,8 +272,16 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
                                             "backdrop geometry. Build an addressable scene object "
                                             "with a distinct ID and a matching visual first."})
             continue
-        if element.get("motion") and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values()):
-            problems.append({"code": "MISSING_ELEMENT_MOTION", "message": f"planned element {eid!r} has motion intent but no animation or camera choreography"})
+        authored_motion = str(element.get("motion") or "").strip().lower()
+        addressable = objects.get(eid) or (spec.get("typography") or {}).get(eid) or {}
+        entrance = (addressable.get("entrance") or {}).get("type")
+        realized_entrance = entrance in ("reveal", "fade", "slide", "spring")
+        if (authored_motion and not authored_motion.startswith((
+                "static", "still", "stationary", "no animation", "no motion", "hold position"))
+                and not realized_entrance
+                and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values())):
+            problems.append({"code": "MISSING_ELEMENT_MOTION",
+                             "message": f"planned element {eid!r} has motion intent but no rendered entrance or animation"})
     supported_props = {"position", "position.x", "position.y", "scale", "rotation", "opacity"}
     for aid, anim in (spec.get("animation") or {}).items():
         if anim.get("property") not in supported_props:

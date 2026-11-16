@@ -196,6 +196,73 @@ def _interpret(out: dict, ctx: dict) -> dict:
     )
 
 
+def _tool_args(call: dict) -> dict:
+    args = call.get("arguments") or {}
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except (ValueError, TypeError):
+            return {}
+    return args if isinstance(args, dict) else {}
+
+
+def merge_engineer_tool_repairs(previous: list[dict], patch: list[dict]) -> tuple[list[dict], dict]:
+    """Compose a partial scene_fix patch with previous Engineer tool calls.
+
+    A fix response is a DELTA, not a complete new scene. Replace a prior tool
+    only when it addresses the same stable object/tool ID; preserve everything
+    else, including create_environment and previously constructed titles.
+    Stable ordering guarantees object creation before animation and grouping.
+    """
+    stable_ids = (
+        "environmentId", "typeId", "objectId", "animationId", "groupId",
+        "motionId", "transitionId", "effectId",
+    )
+    def identity(call: dict) -> tuple:
+        tool = call.get("tool") or ""
+        args = _tool_args(call)
+        for field in stable_ids:
+            if field in args and args[field] is not None:
+                # Distinguish animate_camera from create_environment even when
+                # both refer to an environmentId.
+                if field == "environmentId" and tool != "create_environment":
+                    continue
+                return tool, field, str(args[field])
+        if tool in ("set_material",):
+            return tool, "targetId", str(args.get("targetId"))
+        return tool, "anonymous", id(call)
+
+    preserved = [dict(t) for t in previous if isinstance(t, dict)]
+    replaced = []
+    added = []
+    for raw in patch:
+        if not isinstance(raw, dict):
+            preserved.append(raw)
+            continue
+        key = identity(raw)
+        existing_index = next((i for i, old in enumerate(preserved)
+                               if identity(old) == key), None)
+        if existing_index is None:
+            preserved.append(dict(raw))
+            added.append({"tool": raw.get("tool"), "identity": str(key)})
+        else:
+            preserved[existing_index] = dict(raw)
+            replaced.append({"tool": raw.get("tool"), "identity": str(key)})
+    # Constraints: environment first; object creation before links/grouping,
+    # keyframe/property/material operations after their target is created.
+    phases = {
+        "create_environment": 0, "place_media": 1, "place_primitive": 1,
+        "draw_path": 1, "create_graphic": 1, "animate_text": 1,
+        "use_component": 1, "layout_group": 2, "set_material": 3,
+        "animate_property": 3, "apply_effect": 3,
+        "animate_camera": 4, "transition_scene": 5,
+    }
+    ordered = sorted(preserved, key=lambda c: phases.get(c.get("tool"), 3)
+                     if isinstance(c, dict) else 6)
+    return ordered, {"previousCalls": len(previous), "patchCalls": len(patch),
+                     "resultCalls": len(ordered), "added": added, "replaced": replaced}
+
+
 def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, preflight: bool = False) -> dict:
     """Motion Engineer entry point. Returns a validated scene implementation or a degraded fallback.
 
@@ -211,6 +278,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
     limitation = None
     interpreted = None
     last_raw_output = None
+    cumulative_tools: list[dict] = []
     attempts: list[dict] = []
 
     def _record_failed_attempt(reason: list[str], candidate: dict | None = None) -> None:
@@ -235,6 +303,8 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                              schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer", m)
             last_raw_output = out
+            if isinstance(out.get("tools"), list):
+                cumulative_tools = list(out["tools"])
             interpreted = _interpret(out, ctx)
             if interpreted.get("toolAdjustments"):
                 log("engineer_tool_normalization", "Applied mechanical tool-call normalization", {
@@ -304,6 +374,7 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             payload = {
                 "previous_code": code,
                 "previous_spec": spec,
+                "previous_tools": cumulative_tools,
                 "problems": problems,
                 "registeredToolOrdering": [
                     "1. create_environment with exact approvedWorldElements in backdrop.elements",
@@ -326,6 +397,9 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
                 "traceback": (failed or {}).get("trace") or problems,
                 "api": api_excerpt_for(problems + ((failed or {}).get("trace") or []), code or None),
                 "instruction": (
+                    "Return ONLY new/replacement tool calls needed for these problems; "
+                    "they are a DELTA and are merged with previous_tools, not a new scene. "
+                    "Do not recreate a title, backdrop, or prior tool unless changing it. "
                     "Fix ONLY these problems. Prefer corrected tool calls. "
                     "The traceback and API excerpt are complete. Do not change the approved design. "
                     "Designer-owned world geometry is injected verbatim by the tool compiler. "
@@ -342,6 +416,14 @@ def design_scene(ctx: dict, scratch: str, assets_dir: str, log, exec_log, *, pre
             out, m = chat_json("scene_fix", SYSTEM, json.dumps(payload), max_tokens=128000,
                            schema=schema_for("motion_engineer"), schema_name=schema_name("motion_engineer"))
             log("model_call", f"scene {ctx['scene']['index'] + 1} engineer fix round {rounds}", m)
+            if isinstance(out.get("tools"), list) and cumulative_tools:
+                merged, summary = merge_engineer_tool_repairs(cumulative_tools, out["tools"])
+                log("engineer_repair_merge", "Replaying cumulative Engineer tools after partial fix",
+                    {"sceneIndex": ctx["scene"]["index"], "fixRound": rounds, **summary})
+                out = {**out, "tools": merged}
+                cumulative_tools = merged
+            elif isinstance(out.get("tools"), list):
+                cumulative_tools = list(out["tools"])
             last_raw_output = out
             interpreted = _interpret(out, ctx)
             if interpreted.get("toolAdjustments"):
