@@ -222,11 +222,30 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   const completed = await db().$transaction(async tx => {
     const result = await tx.motionStudioAgentJob.update({ where: { id }, data: { status: 'complete',
       phase: 'complete', progress: 100, message: 'Video ready.', resultKey: video.key, completedAt: now } })
+    const motionProject = await tx.motionStudioProject.findUnique({ where: { id: job.projectId },
+      select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
       stage: 'review', completedAt: now, exportInfo: toPrismaJson({
         masterKey: video.key, smallKey: video.key, durationMs, source: 'grokbot_agent',
         storageDriver: storageDriverName(),
       }) } })
+    // The initial Motion Studio project creates an empty editor canvas. Attach
+    // the bot's actual MP4 to that project's source upload so the existing
+    // Compact Editor can preview, trim, split, and layer over the video.
+    if (motionProject?.clipProjectId) {
+      const clipProject = await tx.clipProject.findUnique({ where: { id: motionProject.clipProjectId },
+        select: { uploadId: true } })
+      if (clipProject?.uploadId) {
+        await tx.clipUpload.update({ where: { id: clipProject.uploadId }, data: {
+          key: video.key, bytes: BigInt(video.bytes), durationMs, mime: 'video/mp4',
+          filename: video.filename, status: 'READY', storageDriver: storageDriverName(),
+        } })
+      }
+      await tx.clipProject.update({ where: { id: motionProject.clipProjectId }, data: {
+        status: 'READY', stage: 'motion_studio', progress: 100,
+        rangeEndMs: durationMs, proxyKey: video.key,
+      } })
+    }
     await tx.studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'review',
       kind: 'stage', message: 'Grokbot video received and ready for preview.' } })
     return result
