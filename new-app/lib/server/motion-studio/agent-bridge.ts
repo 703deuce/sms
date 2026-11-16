@@ -65,6 +65,18 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const where = { projectId_idempotencyKey: { projectId, idempotencyKey } }
   const previous = await db().motionStudioAgentJob.findUnique({ where })
   if (previous) return publicJob(previous)
+  // Until billing and a proper tenant quota are connected, refuse unlimited
+  // public webhook dispatch. This also bounds setup-mode routine usage.
+  const today = new Date()
+  today.setUTCHours(0, 0, 0, 0)
+  const jobsToday = await db().motionStudioAgentJob.count({
+    where: { userId, createdAt: { gte: today } },
+  })
+  if (jobsToday >= 3) throw new MotionStudioError('CONFLICT', 'Daily agent test limit reached (3 jobs).', 429)
+  const active = await db().motionStudioAgentJob.count({
+    where: { userId, status: { in: ['dispatching', 'dispatched', 'running'] } },
+  })
+  if (active >= 3) throw new MotionStudioError('CONFLICT', 'Maximum concurrent agent jobs reached.', 429)
   const id = 'msaj_' + randomUUID()
   const token = randomBytes(32).toString('base64url')
   const tokenHash = sha(id + ':' + token).toString('hex')
