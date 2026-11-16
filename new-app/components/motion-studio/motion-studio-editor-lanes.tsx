@@ -9,6 +9,7 @@ import { MOTION_STUDIO_NAME, MOTION_STUDIO_ROUTE } from '@/lib/motion-studio/con
 import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsProject } from '@/lib/motion-studio/types'
 import { MotionStudioTracks } from './motion-studio-tracks'
+import { AgentChatPanel } from './agent-chat-panel'
 
 /**
  * Motion Studio lanes mounted inside the existing Compact Editor (EditorShell `motionStudioSlot`).
@@ -27,6 +28,8 @@ export function MotionStudioEditorLanes({
 }) {
   const client = useMemo(() => injected ?? getMotionStudioClient(), [injected])
   const [project, setProject] = useState<MsProject | null>(null)
+  const [agentTracks, setAgentTracks] = useState<{ id: string; label: string; items: { id: string; startMs: number; endMs: number }[] }[] | null>(null)
+  const [agentDurationMs, setAgentDurationMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
@@ -43,6 +46,24 @@ export function MotionStudioEditorLanes({
               : 'Could not load the Motion Studio lanes.',
         )
       })
+    if (client.mode === 'live') {
+      void fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline',
+        {cache: 'no-store'}).then(r=>r.ok?r.json():null).then((response: {
+          edits?: { motionStudio?: { tracks?: {id:string;label:string;items:object[]}[];durationMs?:number } }
+        } | null) => {
+          if (!alive) return
+          const ext = response?.edits?.motionStudio
+          if (ext?.tracks?.length) {
+            setAgentTracks(ext.tracks.map(t=>({
+              id:t.id,label:t.label,items:(t.items ?? []).map(v=>{
+                const o=v as { id?:string;startMs?:number;endMs?:number }
+                return {id:String(o.id??''),startMs:Number(o.startMs)||0,endMs:Number(o.endMs)||0}
+              }).filter(x=>x.endMs>x.startMs)
+            })))
+            setAgentDurationMs(ext.durationMs || 0)
+          }
+        }).catch(()=>{/* The legacy project lanes remain available. */})
+    }
     return () => {
       alive = false
     }
@@ -77,10 +98,31 @@ export function MotionStudioEditorLanes({
       <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
         Each scene and footage insert is its own clip on the Video track, narration stays with the picture, and the score is on the Music track. Trim, delete, mute or swap them here. To redesign a scene, ask the Director in Motion Studio; only that scene re-renders, and this cut updates the next time you open it.
       </p>
-      <div className="overflow-x-auto">
-        <div className="min-w-[560px]">
-          <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="min-w-0 overflow-x-auto">
+          {agentTracks?.length ? <div className="min-w-[560px] space-y-2 rounded-lg border border-border p-3"
+            aria-label="Imported production tracks" data-testid="ms-agent-timeline-tracks">
+            {agentTracks.map(track=><div key={track.id} className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 text-xs">
+              <span className="truncate text-muted-foreground">{track.label}</span>
+              <div className="relative h-8 rounded bg-muted">
+                {track.items.map(item=>{
+                  const total=Math.max(1,agentDurationMs)
+                  const left=Math.min(100,100*item.startMs/total)
+                  const width=Math.max(0.5,100*(item.endMs-item.startMs)/total)
+                  return <button type="button" key={item.id} title={item.id}
+                    onClick={()=>onSeek(item.startMs)}
+                    className="absolute top-1 h-6 truncate rounded border border-primary/20 bg-primary/20 px-1 text-left text-[10px] hover:bg-primary/30"
+                    style={{left:left+'%',width:Math.min(100-left,width)+'%'}}>
+                    {item.id}
+                  </button>
+                })}
+              </div>
+            </div>)}
+          </div> : <div className="min-w-[560px]">
+            <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />
+          </div>}
         </div>
+        <AgentChatPanel projectId={projectId} selectedElementIds={current ? [current.id] : []} />
       </div>
     </div>
   )
