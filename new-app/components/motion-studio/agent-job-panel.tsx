@@ -67,7 +67,10 @@ export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOp
             <time className="shrink-0 text-xs text-muted-foreground" dateTime={event.timestamp}>{new Date(event.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</time>
             <span>{event.message}</span>
           </li>)}
-          {!job.events?.length ? <li className="text-sm text-muted-foreground">We're getting everything ready…</li> : null}
+          {!job.events?.length ? <li className="text-sm text-muted-foreground">{complete
+            ? 'Done! Your film is ready to edit.'
+            : failed ? 'Production needs attention. Your existing files are safe.'
+              : "We're getting everything ready…"}</li> : null}
         </ol>
       </div>
       {(complete || Boolean(job.parentJobId)) && job.videoUrl ? (
