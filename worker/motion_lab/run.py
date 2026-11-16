@@ -291,14 +291,47 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
     }
     project = {"id": "motion_lab_stage1",
                "settings": {"lengthMin": DURATION / 60, "voiceover": False, "music": False}}
+    # design_production consumes an already-approved FILM DIRECTOR plan.
+    # Unlike the Production Designer's structured output, that upstream plan
+    # owns style.fonts, music mood/reason, style reason and per-scene reasons.
+    # Keep these lab-provided editorial facts explicit; never ask Luna to
+    # supply Director-only fields or weaken production validate_plan().
     plan = {
-        "style": ctx["style"],
+        "style": {
+            **ctx["style"],
+            "fonts": {"display": "cond", "label": "label", "body": "serif"},
+            "reason": "A luminous graphic city uses high contrast and legible editorial typography.",
+        },
+        "music": {
+            "mood": "none",
+            "reason": "Stage 1 tests visual world construction in isolation; no audio mix.",
+        },
         "world": {"id": "world_grid", "name": "Perspective Grid World",
-                  "brief": "A cinematic perspective grid city with layered spatial depth."},
-        "scenes": [ctx["scene"]],
+                  "brief": "A cinematic perspective grid city with layered spatial depth.",
+                  "reason": "One original spatial environment establishes the opening beat."},
+        "scenes": [{
+            **ctx["scene"],
+            "reason": "The single storyboard beat establishes spatial depth and perspective.",
+            "illustrative": True,
+            "visualProvenance": "original_illustration",
+        }],
         "cameraPlan": {"beats": [{"sceneIndex": 0, "intent": "hold", "hold": True,
                                    "reason": "Stage 1 isolates physical world construction; no camera movement."}]},
     }
+    # Fail before an expensive model call if the upstream director fixture
+    # drifts from the REAL production plan contract again.
+    from clips_worker.motion_studio.directors.documentary.director import validate_plan
+    director_errors = validate_plan(plan, story, [])
+    log("director.validate", "Validate upstream lab Film Director fixture",
+        {"pass": not director_errors, "errors": director_errors,
+         "styleFonts": plan["style"]["fonts"], "music": plan["music"],
+         "sceneReason": plan["scenes"][0]["reason"]})
+    if director_errors:
+        save_json(output / "director_fixture_invalid.json",
+                  {"errors": director_errors, "plan": plan})
+        raise RuntimeError("Lab's Film Director input is invalid: " +
+                           "; ".join(director_errors))
+    save_json(output / "director_plan.json", plan)
     log("designer.start", "Invoking the REAL Production Designer via production.design_production",
         {"model": config.model_for("production_designer"), "scene": ctx["scene"]["id"],
          "seconds": DURATION, "assets": 0, "cameraStage": "static world only"})

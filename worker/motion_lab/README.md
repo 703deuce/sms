@@ -67,3 +67,9 @@ python worker/motion_lab/run.py world --mode agent --out /tmp/ms-stage1-agent
 ```
 
 Watch `/tmp/ms-stage1-agent/stage1_world_agent.mp4` and open `/tmp/ms-stage1-agent/stage1_world_agent_frame.png`. If the agent fails, send `/tmp/ms-stage1-agent/lab_events.jsonl`, `failure.json`, `designer_blueprint.json` or `engineer_result.json` as applicable; remove credentials/private content before sharing. Nothing is silently replaced with the canned reference world.
+
+## Fix for Designer contract failure on 4a37bc3
+
+The Production Designer correctly returns `identity`, `worlds`, `sceneBindings` and other production-blueprint fields. Its response does **not** supply Film Director fields `style`, `music` or `scenes`. The previous lab input plan omitted required Film Director data, causing `validate_plan` to fail even though the model answered in the correct Production Designer schema. The lab now initializes `style.fonts` with `display/label/body`, `style.reason`, `music.mood/reason`, and `scene.reason` before calling Luna. It validates this fixture with the **real** `director.validate_plan` before any paid call, records the result in `lab_events.jsonl`, and writes `director_plan.json`. This is not a schema bypass or retry prompt modification, and the agent still must author the world geometry independently.
+
+If a subsequent failure occurs, inspect `director_plan.json`, `designer_blueprint.json`, `engineer_result.json` and `lab_events.jsonl`. Never copy the hardcoded deterministic grid into an agent result.
