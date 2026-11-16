@@ -202,12 +202,22 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
   const sourceUrl=await createReadableSignedUrl(project.upload.key,3600)
   const id='caf_'+randomUUID(),token=randomBytes(32).toString('base64url')
   const root=callbackOrigin(request)+'/api/clips/agent/jobs/'+encodeURIComponent(id)
-  let job=await prisma().clipAgentFinishJob.create({data:{
-    id,workspaceId,projectId,clipId:slot,idempotencyKey:key,
-    tokenHash:digest(id+':'+token).toString('hex'),
-    tokenExpiresAt:new Date(Date.now()+36*3600_000),
-    status:'dispatching',phase:'dispatch',message:'Finding your best moments.',
-  }})
+  let job
+  try {
+    job=await prisma().clipAgentFinishJob.create({data:{
+      id,workspaceId,projectId,clipId:slot,idempotencyKey:key,
+      tokenHash:digest(id+':'+token).toString('hex'),
+      tokenExpiresAt:new Date(Date.now()+36*3600_000),
+      status:'dispatching',phase:'dispatch',message:'Finding your best moments.',
+    }})
+  }catch(err){
+    if ((err as {code?:string})?.code!=='P2002') throw err
+    const duplicate=await prisma().clipAgentFinishJob.findUnique({
+      where:{clipId_idempotencyKey:{clipId:slot,idempotencyKey:key}},
+    })
+    if(!duplicate) throw err
+    return publicJob(duplicate)
+  }
   const payload={
     version:1,action:'clip_and_finish',mode:'autonomous_clipper',jobId:id,
     projectId,jobToken:token,jobUrl:root,callbackUrl:root,
