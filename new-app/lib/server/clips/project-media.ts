@@ -140,7 +140,7 @@ export async function listProjectMedia(workspaceId: string, projectId: string): 
   const rows = await prisma.clipProjectMedia.findMany({
     where: { projectId, workspaceId },
     orderBy: { createdAt: 'desc' },
-    take: 200,
+    take: 350,
     select: MEDIA_SELECT,
   })
   const uploads = await Promise.all(rows.map((r) => toItem(r)))
