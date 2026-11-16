@@ -155,14 +155,14 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     }
     extTracks.push({ id:t.id,kind:t.kind,label:t.label,items:manifest.elements.filter(x=>x.trackId===t.id).map(e=>({
       id:e.id, startMs:e.startMs,endMs:e.endMs,sourceInMs:e.sourceInMs,
-      editable:e.editable, itemId:mapped.get(e.id) || null
+      editable:e.editable, itemId:mapped.get(e.id) || null,
+      engine:e.engine ?? null, codeRef:e.codeRef ?? null
     })) })
     const renderKind = kind==='footage' ? 'overlay' : kind==='text' ? 'text' : kind==='audio' ? 'audio' : null
     if (renderKind && members.length && trackIndex < 48) {
       tracks.push({ id: 'ms' + trackIndex++, kind:renderKind, name:t.label.slice(0,40), items:members })
     }
   }
-  const sourceById = new Map(manifest.elements.map(e=>[safe(e.id,'ms'),e]))
   const textItems = manifest.elements.filter(e=>lane(e.trackId)==='text' && e.text && !resolveArtifact(e,all) && e.endMs-e.startMs>=300)
     .slice(0,60).map(e=>({ id:safe(e.id,'ms'),text:e.text.slice(0,200),startMs:e.startMs,endMs:e.endMs,
       x:50,y:83,style:{font:'Montserrat' as const,size:80,color:'#FFFFFF',align:'center' as const,case:'none' as const} }))
@@ -170,10 +170,19 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     durationMs:args.durationMs,fps:30,tracks:extTracks,segments:manifest.elements.filter(e=>lane(e.trackId)==='video').map(e=>({
       id:e.id,startMs:e.startMs,endMs:e.endMs,elementId:e.id
     })) }
-  // The separated stems preserve the audio mix, but the master stays the default
-  // until audio parity can be confirmed; avoid doubling narration/music by overlaying them.
-  // Stems are registered in the Media Library and their timing is retained on separate lanes.
-  return { ...args.base, sources:[...(args.base.sources??[]),...sources], sourceSegments,
+  // Preserve the full master as the default picture/canvas. Only replace its
+  // baked audio when every audio manifest element has a playable registered stem.
+  // Otherwise the master mix remains authoritative (avoids silent exports).
+  const audioElements = manifest.elements.filter(e=>lane(e.trackId)==='audio')
+  const haveAllStems = audioElements.length > 0 && audioElements.every(e => {
+    const asset = resolveArtifact(e, all)
+    return asset && media.has(asset.id)
+  })
+  const replaceAudio = haveAllStems && sfx.length === audioElements.length
+  return { ...args.base,
+    ...(replaceAudio ? { audioMuteRanges: [[0,args.durationMs] as [number,number]],
+      audio: { ...args.base.audio, music:null, sfx } } : {}),
+    sources:[...(args.base.sources??[]),...sources], sourceSegments,
     broll:[...(args.base.broll??[]),...broll], textItems:[...(args.base.textItems??[]),...textItems],
     tracks:[...(args.base.tracks??[]),...tracks],
     markers:[...(args.base.markers??[]).filter(m=>!String(m.id).startsWith('ms_ch_')),...manifest.chapters],
