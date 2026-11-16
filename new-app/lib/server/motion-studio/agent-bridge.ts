@@ -251,7 +251,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     const motionProject = await tx.motionStudioProject.findUnique({ where: { id: job.projectId },
       select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
-      stage: 'review', completedAt: now, exportInfo: toPrismaJson({
+      stage: 'review', completedAt: now, timelineVersion: { increment: 1 }, exportInfo: toPrismaJson({
         masterKey: video.key, smallKey: video.key, durationMs, source: 'transovo_agent',
         storageDriver: storageDriverName(),
       }) } })
