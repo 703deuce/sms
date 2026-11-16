@@ -149,10 +149,20 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     ...(agentBridgeLive() ? { jobToken: token } : {}),
   }
   try {
-    const response = await fetch(rawUrl, { method: 'POST', cache: 'no-store', redirect: 'error',
-      headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload), signal: AbortSignal.timeout(15_000) })
-    if (!response.ok) throw new Error('Webhook HTTP ' + response.status)
+    // Reuse the exact same jobId and callback token on retries; the producer must
+    // treat repeated deliveries as one assignment.
+    let accepted = false
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const response = await fetch(rawUrl, { method: 'POST', cache: 'no-store', redirect: 'error',
+          headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload), signal: AbortSignal.timeout(15_000) })
+        if (response.ok) { accepted = true; break }
+        if (response.status < 500 && response.status !== 429) break
+      } catch { /* Network failures may be retried with this job's stable ID. */ }
+      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 300 * 2 ** attempt))
+    }
+    if (!accepted) throw new Error('Webhook not accepted')
     job = await db().motionStudioAgentJob.update({ where: { id }, data: { status: 'dispatched', phase: 'accepted',
       dispatchedAt: new Date(), message: agentBridgeLive() ? (revisionRequest ? "We're updating your video…" : "We're preparing your video…") : 'Setup-mode job received; rendering is disabled.' } })
     await db().studioActivityEvent.create({ data: { projectId, stage: 'story', kind: 'stage',
@@ -266,7 +276,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
   const input = toObject(raw)
   if (input.status === 'failed') {
-    const message = str(input.message, 500) || 'Production failed.'
+    const message = friendlyMessage(input.message, 'fixing') || "We hit a snag finishing your video."
     const failed = await db().motionStudioAgentJob.update({ where: { id },
       data: { status: 'failed', phase: 'failed', message, completedAt: new Date() } })
     return publicJob(failed)
