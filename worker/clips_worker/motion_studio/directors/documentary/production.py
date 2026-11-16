@@ -423,6 +423,8 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         return out
 
     editorial = copy.deepcopy(plan)
+    total_scenes = len(plan.get("scenes") or [])
+    single_scene = total_scenes == 1
     # The Film Director's existing camera beats are upstream requirements, not suggestions.
     editorial["editorialCameraPlan"] = plan.get("cameraPlan") or pre.camera_continuity_plan(plan, story)
     inventory = inventory_from_catalog(catalog, story)
@@ -456,7 +458,16 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "null is allowed for non-applicable fields. For cameraShots give id, purpose, fromTarget, toTarget, "
         "movement, timingAnchor, fromPose {x,y,zoom,rot}, toPose {x,y,zoom,rot}. Moving shots MUST change a numeric pose and must use actual object targets. For holds give holdReason; never replace a moving editorial camera beat with a hold. Art direction must be buildable from these coordinates, layers and relationships. "
         "Do not use identical plans across unrelated scenes. Every required effect must survive rendering. "
-        "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
+        + (
+            "SCENE TOPOLOGY — STRICT: This film has EXACTLY ONE scene. There is NO NEXT SCENE. "
+            "Do NOT include 'transition' in requiredEffects for its only scene, and set "
+            "transitionIntent to null. An opening reveal or an ending hold is NOT a "
+            "transition_scene effect; if you want a visible in-scene reveal, describe "
+            "real supported drawable objects/animation in compositionElements instead. "
+            "Do not invent a subsequent scene or write an instruction to transition to one. "
+            if single_scene else ""
+        )
+        + "missingNeeds [{sceneIndex, need, treatment}] — when an upload cannot cover a beat, name an original "
         "relevant illustration, never unrelated filler.\n"
         "Every ready upload in the inventory should appear at least once. Repeats require a narrative reuseReason. "
         "Do not drop an official Director assignment: if you move a still, place it on another scene in the same output. "
@@ -490,6 +501,13 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
                                       "transitionOut": s.get("transitionOut"), "camera": s.get("camera")}
                                     for s in plan.get("scenes") or []]},
         "inventory": inventory,
+        "sceneTopology": {
+            "sceneCount": total_scenes,
+            "sceneIndices": [s.get("index") for s in plan.get("scenes") or []],
+            "terminalSceneIndex": (plan.get("scenes") or [{}])[-1].get("index"),
+            "hasAdjacentScene": total_scenes > 1,
+            "singleSceneNoTransition": single_scene,
+        },
         "editorialCameraPlan": editorial.get("editorialCameraPlan"),
         "requestedDurationS": float((project.get("settings") or {}).get("lengthMin") or 3) * 60,
         "capabilities": format_designer_capabilities(),
@@ -507,7 +525,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         )
         log("model_call", "production design", m)
         out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
-        reconcile_explicit_no_transition(out, log)
+        reconcile_single_scene_transitions(out, log)
         errs = validate_plan(out, story, catalog)
         berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
@@ -516,7 +534,20 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             repair_user = json.dumps({
                 "previous": raw,
                 "errors": (errs or []) + (berrs or []),
-                "instruction": "Fix ONLY these validation errors. On-screen wording errors include the exact phrase and recorded onScreenText/description. Preserve all other decisions and return the complete corrected JSON.",
+                "sceneTopology": {
+                    "sceneCount": total_scenes,
+                    "singleSceneNoTransition": single_scene,
+                    "terminalSceneIndex": (plan.get("scenes") or [{}])[-1].get("index"),
+                },
+                "instruction": (
+                    "Fix ONLY these validation errors. "
+                    + ("This is one scene with NO neighbor: requiredEffects must NOT contain "
+                       "'transition' and transitionIntent must be null. In-scene reveals use "
+                       "real approved object/animation calls, not transition_scene. "
+                       if single_scene else "")
+                    + "On-screen wording errors include the exact phrase and recorded "
+                      "onScreenText/description. Preserve all other decisions and return the complete corrected JSON."
+                ),
             })
             raw, m = chat_json(
                 "production_designer", sys_, repair_user, max_tokens=128000, timeout_s=360,
@@ -524,7 +555,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             )
             log("model_call", "production design repair", m)
             out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
-            reconcile_explicit_no_transition(out, log)
+            reconcile_single_scene_transitions(out, log)
             errs = validate_plan(out, story, catalog)
             berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
@@ -597,38 +628,44 @@ def _beat_requires_travel(beat: dict) -> bool:
     return beat.get("hold") is False and beat.get("hold") is not None
 
 
-def reconcile_explicit_no_transition(plan: dict, log) -> None:
-    """Normalize a very narrow contradiction before the Engineer sees it.
+def reconcile_single_scene_transitions(plan: dict, log) -> None:
+    """Resolve an impossible outgoing transition from the ACTUAL scene topology.
 
-    A single-scene composition has no adjacent scene. If the Designer explicitly
-    says there is *no* scene transition, that statement wins over a stray
-    'transition' required-effect label. Never discard a positive transition,
-    and never invent a neighbor.
+    transition_scene connects adjacent scenes. A one-scene film has no adjacent
+    scene, so transitionIntent is not executable even if it describes an opening
+    reveal, a future continuation, or a vague transition language. Preserve the
+    Designer's original words for diagnostics; do not manufacture a neighbor or
+    turn the instruction into an unsupported animation.
     """
-    scenes = [s for s in plan.get("scenes") or []
-              if s.get("kind") not in ("handoff", "hardcut")]
-    if len(plan.get("scenes") or []) != 1 or len(scenes) != 1:
+    scenes = plan.get("scenes") or []
+    if len(scenes) != 1:
         return
     bindings = (plan.get("blueprint") or {}).get("sceneBindings") or []
     for binding in bindings:
-        if not isinstance(binding, dict):
+        if not isinstance(binding, dict) or binding.get("sceneIndex") != scenes[0].get("index"):
             continue
-        intent = str(binding.get("transitionIntent") or "")
-        if not re.search(r"\\b(?:without|no|none|avoid|skip|omit)\\b[^.!?;]{0,75}\\b(?:scene\\s+)?transitions?\\b",
-                         intent, re.I):
+        original_intent = binding.get("transitionIntent")
+        original_required = list(binding.get("requiredEffects") or [])
+        if not original_intent and "transition" not in original_required:
             continue
-        required = list(binding.get("requiredEffects") or [])
-        if "transition" not in required:
-            # Even a negative note must not become a requested outgoing effect.
-            binding["transitionIntent"] = None
-            continue
-        binding["requiredEffects"] = [e for e in required if e != "transition"]
         binding["transitionIntent"] = None
+        binding["requiredEffects"] = [
+            effect for effect in original_required if effect != "transition"
+        ]
+        # Keep this explanation outside the executable scene-binding contract.
+        # The original text is diagnostic, not a request to the Engineer.
+        audit = {
+            "sceneIndex": binding.get("sceneIndex"),
+            "originalTransitionIntent": original_intent,
+            "originalRequiredEffects": original_required,
+            "reason": "single-scene production has no adjacent scene; "
+                      "intra-scene reveals must be expressed as drawable objects or animations",
+        }
+        plan.setdefault("transitionReconciliations", []).append(audit)
         log("design_transition_reconciled",
-            "single-scene explicit NO transition beats contradictory required-effect label",
-            {"sceneIndex": binding.get("sceneIndex"), "originalIntent": intent,
-             "removedEffect": "transition", "remainingEffects": binding["requiredEffects"],
-             "reason": "the approved direction says no scene transition and no next scene exists"})
+            "Dropped impossible inter-scene transition for terminal one-scene film",
+            audit)
+
 
 
 def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> list[str]:
@@ -696,7 +733,7 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
         if "transition" in approved and len(scenes) == 1:
             errs.append(f"scene {idx}: required inter-scene transition has no adjacent scene in this single-scene production")
         if "transition" in approved and re.search(
-            r"\\b(?:without|no|none|avoid|skip|omit)\\b[^.!?;]{0,75}\\b(?:scene\\s+)?transitions?\\b",
+            r"\b(?:without|no|none|avoid|skip|omit)\b[^.!?;]{0,75}\b(?:scene\s+)?transitions?\b",
             str(b.get("transitionIntent") or ""), re.I,
         ):
             errs.append(f"scene {idx}: required transition contradicts explicit no-transition intent")
