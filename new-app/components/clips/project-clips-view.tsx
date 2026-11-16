@@ -547,7 +547,9 @@ export function ProjectClipsView({
       ? 'Loading your saved clips…'
       : listError && clips.length === 0
         ? listError
-        : pageDescription(status, error, clips.length)
+        : autoGrokClipper && status === 'READY' && clips.length === 0
+          ? 'Your upload is ready. Transovo Agent is preparing your finished clips.'
+          : pageDescription(status, error, clips.length)
   const showResults =
     (status === 'READY' && (readyHydrated || clips.length > 0)) ||
     (status === 'FAILED' && clips.length > 0)
@@ -804,7 +806,13 @@ export function ProjectClipsView({
               ) : null
             }
           >
-            {clips.length === 0 && autoAgentClipMode ? (
+            {clips.length === 0 && autoGrokClipper ? (
+              <EmptyState
+                icon={Sparkles}
+                title="Your finished clips are on the way"
+                description="Transovo Agent will find, score, edit and deliver highlights from your uploaded footage. You can leave this page and return to check progress."
+              />
+            ) : clips.length === 0 && autoAgentClipMode ? (
               <EmptyState
                 icon={Clapperboard}
                 title={failureCopy?.title ?? 'No clips to show'}
