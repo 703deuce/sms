@@ -231,7 +231,11 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
     # Check every specifically designed element by stable id, not only the presence
     # of one generic tool of the same family. An approved image cluster cannot
     # silently become one unrelated photograph.
-    known = set(envs) | set(objects) | set(spec.get("typography") or {})
+    # Backdrop geometry is materially compiled to _EnvironmentShape Items.
+    # Composition may reference those geometry IDs as kind="environment";
+    # they are not separate objects and must not be double-created.
+    approved_world_ids = set(world_by_id)
+    known = set(envs) | set(objects) | set(spec.get("typography") or {}) | approved_world_ids
     for element in spec.get("compositionElements") or []:
         if not isinstance(element, dict):
             problems.append({"code": "INVALID_COMPOSITION_ELEMENT", "message": "composition element must be an object"})
@@ -250,6 +254,17 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
                 {p.get("fromObjectId"), p.get("toObjectId")} == {eid, linked})
                 for p in objects.values()):
             problems.append({"code": "MISSING_VISUAL_LINK", "message": f"planned elements {eid!r} and {linked!r} lack a connecting path"})
+        if eid in approved_world_ids:
+            # A world element is visible via _EnvironmentShape, but its ID is
+            # not a transformable objects[] Item. Geometry must stay exact.
+            # Fail explicitly when moving backdrop geometry is requested;
+            # never pretend an animation exists.
+            if element.get("motion"):
+                problems.append({"code": "WORLD_ELEMENT_MOTION_UNSUPPORTED",
+                                 "message": f"world element {eid!r} requests motion but is static "
+                                            "backdrop geometry. Build an addressable scene object "
+                                            "with a distinct ID and a matching visual first."})
+            continue
         if element.get("motion") and not any(a.get("targetId") == eid for a in (spec.get("animation") or {}).values()):
             problems.append({"code": "MISSING_ELEMENT_MOTION", "message": f"planned element {eid!r} has motion intent but no animation or camera choreography"})
     supported_props = {"position", "position.x", "position.y", "scale", "rotation", "opacity"}

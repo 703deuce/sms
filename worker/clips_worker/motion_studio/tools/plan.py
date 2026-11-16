@@ -68,21 +68,34 @@ def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list
                 problems.append({"code": "INVALID_WORLD_GEOMETRY",
                                  "message": "create_environment.backdrop.elements must be an array."})
                 continue
+            # The Production Designer owns these exact geometry definitions.
+            # Engineer-written copies may use a different shape vocabulary
+            # ("environment" vs "line"/"rrect") or omit metadata. Treat those
+            # as references to the approved world, not as new geometry.
+            # Preserve extra Engineer-created shapes; never silently accept
+            # altered Designer-owned shapes or lose their exact source values.
             claimed = {e.get("id"): e for e in existing if isinstance(e, dict) and e.get("id")}
-            conflicts = [eid for eid, element in world_by_id.items()
-                         if eid in claimed and claimed[eid] != element]
-            if conflicts:
-                problems.append({"code": "WORLD_GEOMETRY_CHANGED",
-                                 "message": "Engineer altered Designer-approved world shapes: " +
-                                            ", ".join(conflicts) + "; use exact approvedWorldElements."})
-                continue
-            missing = [e for eid, e in world_by_id.items() if eid not in claimed]
-            if missing:
-                backdrop["elements"] = existing + missing
+            overrides = []
+            for eid, element in world_by_id.items():
+                if eid in claimed and claimed[eid] != element:
+                    keys = sorted(k for k in set(claimed[eid]) | set(element)
+                                  if claimed[eid].get(k) != element.get(k))
+                    overrides.append({"id": eid, "differingFields": keys,
+                                      "engineerKind": claimed[eid].get("kind"),
+                                      "approvedKind": element.get("kind")})
+            missing = [eid for eid in world_by_id if eid not in claimed]
+            if overrides or missing:
+                # Rebuild in the Designer's order. Only the Designer's full
+                # approved dict is used for these IDs. Others are untouched.
+                extra = [e for e in existing if not isinstance(e, dict)
+                         or e.get("id") not in world_by_id]
+                backdrop["elements"] = list(world_by_id.values()) + extra
                 args["backdrop"] = backdrop
-                changes.append({"kind": "restore_approved_world", "tool": tool,
-                                "ids": [e["id"] for e in missing],
-                                "reason": "Designer-owned geometry is required input, not a new creative choice"})
+                changes.append({"kind": "bind_approved_world", "tool": tool,
+                                "source": "production_designer.environmentElements",
+                                "restoredIds": missing, "overridden": overrides,
+                                "reason": "Approved world is immutable source of truth; "
+                                          "Engineer copies are not authoritative"})
         if tool == "animate_property":
             for start, dest in (("startS", "startFrame"), ("endS", "endFrame")):
                 if start not in args:
