@@ -11027,12 +11027,25 @@ model MotionStudioSandboxExec {
 
 
 /// Autonomous production assignments dispatched from the Motion Studio UI.
+model MotionStudioAgentMessage {
+  id        String   @id
+  projectId String
+  jobId     String?
+  role      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
 model MotionStudioAgentJob {
   id               String   @id
   projectId        String
   workspaceId      String
   userId           String
   idempotencyKey   String
+  parentJobId      String?
+  revision         Int      @default(0)
   tokenHash        String
   tokenExpiresAt   DateTime
   status           String   @default("dispatching")
