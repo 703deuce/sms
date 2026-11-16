@@ -219,6 +219,8 @@ export default async function ClipProjectPage({
         autoAgentClipMode={projectSettings.autoAgentClipMode}
         autoAgentClipError={typeof (project.settings as Record<string,unknown> | null)?.autoAgentClipError==='string' ? String((project.settings as Record<string,unknown>).autoAgentClipError) : undefined}
         autoAgentClipSeconds={projectSettings.autoAgentClipSeconds}
+        autoGrokClipper={projectSettings.autoGrokClipper === true}
+        autoGrokMaxClips={projectSettings.autoGrokMaxClips ?? 3}
       />
     </Page>
   )
