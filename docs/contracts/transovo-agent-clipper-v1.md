@@ -76,8 +76,8 @@ To retain fully editable layers, also upload project.json using the existing tra
 
 ## Product flow
 
-- Upload a video, optionally check "Transovo Agent — fully finished clips" and choose maximum clips.
-- Standard source processing reaches READY, then the project page sends an idempotent automatic discovery request (when that page is open).
+- Upload a video, optionally check "Transovo Agent — fully finished clips" and choose maximum clips. This mode does not also invoke the legacy clip-scoring worker.
+- For new opted-in video uploads, the project becomes source-ready immediately and skips the legacy clipper worker. When the project page opens, it sends a stable-idempotency discovery request.
 - Or click "Create finished clips" on a ready source project to make an autonomous Grok run.
 - Or select existing ranked clips and click "Finish top/selected clips" to enhance them without rerunning moment detection.
 - Progress is polled; delivered MP4s appear with scored result cards and downloadable video.
