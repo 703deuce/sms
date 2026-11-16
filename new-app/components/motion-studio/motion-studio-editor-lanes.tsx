@@ -49,7 +49,7 @@ export function MotionStudioEditorLanes({
       })
     // Passive reads only: never start an import while React mounts the editor.
     // Poll briefly so separated lanes appear if the async manifest import finishes later.
-    let tracksPoll: ReturnType<typeof setInterval> | null = null
+    let tracksPoll: number | null = null
     if (client.mode === 'live') {
       const loadTracks = async () => {
         try {
