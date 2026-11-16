@@ -244,9 +244,17 @@ class _EnvironmentShape(Item):
                     path.lineTo(float(pt[0]), float(pt[1]))
                 drawn = True
             if drawn:
+                if (kind == "path" and not s.get("strokeOnly")
+                        and s.get("fillMode") != "stroke"
+                        and ((pts and len(pts) >= 4 and pts[0] == pts[-1])
+                             or s.get("closed") is True)):
+                    fill_p = paint(rgb, float(s.get("opacity") if s.get("opacity") is not None else 1))
+                    c.drawPath(path, fill_p)
                 c.drawPath(path, p)
             elif kind == "line":
-                c.drawLine(0, 0, w, h, p)
+                # A positioned line with dimensions but no authored endpoints
+                # is centered at position, like every other primitive.
+                c.drawLine(-w/2, -h/2, w/2, h/2, p)
         c.restore()
 '''
 
