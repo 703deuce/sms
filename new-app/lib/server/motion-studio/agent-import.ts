@@ -18,7 +18,7 @@ const obj = (v: unknown): Raw => v && typeof v === 'object' && !Array.isArray(v)
 const txt = (v: unknown) => typeof v === 'string' ? v.trim() : ''
 const idFor = (s: string) => 'msau_' + createHash('sha256').update(s).digest('hex').slice(0, 28)
 const safe = (v: unknown, prefix = 'ms') => (prefix + '_' + txt(v)).replace(/[^A-Za-z0-9_-]/g,'_').slice(0,80)
-const millis = (v: unknown) => Number.isSafeInteger(v) && Number(v) >= 0 ? Number(v) : NaN
+const millis = (v: unknown) => Number.isSafeInteger(Number(v)) && Number(v) >= 0 ? Number(v) : NaN
 const gain = (db: number) => Math.max(0, Math.min(2, Math.pow(10, db / 20)))
 
 /** Validate the exact transovo.motion-project/1 time domain before touching editor data. */
@@ -126,6 +126,18 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     if (/(footage|insert|b.roll|\bv2\b)/.test(k)) return 'footage'
     return 'video'
   }
+  const friendlyLane = (id: string): string => {
+    const k = lane(id)
+    const t = manifest.tracks.find(v=>v.id===id)
+    const name = (t?.label || '').toLowerCase()
+    if (k === 'video') return 'Scenes'
+    if (k === 'footage') return 'Footage'
+    if (k === 'text') return 'Titles and graphics'
+    if (/narration|voice/.test(name)) return 'Narration'
+    if (/music/.test(name)) return 'Music'
+    if (/dialog|footage sound|natural/.test(name)) return 'Footage audio'
+    return 'Sound effects'
+  }
   let trackIndex = 2
   for (const t of manifest.tracks) {
     const kind = lane(t.id)
@@ -153,19 +165,43 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
         members.push(file.id)
       }
     }
-    extTracks.push({ id:t.id,kind:t.kind,label:t.label,items:manifest.elements.filter(x=>x.trackId===t.id).map(e=>({
+    extTracks.push({ id:t.id,kind:t.kind,label:friendlyLane(t.id),items:manifest.elements.filter(x=>x.trackId===t.id).map(e=>({
       id:e.id, startMs:e.startMs,endMs:e.endMs,sourceInMs:e.sourceInMs,
       editable:e.editable, itemId:mapped.get(e.id) || null,
       engine:e.engine ?? null, codeRef:e.codeRef ?? null
     })) })
     const renderKind = kind==='footage' ? 'overlay' : kind==='text' ? 'text' : kind==='audio' ? 'audio' : null
     if (renderKind && members.length && trackIndex < 48) {
-      tracks.push({ id: 'ms' + trackIndex++, kind:renderKind, name:t.label.slice(0,40), items:members })
+      tracks.push({ id: 'ms' + trackIndex++, kind:renderKind, name:friendlyLane(t.id), items:members })
     }
   }
   const textItems = manifest.elements.filter(e=>lane(e.trackId)==='text' && e.text && !resolveArtifact(e,all) && e.endMs-e.startMs>=300)
     .slice(0,60).map(e=>({ id:safe(e.id,'ms'),text:e.text.slice(0,200),startMs:e.startMs,endMs:e.endMs,
       x:50,y:83,style:{font:'Montserrat' as const,size:80,color:'#FFFFFF',align:'center' as const,case:'none' as const} }))
+  // Import a sidecar SRT when supplied; caption edits use the editor's native
+  // caption lane and can be retimed or rewritten independently of the footage.
+  const captionArtifact = all.find(a => a.state === 'ready' &&
+    (a.mime === 'application/x-subrip' || /\\.srt$/i.test(a.filename)) && a.bytes <= 2_000_000)
+  let captionLines: {id:string;text:string;startMs:number;endMs:number}[] = []
+  if (captionArtifact) try {
+    const content = (await getClipStorage().getObjectBytes(captionArtifact.key)).toString('utf8')
+    const time = (v: string) => {
+      const m = /^(\\d{2}):(\\d{2}):(\\d{2})[,\\.](\\d{3})$/.exec(v.trim())
+      return m ? ((Number(m[1])*3600+Number(m[2])*60+Number(m[3]))*1000+Number(m[4])) : NaN
+    }
+    for (const block of content.replace(/\\r/g,'').split(/\\n\\s*\\n/)) {
+      const lines=block.trim().split('\\n')
+      const arrow=lines.findIndex(line=>line.includes('-->'))
+      if (arrow<0) continue
+      const [a,b]=lines[arrow]!.split('-->').map(time)
+      const text=lines.slice(arrow+1).join('\\n').trim()
+      if (!Number.isFinite(a)||!Number.isFinite(b)||b<=a||!text||a>=args.durationMs) continue
+      captionLines.push({id:'mscap_'+captionLines.length,text:text.slice(0,200),
+        startMs:a,endMs:Math.min(b,args.durationMs)})
+      if (captionLines.length>=2000) break
+    }
+  } catch { /* Missing sidecars never block production import. */ }
+
   const motionStudio: ClipMotionStudioExt = { v:1,projectId:args.motionProjectId,timelineVersion:1,
     durationMs:args.durationMs,fps:30,tracks:extTracks,segments:manifest.elements.filter(e=>lane(e.trackId)==='video').map(e=>({
       id:e.id,startMs:e.startMs,endMs:e.endMs,elementId:e.id
@@ -186,5 +222,6 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     broll:[...(args.base.broll??[]),...broll], textItems:[...(args.base.textItems??[]),...textItems],
     tracks:[...(args.base.tracks??[]),...tracks],
     markers:[...(args.base.markers??[]).filter(m=>!String(m.id).startsWith('ms_ch_')),...manifest.chapters],
+    ...(captionLines.length ? {captionLines, captions:{...args.base.captions,enabled:true}} : {}),
     motionStudio }
 }
