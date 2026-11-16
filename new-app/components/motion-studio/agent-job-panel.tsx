@@ -13,6 +13,8 @@ export type MotionAgentJob = {
   progress: number
   message: string | null
   videoUrl?: string | null
+  parentJobId?: string | null
+  revision?: number
   artifacts?: { id: string; filename: string; kind: string; bytes: number }[]
   stages?: string[]
   events?: { id: number; stage: string; message: string; timestamp: string; percent?: number; sceneId?: string }[]
@@ -68,17 +70,18 @@ export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOp
           {!job.events?.length ? <li className="text-sm text-muted-foreground">We're getting everything ready…</li> : null}
         </ol>
       </div>
-      {complete && job.videoUrl ? (
+      {(complete || Boolean(job.parentJobId)) && job.videoUrl ? (
         <div className="rounded-xl border border-border bg-card p-4">
-          <video src={job.videoUrl} controls preload="metadata" className="aspect-video w-full rounded-lg bg-black" aria-label="Finished documentary" />
+          {job.parentJobId && !complete ? <p className="mb-3 text-sm text-muted-foreground">Your previous version is available while we're making these changes.</p> : null}
+          <video src={job.videoUrl} controls preload="metadata" className="aspect-video w-full rounded-lg bg-black" aria-label="Current video preview" />
           <div className="mt-4 flex flex-wrap gap-2">
             <a href={job.videoUrl} download rel="noopener noreferrer" className={buttonVariants({ variant: 'default' })}><Download className="mr-2 size-4" /> Download video</a>
-            {onOpenEditor ? <Button variant="outline" onClick={onOpenEditor}>Open in Editor</Button> : null}
+            {onOpenEditor || job.parentJobId ? <Button variant="outline" onClick={onOpenEditor ?? (()=>window.location.reload())} disabled={!onOpenEditor}>Open in Editor</Button> : null}
           </div>
         </div>
       ) : null}
       {complete && !job.videoUrl ? <p className="text-sm text-muted-foreground">The video is complete. Its playback link is being prepared.</p> : null}
-      {complete ? <AgentChatPanel projectId={job.projectId} /> : null}
+      {complete || job.parentJobId ? <AgentChatPanel projectId={job.projectId} /> : null}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Clapperboard className="size-4" aria-hidden />
         <Link href="/app/motion-studio" className="text-primary hover:underline">All Motion Studio projects</Link>
