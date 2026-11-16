@@ -148,10 +148,14 @@ export async function createClipProject(
       rangeEndMs: upload.durationMs || 0,
     }
   }
-  if (settings.autoAgentClipMode && !settings.byo && !settings.fullVideo) {
+  if (settings.autoAgentClipMode && !settings.autoGrokClipper && !settings.byo && !settings.fullVideo) {
     const { aiProducerAgentServerEnabled } = await import('@/lib/ai-producer-agent/flags')
     if (!aiProducerAgentServerEnabled()) throw new Error('ai_producer_agent_disabled')
   }
+  if (settings.autoGrokClipper && !settings.byo && !settings.fullVideo && !upload.mime.startsWith('video/')) {
+    throw new Error('Transovo Agent clipper requires a video upload')
+  }
+  const grokOnly = settings.autoGrokClipper === true && !settings.byo && !settings.fullVideo
   const rangeEnd = settings.byo
     ? settings.rangeEndMs
     : settings.rangeEndMs || upload.durationMs || 0
@@ -166,22 +170,26 @@ export async function createClipProject(
       settings: JSON.parse(JSON.stringify(settings)),
       rangeStartMs: settings.rangeStartMs,
       rangeEndMs: rangeEnd,
-      status: 'QUEUED',
-      stage: 'queued',
-      progress: 0,
-      transcriptKey: projectWordsKey(workspaceId, projectId),
+      status: grokOnly ? 'READY' : 'QUEUED',
+      stage: grokOnly ? 'agent_ready' : 'queued',
+      progress: grokOnly ? 100 : 0,
+      transcriptKey: grokOnly ? null : projectWordsKey(workspaceId, projectId),
     },
   })
-  const jobId = createId('job')
-  await prisma.clipJob.create({
-    data: {
-      id: jobId,
-      projectId: project.id,
-      type: 'PROCESS_PROJECT',
-      status: 'QUEUED',
-      payload: buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
-    },
-  })
+  if (!grokOnly) {
+    const jobId = createId('job')
+    await prisma.clipJob.create({
+      data: {
+        id: jobId,
+        projectId: project.id,
+        type: 'PROCESS_PROJECT',
+        status: 'QUEUED',
+        payload: buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
+      },
+    })
+  }
+  // Grok-only uploads already have a complete source file and do not need
+  // an old clipper pass. The project UI dispatches the autonomous director.
   return project
 }
 
