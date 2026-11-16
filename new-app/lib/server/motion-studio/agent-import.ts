@@ -215,12 +215,18 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     return asset && media.has(asset.id)
   })
   const replaceAudio = haveAllStems && sfx.length === audioElements.length
+  // On a new production revision, replace only the previously imported items.
+  // Preserve manual editor items, while stable element IDs map to new artifacts.
+  const manualSources = (args.base.sources??[]).filter(x=>!x.id.startsWith('msau_'))
+  const manualBroll = (args.base.broll??[]).filter(x=>!x.id.startsWith('ms_'))
+  const manualText = (args.base.textItems??[]).filter(x=>!x.id.startsWith('ms_'))
+  const manualTracks = (args.base.tracks??[]).filter(x=>!/^ms[0-9]+$/.test(x.id))
   return { ...args.base,
     ...(replaceAudio ? { audioMuteRanges: [[0,args.durationMs] as [number,number]],
       audio: { ...args.base.audio, music:null, sfx } } : {}),
-    sources:[...(args.base.sources??[]),...sources], sourceSegments,
-    broll:[...(args.base.broll??[]),...broll], textItems:[...(args.base.textItems??[]),...textItems],
-    tracks:[...(args.base.tracks??[]),...tracks],
+    sources:[...manualSources,...sources], sourceSegments,
+    broll:[...manualBroll,...broll], textItems:[...manualText,...textItems],
+    tracks:[...manualTracks,...tracks],
     markers:[...(args.base.markers??[]).filter(m=>!String(m.id).startsWith('ms_ch_')),...manifest.chapters],
     ...(captionLines.length ? {captionLines, captions:{...args.base.captions,enabled:true}} : {}),
     motionStudio }
