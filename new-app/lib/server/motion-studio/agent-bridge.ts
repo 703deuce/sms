@@ -280,7 +280,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   const now = new Date()
   const completed = await db().$transaction(async tx => {
     const result = await tx.motionStudioAgentJob.update({ where: { id }, data: { status: 'complete',
-      phase: 'complete', progress: 100, message: DEFAULT_STAGE_MESSAGES.complete, resultKey: video.key, completedAt: now } })
+      phase: 'complete', progress: 100, message: DEFAULT_STAGE_MESSAGES.complete, resultKey: video.key, durationMs, completedAt: now } })
     const motionProject = await tx.motionStudioProject.findUnique({ where: { id: job.projectId },
       select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
@@ -322,16 +322,16 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
 
 /** Workspace-scoped persisted customer conversation, independent of production-run retries. */
 export async function agentThread(workspaceId: string, projectId: string) {
-  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } })
+  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true, exportInfo: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const [messages, jobs] = await Promise.all([
     db().motionStudioAgentMessage.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' }, take: 250 }),
     db().motionStudioAgentJob.findMany({ where: { workspaceId, projectId, status: 'complete' },
-      select: { id: true, revision: true, createdAt: true }, orderBy: { revision: 'asc' } }),
+      select: { id: true, revision: true, durationMs: true, createdAt: true }, orderBy: { revision: 'asc' } }),
   ])
-  return { threadId: projectId, messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
+  return { threadId: projectId, activeJobId: str(toObject(project.exportInfo).agentJobId, 100), messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
     timestamp:m.createdAt.toISOString(),jobId:m.jobId })),
-    versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,createdAt:j.createdAt.toISOString() })) }
+    versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,durationMs:j.durationMs,createdAt:j.createdAt.toISOString() })) }
 }
 
 export async function submitAgentRevision(workspaceId: string, userId: string, projectId: string, request: Request, raw: unknown) {
@@ -401,4 +401,35 @@ export async function cancelAgentJob(workspaceId: string, projectId: string, id:
     } catch { /* The persisted cancellation status is authoritative. */ }
   }
   return publicJob(updated)
+}
+
+
+/** Restore a completed version without deleting later versions or their scene assets. */
+export async function restoreAgentVersion(workspaceId: string, projectId: string, jobId: string) {
+  const dbi = db()
+  const project = await dbi.motionStudioProject.findFirst({ where: { id: projectId, workspaceId },
+    select: { clipProjectId:true,exportInfo:true } })
+  if (!project?.clipProjectId) throw new MotionStudioError('NOT_FOUND','Project not found.',404)
+  const job = await dbi.motionStudioAgentJob.findFirst({ where: {
+    id: jobId, projectId, workspaceId, status:'complete' } })
+  if (!job?.resultKey) throw new MotionStudioError('NOT_FOUND','That version is unavailable.',404)
+  const asset = artifacts(job.artifacts).find(a => a.state === 'ready' && a.key === job.resultKey)
+  if (!asset) throw new MotionStudioError('CONFLICT','That version has no completed MP4.',409)
+  const durationMs = job.durationMs || Number(toObject(project.exportInfo).durationMs) || 0
+  if (!Number.isSafeInteger(durationMs) || durationMs <= 0) throw new MotionStudioError('CONFLICT','Version duration is unavailable.',409)
+  const source = await dbi.clipProject.findFirst({ where: { id:project.clipProjectId,workspaceId },
+    select:{uploadId:true} })
+  await dbi.$transaction(async tx => {
+    await tx.motionStudioProject.update({ where:{id:projectId},data:{
+      status:'review',stage:'review',timelineVersion:{increment:1},exportInfo:toPrismaJson({
+        masterKey:job.resultKey,smallKey:job.resultKey,durationMs,source:'transovo_agent',
+        agentJobId:jobId,storageDriver:storageDriverName()
+      }) } })
+    if (source?.uploadId) await tx.clipUpload.update({ where: { id:source.uploadId }, data:{
+      key:job.resultKey,bytes:BigInt(asset.bytes),filename:asset.filename,mime:'video/mp4',
+      durationMs,status:'READY',storageDriver:storageDriverName() } })
+    await tx.clipProject.update({ where:{id:project.clipProjectId!},data:{
+      status:'READY',rangeEndMs:durationMs,proxyKey:job.resultKey,progress:100 } })
+  })
+  return { activeJobId:jobId,revision:job.revision }
 }
