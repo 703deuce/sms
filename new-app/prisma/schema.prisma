@@ -11064,3 +11064,35 @@ model MotionStudioAgentJob {
   @@unique([projectId, idempotencyKey])
   @@index([workspaceId, projectId, createdAt])
 }
+
+
+/**
+ * Autonomous finishing of already-discovered clipper moments.
+ * This is deliberately separate from Motion Studio's from-scratch film jobs.
+ * Raw clip edits remain untouched; completed masters are attached as previews.
+ */
+model ClipAgentFinishJob {
+  id             String    @id
+  workspaceId    String
+  projectId      String
+  clipId         String
+  idempotencyKey String
+  tokenHash      String
+  tokenExpiresAt DateTime
+  status         String    @default("dispatching")
+  phase          String    @default("dispatch")
+  progress       Int       @default(0)
+  message        String?
+  artifacts      Json      @default("[]")
+  resultKey      String?
+  durationMs     Int?
+  error          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  @@unique([clipId, idempotencyKey])
+  @@index([workspaceId, projectId, createdAt])
+  @@index([clipId, createdAt])
+  @@map("clip_agent_finish_jobs")
+}
