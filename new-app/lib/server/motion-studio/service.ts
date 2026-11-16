@@ -1189,6 +1189,16 @@ export async function openInEditor(workspaceId: string, id: string): Promise<MsE
   return { clipProjectId: r.clipProjectId, clipId: r.clipId }
 }
 
+/** Read the saved editor timeline without starting any manifest downloads or writes. */
+export async function getTimelineSnapshot(workspaceId: string, id: string) {
+  const row = await required(workspaceId, id)
+  if (!row.clipProjectId || !row.clipId) throw new MotionStudioError('CONFLICT', 'Editor not prepared.', 409)
+  const clip = await db().clip.findFirst({ where: { id: row.clipId, projectId: row.clipProjectId, workspaceId, deletedAt: null },
+    select: { edits: true } })
+  return { clipProjectId: row.clipProjectId, clipId: row.clipId,
+    edits: clip?.edits ?? null }
+}
+
 export async function getTimeline(workspaceId: string, id: string) {
   const r = await ensureEditorClip(workspaceId, id)
   return { ...r, compactEditorUrl: `/app/video-editor/${r.clipProjectId}/edit/${r.clipId}?motionStudio=${encodeURIComponent(id)}` }
