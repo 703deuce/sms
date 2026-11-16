@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Clapperboard, Loader2, CheckCircle2, AlertTriangle, Download } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
 
 export type MotionAgentJob = {
   id: string
@@ -46,7 +46,7 @@ export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOp
         <div className="rounded-xl border border-border bg-card p-4">
           <video src={job.videoUrl} controls preload="metadata" className="aspect-video w-full rounded-lg bg-black" aria-label="Finished documentary" />
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button asChild><a href={job.videoUrl} download rel="noopener noreferrer"><Download className="mr-2 size-4" /> Download video</a></Button>
+            <a href={job.videoUrl} download rel="noopener noreferrer" className={buttonVariants({ variant: 'default' })}><Download className="mr-2 size-4" /> Download video</a>
             {onOpenEditor ? <Button variant="outline" onClick={onOpenEditor}>Open in Editor</Button> : null}
           </div>
         </div>
