@@ -43,8 +43,8 @@ function publicJob(job: PublicJob) {
       .map(a => ({ id: a.id, kind: a.kind, filename: a.filename, bytes: a.bytes })) }
 }
 
-export async function userAgentJob(workspaceId: string, projectId: string) {
-  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId }, select: { id: true } })
+export async function userAgentJob(workspaceId: string, projectId: string, userId: string) {
+  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId, userId }, select: { id: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const job = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
   if (!job) return null
