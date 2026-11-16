@@ -10,9 +10,16 @@ const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'obj
 const str = (x: unknown, max = 4000): string => typeof x === 'string' ? x.trim().slice(0, max) : ''
 const sha = (x: string): Buffer => createHash('sha256').update(x).digest()
 const MAX_FILE = 2_000_000_000
-type Artifact = { id: string; key: string; kind: string; filename: string; mime: string; bytes: number; state: 'pending' | 'ready'; s3UploadId?: string }
+type Artifact = { id: string; key: string; kind: string; filename: string; mime: string; bytes: number; state: 'pending' | 'ready'; s3UploadId?: string; elementId?: string; trackId?: string }
 const artifacts = (raw: unknown): Artifact[] => Array.isArray(raw) ? raw as Artifact[] : []
-const isDone = (status: string) => ['complete', 'failed', 'dispatch_failed'].includes(status)
+const isDone = (status: string) => ['complete', 'failed', 'dispatch_failed', 'cancelled'].includes(status)
+const CUSTOMER_STAGES = ['research','story','voice','scenes','review','fixing','rendering','delivering','complete'] as const
+const DEFAULT_STAGE_MESSAGES: Record<string, string> = { research: "We're finding the best photos and clips…", story: "We're writing your story…", voice: "We're recording narration…", scenes: "We're building your scenes…", review: "We're reviewing the cut…", fixing: "We're polishing a few details…", rendering: "We're rendering your final video…", delivering: "We're adding the video to your timeline…", complete: "Done! Your film is ready to edit." }
+function friendlyMessage(raw: unknown, stage: string): string {
+  const message = str(raw, 240)
+  if (!message || /grok|bot\b|model|engine|\/workspace|\/tmp\/|https?:\/\/|token|stack trace|api[_ -]?key|\$\d|usd|ffmpeg|python|exception|traceback/i.test(message)) return DEFAULT_STAGE_MESSAGES[stage] || "We're working on your video…"
+  return message
+}
 
 function baseUrl(request: Request): string {
   const value = process.env.MOTION_STUDIO_AGENT_PUBLIC_URL || new URL(request.url).origin
@@ -50,7 +57,9 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   if (!job) return null
   const videoUrl = job.status === 'complete' && job.resultKey
     ? await createReadableSignedUrl(job.resultKey, 3600).catch(() => null) : null
-  return { ...publicJob(job), videoUrl }
+  const events = await db().studioActivityEvent.findMany({ where: { projectId, kind: 'agent_progress' }, orderBy: { id: 'asc' }, take: 500 })
+  return { ...publicJob(job), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
+    stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
 
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request) {
@@ -157,14 +166,16 @@ export async function botProgress(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id, request)
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
   const input = toObject(raw)
-  const proposed = Number(input.progress)
+  const requestedStage = str(input.stage || input.phase, 60)
+  const phase = (CUSTOMER_STAGES as readonly string[]).includes(requestedStage) ? requestedStage : 'scenes'
+  const proposed = Number(input.percent ?? input.progress)
   const progress = Number.isFinite(proposed) ? Math.max(job.progress, Math.min(99, Math.round(proposed))) : job.progress
-  const phase = str(input.phase, 60) || 'production'
-  const message = str(input.message, 500)
+  const message = friendlyMessage(input.message, phase)
+  const sceneId = str(input.sceneId, 80)
   const updated = await db().motionStudioAgentJob.update({ where: { id },
     data: { status: 'running', phase, progress, message } })
-  await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'graphics',
-    kind: 'stage', message: message || phase } })
+  await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: phase,
+    kind: 'agent_progress', message, data: toPrismaJson({ jobId: id, percent: progress, ...(sceneId ? {sceneId} : {}) }) } })
   return publicJob(updated)
 }
 
@@ -177,9 +188,10 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
   if (action === 'prepare') {
     const filename = str(input.filename, 150).replace(/[^a-zA-Z0-9._-]/g, '_')
     const kind = str(input.kind, 30), mime = str(input.mime, 80), bytes = Number(input.bytes)
+    const elementId = str(input.elementId, 100), trackId = str(input.trackId, 100)
     if (!filename || !['video', 'project', 'media', 'audio', 'source'].includes(kind)
-      || !['video/mp4', 'application/json', 'image/png', 'image/jpeg', 'audio/mpeg', 'audio/wav', 'application/zip'].includes(mime)
-      || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE || all.length >= 100) {
+      || !['video/mp4', 'video/webm', 'video/quicktime', 'application/json', 'image/png', 'image/jpeg', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'text/plain', 'application/x-subrip', 'application/zip'].includes(mime)
+      || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE || all.length >= 300) {
       throw new MotionStudioError('INVALID', 'Invalid artifact details.', 400)
     }
     const uploadId = randomUUID()
@@ -187,7 +199,8 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const upload = await getClipStorage().createUpload({ workspaceId: job.workspaceId, uploadId,
       filename, mime, bytes, objectKey })
     const item: Artifact = { id: uploadId, key: objectKey, kind, filename, mime, bytes, state: 'pending',
-      ...(upload.s3Multipart ? { s3UploadId: upload.s3Multipart.uploadId } : {}) }
+      ...(upload.s3Multipart ? { s3UploadId: upload.s3Multipart.uploadId } : {}),
+      ...(elementId ? { elementId } : {}), ...(trackId ? { trackId } : {}) }
     await db().motionStudioAgentJob.update({ where: { id },
       data: { artifacts: toPrismaJson([...all, item]) } })
     return { uploadId, objectKey, mode: upload.mode, signedPut: upload.signedPut,
@@ -234,12 +247,12 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   const now = new Date()
   const completed = await db().$transaction(async tx => {
     const result = await tx.motionStudioAgentJob.update({ where: { id }, data: { status: 'complete',
-      phase: 'complete', progress: 100, message: 'Video ready.', resultKey: video.key, completedAt: now } })
+      phase: 'complete', progress: 100, message: DEFAULT_STAGE_MESSAGES.complete, resultKey: video.key, completedAt: now } })
     const motionProject = await tx.motionStudioProject.findUnique({ where: { id: job.projectId },
       select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
       stage: 'review', completedAt: now, exportInfo: toPrismaJson({
-        masterKey: video.key, smallKey: video.key, durationMs, source: 'grokbot_agent',
+        masterKey: video.key, smallKey: video.key, durationMs, source: 'transovo_agent',
         storageDriver: storageDriverName(),
       }) } })
     // The initial Motion Studio project creates an empty editor canvas. Attach
@@ -260,8 +273,10 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
       } })
     }
     await tx.studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'review',
-      kind: 'stage', message: 'Grokbot video received and ready for preview.' } })
+      kind: 'stage', message: DEFAULT_STAGE_MESSAGES.complete } })
     return result
   })
+  await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'complete', kind: 'agent_progress', message: DEFAULT_STAGE_MESSAGES.complete,
+    data: toPrismaJson({ jobId: id, percent: 100 }) } })
   return publicJob(completed)
 }
