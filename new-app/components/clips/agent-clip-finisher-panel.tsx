@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Sparkles, Loader2, CheckCircle2, AlertTriangle, Download } from 'lucide-react'
@@ -23,6 +23,7 @@ export function AgentClipFinisherPanel({projectId,clips,selectedClipIds,onFinish
   const [running,setRunning]=useState(false)
   const [error,setError]=useState<string|null>(null)
   const [limit,setLimit]=useState(3)
+  const seenCompleted = useRef(new Set<string>())
   const picks=useMemo(()=>{
     const sorted=[...clips].sort((a,b)=>b.score-a.score)
     const chosen=selectedClipIds.size?sorted.filter(c=>selectedClipIds.has(c.id)):sorted
@@ -33,7 +34,13 @@ export function AgentClipFinisherPanel({projectId,clips,selectedClipIds,onFinish
     if(!response.ok) return
     const data=await response.json() as {jobs:Job[]}
     setJobs(data.jobs||[])
-  },[projectId])
+    for (const job of data.jobs||[]) {
+      if (job.status==='complete' && !seenCompleted.current.has(job.id)) {
+        seenCompleted.current.add(job.id)
+        onFinished?.()
+      }
+    }
+  },[projectId,onFinished])
   useEffect(()=>{
     let live=true
     const refresh=()=>{if(live) void load().catch(()=>{})}
