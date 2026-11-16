@@ -9,6 +9,7 @@ import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
 import type { Marker } from '@/lib/clips/editor/markers'
 import { buildMotionStudioEditorEdits, MS_MUSIC_ID_PREFIX, type MsEditorStems } from '@/lib/motion-studio/editor-timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
+import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import type {
@@ -468,7 +469,7 @@ function feStatus(c: Ctx): MsProjectStatus {
   if (row.status === 'setup') return 'setup'
   if (row.status === 'awaiting_approval') return 'awaiting_review'
   if (row.status === 'preflight_ok') return 'preflight_ok'
-  if (row.status === 'review') return s.exportRequested && row.exportInfo ? 'complete' : 'review'
+  if (row.status === 'review') return (s.exportRequested || J(row.exportInfo).source === 'transovo_agent') && row.exportInfo ? 'complete' : 'review'
   if (!row.plan || row.stage === 'story' || row.stage === 'direct') return 'planning'
   return s.exportRequested ? 'exporting' : 'producing'
 }
@@ -1119,13 +1120,22 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
   } catch (err) {
     console.warn('[motion-studio:editor] music_stem_unavailable', { projectId: id, message: err instanceof Error ? err.message : String(err) })
   }
-  const edits = buildMotionStudioEditorEdits({
+  let edits = buildMotionStudioEditorEdits({
     base: existing ? (existing.edits as unknown as ClipEditsV2) : null,
     durationMs,
     patch: { markers: patch.markers as Marker[] | undefined, motionStudio: patch.motionStudio as ClipMotionStudioExt | undefined },
     musicUploadId,
     lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
   })
+  if (ex.source === 'transovo_agent') {
+    const job = await db().motionStudioAgentJob.findFirst({ where: { projectId: id, workspaceId, status: 'complete' },
+      orderBy: { createdAt: 'desc' }, select: { id: true } })
+    if (job) {
+      const imported = await importAgentTimeline({ workspaceId, motionProjectId: id, clipProjectId: row.clipProjectId,
+        durationMs, base: edits, latestJobId: job.id })
+      if (imported) edits = imported
+    }
+  }
   const placedMusic = edits.audio?.music?.uploadId?.startsWith(MS_MUSIC_ID_PREFIX) ? edits.audio.music.uploadId : (meta.motionStudioMusicUploadId ?? null)
   const aiMeta = { ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion, motionStudioMusicUploadId: placedMusic }
   await db().clip.upsert({
