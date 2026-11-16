@@ -47,26 +47,36 @@ export function MotionStudioEditorLanes({
               : 'Could not load the Motion Studio lanes.',
         )
       })
+    // Passive reads only: never start an import while React mounts the editor.
+    // Poll briefly so separated lanes appear if the async manifest import finishes later.
+    let tracksPoll: ReturnType<typeof setInterval> | null = null
     if (client.mode === 'live') {
-      void fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline?passive=1',
-        {cache: 'no-store'}).then(r=>r.ok?r.json():null).then((response: {
-          edits?: { motionStudio?: { tracks?: {id:string;label:string;items:object[]}[];durationMs?:number } }
-        } | null) => {
-          if (!alive) return
-          const ext = response?.edits?.motionStudio
-          if (ext?.tracks?.length) {
-            setAgentTracks(ext.tracks.map(t=>({
-              id:t.id,label:t.label,items:(t.items ?? []).map(v=>{
-                const o=v as { id?:string;startMs?:number;endMs?:number }
-                return {id:String(o.id??''),startMs:Number(o.startMs)||0,endMs:Number(o.endMs)||0}
-              }).filter(x=>x.endMs>x.startMs)
-            })))
-            setAgentDurationMs(ext.durationMs || 0)
+      const loadTracks = async () => {
+        try {
+          const response = await fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline?passive=1',
+            { cache: 'no-store' })
+          if (!response.ok || !alive) return
+          const data = await response.json() as {
+            edits?: { motionStudio?: { tracks?: { id: string; label: string; items: object[] }[]; durationMs?: number } }
           }
-        }).catch(()=>{/* The legacy project lanes remain available. */})
+          const ext = data.edits?.motionStudio
+          if (!alive || !ext?.tracks?.length) return
+          setAgentTracks(ext.tracks.map(t => ({
+            id: t.id, label: t.label, items: (t.items ?? []).map(v => {
+              const o = v as { id?: string; startMs?: number; endMs?: number }
+              return { id: String(o.id ?? ''), startMs: Number(o.startMs) || 0, endMs: Number(o.endMs) || 0 }
+            }).filter(x => x.endMs > x.startMs)
+          })))
+          setAgentDurationMs(ext.durationMs || 0)
+          if (tracksPoll) window.clearInterval(tracksPoll)
+        } catch { /* The main editor stays usable without optional agent lanes. */ }
+      }
+      void loadTracks()
+      tracksPoll = window.setInterval(() => void loadTracks(), 5000)
     }
     return () => {
       alive = false
+      if (tracksPoll) window.clearInterval(tracksPoll)
     }
   }, [client, projectId])
 
