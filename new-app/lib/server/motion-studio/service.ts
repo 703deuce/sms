@@ -1135,7 +1135,10 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
     lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
   })
   if (ex.source === 'transovo_agent') {
-    const job = await db().motionStudioAgentJob.findFirst({ where: { projectId: id, workspaceId, status: 'complete' },
+    const selectedAgentJobId = typeof ex.agentJobId === 'string' ? ex.agentJobId : null
+    const job = await db().motionStudioAgentJob.findFirst({ where: {
+      projectId: id, workspaceId, status: 'complete',
+      ...(selectedAgentJobId ? { id: selectedAgentJobId } : {}) },
       orderBy: { createdAt: 'desc' }, select: { id: true } })
     if (job) {
       const imported = await importAgentTimeline({ workspaceId, motionProjectId: id, clipProjectId: row.clipProjectId,
