@@ -30,6 +30,7 @@ import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/projec
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
 import { AgentClipFinisherPanel } from '@/components/clips/agent-clip-finisher-panel'
+import { AgentClipDiscoveryPanel } from '@/components/clips/agent-clip-discovery-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { StreamerAgentClipMaker } from '@/components/streamer/streamer-agent-clip-maker'
@@ -725,6 +726,9 @@ export function ProjectClipsView({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {status === 'READY' && projectHasUpload && !byoProject ? (
+            <AgentClipDiscoveryPanel projectId={projectId} onFinished={refreshClipsList} />
+          ) : null}
           {isStreamer ? <MontageProgress projectId={projectId} pollKey={montagePollKey} /> : null}
           {!isStreamer && clips.length > 0 ? <ProjectPeopleStrip clips={clips} /> : null}
           <Panel
