@@ -181,16 +181,30 @@ class _EnvironmentShape(Item):
                 else:
                     paired = s.get("segmentMode") == "pairs"
                     if not paired and len(pts) >= 4 and len(pts) % 2 == 0:
-                        origins = [tuple(pts[i]) for i in range(0, len(pts), 2)]
-                        shared_origin = len(set(origins)) == 1
-                        parallel_rows = (
-                            all(abs(float(pts[i][1]) - float(pts[i+1][1])) < 0.001
-                                for i in range(0, len(pts), 2))
-                            and len(set(float(pts[i][1]) for i in range(0, len(pts), 2))) > 1
-                        )
-                        paired = shared_origin or parallel_rows
+                        # The sandbox checker currently does not resolve
+                        # comprehension-local variables. Use explicit loops
+                        # here, inside the trusted generated runtime.
+                        first_starts = tuple(pts[0])
+                        first_ends = tuple(pts[1])
+                        same_starts = True
+                        same_ends = True
+                        horizontal_pairs = True
+                        distinct_rows = False
+                        for pair_index in range(0, len(pts), 2):
+                            start_point = pts[pair_index]
+                            end_point = pts[pair_index + 1]
+                            if tuple(start_point) != first_starts:
+                                same_starts = False
+                            if tuple(end_point) != first_ends:
+                                same_ends = False
+                            if abs(float(start_point[1]) - float(end_point[1])) >= 0.001:
+                                horizontal_pairs = False
+                            if abs(float(start_point[1]) - float(first_starts[1])) >= 0.001:
+                                distinct_rows = True
+                        paired = same_starts or same_ends or (horizontal_pairs and distinct_rows)
                     if paired:
-                        segments = [pts[i:i+2] for i in range(0, len(pts), 2)]
+                        for pair_index in range(0, len(pts), 2):
+                            segments.append(pts[pair_index:pair_index+2])
                     else:
                         segments = [pts]
             p.setStyle(skia.Paint.Style.kStroke_Style)
