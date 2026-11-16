@@ -49,6 +49,7 @@ import { DirectorChat } from './director-chat'
 import { PreviewStage } from './preview-stage'
 import { MotionStudioTracks } from './motion-studio-tracks'
 import { MotionExportDialog } from './export-dialog'
+import { AgentJobPanel, type MotionAgentJob } from './agent-job-panel'
 
 const SECTION_ICON: Record<MsProjectSection, typeof BookOpen> = { Story: BookOpen, Media: FolderOpen, Scenes: Film, Graphics: Shapes, Audio: AudioLines }
 type MobileTab = 'chat' | 'storyboard' | 'preview' | 'timeline'
@@ -77,6 +78,23 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [uploads, setUploads] = useState<{ key: string; name: string; percent: number; error?: string | null }[]>([])
+  const [agentJob, setAgentJob] = useState<MotionAgentJob | null>(null)
+  useEffect(() => {
+    if (client.mode !== 'live') return
+    let active = true
+    const load = async () => {
+      try {
+        const response = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId), { cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json() as { job?: MotionAgentJob | null }
+        if (active) setAgentJob(data.job ?? null)
+      } catch { /* The regular project polling and its error display remain available. */ }
+    }
+    void load()
+    const poll = window.setInterval(() => void load(), Math.max(1500, pollMs))
+    return () => { active = false; window.clearInterval(poll) }
+  }, [client.mode, projectId, pollMs])
+
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -430,7 +448,9 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         ) : null}
       </div>
 
-      {project.status === 'setup' ? (
+      {agentJob ? (
+        <AgentJobPanel job={agentJob} onOpenEditor={agentJob.status === 'complete' ? openEditor : undefined} />
+      ) : project.status === 'setup' ? (
         <SetupStep project={project} busy={busy} onChange={patchSettings} onPlan={createPlan} />
       ) : (
         <>
