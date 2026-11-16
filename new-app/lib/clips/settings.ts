@@ -98,6 +98,9 @@ export const clipProjectSettingsSchema = z.object({
   /** Start the same durable Story/Footage/Flow/QA clipper after upload processing. */
   autoAgentClipMode: z.enum(['clip_moment_v1','clip_story_v1','clip_unified_v1']).optional(),
   autoAgentClipSeconds: z.union([z.literal(30),z.literal(60),z.literal(90)]).optional(),
+  /** Opt-in: run unified Grok on the full upload after preparation, including discovery. */
+  autoGrokClipper: z.boolean().optional(),
+  autoGrokMaxClips: z.number().int().min(1).max(10).optional(),
   /** TX-30: transcription language for new uploads (unset = English). */
   asrLanguage: z
     .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])
