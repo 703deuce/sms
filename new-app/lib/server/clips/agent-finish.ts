@@ -341,6 +341,17 @@ export async function updateClipAgentProgress(id: string,request: Request,raw: u
   return publicJob(row)
 }
 
+/** Serialize JSON artifact mutations under a Postgres row lock.
+ * Multiple video/graphics uploads can commit in parallel without lost entries. */
+async function updateArtifactsLocked(id:string,change:(all:Artifact[])=>Artifact[]) {
+  await prisma().$transaction(async tx=>{
+    await tx.$queryRaw`SELECT "id" FROM "clip_agent_finish_jobs" WHERE "id" = ${id} FOR UPDATE`
+    const row=await tx.clipAgentFinishJob.findUnique({where:{id},select:{artifacts:true,status:true}})
+    if(!row||finished(row.status)) throw problem('Job is no longer accepting artifacts.',409)
+    const next=change(items(row.artifacts).map(a=>({...a})))
+    await tx.clipAgentFinishJob.update({where:{id},data:{artifacts:toPrismaJson(next)}})
+  })
+}
 export async function clipAgentArtifact(id: string,request: Request,raw: unknown) {
   const j=await authorizeClipAgentCallback(id,request)
   if (finished(j.status)) throw problem('Job already finished.',409)
@@ -360,7 +371,10 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       filename,mime,bytes,objectKey})
     const item:Artifact={id:uploadId,key:objectKey,filename,kind,mime,bytes,state:'pending',
       ...(upload.s3Multipart?{s3UploadId:upload.s3Multipart.uploadId}:{})}
-    await prisma().clipAgentFinishJob.update({where:{id},data:{artifacts:toPrismaJson([...all,item])}})
+    await updateArtifactsLocked(id,current=>{
+      if(current.length>=100) throw problem('Too many job artifacts.',400)
+      return [...current,item]
+    })
     return {uploadId,objectKey,mode:upload.mode,signedPut:upload.signedPut,
       tus:upload.tus,s3Multipart:upload.s3Multipart}
   }
@@ -378,8 +392,12 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
     await storage.completeUpload({objectKey:item.key,s3UploadId:item.s3UploadId,parts})
     const size=await storage.getObjectSizeBytes(item.key)
     if (!size||size>MAX_FILE_BYTES) throw problem('Uploaded artifact missing.',400)
-    item.state='ready'
-    await prisma().clipAgentFinishJob.update({where:{id},data:{artifacts:toPrismaJson(all)}})
+    await updateArtifactsLocked(id,current=>{
+      const latest=current.find(a=>a.id===item.id)
+      if(!latest) throw problem('Prepared artifact no longer exists.',409)
+      latest.state='ready'
+      return current
+    })
     return {uploadId:item.id,status:'ready',bytes:size}
   }
   throw problem('Expected prepare or commit.',400)
