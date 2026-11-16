@@ -40,10 +40,11 @@ export function agentBridgeLive(): boolean { return process.env.GROKBOT_LIVE_MOD
 type PublicJob = {
   id: string; projectId: string; status: string; phase: string; progress: number;
   message: string | null; resultKey: string | null; createdAt: Date; updatedAt: Date;
-  completedAt: Date | null; artifacts: unknown
+  completedAt: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
 }
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
+    parentJobId: job.parentJobId ?? null, revision: job.revision ?? 0,
     progress: job.progress, message: job.message, createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(), completedAt: job.completedAt?.toISOString() ?? null,
     artifacts: artifacts(job.artifacts).filter(a => a.state === 'ready')
@@ -55,8 +56,11 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const job = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
   if (!job) return null
-  const videoUrl = job.status === 'complete' && job.resultKey
-    ? await createReadableSignedUrl(job.resultKey, 3600).catch(() => null) : null
+  const previousVideo = !job.resultKey && job.parentJobId
+    ? await db().motionStudioAgentJob.findFirst({ where: { id: job.parentJobId,
+      workspaceId, projectId, status: 'complete' }, select: { resultKey: true } }) : null
+  const activeVideoKey = job.resultKey || previousVideo?.resultKey
+  const videoUrl = activeVideoKey ? await createReadableSignedUrl(activeVideoKey, 3600).catch(() => null) : null
   const events = await db().studioActivityEvent.findMany({ where: { projectId, kind: 'agent_progress' }, orderBy: { id: 'asc' }, take: 500 })
   return { ...publicJob(job), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
