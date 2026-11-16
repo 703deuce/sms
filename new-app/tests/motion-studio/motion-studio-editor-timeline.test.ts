@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMotionStudioEditorEdits, sceneSplitsMs } from '@/lib/motion-studio/editor-timeline'
+import { agentCanvasVideoLayout, buildMotionStudioEditorEdits, sceneSplitsMs } from '@/lib/motion-studio/editor-timeline'
 import type { ClipMotionStudioExt } from '@/lib/clips/edits'
 
 const ext: ClipMotionStudioExt = {
@@ -53,6 +53,26 @@ describe('Motion Studio -> Compact Editor timeline', () => {
     // assembled source (which includes narration); no fake short replacement.
     expect(edits.sourceSegments ?? []).toEqual([])
     expect(edits.audio?.music).toBeNull()
+  })
+
+  it('agent import removes old first-scene override and retains manual media overrides', () => {
+    const durationMs = 191_000
+    const fullFilm: ClipMotionStudioExt = {
+      ...ext, durationMs, segments: [
+        { startMs: 0, endMs: 10_000 }, { startMs: 10_000, endMs: 45_000 },
+        { startMs: 45_000, endMs: 80_000 }, { startMs: 80_000, endMs: 105_000 },
+        { startMs: 105_000, endMs: 130_000 }, { startMs: 130_000, endMs: 150_000 },
+        { startMs: 150_000, endMs: 170_000 }, { startMs: 170_000, endMs: 191_000 },
+      ],
+    }
+    const base = buildMotionStudioEditorEdits({ base:null, durationMs, patch: {}, musicUploadId:null, lastPlacedMusicUploadId:null })
+    base.sourceSegments = [
+      { id: 'ms_scene_1', sourceId: 'scene1', startMs: 0, endMs: 10_000 },
+      { id: 'user_broll_override', sourceId: 'custom', startMs: 50_000, endMs: 55_000 },
+    ]
+    const result = agentCanvasVideoLayout(base, fullFilm, durationMs)
+    expect(result.videoSplits).toEqual([10_000, 45_000, 80_000, 105_000, 130_000, 150_000, 170_000])
+    expect(result.sourceSegments).toEqual([base.sourceSegments[1]])
   })
 
   it('older assemblies without a music stem keep the full-mix canvas and no music item', () => {
