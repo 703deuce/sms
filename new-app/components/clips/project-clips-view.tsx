@@ -29,6 +29,7 @@ import { describeClipProjectFailure } from '@/lib/clips/project-failure-copy'
 import { buildOpenInEditorHref, openInEditorLinkLabel } from '@/lib/clips/project-editor-link'
 import type { ClipProjectSettings } from '@/lib/clips/settings'
 import { ProjectProducerPanel } from '@/components/clips/producer/project-producer-panel'
+import { AgentClipFinisherPanel } from '@/components/clips/agent-clip-finisher-panel'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { MontageDialog } from '@/components/streamer/montage-dialog'
 import { StreamerAgentClipMaker } from '@/components/streamer/streamer-agent-clip-maker'
@@ -845,6 +846,14 @@ export function ProjectClipsView({
                     exportAspect={exportAspect}
                     onClear={() => setSelectedClipIds(new Set())}
                     onApplied={() => void refreshClipsList()}
+                  />
+                ) : null}
+                {status === 'READY' && !byoProject && clips.length > 0 ? (
+                  <AgentClipFinisherPanel
+                    projectId={projectId}
+                    clips={clips}
+                    selectedClipIds={selectedClipIds}
+                    onFinished={() => void refreshClipsList()}
                   />
                 ) : null}
                 {displayedClips.length === 0 ? (
