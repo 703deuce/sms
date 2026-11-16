@@ -552,12 +552,19 @@ function allowanceFor(s: Json, plan?: Json | null): MsAllowance {
   }
 }
 
+/** Customer-facing only: historical agent events predate the Transovo branding contract. */
+function customerActivityMessage(message: string): string {
+  if (/\/(?:workspace|tmp|home)\/|traceback|stack trace|api[_-]?key|bearer\s|https?:\/\//i.test(message))
+    return "Transovo Agent is working on your video."
+  return message.replace(/\bGrokbot\b/gi, 'Transovo Agent').replace(/\bGrok\b/gi, 'Transovo')
+}
+
 async function lastEventPerStage(projectId: string): Promise<Partial<Record<MsStageId, string>>> {
   const rows = await db().studioActivityEvent.findMany({ where: { projectId }, orderBy: { id: 'desc' }, take: 60, select: { stage: true, message: true } })
   const out: Partial<Record<MsStageId, string>> = {}
   for (const r of rows) {
     const st = stageOf(r.stage)
-    if (!out[st]) out[st] = r.message.slice(0, 200)
+    if (!out[st]) out[st] = customerActivityMessage(r.message).slice(0, 200)
   }
   return out
 }
@@ -1083,7 +1090,7 @@ export async function listActivity(workspaceId: string, id: string, q: { after?:
     /warn|error|fail/.test(k) ? 'warning' : /decision|research_plan|plan_|reason|checkpoint_reason/.test(k) ? 'reasoning'
       : /^stage$|checkpoint|_ready$/.test(k) ? 'status' : 'action'
   return {
-    events: rows.map((r: (typeof rows)[number]) => ({ id: String(r.id), at: r.createdAt.toISOString(), stage: stageOf(r.stage), kind: kindOf(r.kind), text: r.message })),
+    events: rows.map((r: (typeof rows)[number]) => ({ id: String(r.id), at: r.createdAt.toISOString(), stage: stageOf(r.stage), kind: kindOf(r.kind), text: customerActivityMessage(r.message) })),
     cursor: rows.length ? String(rows[rows.length - 1].id) : (q.after ?? null),
   }
 }
