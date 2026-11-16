@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Clapperboard, Loader2, CheckCircle2, AlertTriangle, Download } from 'lucide-react'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { AgentChatPanel } from './agent-chat-panel'
 
 export type MotionAgentJob = {
   id: string
@@ -77,6 +78,7 @@ export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOp
         </div>
       ) : null}
       {complete && !job.videoUrl ? <p className="text-sm text-muted-foreground">The video is complete. Its playback link is being prepared.</p> : null}
+      {complete ? <AgentChatPanel projectId={job.projectId} /> : null}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Clapperboard className="size-4" aria-hidden />
         <Link href="/app/motion-studio" className="text-primary hover:underline">All Motion Studio projects</Link>
