@@ -74,12 +74,20 @@ function resolveArtifact(e: Element, all: Artifact[]): Artifact | undefined {
  * placements into the existing Compact Editor data model. Re-imports reuse stable upload IDs.
  */
 export async function importAgentTimeline(args: { workspaceId: string; motionProjectId: string; clipProjectId: string;
-  durationMs: number; base: ClipEditsV2; latestJobId: string }): Promise<ClipEditsV2 | null> {
+  durationMs: number; base: ClipEditsV2; latestJobId?: string;
+  /** Already-authenticated clipper agent artifacts (same signed upload contract). */
+  directArtifacts?: Artifact[] }): Promise<ClipEditsV2 | null> {
   const db = getPrisma()
-  const job = await db.motionStudioAgentJob.findUnique({ where: { id: args.latestJobId },
-    select: { artifacts: true, status: true, workspaceId: true, projectId: true } })
-  if (!job || job.status !== 'complete' || job.workspaceId !== args.workspaceId || job.projectId !== args.motionProjectId) return null
-  const all = (Array.isArray(job.artifacts) ? job.artifacts : []) as Artifact[]
+  let all: Artifact[]
+  if (args.directArtifacts) {
+    all = args.directArtifacts
+  } else {
+    if (!args.latestJobId) return null
+    const job = await db.motionStudioAgentJob.findUnique({ where: { id: args.latestJobId },
+      select: { artifacts: true, status: true, workspaceId: true, projectId: true } })
+    if (!job || job.status !== 'complete' || job.workspaceId !== args.workspaceId || job.projectId !== args.motionProjectId) return null
+    all = (Array.isArray(job.artifacts) ? job.artifacts : []) as Artifact[]
+  }
   const projectFile = all.find(a => a.filename === 'project.json' && a.state === 'ready' && a.mime === 'application/json')
   if (!projectFile || projectFile.bytes > 8_000_000) return null
   let manifest: Manifest
