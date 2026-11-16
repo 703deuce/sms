@@ -68,8 +68,12 @@ def world_camera_fit(world: dict, *, size: tuple[int, int] = (960, 540)) -> tupl
         if kind == "path" and len(points) >= 2 or kind == "line" and len(points) >= 2:
             local = [(float(pt[0]), float(pt[1])) for pt in points
                      if isinstance(pt, (list, tuple)) and len(pt) >= 2]
-            xs = [x + xx for xx, yy in local]
-            ys = [y + yy for xx, yy in local]
+            # Match _EnvironmentShape: path/line coordinates are authored in
+            # world space unless the shape explicitly requests local points.
+            offset_x = x if element.get("pointsSpace", "world") == "local" else 0.0
+            offset_y = y if element.get("pointsSpace", "world") == "local" else 0.0
+            xs = [offset_x + xx for xx, yy in local]
+            ys = [offset_y + yy for xx, yy in local]
         elif kind in ("rect", "rrect", "surface", "circle"):
             xs = [x - w / 2, x + w / 2]
             ys = [y - h / 2, y + h / 2]
@@ -488,13 +492,28 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
     built = [el for env in (spec.get("environments") or {}).values()
              for el in ((env.get("backdrop") or {}).get("elements") or []) + (env.get("geometry") or [])]
     wanted = world["environmentElements"]
-    built_by_id = {el.get("id"): el for el in built if isinstance(el, dict)}
+    built_by_id = {el.get("id"): el for el in built if isinstance(el, dict) and el.get("id")}
     missing = [el.get("id") for el in wanted
                if built_by_id.get(el.get("id")) is None]
     if missing:
         log("agent.world.missing", "Engineer dropped Designer-approved world geometry", {"missingIds": missing})
         raise RuntimeError(f"Engineer dropped Designer-authored world elements: {missing}")
-    log("agent.world.verified", "Exact agent-authored world objects survived into tool spec", {"expected": len(wanted), "rendered": len(built), "ids": list(built_by_id)})
+    ids = [el.get("id") if isinstance(el, dict) else None for el in built]
+    if len(built) != len(wanted) or len(set(ids)) != len(ids) or any(i is None for i in ids):
+        log("agent.world.duplicates", "Approved geometry rendered more than once or anonymous artwork remains",
+            {"expected": len(wanted), "rendered": len(built), "ids": ids})
+        raise RuntimeError("Stage 1 has duplicate or anonymous environment geometry; see agent.world.duplicates")
+    for shape in wanted:
+        if built_by_id[shape["id"]] != shape:
+            raise RuntimeError(f"Stage 1 altered approved shape {shape['id']!r}")
+    approved_titles = [e.get("id") for e in (binding.get("compositionElements") or [])
+                       if isinstance(e, dict) and e.get("kind") == "typography"]
+    absent_titles = [tid for tid in approved_titles if tid not in (spec.get("typography") or {})]
+    if absent_titles:
+        raise RuntimeError(f"Stage 1 lost Designer-approved typography: {absent_titles}")
+    log("agent.world.verified", "One-to-one approved geometry and typography survived",
+        {"expected": len(wanted), "rendered": len(built), "ids": ids,
+         "typographyIds": approved_titles})
     # Stage 1 uses a STATIC camera, but its pose should follow the bounding
     # box of the approved world rather than a hardcoded crop.
     fit_pose, framing = world_camera_fit(world)
@@ -528,7 +547,7 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
         log("framing.fixed", "Added world-aware STATIC camera via registered tool",
             {"pose": fit_pose})
     code = compile_spec(spec)
-    log("compiler.finish", "Agent tool spec recompiled after fixed framing", {"objects": len(spec.get("objects") or {}), "environments": len(spec.get("environments") or {}), "codeChars": len(code)})
+    log("compiler.finish", "Agent tool spec recompiled after fixed framing", {"objects": len(spec.get("objects") or {}), "typography": len(spec.get("typography") or {}), "environments": len(spec.get("environments") or {}), "codeChars": len(code)})
     return code, spec, ctx
 
 
