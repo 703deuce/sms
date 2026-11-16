@@ -170,12 +170,21 @@ class _EnvironmentShape(Item):
             space = "world"
             if kind in ("line", "path") and points and (x or y):
                 w_abs, h_abs = abs(w), abs(h)
-                if (w_abs > 0 and h_abs > 0
-                        and all(isinstance(pt, (list, tuple)) and len(pt) >= 2
-                                and 0 <= float(pt[0]) <= w_abs
-                                and 0 <= float(pt[1]) <= h_abs
-                                for pt in points)):
-                    space = "local"
+                if w_abs > 0 and h_abs > 0:
+                    local_box = True
+                    local_ground = kind == "path" and x == 0 and y != 0
+                    for pt in points:
+                        if not isinstance(pt, (list, tuple)) or len(pt) < 2:
+                            local_box = False
+                            local_ground = False
+                            break
+                        px, py = float(pt[0]), float(pt[1])
+                        if not (0 <= px <= w_abs and 0 <= py <= h_abs):
+                            local_box = False
+                        if not (0 <= py <= h_abs):
+                            local_ground = False
+                    if local_box or local_ground:
+                        space = "local"
         has_world_points = kind in ("line", "path") and space == "world"
         if not has_world_points:
             c.translate(x, y)
