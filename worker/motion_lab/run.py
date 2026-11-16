@@ -364,6 +364,11 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
     binding = {**binding, "requiredEffects": sorted(set(binding.get("requiredEffects") or []) | {"environment_geometry"})}
     ctx = scene_context(world=world, binding=binding, blueprint=bp)
     ctx["worlds"] = worlds
+    ctx["worldOnlyLab"] = True
+    log("designer.world_contract", "Stage-1 drawing IDs are authoritative", {
+        "worldIds": [e["id"] for e in world["environmentElements"]],
+        "compositionIds": [e.get("id") for e in binding.get("compositionElements") or []],
+        "constraints": "static world, one ID per drawable shape, no group/animation of backdrop"})
     log("engineer.start", "Invoking REAL Motion Engineer on the Designer-approved world", {"model": config.model_for("motion_engineer"), "requiredEffects": binding["requiredEffects"]})
     with tempfile.TemporaryDirectory(prefix="motion_lab_agent_") as scratch:
         assets = Path(scratch) / "assets"

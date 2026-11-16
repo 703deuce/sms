@@ -12,7 +12,9 @@ from clips_worker.motion_studio.tools.validate import validate_spec
 
 
 def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list[dict],
-                            duration_s: float | None, fps: int) -> tuple[list[dict], list[dict], list[dict]]:
+                            duration_s: float | None, fps: int,
+                            world_id: str | None = None,
+                            world_brief: str | None = None) -> tuple[list[dict], list[dict], list[dict]]:
     """Mechanical correction at the tool boundary; never change creative choices.
 
     Designer-owned background primitives belong to create_environment.backdrop.elements.
@@ -27,10 +29,43 @@ def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list
     creators = [(i, row) for i, row in enumerate(original)
                 if isinstance(row, dict) and row.get("tool") == "create_environment"]
     if approved_world and not creators:
-        problems.append({"code": "MISSING_ENVIRONMENT_TOOL",
-                         "message": "Designer-approved world requires create_environment FIRST; "
-                                    "copy all approvedWorldElements into backdrop.elements."})
-        return [], changes, problems
+        # The Designer has already authored the world. It is valid to construct
+        # that approved environment deterministically even when the Engineer
+        # omitted the creation call during a repair. We do not invent geometry.
+        referenced = set()
+        for row in original:
+            if not isinstance(row, dict):
+                continue
+            args = row.get("arguments") or {}
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except (ValueError, TypeError):
+                    continue
+            if isinstance(args, dict) and args.get("environmentId"):
+                referenced.add(args["environmentId"])
+        target = world_id or (next(iter(referenced)) if len(referenced) == 1 else None)
+        if not target or (referenced and referenced != {target}):
+            problems.append({"code": "MISSING_ENVIRONMENT_TOOL",
+                             "message": "The Designer-approved world cannot be assigned to an unambiguous "
+                                        f"environmentId (expected {world_id!r}, referenced {sorted(referenced)}). "
+                                        "Create the environment explicitly first."})
+            return [], changes, problems
+        original.insert(0, {
+            "tool": "create_environment",
+            "arguments": {
+                "environmentId": target,
+                "brief": world_brief or "Production Designer-authored drawable environment",
+                "size": {"width": 3840, "height": 2160},
+                "backdrop": {"kind": "geometry", "elements": list(approved_world)},
+            },
+        })
+        changes.append({"kind": "insert_approved_environment", "worldId": target,
+                        "elementIds": [e.get("id") for e in approved_world if isinstance(e, dict)],
+                        "source": "Production Designer approvedWorldElements",
+                        "reason": "Real world geometry is provided upstream; a missing Engineer "
+                                  "tool call must not erase it or trigger repetitive paid repair."})
+        creators = [(0, original[0])]
     if len(creators) == 1 and creators[0][0] != 0:
         i, env_call = creators[0]
         original = [env_call] + original[:i] + original[i + 1:]
@@ -172,6 +207,8 @@ def compile_agent_output(
     composition_elements: list[dict] | None = None,
     planned_camera_shots: list[dict] | None = None,
     world_elements: list[dict] | None = None,
+    world_id: str | None = None,
+    world_brief: str | None = None,
     transition_intent: str | None = None,
     project_id: str | None = None,
 ) -> dict[str, Any]:
@@ -197,7 +234,8 @@ def compile_agent_output(
         if payload.get("tools"):
             prepared, adjustments, early_errors = _prepare_engineer_tools(
                 payload["tools"], approved_world=list(world_elements or []),
-                duration_s=duration_s, fps=fps)
+                duration_s=duration_s, fps=fps,
+                world_id=world_id, world_brief=world_brief)
             if early_errors:
                 return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec,
                         "errors": early_errors, "toolAdjustments": adjustments}

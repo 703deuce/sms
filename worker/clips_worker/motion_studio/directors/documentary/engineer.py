@@ -137,6 +137,21 @@ def _engineer_brief(ctx: dict) -> dict:
             "For any unsupportable effect, return a precise limitation, not a substitute hold."
         ),
     }
+    if ctx.get("worldOnlyLab"):
+        brief["stage1WorldConstructionRule"] = (
+            "STAGE 1: Design of the STATIC WORLD is approved. No camera travel. "
+            "The world elements already have exact drawable IDs and are supplied to "
+            "create_environment by the trusted tool compiler. For compositionElements "
+            "whose ids match approvedWorldElements, DO NOT place duplicates, "
+            "draw separate links, group backdrop shapes or animate backdrop IDs. "
+            "Do not make zero-change/no-op animations. Static means no motion tool call. "
+            "Every additional typography or graphic object must be created with its "
+            "exact approved composition ID; add these to groups only AFTER creation. "
+            "Never treat descriptive 'connectTo' relationships as drawable paths "
+            "unless the approved design specifically requires connector graphics. "
+            "Use only the registered tool signatures and exact authored IDs. "
+            "Preserve complete tool calls across repair rounds (including create_environment)."
+        )
     # Maps remain available as engine capabilities, not as a world to invent.
     brief["maps"] = map_catalog()
     if ctx["scene"].get("userNotes"):
@@ -161,6 +176,11 @@ def _interpret(out: dict, ctx: dict) -> dict:
         transition_intent=(ctx.get("sceneBinding") or {}).get("transitionIntent"),
         world_elements=next((w.get("environmentElements") or [] for w in ctx.get("worlds") or []
                              if isinstance(w, dict) and w.get("id") == (ctx.get("sceneBinding") or {}).get("worldId")), []),
+        world_id=(ctx.get("sceneBinding") or {}).get("worldId"),
+        world_brief=next((w.get("brief") or w.get("constructionPlan") or ""
+                          for w in ctx.get("worlds") or []
+                          if isinstance(w, dict) and w.get("id") ==
+                          (ctx.get("sceneBinding") or {}).get("worldId")), ""),
         composition_elements=(ctx.get("sceneBinding") or {}).get("compositionElements") or [],
         project_id=ctx.get("projectId"),
         anchors={

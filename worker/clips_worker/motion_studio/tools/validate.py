@@ -259,7 +259,10 @@ def validate_spec(spec: dict[str, Any], *, catalog_ids: list[str] | None = None)
             # not a transformable objects[] Item. Geometry must stay exact.
             # Fail explicitly when moving backdrop geometry is requested;
             # never pretend an animation exists.
-            if element.get("motion"):
+            motion = str(element.get("motion") or "").strip().lower()
+            if motion and not motion.startswith((
+                "static", "stationary", "still", "no animation", "no motion", "hold position"
+            )):
                 problems.append({"code": "WORLD_ELEMENT_MOTION_UNSUPPORTED",
                                  "message": f"world element {eid!r} requests motion but is static "
                                             "backdrop geometry. Build an addressable scene object "

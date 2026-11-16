@@ -425,6 +425,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
     editorial = copy.deepcopy(plan)
     total_scenes = len(plan.get("scenes") or [])
     single_scene = total_scenes == 1
+    world_only_lab = bool((project.get("settings") or {}).get("motionLabWorldOnly"))
     # The Film Director's existing camera beats are upstream requirements, not suggestions.
     editorial["editorialCameraPlan"] = plan.get("cameraPlan") or pre.camera_continuity_plan(plan, story)
     inventory = inventory_from_catalog(catalog, story)
@@ -458,6 +459,22 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         "null is allowed for non-applicable fields. For cameraShots give id, purpose, fromTarget, toTarget, "
         "movement, timingAnchor, fromPose {x,y,zoom,rot}, toPose {x,y,zoom,rot}. Moving shots MUST change a numeric pose and must use actual object targets. For holds give holdReason; never replace a moving editorial camera beat with a hold. Art direction must be buildable from these coordinates, layers and relationships. "
         "Do not use identical plans across unrelated scenes. Every required effect must survive rendering. "
+        + (
+            "STAGE 1 WORLD-CONSTRUCTION LAB CONTRACT: The camera is held still, there is no "
+            "outgoing scene transition, and the focus is accurate detailed background geometry. "
+            "DO NOT include camera_travel/transition in requiredEffects. "
+            "For every compositionElement representing an environment/world shape, set its id "
+            "to an EXACT id of ONE world.environmentElements item; no renamed duplicates, "
+            "plural bundles, or abstract/aggregate IDs such as 'street_grid' for five paths. "
+            "Set groupId, connectTo and motion to null on all static backdrop shapes. "
+            "Environment shapes in create_environment are not individually groupable/animatable. "
+            "If you add a title or a standalone foreground graphic, it must have its own unique "
+            "tool-addressable id; group and animate ONLY those real foreground objects. "
+            "Only request a requiredEffect when its exact tool implementation is designed. "
+            "Do not invent a second name for existing world geometry. "
+            if world_only_lab else ""
+        )
+
         + (
             "SCENE TOPOLOGY — STRICT: This film has EXACTLY ONE scene. There is NO NEXT SCENE. "
             "Do NOT include 'transition' in requiredEffects for its only scene, and set "
@@ -507,6 +524,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             "terminalSceneIndex": (plan.get("scenes") or [{}])[-1].get("index"),
             "hasAdjacentScene": total_scenes > 1,
             "singleSceneNoTransition": single_scene,
+            "worldOnlyLab": world_only_lab,
         },
         "editorialCameraPlan": editorial.get("editorialCameraPlan"),
         "requestedDurationS": float((project.get("settings") or {}).get("lengthMin") or 3) * 60,
@@ -527,13 +545,16 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
         reconcile_single_scene_transitions(out, log)
         errs = validate_plan(out, story, catalog)
-        berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
+        berrs = (validate_blueprint(out.get("blueprint")) +
+                 validate_scene_objectives(out, catalog) +
+                 (validate_lab_world_only(out) if world_only_lab else []))
         if errs or berrs:
             log("production_invalid", "production design failed validation; requesting a targeted repair",
                 {"errors": (errs or berrs)[:12], "output": raw})
             repair_user = json.dumps({
                 "previous": raw,
                 "errors": (errs or []) + (berrs or []),
+                "worldOnlyLab": world_only_lab,
                 "sceneTopology": {
                     "sceneCount": total_scenes,
                     "singleSceneNoTransition": single_scene,
@@ -557,7 +578,9 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
             reconcile_single_scene_transitions(out, log)
             errs = validate_plan(out, story, catalog)
-            berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
+            berrs = (validate_blueprint(out.get("blueprint")) +
+                     validate_scene_objectives(out, catalog) +
+                     (validate_lab_world_only(out) if world_only_lab else []))
         if errs or berrs:
             problems = (errs or []) + (berrs or [])
             log("production_invalid", "production design still invalid after targeted repair; stopping",
@@ -666,6 +689,82 @@ def reconcile_single_scene_transitions(plan: dict, log) -> None:
             "Dropped impossible inter-scene transition for terminal one-scene film",
             audit)
 
+
+
+def validate_lab_world_only(plan: dict) -> list[str]:
+    """Stage-1-only Designer contract: one addressable shape ID per real object.
+
+    The lab is deliberately testing world *construction*, not camera travel or
+    animation. World geometry is an immutable list of drawable shapes; a scene
+    composition entry may reference an existing shape by its exact ID, or create
+    a separately addressable title/graphic. Aggregate prose concepts cannot be
+    graded as single phantom tool objects.
+    """
+    problems: list[str] = []
+    bp = plan.get("blueprint") or {}
+    worlds = {w.get("id"): w for w in bp.get("worlds") or [] if isinstance(w, dict)}
+    for b in bp.get("sceneBindings") or []:
+        if not isinstance(b, dict):
+            continue
+        idx = b.get("sceneIndex")
+        if b.get("cameraIntent") != "hold":
+            problems.append(f"scene {idx}: Stage 1 requires cameraIntent=hold; camera travel belongs to Stage 2")
+        if any(
+            isinstance(shot, dict) and _distinct_camera_poses(
+                shot.get("fromPose"), shot.get("toPose"))
+            for shot in b.get("cameraShots") or []
+        ):
+            problems.append(f"scene {idx}: Stage 1 cameraShots must have identical poses, not moving camera beats")
+        required = set(b.get("requiredEffects") or [])
+        if "camera_travel" in required or "transition" in required:
+            problems.append(f"scene {idx}: Stage 1 must not require camera_travel or inter-scene transition")
+        world = worlds.get(b.get("worldId")) or {}
+        world_ids = {e.get("id") for e in world.get("environmentElements") or []
+                     if isinstance(e, dict) and e.get("id")}
+        ids = set()
+        for e in b.get("compositionElements") or []:
+            if not isinstance(e, dict):
+                continue
+            eid, kind = e.get("id"), str(e.get("kind") or "").lower()
+            if eid in ids:
+                problems.append(f"scene {idx}: duplicate composition id {eid!r}")
+            ids.add(eid)
+            if kind in ("environment", "surface", "line", "path", "rect", "rrect", "circle"):
+                if eid not in world_ids:
+                    problems.append(
+                        f"scene {idx}: composition element {eid!r} is a phantom/aggregate world shape. "
+                        "Use the EXACT individual environmentElements IDs (one per physical shape), "
+                        "not a second name for several shapes. For extra foreground art use kind=graphic "
+                        "with its own addressable tool object instead.")
+                    continue
+                if e.get("groupId") or e.get("connectTo"):
+                    problems.append(
+                        f"scene {idx}: environment shape {eid!r} is not a groupable or linked "
+                        "scene object. Set groupId/connectTo to null for background geometry.")
+                motion = str(e.get("motion") or "").strip().lower()
+                if motion and not motion.startswith((
+                    "static", "still", "no animation", "no motion", "stationary", "hold position"
+                )):
+                    problems.append(
+                        f"scene {idx}: background shape {eid!r} requests unsupported individual motion. "
+                        "Use a separately created foreground object if it must animate, otherwise "
+                        "set motion to null for the static Stage-1 world.")
+        if "group" in required and not any(
+            isinstance(e, dict) and e.get("groupId") and e.get("id") not in world_ids
+            for e in b.get("compositionElements") or []
+        ):
+            problems.append(
+                f"scene {idx}: required group has no GROUPABLE foreground objects; "
+                "world background geometry is not a layout_group member.")
+        if "property_animation" in required and not any(
+            isinstance(e, dict) and e.get("id") not in world_ids
+            and e.get("motion") and not str(e.get("motion")).lower().startswith("static")
+            for e in b.get("compositionElements") or []
+        ):
+            problems.append(
+                f"scene {idx}: required property_animation has no addressable moving foreground "
+                "object; static world shapes are not animatable.")
+    return problems
 
 
 def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> list[str]:
