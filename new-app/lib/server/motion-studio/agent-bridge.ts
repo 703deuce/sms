@@ -109,8 +109,20 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, projectId, action: 'create_video', title: project.title, prompt: project.brief,
-    durationSeconds: Math.round((Number(settings.lengthMin) || 3) * 60),
+    durationSeconds: [30,60,120,180,300].includes(Number(settings.durationSeconds))
+      ? Number(settings.durationSeconds) : Math.round((Number(settings.lengthMin) || 3) * 60),
     aspectRatio: str(settings.format, 30).split('_')[0] || '16:9',
+    ...(() => {
+      const size = str(settings.finalRenderSize || settings.renderSize || str(settings.format).split('_')[1], 40) || '480p'
+      const height = ({'480p':480,'720p':720,'1080p':1080,'2160p':2160} as Record<string,number>)[size] || 480
+      const ar = str(settings.format).split('_')[0]
+      const width = Math.round(height * (ar === '9:16' ? 9 / 16 : ar === '1:1' ? 1 : 16 / 9) / 2) * 2
+      return { width, height, fps: 30, resolution: size }
+    })(),
+    quality: str(settings.quality || settings.tier, 40) || 'premium',
+    style: str(settings.visualDirection, 80) || 'cinematic',
+    webResearch: true,
+    mediaPolicy: 'auto_plus_uploads',
     jobUrl: endpoint, callbackUrl: endpoint, setupMode: !agentBridgeLive(),
     // During setup do not disclose a callback token in the bot's diagnostic chat.
     ...(agentBridgeLive() ? { jobToken: token } : {}),
