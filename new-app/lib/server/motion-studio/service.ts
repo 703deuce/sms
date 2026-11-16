@@ -476,7 +476,7 @@ function feStatus(c: Ctx): MsProjectStatus {
   if (row.status === 'setup') return 'setup'
   if (row.status === 'awaiting_approval') return 'awaiting_review'
   if (row.status === 'preflight_ok') return 'preflight_ok'
-  if (row.status === 'review') return (s.exportRequested || J(row.exportInfo).source === 'transovo_agent') && row.exportInfo ? 'complete' : 'review'
+  if (row.status === 'review') return (s.exportRequested || ['transovo_agent','grokbot_agent'].includes(String(J(row.exportInfo).source))) && row.exportInfo ? 'complete' : 'review'
   if (!row.plan || row.stage === 'story' || row.stage === 'direct') return 'planning'
   return s.exportRequested ? 'exporting' : 'producing'
 }
@@ -1134,7 +1134,7 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
     musicUploadId,
     lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
   })
-  if (ex.source === 'transovo_agent') {
+  if (ex.source === 'transovo_agent' || ex.source === 'grokbot_agent') {
     const selectedAgentJobId = typeof ex.agentJobId === 'string' ? ex.agentJobId : null
     const job = await db().motionStudioAgentJob.findFirst({ where: {
       projectId: id, workspaceId, status: 'complete',
