@@ -65,3 +65,9 @@ def test_environment_runtime_supports_separate_subpaths():
     assert 's.get("segments")' in RUNTIME
     assert 's.get("segmentMode") == "pairs"' in RUNTIME
     assert "path.moveTo(float(segment[0][0])" in RUNTIME
+
+def test_environment_runtime_has_no_comprehension_local_scope_lint_failure():
+    """Prevent Stage 1's 'undefined name i' regression in emitted source."""
+    tree = ast.parse(RUNTIME)
+    for node in ast.walk(tree):
+        assert not isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
