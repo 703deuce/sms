@@ -20,6 +20,8 @@ export type MsMusicChoice = 'generated' | 'upload' | 'elevenlabs' | 'none'
 
 export type MsSettings = {
   lengthMin: MsLengthMin
+  /** Exact agent target, supports 30-second productions without rounding to a minute. */
+  durationSeconds?: number
   visualDirection: MsVisualDirection
   voiceover: MsVoiceover
   format: MsFormat
@@ -251,7 +253,8 @@ export type MsCreateInput = {
   prompt: string
   script?: string | null
   uploads: MsUploadInput[]
-  mediaPolicy: 'uploads_only'
+  mediaPolicy: MsMediaPolicy
+  durationSeconds?: 30 | 60 | 120 | 180 | 300
   idempotencyKey: string
 }
 
