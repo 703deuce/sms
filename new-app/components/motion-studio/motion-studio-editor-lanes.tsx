@@ -48,7 +48,7 @@ export function MotionStudioEditorLanes({
         )
       })
     if (client.mode === 'live') {
-      void fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline',
+      void fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline?passive=1',
         {cache: 'no-store'}).then(r=>r.ok?r.json():null).then((response: {
           edits?: { motionStudio?: { tracks?: {id:string;label:string;items:object[]}[];durationMs?:number } }
         } | null) => {
