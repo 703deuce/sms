@@ -92,6 +92,25 @@ export function EditorClipShell(props: {
   )
 
   const [media, setMedia] = useState<EditorMedia | null>(props.primaryMedia)
+  // The project page already has a signed master preview. If signing the
+  // initial editor payload timed out, recover it in the browser without
+  // delaying the editor layout or any manifest sync.
+  useEffect(() => {
+    if (!props.motionStudioProjectId || props.primaryMedia?.url) return
+    let live = true
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+    void fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(props.motionStudioProjectId), {
+      cache: 'no-store', signal: controller.signal,
+    }).then(async response => {
+      if (!response.ok) return
+      const data = await response.json() as { job?: { videoUrl?: string | null } }
+      if (live && data.job?.videoUrl) setMedia({ url: data.job.videoUrl, kind: 'proxy', offsetMs: 0 })
+    }).catch(() => {/* Keep the editor visible even if preview recovery fails. */})
+      .finally(() => clearTimeout(timeout))
+    return () => { live = false; clearTimeout(timeout); controller.abort() }
+  }, [props.motionStudioProjectId, props.primaryMedia?.url])
+
   const [liveAssets, setLiveAssets] = useState(props.editorAssets)
   const [preparation, setPreparation] = useState<{ stage: string; progress: number; status: string } | null>(
     props.fullVideo && props.projectStatus !== 'READY'
