@@ -203,7 +203,7 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string, 
     previewKey: clip.previewKey,
   })
   const projectTranscriptP = fastMotionStudio ? Promise.resolve([] as ClipWord[]) : loadProjectTranscript(storage, project)
-  const clipWordsP = fastMotionStudio ? Promise.resolve(null) : preloadClipWordJson(storage, workspaceId, clip)
+  const clipWordsP = fastMotionStudio ? Promise.resolve([] as ClipWord[]) : preloadClipWordJson(storage, workspaceId, clip)
   const cropTrackJsonP = fastMotionStudio ? Promise.resolve(null) : storage.getJson<unknown>(cropTrackKey).catch(() => null)
   const cropRawP = !fastMotionStudio && clip.cropKey ? storage.getJson(clip.cropKey).catch(() => null) : Promise.resolve(null)
   const segmentSizeP = sourceSegKey
