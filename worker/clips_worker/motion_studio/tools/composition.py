@@ -160,7 +160,23 @@ class _EnvironmentShape(Item):
         # Environment points are world-space by default, unlike local
         # rectangle/circle geometry. Older explicitly local shapes can opt in
         # with pointsSpace="local". Keep framing and drawing consistent.
-        has_world_points = kind in ("line", "path") and s.get("pointsSpace", "world") == "world"
+        points = s.get("points") or []
+        # Artist-authored path conventions are mixed: skyline outlines are
+        # local to their placement, while perspective rays supply absolute
+        # world endpoints. Prefer an explicit pointsSpace, otherwise recognize
+        # nonnegative points bounded by the declared local dimensions.
+        space = s.get("pointsSpace")
+        if space not in ("local", "world"):
+            space = "world"
+            if kind in ("line", "path") and points and (x or y):
+                w_abs, h_abs = abs(w), abs(h)
+                if (w_abs > 0 and h_abs > 0
+                        and all(isinstance(pt, (list, tuple)) and len(pt) >= 2
+                                and 0 <= float(pt[0]) <= w_abs
+                                and 0 <= float(pt[1]) <= h_abs
+                                for pt in points)):
+                    space = "local"
+        has_world_points = kind in ("line", "path") and space == "world"
         if not has_world_points:
             c.translate(x, y)
         c.rotate(float(s.get("rotation") or 0))
