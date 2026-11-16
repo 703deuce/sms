@@ -20,7 +20,7 @@ function baseUrl(request: Request): string {
   const productionHost = url.hostname === 'transovo.ai' || url.hostname.endsWith('.transovo.ai')
   const localHost = process.env.NODE_ENV !== 'production' && ['localhost', '127.0.0.1'].includes(url.hostname)
   if ((!productionHost && !localHost) || (url.protocol !== 'https:' && !localHost)) {
-    throw new MotionStudioError('CONFIG', 'Configure MOTION_STUDIO_AGENT_PUBLIC_URL with the public HTTPS Transovo origin.', 503)
+    throw new MotionStudioError('INTERNAL', 'Configure MOTION_STUDIO_AGENT_PUBLIC_URL with the public HTTPS Transovo origin.', 503)
   }
   return url.origin
 }
@@ -54,7 +54,7 @@ export async function userAgentJob(workspaceId: string, projectId: string) {
 }
 
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request) {
-  if (!agentBridgeConfigured()) throw new MotionStudioError('CONFIG', 'Grokbot webhook is not configured.', 503)
+  if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
   const project = await db().motionStudioProject.findFirst({
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
   })
@@ -82,7 +82,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   }
   const rawUrl = process.env.GROKBOT_WEBHOOK_URL!
   const webhook = new URL(rawUrl)
-  if (webhook.protocol !== 'https:') throw new MotionStudioError('CONFIG', 'Grokbot webhook requires HTTPS.', 503)
+  if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
   const settings = toObject(project.settings)
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
@@ -114,13 +114,13 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
 export async function requireBotJob(id: string, request: Request) {
   const auth = request.headers.get('authorization') || ''
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
-  if (!token || token.length > 256) throw new MotionStudioError('UNAUTHORIZED', 'Job bearer token required.', 401)
+  if (!token || token.length > 256) throw new MotionStudioError('UNAUTHENTICATED', 'Job bearer token required.', 401)
   const job = await db().motionStudioAgentJob.findUnique({ where: { id } })
-  if (!job || job.tokenExpiresAt.getTime() <= Date.now()) throw new MotionStudioError('UNAUTHORIZED', 'Expired or invalid token.', 401)
+  if (!job || job.tokenExpiresAt.getTime() <= Date.now()) throw new MotionStudioError('UNAUTHENTICATED', 'Expired or invalid token.', 401)
   const given = sha(id + ':' + token)
   const expected = Buffer.from(job.tokenHash, 'hex')
   if (expected.length !== given.length || !timingSafeEqual(given, expected)) {
-    throw new MotionStudioError('UNAUTHORIZED', 'Invalid token.', 401)
+    throw new MotionStudioError('UNAUTHENTICATED', 'Invalid token.', 401)
   }
   return job
 }
