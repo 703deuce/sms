@@ -22,7 +22,7 @@ Idempotency-Key: create-<projectId>
 {"projectId":"msp_..."}
 ```
 
-The endpoint requires an authenticated Transovo session and matching project owner. It creates a `MotionStudioAgentJob`, generates a random job-specific token, stores only its SHA-256 hash, and performs one server-side POST to the Grokbot routine webhook:
+During no-login testing, the endpoint uses Motion Studio's pinned workspace and internal operator, without any session or login requirement. **Do not enable unrestricted paid public production until tenant authorization and abuse protection are implemented.** It creates a `MotionStudioAgentJob`, generates a random job-specific token, stores only its SHA-256 hash, and performs one server-side POST to the Grokbot routine webhook:
 
 ```http
 Authorization: Bearer <GROKBOT_WEBHOOK_KEY>
@@ -37,7 +37,7 @@ The customer-facing status endpoint, polled by the existing project workspace, i
 GET /api/motion-studio/agent/jobs?projectId=<MotionStudioProject.id>
 ```
 
-It requires an authenticated session and project ownership. It returns job state and, when completed, a temporary signed MP4 playback URL, but never a secret or storage key.
+During testing it uses the pinned workspace without a login. Project IDs are unguessable, but this is **not a substitute for production access control**. It returns job state and, when completed, a temporary signed MP4 playback URL, but never a secret or storage key.
 
 ## Bot callback contract (live mode)
 
@@ -92,7 +92,7 @@ POST /api/motion-studio/agent/jobs/<jobId>/complete
 
 ## Deployment smoke-test procedure
 
-1. Confirm the additive Prisma migration has applied, the two Grokbot env vars exist only on the server, and `GROKBOT_LIVE_MODE` is unset.
+1. Confirm the additive Prisma migration has applied, the two Grokbot env vars exist only on the server, and `GROKBOT_LIVE_MODE` is unset. Motion Studio does not require login during this test.
 2. Open Motion Studio and click Generate once with a small test prompt.
 3. Confirm the project page displays a dispatched setup-mode job and a stable `msaj_...` job ID.
 4. Confirm the Grokbot routine reports exactly the same `jobId` and `projectId`, with `setupMode: true`, and does not start research or rendering.
