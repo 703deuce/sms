@@ -1,3 +1,4 @@
+import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { dispatchClipAgentFinish, listClipAgentFinishes, clipAgentError } from '@/lib/server/clips/agent-finish'
 
@@ -12,6 +13,8 @@ export async function GET(_req: Request,ctx:{params:Promise<{id:string}>}) {
 
 /** Starts finishing of existing discovered/scored moments. No new clip scoring. */
 export async function POST(request:Request,ctx:{params:Promise<{id:string}>}) {
+  const denied=assertDevApiAccess(request)
+  if(denied) return denied
   try {
     const {id}=await ctx.params
     const workspaceId=await resolveWorkspaceId()
