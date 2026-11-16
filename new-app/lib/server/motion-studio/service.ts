@@ -1119,7 +1119,9 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
   const patch = J(ex.editsPatch)
   const existing = await db().clip.findUnique({ where: { id: row.clipId }, select: { edits: true, aiMeta: true } })
   const meta = J(existing?.aiMeta)
-  if (existing && meta.motionStudioTimelineVersion === row.timelineVersion)
+  const agentSource = ex.source === 'transovo_agent' || ex.source === 'grokbot_agent'
+  if (existing && meta.motionStudioTimelineVersion === row.timelineVersion &&
+    (!agentSource || meta.motionStudioImportedManifest === true))
     return { clipProjectId: row.clipProjectId, clipId: row.clipId, edits: existing.edits as unknown as ClipEditsV2 }
   let musicUploadId: string | null = null
   try {
@@ -1134,7 +1136,8 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
     musicUploadId,
     lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
   })
-  if (ex.source === 'transovo_agent' || ex.source === 'grokbot_agent') {
+  let manifestImported = false
+  if (agentSource) {
     const selectedAgentJobId = typeof ex.agentJobId === 'string' ? ex.agentJobId : null
     const job = await db().motionStudioAgentJob.findFirst({ where: {
       projectId: id, workspaceId, status: 'complete',
@@ -1143,11 +1146,12 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
     if (job) {
       const imported = await importAgentTimeline({ workspaceId, motionProjectId: id, clipProjectId: row.clipProjectId,
         durationMs, base: edits, latestJobId: job.id })
-      if (imported) edits = imported
+      if (imported) { edits = imported; manifestImported = true }
     }
   }
   const placedMusic = edits.audio?.music?.uploadId?.startsWith(MS_MUSIC_ID_PREFIX) ? edits.audio.music.uploadId : (meta.motionStudioMusicUploadId ?? null)
-  const aiMeta = { ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion, motionStudioMusicUploadId: placedMusic }
+  const aiMeta = { ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion,
+    motionStudioMusicUploadId: placedMusic, ...(agentSource ? {motionStudioImportedManifest:manifestImported} : {}) }
   await db().clip.upsert({
     where: { id: row.clipId },
     create: { id: row.clipId, workspaceId, projectId: row.clipProjectId, title: (row.title || 'Documentary').slice(0, 120), reason: 'motion_studio',
