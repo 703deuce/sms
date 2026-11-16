@@ -304,3 +304,87 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     data: toPrismaJson({ jobId: id, percent: 100 }) } })
   return publicJob(completed)
 }
+
+
+/** Workspace-scoped persisted customer conversation, independent of production-run retries. */
+export async function agentThread(workspaceId: string, projectId: string) {
+  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } })
+  if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
+  const [messages, jobs] = await Promise.all([
+    db().motionStudioAgentMessage.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' }, take: 250 }),
+    db().motionStudioAgentJob.findMany({ where: { workspaceId, projectId, status: 'complete' },
+      select: { id: true, revision: true, createdAt: true }, orderBy: { revision: 'asc' } }),
+  ])
+  return { threadId: projectId, messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
+    timestamp:m.createdAt.toISOString(),jobId:m.jobId })),
+    versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,createdAt:j.createdAt.toISOString() })) }
+}
+
+export async function submitAgentRevision(workspaceId: string, userId: string, projectId: string, request: Request, raw: unknown) {
+  const input = toObject(raw)
+  const instruction = str(input.instruction || input.text, 2500)
+  if (instruction.length < 2) throw new MotionStudioError('INVALID', 'Tell Transovo what to change.', 400)
+  const selectedElementIds = Array.isArray(input.selectedElementIds)
+    ? input.selectedElementIds.slice(0,20).map(v=>str(v,80)).filter(Boolean) : []
+  const times = Array.isArray(input.timeRangeMs) ? input.timeRangeMs.map(Number) : []
+  const timeRangeMs: [number,number] | undefined = times.length === 2 && times.every(Number.isSafeInteger) &&
+    times[0] >= 0 && times[1] > times[0] ? [times[0],times[1]] : undefined
+  const existing = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } })
+  if (!existing) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
+  const key = str(request.headers.get('Idempotency-Key'),120) || 'revision-' + randomUUID()
+  const prior = await db().motionStudioAgentJob.findUnique({ where: { projectId_idempotencyKey: {
+    projectId, idempotencyKey: key } } })
+  if (prior) return publicJob(prior)
+  const message = await db().motionStudioAgentMessage.create({ data: { id: 'msmsg_' + randomUUID(),
+    projectId, role: 'customer', text: instruction } })
+  const job = await dispatchAgentJob(workspaceId,userId,projectId,key,request,{instruction,selectedElementIds,timeRangeMs})
+  await db().motionStudioAgentMessage.update({ where: { id: message.id }, data: { jobId: job.id } })
+  return job
+}
+
+export async function botPostMessage(id: string, request: Request, raw: unknown) {
+  const job = await requireBotJob(id,request)
+  const input = toObject(raw)
+  const text = friendlyMessage(input.text, 'review')
+  if (!str(input.text,2000)) throw new MotionStudioError('INVALID','Message required.',400)
+  const item = await db().motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
+    projectId:job.projectId,jobId:id,role:'agent',text } })
+  if (input.needsInput === true && !isDone(job.status)) {
+    await db().motionStudioAgentJob.update({ where: { id }, data: {
+      status: 'needs_input', tokenExpiresAt: new Date(Date.now() + 36*3600_000),
+      message: "We're waiting for your direction…" } })
+  }
+  return { id:item.id, role:'agent',text:item.text,timestamp:item.createdAt.toISOString() }
+}
+
+/** A revision's bearer token can retrieve only its own declared parent artifacts. */
+export async function botParentArtifacts(id: string, request: Request) {
+  const job = await requireBotJob(id,request)
+  if (!job.parentJobId) throw new MotionStudioError('NOT_FOUND','No parent version.',404)
+  const parent = await db().motionStudioAgentJob.findFirst({ where: {
+    id:job.parentJobId, projectId:job.projectId, workspaceId:job.workspaceId,status:'complete' } })
+  if (!parent) throw new MotionStudioError('NOT_FOUND','Previous version unavailable.',404)
+  const list = artifacts(parent.artifacts).filter(a=>a.state==='ready').slice(0,300)
+  return { parentJobId:parent.id,revision:parent.revision, artifacts: await Promise.all(list.map(async a => ({
+    id:a.id,elementId:a.elementId,trackId:a.trackId,filename:a.filename,kind:a.kind,mime:a.mime,
+    url:await createReadableSignedUrl(a.key,900).catch(()=>null) }))) }
+}
+
+/** Excludes bot secrets and URLs from logs and any public progress response. */
+export async function cancelAgentJob(workspaceId: string, projectId: string, id: string) {
+  const job = await db().motionStudioAgentJob.findFirst({ where: { id,projectId,workspaceId } })
+  if (!job) throw new MotionStudioError('NOT_FOUND','Job not found.',404)
+  if (isDone(job.status)) return publicJob(job)
+  const updated = await db().motionStudioAgentJob.update({ where:{id},data:{
+    status:'cancelled',phase:'cancelled',message:'Production cancelled.',completedAt:new Date() } })
+  if (agentBridgeConfigured()) {
+    const url = process.env.GROKBOT_WEBHOOK_URL!
+    // Best effort; cancellation is also visible through GET /jobs/:id polling.
+    try {
+      await fetch(url,{method:'POST',redirect:'error',headers:{Authorization:'Bearer '+process.env.GROKBOT_WEBHOOK_KEY!,
+        'Content-Type':'application/json'},body:JSON.stringify({action:'cancel',jobId:id}),
+        signal:AbortSignal.timeout(5000)})
+    } catch { /* The persisted cancellation status is authoritative. */ }
+  }
+  return publicJob(updated)
+}
