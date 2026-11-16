@@ -23,8 +23,13 @@ export async function EditorPayloadSection({
 }) {
   const initialPanel = editorPanelFromSearchParam(initialTab)
   let data
+  const started = Date.now()
+  if (motionStudioProjectId) console.info('[motion-studio:editor-page] payload_start', { clipId, projectId })
   try {
     data = await getClipEditorPayload(workspaceId, clipId, {fastMotionStudio: Boolean(motionStudioProjectId)})
+    if (motionStudioProjectId) console.info('[motion-studio:editor-page] payload_ready', {
+      clipId, elapsedMs: Date.now() - started, hasMedia: Boolean(data?.media),
+    })
   } catch (err) {
     console.error('[clipper:editor-page] payload_failed', {
       clipId,
