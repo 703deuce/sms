@@ -62,7 +62,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
 
-export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request) {
+export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
+export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
   if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
   const project = await db().motionStudioProject.findFirst({
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
@@ -70,7 +71,10 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   // No-login Motion Studio testing: the pinned workspace is the project scope.
   // Before public paid production, restore per-tenant authorization.
-  if (project.status !== 'setup') throw new MotionStudioError('CONFLICT', 'The old production pipeline has started.', 409)
+  if (!revisionRequest && project.status !== 'setup') throw new MotionStudioError('CONFLICT', 'The old production pipeline has started.', 409)
+  const parent = revisionRequest ? await db().motionStudioAgentJob.findFirst({
+    where: { workspaceId, projectId, status: 'complete' }, orderBy: [{ revision: 'desc' }, { createdAt: 'desc' }] }) : null
+  if (revisionRequest && !parent) throw new MotionStudioError('CONFLICT', 'Finish a video before requesting edits.', 409)
   const idempotencyKey = str(key, 120) || 'initial-production'
   const where = { projectId_idempotencyKey: { projectId, idempotencyKey } }
   const previous = await db().motionStudioAgentJob.findUnique({ where })
@@ -82,7 +86,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const jobsToday = await db().motionStudioAgentJob.count({
     where: { userId, createdAt: { gte: today } },
   })
-  if (jobsToday >= 3) throw new MotionStudioError('CONFLICT', 'Daily agent test limit reached (3 jobs).', 429)
+  if (jobsToday >= (revisionRequest ? 12 : 3)) throw new MotionStudioError('CONFLICT', 'Daily testing limit reached.', 429)
   const active = await db().motionStudioAgentJob.count({
     where: { userId, status: { in: ['dispatching', 'dispatched', 'running'] } },
   })
@@ -93,7 +97,8 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   let job
   try {
     job = await db().motionStudioAgentJob.create({ data: { id, projectId, workspaceId, userId,
-      idempotencyKey, tokenHash, tokenExpiresAt: new Date(Date.now() + 36 * 3600_000),
+      idempotencyKey, parentJobId: parent?.id ?? null, revision: parent ? parent.revision + 1 : 0,
+      tokenHash, tokenExpiresAt: new Date(Date.now() + 36 * 3600_000),
       status: 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
       message: 'Submitting assignment to the production bot.' } })
   } catch (err) {
@@ -108,7 +113,14 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const settings = toObject(project.settings)
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
-    version: 1, jobId: id, projectId, action: 'create_video', title: project.title, prompt: project.brief,
+    version: 1, jobId: id, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
+    ...(parent ? { parentJobId: parent.id, revision: parent.revision + 1, threadId: projectId,
+      instruction: revisionRequest?.instruction,
+      selectedElementIds: revisionRequest?.selectedElementIds ?? [],
+      timeRangeMs: revisionRequest?.timeRangeMs ?? null,
+      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId },
+        orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role, text: m.text })) } : {}),
+    title: project.title, prompt: project.brief,
     durationSeconds: [30,60,120,180,300].includes(Number(settings.durationSeconds))
       ? Number(settings.durationSeconds) : Math.round((Number(settings.lengthMin) || 3) * 60),
     aspectRatio: str(settings.format, 30).split('_')[0] || '16:9',
@@ -131,11 +143,11 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     const response = await fetch(rawUrl, { method: 'POST', cache: 'no-store', redirect: 'error',
       headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
       body: JSON.stringify(payload), signal: AbortSignal.timeout(15_000) })
-    if (response.status !== 200) throw new Error('Webhook HTTP ' + response.status)
+    if (!response.ok) throw new Error('Webhook HTTP ' + response.status)
     job = await db().motionStudioAgentJob.update({ where: { id }, data: { status: 'dispatched', phase: 'accepted',
-      dispatchedAt: new Date(), message: agentBridgeLive() ? 'Bot accepted the production request.' : 'Setup-mode job received; rendering is disabled.' } })
+      dispatchedAt: new Date(), message: agentBridgeLive() ? (revisionRequest ? "We're updating your video…" : "We're preparing your video…") : 'Setup-mode job received; rendering is disabled.' } })
     await db().studioActivityEvent.create({ data: { projectId, stage: 'story', kind: 'stage',
-      message: 'Agent webhook accepted' + (agentBridgeLive() ? '.' : ' (setup mode).') } })
+      message: 'Transovo Agent accepted your request' + (agentBridgeLive() ? '.' : ' (setup mode).') } })
     console.info('[motion-studio:agent] dispatched', { jobId: id, projectId, setupMode: !agentBridgeLive() })
   } catch (err) {
     job = await db().motionStudioAgentJob.update({ where: { id }, data: { status: 'dispatch_failed',
