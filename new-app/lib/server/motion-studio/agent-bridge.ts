@@ -52,9 +52,14 @@ function publicJob(job: PublicJob) {
 }
 
 export async function userAgentJob(workspaceId: string, projectId: string, _userId: string) {
-  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId }, select: { id: true } })
+  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId }, select: { id: true, exportInfo: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  const job = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
+  const latest = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
+  const selectedJobId = str(toObject(project.exportInfo).agentJobId, 100)
+  const selected = selectedJobId ? await db().motionStudioAgentJob.findFirst({ where: {
+    id: selectedJobId, workspaceId, projectId, status: 'complete' } }) : null
+  const job = latest && ['dispatching','dispatched','running','needs_input'].includes(latest.status)
+    ? latest : selected ?? latest
   if (!job) return null
   const previousVideo = !job.resultKey && job.parentJobId
     ? await db().motionStudioAgentJob.findFirst({ where: { id: job.parentJobId,
@@ -280,7 +285,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
       select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
       stage: 'review', completedAt: now, timelineVersion: { increment: 1 }, exportInfo: toPrismaJson({
-        masterKey: video.key, smallKey: video.key, durationMs, source: 'transovo_agent',
+        masterKey: video.key, smallKey: video.key, durationMs, source: 'transovo_agent', agentJobId: id,
         storageDriver: storageDriverName(),
       }) } })
     // The initial Motion Studio project creates an empty editor canvas. Attach
@@ -304,6 +309,11 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
       kind: 'stage', message: DEFAULT_STAGE_MESSAGES.complete } })
     return result
   })
+  if (job.parentJobId) {
+    await db().motionStudioAgentMessage.create({ data: { id:'msmsg_' + randomUUID(),
+      projectId:job.projectId,jobId:id,role:'agent',
+      text:friendlyMessage(input.summary || "We've finished your changes. The updated version is ready.",'complete') } })
+  }
   await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'complete', kind: 'agent_progress', message: DEFAULT_STAGE_MESSAGES.complete,
     data: toPrismaJson({ jobId: id, percent: 100 }) } })
   return publicJob(completed)
