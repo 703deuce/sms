@@ -1,3 +1,4 @@
+import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { dispatchClipAgentDiscover, listClipAgentFinishes, clipAgentError } from '@/lib/server/clips/agent-finish'
 
@@ -13,6 +14,8 @@ export async function GET(_request:Request,context:{params:Promise<{id:string}>}
 
 /** Runs one unified Grok director on the uploaded project to find and finish clips. */
 export async function POST(request:Request,context:{params:Promise<{id:string}>}) {
+  const denied=assertDevApiAccess(request)
+  if(denied) return denied
   try {
     const {id}=await context.params
     const body=await request.json().catch(()=>( {} )) as {maxClips?:unknown}
