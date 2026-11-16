@@ -35,6 +35,26 @@ describe('Motion Studio -> Compact Editor timeline', () => {
     expect(buildMotionStudioEditorEdits({ base: removed, durationMs: 20000, patch: { motionStudio: ext }, musicUploadId: 'msmuB', lastPlacedMusicUploadId: 'msmuA' }).audio?.music).toBeNull()
   })
 
+  it('keeps a 3:11 eight-scene film on the full canvas, including baked narration', () => {
+    const durationMs = 191_000
+    const boundaries = [0, 10_000, 33_000, 56_000, 78_000, 102_000, 129_000, 156_000, durationMs]
+    const fullFilm: ClipMotionStudioExt = {
+      ...ext, durationMs,
+      segments: boundaries.slice(0, -1).map((startMs, i) => ({ startMs, endMs: boundaries[i + 1]! })),
+    }
+    const edits = buildMotionStudioEditorEdits({
+      base: null, durationMs, patch: { motionStudio: fullFilm },
+      musicUploadId: null, lastPlacedMusicUploadId: null,
+    })
+    expect(edits.trim).toEqual({ in: 0, out: 191_000 })
+    expect(edits.videoSplits).toEqual(boundaries.slice(1, -1))
+    expect((edits.videoSplits?.length ?? 0) + 1).toBe(8)
+    // Without an independent narration stem, playback stays on the full
+    // assembled source (which includes narration); no fake short replacement.
+    expect(edits.sourceSegments ?? []).toEqual([])
+    expect(edits.audio?.music).toBeNull()
+  })
+
   it('older assemblies without a music stem keep the full-mix canvas and no music item', () => {
     const e = buildMotionStudioEditorEdits({ base: null, durationMs: 20000, patch: { motionStudio: ext }, musicUploadId: null, lastPlacedMusicUploadId: null })
     expect(e.audio?.music).toBeNull()
