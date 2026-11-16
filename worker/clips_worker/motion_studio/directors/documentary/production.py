@@ -507,6 +507,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
         )
         log("model_call", "production design", m)
         out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
+        reconcile_explicit_no_transition(out, log)
         errs = validate_plan(out, story, catalog)
         berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
@@ -523,6 +524,7 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             )
             log("model_call", "production design repair", m)
             out = _merge_model_design(copy.deepcopy(editorial), story, catalog, inventory, raw)
+            reconcile_explicit_no_transition(out, log)
             errs = validate_plan(out, story, catalog)
             berrs = validate_blueprint(out.get("blueprint")) + validate_scene_objectives(out, catalog)
         if errs or berrs:
@@ -595,6 +597,40 @@ def _beat_requires_travel(beat: dict) -> bool:
     return beat.get("hold") is False and beat.get("hold") is not None
 
 
+def reconcile_explicit_no_transition(plan: dict, log) -> None:
+    """Normalize a very narrow contradiction before the Engineer sees it.
+
+    A single-scene composition has no adjacent scene. If the Designer explicitly
+    says there is *no* scene transition, that statement wins over a stray
+    'transition' required-effect label. Never discard a positive transition,
+    and never invent a neighbor.
+    """
+    scenes = [s for s in plan.get("scenes") or []
+              if s.get("kind") not in ("handoff", "hardcut")]
+    if len(plan.get("scenes") or []) != 1 or len(scenes) != 1:
+        return
+    bindings = (plan.get("blueprint") or {}).get("sceneBindings") or []
+    for binding in bindings:
+        if not isinstance(binding, dict):
+            continue
+        intent = str(binding.get("transitionIntent") or "")
+        if not re.search(r"\\b(?:without|no|none|avoid|skip|omit)\\b[^.!?;]{0,75}\\b(?:scene\\s+)?transitions?\\b",
+                         intent, re.I):
+            continue
+        required = list(binding.get("requiredEffects") or [])
+        if "transition" not in required:
+            # Even a negative note must not become a requested outgoing effect.
+            binding["transitionIntent"] = None
+            continue
+        binding["requiredEffects"] = [e for e in required if e != "transition"]
+        binding["transitionIntent"] = None
+        log("design_transition_reconciled",
+            "single-scene explicit NO transition beats contradictory required-effect label",
+            {"sceneIndex": binding.get("sceneIndex"), "originalIntent": intent,
+             "removedEffect": "transition", "remainingEffects": binding["requiredEffects"],
+             "reason": "the approved direction says no scene transition and no next scene exists"})
+
+
 def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> list[str]:
     """Live-path check: each graphics beat records how the asset and tools support it."""
     errs: list[str] = []
@@ -657,6 +693,13 @@ def validate_scene_objectives(plan: dict, catalog: list[dict] | None = None) -> 
             errs.append(f"scene {idx}: required property_animation has no explicitly animated element")
         if "transition" in approved and not b.get("transitionIntent"):
             errs.append(f"scene {idx}: required transition has no authored transitionIntent")
+        if "transition" in approved and len(scenes) == 1:
+            errs.append(f"scene {idx}: required inter-scene transition has no adjacent scene in this single-scene production")
+        if "transition" in approved and re.search(
+            r"\\b(?:without|no|none|avoid|skip|omit)\\b[^.!?;]{0,75}\\b(?:scene\\s+)?transitions?\\b",
+            str(b.get("transitionIntent") or ""), re.I,
+        ):
+            errs.append(f"scene {idx}: required transition contradicts explicit no-transition intent")
         if b.get("transitionIntent") and "transition" not in approved:
             errs.append(f"scene {idx}: transitionIntent is authored but transition not in requiredEffects")
         if "custom_component" in approved and idx not in custom:

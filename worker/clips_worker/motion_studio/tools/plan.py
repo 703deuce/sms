@@ -135,6 +135,29 @@ def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list
     return prepared, changes, problems
 
 
+def _enforce_approved_memberships(spec: dict, composition: list[dict]) -> list[dict]:
+    """Add an explicitly approved member to an existing group, never invent a group."""
+    changes = []
+    objects = spec.get("objects") or {}
+    typography = spec.get("typography") or {}
+    for element in composition:
+        if not isinstance(element, dict):
+            continue
+        oid, gid = element.get("id"), element.get("groupId")
+        if not oid or not gid or oid not in objects and oid not in typography:
+            continue
+        group = objects.get(gid)
+        if not group or group.get("kind") != "group":
+            continue
+        members = group.setdefault("memberIds", [])
+        if oid not in members:
+            members.append(oid)
+            changes.append({"kind": "restore_approved_group_member",
+                            "groupId": gid, "memberId": oid,
+                            "reason": "explicitly specified in Designer compositionElements"})
+    return changes
+
+
 def compile_agent_output(
     out: dict[str, Any] | None,
     *,
@@ -184,6 +207,10 @@ def compile_agent_output(
                 return {"ok": False, "limitation": None, "tier": 1, "code": None, "spec": spec,
                         "errors": errors, "results": [r.as_dict() for r in results],
                         "toolAdjustments": adjustments}
+        membership_changes = _enforce_approved_memberships(
+            spec, list(composition_elements or []))
+        if payload.get("tools"):
+            adjustments.extend(membership_changes)
         clamp_spec_timing(spec)
         problems = validate_spec(spec, catalog_ids=catalog_ids)
         if problems:
