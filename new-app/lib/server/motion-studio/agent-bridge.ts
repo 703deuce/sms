@@ -443,3 +443,23 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
   })
   return { activeJobId:jobId,revision:job.revision }
 }
+
+
+/** Private operational telemetry; never included in publicJob or customer chat. */
+export async function botRecordUsage(id: string, request: Request, raw: unknown) {
+  const job = await requireBotJob(id, request)
+  const input = toObject(raw)
+  if (!Array.isArray(input.items)) throw new MotionStudioError('INVALID','Usage items required.',400)
+  const items = input.items.slice(0,100).map(v=>{
+    const item = toObject(v)
+    const provider = str(item.provider,80)
+    const units = Number(item.units), usd = Number(item.usd)
+    if (!provider || !Number.isFinite(units) || units < 0 || !Number.isFinite(usd) || usd < 0)
+      throw new MotionStudioError('INVALID','Invalid usage item.',400)
+    return {provider,units,usd}
+  })
+  const updated = await db().motionStudioAgentJob.update({ where:{id},data:{usage:toPrismaJson({
+    items,recordedAt:new Date().toISOString()
+  }) } })
+  return {jobId:updated.id,stored:true}
+}
