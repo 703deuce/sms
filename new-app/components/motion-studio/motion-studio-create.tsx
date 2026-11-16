@@ -177,6 +177,19 @@ export function MotionStudioCreate({
         mediaPolicy: 'uploads_only',
         idempotencyKey: idemKey.current,
       })
+      if (client.mode === 'live') {
+        // Keep the existing Motion Studio project and route. The autonomous
+        // production bot is dispatched from the server; never expose its key.
+        const response = await fetch('/api/motion-studio/agent/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'create-' + project.id },
+          body: JSON.stringify({ projectId: project.id }),
+        })
+        if (!response.ok) {
+          const issue = await response.json().catch(() => ({})) as { error?: string }
+          throw new Error(issue.error || 'Could not submit the project to the production bot.')
+        }
+      }
       router.push(`${MOTION_STUDIO_ROUTE}/${encodeURIComponent(project.id)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not start the project. Try again.')
