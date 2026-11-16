@@ -30,6 +30,7 @@ export function MotionStudioEditorLanes({
   const [project, setProject] = useState<MsProject | null>(null)
   const [agentTracks, setAgentTracks] = useState<{ id: string; label: string; items: { id: string; startMs: number; endMs: number }[] }[] | null>(null)
   const [agentDurationMs, setAgentDurationMs] = useState(0)
+  const [selectedAgentElementId, setSelectedAgentElementId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
@@ -110,7 +111,7 @@ export function MotionStudioEditorLanes({
                   const left=Math.min(100,100*item.startMs/total)
                   const width=Math.max(0.5,100*(item.endMs-item.startMs)/total)
                   return <button type="button" key={item.id} title={item.id}
-                    onClick={()=>onSeek(item.startMs)}
+                    onClick={()=>{setSelectedAgentElementId(item.id);onSeek(item.startMs)}}
                     className="absolute top-1 h-6 truncate rounded border border-primary/20 bg-primary/20 px-1 text-left text-[10px] hover:bg-primary/30"
                     style={{left:left+'%',width:Math.min(100-left,width)+'%'}}>
                     {item.id}
@@ -122,7 +123,7 @@ export function MotionStudioEditorLanes({
             <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />
           </div>}
         </div>
-        <AgentChatPanel projectId={projectId} selectedElementIds={current ? [current.id] : []} />
+        <AgentChatPanel projectId={projectId} selectedElementIds={selectedAgentElementId ? [selectedAgentElementId] : current ? [current.id] : []} selectedTimeMs={outputMs} />
       </div>
     </div>
   )
