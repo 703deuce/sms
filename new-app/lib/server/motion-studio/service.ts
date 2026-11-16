@@ -1169,7 +1169,10 @@ export async function syncEditorClipIfStale(workspaceId: string, motionStudioPro
     select: { clipId: true, timelineVersion: true, exportInfo: true } })
   if (!row || row.clipId !== clipId || !row.exportInfo) return false
   const clip = await db().clip.findUnique({ where: { id: clipId }, select: { aiMeta: true } })
-  if (J(clip?.aiMeta).motionStudioTimelineVersion === row.timelineVersion) return false
+  const meta = J(clip?.aiMeta)
+  const source = J(row.exportInfo).source
+  if (meta.motionStudioTimelineVersion === row.timelineVersion &&
+    (!['transovo_agent','grokbot_agent'].includes(String(source)) || meta.motionStudioImportedManifest === true)) return false
   await ensureEditorClip(workspaceId, motionStudioProjectId)
   return true
 }
