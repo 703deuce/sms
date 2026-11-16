@@ -276,7 +276,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
   const input = toObject(raw)
   if (input.status === 'failed') {
-    const message = friendlyMessage(input.message, 'fixing') || "We hit a snag finishing your video."
+    const message = "We hit a snag finishing your video. Please try again."
     const failed = await db().motionStudioAgentJob.update({ where: { id },
       data: { status: 'failed', phase: 'failed', message, completedAt: new Date() } })
     return publicJob(failed)
