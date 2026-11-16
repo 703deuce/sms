@@ -169,6 +169,148 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
   return publicJob(job)
 }
 
+/**
+ * Project-wide autonomous clipping: Grok decides which moments deserve clips,
+ * scores them, chooses the cuts, and finishes each with its creative engines.
+ * This intentionally does not reuse the legacy pick list as its source of truth.
+ */
+export async function dispatchClipAgentDiscover(workspaceId:string,projectId:string,
+  request:Request,idempotencyKey:string,maximumClips:number) {
+  if (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY ||
+      process.env.GROKBOT_LIVE_MODE!=='1') throw problem('Transovo Agent is not connected.',503)
+  const project=await prisma().clipProject.findFirst({
+    where:{id:projectId,workspaceId,deletedAt:null},
+    select:{id:true,title:true,status:true,rangeEndMs:true,
+      upload:{select:{key:true,filename:true,mime:true,durationMs:true}}},
+  })
+  if (!project) throw problem('Project not found.',404)
+  if (!project.upload?.key) throw problem('Upload a source video first.',409)
+  if (project.status!=='READY') throw problem('Wait for your source video to finish processing.',409)
+  const slot='project:'+projectId
+  const key=word(idempotencyKey,120)||'agent-discovery-v1'
+  const previous=await prisma().clipAgentFinishJob.findUnique({
+    where:{clipId_idempotencyKey:{clipId:slot,idempotencyKey:key}},
+  })
+  if(previous) return publicJob(previous)
+  const active=await prisma().clipAgentFinishJob.count({where:{
+    workspaceId,status:{in:['dispatching','dispatched','running']},
+  }})
+  if(active>=6) throw problem('Too many productions are running.',429)
+  const today=new Date();today.setUTCHours(0,0,0,0)
+  if(await prisma().clipAgentFinishJob.count({where:{workspaceId,createdAt:{gte:today}}})>=30)
+    throw problem('Daily production limit reached.',429)
+  const sourceUrl=await createReadableSignedUrl(project.upload.key,3600)
+  const id='caf_'+randomUUID(),token=randomBytes(32).toString('base64url')
+  const root=callbackOrigin(request)+'/api/clips/agent/jobs/'+encodeURIComponent(id)
+  let job=await prisma().clipAgentFinishJob.create({data:{
+    id,workspaceId,projectId,clipId:slot,idempotencyKey:key,
+    tokenHash:digest(id+':'+token).toString('hex'),
+    tokenExpiresAt:new Date(Date.now()+36*3600_000),
+    status:'dispatching',phase:'dispatch',message:'Finding your best moments.',
+  }})
+  const payload={
+    version:1,action:'clip_and_finish',mode:'autonomous_clipper',jobId:id,
+    projectId,jobToken:token,jobUrl:root,callbackUrl:root,
+    title:project.title,
+    source:{url:sourceUrl,filename:project.upload.filename,mime:project.upload.mime,
+      startMs:0,endMs:project.upload.durationMs??project.rangeEndMs,
+      durationMs:project.upload.durationMs??project.rangeEndMs},
+    maxClips:Math.max(1,Math.min(10,maximumClips)),
+    targetDurationsSeconds:[30,60],aspectRatio:'9:16',fps:30,
+    mediaPolicy:'user_footage_primary',webResearch:false,quality:'premium',
+    direction:'You are the ONE Transovo creative director. Analyze the full source recording, including picture, dialogue, action, speakers and changes in scene. Independently identify and score its strongest self-contained moments, rank by hook, payoff, comprehensibility, action and entertainment value, then produce up to maxClips polished social clips. Preserve the subjects original speech and video. Cut dead space, reorder only if coherent, dynamically reframe and track the relevant people, choose split-screen layouts when needed, and create story-specific motion graphics, captions and transitions. Choose any available engines, including layered ones, by creative merit and vary visual DNA across clips without sacrificing cohesion. Return each finished highlight as its own MP4 and a highlights.json manifest containing filename, source start/end times, delivered duration, title, score and why it was selected. Do not make a documentary from scratch.',
+  }
+  try {
+    const url=new URL(process.env.GROKBOT_WEBHOOK_URL)
+    if(url.protocol!=='https:') throw new Error('Webhook requires HTTPS')
+    const response=await fetch(url,{method:'POST',cache:'no-store',redirect:'error',
+      headers:{Authorization:'Bearer '+process.env.GROKBOT_WEBHOOK_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify(payload),signal:AbortSignal.timeout(15000)})
+    if(!response.ok) throw new Error('Webhook not accepted')
+    job=await prisma().clipAgentFinishJob.update({where:{id},data:{
+      status:'dispatched',phase:'selecting',message:messages.selecting,
+    }})
+  }catch(e){
+    job=await prisma().clipAgentFinishJob.update({where:{id},data:{
+      status:'dispatch_failed',phase:'dispatch',message:'Could not start. Please try again.',
+      completedAt:new Date(),error:'Producer unavailable.',
+    }})
+    console.error('[clip-agent] discover_dispatch_failed',{jobId:id,kind:e instanceof Error?e.name:'unknown'})
+  }
+  return publicJob(job)
+}
+
+/** Delivers multiple independently scored, agent-edited clips in one callback. */
+async function completeDiscoveredClips(job:Awaited<ReturnType<typeof authorizeClipAgentCallback>>,
+  raw:Record<string,unknown>) {
+  const all=items(job.artifacts)
+  const manifest=all.find(a=>a.state==='ready'&&a.filename==='highlights.json'&&a.mime==='application/json'
+    &&a.bytes<=2_000_000)
+  if(!manifest) throw problem('Upload highlights.json before finishing this project.',409)
+  let records:unknown
+  try {
+    const bytes=await getClipStorage().getObjectBytes(manifest.key)
+    if(bytes.byteLength>2_000_000) throw new Error('Too large')
+    const data=JSON.parse(bytes.toString('utf8'))
+    records=Array.isArray(data)?data:object(data).clips
+  }catch{throw problem('Highlights manifest is invalid.',400)}
+  if(!Array.isArray(records)||!records.length||records.length>10)
+    throw problem('Provide 1–10 scored highlight records.',400)
+  const videoFiles=new Set<string>()
+  const normalized=records.map((rawRow:unknown)=>{
+    const row=object(rawRow)
+    const filename=word(row.filename||row.videoFilename,150)
+    const title=word(row.title,120)||'Highlight'
+    const startMs=Number(row.startMs),endMs=Number(row.endMs),
+      durationMs=Number(row.durationMs),score=Number(row.score)
+    const why=word(row.why,300)
+    const video=all.find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&a.filename===filename)
+    if(!video||videoFiles.has(filename)||!Number.isSafeInteger(startMs)
+      ||!Number.isSafeInteger(endMs)||startMs<0||endMs<=startMs
+      ||!Number.isSafeInteger(durationMs)||durationMs<1000||durationMs>180_000
+      ||!Number.isInteger(score)||score<0||score>100) throw problem('Invalid scored clip or missing MP4.',400)
+    videoFiles.add(filename)
+    return {video,title,startMs,endMs,durationMs,score,why}
+  })
+  const src=await prisma().clipProject.findFirst({
+    where:{id:job.projectId,workspaceId:job.workspaceId,deletedAt:null},
+    select:{upload:{select:{durationMs:true}}},
+  })
+  if(!src) throw problem('Source project removed.',404)
+  const sourceDuration=src.upload?.durationMs
+  if(sourceDuration && normalized.some(r=>r.endMs>sourceDuration+1000))
+    throw problem('A clip exceeds its source media.',400)
+  const now=new Date()
+  const completed=await prisma().$transaction(async tx=>{
+    const existing=await tx.clipAgentFinishJob.findUnique({where:{id:job.id},select:{status:true}})
+    if(existing?.status==='complete') return tx.clipAgentFinishJob.findUniqueOrThrow({where:{id:job.id}})
+    for(const row of normalized) {
+      const clipId='clip_'+randomUUID()
+      await tx.clip.create({data:{
+        id:clipId,workspaceId:job.workspaceId,projectId:job.projectId,
+        title:row.title,reason:row.why||'Selected by Transovo Agent',
+        startMs:row.startMs,endMs:row.endMs,score:row.score,
+        scores:toPrismaJson({overall:row.score}),
+        previewKey:row.video.key,storageDriver:storageDriverName(),
+        aiMeta:toPrismaJson({
+          agentClipperRunId:job.id,agentClipper:true,why:row.why,
+          score:row.score,reasonTag:'both',deliveredDurationMs:row.durationMs,
+          agentFinishOriginalPreviewKey:null,
+          agentFinishedVersions:[{jobId:job.id,key:row.video.key,
+            durationMs:row.durationMs,completedAt:now.toISOString()}],
+        }),
+      }})
+    }
+    return tx.clipAgentFinishJob.update({where:{id:job.id},data:{
+      status:'complete',phase:'complete',progress:100,
+      message:normalized.length+' finished clips are ready.',
+      resultKey:normalized[0]!.video.key,
+      durationMs:normalized.reduce((a,r)=>a+r.durationMs,0),completedAt:now,
+    }})
+  })
+  return publicJob(completed)
+}
+
 export async function authorizeClipAgentCallback(id: string,request: Request) {
   const auth=request.headers.get('authorization')||''
   const token=auth.startsWith('Bearer ')?auth.slice(7):''
@@ -255,6 +397,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     }})
     return publicJob(j)
   }
+  if (job.clipId==='project:'+job.projectId) return completeDiscoveredClips(job,body)
   const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4')
   if (!video) throw problem('Upload and commit a finished MP4 first.',409)
   const durationMs=Number(body.durationMs)
