@@ -19,6 +19,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showVersions, setShowVersions] = useState(false)
+  const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
   const reload = useCallback(async () => {
     const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
       cache: 'no-store',
@@ -28,6 +29,12 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     setMessages(data.messages ?? [])
     setVersions(data.versions ?? [])
     setActiveJobId(data.activeJobId ?? null)
+    const jobResponse = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId),
+      {cache:'no-store'})
+    if (jobResponse.ok) {
+      const jobs = await jobResponse.json() as {job?: typeof liveJob}
+      setLiveJob(jobs.job ?? null)
+    }
   }, [projectId])
   useEffect(() => {
     let active = true
@@ -90,6 +97,17 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
         </button> : null}
       </li>)}
     </ol> : null}
+    {liveJob && !['complete','failed','cancelled','dispatch_failed'].includes(liveJob.status) ?
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs" role="status">
+        <p className="font-medium">We're working on your edit · {Math.round(liveJob.progress)}%</p>
+        <p className="mt-1 text-muted-foreground">{liveJob.message || "We're preparing your changes…"}</p>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary transition-all" style={{width:liveJob.progress+'%'}} />
+        </div>
+        <ol className="mt-2 max-h-28 overflow-y-auto space-y-1 text-muted-foreground">
+          {(liveJob.events??[]).slice(-5).map(e=><li key={e.id}>{e.message}</li>)}
+        </ol>
+      </div> : null}
     <ol className="max-h-80 min-h-20 space-y-3 overflow-y-auto" aria-live="polite">
       {messages.map(m => <li key={m.id} className={m.role === 'customer'
         ? 'ml-6 rounded-xl bg-primary/10 px-3 py-2 text-sm'
