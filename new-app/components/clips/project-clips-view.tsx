@@ -134,6 +134,8 @@ export function ProjectClipsView({
   projectHasUpload = false,
   autoAgentClipMode,
   autoAgentClipError,
+  autoGrokClipper = false,
+  autoGrokMaxClips = 3,
 }: {
   projectId: string
   projectTitle: string
@@ -160,6 +162,8 @@ export function ProjectClipsView({
   autoAgentClipMode?: 'clip_moment_v1'|'clip_story_v1'|'clip_unified_v1'
   autoAgentClipSeconds?: 30|60|90
   autoAgentClipError?: string
+  autoGrokClipper?: boolean
+  autoGrokMaxClips?: number
 }) {
   useSetBreadcrumbTitle('project', projectTitle)
   const router = useRouter()
@@ -226,6 +230,25 @@ export function ProjectClipsView({
     const rows = data.clips as ClipCardData[]
     setClips(rows)
   }, [projectId])
+  // Opt-in autonomous clipper: once the uploaded project is ready, start Grok
+  // with a stable key. Re-mounts or page refreshes cannot charge a second run.
+  const grokAutoStarted = useRef(false)
+  useEffect(() => {
+    if (!autoGrokClipper || !projectHasUpload || byoProject || status !== 'READY' || grokAutoStarted.current) return
+    grokAutoStarted.current = true
+    void fetch('/api/clips/projects/' + encodeURIComponent(projectId) + '/agent-discover', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Idempotency-Key': 'auto-grok-'+projectId },
+      body: JSON.stringify({ maxClips: autoGrokMaxClips }),
+    }).then(async response => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string }
+        console.warn('[clipper:grok] auto_dispatch_unavailable', { projectId, status: response.status,
+          message: data.error || 'Unknown error' })
+      }
+    }).catch(() => {/* The project remains usable and manual retry is available. */})
+  }, [autoGrokClipper, autoGrokMaxClips, projectHasUpload, byoProject, status, projectId])
+
 
   const thumbnailBackfillRequestedRef = useRef<Set<string>>(new Set())
   const thumbnailBackfillControllersRef = useRef<Set<AbortController>>(new Set())
