@@ -18,7 +18,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showVersions, setShowVersions] = useState(false)
+  const [showVersions, setShowVersions] = useState(true)
   const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
   const reload = useCallback(async () => {
     const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
@@ -38,7 +38,9 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   }, [projectId])
   useEffect(() => {
     let active = true
-    const load = () => { if (active) void reload().catch(() => {/* brief network failures are retried */}) }
+    const load = () => { if (active) void reload().catch(() => {
+      if (active) setError('Version history and chat could not load. Please refresh or try again.')
+    }) }
     load()
     const timer = window.setInterval(load, 4000)
     return () => { active = false; window.clearInterval(timer) }
@@ -84,11 +86,15 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     aria-label="Transovo Agent editing conversation" data-testid="ms-agent-chat">
     <div className="flex items-center justify-between gap-2">
       <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4" /> Transovo Agent</h3>
-      {versions.length > 0 ? <button type="button" className="text-xs text-muted-foreground underline"
-        onClick={() => setShowVersions(v => !v)}>Versions ({versions.length})</button> : null}
     </div>
-    {showVersions ? <ol className="space-y-1 rounded-md bg-muted p-3 text-xs">
-      {versions.map(v => <li key={v.jobId} className="flex items-center justify-between gap-2">
+    <div className="rounded-lg border border-border p-3" data-testid="ms-agent-versions">
+      <button type="button" className="flex w-full items-center justify-between text-left text-sm font-semibold"
+        onClick={() => setShowVersions(v => !v)} aria-expanded={showVersions}>
+        Version history <span className="text-xs font-normal text-muted-foreground">{versions.length} saved {showVersions ? '▴' : '▾'}</span>
+      </button>
+      {showVersions ? <ol className="mt-3 space-y-2 text-xs">
+        {!versions.length ? <li className="text-muted-foreground">No saved versions are available yet.</li> : null}
+        {versions.map(v => <li key={v.jobId} className="flex items-center justify-between gap-2">
         <span>Version {v.revision + 1} · {new Date(v.createdAt).toLocaleDateString()}
           {activeJobId === v.jobId ? ' · Current' : ''}</span>
         {activeJobId !== v.jobId ? <button type="button" onClick={() => void restore(v.jobId)}
@@ -96,7 +102,8 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
           {restoring === v.jobId ? 'Restoring…' : 'Restore'}
         </button> : null}
       </li>)}
-    </ol> : null}
+      </ol> : null}
+    </div>
     {liveJob && !['complete','failed','cancelled','dispatch_failed'].includes(liveJob.status) ?
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs" role="status">
         <p className="font-medium">We're working on your edit · {Math.round(liveJob.progress)}%</p>
