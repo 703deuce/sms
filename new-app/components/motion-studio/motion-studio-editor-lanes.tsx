@@ -80,28 +80,28 @@ export function MotionStudioEditorLanes({
     }
   }, [client, projectId])
 
-  if (error)
+  if (error && !agentTracks?.length)
     return (
       <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground" role="status" data-testid="ms-editor-lanes-error">
         Motion Studio lanes unavailable: {error}
         <Link href={MOTION_STUDIO_ROUTE} className="text-primary hover:underline">Back to Motion Studio</Link>
       </p>
     )
-  if (!project)
+  if (!project && !agentTracks?.length)
     return (
       <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground" aria-busy="true">
         <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />
         Loading Motion Studio lanes…
       </p>
     )
-  const current = sceneAt(project.scenes, outputMs)
+  const current = project ? sceneAt(project.scenes, outputMs) : null
   return (
     <div className="flex flex-col gap-2" data-testid="ms-editor-lanes">
       <div className="flex items-center gap-2 text-xs">
         <Film className="size-3.5 text-lane-ai" aria-hidden />
         <span className="font-medium">{MOTION_STUDIO_NAME}</span>
-        <span className="truncate text-muted-foreground">· {project.title}{current ? ` · Scene ${current.index + 1}: ${current.title}` : ''}</span>
-        <Link href={`${MOTION_STUDIO_ROUTE}/${encodeURIComponent(project.id)}`} className="ml-auto inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+        <span className="truncate text-muted-foreground">· {project?.title ?? 'Your video'}{current ? ` · Scene ${current.index + 1}: ${current.title}` : ''}</span>
+        <Link href={`${MOTION_STUDIO_ROUTE}/${encodeURIComponent(projectId)}`} className="ml-auto inline-flex items-center gap-1 rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
           <ArrowLeft className="size-3" aria-hidden />
           Back to workspace
         </Link>
@@ -129,9 +129,9 @@ export function MotionStudioEditorLanes({
                 })}
               </div>
             </div>)}
-          </div> : <div className="min-w-[560px]">
+          </div> : project ? <div className="min-w-[560px]">
             <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />
-          </div>}
+          </div> : <p className="text-xs text-muted-foreground">We're loading your saved tracks…</p>}
         </div>
         <AgentChatPanel projectId={projectId} selectedElementIds={selectedAgentElementId ? [selectedAgentElementId] : current ? [current.id] : []} selectedTimeMs={outputMs} />
       </div>
