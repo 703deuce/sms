@@ -53,3 +53,17 @@ python worker/motion_lab/run.py world --mode agent --out /tmp/ms-world-agent
 **Acceptance for Stage 1:** the world is visibly built from actual paths and surfaces in the MP4; the agent path produces its own world with no substituted fallback. The Lab deliberately does **not** run tests on command import or auto-run anything. No production app changes are required.
 
 **Next, after human visual review:** Stage 2 adds two distinct camera poses and verifies visible parallax/travel, then animation, transitions, text/media, narration and full-film agent orchestration one at a time.
+
+## Agent-authored Stage 1 and full console diagnostics
+
+The deterministic MP4 only confirms the renderer. **Do not advance to Stage 2 until the agent pass succeeds and its MP4 is visually reviewed.** The `--mode agent` run calls the actual production `design_production` and `design_scene`, not a local imitation. The Designer authors geometry IDs, shapes and positions from the story; the Engineer must preserve them in a real compiled scene spec. The harness rejects missing world geometry and moving cameras. The lab only imposes a known **static** framing pose, using the production registered camera tool/compiler, to keep this step about world construction rather than camera direction.
+
+Every stage now emits unbuffered timestamped **console logs** and writes append-only `lab_events.jsonl` next to the MP4. Logged boundaries include: run start, designer call and validation, generated world count and IDs, engineer model/fix rounds and tool errors, exact spec preservation, camera framing, compiler output, sandbox render duration/frame count, still-frame extraction, and exceptions. Production agent logs and failed model responses are saved locally; **do not publish logs or artifacts containing prompts or user data**. The live console prints event summaries rather than credentials. `failure.json` preserves full tracebacks; failed Designer outputs go to `designer_failed_output.json`, failed Engineer code to `engineer_failed.py` if available.
+
+Recommended first agent run from repo root (use your actual worker API credentials):
+
+```bash
+python worker/motion_lab/run.py world --mode agent --out /tmp/ms-stage1-agent
+```
+
+Watch `/tmp/ms-stage1-agent/stage1_world_agent.mp4` and open `/tmp/ms-stage1-agent/stage1_world_agent_frame.png`. If the agent fails, send `/tmp/ms-stage1-agent/lab_events.jsonl`, `failure.json`, `designer_blueprint.json` or `engineer_result.json` as applicable; remove credentials/private content before sharing. Nothing is silently replaced with the canned reference world.
