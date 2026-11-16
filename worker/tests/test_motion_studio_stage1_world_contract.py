@@ -28,11 +28,11 @@ def _scene(elements):
 
 def test_lab_rejects_composite_phantom_id_instead_of_wasting_engineer_rounds():
     errors = validate_lab_world_only(_scene([
-        {"id": "street_perspective_lines", "kind": "path", "groupId": "city_composition",
+        {"id": "street_perspective_lines", "kind": "environment", "groupId": "city_composition",
          "connectTo": "env_horizon", "motion": "Static."}
     ]))
     assert len(errors) == 1
-    assert "phantom/aggregate" in errors[0]
+    assert "does not reference any approved world geometry ID" in errors[0]
 
 
 def test_lab_accepts_static_approved_world_ids_without_tool_object_duplicates():
@@ -95,3 +95,12 @@ def test_tool_boundary_does_not_assign_ambiguous_environment_ids():
         approved_world=_world(), duration_s=4, fps=24, world_id="world_grid")
     assert not prepared
     assert errors[0]["code"] == "MISSING_ENVIRONMENT_TOOL"
+
+
+def test_lab_allows_independent_foreground_paths_with_unique_ids():
+    assert validate_lab_world_only(_scene([
+        {"id": "city_center_tower", "kind": "path", "groupId": "city_reveal_group",
+         "connectTo": "env_horizon", "motion": "Draw the tower edge upward."},
+        {"id": "junction_marks", "kind": "circle", "groupId": "city_reveal_group",
+         "connectTo": None, "motion": "Fade in after the tower."},
+    ])) == []

@@ -463,13 +463,15 @@ def design_production(project: dict, story: dict, catalog: list[dict], plan: dic
             "STAGE 1 WORLD-CONSTRUCTION LAB CONTRACT: The camera is held still, there is no "
             "outgoing scene transition, and the focus is accurate detailed background geometry. "
             "DO NOT include camera_travel/transition in requiredEffects. "
-            "For every compositionElement representing an environment/world shape, set its id "
-            "to an EXACT id of ONE world.environmentElements item; no renamed duplicates, "
-            "plural bundles, or abstract/aggregate IDs such as 'street_grid' for five paths. "
-            "Set groupId, connectTo and motion to null on all static backdrop shapes. "
+            "For any compositionElement representing existing WORLD BACKDROP geometry, "
+            "use kind=environment and an EXACT id of ONE world.environmentElements item; "
+            "do not rename it or group/animate backdrop elements. "
+            "For NEW foreground art (outlined towers, title, marks, paths, circles), "
+            "use its own unique ID and a drawable object kind such as path/graphic/primitive/typography. "
+            "These independent objects MUST be created by registered tools before "
+            "they are grouped or animated. Preserve their authored geometry and timing. "
+            "Set groupId, connectTo and motion to null on static backdrop shape references. "
             "Environment shapes in create_environment are not individually groupable/animatable. "
-            "If you add a title or a standalone foreground graphic, it must have its own unique "
-            "tool-addressable id; group and animate ONLY those real foreground objects. "
             "Only request a requiredEffect when its exact tool implementation is designed. "
             "Do not invent a second name for existing world geometry. "
             if world_only_lab else ""
@@ -729,18 +731,22 @@ def validate_lab_world_only(plan: dict) -> list[str]:
             if eid in ids:
                 problems.append(f"scene {idx}: duplicate composition id {eid!r}")
             ids.add(eid)
-            if kind in ("environment", "surface", "line", "path", "rect", "rrect", "circle"):
-                if eid not in world_ids:
-                    problems.append(
-                        f"scene {idx}: composition element {eid!r} is a phantom/aggregate world shape. "
-                        "Use the EXACT individual environmentElements IDs (one per physical shape), "
-                        "not a second name for several shapes. For extra foreground art use kind=graphic "
-                        "with its own addressable tool object instead.")
-                    continue
+            # Only kind=environment claims a Designer-owned backdrop shape.
+            # A new kind=path/line/circle/etc. with a NEW id is valid as an
+            # independently created foreground object. The older check
+            # mistakenly rejected those as "phantom" backgrounds.
+            if kind == "environment" and eid not in world_ids:
+                problems.append(
+                    f"scene {idx}: environment composition element {eid!r} does not "
+                    "reference any approved world geometry ID. Use the exact "
+                    "environmentElements id, or create independent foreground "
+                    "artwork with an addressable primitive/graphic/path kind.")
+                continue
+            if eid in world_ids:
                 if e.get("groupId") or e.get("connectTo"):
                     problems.append(
                         f"scene {idx}: environment shape {eid!r} is not a groupable or linked "
-                        "scene object. Set groupId/connectTo to null for background geometry.")
+                        "scene object. Set groupId/connectTo to null for backdrop geometry.")
                 motion = str(e.get("motion") or "").strip().lower()
                 if motion and not motion.startswith((
                     "static", "still", "no animation", "no motion", "stationary", "hold position"

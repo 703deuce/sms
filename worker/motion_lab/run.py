@@ -221,8 +221,8 @@ def _summarize_world(world: dict) -> dict:
 def require_world(world: dict, *, stage: str) -> None:
     """Stage 1 genuinely needs drawable elements, not descriptive prose."""
     elements = world.get("environmentElements") or []
-    if len(elements) < 6:
-        raise RuntimeError(f"{stage}: world has {len(elements)} drawable elements; need >=6")
+    if not elements:
+        raise RuntimeError(f"{stage}: world has no drawable environmentElements")
     ids = [e.get("id") for e in elements if isinstance(e, dict)]
     if len(ids) != len(elements) or len(set(ids)) != len(ids) or any(not i for i in ids):
         raise RuntimeError(f"{stage}: world elements require unique nonempty IDs")
@@ -290,7 +290,8 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
         "chapters": [{"id": 1, "title": "A world begins", "lineIds": ["line_1"]}],
     }
     project = {"id": "motion_lab_stage1",
-               "settings": {"lengthMin": DURATION / 60, "voiceover": False, "music": False}}
+               "settings": {"lengthMin": DURATION / 60, "voiceover": False, "music": False,
+                            "motionLabWorldOnly": True}}
     # design_production consumes an already-approved FILM DIRECTOR plan.
     # Unlike the Production Designer's structured output, that upstream plan
     # owns style.fonts, music mood/reason, style reason and per-scene reasons.
@@ -332,6 +333,10 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
         raise RuntimeError("Lab's Film Director input is invalid: " +
                            "; ".join(director_errors))
     save_json(output / "director_plan.json", plan)
+    log("stage1.contract", "Enable Stage 1 world-only Designer constraints BEFORE the paid call",
+        {"worldOnlyLab": project["settings"]["motionLabWorldOnly"],
+         "camera": "hold", "transition": "none",
+         "worldGeometry": "Designer-owned drawable elements; no arbitrary minimum count"})
     log("designer.start", "Invoking the REAL Production Designer via production.design_production",
         {"model": config.model_for("production_designer"), "scene": ctx["scene"]["id"],
          "seconds": DURATION, "assets": 0, "cameraStage": "static world only"})
@@ -355,6 +360,11 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
     if not binding or not world or not world.get("environmentElements"):
         raise RuntimeError("Designer did not produce the required drawable Stage 1 world.")
     require_world(world, stage="agent.designer")
+    log("designer.geometry.audit", "Verified authored world geometry, no fixed shape-count threshold",
+        {"shapeCount": len(world["environmentElements"]),
+         "pathSegments": sum(max(0, len(e.get("points") or []) - 1)
+                             for e in world["environmentElements"] if isinstance(e, dict)),
+         "approvedIds": [e.get("id") for e in world["environmentElements"]]})
     log("designer.world", "World geometry authored by agent", _summarize_world(world))
     log("designer.binding", "Agent scene requirements", {"requiredEffects": binding.get("requiredEffects"), "cameraIntent": binding.get("cameraIntent"), "cameraShots": binding.get("cameraShots"), "compositionElements": len(binding.get("compositionElements") or [])})
     if binding.get("cameraIntent") != "hold":
