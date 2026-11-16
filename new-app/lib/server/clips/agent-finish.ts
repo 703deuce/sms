@@ -94,7 +94,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
   if (!clip) throw problem('Clip not found.',404)
   if (clip.endMs<=clip.startMs) throw problem('Clip has an invalid duration.',409)
   if (clip.project.status!=='READY') throw problem('Finish clip discovery before requesting a production.',409)
-  const sourceKey = clip.sourceSegKey || clip.project.upload?.key || clip.segmentKey || clip.previewKey
+  const sourceKey = clip.project.upload?.key || clip.segmentKey || clip.sourceSegKey || clip.previewKey
   if (!sourceKey) throw problem('The original clip footage is unavailable.',409)
   const key = word(idempotencyKey,120) || 'clip-finish-v1'
   const previous = await prisma().clipAgentFinishJob.findUnique({
@@ -130,9 +130,11 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     if (!duplicate) throw e
     return publicJob(duplicate)
   }
-  const segmentLocal=Boolean(clip.sourceSegKey)
-  const startMs=segmentLocal ? (clip.sourceSegStartMs ?? 0) : clip.startMs
-  const endMs=segmentLocal ? (clip.sourceSegEndMs ?? clip.endMs-clip.startMs) : clip.endMs
+  // For the original upload, clip timestamps are absolute. An isolated
+  // segment/preview is already clip-local and must start at zero.
+  const fromOriginal=sourceKey===clip.project.upload?.key
+  const startMs=fromOriginal ? clip.startMs : 0
+  const endMs=fromOriginal ? clip.endMs : clip.endMs-clip.startMs
   const payload={
     version:1,action:'finish_clip',mode:'source_footage_enhancement',
     jobId:id,projectId,clipId,jobToken:token,jobUrl:root,callbackUrl:root,
