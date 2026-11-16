@@ -1,4 +1,5 @@
 import { EditorPageSkeleton } from '../../../../../../components/clips/editor/editor-page-skeleton'
+import { MotionStudioEditorLoading } from '../../../../../../components/motion-studio/motion-studio-editor-loading'
 import { resolveWorkspaceId } from '../../../../../../lib/server/workspace'
 import { Suspense } from 'react'
 import { EditorPayloadSection } from './editor-payload-section'
@@ -17,7 +18,7 @@ export default async function ClipEditorPage({
   const workspaceId = await resolveWorkspaceId()
 
   return (
-    <Suspense fallback={<EditorPageSkeleton />}>
+    <Suspense fallback={typeof motionStudio === 'string' && motionStudio ? <MotionStudioEditorLoading projectId={motionStudio} /> : <EditorPageSkeleton />}>
       <EditorPayloadSection workspaceId={workspaceId} projectId={projectId} clipId={clipId} initialTab={tab} motionStudioProjectId={typeof motionStudio === 'string' && motionStudio ? motionStudio : null} />
     </Suspense>
   )
