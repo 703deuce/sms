@@ -276,7 +276,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
           ))}
         </fieldset>
       ) : null}
-      {projectIntent==='find'&&tab!=='streamer'?(
+      {projectIntent==='find'&&tab==='upload'?(
         <div className="mb-4 rounded-xl border border-border bg-card p-4" data-testid="grok-clipper-choice">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" className="mt-1 size-4 accent-primary"
