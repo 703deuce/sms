@@ -70,16 +70,26 @@ def world_camera_fit(world: dict, *, size: tuple[int, int] = (960, 540)) -> tupl
                      if isinstance(pt, (list, tuple)) and len(pt) >= 2]
             # Match _EnvironmentShape: path/line coordinates are authored in
             # world space unless the shape explicitly requests local points.
-            offset_x = x if element.get("pointsSpace", "world") == "local" else 0.0
-            offset_y = y if element.get("pointsSpace", "world") == "local" else 0.0
+            points_space = element.get("pointsSpace")
+            if points_space not in ("local", "world"):
+                points_space = "world"
+                if (x or y) and w > 0 and h > 0:
+                    local_box = all(0 <= xx <= w and 0 <= yy <= h for xx, yy in local)
+                    local_ground = kind == "path" and x == 0 and y != 0 and all(
+                        0 <= yy <= h for xx, yy in local)
+                    if local_box or local_ground:
+                        points_space = "local"
+            offset_x = x if points_space == "local" else 0.0
+            offset_y = y if points_space == "local" else 0.0
             xs = [offset_x + xx for xx, yy in local]
             ys = [offset_y + yy for xx, yy in local]
         elif kind in ("rect", "rrect", "surface", "circle"):
             xs = [x - w / 2, x + w / 2]
             ys = [y - h / 2, y + h / 2]
         elif kind == "line":
-            xs = [x, x + float(dimensions.get("width") or 0)]
-            ys = [y, y + float(dimensions.get("height") or 0)]
+            # Endpoint-free lines use center-position and size extent.
+            xs = [x - w / 2, x + w / 2]
+            ys = [y - h / 2, y + h / 2]
         else:
             continue
         if xs and ys and all(math.isfinite(v) for v in xs + ys):
