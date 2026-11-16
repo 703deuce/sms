@@ -11046,6 +11046,7 @@ model MotionStudioAgentJob {
   idempotencyKey   String
   parentJobId      String?
   revision         Int      @default(0)
+  durationMs       Int?
   tokenHash        String
   tokenExpiresAt   DateTime
   status           String   @default("dispatching")
