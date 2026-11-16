@@ -184,6 +184,20 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string, 
   const projectVersionHint = project.updatedAt.toISOString()
   const signClip = { versionHint: clipVersionHint }
   const signProject = { versionHint: projectVersionHint }
+  const signEditorMedia = async (key: string, hint: { versionHint: string }) => {
+    const task = createCachedSignedDownloadUrl(storage, key, hint, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+    if (!fastMotionStudio) return task
+    // Master URLs should normally sign immediately; if object storage is slow,
+    // keep the editor shell available and recover media from the agent job API.
+    let timer: ReturnType<typeof setTimeout> | null = null
+    try {
+      return await Promise.race([
+        task,
+        new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 8000) }),
+      ])
+    } finally { if (timer) clearTimeout(timer) }
+  }
+
 
   const cropTrackKey = `ws/${workspaceId}/projects/${clip.projectId}/clips/${clip.id}/crop_track.json`
   const proxyKey = project.proxyKey
@@ -244,18 +258,18 @@ export async function getClipEditorPayload(workspaceId: string, clipId: string, 
     cropRawP,
     segmentSizeP,
     uploadSourceSizeP,
-    prisma.streamVod.findFirst({
+    fastMotionStudio ? Promise.resolve(null) : prisma.streamVod.findFirst({
       where: { projectId: originId, workspaceId },
       select: { chatSource: true, chatMessages: true, sourceType: true, state: true, channelId: true },
     }),
     previewKey
-      ? createCachedSignedDownloadUrl(storage, previewKey, signClip, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      ? signEditorMedia(previewKey, signClip)
       : Promise.resolve(null),
     proxyKey
-      ? createCachedSignedDownloadUrl(storage, proxyKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      ? signEditorMedia(proxyKey, signProject)
       : Promise.resolve(null),
     sourceKey
-      ? createCachedSignedDownloadUrl(storage, sourceKey, signProject, CLIPS_EDITOR_MEDIA_TTL_SEC).catch(() => null)
+      ? signEditorMedia(sourceKey, signProject)
       : Promise.resolve(null),
     (fastMotionStudio ? Promise.resolve([] as ClipWord[]) : Promise.all([projectTranscriptP, clipWordsP]).then(([pt, clipWords]) =>
       resolveEditorWords(storage, workspaceId, clip, pt, { preloadedClipWords: clipWords }),
