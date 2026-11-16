@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { MotionStudioEditorLanes } from '@/components/motion-studio/motion-studio-editor-lanes'
@@ -55,6 +56,30 @@ export function EditorClipShell(props: {
   /** Motion Studio project id (?motionStudio=) — opens the Compact Editor with the Motion Studio lanes. */
   motionStudioProjectId?: string | null
 }) {
+  const router = useRouter()
+  const syncAttempted = useRef(false)
+  // The editor itself must render before the optional agent manifest import.
+  // A slow storage read or media registration must never hold the page skeleton.
+  useEffect(() => {
+    if (!props.motionStudioProjectId || syncAttempted.current) return
+    syncAttempted.current = true
+    const ctrl = new AbortController()
+    const timer = window.setTimeout(() => ctrl.abort(), 12000)
+    void fetch('/api/motion-studio/projects/' + encodeURIComponent(props.motionStudioProjectId) + '/sync-editor', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({clipId:props.clipId}),
+      signal:ctrl.signal,
+    }).then(async response => {
+      if (!response.ok) return
+      const result = await response.json() as {updated?:boolean}
+      if (result.updated) router.refresh()
+    }).catch(() => {
+      // The MP4-based editor remains usable; the project may retry import later.
+    }).finally(() => window.clearTimeout(timer))
+    return () => { window.clearTimeout(timer);ctrl.abort() }
+  }, [props.motionStudioProjectId, props.clipId, router])
+
   const fallbacks = useMemo(
     () =>
       editorMediaLoadFallbacks(props.primaryMedia, props.mediaUrls, {
