@@ -80,6 +80,7 @@ export function MotionStudioCreate({
   const router = useRouter()
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
+  const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 120 | 180 | 300>(30)
   const [prompt, setPrompt] = useState('')
   const [script, setScript] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
@@ -174,7 +175,8 @@ export function MotionStudioCreate({
         prompt: prompt.trim(),
         script: workflow === 'idea' ? null : script.trim() || null,
         uploads: ready.map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
-        mediaPolicy: 'uploads_only',
+        mediaPolicy: 'auto_plus_uploads',
+        durationSeconds,
         idempotencyKey: idemKey.current,
       })
       if (client.mode === 'live') {
@@ -228,6 +230,18 @@ export function MotionStudioCreate({
                 {MS_LABELS.headline}
               </h2>
               <p className="text-sm text-muted-foreground">{MS_LABELS.subhead}</p>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
+              <label htmlFor="ms-duration" className="text-sm font-medium">Video length</label>
+              <select id="ms-duration" data-testid="ms-duration" value={durationSeconds}
+                onChange={e => setDurationSeconds(Number(e.target.value) as 30 | 60 | 120 | 180 | 300)}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value={30}>30 seconds</option>
+                <option value={60}>1 minute</option>
+                <option value={120}>2 minutes</option>
+                <option value={180}>3 minutes</option>
+                <option value={300}>5 minutes</option>
+              </select>
             </div>
 
             <div
