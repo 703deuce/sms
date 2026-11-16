@@ -339,7 +339,7 @@ export async function agentThread(workspaceId: string, projectId: string) {
     db().motionStudioAgentJob.findMany({ where: { workspaceId, projectId, status: 'complete' },
       select: { id: true, revision: true, durationMs: true, createdAt: true }, orderBy: { revision: 'asc' } }),
   ])
-  return { threadId: projectId, activeJobId: str(toObject(project.exportInfo).agentJobId, 100), messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
+  return { threadId: projectId, activeJobId: str(toObject(project.exportInfo).agentJobId, 100) || jobs.at(-1)?.id || null, messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
     timestamp:m.createdAt.toISOString(),jobId:m.jobId })),
     versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,durationMs:j.durationMs,createdAt:j.createdAt.toISOString() })) }
 }
