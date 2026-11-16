@@ -181,20 +181,20 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
   // Import a sidecar SRT when supplied; caption edits use the editor's native
   // caption lane and can be retimed or rewritten independently of the footage.
   const captionArtifact = all.find(a => a.state === 'ready' &&
-    (a.mime === 'application/x-subrip' || /\\.srt$/i.test(a.filename)) && a.bytes <= 2_000_000)
+    (a.mime === 'application/x-subrip' || /\.srt$/i.test(a.filename)) && a.bytes <= 2_000_000)
   let captionLines: {id:string;text:string;startMs:number;endMs:number}[] = []
   if (captionArtifact) try {
     const content = (await getClipStorage().getObjectBytes(captionArtifact.key)).toString('utf8')
     const time = (v: string) => {
-      const m = /^(\\d{2}):(\\d{2}):(\\d{2})[,\\.](\\d{3})$/.exec(v.trim())
+      const m = /^(\d{2}):(\d{2}):(\d{2})[,\.](\d{3})$/.exec(v.trim())
       return m ? ((Number(m[1])*3600+Number(m[2])*60+Number(m[3]))*1000+Number(m[4])) : NaN
     }
-    for (const block of content.replace(/\\r/g,'').split(/\\n\\s*\\n/)) {
-      const lines=block.trim().split('\\n')
+    for (const block of content.replace(/\r/g,'').split(/\n\s*\n/)) {
+      const lines=block.trim().split('\n')
       const arrow=lines.findIndex(line=>line.includes('-->'))
       if (arrow<0) continue
       const [a,b]=lines[arrow]!.split('-->').map(time)
-      const text=lines.slice(arrow+1).join('\\n').trim()
+      const text=lines.slice(arrow+1).join('\n').trim()
       if (!Number.isFinite(a)||!Number.isFinite(b)||b<=a||!text||a>=args.durationMs) continue
       captionLines.push({id:'mscap_'+captionLines.length,text:text.slice(0,200),
         startMs:a,endMs:Math.min(b,args.durationMs)})
