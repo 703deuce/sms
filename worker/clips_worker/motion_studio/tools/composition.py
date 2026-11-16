@@ -157,39 +157,57 @@ class _EnvironmentShape(Item):
         p = paint(rgb, float(s.get("opacity") if s.get("opacity") is not None else 1),
                   blur=float(s.get("blur") or 0))
         c.save()
-        c.translate(x, y)
+        # Environment points are world-space by default, unlike local
+        # rectangle/circle geometry. Older explicitly local shapes can opt in
+        # with pointsSpace="local". Keep framing and drawing consistent.
+        has_world_points = kind in ("line", "path") and s.get("pointsSpace", "world") == "world"
+        if not has_world_points:
+            c.translate(x, y)
         c.rotate(float(s.get("rotation") or 0))
         if kind in ("rect", "rrect", "surface"):
             c.drawRRect(rrect(-w/2, -h/2, w, h, float(s.get("radius") or 0)), p)
         elif kind == "circle":
             c.drawCircle(0, 0, float(s.get("radius") or w/2), p)
-        elif kind == "line":
-            # World-element line endpoints are local coordinates, just like
-            # path.points. Do not replace authored rays with (0,0)->(w,h):
-            # size describes dimensions, NOT the stroke's actual geometry.
+        elif kind in ("line", "path"):
+            # Multiple strokes may be encoded as explicit segments, nested
+            # point lists, or paired endpoints. A repeated shared origin
+            # (perspective rays) and separate parallel two-point rows (grid)
+            # are paired strokes, not a single zigzag/polyline.
             pts = s.get("points") or []
-            if len(pts) >= 2:
-                p.setStyle(skia.Paint.Style.kStroke_Style)
-                p.setStrokeWidth(float(s.get("strokeWidth") or 6))
-                path = skia.Path()
-                path.moveTo(float(pts[0][0]), float(pts[0][1]))
-                for pt in pts[1:]:
+            segments = s.get("segments") or []
+            if not segments and pts and isinstance(pts[0], (list, tuple)):
+                if pts[0] and isinstance(pts[0][0], (list, tuple)):
+                    segments = pts
+                else:
+                    paired = s.get("segmentMode") == "pairs"
+                    if not paired and len(pts) >= 4 and len(pts) % 2 == 0:
+                        origins = [tuple(pts[i]) for i in range(0, len(pts), 2)]
+                        shared_origin = len(set(origins)) == 1
+                        parallel_rows = (
+                            all(abs(float(pts[i][1]) - float(pts[i+1][1])) < 0.001
+                                for i in range(0, len(pts), 2))
+                            and len(set(float(pts[i][1]) for i in range(0, len(pts), 2))) > 1
+                        )
+                        paired = shared_origin or parallel_rows
+                    if paired:
+                        segments = [pts[i:i+2] for i in range(0, len(pts), 2)]
+                    else:
+                        segments = [pts]
+            p.setStyle(skia.Paint.Style.kStroke_Style)
+            p.setStrokeWidth(float(s.get("strokeWidth") or 6))
+            path = skia.Path()
+            drawn = False
+            for segment in segments:
+                if len(segment) < 2:
+                    continue
+                path.moveTo(float(segment[0][0]), float(segment[0][1]))
+                for pt in segment[1:]:
                     path.lineTo(float(pt[0]), float(pt[1]))
+                drawn = True
+            if drawn:
                 c.drawPath(path, p)
-            else:
-                p.setStyle(skia.Paint.Style.kStroke_Style)
-                p.setStrokeWidth(float(s.get("strokeWidth") or 6))
+            elif kind == "line":
                 c.drawLine(0, 0, w, h, p)
-        elif kind == "path":
-            pts = s.get("points") or []
-            if len(pts) >= 2:
-                path = skia.Path()
-                path.moveTo(float(pts[0][0]), float(pts[0][1]))
-                for pt in pts[1:]:
-                    path.lineTo(float(pt[0]), float(pt[1]))
-                p.setStyle(skia.Paint.Style.kStroke_Style)
-                p.setStrokeWidth(float(s.get("strokeWidth") or 6))
-                c.drawPath(path, p)
         c.restore()
 '''
 
