@@ -880,7 +880,7 @@ export function ProjectClipsView({
                     projectId={projectId}
                     clips={clips}
                     selectedClipIds={selectedClipIds}
-                    onFinished={() => void refreshClipsList()}
+                    onFinished={refreshClipsList}
                   />
                 ) : null}
                 {displayedClips.length === 0 ? (
