@@ -26,6 +26,94 @@ DURATION = 4.0
 FPS = 24
 # Explicit full-frame camera pose, held steady for all of Stage 1.
 WORLD_HOLD_POSE = {"x": 0, "y": 0, "zoom": 1.0, "rot": 0}
+
+def world_camera_fit(world: dict, *, size: tuple[int, int] = (960, 540)) -> tuple[dict, dict]:
+    """Frame the Designer's actual authored marks, not an arbitrary (0,0) crop.
+
+    Coordinates are authored in the same 3840x2160 composition space used by
+    the renderer. Backdrop planes often extend far beyond the meaningful
+    artwork, so the fit uses visible linework, towers and focal marks and
+    excludes broad full-frame substrate shapes from the bounding box.
+    No geometry, layer, color or location is altered.
+    """
+    import math
+
+    marks = []
+    excluded = []
+    for element in world.get("environmentElements") or []:
+        if not isinstance(element, dict):
+            continue
+        kind = element.get("kind")
+        pos = element.get("position") or {}
+        dimensions = element.get("size") or {}
+        x, y = float(pos.get("x") or 0), float(pos.get("y") or 0)
+        w, h = abs(float(dimensions.get("width") or 0)), abs(float(dimensions.get("height") or 0))
+        points = element.get("points") or []
+        # Broad surfaces and translucent near-full-width planes are background
+        # atmospherics, not framing anchors.
+        name = (str(element.get("id") or "") + " " +
+                str(element.get("purpose") or "")).lower()
+        is_substrate = (
+            (kind in ("surface", "rect", "rrect") and
+             (w > 7000 or h > 5000 or
+              any(term in name for term in ("background", "void", "sky", "atmosphere", "haze"))))
+            or (kind == "path" and w > 10000 and
+                any(term in name for term in (
+                    "ground_plane", "depth_plane", "atmosphere", "backdrop", "sky_plane"
+                )))
+        )
+        if is_substrate:
+            excluded.append(element.get("id"))
+            continue
+        if kind == "path" and len(points) >= 2 or kind == "line" and len(points) >= 2:
+            local = [(float(pt[0]), float(pt[1])) for pt in points
+                     if isinstance(pt, (list, tuple)) and len(pt) >= 2]
+            xs = [x + xx for xx, yy in local]
+            ys = [y + yy for xx, yy in local]
+        elif kind in ("rect", "rrect", "surface", "circle"):
+            xs = [x - w / 2, x + w / 2]
+            ys = [y - h / 2, y + h / 2]
+        elif kind == "line":
+            xs = [x, x + float(dimensions.get("width") or 0)]
+            ys = [y, y + float(dimensions.get("height") or 0)]
+        else:
+            continue
+        if xs and ys and all(math.isfinite(v) for v in xs + ys):
+            marks.append({"id": element.get("id"), "bounds": [min(xs), min(ys), max(xs), max(ys)]})
+    if not marks:
+        raise RuntimeError("Stage 1 cannot fit camera: no finite drawable foreground or structural geometry.")
+    bounds = (
+        min(m["bounds"][0] for m in marks),
+        min(m["bounds"][1] for m in marks),
+        max(m["bounds"][2] for m in marks),
+        max(m["bounds"][3] for m in marks),
+    )
+    span_x = max(1.0, bounds[2] - bounds[0])
+    span_y = max(1.0, bounds[3] - bounds[1])
+    # film.cam zoom=1 frames roughly 3840x2160 virtual units.
+    # A modest safety margin keeps tower tips / near-grid marks on screen.
+    # Respect actual requested output aspect ratio, not just 16:9.
+    virtual_width = 3840.0
+    virtual_height = virtual_width * size[1] / size[0]
+    zoom = min(virtual_width / (span_x * 1.12),
+               virtual_height / (span_y * 1.12))
+    pose = {
+        "x": round((bounds[0] + bounds[2]) / 2, 3),
+        "y": round((bounds[1] + bounds[3]) / 2, 3),
+        "zoom": round(max(0.03, min(4.0, zoom)), 5),
+        "rot": 0,
+    }
+    diagnostics = {
+        "bounds": bounds, "span": [span_x, span_y], "pose": pose,
+        "framedGeometryIds": [m["id"] for m in marks],
+        "excludedBackdrops": excluded,
+        "method": "authored-geometry-bounds; no camera travel; fixed 12% safety margin",
+        "outputSize": list(size),
+    }
+    return pose, diagnostics
+
+
+
 PALETTE = {
     "bg": "#071120",
     "ink": "#EFF7FF",
@@ -407,9 +495,12 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
         log("agent.world.missing", "Engineer dropped Designer-approved world geometry", {"missingIds": missing})
         raise RuntimeError(f"Engineer dropped Designer-authored world elements: {missing}")
     log("agent.world.verified", "Exact agent-authored world objects survived into tool spec", {"expected": len(wanted), "rendered": len(built), "ids": list(built_by_id)})
-    # The camera is merely a lab framing control in this stage, NOT an invented
-    # agent world or a later-stage camera move. Correct the 0.4 fallback by
-    # requiring a fixed pose through the real registered tool/compiler path.
+    # Stage 1 uses a STATIC camera, but its pose should follow the bounding
+    # box of the approved world rather than a hardcoded crop.
+    fit_pose, framing = world_camera_fit(world)
+    save_json(output / "framing.json", framing)
+    log("framing.fit", "Computed static frame from Designer geometry", framing)
+    # This is a lab-only camera framing decision, NOT Stage 2 travel.
     from clips_worker.motion_studio.tools.registry import apply_calls
     from clips_worker.motion_studio.tools.compiler import compile_spec
     from clips_worker.motion_studio.tools.validate import _camera_moved
@@ -418,23 +509,24 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
         raise RuntimeError("Stage 1 Engineer introduced camera travel; Stage 2 is not yet authorized.")
     if moves:
         for move in moves:
-            move["from"] = dict(WORLD_HOLD_POSE)
-            move["to"] = dict(WORLD_HOLD_POSE)
+            move["from"] = dict(fit_pose)
+            move["to"] = dict(fit_pose)
             move["easing"] = "hold"
-        log("framing.fixed", "Holding the agent-authored world on lab's fixed framing (existing camera call)")
+        log("framing.fixed", "Preserved static camera with world-aware fitted pose", {"pose": fit_pose})
     else:
         spec, results = apply_calls(spec, [{
             "tool": "animate_camera",
             "arguments": {"environmentId": next(iter(spec["environments"])),
                           "motionId": "stage1_lab_static_framing",
                           "startS": 0, "endS": DURATION,
-                          "from": WORLD_HOLD_POSE, "to": WORLD_HOLD_POSE,
+                          "from": fit_pose, "to": fit_pose,
                           "easing": "linear"},
         }])
         if not all(r.ok for r in results):
-            raise RuntimeError("Lab fixed framing failed in registered tool: " +
+            raise RuntimeError("Lab static framing failed in registered tool: " +
                                json.dumps([r.as_dict() for r in results]))
-        log("framing.fixed", "Added lab-only static camera using registered animate_camera", {"pose": WORLD_HOLD_POSE})
+        log("framing.fixed", "Added world-aware STATIC camera via registered tool",
+            {"pose": fit_pose})
     code = compile_spec(spec)
     log("compiler.finish", "Agent tool spec recompiled after fixed framing", {"objects": len(spec.get("objects") or {}), "environments": len(spec.get("environments") or {}), "codeChars": len(code)})
     return code, spec, ctx

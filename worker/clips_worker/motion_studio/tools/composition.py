@@ -164,7 +164,22 @@ class _EnvironmentShape(Item):
         elif kind == "circle":
             c.drawCircle(0, 0, float(s.get("radius") or w/2), p)
         elif kind == "line":
-            c.drawLine(0, 0, w, h, p)
+            # World-element line endpoints are local coordinates, just like
+            # path.points. Do not replace authored rays with (0,0)->(w,h):
+            # size describes dimensions, NOT the stroke's actual geometry.
+            pts = s.get("points") or []
+            if len(pts) >= 2:
+                p.setStyle(skia.Paint.Style.kStroke_Style)
+                p.setStrokeWidth(float(s.get("strokeWidth") or 6))
+                path = skia.Path()
+                path.moveTo(float(pts[0][0]), float(pts[0][1]))
+                for pt in pts[1:]:
+                    path.lineTo(float(pt[0]), float(pt[1]))
+                c.drawPath(path, p)
+            else:
+                p.setStyle(skia.Paint.Style.kStroke_Style)
+                p.setStrokeWidth(float(s.get("strokeWidth") or 6))
+                c.drawLine(0, 0, w, h, p)
         elif kind == "path":
             pts = s.get("points") or []
             if len(pts) >= 2:
