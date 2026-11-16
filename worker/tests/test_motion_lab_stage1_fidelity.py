@@ -71,3 +71,29 @@ def test_environment_runtime_has_no_comprehension_local_scope_lint_failure():
     tree = ast.parse(RUNTIME)
     for node in ast.walk(tree):
         assert not isinstance(node, (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp))
+
+
+def test_stage1_local_tower_geometry_is_fitted_at_its_placement():
+    tower = _shape("tower", "path",
+                   [[0, 680], [0, 0], [390, 0], [390, 680]],
+                   {"x": -1120, "y": -910})
+    tower["size"] = {"width": 390, "height": 680}
+    _, audit = world_camera_fit({"environmentElements": [tower]})
+    assert audit["bounds"] == (-1120.0, -910.0, -730.0, -230.0)
+
+
+def test_stage1_closed_ground_path_is_fitted_in_local_space():
+    ground = _shape("ground", "path",
+                    [[-4600, 0], [4600, 0], [5900, 3450],
+                     [-5900, 3450], [-4600, 0]],
+                    {"x": 0, "y": -850})
+    ground["size"] = {"width": 9200, "height": 4300}
+    _, audit = world_camera_fit({"environmentElements": [ground]})
+    assert audit["bounds"] == (-5900.0, -850.0, 5900.0, 2600.0)
+
+
+def test_environment_runtime_respects_local_outlines_and_centered_lines():
+    assert 'space = s.get("pointsSpace")' in RUNTIME
+    assert 'if local_box or local_ground:' in RUNTIME
+    assert 'c.drawLine(-w/2, -h/2, w/2, h/2, p)' in RUNTIME
+    assert 's.get("fillMode") != "stroke"' in RUNTIME
