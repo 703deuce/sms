@@ -11024,3 +11024,28 @@ model MotionStudioSandboxExec {
 
   @@index([projectId, createdAt])
 }
+
+
+/// Autonomous production assignments dispatched from the Motion Studio UI.
+model MotionStudioAgentJob {
+  id               String   @id
+  projectId        String
+  workspaceId      String
+  userId           String
+  idempotencyKey   String
+  tokenHash        String
+  tokenExpiresAt   DateTime
+  status           String   @default("dispatching")
+  phase            String   @default("dispatch")
+  progress         Int      @default(0)
+  message          String?
+  artifacts        Json?
+  resultKey        String?
+  dispatchedAt     DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([projectId, idempotencyKey])
+  @@index([workspaceId, projectId, createdAt])
+}
