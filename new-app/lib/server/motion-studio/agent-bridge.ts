@@ -43,8 +43,8 @@ function publicJob(job: PublicJob) {
       .map(a => ({ id: a.id, kind: a.kind, filename: a.filename, bytes: a.bytes })) }
 }
 
-export async function userAgentJob(workspaceId: string, projectId: string, userId: string) {
-  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId, userId }, select: { id: true } })
+export async function userAgentJob(workspaceId: string, projectId: string, _userId: string) {
+  const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId }, select: { id: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const job = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
   if (!job) return null
@@ -59,7 +59,8 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
   })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  if (project.userId !== userId) throw new MotionStudioError('FORBIDDEN', 'Project owner required.', 403)
+  // No-login Motion Studio testing: the pinned workspace is the project scope.
+  // Before public paid production, restore per-tenant authorization.
   if (project.status !== 'setup') throw new MotionStudioError('CONFLICT', 'The old production pipeline has started.', 409)
   const idempotencyKey = str(key, 120) || 'initial-production'
   const where = { projectId_idempotencyKey: { projectId, idempotencyKey } }
