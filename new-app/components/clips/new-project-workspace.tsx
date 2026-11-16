@@ -276,6 +276,32 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
           ))}
         </fieldset>
       ) : null}
+      {projectIntent==='find'&&tab!=='streamer'?(
+        <div className="mb-4 rounded-xl border border-border bg-card p-4" data-testid="grok-clipper-choice">
+          <label className="flex items-start gap-3 text-sm">
+            <input type="checkbox" className="mt-1 size-4 accent-primary"
+              checked={settings.autoGrokClipper===true}
+              onChange={e=>setSettings(v=>({...v,autoGrokClipper:e.target.checked}))}/>
+            <span>
+              <span className="block font-semibold">Transovo Agent — fully finished clips</span>
+              <span className="mt-1 block text-xs text-muted-foreground">
+                Let Grok find, score and edit the best moments from this video.
+                It adds dynamic framing, motion graphics and polished exports automatically after upload processing.
+              </span>
+            </span>
+          </label>
+          {settings.autoGrokClipper?(
+            <div className="mt-3 flex items-center gap-2 text-xs">
+              <label htmlFor="auto-grok-count">Maximum finished clips</label>
+              <select id="auto-grok-count" className="rounded-md border border-border bg-background px-2 py-1.5"
+                value={settings.autoGrokMaxClips??3}
+                onChange={e=>setSettings(v=>({...v,autoGrokMaxClips:Number(e.target.value)}))}>
+                {[1,2,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          ):null}
+        </div>
+      ):null}
       {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()?(
         <UnifiedClipRunNote testId="upload-agent-mode" className="mb-4">
           <select aria-label="Agent target length" value={agentClipSeconds}
