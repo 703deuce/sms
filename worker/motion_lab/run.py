@@ -556,6 +556,23 @@ def agent(output: Path, log: LabLog) -> tuple[str, dict, dict]:
                                json.dumps([r.as_dict() for r in results]))
         log("framing.fixed", "Added world-aware STATIC camera via registered tool",
             {"pose": fit_pose})
+    # The production HeroSlam text legibility gate fades sub-40px caps to
+    # zero. Designer typography must survive even when a large world requires
+    # a wide camera; adjust physical type size for this *preview* after camera
+    # framing rather than silently rendering the approved words invisible.
+    from clips_worker.motion_studio.core.world import HOUSE
+    minimum_cap = float(HOUSE["min_cap_px"]) * 1.15
+    for tid, title in (spec.get("typography") or {}).items():
+        font = (title.get("font") or "cond")
+        cap_ratio = 0.66 if font == "serif" else 0.6 if font == "hand" else 0.7 if font == "mono" else 0.72
+        approved_size = float(title.get("size") or 120)
+        needed_size = minimum_cap * 2 / (max(fit_pose["zoom"], 0.001) * cap_ratio)
+        if approved_size < needed_size:
+            title["size"] = round(needed_size, 2)
+            log("typography.readability", "Adjusted display size to clear renderer cap-height gate",
+                {"id": tid, "approvedSize": approved_size,
+                 "previewSize": title["size"], "cameraZoom": fit_pose["zoom"],
+                 "minimumCapPx1080p": minimum_cap})
     code = compile_spec(spec)
     log("compiler.finish", "Agent tool spec recompiled after fixed framing", {"objects": len(spec.get("objects") or {}), "typography": len(spec.get("typography") or {}), "environments": len(spec.get("environments") or {}), "codeChars": len(code)})
     return code, spec, ctx
