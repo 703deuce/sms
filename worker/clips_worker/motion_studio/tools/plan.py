@@ -119,18 +119,34 @@ def _prepare_engineer_tools(calls: list[dict[str, Any]], *, approved_world: list
                                       "engineerKind": claimed[eid].get("kind"),
                                       "approvedKind": element.get("kind")})
             missing = [eid for eid in world_by_id if eid not in claimed]
-            if overrides or missing:
-                # Rebuild in the Designer's order. Only the Designer's full
-                # approved dict is used for these IDs. Others are untouched.
-                extra = [e for e in existing if not isinstance(e, dict)
-                         or e.get("id") not in world_by_id]
-                backdrop["elements"] = list(world_by_id.values()) + extra
+            # Engineer may return ID-less copies of the complete approved world.
+            # Those are not creative extras: keeping them duplicates artwork and
+            # distorts both geometry counts and rendering. Compare every field
+            # except the ID; preserve genuinely new Engineer artwork.
+            approved_without_ids = [
+                {k: v for k, v in element.items() if k != "id"}
+                for element in world_by_id.values()
+            ]
+            extras = []
+            dropped_copies = 0
+            for element in existing:
+                if isinstance(element, dict) and element.get("id") in world_by_id:
+                    continue
+                if (isinstance(element, dict) and not element.get("id") and
+                        {k: v for k, v in element.items() if k != "id"}
+                        in approved_without_ids):
+                    dropped_copies += 1
+                    continue
+                extras.append(element)
+            if overrides or missing or dropped_copies:
+                backdrop["elements"] = list(world_by_id.values()) + extras
                 args["backdrop"] = backdrop
                 changes.append({"kind": "bind_approved_world", "tool": tool,
                                 "source": "production_designer.environmentElements",
                                 "restoredIds": missing, "overridden": overrides,
-                                "reason": "Approved world is immutable source of truth; "
-                                          "Engineer copies are not authoritative"})
+                                "droppedIdlessCopies": dropped_copies,
+                                "reason": "Designer shapes are authoritative; matching "
+                                          "ID-less copies must not render twice"})
         if tool == "animate_property":
             for start, dest in (("startS", "startFrame"), ("endS", "endFrame")):
                 if start not in args:
