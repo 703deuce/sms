@@ -13,6 +13,8 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [versions, setVersions] = useState<Version[]>([])
+  const [activeJobId, setActiveJobId] = useState<string | null>(null)
+  const [restoring, setRestoring] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -22,9 +24,10 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
       cache: 'no-store',
     })
     if (!response.ok) throw new Error('Could not load your conversation.')
-    const data = await response.json() as { messages: Message[]; versions: Version[] }
+    const data = await response.json() as { messages: Message[]; versions: Version[]; activeJobId: string | null }
     setMessages(data.messages ?? [])
     setVersions(data.versions ?? [])
+    setActiveJobId(data.activeJobId ?? null)
   }, [projectId])
   useEffect(() => {
     let active = true
@@ -33,6 +36,21 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     const timer = window.setInterval(load, 4000)
     return () => { active = false; window.clearInterval(timer) }
   }, [reload])
+
+  const restore = async (jobId: string) => {
+    if (restoring) return
+    setRestoring(jobId)
+    setError(null)
+    try {
+      const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId)
+        + '/versions/' + encodeURIComponent(jobId) + '/restore', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not restore that version.')
+      await reload()
+      window.location.reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not restore that version.')
+    } finally { setRestoring(null) }
+  }
 
   const send = async () => {
     const instruction = draft.trim()
@@ -63,7 +81,14 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
         onClick={() => setShowVersions(v => !v)}>Versions ({versions.length})</button> : null}
     </div>
     {showVersions ? <ol className="space-y-1 rounded-md bg-muted p-3 text-xs">
-      {versions.map(v => <li key={v.jobId}>Version {v.revision + 1} · {new Date(v.createdAt).toLocaleDateString()}</li>)}
+      {versions.map(v => <li key={v.jobId} className="flex items-center justify-between gap-2">
+        <span>Version {v.revision + 1} · {new Date(v.createdAt).toLocaleDateString()}
+          {activeJobId === v.jobId ? ' · Current' : ''}</span>
+        {activeJobId !== v.jobId ? <button type="button" onClick={() => void restore(v.jobId)}
+          disabled={restoring != null} className="text-primary underline">
+          {restoring === v.jobId ? 'Restoring…' : 'Restore'}
+        </button> : null}
+      </li>)}
     </ol> : null}
     <ol className="max-h-80 min-h-20 space-y-3 overflow-y-auto" aria-live="polite">
       {messages.map(m => <li key={m.id} className={m.role === 'customer'
