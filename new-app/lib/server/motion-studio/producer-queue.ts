@@ -47,6 +47,14 @@ export async function claimProducerJob(request: Request, raw: unknown) {
   const worker = validWorkerId((raw as {workerId?: unknown} | null)?.workerId)
   const jobUrlOrigin = process.env.MOTION_STUDIO_AGENT_PUBLIC_URL
   if (!jobUrlOrigin) throw new MotionStudioError('INTERNAL', 'Producer public URL missing.', 503)
+  // Continuous producer polling also sweeps unanswered jobs, even when the
+  // customer never reopens the browser. No resident video worker is held.
+  await db().motionStudioAgentJob.updateMany({ where: {
+    status: 'needs_input', updatedAt: { lte: new Date(Date.now() - 24 * 3600_000) },
+  }, data: { status: 'failed', phase: 'failed', completedAt: new Date(),
+    message: 'We did not receive your answer within 24 hours. You can request another video or edit.',
+    leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null,
+  } })
   // After repeated lost leases, do not strand the queue item forever.
   await db().motionStudioAgentJob.updateMany({ where: {
     leaseAttempts: { gte: 20 },
