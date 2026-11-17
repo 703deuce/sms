@@ -147,7 +147,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       return { width, height, fps: 30, resolution: size }
     })(),
     quality: str(settings.quality || settings.tier, 40) || 'premium',
-    style: str(settings.visualDirection, 80) || 'cinematic',
+    style: creative.style === 'automatic' ? (str(settings.visualDirection, 80) || 'cinematic') : (creative.style === 'custom' ? creative.customStyle || 'custom' : creative.style),
     webResearch: true,
     mediaPolicy: 'auto_plus_uploads',
     jobUrl: endpoint, callbackUrl: endpoint, setupMode: !agentBridgeLive(),
