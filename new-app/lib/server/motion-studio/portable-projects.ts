@@ -2,6 +2,8 @@ import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { coordinatorEnabled } from '@/lib/server/motion-studio/coordinator'
+import { coordinateSceneRenders } from '@/lib/server/motion-studio/render-coordinator'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import {
   validatePortableManifest, validateScenePropertyPatch, validateThemePatch,
@@ -144,10 +146,12 @@ export async function requestSceneRender(workspaceId: string, projectId: string,
   const existing = await db().motionStudioRenderRequest.findUnique({ where })
   if (existing) return existing
   try {
-    return await db().motionStudioRenderRequest.create({ data: {
+    const created = await db().motionStudioRenderRequest.create({ data: {
       id: 'msrr_' + randomUUID(), workspaceId, projectId, versionId, sceneId, idempotencyKey,
       patch: toPrismaJson(valid.patch), status: 'queued',
     } })
+    if (coordinatorEnabled()) await coordinateSceneRenders(1)
+    return created
   } catch (error) {
     const again = await db().motionStudioRenderRequest.findUnique({ where })
     if (again) return again
