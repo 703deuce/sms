@@ -9,6 +9,9 @@ const eq = (a: string, b: string) => {
   const x = Buffer.from(hash(a), 'hex'), y = Buffer.from(hash(b), 'hex')
   return timingSafeEqual(x,y)
 }
+const matchesStoredHash = (given:string,stored:string) =>
+  /^[a-f0-9]{64}$/i.test(stored) &&
+  timingSafeEqual(Buffer.from(hash(given),'hex'),Buffer.from(stored,'hex'))
 const uid = (v: unknown) => typeof v === 'string' && /^[a-zA-Z0-9_.:-]{3,96}$/.test(v)
 const obj = (x: unknown): Record<string, unknown> =>
   x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string,unknown> : {}
@@ -93,7 +96,7 @@ export async function requireRegisteredWorker(request: Request, id: string) {
   const worker = await db().motionStudioProducerWorker.findUnique({ where: { id } })
   const auth = request.headers.get('authorization') || ''
   if (!worker || !worker.enabled || !auth.startsWith('Bearer ') ||
-      !eq(auth.slice(7), worker.credentialHash))
+      !matchesStoredHash(auth.slice(7), worker.credentialHash))
     problem('Valid worker credential required.', 'UNAUTHENTICATED', 401)
   return worker!
 }
