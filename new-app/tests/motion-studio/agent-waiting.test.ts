@@ -97,7 +97,7 @@ describe('producer clarification and retries', () => {
     await expect(submitAgentRevision('ws_test','user_test','msp_test',request,
       { instruction: 'Use the first image', answerInput: true })).rejects.toThrow('simulated database failure')
     expect(state.job.status).toBe('running')
-    expect(state.messages.filter(m => m.role === 'customer')).toHaveLength(1)
+    expect(state.messages.filter(m => m.role === 'answer')).toHaveLength(1)
     const result = await submitAgentRevision('ws_test','user_test','msp_test',request,
       { instruction: 'Use the first image', answerInput: true })
     expect(result.intent).toBe('conversation')
@@ -110,7 +110,19 @@ describe('producer clarification and retries', () => {
       jobUrl: first.jobUrl, jobToken: first.jobToken })
     expect(first.jobUrl).toContain('/agent/jobs/msaj_test')
     expect(first.jobToken).toBeTruthy()
+    expect(state.job.leaseAttempts).toBe(0)
     expect(state.messages.filter(m => m.role === 'agent')).toHaveLength(1)
+  })
+  it('retains the previous job token if the webhook rejects the answer', async () => {
+    state.webhook.mockResolvedValue({ ok: false, status: 503 })
+    const oldTokenHash = state.job.tokenHash
+    const request = new Request('https://transovo.ai/api/motion-studio/agent/projects/msp_test/chat',
+      { method: 'POST', headers: { 'Idempotency-Key': 'answer-refused' } })
+    await expect(submitAgentRevision('ws_test','user_test','msp_test',request,
+      { instruction: 'Use the blue photo', answerInput: true })).rejects.toThrow('Could not deliver')
+    expect(state.job.tokenHash).toBe(oldTokenHash)
+    expect(state.job.pendingTokenHash).toBeNull()
+    expect(state.job.status).toBe('needs_input')
   })
   it('queues a creative edit behind a waiting job without starting another production', async () => {
     state.routeIntent = 'edit'
