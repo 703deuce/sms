@@ -368,10 +368,14 @@ export function createMockMotionStudioClient(opts: MockOptions = {}): MotionStud
       await wait()
       const existing = Object.values(store.recs).find((r) => r.createIdem === input.idempotencyKey)
       if (existing) return materialize(existing)
-      if (input.mediaPolicy !== 'uploads_only') throw new MotionStudioHttpError(400, 'MEDIA_POLICY', 'Only uploaded media is supported in this version.')
+      if (!['uploads_only','auto_plus_uploads','auto_only'].includes(input.mediaPolicy)) throw new MotionStudioHttpError(400, 'MEDIA_POLICY', 'Unsupported media policy.')
       const t = now()
       const pid = id('ms')
       const project = baseProject({ pid, t, title: titleFromPrompt(input.prompt || input.script || '', input.workflow), prompt: input.prompt, workflow: input.workflow, assets: assetsFrom(input.uploads, t) })
+      project.mediaPolicy = input.mediaPolicy
+      if (input.format) project.settings.format = input.format
+      if (input.creative) project.settings.creative = input.creative
+      if (input.durationSeconds) { project.settings.durationSeconds = input.durationSeconds; project.settings.lengthMin = Math.ceil(input.durationSeconds / 60) }
       if (input.uploads.some((u) => u.kind === 'audio' && /(vo|voice|narrat)/i.test(u.label))) project.settings.voiceover = 'upload'
       const music = project.assets.find((a) => a.role === 'music')
       if (music) project.audio.music = { source: 'upload', label: `Your music: ${music.label}`, assetId: music.id, status: 'planned' }
