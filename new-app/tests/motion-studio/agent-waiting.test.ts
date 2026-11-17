@@ -56,7 +56,7 @@ vi.mock('@/lib/server/motion-studio/chat-assistant', () => ({
   interpretCustomerMessage: vi.fn(async () => ({ intent: state.routeIntent, reply: 'I understand.', instruction: 'Redesign the intro.' })),
 }))
 
-const { submitAgentRevision, botPostMessage, botProgress } = await import('../../lib/server/motion-studio/agent-bridge')
+import { submitAgentRevision, botPostMessage, botProgress } from '../../lib/server/motion-studio/agent-bridge'
 
 beforeEach(() => {
   state.messages = []
@@ -68,7 +68,7 @@ beforeEach(() => {
     status: 'needs_input', phase: 'review', progress: 30, message: 'Waiting for you',
     tokenHash: createHash('sha256').update('msaj_test:secret').digest('hex'),
     tokenExpiresAt: new Date(Date.now() + 60_000),
-    createdAt: new Date(), updatedAt: new Date(), completedAt: null, resultKey: null, artifacts: [],
+    createdAt: new Date(), updatedAt: new Date(), waitingStartedAt: new Date(), completedAt: null, resultKey: null, artifacts: [],
   }
   process.env.GROKBOT_WEBHOOK_URL = 'https://example.com/producer'
   process.env.GROKBOT_WEBHOOK_KEY = 'key'
@@ -121,7 +121,7 @@ describe('producer clarification and retries', () => {
   })
 
   it('closes an unanswered production after 24 hours instead of accepting a late answer', async () => {
-    state.job.updatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    state.job.waitingStartedAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
     const request = new Request('https://transovo.ai/api/motion-studio/agent/projects/msp_test/chat',
       { method: 'POST', headers: { 'Idempotency-Key': 'late-answer' } })
     await expect(submitAgentRevision('ws_test','user_test','msp_test',request,
