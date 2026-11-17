@@ -19,7 +19,7 @@ describe('Motion Studio mock adapter (contract simulation)', () => {
     const client = createMockMotionStudioClient({ now: c.now, storage: null, seedExample: false })
     const created = await client.createProject({
       workflow: 'footage',
-      prompt: 'Make a 3-minute documentary about the history of artificial intelligence.',
+      prompt: 'Make a 3-minute video about the history of artificial intelligence.',
       uploads: [
         { uploadId: 'u1', kind: 'video', label: 'interview.mp4' },
         { uploadId: 'u2', kind: 'photo', label: 'lab.jpg' },
@@ -117,9 +117,9 @@ describe('Motion Studio config, tracks and nav', () => {
   })
 
   it('selected workflow line covers the 3 modes × uploads_only', () => {
-    expect(selectedWorkflowLine('idea')).toMatchInlineSnapshot(`"Selected workflow: Transovo will research the topic, write the script, use the photos, images and clips you upload, and produce a 5-minute documentary."`)
-    expect(selectedWorkflowLine('script', { uploads: 2 })).toMatchInlineSnapshot(`"Selected workflow: Transovo will keep your script word for word, use your 2 uploaded files, design the motion graphics, and produce a 5-minute documentary."`)
-    expect(selectedWorkflowLine('footage', { lengthMin: 3, uploads: 1 })).toMatchInlineSnapshot(`"Selected workflow: Transovo will analyze your footage, use your 1 uploaded file, add motion graphics where they help the story, and produce a 3-minute documentary."`)
+    expect(selectedWorkflowLine('idea')).toMatchInlineSnapshot(`"Selected workflow: Transovo will research the topic, write the script, use your uploads and source additional media as needed, and produce a 5-minute video."`)
+    expect(selectedWorkflowLine('script', { uploads: 2 })).toMatchInlineSnapshot(`"Selected workflow: Transovo will keep your script word for word, use your 2 uploaded files, design the motion graphics, and produce a 5-minute video."`)
+    expect(selectedWorkflowLine('footage', { lengthMin: 3, uploads: 1 })).toMatchInlineSnapshot(`"Selected workflow: Transovo will analyze your footage, use your 1 uploaded file, add motion graphics where they help the story, and produce a 3-minute video."`)
   })
 
   it('keeps the v1 rules: picker hidden, credits only, exact concept labels', () => {
@@ -127,7 +127,7 @@ describe('Motion Studio config, tracks and nav', () => {
     expect(formatMsCredits(null)).toBe('Included')
     expect(formatMsCredits(12)).toBe('12 credits')
     expect(MS_LABELS.headline).toBe('What are we creating today?')
-    expect(MS_LABELS.promptPlaceholder).toBe('Describe the documentary you want to make. You can attach photos and clips.')
+    expect(MS_LABELS.promptPlaceholder).toBe('Describe what you want to make. Add a story, brand direction, photos or footage.')
     for (const v of Object.values(MS_LABELS)) expect(v).not.toMatch(/\$/)
   })
 
