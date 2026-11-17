@@ -142,7 +142,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const creative = sanitizeCreativeBrief(settings.creative)
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
-    version: 1, jobId: id, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
+    version: 1, jobId: id, workspaceId, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
     ...(parent ? { parentJobId: parent.id, revision: parent.revision + 1, threadId: projectId,
       instruction: revisionRequest?.instruction,
       selectedElementIds: revisionRequest?.selectedElementIds ?? [],
@@ -214,19 +214,92 @@ export async function requireBotJob(id: string, request: Request) {
   return await expireStaleQuestion(job)
 }
 
+/** Durable workspace/project context. Reconstructed for every job; no reliance on a
+ * running Grokbot process, local filesystem, or expired pre-signed media links. */
 export async function botGetAssignment(id: string, request: Request) {
   const job = await requireBotJob(id, request)
-  const project = await db().motionStudioProject.findFirst({ where: { id: job.projectId, workspaceId: job.workspaceId },
-    select: { title: true, brief: true, workflow: true, settings: true } })
+  const project = await db().motionStudioProject.findFirst({
+    where: { id: job.projectId, workspaceId: job.workspaceId },
+    select: { id: true, workspaceId: true, title: true, brief: true, workflow: true,
+      settings: true, story: true, plan: true, narration: true, music: true, qa: true,
+      exportInfo: true, timelineVersion: true },
+  })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  const projectAssets = await db().studioAsset.findMany({ where: { projectId: job.projectId, workspaceId: job.workspaceId } })
-  const uploads = await db().clipUpload.findMany({ where: { id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } })
+  const [projectAssets, priorVersions, recentMessages] = await Promise.all([
+    db().studioAsset.findMany({ where: { projectId: job.projectId, workspaceId: job.workspaceId } }),
+    db().motionStudioAgentJob.findMany({ where: {
+      projectId: job.projectId, workspaceId: job.workspaceId, status: 'complete' },
+      orderBy: [{ revision: 'desc' }, { createdAt: 'desc' }], take: 20 }),
+    db().motionStudioAgentMessage.findMany({ where: {
+      projectId: job.projectId, role: { in: ['customer', 'agent'] } },
+      orderBy: { createdAt: 'desc' }, take: 50 }),
+  ])
+  const uploads = projectAssets.length ? await db().clipUpload.findMany({ where: {
+    id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } }) : []
+  const roleByUpload = new Map(projectAssets.map(a => [a.uploadId, toObject(a.provenanceLog).role]))
   const inputs = await Promise.all(uploads.map(async upload => ({
     uploadId: upload.id, filename: upload.filename, mime: upload.mime,
+    role: roleByUpload.get(upload.id) || 'source', durableAssetId: upload.id,
     url: await createReadableSignedUrl(upload.key, 1800).catch(() => null),
   })))
-  return { ...publicJob(job), title: project.title, prompt: project.brief,
-    settings: project.settings, workflow: project.workflow, inputs }
+  const versions = await Promise.all(priorVersions.map(async previous => ({
+    jobId: previous.id, revision: previous.revision, durationMs: previous.durationMs,
+    createdAt: previous.createdAt.toISOString(), artifacts: artifacts(previous.artifacts)
+      .filter(a => a.state === 'ready').map(a => ({ id: a.id, elementId: a.elementId, trackId: a.trackId,
+        kind: a.kind, filename: a.filename, mime: a.mime, bytes: a.bytes })),
+    videoUrl: previous.resultKey
+      ? await createReadableSignedUrl(previous.resultKey, 1800).catch(() => null) : null,
+  })))
+  return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
+    title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
+    projectContext: {
+      projectId: project.id, workspaceId: project.workspaceId,
+      timelineVersion: project.timelineVersion, story: project.story, plan: project.plan,
+      narration: project.narration, music: project.music, qa: project.qa,
+      exportInfo: project.exportInfo,
+    },
+    checkpoint: job.checkpoint ?? null, inputs, versions,
+    conversation: recentMessages.reverse().map(m => ({ role: m.role, text: m.text,
+      timestamp: m.createdAt.toISOString(), jobId: m.jobId })),
+  }
+}
+
+/** Only the active job bearer may read or replace its checkpoint. State survives
+ * process restart. All referenced media stays in project storage, not this JSON. */
+export async function botGetCheckpoint(id: string, request: Request) {
+  const job = await requireBotJob(id, request)
+  return { jobId: job.id, workspaceId: job.workspaceId, projectId: job.projectId,
+    status: job.status, checkpoint: job.checkpoint ?? null }
+}
+export async function botSaveCheckpoint(id: string, request: Request, raw: unknown) {
+  const job = await requireBotJob(id, request)
+  if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Cannot change a completed job.', 409)
+  const input = toObject(raw)
+  const checkpoint = toObject(input.checkpoint)
+  const encoded = JSON.stringify(checkpoint)
+  if (!encoded || encoded.length > 256_000)
+    throw new MotionStudioError('INVALID', 'Checkpoint must be a JSON object under 256 KB.', 400)
+  const revision = Number(input.revision)
+  if (!Number.isSafeInteger(revision) || revision < 1)
+    throw new MotionStudioError('INVALID', 'Checkpoint revision must be a positive integer.', 400)
+  const current = toObject(job.checkpoint)
+  const previousRevision = Number(current.revision) || 0
+  if (revision < previousRevision) throw new MotionStudioError('CONFLICT', 'Stale checkpoint revision.', 409)
+  if (revision === previousRevision) {
+    if (JSON.stringify(current.state) !== encoded)
+      throw new MotionStudioError('CONFLICT', 'Checkpoint revision already used with different state.', 409)
+    return { jobId: id, revision, saved: true }
+  }
+  const state = { revision, state: checkpoint, savedAt: new Date().toISOString() }
+  // Conditional update avoids advancing a stale worker after another worker
+  // has persisted a newer checkpoint.
+  const count = await db().motionStudioAgentJob.updateMany({ where: {
+    id, workspaceId: job.workspaceId, projectId: job.projectId,
+    checkpoint: job.checkpoint === null ? { equals: null } : { equals: job.checkpoint as object },
+    status: { in: ['dispatching', 'dispatched', 'running', 'needs_input'] },
+  }, data: { checkpoint: toPrismaJson(state) } })
+  if (!count.count) throw new MotionStudioError('CONFLICT', 'Checkpoint changed. Reload before saving.', 409)
+  return { jobId: id, revision, saved: true }
 }
 
 export async function botProgress(id: string, request: Request, raw: unknown) {
