@@ -33,7 +33,7 @@ export const MS_LABELS = {
   modeScript: 'Use a script',
   modeFootage: 'Edit my footage',
   exampleProject: 'Example project',
-  length: 'Documentary length',
+  length: 'Video length',
   visualDirection: 'Visual direction',
   voiceover: 'Voiceover',
   format: 'Format',
@@ -41,7 +41,7 @@ export const MS_LABELS = {
   webResearch: 'Web research',
   formatValue: '16:9 · 480p',
   /** v1 read-only media row (ST-UX-028 / ST-UI-107). */
-  mediaValueV1: 'Use only my uploaded media',
+  mediaValueV1: 'AI can source media and use your uploads',
   nextPlan: 'Next: Create production plan',
   nextPlanHelper: 'Review the story, chapters, visuals and proposed motion graphics before full production.',
   project: 'PROJECT',
@@ -155,7 +155,7 @@ export function selectedWorkflowLine(workflow: MsWorkflow, opts: { lengthMin?: M
   const len = `${opts.lengthMin ?? 5}-minute video`
   const media = opts.uploads && opts.uploads > 0
     ? `use your ${opts.uploads} uploaded ${opts.uploads === 1 ? 'file' : 'files'}`
-    : 'use the photos, images and clips you upload'
+    : 'use your uploads and source additional media as needed'
   switch (workflow) {
     case 'idea':
       return `Selected workflow: Transovo will research the topic, write the script, ${media}, and produce a ${len}.`
