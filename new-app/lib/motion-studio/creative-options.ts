@@ -79,5 +79,5 @@ export function sanitizeCreativeBrief(value: unknown): MsCreativeBrief {
   }
 }
 export function directorCategoryGuidance(type: MsVideoType): string {
-  return MS_VIDEO_TYPES.find(t => t.id === type)?.guidance ?? MS_VIDEO_TYPES[0].guidance
+  return MS_VIDEO_TYPES.find(t => t.id === type)?.guidance ?? 'Follow the requested direction without imposing a fixed scene design.'
 }
