@@ -4,7 +4,7 @@ Branch: `feat/motion-studio-video-types-brand-kits-20261117` (NOT merged to mast
 
 ## Behavior
 - Creation UI: `/app/motion-studio/new` (legacy `?type=documentary` remains navigable).
-- Video type dropdown has 21 values (see `new-app/lib/motion-studio/creative-options.ts`): anything, documentary, social_video, explainer, educational, faq, testimonial, video_ad, animated_ad, product_demo, animated_typography, animated_design, logo_animation, cinemagraph, display_loop, ui_animation, gif, video_editing, audiogram, text_overlay, template_customization.
+- Video type dropdown has 22 values (see `new-app/lib/motion-studio/creative-options.ts`): anything, documentary, social_video, explainer, educational, faq, testimonial, video_ad, animated_ad, product_demo, animated_typography, animated_design, logo_animation, cinemagraph, display_loop, ui_animation, nft_design, gif, video_editing, audiogram, text_overlay, template_customization.
 - Creative styles: automatic, minimalist, modern, cinematic, bold, luxury, playful, editorial, retro, futuristic, custom.
 - Independent source workflows remain: idea, script, footage. Duration remains 30/60/120/180/300 sec.
 - Optional project branding: brand name, primary/secondary/accent HEX colors, typography preference, personality/tone, brand guidelines, uploaded image logo, logo placement (ai_decides/intro/outro/watermark/none), consistency (guided/strict/creative).
@@ -22,6 +22,7 @@ Branch: `feat/motion-studio-video-types-brand-kits-20261117` (NOT merged to mast
   "creative": {
     "videoType": "animated_ad",
     "style": "modern",
+    "customStyle": "Optional free-text style when style=custom",
     "instructions": "Make the ending feel warm and optimistic.",
     "brandMode": "saved",
     "brandKitId": "msbk_<uuid>",
@@ -41,7 +42,7 @@ Branch: `feat/motion-studio-video-types-brand-kits-20261117` (NOT merged to mast
   }
 }
 ```
-Read `GET jobUrl` with the existing bearer token to fetch signed `inputs` URLs of uploaded media. These assets include logos/references; correlate the upload ID with `creative.brand.logoUploadId` or `creative.referenceUploadIds` only if the producer receives IDs via future asset metadata enhancement. The `inputs` entries now expose `uploadId`, `filename`, `mime`, and `url` for exact matching.
+Read `GET jobUrl` with the existing bearer token to fetch signed `inputs` URLs of uploaded media. Match `inputs[].uploadId` to `creative.brand.logoUploadId` and `creative.referenceUploadIds`. The `inputs` entries now expose `uploadId`, `filename`, `mime`, and `url` for exact matching.
 
 **Precedence**: validated mandatory facts and safety > user's explicit instructions > strict brand constraints > category guidance > optional style suggestion. Never overwrite `prompt`, and do not treat brand or category as a scene template. Original concepts, compositions, animation, footage selection and storytelling remain the responsibility of the creative agents. `brandMode=none` means ignore brand fields; `guided` means stylistic consistency, `strict` means follow the approved identity, `creative` means broader art direction unless user states mandatory requirements.
 
@@ -49,7 +50,7 @@ Read `GET jobUrl` with the existing bearer token to fetch signed `inputs` URLs o
 
 ## Production readiness
 - Run `prisma migrate deploy` (and Prisma generate if needed), scoped `vitest`, `tsc`, and a real end-to-end create/dispatch.
-- Inspect media upload MIME validation for SVG support and protect SVG handling from unsafe active content.
+- SVG brand logos are validated and converted to PNG in the browser before upload. The existing server upload remains PNG/JPEG/WebP-only; test safe SVG rendering and conversion.
 - Real login/tenant authorization is NOT enabled for Motion Studio: `auth.ts` resolves pinned testing workspace. This must be fixed before public launch.
 - Existing agent testing quotas (3 initial jobs/day and 3 active jobs/user) remain unchanged; they are not a SaaS quota system.
 - Ensure 9:16 and 1:1 render, preview, timeline, and export have parity beyond the creation form.
