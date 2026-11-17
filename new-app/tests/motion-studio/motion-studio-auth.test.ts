@@ -2,21 +2,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const resolveWorkspaceId = vi.fn(async () => 'ws_default')
-const resolveClipsActorUserId = vi.fn(async (_request?: Request) => 'user_operator')
+const resolveInternalUserId = vi.fn(async () => 'user_operator')
 
 vi.mock('@/lib/server/workspace', () => ({
   resolveWorkspaceId: (...args: unknown[]) => resolveWorkspaceId(...args),
 }))
 
-vi.mock('@/lib/server/clips/clips-auth', () => ({
-  resolveClipsActorUserId: (...args: unknown[]) => resolveClipsActorUserId(...(args as [Request?])),
+vi.mock('@/lib/server/internal-user', () => ({
+  resolveInternalUserId: (...args: unknown[]) => resolveInternalUserId(),
 }))
 
 describe('Motion Studio caller resolution (no login gate)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resolveWorkspaceId.mockResolvedValue('ws_default')
-    resolveClipsActorUserId.mockResolvedValue('user_operator')
+    resolveInternalUserId.mockResolvedValue('user_operator')
   })
 
   it('uses the default workspace and operator when there is no session, and does not 401', async () => {
@@ -25,11 +25,11 @@ describe('Motion Studio caller resolution (no login gate)', () => {
     const caller = await requireMotionStudioCaller(request)
     expect(caller).toEqual({ userId: 'user_operator', workspaceId: 'ws_default' })
     expect(resolveWorkspaceId).toHaveBeenCalledOnce()
-    expect(resolveClipsActorUserId).toHaveBeenCalledWith(request)
+    expect(resolveInternalUserId).toHaveBeenCalledOnce()
   })
 
   it('uses a signed-in user when the rest of the app would, still on the default workspace', async () => {
-    resolveClipsActorUserId.mockResolvedValue('user_signed_in')
+    resolveInternalUserId.mockResolvedValue('user_signed_in')
     const { requireMotionStudioCaller } = await import('@/lib/server/motion-studio/auth')
     const caller = await requireMotionStudioCaller(new Request('http://local/api/motion-studio/projects'))
     expect(caller).toEqual({ userId: 'user_signed_in', workspaceId: 'ws_default' })
@@ -41,12 +41,12 @@ describe('Motion Studio caller resolution (no login gate)', () => {
     const listProjects = vi.fn(async () => ({ projects: [], nextCursor: null }))
     vi.resetModules()
     resolveWorkspaceId.mockResolvedValue('ws_default')
-    resolveClipsActorUserId.mockResolvedValue('user_operator')
+    resolveInternalUserId.mockResolvedValue('user_operator')
     vi.doMock('@/lib/server/workspace', () => ({
       resolveWorkspaceId: (...args: unknown[]) => resolveWorkspaceId(...args),
     }))
-    vi.doMock('@/lib/server/clips/clips-auth', () => ({
-      resolveClipsActorUserId: (...args: unknown[]) => resolveClipsActorUserId(...(args as [Request?])),
+    vi.doMock('@/lib/server/internal-user', () => ({
+      resolveInternalUserId: (...args: unknown[]) => resolveInternalUserId(...(args as [Request?])),
     }))
     vi.doMock('@/lib/server/motion-studio/service', () => ({ createProject, listProjects }))
 
