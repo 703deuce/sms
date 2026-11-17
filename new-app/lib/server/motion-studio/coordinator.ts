@@ -277,6 +277,21 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
 export async function coordinatorSweep() {
   if (!coordinatorEnabled()) return { enabled:false }
   const now=new Date()
+  const deadline=new Date(Date.now()-24*3600_000)
+  const staleQuestions=await db().motionStudioAgentJob.updateMany({where:{
+    status:'needs_input',OR:[
+      {waitingStartedAt:{lte:deadline}},
+      {waitingStartedAt:null,updatedAt:{lte:deadline}},
+    ],
+  },data:{status:'failed',phase:'failed',completedAt:now,
+    message:'We did not receive your answer within 24 hours.',
+    leaseOwner:null,leaseIdHash:null,leaseExpiresAt:null,
+  }})
+  const abandoned=await db().motionStudioAgentJob.updateMany({where:{
+    status:'queued',leaseAttempts:{gte:20},
+  },data:{status:'failed',phase:'failed',completedAt:now,
+    message:'Production could not be resumed after repeated worker interruptions.',
+  }})
   const expired=await db().motionStudioWorkerAssignment.findMany({where:{
     status:{in:['reserved','dispatched','running']},leaseExpiresAt:{lte:now},
   },take:100})
@@ -294,5 +309,5 @@ export async function coordinatorSweep() {
     })
   }
   const dispatched=await coordinatePendingJobs()
-  return { ...dispatched,expired:expired.length }
+  return { ...dispatched,expired:expired.length,staleQuestions:staleQuestions.count,abandoned:abandoned.count }
 }
