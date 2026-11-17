@@ -11154,6 +11154,7 @@ model MotionStudioRenderRequest {
   patch       Json
   status      String   @default("queued")
   resultAssetId String?
+  upload      Json?
   workerId    String?
   leaseHash   String?
   leaseExpiresAt DateTime?
