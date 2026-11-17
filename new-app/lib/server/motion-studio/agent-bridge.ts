@@ -6,7 +6,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assistant'
 import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
-import { customerQuestion, progressMayChangeWaiting, waitingExpired } from '@/lib/motion-studio/waiting-contract'
+import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 
 const db = () => getPrisma()
@@ -50,7 +50,7 @@ async function expireStaleQuestion<T extends { id: string; status: string; updat
   if (job.status !== 'needs_input' || !waitingExpired(job.updatedAt)) return job
   // Lazy fail-safe: enforced whenever client or producer polls the job. The producer
   // may choose an earlier best-effort continuation on its own 24-hour clock.
-  const deadline = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const deadline = new Date(Date.now() - CUSTOMER_WAIT_MS)
   const result = await db().motionStudioAgentJob.updateMany({
     where: { id: job.id, status: 'needs_input', updatedAt: { lte: deadline } },
     data: { status: 'failed', phase: 'failed',
