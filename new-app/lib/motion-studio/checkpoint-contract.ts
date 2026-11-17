@@ -12,7 +12,8 @@ export function validateProducerCheckpoint(raw: unknown, current: unknown): Prod
   const inspect = (value: unknown, path: string, depth: number): void => {
     if (depth > 24) throw new Error('Checkpoint is too deeply nested.')
     if (typeof value === 'string') {
-      if (/(?:https?:\/\/|s3:\/\/|gs:\/\/|\bBearer\s+|(?:^|\/)ws\/[^\s]+)/i.test(value))
+      if (/(?:s3:\/\/|gs:\/\/|\bBearer\s+|(?:^|\s|\/)ws\/[^\s]+)/i.test(value) ||
+          (/\bhttps?:\/\//i.test(value) && (/(?:[?&](?:X-Amz-|Signature|Expires=|token=|X-Goog-)|(?:https?:\/\/\S+\.(?:mp4|mov|wav|png|jpg)(?:\?|$)))/i.test(value) || /(?:^|\.)(?:url|downloadUrl|signedLink)$/i.test(path))))
         throw new Error('Checkpoint must contain stable asset IDs, not signed URLs or storage keys.')
       return
     }
