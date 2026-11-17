@@ -18,7 +18,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showVersions, setShowVersions] = useState(true)
+  const [showVersions, setShowVersions] = useState(false)
   const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
   const reload = useCallback(async () => {
     const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
@@ -83,9 +83,9 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   }
 
   return <section className="flex min-h-0 flex-col gap-3 rounded-xl border border-border bg-card p-4"
-    aria-label="Transovo Agent editing conversation" data-testid="ms-agent-chat">
+    aria-label="Transovo AI Assistant conversation" data-testid="ms-agent-chat">
     <div className="flex items-center justify-between gap-2">
-      <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4" /> Transovo Agent</h3>
+      <h3 className="flex items-center gap-2 text-sm font-semibold"><MessageSquare className="size-4" /> Transovo AI Assistant</h3>
     </div>
     <div className="rounded-lg border border-border p-3" data-testid="ms-agent-versions">
       <button type="button" className="flex w-full items-center justify-between text-left text-sm font-semibold"
@@ -115,26 +115,26 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
           {(liveJob.events??[]).slice(-5).map(e=><li key={e.id}>{e.message}</li>)}
         </ol>
       </div> : null}
-    <ol className="max-h-80 min-h-20 space-y-3 overflow-y-auto" aria-live="polite">
+    <ol className="max-h-[55vh] min-h-36 space-y-3 overflow-y-auto" aria-live="polite">
       {messages.map(m => <li key={m.id} className={m.role === 'customer'
         ? 'ml-6 rounded-xl bg-primary/10 px-3 py-2 text-sm'
         : 'mr-6 rounded-xl bg-muted px-3 py-2 text-sm'}>
-        <span className="mb-1 block text-xs font-semibold">{m.role === 'customer' ? 'You' : 'Transovo Agent'}</span>
+        <span className="mb-1 block text-xs font-semibold">{m.role === 'customer' ? 'You' : 'Transovo Assistant'}</span>
         <span className="whitespace-pre-wrap break-words">{m.text}</span>
       </li>)}
       {!messages.length ? <li className="text-sm text-muted-foreground">
-        Ask us to replace a scene, change a card, adjust music, or add footage.
+        Ask me about your video, request an edit, or check production progress. I can help while it renders.
       </li> : null}
     </ol>
     <label className="sr-only" htmlFor={'ms-agent-instruction-' + projectId}>Tell Transovo what to change</label>
     <Textarea id={'ms-agent-instruction-' + projectId} value={draft}
       onChange={e => setDraft(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {e.preventDefault(); void send()} }}
-      placeholder="At 1:36, change that title…" rows={3} maxLength={2500} />
+      placeholder="Ask a question or tell me what to change…" rows={3} maxLength={2500} />
     {error ? <p className="text-xs text-destructive" role="alert">{error}</p> : null}
     <Button size="sm" onClick={() => void send()} disabled={busy || !draft.trim()}>
       {busy ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Send className="mr-2 size-4" />}
-      Send edit
+      Send
     </Button>
   </section>
 }
