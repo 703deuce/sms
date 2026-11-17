@@ -251,7 +251,7 @@ export function MotionStudioCreate({
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
   const ready = attachments.filter((a) => a.uploadId)
   const hasInput =
-    workflow === 'idea' ? prompt.trim().length > 0 : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video') || prompt.trim().length > 0
+    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video')
   const canStart = hasInput && !uploading && !starting && (brandMode !== 'saved' || !!brandKitId)
 
   const start = async () => {
@@ -330,6 +330,7 @@ export function MotionStudioCreate({
             <section className="rounded-xl border border-border bg-card p-4" aria-label="Video type">
               <label htmlFor="ms-video-type" className="mb-2 block text-sm font-medium">What kind of video are you creating?</label>
               <select id="ms-video-type" data-testid="ms-video-type" value={videoType} onChange={e => { const type = e.target.value as MsVideoType; setVideoType(type);
+                  if (type === 'video_editing') setWorkflow('footage')
                   if (!durationTouched) setDurationSeconds(['documentary','educational','explainer'].includes(type) ? 180 : type === 'product_demo' ? 60 : 30)
                   if (!formatTouched) setFormat(['social_video','audiogram'].includes(type) ? '9:16' : '16:9') }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                 {['General','Stories & Content','Marketing','Motion Design','Editing & Repurposing'].map(group => <optgroup key={group} label={group}>
@@ -412,7 +413,7 @@ export function MotionStudioCreate({
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => logoRef.current?.click()}>Upload logo</Button>
-                    <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={e => { addFiles(e.target.files, 'logo'); e.target.value = '' }} />
+                    <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { addFiles(e.target.files, 'logo'); e.target.value = '' }} />
                     {attachments.filter(a => a.role === 'logo').map(a => <span key={a.key} className="text-xs text-muted-foreground">{a.file.name}</span>)}
                     <Button type="button" variant="outline" size="sm" disabled={!brandName.trim() || savingBrand || uploading || client.mode !== 'live'} onClick={() => void saveBrand()}>{savingBrand ? 'Saving…' : editingBrandKitId ? 'Update Brand Kit' : 'Save as Brand Kit'}</Button>
                   </div>
@@ -446,7 +447,7 @@ export function MotionStudioCreate({
                 data-testid="ms-prompt"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder={MS_LABELS.promptPlaceholder}
+                placeholder={videoType === 'documentary' ? 'Describe your documentary topic, people, story arc and facts to verify…' : videoType === 'animated_ad' || videoType === 'video_ad' ? 'Describe your business, audience, product benefits and desired call to action…' : videoType === 'logo_animation' ? 'Describe how your logo should appear, move and reveal…' : videoType === 'product_demo' ? 'Describe the product and what its demo must show…' : MS_LABELS.promptPlaceholder}
                 
                 rows={4}
                 className="min-h-28 resize-none border-0 bg-transparent px-4 pt-4 text-[15px] leading-6 shadow-none focus-visible:ring-0 dark:bg-transparent"
