@@ -571,6 +571,19 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         return { job: null, intent: 'conversation' }
       }
       if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
+      // Only one distinct answer may be delivered for a given job at once.
+      // The same idempotency key may retry after a partial write failure.
+      const claimed = await db().motionStudioAgentJob.updateMany({ where: {
+        id: answerJob.id, workspaceId, projectId,
+        status: existingMessage ? { in: ['needs_input','running'] } : 'needs_input',
+        OR: [
+          { answerInFlightKey: null },
+          { answerInFlightUntil: { lt: new Date() } },
+          { answerInFlightKey: key },
+        ],
+      }, data: { answerInFlightKey: key, answerInFlightUntil: new Date(Date.now()+60_000) } })
+      if (!claimed.count) throw new MotionStudioError('CONFLICT',
+        'Another answer is being delivered for this video. Please retry.', 409)
       // Deterministic fresh access for the existing job: an identical retry
       // derives the same token even if webhook acceptance preceded a DB failure.
       const resumeSecret = process.env.MOTION_STUDIO_JOB_TOKEN_SECRET || ''
@@ -601,7 +614,8 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (!accepted) {
         await db().motionStudioAgentJob.updateMany({ where: {
           id: answerJob.id, workspaceId, projectId, pendingTokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'),
-        }, data: { pendingTokenHash: null, pendingTokenExpiresAt: null } })
+        }, data: { pendingTokenHash: null, pendingTokenExpiresAt: null,
+          answerInFlightKey: null, answerInFlightUntil: null } })
         throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
       }
       await db().motionStudioAgentJob.updateMany({ where: {
@@ -609,6 +623,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         pendingTokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex') }, data: {
         tokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'), tokenExpiresAt: resumedExpires,
         pendingTokenHash: null, pendingTokenExpiresAt: null,
+        answerInFlightKey: null, answerInFlightUntil: null,
         status: 'running', waitingStartedAt: null, leaseAttempts: 0, message: "We're continuing with your direction…" } })
       await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
         create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
