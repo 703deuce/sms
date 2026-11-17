@@ -287,7 +287,7 @@ export function MotionStudioCreate({
         workflow,
         prompt: prompt.trim(),
         script: workflow === 'idea' ? null : script.trim() || null,
-        uploads: ready.map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
+        uploads: ready.filter(a => a.role !== 'logo' || brandMode !== 'none').map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
         mediaPolicy: 'auto_plus_uploads',
         durationSeconds,
         format: `${format}_${resolution}`,
