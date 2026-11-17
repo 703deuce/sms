@@ -11040,6 +11040,10 @@ model MotionStudioAgentMessage {
 
 model MotionStudioAgentJob {
   checkpoint       Json?
+  leaseOwner       String?
+  leaseIdHash      String?
+  leaseExpiresAt   DateTime?
+  leaseAttempts    Int      @default(0)
   id               String   @id
   projectId        String
   workspaceId      String
@@ -11064,6 +11068,7 @@ model MotionStudioAgentJob {
 
   @@unique([projectId, idempotencyKey])
   @@index([workspaceId, projectId, createdAt])
+  @@index([status, leaseExpiresAt, createdAt])
 }
 
 
