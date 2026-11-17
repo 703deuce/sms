@@ -26,7 +26,7 @@ export function validateSvgLogoMarkup(raw: string): Document {
       // Namespace declarations are XML metadata, not external resource loads.
       if (qualified === 'xmlns' || qualified.startsWith('xmlns:')) continue
       if (name.startsWith('on') || (name === 'href' && !value.startsWith('#')) ||
-        /(?:javascript:|data:|https?:|url\\(\\s*['"]?(?!#))/i.test(value))
+        /(?:javascript:|data:|https?:|url\(\s*['"]?(?!#))/i.test(value))
         throw new Error('This SVG includes external or interactive content. Export it as PNG.')
       // Editor-specific namespaced attributes are metadata; don't pass them to renderer.
       if (attr.namespaceURI && !['http://www.w3.org/1999/xlink'].includes(attr.namespaceURI))
