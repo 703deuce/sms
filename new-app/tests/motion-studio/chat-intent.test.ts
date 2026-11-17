@@ -15,5 +15,6 @@ describe('Motion Studio assistant intent helpers', () => {
   it('redacts accidental vendor references', () => {
     expect(publicAssistantText('Grokbot webhook error')).not.toContain('Grokbot')
     expect(publicAssistantText('Change the title to gold')).toBe('Change the title to gold')
+    expect(publicAssistantText("I've changed the intro.")).not.toContain('changed the intro')
   })
 })
