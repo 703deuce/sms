@@ -648,7 +648,7 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
     if (input.needsInput === true && !isDone(job.status)) {
       await tx.motionStudioAgentJob.updateMany({ where: {
         id, status: { in: ['dispatching','dispatched','running','needs_input'] } }, data: {
-        status: 'needs_input', waitingStartedAt: job.status === 'needs_input' ? job.waitingStartedAt : new Date(),
+        status: 'needs_input', waitingStartedAt: job.status === 'needs_input' && job.waitingStartedAt ? job.waitingStartedAt : new Date(),
         tokenExpiresAt: new Date(Date.now() + 36*3600_000),
         ...(pullProducerQueueEnabled() ? { leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null } : {}),
         message: "We're waiting for your direction…" } })
