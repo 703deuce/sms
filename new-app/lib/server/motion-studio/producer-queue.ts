@@ -47,6 +47,13 @@ export async function claimProducerJob(request: Request, raw: unknown) {
   const worker = validWorkerId((raw as {workerId?: unknown} | null)?.workerId)
   const jobUrlOrigin = process.env.MOTION_STUDIO_AGENT_PUBLIC_URL
   if (!jobUrlOrigin) throw new MotionStudioError('INTERNAL', 'Producer public URL missing.', 503)
+  // After repeated lost leases, do not strand the queue item forever.
+  await db().motionStudioAgentJob.updateMany({ where: {
+    leaseAttempts: { gte: 20 },
+    status: { in: ['queued', 'dispatched', 'running'] },
+    OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: new Date() } }],
+  }, data: { status: 'failed', phase: 'failed', completedAt: new Date(),
+    message: 'Production could not be resumed after repeated worker interruptions.' } })
   return db().$transaction(async tx => {
     const rows = await tx.$queryRaw<ClaimedRow[]>`
       SELECT j."id", j."projectId", j."workspaceId", j."userId", j."parentJobId", j."revision"
@@ -68,6 +75,14 @@ export async function claimProducerJob(request: Request, raw: unknown) {
     `
     const row = rows[0]
     if (!row) return { job: null }
+    // Serialize claims per workspace as well as per job; concurrent pollers
+    // must not lease two projects from the same workspace simultaneously.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${row.workspaceId}))`
+    const active = await tx.motionStudioAgentJob.count({ where: {
+      workspaceId: row.workspaceId, id: { not: row.id },
+      status: { in: ['dispatched', 'running'] }, leaseExpiresAt: { gt: new Date() },
+    } })
+    if (active) return { job: null }
     const token = randomBytes(32).toString('base64url')
     const leaseId = randomBytes(32).toString('base64url')
     const leaseExpiresAt = new Date(Date.now() + LEASE_MS)
