@@ -264,6 +264,10 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
     Number.isFinite(observed)&&observed>=0&&observed<=100
   const usageMoment=input.usageMoment==='before'?'before':'after'
   const observedAt=typeof input.observedAt==='string'?new Date(input.observedAt):new Date()
+  const resetRaw=typeof input.resetsAt==='string'?new Date(input.resetsAt):null
+  const resetsAt=resetRaw && Number.isFinite(resetRaw.getTime()) &&
+    resetRaw.getTime()>observedAt.getTime() &&
+    resetRaw.getTime()<=observedAt.getTime()+8*24*3600_000?resetRaw:null
   if(validObservation && (!Number.isFinite(observedAt.getTime()) ||
       observedAt.getTime()>Date.now()+60_000 ||
       observedAt.getTime()<Date.now()-7*24*3600_000))
@@ -283,7 +287,7 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
       await tx.motionStudioWorkerPlan.updateMany({where:{
         id:assignment.planId,
         OR:[{observedAt:null},{observedAt:{lt:observedAt}}],
-      },data:{observedPercent:observed,observedAt}})
+      },data:{observedPercent:observed,observedAt,...(resetsAt?{resetsAt}:{})}})
     }
     if(status==='running') await tx.motionStudioAgentJob.updateMany({where:{id:jobId,leaseOwner:worker.id},
       data:{leaseExpiresAt:expires}})
