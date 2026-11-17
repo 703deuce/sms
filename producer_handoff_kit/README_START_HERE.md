@@ -4,6 +4,8 @@ Your job: CREATE A NEW GROKBOT that is an exact copy of Rick's "Motion Studio Pr
 # START HERE: everything needed to build a new "Motion Studio Producer" Grokbot (Nov 17, 2026)
 Owner: Rick James (America/New_York). Transovo = Rick's platform (transovo.ai). GitHub repo: 703deuce/sms.
 
+**Test support (simulator, capture script, test footage): see test_support/README.md.**
+
 **Also read ADDENDUM_FROM_MAIN_AGENT.md (coordinator context, open issues, clipper status).**
 
 ## Where everything is
