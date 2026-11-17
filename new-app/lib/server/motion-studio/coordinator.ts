@@ -130,6 +130,19 @@ async function reserveOne(): Promise<Pending|null> {
     if (active.length >= globalMax) return null
     const workspacesMax = Math.max(1,Math.min(8,Number(process.env.MOTION_STUDIO_MAX_JOBS_PER_WORKSPACE)||1))
     const workers = await tx.motionStudioProducerWorker.findMany({ where:{ enabled:true }, orderBy:{ id:'asc' } })
+    // A deterministic scene render and a creative AI job consume the same
+    // physical machine even though only the latter consumes Grok plan usage.
+    const activeRenders = await tx.motionStudioRenderRequest.findMany({
+      where:{ status:{in:['reserved','running']}, leaseExpiresAt:{gt:now},workerId:{not:null} },
+      select:{workerId:true},
+    })
+    for(const render of activeRenders){
+      if(!render.workerId)continue
+      const renderer=workers.find(w=>w.id===render.workerId)
+      if(!renderer)continue
+      workerCounts.set(renderer.id,(workerCounts.get(renderer.id)||0)+1)
+      machineCounts.set(renderer.machineId,(machineCounts.get(renderer.machineId)||0)+1)
+    }
     const machines = await tx.motionStudioWorkerMachine.findMany({ where:{ enabled:true } })
     const plans = await tx.motionStudioWorkerPlan.findMany({ where:{ enabled:true } })
     const machinesById = new Map(machines.map(m=>[m.id,m]))
