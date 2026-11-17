@@ -9,7 +9,7 @@ import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
-import { pullProducerQueueEnabled, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
+import { pullProducerQueueEnabled, pullProducerQueueConfigured, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
 
 const db = () => getPrisma()
 const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {}
@@ -95,6 +95,7 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
 export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
   if (!pullProducerQueueEnabled() && !agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
+  if (pullProducerQueueEnabled() && !pullProducerQueueConfigured()) throw new MotionStudioError('INTERNAL', 'Producer queue configuration is incomplete.', 503)
   const project = await db().motionStudioProject.findFirst({
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
   })
