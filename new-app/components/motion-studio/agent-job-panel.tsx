@@ -23,8 +23,10 @@ export type MotionAgentJob = {
 export function AgentJobPanel({ job, onOpenEditor, showChat = true }: { job: MotionAgentJob; onOpenEditor?: () => void; showChat?: boolean }) {
   const complete = job.status === 'complete'
   const failed = ['failed', 'dispatch_failed', 'cancelled'].includes(job.status)
+  const queued = job.status === 'queued'
+  const awaitingAnswer = job.status === 'needs_input'
   const stages = job.stages ?? ['research','story','voice','scenes','review','fixing','rendering','delivering','complete']
-  const stageIndex = stages.indexOf(job.phase)
+  const stageIndex = queued ? -1 : stages.indexOf(job.phase)
   const labels: Record<string,string> = { research:'Research', story:'Story', voice:'Narration', scenes:'Scenes', review:'Review', fixing:'Polishing', rendering:'Rendering', delivering:'Delivery', complete:'Complete' }
   return (
     <section className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-5 py-8" aria-label="AI video production job" data-testid="ms-agent-job">
@@ -35,16 +37,16 @@ export function AgentJobPanel({ job, onOpenEditor, showChat = true }: { job: Mot
             : <Loader2 className="size-5 animate-spin text-primary" aria-hidden />}
           <h2 className="text-lg font-semibold">
             {failed ? 'Production request needs attention'
-              : complete ? 'Your video is ready' : 'Transovo Agent is creating your video'}
+              : complete ? 'Your video is ready' : awaitingAnswer ? 'Your direction is needed' : queued ? 'Your video is in the queue' : 'Transovo is creating your video'}
           </h2>
         </div>
         <p className="text-sm text-muted-foreground" role="status">
           {job.message || (complete ? 'Video production finished.' : 'Preparing your video request.')}
         </p>
         <p className="mt-2 font-mono text-xs text-muted-foreground">
-          {complete ? 'Production complete' : failed ? 'Production paused' : `${Math.round(job.progress)}% complete`}
+          {complete ? 'Production complete' : failed ? 'Production paused' : queued ? 'Waiting for an available producer' : awaitingAnswer ? 'Waiting for your answer' : `${Math.round(job.progress)}% complete`}
         </p>
-        {!failed && !complete ? (
+        {!failed && !complete && !queued && !awaitingAnswer ? (
           <div className="mt-4 h-2 overflow-hidden rounded-full bg-muted" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={job.progress} aria-label="Production progress">
             <div className="h-full rounded-full bg-primary transition-all" style={{ width: Math.min(100, Math.max(0, job.progress)) + '%' }} />
           </div>
