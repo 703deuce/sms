@@ -146,7 +146,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       instruction: revisionRequest?.instruction,
       selectedElementIds: revisionRequest?.selectedElementIds ?? [],
       timeRangeMs: revisionRequest?.timeRangeMs ?? null,
-      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId },
+      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','agent'] } },
         orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role, text: m.text })) } : {}),
     title: project.title, prompt: project.brief,
     videoType: creative.videoType,
@@ -420,8 +420,9 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   const existingMessage = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: messageId } })
   const recent = await db().motionStudioAgentMessage.findMany({ where: { projectId },
     orderBy: { createdAt: 'desc' }, take: 12 })
-  const latest = await db().motionStudioAgentJob.findFirst({
+  const rawLatest = await db().motionStudioAgentJob.findFirst({
     where: { projectId, workspaceId }, orderBy: { createdAt: 'desc' } })
+  const latest = rawLatest ? await expireStaleQuestion(rawLatest) : null
   const selectedStatus = latest?.status || project.status
   const pending = latest && !isDone(latest.status)
   const knownQuestion = isStatusQuestion(instruction)
@@ -486,6 +487,9 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     await db().motionStudioAgentMessage.upsert({ where: { id: 'msmsg_queue_' + messageId.slice(6) },
       create: { id: 'msmsg_queue_' + messageId.slice(6), projectId, jobId: latest.id,
         role: 'queued_edit', text: (decision.instruction || instruction).slice(0, 2500) }, update: {} })
+    // The producer may complete between our original status check and queueing.
+    const currentJob = await db().motionStudioAgentJob.findUnique({ where: { id: latest.id } })
+    if (currentJob?.status === 'complete') await dispatchQueuedAfterFinish(currentJob, request)
     response = latest.status === 'needs_input'
       ? 'I’ve queued that change for the next version. Please also answer the production question so the current video can finish.'
       : 'I’ve queued that change for the next version. I won’t interrupt the video that is currently processing.'
@@ -515,6 +519,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
 
 export async function botPostMessage(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id,request)
+  if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Cannot ask a question on a finished job.', 409)
   const input = toObject(raw)
   const text = input.needsInput === true ? customerQuestion(input.text) : friendlyMessage(input.text, 'review')
   if (!text) throw new MotionStudioError('INVALID','Message required.',400)
