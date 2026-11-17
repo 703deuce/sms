@@ -97,7 +97,7 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
     }
   }
   enforceBoundedJson(value, 2_000_000, 'Portable manifest')
-  return value as MsPortableManifest
+  return value as unknown as MsPortableManifest
 }
 export function validateScenePropertyPatch(
   manifest: MsPortableManifest, sceneId: string, patch: unknown,
