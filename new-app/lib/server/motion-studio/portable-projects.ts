@@ -68,8 +68,13 @@ export async function getPortableProject(workspaceId: string, projectId: string,
     where: { workspaceId, projectId, status: 'committed', ...(versionId ? { id: versionId } : {}) },
     orderBy: { revision: 'desc' },
   })
-  if (!version) return { version: null }
-  return { version: { ...version, manifest: version.manifest, theme: version.theme, overrides: version.overrides } }
+  const history = await db().motionStudioPortableVersion.findMany({
+    where: { workspaceId, projectId, status: 'committed' },
+    select: { id:true,revision:true,parentId:true,createdAt:true,sourceJobId:true },
+    orderBy: { revision: 'desc' }, take:100,
+  })
+  if (!version) return { version: null, history }
+  return { version: { ...version, manifest: version.manifest, theme: version.theme, overrides: version.overrides }, history }
 }
 
 /** Save a user edit atomically as a new immutable version. Never mutate source. */
@@ -136,6 +141,35 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
     } })
     return { version: next, requiresRender: Boolean(validated?.requiresRender), affectedSceneIds:
       validated ? [sceneId] : manifest.scenes.map(s => s.id) }
+  })
+}
+
+/** Restore an earlier immutable version by copying it into a new latest version. */
+export async function restorePortableVersion(workspaceId:string,projectId:string,raw:unknown){
+  await requireProject(workspaceId,projectId)
+  const input=obj(raw)
+  const baseVersionId=typeof input.baseVersionId==='string'?input.baseVersionId:''
+  const restoreVersionId=typeof input.restoreVersionId==='string'?input.restoreVersionId:''
+  if(!baseVersionId||!restoreVersionId)bad('Current and restored version IDs required')
+  return db().$transaction(async tx=>{
+    await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${projectId} FOR UPDATE`
+    const latest=await tx.motionStudioPortableVersion.findFirst({
+      where:{projectId,workspaceId,status:'committed'},orderBy:{revision:'desc'},
+    })
+    if(!latest||latest.id!==baseVersionId)
+      bad('Project version changed. Reload before restoring.','CONFLICT',409)
+    const source=await tx.motionStudioPortableVersion.findFirst({
+      where:{id:restoreVersionId,projectId,workspaceId,status:'committed'},
+    })
+    if(!source)bad('Version to restore not found.','NOT_FOUND',404)
+    const version=await tx.motionStudioPortableVersion.create({data:{
+      id:'mspv_'+randomUUID(),projectId,workspaceId,
+      revision:latest.revision+1,parentId:latest.id,sourceJobId:source!.sourceJobId,
+      status:'committed',manifest:toPrismaJson(source!.manifest),
+      theme:toPrismaJson(source!.theme),overrides:toPrismaJson(source!.overrides),
+      manifestHash:source!.manifestHash,committedAt:new Date(),
+    }})
+    return{version,restoredFrom:restoreVersionId}
   })
 }
 
