@@ -6,6 +6,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assistant'
 import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
+import { customerQuestion, progressMayChangeWaiting, waitingExpired } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 
 const db = () => getPrisma()
@@ -216,6 +217,8 @@ export async function botGetAssignment(id: string, request: Request) {
 export async function botProgress(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id, request)
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
+  // The producer may emit late telemetry after asking a question. Never clear needs_input.
+  if (!progressMayChangeWaiting(job.status)) return publicJob(job)
   const input = toObject(raw)
   const requestedStage = str(input.stage || input.phase, 60)
   const phase = (CUSTOMER_STAGES as readonly string[]).includes(requestedStage) ? requestedStage : 'scenes'
@@ -223,8 +226,10 @@ export async function botProgress(id: string, request: Request, raw: unknown) {
   const progress = Number.isFinite(proposed) ? Math.max(job.progress, Math.min(99, Math.round(proposed))) : job.progress
   const message = friendlyMessage(input.message, phase)
   const sceneId = str(input.sceneId, 80)
-  const updated = await db().motionStudioAgentJob.update({ where: { id },
+  const change = await db().motionStudioAgentJob.updateMany({ where: { id, status: { not: 'needs_input' } },
     data: { status: 'running', phase, progress, message } })
+  if (!change.count) return publicJob(await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id } }))
+  const updated = await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id } })
   await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: phase,
     kind: 'agent_progress', message, data: toPrismaJson({ jobId: id, percent: progress, ...(sceneId ? {sceneId} : {}) }) } })
   return publicJob(updated)
@@ -453,8 +458,8 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
 export async function botPostMessage(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id,request)
   const input = toObject(raw)
-  const text = friendlyMessage(input.text, 'review')
-  if (!str(input.text,2000)) throw new MotionStudioError('INVALID','Message required.',400)
+  const text = input.needsInput === true ? customerQuestion(input.text) : friendlyMessage(input.text, 'review')
+  if (!text) throw new MotionStudioError('INVALID','Message required.',400)
   const item = await db().motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
     projectId:job.projectId,jobId:id,role:'agent',text } })
   if (input.needsInput === true && !isDone(job.status)) {
