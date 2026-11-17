@@ -276,9 +276,9 @@ export async function createProject(workspaceId: string, userId: string, body: u
     await db().$transaction(async (tx: Tx) => {
       await tx.clipUpload.create({ data: { id: canvasUploadId, workspaceId, key: uploadSourceKey(workspaceId, canvasUploadId, 'mp4'),
         filename: 'Motion Studio video.mp4', bytes: BigInt(0), mime: 'video/mp4', status: 'PENDING', storageDriver: storageDriverName(), kind: 'source' } })
-      await tx.clipProject.create({ data: { id: clipProjectId, workspaceId, createdById: userId, title: (title || prompt || 'Documentary').slice(0, 120),
+      await tx.clipProject.create({ data: { id: clipProjectId, workspaceId, createdById: userId, title: (title || prompt || 'Video').slice(0, 120),
         uploadId: canvasUploadId, sourceKind: 'motion_studio',
-        settings: toPrismaJson(defaultClipSettings({ aspectRatio: '16:9', rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, byo: true,
+        settings: toPrismaJson(defaultClipSettings({ aspectRatio: settings.format.split('_')[0] as '16:9' | '9:16' | '1:1', rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, byo: true,
           fullVideo: true, blank: true, captions: { enabled: false, presetId: 'bold_pop', language: 'en' } })),
         rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'creative', clipProjectId, clipId, title,
