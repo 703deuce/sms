@@ -1,6 +1,7 @@
 import 'server-only'
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
+import { coordinatorEnabled, coordinatePendingJobs } from '@/lib/server/motion-studio/coordinator'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
@@ -49,12 +50,13 @@ type PublicJob = {
   completedAt: Date | null; waitingStartedAt?: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
 }
 async function expireStaleQuestion<T extends { id: string; status: string; waitingStartedAt?: Date | null }>(job: T): Promise<T> {
-  if (job.status !== 'needs_input' || !job.waitingStartedAt || !waitingExpired(job.waitingStartedAt)) return job
+  if (job.status !== 'needs_input' || !waitingExpired(job.waitingStartedAt || (job as T & { updatedAt?: Date }).updatedAt || new Date())) return job
   // Lazy fail-safe: enforced whenever client or producer polls the job. The producer
   // may choose an earlier best-effort continuation on its own 24-hour clock.
   const deadline = new Date(Date.now() - CUSTOMER_WAIT_MS)
   const result = await db().motionStudioAgentJob.updateMany({
-    where: { id: job.id, status: 'needs_input', waitingStartedAt: { lte: deadline } },
+    where: { id: job.id, status: 'needs_input',
+      OR: [{ waitingStartedAt: { lte: deadline } }, { waitingStartedAt: null, updatedAt: { lte: deadline } }] },
     data: { status: 'failed', phase: 'failed',
       message: 'We did not receive your answer within 24 hours. You can start another production request.',
       completedAt: new Date() },
@@ -95,7 +97,7 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
 
 export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
-  if (!pullProducerQueueEnabled() && !agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
+  if (!pullProducerQueueEnabled() && !coordinatorEnabled() && !agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
   if (pullProducerQueueEnabled() && !pullProducerQueueConfigured()) throw new MotionStudioError('INTERNAL', 'Producer queue configuration is incomplete.', 503)
   const project = await db().motionStudioProject.findFirst({
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
@@ -131,8 +133,8 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     job = await db().motionStudioAgentJob.create({ data: { id, projectId, workspaceId, userId,
       idempotencyKey, parentJobId: parent?.id ?? null, revision: parent ? parent.revision + 1 : 0,
       tokenHash, tokenExpiresAt: new Date(Date.now() + 36 * 3600_000),
-      status: pullProducerQueueEnabled() ? 'queued' : 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
-      message: pullProducerQueueEnabled() ? 'Your video is in the production queue.' : 'Submitting assignment to the production bot.' } })
+      status: (pullProducerQueueEnabled() || coordinatorEnabled()) ? 'queued' : 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
+      message: (pullProducerQueueEnabled() || coordinatorEnabled()) ? 'Your video is in the production queue.' : 'Submitting assignment to the production bot.' } })
   } catch (err) {
     if ((err as { code?: string })?.code !== 'P2002') throw err
     const duplicate = await db().motionStudioAgentJob.findUnique({ where })
@@ -140,6 +142,10 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     return publicJob(duplicate)
   }
   if (pullProducerQueueEnabled()) return publicJob(job)
+  if (coordinatorEnabled()) {
+    await coordinatePendingJobs(1)
+    return publicJob(await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id } }))
+  }
   const rawUrl = process.env.GROKBOT_WEBHOOK_URL!
   const webhook = new URL(rawUrl)
   if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
