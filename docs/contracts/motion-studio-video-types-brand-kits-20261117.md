@@ -126,3 +126,20 @@ The default existing webhook delivery remains enabled. The following is **opt-in
 - Safe SVG import tolerates additional editor namespaces and removes non-rendered Inkscape metadata before rasterization, while still forbidding executable content and external assets.
 
 **Verification status:** The earlier 63 passing tests were reported by Brock against an older branch state, with four additional tests blocked by the duplicate symbol. These new fixes have been committed but NOT yet run in the chat environment. Re-run the full scoped suites, Prisma schema/migrations and TypeScript comparison; then verify webhook-mode resume and pull-queue resume in preview before enabling production.
+
+## Follow-up corrections for the 74/75 validation report
+
+- Fixed accidental doubled escapes in the literal regexes in `checkpoint-contract.ts` and `logo-upload.ts`; the long-question test now compares against the intentionally trimmed question.
+- Lease claim comparisons no longer depend on a database session-local `CURRENT_TIMESTAMP`: Prisma parameterizes UTC `Date` values in the SQL claim predicate. Re-test with the PostgreSQL session time zone set to `America/New_York` and a just-expired lease.
+- Created migration `20261117104500_motion_studio_waiting_backfill` to initialize `waitingStartedAt` for legacy `needs_input` jobs from their last known `updatedAt`. Further checkpoint updates do not change the response deadline.
+- A successful answer resets the job's crash-claim counter (`leaseAttempts=0`) so normal multi-round clarifications are not mistaken for twenty interrupted workers.
+- Revision eligibility checks for any completed version of the same workspace/project, not only `latest.resultKey`; a failed latest attempt does not hide an earlier completed version.
+- For **legacy webhook mode**, configure `MOTION_STUDIO_JOB_TOKEN_SECRET` to an independent random secret of at least 32 characters, **different from** `GROKBOT_WEBHOOK_KEY`. A fresh deterministic per-answer token is staged as `pendingTokenHash` before delivery; the previous token remains valid until producer acceptance. A failed webhook clears the staged token; a successful delivery promotes it. Additive migration `20261117110000_motion_studio_pending_resume_token` creates the optional staged fields. **Do not reuse the webhook secret as a derivation key.**
+- In **pull mode**, workers already receive a fresh token on each queue claim and should not use the legacy answer webhook.
+- Customer answers to producer questions are stored with internal role `answer`; client and conversation presentation map them back to customer role. `resumeAnswer` now queries only that answer role, not unrelated chat or edit messages.
+- Checkpoint inspection now preserves ordinary hyperlinks inside written narration/story text, while blocking credential-like field names, signed media URLs, raw storage paths, and suspicious external media-file URLs. References to source media should be stable asset IDs.
+- Saved project-level queued edit requests remain available after a failed production or timeout. On the next successful completion, pending requests are collected for a follow-up revision; they are not falsely marked sent by a failed job.
+
+**New validation required:** regex import/parsing, 75-test suite plus new regression assertions, TypeScript vs master, Prisma validate, all migrations including legacy backfill and staged token columns, claim under a New York PostgreSQL session time zone, rejected webhook preserving old token, retry after webhook acceptance, questions through more than 20 rounds, revisions after failed latest job with older completed version, and resumeAnswer not mistakenly picking a normal chat message.
+
+The existing no-login customer testing setup remains unchanged. Do not merge, deploy, or enable the queue until the branch is validated with the real producer.
