@@ -46,6 +46,19 @@ type PublicJob = {
   message: string | null; resultKey: string | null; createdAt: Date; updatedAt: Date;
   completedAt: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
 }
+async function expireStaleQuestion<T extends { id: string; status: string; updatedAt: Date }>(job: T): Promise<T> {
+  if (job.status !== 'needs_input' || !waitingExpired(job.updatedAt)) return job
+  // Lazy fail-safe: enforced whenever client or producer polls the job. The producer
+  // may choose an earlier best-effort continuation on its own 24-hour clock.
+  const deadline = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const result = await db().motionStudioAgentJob.updateMany({
+    where: { id: job.id, status: 'needs_input', updatedAt: { lte: deadline } },
+    data: { status: 'failed', phase: 'failed',
+      message: 'We did not receive your answer within 24 hours. You can start another production request.',
+      completedAt: new Date() },
+  })
+  return result.count ? (await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id: job.id } })) as T : job
+}
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
     parentJobId: job.parentJobId ?? null, revision: job.revision ?? 0,
@@ -58,7 +71,8 @@ function publicJob(job: PublicJob) {
 export async function userAgentJob(workspaceId: string, projectId: string, _userId: string) {
   const project = await db().motionStudioProject.findFirst({ where: { workspaceId, id: projectId }, select: { id: true, exportInfo: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  const latest = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
+  const currentLatest = await db().motionStudioAgentJob.findFirst({ where: { workspaceId, projectId }, orderBy: { createdAt: 'desc' } })
+  const latest = currentLatest ? await expireStaleQuestion(currentLatest) : null
   const selectedJobId = str(toObject(project.exportInfo).agentJobId, 100)
   const selected = selectedJobId ? await db().motionStudioAgentJob.findFirst({ where: {
     id: selectedJobId, workspaceId, projectId, status: 'complete' } }) : null
@@ -196,7 +210,7 @@ export async function requireBotJob(id: string, request: Request) {
   if (expected.length !== given.length || !timingSafeEqual(given, expected)) {
     throw new MotionStudioError('UNAUTHENTICATED', 'Invalid token.', 401)
   }
-  return job
+  return await expireStaleQuestion(job)
 }
 
 export async function botGetAssignment(id: string, request: Request) {
