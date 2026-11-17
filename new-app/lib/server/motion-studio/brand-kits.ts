@@ -27,7 +27,9 @@ export async function saveBrandKit(workspaceId: string, raw: unknown) {
     const logo = await getPrisma().clipUpload.findFirst({ where: { workspaceId, id: profile.logoUploadId, status: 'COMPLETE' }, select: { mime: true } })
     if (!logo || !['image/png','image/jpeg','image/webp'].includes(logo.mime)) throw new MotionStudioError('INVALID', 'Upload a valid logo image.', 400)
   }
-  const id = typeof o.id === 'string' && /^msbk_[a-f0-9-]{36}$/.test(o.id) ? o.id : 'msbk_' + randomUUID()
+  if (o.id != null && (typeof o.id !== 'string' || !/^msbk_[a-f0-9-]{36}$/.test(o.id)))
+    throw new MotionStudioError('INVALID', 'Invalid Brand Kit ID. Select an existing saved kit to update it.', 400)
+  const id = typeof o.id === 'string' ? o.id : 'msbk_' + randomUUID()
   if (o.id) {
     const prior = await loadBrandKit(workspaceId, id)
     await getPrisma().$executeRaw`UPDATE "MotionStudioBrandKit" SET "name" = ${name}, "profile" = ${JSON.stringify(profile)}::jsonb, "updatedAt" = CURRENT_TIMESTAMP WHERE "workspaceId" = ${workspaceId} AND "id" = ${prior.id}`
