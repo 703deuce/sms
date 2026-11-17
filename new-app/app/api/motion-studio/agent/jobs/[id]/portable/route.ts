@@ -2,7 +2,18 @@ import { NextResponse } from 'next/server'
 import { requireBotJob } from '@/lib/server/motion-studio/agent-bridge'
 import { motionStudioJsonError } from '@/lib/server/motion-studio/http'
 import { publishPortableVersion } from '@/lib/server/motion-studio/portable-projects'
+import { portableAssetSession } from '@/lib/server/motion-studio/portable-assets'
 type Ctx={params:Promise<{id:string}>}
+export async function GET(request:Request,ctx:Ctx){
+  try{
+    const {id}=await ctx.params
+    const job=await requireBotJob(id,request)
+    if(['complete','failed','cancelled','dispatch_failed'].includes(job.status))
+      return NextResponse.json({error:'Finished jobs cannot refresh source assets'},{status:409})
+    const versionId=new URL(request.url).searchParams.get('versionId')||''
+    return NextResponse.json(await portableAssetSession(job.workspaceId,job.projectId,versionId))
+  }catch(e){return motionStudioJsonError(e)}
+}
 export async function POST(request:Request,ctx:Ctx) {
   try {
     const {id}=await ctx.params
