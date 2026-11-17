@@ -1,0 +1,12 @@
+{
+  "schema": "transovo.motion-project-version/0.1",
+  "projectId": "poc_keith_murray_doc_2min",
+  "projectVersion": 1,
+  "createdBy": "grokbot",
+  "theme": {"themeId": "thm_lexicon", "themeVersion": 1, "file": "../theme.json"},
+  "runtime": {"chrome": "156.0.8078.47", "gsap": "3.15.1", "three": "r187", "lock": "bundle/S01/bundle-lock.json", "capture": "render.mjs 0.1"},
+  "scenes": [
+    {"sceneId": "S01", "bundle": {"asset": "bnd_km_S01_v1", "path": "../../bundle/S01"}, "startMs": 6250, "endMs": 11817,
+     "overrides": {"tokens": {}, "elements": {}, "render": {}}}
+  ]
+}

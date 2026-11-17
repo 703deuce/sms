@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transovo.example/schemas/scene-overrides/0.1",
+  "title": "Customer edits (override patch) v0.1 (proposal). Written by the Transovo editor, consumed by setProps (live) and render.mjs (export).",
+  "type": "object",
+  "properties": {
+    "schema": {"const": "transovo.scene-overrides/0.1"},
+    "description": {"type": "string"},
+    "theme": {"type": "object", "description": "partial theme.json: project-wide, applies to every scene"},
+    "scenes": {"type": "object", "propertyNames": {"pattern": "^[A-Z][A-Z0-9_]*$"},
+      "additionalProperties": {"type": "object", "additionalProperties": false, "properties": {
+        "tokens": {"type": "object", "propertyNames": {"pattern": "^(colors|fonts)\\.[a-z]+$"}, "description": "scene-level token overrides"},
+        "elements": {"type": "object", "propertyNames": {"pattern": "^[a-z][a-z0-9_]*$"}, "additionalProperties": {"type": "object", "description": "elementId -> {prop: value}; null removes an override"}},
+        "render": {"type": "object", "description": "scene render_editable settings (worker only)"}}}}
+  },
+  "additionalProperties": false
+}

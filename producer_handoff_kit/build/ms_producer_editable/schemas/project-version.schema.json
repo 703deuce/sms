@@ -1,0 +1,188 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/project-version.schema.json",
+ "title": "Immutable project version (transovo.motion-project/1). Never edited in place; edits publish version+1.",
+ "type": "object",
+ "required": [
+  "schema",
+  "projectId",
+  "version",
+  "parentVersion",
+  "createdAt",
+  "createdBy",
+  "format",
+  "theme",
+  "overrides",
+  "scenes",
+  "master",
+  "assetRefs"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.motion-project/1"
+  },
+  "projectId": {
+   "type": "string",
+   "pattern": "^[A-Za-z0-9_-]+$"
+  },
+  "version": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "parentVersion": {
+   "type": [
+    "integer",
+    "null"
+   ]
+  },
+  "title": {
+   "type": "string"
+  },
+  "createdAt": {
+   "$ref": "common.schema.json#/$defs/iso"
+  },
+  "createdBy": {
+   "type": "object",
+   "required": [
+    "mode"
+   ],
+   "properties": {
+    "mode": {
+     "enum": [
+      "import",
+      "creative_production",
+      "deterministic_render"
+     ]
+    },
+    "workerId": {
+     "type": "string"
+    },
+    "jobId": {
+     "type": "string"
+    }
+   }
+  },
+  "changes": {
+   "type": "array"
+  },
+  "format": {
+   "type": "object",
+   "required": [
+    "width",
+    "height",
+    "fps"
+   ]
+  },
+  "theme": {
+   "$ref": "theme.schema.json"
+  },
+  "overrides": {
+   "$ref": "edit-patch.schema.json"
+  },
+  "fontRecords": {
+   "type": "array",
+   "items": {
+    "$ref": "font-record.schema.json"
+   }
+  },
+  "scenes": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "sceneId",
+     "bundle",
+     "clip",
+     "timeline"
+    ],
+    "properties": {
+     "sceneId": {
+      "$ref": "common.schema.json#/$defs/sceneId"
+     },
+     "bundle": {
+      "$ref": "common.schema.json#/$defs/bundleId"
+     },
+     "editable": {
+      "type": "boolean"
+     },
+     "themeAware": {
+      "type": "boolean"
+     },
+     "timeline": {
+      "type": "object"
+     },
+     "clip": {
+      "type": "object",
+      "required": [
+       "asset",
+       "renderKey"
+      ],
+      "properties": {
+       "asset": {
+        "$ref": "common.schema.json#/$defs/assetId"
+       },
+       "renderKey": {
+        "type": "string"
+       },
+       "frames": {
+        "type": "integer"
+       },
+       "renderedInVersion": {
+        "type": "integer"
+       }
+      }
+     },
+     "preview": {
+      "type": [
+       "object",
+       "null"
+      ]
+     },
+     "narrationRefs": {
+      "type": "array"
+     }
+    }
+   }
+  },
+  "sources": {
+   "type": "object",
+   "description": "narration script, word timestamps, stems, captions, music, footage, cut-outs, graphics"
+  },
+  "master": {
+   "type": "object",
+   "required": [
+    "recipe",
+    "asset"
+   ],
+   "properties": {
+    "recipe": {
+     "$ref": "common.schema.json#/$defs/assetId"
+    },
+    "asset": {
+     "$ref": "common.schema.json#/$defs/assetId"
+    },
+    "renderKey": {
+     "type": "string"
+    },
+    "encode": {
+     "type": "object"
+    },
+    "renderedInVersion": {
+     "type": "integer"
+    }
+   }
+  },
+  "runtimeLock": {
+   "$ref": "common.schema.json#/$defs/assetId"
+  },
+  "validation": {
+   "type": "object"
+  },
+  "assetRefs": {
+   "type": "array",
+   "items": {
+    "$ref": "common.schema.json#/$defs/anyAsset"
+   }
+  }
+ }
+}

@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="lib/common.css">
+<script src="lib/gsap.min.js"></script><script src="lib/SplitText.min.js"></script><script src="lib/common.js"></script>
+<!-- Parameterized copy of keith_murray_doc_2min/scenes/S05 (contract transovo.editable-elements/1).
+     Layout, timing and every tween are unchanged; literals moved to editable-elements.json defaults; text injected by scene.js. -->
+<style>body{background:var(--deep)}#c3{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(0,0,0,.55) 100%)}</style></head>
+<body><canvas id="c3" width="1920" height="1080"></canvas><div id="vig"></div>
+<div class="hw abs" id="km" data-el="title" style="left:120px;top:250px;font-size:250px;text-shadow:0 10px 40px rgba(0,0,0,.6)"></div>
+<div class="def abs" id="see" data-el="definition" style="left:126px;top:720px;font-size:58px;width:880px"></div>
+<div id="fade" style="position:absolute;inset:0;background:var(--deep);opacity:0"></div>
+<script>
+window.CFG={start:122.332,dur:2.978,
+ cam:[{p:[2.4,3.4,3.8],l:[2.8,0,-0.7]},{p:[1.8,5.0,6.0],l:[2.6,0,-0.7]},{p:[0.8,7.5,8.6],l:[2.0,0,-0.8]}],
+ type:(S,tl)=>{ S.show(document.getElementById('km'),0.0,null,{y:30,d:.5}); S.show(document.getElementById('see'),0.35,null); S.hl(document.getElementById('fb'),0.8,0.4);
+  tl.to(document.getElementById('fade'),{opacity:1,duration:0.55,ease:'power1.in'},S.dur-0.6); }};
+</script><script type="module" src="scene.js"></script></body></html>

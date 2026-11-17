@@ -1,0 +1,28 @@
+{
+ "schema": "transovo.editable-elements/1",
+ "sceneId": "sh04",
+ "sceneRevision": 1,
+ "origin": {"designedBy": "grokbot", "jobId": "test_phil_blount_30s", "designedFromScratch": true,
+  "description": "Studio shot of Phil: MediaPipe face-tracked 9:16 punch-in (OpenCV warpAffine, Lanczos) from a 16:9 interview frame, slow push 1.20 -> 1.26, gamma lift 1.45 for the dark room.",
+  "note": "Describes THIS custom shot; not a template."},
+ "format": {"width": 1080, "height": 1920, "fps": 30, "frames": 72, "durationSec": 2.4, "holdFrame": 36},
+ "timelinePlacement": {"startSec": 4.44, "endSec": 6.84},
+ "engines": [{"engine": "opencv", "version": "5.0.0", "role": "crop / warp / LUT"}, {"engine": "ffmpeg", "role": "decode + H.264 encode"}],
+ "entry": {"python": "render.py"},
+ "livePreview": {"capability": "render_only", "reasons": ["OpenCV frame renderer runs on the worker; browsers cannot run it"],
+  "fallback": {"mode": "still_then_render", "description": "editor shows the version poster; an edit requests a worker still (deterministic job with output.stillOnly) in ~2 s, then a full render on save"}},
+ "shotSpec": {"footage": "@var:footage", "track": "@var:track", "in": 117.1, "note": "face track computed once at import with the production detector (blaze_face_full_range, conf 0.45, every 2nd frame, Gaussian smoothing sigma 18)"},
+ "elements": [
+  {"id": "shot", "label": "Shot framing", "kind": "video", "layer": "opencv", "timing": {"inSec": 0, "outSec": 2.4},
+   "properties": {
+    "zoomStart": {"tier": "render_editable", "type": "number", "default": 1.2, "min": 1.0, "max": 1.6, "worker": "render.py"},
+    "zoomEnd": {"tier": "render_editable", "type": "number", "default": 1.26, "min": 1.0, "max": 1.6, "worker": "render.py"},
+    "framingY": {"tier": "render_editable", "type": "number", "default": 0.2, "min": 0.0, "max": 0.35, "worker": "render.py", "why": "fraction of crop height the face sits above centre"},
+    "framingX": {"tier": "render_editable", "type": "number", "default": 0.0, "min": -0.2, "max": 0.2, "worker": "render.py"},
+    "gamma": {"tier": "render_editable", "type": "number", "default": 1.45, "min": 1.0, "max": 2.0, "worker": "render.py"}
+   },
+   "aiEditable": [{"prop": "source", "what": "a different source clip or in-point (needs a new face track)"}, {"prop": null, "what": "different subject / reframe to two-shot"}]}
+ ],
+ "protected": [{"what": "face track (stored asset), smoothing, Lanczos warp, 9:16 crop geometry", "props": ["track", "smoothing", "interpolation", "aspect"]}, {"what": "shot timing / in-point", "props": ["in", "duration", "timing", "source"]}],
+ "aiEditable": [{"what": "replace the footage"}]
+}

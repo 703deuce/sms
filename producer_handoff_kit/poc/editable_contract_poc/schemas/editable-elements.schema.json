@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transovo.example/schemas/editable-elements/0.1",
+  "title": "Transovo Motion Studio per-scene editable-elements manifest v0.1 (proposal)",
+  "description": "Describes which parts of ONE custom-built scene a customer may change. Not a template: no layout or motion is defined here.",
+  "type": "object",
+  "required": ["schema", "sceneId", "sceneRevision", "origin", "format", "entry", "livePreview", "elements", "protected"],
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema": {"const": "transovo.editable-elements/0.1"},
+    "sceneId": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]*$"},
+    "sceneRevision": {"type": "integer", "minimum": 1},
+    "origin": {"type": "object", "required": ["designedBy", "designedFromScratch"], "properties": {"designedBy": {"type": "string"}, "jobId": {"type": "string"}, "designedFromScratch": {"const": true}, "description": {"type": "string"}, "note": {"type": "string"}}},
+    "format": {"type": "object", "required": ["width", "height", "fps", "frames"], "properties": {"width": {"type": "integer"}, "height": {"type": "integer"}, "fps": {"type": "number"}, "frames": {"type": "integer"}, "durationSec": {"type": "number"}, "aspectRatio": {"type": "string"}}},
+    "timelinePlacement": {"type": "object"},
+    "engines": {"type": "array", "items": {"type": "object", "required": ["role", "engine"]}},
+    "entry": {"type": "object", "required": ["html", "api", "methods"], "properties": {"html": {"type": "string"}, "api": {"const": "window.__scene"}, "methods": {"type": "array", "items": {"type": "string"}}, "readyFlags": {"type": "array", "items": {"type": "string"}}}},
+    "livePreview": {
+      "type": "object", "required": ["capability", "reasons", "fallback"],
+      "properties": {
+        "capability": {"enum": ["live", "live_limited", "render_only"]},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+        "requirements": {"type": "object", "properties": {"webgl": {"type": "string"}, "maxTextureSize": {"type": "integer"}, "minDeviceMemoryGB": {"type": "number"}}},
+        "fallback": {"type": "object", "required": ["mode"], "properties": {"mode": {"enum": ["poster_then_render", "render"]}, "posterFrame": {"type": "integer"}}}
+      }
+    },
+    "safeArea": {"type": "object", "properties": {"action": {"$ref": "#/$defs/rect"}, "title": {"$ref": "#/$defs/rect"}}},
+    "colorTokensUsed": {"type": "array", "items": {"type": "string", "pattern": "^colors\\.[a-z]+$"}},
+    "fontTokensUsed": {"type": "array", "items": {"type": "string", "pattern": "^fonts\\.[a-z]+$"}},
+    "derivedTokens": {"type": "object", "additionalProperties": {"type": "object", "required": ["from", "designFrom", "designValue", "method"],
+      "properties": {"from": {"type": "string"}, "designFrom": {"$ref": "#/$defs/hex"}, "designValue": {"$ref": "#/$defs/hex"}, "method": {"enum": ["oklch-delta"]}, "usedBy": {"type": "string"}}}},
+    "elements": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/element"}},
+    "renderEditable": {"type": "object"},
+    "aiEditable": {"type": "array", "items": {"type": "string"}},
+    "protected": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["what", "where"]}},
+    "allowedOverlaps": {"type": "array", "items": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2}}
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "rect": {"type": "object", "required": ["x", "y", "w", "h"], "properties": {"x": {"type": "number"}, "y": {"type": "number"}, "w": {"type": "number"}, "h": {"type": "number"}}},
+    "tier": {"enum": ["live_editable", "render_editable"]},
+    "element": {
+      "type": "object", "required": ["id", "label", "kind", "layer", "timing", "properties"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "stable across revisions; never renumbered"},
+        "label": {"type": "string"},
+        "kind": {"enum": ["text", "image", "color", "audio", "group"]},
+        "layer": {"enum": ["dom", "svg", "canvas2d", "webgl-texture", "webgl-mesh", "video", "audio"]},
+        "selector": {"type": "string"},
+        "producerSlot": {"type": "boolean"},
+        "timing": {"type": "object", "properties": {"inSec": {"type": "number"}, "revealEndSec": {"type": "number"}, "outSec": {"type": ["number", "null"]}, "anchor": {"type": "string"}, "revealRule": {"type": "string"}, "note": {"type": "string"}}},
+        "layout": {"type": "object"},
+        "contrast": {"type": "object", "required": ["min", "designBaseline"], "properties": {"min": {"type": "number"}, "designBaseline": {"type": "number"}}},
+        "properties": {"type": "object", "minProperties": 1, "additionalProperties": {"$ref": "#/$defs/property"}},
+        "aiEditable": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "property": {
+      "type": "object", "required": ["tier", "type"],
+      "properties": {
+        "tier": {"$ref": "#/$defs/tier"},
+        "type": {"enum": ["text", "number", "color", "font", "image", "point", "enum", "boolean"]},
+        "default": {},
+        "bind": {"type": "string", "pattern": "^(colors|fonts)\\.[a-z]+$"},
+        "fallbackBind": {"type": "string"},
+        "min": {"type": "number"}, "max": {"type": "number"}, "autoFitMin": {"type": "number"}, "unit": {"enum": ["px", "db", "%"]},
+        "maxChars": {"type": "integer"}, "maxCharsPerLine": {"type": "integer"}, "maxLines": {"type": "integer"},
+        "transform": {"enum": ["none", "uppercase"]}, "overflow": {"enum": ["auto_fit", "error"]}, "spokenInNarration": {"type": "boolean"},
+        "enum": {"type": "array"}, "roles": {"type": "array"}, "requiresItalic": {"type": "boolean"},
+        "formats": {"type": "array", "items": {"enum": ["image/jpeg", "image/png", "image/webp", "image/svg+xml"]}},
+        "minWidth": {"type": "integer"}, "minHeight": {"type": "integer"}, "svgRules": {"type": "string"},
+        "worker": {"type": "string"}, "why": {"type": "string"}, "note": {"type": "string"}
+      },
+      "allOf": [
+        {"if": {"properties": {"tier": {"const": "render_editable"}}}, "then": {"required": ["worker", "why"]}},
+        {"if": {"properties": {"type": {"enum": ["text", "number", "enum", "boolean", "point"]}}}, "then": {"required": ["default"]}},
+        {"if": {"properties": {"type": {"const": "number"}}}, "then": {"required": ["min", "max"]}},
+        {"if": {"properties": {"type": {"const": "enum"}}}, "then": {"required": ["enum"]}},
+        {"if": {"properties": {"type": {"const": "image"}}}, "then": {"required": ["formats"]}},
+        {"if": {"properties": {"type": {"const": "text"}}}, "then": {"anyOf": [{"required": ["maxChars"]}, {"required": ["maxCharsPerLine"]}]}},
+        {"if": {"properties": {"type": {"enum": ["color", "font"]}}}, "then": {"anyOf": [{"required": ["bind"]}, {"required": ["default"]}]}}
+      ],
+      "additionalProperties": false
+    }
+  }
+}

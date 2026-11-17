@@ -1,0 +1,356 @@
+{
+ "schema": "transovo.editable-elements/1",
+ "sceneId": "S04",
+ "sceneRevision": 1,
+ "origin": {
+  "designedBy": "grokbot",
+  "jobId": "test_phil_blount_30s",
+  "designedFromScratch": true,
+  "description": "PixiJS record for Phil Blount's label (NGMC) that flips to his studio label (NG STUDIO): grooves, sheen, tonearm swing, VU ring, magenta dust. Alpha layer over footage.",
+  "note": "Describes THIS custom scene; not a template."
+ },
+ "format": {
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "frames": 164,
+  "durationSec": 5.467,
+  "holdFrame": 60,
+  "alpha": true
+ },
+ "timelinePlacement": {
+  "startFrame": 308,
+  "note": "overlaid on the master at frame 308 (10.27 s)"
+ },
+ "engines": [
+  {
+   "engine": "pixi.js",
+   "version": "8",
+   "role": "record + label text (WebGL)"
+  },
+  {
+   "engine": "ms-props",
+   "version": "1",
+   "role": "runtime"
+  }
+ ],
+ "fontEngine": "browser",
+ "entry": {
+  "html": "index.html",
+  "api": "window.__scene",
+  "readyFlags": [
+   "__ready",
+   "__msReady"
+  ]
+ },
+ "livePreview": {
+  "capability": "live",
+  "requirements": {
+   "webgl": "webgl1+",
+   "fonts": "FontFace API"
+  },
+  "fallback": {
+   "mode": "poster_then_render",
+   "posterFrame": 60
+  }
+ },
+ "safeArea": {
+  "action": {
+   "x": 54,
+   "y": 96,
+   "w": 972,
+   "h": 1728
+  }
+ },
+ "colorTokensUsed": [
+  "colors.accent",
+  "colors.ink"
+ ],
+ "fontTokensUsed": [
+  "fonts.display",
+  "fonts.mono"
+ ],
+ "elements": [
+  {
+   "id": "labelA",
+   "label": "Label side A (label name)",
+   "kind": "text",
+   "layer": "pixi",
+   "selector": "PIXI.Text on the spinning record label",
+   "timing": {
+    "inSec": 0,
+    "outSec": 3.14,
+    "note": "label flips A->B at 3.02-3.26 s"
+   },
+   "layout": {
+    "maxWidth": {
+     "title": 227,
+     "line1": 215,
+     "line2": 201,
+     "line3": 197
+    },
+    "rule": "each line must fit max(label chord at its baseline, the original design width); auto-fit down to 70% of the design size, else TEXT_OVERFLOW"
+   },
+   "properties": {
+    "title": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "NGMC",
+     "maxChars": 8,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "titleFont"
+    },
+    "line1": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "NO GIMMICK",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "line2": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "MUSIC COALITION",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "line3": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "EST. 2011 · SIDE A",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "titleFont": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.display",
+     "roles": [
+      "display"
+     ]
+    },
+    "lineFont": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.mono",
+     "roles": [
+      "mono"
+     ]
+    }
+   },
+   "aiEditable": [
+    {
+     "prop": "motion",
+     "what": "label flip / spin"
+    },
+    {
+     "prop": null,
+     "what": "more lines or a different label layout"
+    }
+   ]
+  },
+  {
+   "id": "labelB",
+   "label": "Label side B (studio)",
+   "kind": "text",
+   "layer": "pixi",
+   "selector": "PIXI.Text on the spinning record label",
+   "timing": {
+    "inSec": 3.14,
+    "outSec": null,
+    "note": "label flips A->B at 3.02-3.26 s"
+   },
+   "layout": {
+    "maxWidth": {
+     "title": 202,
+     "line1": 216,
+     "line2": 197,
+     "line3": 163
+    },
+    "rule": "each line must fit max(label chord at its baseline, the original design width); auto-fit down to 70% of the design size, else TEXT_OVERFLOW"
+   },
+   "properties": {
+    "title": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "NG",
+     "maxChars": 8,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "titleFont"
+    },
+    "line1": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "STUDIO",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "line2": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "NEW HAVEN, CT",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "line3": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "203",
+     "maxChars": 20,
+     "overflow": "auto_fit",
+     "transform": "none",
+     "fontStyle": "normal",
+     "font": "lineFont"
+    },
+    "titleFont": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.display",
+     "roles": [
+      "display"
+     ]
+    },
+    "lineFont": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.mono",
+     "roles": [
+      "mono"
+     ]
+    }
+   },
+   "aiEditable": [
+    {
+     "prop": "motion",
+     "what": "label flip / spin"
+    },
+    {
+     "prop": null,
+     "what": "more lines or a different label layout"
+    }
+   ]
+  },
+  {
+   "id": "record",
+   "label": "Record colours",
+   "kind": "color",
+   "layer": "pixi",
+   "properties": {
+    "labelColor": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.accent",
+     "note": "label paper"
+    },
+    "ink": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.ink",
+     "note": "label text + rim"
+    },
+    "accent": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.accent",
+     "note": "VU ring, dust, tonearm head"
+    }
+   },
+   "aiEditable": [
+    {
+     "prop": "grooves",
+     "what": "vinyl look"
+    }
+   ]
+  }
+ ],
+ "contrast": [
+  {
+   "element": "labelA",
+   "fg": "el:record.ink",
+   "bg": [
+    "el:record.labelColor"
+   ],
+   "min": 3,
+   "designBaseline": 5.5
+  },
+  {
+   "element": "labelB",
+   "fg": "el:record.ink",
+   "bg": [
+    "el:record.labelColor"
+   ],
+   "min": 3,
+   "designBaseline": 5.5
+  }
+ ],
+ "protected": [
+  {
+   "what": "disc slide-in, spin rate, label flip timing, tonearm swing, VU envelope (88 BPM), dust motion",
+   "props": [
+    "animation",
+    "spin",
+    "flipTime",
+    "tempo",
+    "timing",
+    "x",
+    "y",
+    "rotation"
+   ]
+  },
+  {
+   "what": "record geometry (grooves, sheen wedges, shadow), label size",
+   "props": [
+    "geometry",
+    "radius",
+    "sheen"
+   ]
+  },
+  {
+   "what": "engine (PixiJS 8) and libraries",
+   "props": [
+    "engine"
+   ]
+  }
+ ],
+ "aiEditable": [
+  {
+   "what": "different object than a record"
+  },
+  {
+   "what": "retime to new narration"
+  }
+ ],
+ "allowedOverlaps": [
+  [
+   "labelA",
+   "record"
+  ],
+  [
+   "labelB",
+   "record"
+  ],
+  [
+   "labelA",
+   "labelB"
+  ]
+ ]
+}

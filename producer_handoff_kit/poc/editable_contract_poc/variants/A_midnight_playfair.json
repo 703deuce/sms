@@ -1,0 +1,22 @@
+{
+  "schema": "transovo.scene-overrides/0.1",
+  "description": "Variant A: project-wide palette change (midnight/gold), display font Playfair Display 900, label Archivo 700, new title + headword + pronunciation, SVG logo bottom-right.",
+  "theme": {
+    "colors": {
+      "background": {"value": "#0B1026"}, "primary": {"value": "#16204A"}, "secondary": {"value": "#E2725B"},
+      "accent": {"value": "#F2C14E"}, "text": {"value": "#F4EFE6"}
+    },
+    "fonts": {"display": {"asset": "fnt_playfair_display", "weight": 900}, "label": {"asset": "fnt_archivo", "weight": 700}, "body": {"asset": "fnt_playfair_display", "weight": 400}},
+    "brand": {"logo": {"asset": "ast_logo_placeholder_a"}}
+  },
+  "scenes": {
+    "S01": {
+      "elements": {
+        "title": {"text": "The\nLexicon"},
+        "pronunciation": {"text": "/ˈlek-sə-ˌkän/"},
+        "headword": {"text": "Lex·i·con, The"},
+        "logo": {"visible": true, "position": "bottom-right", "height": 84, "tint": "original"}
+      }
+    }
+  }
+}

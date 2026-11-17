@@ -1,0 +1,15 @@
+{
+  "schema": "transovo.scene-overrides/0.1",
+  "description": "Variant C (validation only, must be rejected): too many lines/chars, low contrast, font outside catalog, logo with no asset, render-only change attempted through setProps is tested separately.",
+  "theme": {"colors": {"text": {"value": "#1A2A22"}}},
+  "scenes": {
+    "S01": {
+      "elements": {
+        "title": {"text": "Keith Murray The Most\nBeautifullest Thing\nIn This World", "fontSize": 400},
+        "year": {"text": "Nineteen-ninety-three"},
+        "location": {"font": {"asset": "fnt_comic_whatever", "weight": 400}},
+        "logo": {"visible": true}
+      }
+    }
+  }
+}

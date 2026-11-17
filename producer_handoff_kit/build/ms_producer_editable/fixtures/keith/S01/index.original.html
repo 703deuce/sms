@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="lib/common.css">
+<script src="lib/gsap.min.js"></script><script src="lib/SplitText.min.js"></script><script src="lib/common.js"></script>
+<style>body{background:#07170F}#c3{position:absolute;left:0;top:0;width:1920px;height:1080px}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 50%,rgba(0,0,0,0) 55%,rgba(0,0,0,.55) 100%)}</style></head>
+<body><canvas id="c3" width="1920" height="1080"></canvas><div id="vig"></div>
+<div class="hw abs" id="km" style="left:120px;top:210px;font-size:300px;text-shadow:0 10px 40px rgba(0,0,0,.6)">Keith<br>Murray</div>
+<div class="pr abs" id="pron" style="left:126px;top:760px;font-size:46px">/ˈkēth ˈmər-ē/ &nbsp;<span class="it">n.</span></div>
+<div class="lab abs" id="loc" style="left:126px;top:880px;font-size:46px;text-align:left">Central Islip, Long Island</div>
+<div class="hw abs" id="yr" style="left:880px;top:826px;font-size:150px;color:var(--brick)">1993</div>
+<script>
+window.CFG={start:6.25,dur:5.57,
+ cam:[{p:[-6,1.1,3.2],l:[-3,0,0]},{p:[-2.5,2.4,4.6],l:[0,0,-0.2]},{p:[0.8,4.4,5.6],l:[1.8,0,-0.6]},{p:[2.0,5.8,5.4],l:[2.7,0,-0.8]}],
+ type:(S,tl)=>{ const kmT=S.cues.annKM-S.start; S.chars(document.getElementById('km'),kmT-0.02,{st:.035,d:.45});
+  S.show(document.getElementById('pron'),kmT+0.5,null);
+  S.show(document.getElementById('loc'),S.W('L01','central')-0.03,null,{y:20});
+  const y=document.getElementById('yr'); y.dataset.r=0; tl.fromTo(y,{opacity:0,scale:1.25},{opacity:1,scale:1,duration:.25,ease:'back.out(2)'},S.W('L01','nineteen')-0.02); }};
+</script><script type="module" src="scene.js"></script></body></html>

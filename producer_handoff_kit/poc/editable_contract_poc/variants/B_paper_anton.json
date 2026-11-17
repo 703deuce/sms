@@ -1,0 +1,76 @@
+{
+  "schema": "transovo.scene-overrides/0.1",
+  "description": "Variant B: light 'paper' palette, display font Anton, long title (auto-fit), scene-level accent override, PNG logo top-left tinted to text colour, plus two render_editable ops (portrait grade, grain). Headword text colour set to the text token value after the validator flagged 1.94:1 contrast on the blue highlight.",
+  "theme": {
+    "colors": {
+      "background": {
+        "value": "#E9E2D0"
+      },
+      "primary": {
+        "value": "#F3EEDF"
+      },
+      "secondary": {
+        "value": "#B3261E"
+      },
+      "accent": {
+        "value": "#FFB000"
+      },
+      "text": {
+        "value": "#1B1B1B"
+      }
+    },
+    "fonts": {
+      "display": {
+        "asset": "fnt_anton",
+        "weight": 400
+      },
+      "label": {
+        "asset": "fnt_archivo",
+        "weight": 700
+      },
+      "body": {
+        "asset": "fnt_spectral",
+        "weight": 400
+      }
+    },
+    "brand": {
+      "logo": {
+        "asset": "ast_logo_placeholder_b"
+      }
+    }
+  },
+  "scenes": {
+    "S01": {
+      "tokens": {
+        "colors.accent": "#3FA7D6"
+      },
+      "elements": {
+        "title": {
+          "text": "Long Island\nLegend"
+        },
+        "pronunciation": {
+          "text": "/lȯŋ ˈī-lənd ˈle-jənd/"
+        },
+        "location": {
+          "text": "Central Islip, NY"
+        },
+        "headword": {
+          "text": "Leg·end, Long Island",
+          "color": "#1B1B1B"
+        },
+        "portrait": {
+          "grade": "archive_bw_warm"
+        },
+        "logo": {
+          "visible": true,
+          "position": "top-left",
+          "height": 72,
+          "tint": "text"
+        }
+      },
+      "render": {
+        "grain": 5
+      }
+    }
+  }
+}

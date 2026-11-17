@@ -1,0 +1,254 @@
+Here’s what I’d send Grok. This gives it the complete producer-side assignment, not just another demonstration. It also makes clear that Grok owns the production engine while Transovo owns the projects, editor, customers and job coordination.
+
+TRANSOVO MOTION STUDIO — PRODUCER-SIDE IMPLEMENTATION
+
+We’re ready to move beyond the Keith Murray proof of concept and build the production-side system.
+
+Your Motion Studio customer-editable elements contract v0.1 is approved as the starting foundation, with the implementation requirements below.
+
+Your job is to build the Grokbot producer side. ChatGPT will handle Transovo’s database, editor UI, project storage APIs, production coordinator and customer-facing functionality.
+
+Do not wait for ChatGPT to finish the editor. Build against the shared contract and keep the integration points clearly documented.
+
+1. Complete portable project packages
+
+Every production must deliver more than a finished MP4.
+
+Upload everything another compatible Grokbot would need to reproduce and edit the video from a completely different computer.
+
+Include:
+
+* Complete source code for every scene.
+* Scene specifications, timelines and timing information.
+* Original footage, extracted footage, cut-out images and graphics.
+* Narration scripts, word timestamps, audio stems, captions and music references.
+* Fonts and font references used by the actual rendering engines.
+* Original project theme, scene themes and element-level overrides.
+* Rendering configuration, dependencies, runtime versions and seeds.
+* Editable-element manifests and validation rules.
+* Scene-level rendered clips, previews and the final master video.
+
+All project references must use stable Transovo asset IDs. Never depend on paths on your local computer.
+
+Use immutable, versioned scene bundles so the original production remains recoverable after multiple revisions.
+
+Preserve existing asset-upload behavior while extending it to include the complete source package.
+
+2. Implement editable elements across production scenes
+
+Use your existing editable-elements.json proposal.
+
+Whenever a scene contains safely configurable elements, expose as many useful properties as practical.
+
+This includes:
+
+* Text, headlines, names, spelling and captions.
+* Font family, weight, size and color.
+* Project-wide colors and individual scene colors.
+* Logos and images.
+* Backgrounds, graphic colors and supported appearance properties.
+* Safe position, scale, opacity and framing controls.
+* Other engine-supported properties that can change without destroying the design.
+
+Keep original animation logic, camera movement, geometry, motion paths and complex effects protected by default.
+
+Do not turn this into a template system. Every scene should still be custom-designed from scratch.
+
+The manifest describes how to edit that unique scene after it has been created.
+
+3. Project-wide themes and engine-native fonts
+
+Implement one project-wide theme with scene-level and element-level overrides.
+
+A customer should be able to change the entire video’s color palette without individually editing every scene.
+
+Preserve meaningful color relationships, gradients, lighting and effects where possible.
+
+Do not restrict fonts to an arbitrary Transovo preset library.
+
+Each rendering engine should use its own supported font system.
+
+Browser scenes should use fonts available to their scene runtime. Skia, Python and other engines should use their corresponding font systems.
+
+Preserve the exact selected font or reproducible engine-specific reference so another compatible worker can render the same result.
+
+Expose only font choices the relevant engine can actually render.
+
+4. Live editing for browser-based scenes
+
+Support live editing for compatible GSAP, three.js, PixiJS and other browser-based scenes.
+
+Maintain the shared scene API from your proof of concept:
+
+* setProps()
+* getProps()
+* validate()
+* describe()
+* seek()
+
+Changing an exposed property should update the original scene without rebuilding it through AI.
+
+Preserve the camera path, tween behavior, masks, transitions and other original production details.
+
+Support text painted into textures, DOM text, SVG graphics, WebGL objects and other compatible scene elements.
+
+Return usable element bounds and timing information so Transovo can show selection handles and inspector controls.
+
+For complex WebGL elements, provide projected screen-space bounds where practical.
+
+If a scene cannot run efficiently in the customer’s browser, declare the limitation and provide a rendered-preview fallback.
+
+The editor integration should use a sandboxed scene runtime and a controlled communication interface. It must not require arbitrary scene code to run inside Transovo’s main application context.
+
+5. Deterministic rendering without AI
+
+Implement a production render entry point that accepts:
+
+* Project ID and version.
+* Scene ID.
+* Property overrides.
+* Theme overrides.
+* Stable asset references.
+* Output settings.
+
+The worker must be able to load the original scene bundle, apply edits and render the result without asking an AI model to rewrite the scene.
+
+Only affected scenes should be regenerated when possible.
+
+If a change affects shared audio, timing, transitions or other dependencies, identify the additional scenes that require rendering.
+
+Produce new scene assets and an updated master video while preserving previous project versions.
+
+Report validation errors before rendering.
+
+6. Safe editing and validation
+
+Extend the validation demonstrated in the Keith Murray test.
+
+Support:
+
+* Text overflow detection and safe auto-fitting.
+* Font availability and character coverage.
+* Color contrast checks.
+* Valid image replacement and crop/framing preservation.
+* Safe property ranges.
+* Element overlap detection.
+* Missing or invalid assets.
+* Validation of unsupported property changes.
+* Warnings when changed on-screen text no longer matches the narration.
+
+Invalid edits must not corrupt the previously working project.
+
+Keep protected animation and camera settings inaccessible through ordinary customer property patches.
+
+7. Prepare for multiple independent Grokbots
+
+A project must never depend on the bot that created it.
+
+Bot 1 might create a documentary today. Five days later, Bot 4 on another computer and Grok account must be able to retrieve the complete source package and continue editing.
+
+Make the producer support:
+
+* Loading a project from Transovo storage.
+* Reconstructing the original scene runtime and dependencies.
+* Applying existing overrides.
+* Rendering a revised scene.
+* Reusing unchanged scenes.
+* Publishing a new project version.
+* Reporting progress, checkpoints, artifacts and errors.
+
+Document the worker capabilities required by each scene bundle so Transovo can assign a job to a compatible bot.
+
+Do not build a separate central dispatcher on any bot computer.
+
+Transovo will own scheduling and send jobs to workers using their existing idle-cost-free webhook routines.
+
+8. Keep production and rendering separate
+
+Your producer will eventually receive two distinct kinds of work.
+
+Creative production jobs: Use Grokbot’s AI capabilities to design or substantially redesign scenes, narration, graphics and the video.
+
+Deterministic edit/render jobs: Apply existing property changes and render them using the original scene source, without an AI model call.
+
+Keep these modes separate so simple customer edits do not consume Grok AI usage.
+
+9. Producer usage and machine reporting
+
+Prepare the worker interface to report:
+
+* Worker ID and capabilities.
+* Machine ID and rendering capacity.
+* Shared Grok account/plan ID.
+* Active job status.
+* Weekly Grok usage percentage observed before and after AI jobs.
+* Usage observation timestamps and reset information when available.
+* Actual render duration and failure information.
+
+Transovo will manage plan-level budgets, shared computer capacity, concurrency, assignments and job recovery.
+
+Multiple workers may share a single Grok account or machine, so don’t assume every bot has an independent allowance.
+
+10. Required testing
+
+Use the real Keith Murray S01 scene as the first integration fixture.
+
+Prove that:
+
+1. Original settings reproduce the original production.
+2. Text changes retain the original animation.
+3. Project-wide colors update correctly.
+4. Font and logo changes work.
+5. Browser preview and exported render agree visually.
+6. Invalid changes are rejected.
+7. The complete package reconstructs without local source paths.
+8. A deterministic edit renders without AI.
+9. Unchanged scenes remain unchanged.
+10. A separate worker can load the same package and produce a revision.
+
+After that, expand testing to another browser scene and at least one Python/FFmpeg-based scene.
+
+Do not claim support for an engine until its behavior is actually tested.
+
+11. Deliverables
+
+Produce:
+
+1. The finalized producer-side portable project format.
+2. The editable-elements and theme schemas.
+3. Versioned scene bundles and asset manifests.
+4. The deterministic scene rendering interface.
+5. Browser-preview runtime support.
+6. Validation and capability declarations.
+7. Worker integration documentation.
+8. Automated tests and real rendered examples.
+9. A clear Transovo integration guide showing required API requests, responses and data structures.
+
+Use your existing proof-of-concept work rather than starting over.
+
+Important constraints:
+
+* Do not change customer authentication.
+* Do not modify Transovo’s existing editor or its Compact/Timeline functionality.
+* Do not introduce a fixed template system.
+* Do not impose a preset font library.
+* Do not build a worker-side central scheduler.
+* Do not store permanent project state only on a bot computer.
+* Do not replace existing working production behavior.
+* Do not deploy or modify the validated Transovo branch as part of producer-side work.
+
+Build in working, testable stages, but complete the full producer-side scope rather than stopping after the first demonstration.
+
+Start with the portable package and shared property contract, then the deterministic renderer and live-preview integration. Test each stage using actual source from finished productions.
+
+When finished, report exactly what was implemented, what was tested, what remains unsupported, and what ChatGPT needs to connect on the Transovo side.
+
+That’s the assignment I’d give Brock. It keeps him focused on his production system while we build Transovo’s side.
+
+One important point: he shouldn’t have to wait for us to finish the coordinator, database or editor. He can implement and test the portable bundles, scene API and deterministic rendering locally against the agreed contract.
+
+Then we’ll connect his finished producer interfaces to Transovo.
+
+Our first shared milestone: import the real Keith Murray scene into the existing editor, change its text and full color theme, preview the original animation live, save the changes and export the revised scene without AI.
+
+After that, we’ll prove the same project can be resumed by another Grokbot on a separate computer.

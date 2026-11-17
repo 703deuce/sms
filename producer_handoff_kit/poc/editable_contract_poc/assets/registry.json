@@ -1,0 +1,90 @@
+{
+ "schema": "transovo.asset-registry/poc",
+ "note": "Stand-in for Transovo's asset store. Projects reference ONLY the ids; 'file' is where this sandbox keeps the bytes. The host resolves id -> session URL at load time.",
+ "assets": {
+  "ast_km_portrait_bw_01": {
+   "kind": "image",
+   "file": "assets/images/km_bw.jpg",
+   "mime": "image/jpeg",
+   "sha256": "4e0602fd1ccdfff94c8278920962500805046dcfb82e2e551ee7518ab2a0e39d",
+   "width": 480,
+   "height": 360
+  },
+  "ast_logo_placeholder_a": {
+   "kind": "logo",
+   "file": "assets/logos/logo_a.svg",
+   "mime": "image/svg+xml",
+   "sha256": "22f0bc7fb34d14a92555a7180dd97a74ab16de37123d67a65a1cb2ce5e7c2679",
+   "width": 520,
+   "height": 180
+  },
+  "ast_logo_placeholder_b": {
+   "kind": "logo",
+   "file": "assets/logos/logo_b.png",
+   "mime": "image/png",
+   "sha256": "e73d5b38e228d10640a58a9c34fb0af7a25270471cdce690b287bbd06c4a3818",
+   "width": 600,
+   "height": 200
+  },
+  "fntf_bsd_wght": {
+   "kind": "font-file",
+   "file": "assets/fonts/BigShouldersDisplay-wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "60e208dc276a1c35fc5b62e94f9fb959c40c11783a9eb7548175c14b1fbeb720"
+  },
+  "fntf_bst_wght": {
+   "kind": "font-file",
+   "file": "assets/fonts/BigShouldersText-wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "fce6c5cf4edec9c9dfb3e7a0f60bef927c881eab72ca17d50fddf4b55f334ed5"
+  },
+  "fntf_spectral_400": {
+   "kind": "font-file",
+   "file": "assets/fonts/Spectral-Regular.ttf",
+   "mime": "font/ttf",
+   "sha256": "c89021dc20720c8d0dcf40b0b2f6e00c13665fa8041717f581396f51b8c78f5d"
+  },
+  "fntf_spectral_600": {
+   "kind": "font-file",
+   "file": "assets/fonts/Spectral-SemiBold.ttf",
+   "mime": "font/ttf",
+   "sha256": "5f86915a744832ecf6e4a17ab04bea091b9fa992ef5164ff65ae34c1da2fe94b"
+  },
+  "fntf_spectral_400i": {
+   "kind": "font-file",
+   "file": "assets/fonts/Spectral-Italic.ttf",
+   "mime": "font/ttf",
+   "sha256": "7ec97244259db4008c4b1224c7914e5371c797c0044af9d85c2d761ba0e5f787"
+  },
+  "fntf_anton_400": {
+   "kind": "font-file",
+   "file": "assets/fonts/Anton-Regular.ttf",
+   "mime": "font/ttf",
+   "sha256": "97aae409210d255fb3b92f18c8af2ed14941e10a1ee134a35bb91f52086de1d0"
+  },
+  "fntf_playfair_wght": {
+   "kind": "font-file",
+   "file": "assets/fonts/PlayfairDisplay-VariableFont_wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "7b756032127781da7f7cc4410ec3cac50fa34b50c4e8408c5f6bf47dfd5eed83"
+  },
+  "fntf_playfair_wght_i": {
+   "kind": "font-file",
+   "file": "assets/fonts/PlayfairDisplay-Italic-VariableFont_wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "e32edc03421ea13490f7956d6386c10d38074ced33ba61922144bc22a7c70a9e"
+  },
+  "fntf_archivo_wght": {
+   "kind": "font-file",
+   "file": "assets/fonts/Archivo-VariableFont_wdth-wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "bc878c6e9e36b848bfa2fb9174acdf812ea6df640fd167f2c95b42674729f6b5"
+  },
+  "fntf_archivo_wght_i": {
+   "kind": "font-file",
+   "file": "assets/fonts/Archivo-Italic-VariableFont_wdth-wght.ttf",
+   "mime": "font/ttf",
+   "sha256": "28148413ceee1f9489a9eaa2c6871a66feef7a2e2ccabc0bcc3f31f3aecb38e1"
+  }
+ }
+}

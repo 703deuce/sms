@@ -1,0 +1,32 @@
+{
+ "schema": "transovo.scene-bundle-lock/0.1",
+ "sceneId": "S01",
+ "bundleAsset": "bnd_km_S01_v1",
+ "runtime": {
+  "chrome": "156.0.8078.47",
+  "gl": "ANGLE SwiftShader (export); preview uses the device GPU",
+  "gsap": "3.15.1 (+SplitText 3.15.1)",
+  "three": "r187"
+ },
+ "files": {
+  "editable-elements.json": "0f10574d6852fed678fb01a3a81fe9b9db384f3d546e758acec11e2877cf2c73",
+  "index.html": "87e1944f902cff187c93d02c257584157bbe2c698a7b4fe31fece2ed64cf3972",
+  "lib/BigShouldersDisplay[wght].ttf": "60e208dc276a1c35fc5b62e94f9fb959c40c11783a9eb7548175c14b1fbeb720",
+  "lib/BigShouldersText[wght].ttf": "fce6c5cf4edec9c9dfb3e7a0f60bef927c881eab72ca17d50fddf4b55f334ed5",
+  "lib/Spectral-ExtraLight.ttf": "5d852db897fd7ad5ce640a6e88f1cd70eac75777c541d02d86749af8d4797ff1",
+  "lib/Spectral-Italic.ttf": "7ec97244259db4008c4b1224c7914e5371c797c0044af9d85c2d761ba0e5f787",
+  "lib/Spectral-Regular.ttf": "c89021dc20720c8d0dcf40b0b2f6e00c13665fa8041717f581396f51b8c78f5d",
+  "lib/Spectral-SemiBold.ttf": "5f86915a744832ecf6e4a17ab04bea091b9fa992ef5164ff65ae34c1da2fe94b",
+  "lib/SplitText.min.js": "7b299a6b26b36fd5ce1c0712f31d6d25f98f9a9860778c2d3a78ce8f880f2edf",
+  "lib/common.css": "de286dc1dce586ccfe03a7b76a34f6c75e483fcbacd8dcca4526d9ea42e7e952",
+  "lib/common.js": "3da72b3e6597b5f041ff493e5be8e19a596e06c10a237514b90f754296ab9031",
+  "lib/cues.json": "dadf40b3334a9903721dab4bc6b0361d22ca273bf14153cbebb989426d1b973b",
+  "lib/d3.min.js": "912111098ea99503a6f4967361d2bbdc9dbf58cf9c678c8e27e5b02d1a07f0c1",
+  "lib/gsap.min.js": "3d1bea374ab1b703cc5c4105358eec63c4465efdc573931dc116e34a0a190c1b",
+  "lib/three.core.js": "613e370f76638fdef83926642bf256dc9615684922de1ce1f63a8583e5d78578",
+  "lib/three.module.js": "104f56145899722094556490d787aae0617cc2fc3382f31df02d724ea1aee341",
+  "lib/words.json": "e2e2420484f87c69379adfb1dcc6bdc953034b41eae4ff0c928cb5a32d75c2a4",
+  "ms-props.js": "3635de2eb1d8eff1ac30e717f1d3abf3db1cf8e1940ac87c0106978e1c53d489",
+  "scene.js": "ae7b5571671613eb222a7f3d935bd0d902fbab2f521ed962ba359b374faf3348"
+ }
+}

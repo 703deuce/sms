@@ -1,0 +1,635 @@
+{
+ "$schema": "../../schemas/editable-elements.schema.json",
+ "schema": "transovo.editable-elements/0.1",
+ "sceneId": "S01",
+ "sceneRevision": 1,
+ "origin": {
+  "designedBy": "grokbot",
+  "jobId": "test_keith_murray_doc_2min",
+  "designedFromScratch": true,
+  "description": "Title card: camera glides over a 3D dictionary page (three.js) with the subject's entry highlighted and his photo print on the page; name types on letter by letter (GSAP SplitText), then pronunciation, place and year land on narration words.",
+  "note": "This manifest describes which parts of THIS custom scene are safe to change. It is not a template and is never reused to generate other scenes."
+ },
+ "format": {
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "frames": 167,
+  "durationSec": 5.567,
+  "aspectRatio": "16:9"
+ },
+ "timelinePlacement": {
+  "startMs": 6250,
+  "endMs": 11817,
+  "anchors": {
+   "in": "cue annKM (announcer says the name)",
+   "location": "L01:'Central'",
+   "year": "L01:'Nineteen'"
+  }
+ },
+ "engines": [
+  {
+   "role": "world",
+   "engine": "three.js",
+   "file": "lib/three.module.js"
+  },
+  {
+   "role": "type",
+   "engine": "gsap",
+   "plugins": [
+    "SplitText"
+   ],
+   "file": "lib/gsap.min.js"
+  },
+  {
+   "role": "runtime",
+   "engine": "ms-props",
+   "version": "0.1",
+   "file": "ms-props.js"
+  }
+ ],
+ "entry": {
+  "html": "index.html",
+  "api": "window.__scene",
+  "methods": [
+   "seek(t)",
+   "setProps(patch)",
+   "getProps()",
+   "validate()",
+   "describe()"
+  ],
+  "readyFlags": [
+   "__ready",
+   "__msReady"
+  ]
+ },
+ "livePreview": {
+  "capability": "live",
+  "reasons": [
+   "single WebGL scene, 6 meshes, one 4096x2560 canvas texture",
+   "all editable props are applied by ms-props.js in < 1 frame budget on desktop GPUs; a text/colour edit repaints the page texture (about 0.2-1 s on software GL)"
+  ],
+  "requirements": {
+   "webgl": "webgl1+",
+   "maxTextureSize": 4096,
+   "minDeviceMemoryGB": 4,
+   "fonts": "FontFace API",
+   "cssMask": true
+  },
+  "fallback": {
+   "mode": "poster_then_render",
+   "posterFrame": 166,
+   "description": "if requirements fail, show the last rendered poster frame and queue a worker render of the same bundle + props"
+  }
+ },
+ "safeArea": {
+  "action": {
+   "x": 96,
+   "y": 54,
+   "w": 1728,
+   "h": 972
+  },
+  "title": {
+   "x": 120,
+   "y": 96,
+   "w": 1680,
+   "h": 888
+  }
+ },
+ "colorTokensUsed": [
+  "colors.background",
+  "colors.primary",
+  "colors.secondary",
+  "colors.accent",
+  "colors.text"
+ ],
+ "fontTokensUsed": [
+  "fonts.display",
+  "fonts.label",
+  "fonts.body"
+ ],
+ "derivedTokens": {
+  "pageInner": {
+   "from": "colors.primary",
+   "designFrom": "#0E2A22",
+   "designValue": "#143A2D",
+   "method": "oklch-delta",
+   "usedBy": "page texture radial gradient centre"
+  },
+  "pageOuter": {
+   "from": "colors.primary",
+   "designFrom": "#0E2A22",
+   "designValue": "#0B2219",
+   "method": "oklch-delta",
+   "usedBy": "page texture radial gradient edge"
+  }
+ },
+ "elements": [
+  {
+   "id": "title",
+   "label": "Title",
+   "kind": "text",
+   "layer": "dom",
+   "selector": "[data-el=title]",
+   "timing": {
+    "inSec": 0.07,
+    "revealEndSec": 0.87,
+    "outSec": null,
+    "revealRule": "per-character rise, 0.035 s stagger, 0.45 s each; reveal length = 0.45 + 0.035*(chars-1)"
+   },
+   "layout": {
+    "origin": {
+     "x": 120,
+     "y": 210
+    },
+    "fitBox": {
+     "x": 120,
+     "y": 210,
+     "w": 960,
+     "h": 540
+    },
+    "selectionBounds": null
+   },
+   "properties": {
+    "text": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "Keith\nMurray",
+     "maxLines": 2,
+     "maxCharsPerLine": 14,
+     "transform": "uppercase",
+     "overflow": "auto_fit"
+    },
+    "font": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.display",
+     "roles": [
+      "display"
+     ]
+    },
+    "fontSize": {
+     "tier": "live_editable",
+     "type": "number",
+     "unit": "px",
+     "default": 300,
+     "min": 180,
+     "max": 320,
+     "autoFitMin": 160
+    },
+    "color": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.text"
+    }
+   },
+   "aiEditable": [
+    "reveal style (letter rise)",
+    "position / composition",
+    "drop shadow look",
+    "line count above 2"
+   ],
+   "contrast": {
+    "min": 3,
+    "designBaseline": 10.2,
+    "against": "worst of colors.background, pageInner, pageOuter",
+    "rule": "warn below min(min, designBaseline); error below 2:1"
+   }
+  },
+  {
+   "id": "pronunciation",
+   "label": "Pronunciation line",
+   "kind": "text",
+   "layer": "dom",
+   "selector": "[data-el=pronunciation]",
+   "timing": {
+    "inSec": 0.59,
+    "revealEndSec": 0.94,
+    "outSec": null
+   },
+   "layout": {
+    "origin": {
+     "x": 126,
+     "y": 760
+    },
+    "fitBox": {
+     "x": 126,
+     "y": 760,
+     "w": 900,
+     "h": 70
+    }
+   },
+   "properties": {
+    "text": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "/ˈkēth ˈmər-ē/",
+     "maxChars": 32,
+     "overflow": "auto_fit"
+    },
+    "partOfSpeech": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "n.",
+     "maxChars": 6
+    },
+    "font": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.body",
+     "roles": [
+      "body"
+     ],
+     "requiresItalic": true
+    },
+    "color": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.text",
+     "note": "rendered at 72% opacity"
+    }
+   },
+   "aiEditable": [
+    "remove the dictionary conceit"
+   ],
+   "contrast": {
+    "min": 3,
+    "designBaseline": 6.11,
+    "against": "worst of colors.background, pageInner, pageOuter",
+    "rule": "warn below min(min, designBaseline); error below 2:1"
+   }
+  },
+  {
+   "id": "location",
+   "label": "Place",
+   "kind": "text",
+   "layer": "dom",
+   "selector": "[data-el=location]",
+   "timing": {
+    "inSec": 1.53,
+    "revealEndSec": 1.88,
+    "outSec": null,
+    "anchor": "narration word L01:'Central'"
+   },
+   "layout": {
+    "origin": {
+     "x": 126,
+     "y": 880
+    },
+    "fitBox": {
+     "x": 126,
+     "y": 880,
+     "w": 720,
+     "h": 70
+    }
+   },
+   "properties": {
+    "text": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "Central Islip, Long Island",
+     "maxChars": 32,
+     "transform": "uppercase",
+     "overflow": "auto_fit",
+     "spokenInNarration": true
+    },
+    "font": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.label",
+     "roles": [
+      "label"
+     ]
+    },
+    "color": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.text"
+    }
+   },
+   "aiEditable": [
+    "re-anchor to different narration words",
+    "change the narration that speaks it"
+   ],
+   "contrast": {
+    "min": 3,
+    "designBaseline": 10.2,
+    "against": "worst of colors.background, pageInner, pageOuter",
+    "rule": "warn below min(min, designBaseline); error below 2:1"
+   }
+  },
+  {
+   "id": "year",
+   "label": "Year",
+   "kind": "text",
+   "layer": "dom",
+   "selector": "[data-el=year]",
+   "timing": {
+    "inSec": 3.618,
+    "revealEndSec": 3.868,
+    "outSec": null,
+    "anchor": "narration word L01:'Nineteen'"
+   },
+   "layout": {
+    "origin": {
+     "x": 880,
+     "y": 826
+    },
+    "fitBox": {
+     "x": 880,
+     "y": 826,
+     "w": 520,
+     "h": 140
+    }
+   },
+   "properties": {
+    "text": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "1993",
+     "maxChars": 6,
+     "transform": "uppercase",
+     "overflow": "auto_fit",
+     "spokenInNarration": true
+    },
+    "font": {
+     "tier": "live_editable",
+     "type": "font",
+     "bind": "fonts.display",
+     "roles": [
+      "display"
+     ]
+    },
+    "color": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.secondary"
+    }
+   },
+   "aiEditable": [
+    "stamp/pop motion",
+    "re-anchor"
+   ],
+   "contrast": {
+    "min": 3,
+    "designBaseline": 2.61,
+    "against": "worst of colors.background, pageInner, pageOuter",
+    "rule": "warn below min(min, designBaseline); error below 2:1"
+   }
+  },
+  {
+   "id": "headword",
+   "label": "Dictionary entry (on the 3D page)",
+   "kind": "text",
+   "layer": "webgl-texture",
+   "selector": "canvas texture: page, rect (2090,1130) 4096x2560 space",
+   "timing": {
+    "inSec": 0,
+    "outSec": null,
+    "note": "visible as the camera passes; legibility depends on camera path (protected)"
+   },
+   "layout": {
+    "textureRect": {
+     "x": 2090,
+     "y": 1130,
+     "minW": 700,
+     "h": 78,
+     "growsRight": true,
+     "maxW": 880
+    }
+   },
+   "properties": {
+    "text": {
+     "tier": "live_editable",
+     "type": "text",
+     "default": "Mur·ray, Keith",
+     "maxChars": 24
+    },
+    "highlight": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.accent"
+    },
+    "color": {
+     "tier": "live_editable",
+     "type": "color",
+     "bind": "colors.background"
+    }
+   },
+   "aiEditable": [
+    "filler dictionary words",
+    "page layout"
+   ],
+   "contrast": {
+    "min": 4.5,
+    "designBaseline": 12.48,
+    "against": "highlight bar (92% over pageInner)",
+    "rule": "warn below min(min, designBaseline); error below 2:1"
+   }
+  },
+  {
+   "id": "portrait",
+   "label": "Photo print",
+   "kind": "image",
+   "layer": "webgl-mesh",
+   "selector": "mesh: photo print (4.0 x 3.0 world units)",
+   "timing": {
+    "inSec": 0,
+    "outSec": null
+   },
+   "layout": {
+    "aspect": "4:3",
+    "crop": "cover",
+    "minSourcePx": {
+     "w": 480,
+     "h": 360
+    }
+   },
+   "properties": {
+    "image": {
+     "tier": "live_editable",
+     "type": "image",
+     "default": {
+      "asset": "ast_km_portrait_bw_01"
+     },
+     "formats": [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+     ],
+     "minWidth": 480,
+     "minHeight": 360
+    },
+    "focalPoint": {
+     "tier": "live_editable",
+     "type": "point",
+     "default": {
+      "x": 0.5,
+      "y": 0.5
+     }
+    },
+    "borderColor": {
+     "tier": "live_editable",
+     "type": "color",
+     "default": "#EFE7D6",
+     "note": "physical print paper; deliberately NOT bound to colors.text (POC finding: in a light theme the text token goes dark and would turn the print border black)"
+    },
+    "grade": {
+     "tier": "render_editable",
+     "type": "enum",
+     "enum": [
+      "none",
+      "archive_bw_warm"
+     ],
+     "default": "none",
+     "worker": "tools/grade_portrait.py (Python/PIL)",
+     "why": "the film's archive grade is a worker image op; the preview shows the ungraded photo until the worker returns a derived asset, which is then live"
+    },
+    "autoFocalPoint": {
+     "tier": "render_editable",
+     "type": "boolean",
+     "default": false,
+     "worker": "MediaPipe face detection (Python)",
+     "why": "face detection runs on the worker, result is written back as focalPoint (live)"
+    }
+   },
+   "aiEditable": [
+    "print size, angle, position on the page",
+    "replace the photo with video"
+   ]
+  },
+  {
+   "id": "logo",
+   "label": "Logo",
+   "kind": "image",
+   "layer": "dom",
+   "selector": "[data-el=logo]",
+   "producerSlot": true,
+   "timing": {
+    "inSec": 1.53,
+    "revealEndSec": 1.88,
+    "outSec": null,
+    "note": "reuses the location reveal"
+   },
+   "layout": {
+    "positions": {
+     "bottom-right": {
+      "x": 1800,
+      "y": 984,
+      "anchor": "right",
+      "vAnchor": "bottom",
+      "maxW": 420
+     },
+     "top-left": {
+      "x": 126,
+      "y": 96,
+      "anchor": "left",
+      "vAnchor": "top",
+      "maxW": 420
+     }
+    }
+   },
+   "properties": {
+    "visible": {
+     "tier": "live_editable",
+     "type": "boolean",
+     "default": false
+    },
+    "image": {
+     "tier": "live_editable",
+     "type": "image",
+     "default": null,
+     "fallbackBind": "brand.logo",
+     "formats": [
+      "image/svg+xml",
+      "image/png",
+      "image/webp"
+     ],
+     "svgRules": "no <text>, no external refs, no scripts (fonts in SVG are not pinned)"
+    },
+    "position": {
+     "tier": "live_editable",
+     "type": "enum",
+     "enum": [
+      "bottom-right",
+      "top-left"
+     ],
+     "default": "bottom-right"
+    },
+    "height": {
+     "tier": "live_editable",
+     "type": "number",
+     "unit": "px",
+     "default": 84,
+     "min": 48,
+     "max": 110
+    },
+    "tint": {
+     "tier": "live_editable",
+     "type": "enum",
+     "enum": [
+      "original",
+      "text",
+      "accent"
+     ],
+     "default": "original"
+    }
+   },
+   "aiEditable": [
+    "animated logo build",
+    "other positions"
+   ]
+  }
+ ],
+ "renderEditable": {
+  "scene.render.grain": {
+   "type": "number",
+   "min": 0,
+   "max": 10,
+   "default": 0,
+   "worker": "ffmpeg noise filter (fixed seed)",
+   "why": "film grain is an ffmpeg post step in this pipeline, not part of the browser bundle"
+  },
+  "portrait.grade": "see elements.portrait.properties.grade",
+  "portrait.autoFocalPoint": "see elements.portrait.properties.autoFocalPoint"
+ },
+ "aiEditable": [
+  "aspect ratio / resolution (layout and WebGL buffer are authored for 1920x1080)",
+  "duration / retiming to new narration",
+  "camera path",
+  "concept (dictionary page)",
+  "adding elements"
+ ],
+ "protected": [
+  {
+   "what": "camera keys, Catmull-Rom path and easing",
+   "where": "index.html CFG.cam, scene.js camHook"
+  },
+  {
+   "what": "all GSAP tweens (char stagger, rise, pop), their eases and narration anchors",
+   "where": "index.html CFG.type"
+  },
+  {
+   "what": "geometry, print placement/rotation, shadow, fog distances",
+   "where": "scene.js"
+  },
+  {
+   "what": "lighting setup: key light colour/intensity, lamp flicker, hemisphere intensity (colours of hemisphere and lamp follow theme tokens)",
+   "where": "scene.js"
+  },
+  {
+   "what": "vignette, text shadow, page filler-word generator (seed 11)",
+   "where": "index.html / scene.js"
+  },
+  {
+   "what": "engine libraries and versions",
+   "where": "lib/"
+  }
+ ],
+ "allowedOverlaps": [
+  [
+   "pron",
+   "km"
+  ]
+ ]
+}

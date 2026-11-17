@@ -1,0 +1,35 @@
+{
+  "$schema": "../schemas/theme.schema.json",
+  "schema": "transovo.motion-theme/0.1",
+  "projectId": "poc_keith_murray_doc_2min",
+  "themeId": "thm_lexicon",
+  "themeVersion": 1,
+  "origin": {"designedBy": "grokbot", "jobId": "test_keith_murray_doc_2min", "concept": "The Lexicon"},
+  "colors": {
+    "background": {"value": "#07170F", "label": "Background", "designName": "deep"},
+    "primary":    {"value": "#0E2A22", "label": "Primary (page / surface)", "designName": "pine"},
+    "secondary":  {"value": "#C8462C", "label": "Secondary (stamps, years)", "designName": "brick"},
+    "accent":     {"value": "#D4F03C", "label": "Accent (highlights, lamp)", "designName": "lime"},
+    "text":       {"value": "#EFE7D6", "label": "Text / paper", "designName": "bone"}
+  },
+  "fonts": {
+    "display": {"asset": "fnt_big_shoulders_display", "weight": 900},
+    "label":   {"asset": "fnt_big_shoulders_text", "weight": 700},
+    "body":    {"asset": "fnt_spectral", "weight": 400}
+  },
+  "brand": {"logo": null},
+  "fontCatalog": [
+    {"asset": "fnt_big_shoulders_display", "label": "Big Shoulders Display", "version": "Google Fonts variable, sha-pinned", "roles": ["display", "label"],
+     "faces": [{"file": "fntf_bsd_wght", "weight": "100 900"}]},
+    {"asset": "fnt_big_shoulders_text", "label": "Big Shoulders Text", "roles": ["label"],
+     "faces": [{"file": "fntf_bst_wght", "weight": "100 900"}]},
+    {"asset": "fnt_spectral", "label": "Spectral", "roles": ["body"],
+     "faces": [{"file": "fntf_spectral_400", "weight": "400"}, {"file": "fntf_spectral_600", "weight": "600"}, {"file": "fntf_spectral_400i", "weight": "400", "style": "italic"}]},
+    {"asset": "fnt_anton", "label": "Anton", "roles": ["display"],
+     "faces": [{"file": "fntf_anton_400", "weight": "400"}]},
+    {"asset": "fnt_playfair_display", "label": "Playfair Display", "roles": ["display", "body"],
+     "faces": [{"file": "fntf_playfair_wght", "weight": "400 900"}, {"file": "fntf_playfair_wght_i", "weight": "400 900", "style": "italic"}]},
+    {"asset": "fnt_archivo", "label": "Archivo", "roles": ["label", "body"],
+     "faces": [{"file": "fntf_archivo_wght", "weight": "100 900"}, {"file": "fntf_archivo_wght_i", "weight": "100 900", "style": "italic"}]}
+  ]
+}

@@ -1,0 +1,57 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/job-event.schema.json",
+ "title": "Worker -> Transovo job event",
+ "type": "object",
+ "required": [
+  "type",
+  "at"
+ ],
+ "properties": {
+  "type": {
+   "enum": [
+    "log",
+    "stage",
+    "artifact",
+    "warning",
+    "error",
+    "validation",
+    "usage",
+    "checkpoint"
+   ]
+  },
+  "at": {
+   "$ref": "common.schema.json#/$defs/iso"
+  },
+  "stage": {
+   "type": "string"
+  },
+  "message": {
+   "type": "string",
+   "maxLength": 2000
+  },
+  "artifact": {
+   "type": "object",
+   "properties": {
+    "assetId": {
+     "$ref": "common.schema.json#/$defs/anyAsset"
+    },
+    "role": {
+     "type": "string"
+    },
+    "sceneId": {
+     "type": "string"
+    },
+    "sha256": {
+     "$ref": "common.schema.json#/$defs/sha"
+    }
+   }
+  },
+  "issues": {
+   "type": "array"
+  },
+  "data": {
+   "type": "object"
+  }
+ }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://transovo.example/schemas/motion-theme/0.1",
+  "title": "Transovo Motion Studio project theme (design tokens) v0.1 (proposal)",
+  "type": "object",
+  "required": ["schema", "projectId", "themeId", "themeVersion", "colors", "fonts", "fontCatalog"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "schema": {"const": "transovo.motion-theme/0.1"},
+    "projectId": {"type": "string", "minLength": 1},
+    "themeId": {"type": "string", "pattern": "^thm_[a-z0-9_]+$"},
+    "themeVersion": {"type": "integer", "minimum": 1},
+    "origin": {"type": "object", "properties": {"designedBy": {"type": "string"}, "jobId": {"type": "string"}, "concept": {"type": "string"}}},
+    "colors": {
+      "type": "object",
+      "required": ["background", "primary", "secondary", "accent", "text"],
+      "additionalProperties": {"$ref": "#/$defs/colorToken"},
+      "properties": {
+        "background": {"$ref": "#/$defs/colorToken"}, "primary": {"$ref": "#/$defs/colorToken"}, "secondary": {"$ref": "#/$defs/colorToken"},
+        "accent": {"$ref": "#/$defs/colorToken"}, "text": {"$ref": "#/$defs/colorToken"}
+      }
+    },
+    "fonts": {
+      "type": "object",
+      "required": ["display", "label", "body"],
+      "additionalProperties": {"$ref": "#/$defs/fontRef"},
+      "properties": {"display": {"$ref": "#/$defs/fontRef"}, "label": {"$ref": "#/$defs/fontRef"}, "body": {"$ref": "#/$defs/fontRef"}}
+    },
+    "brand": {"type": "object", "properties": {"logo": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/assetRef"}]}}, "additionalProperties": false},
+    "fontCatalog": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/fontFamily"}}
+  },
+  "$defs": {
+    "hex": {"type": "string", "pattern": "^#[0-9A-Fa-f]{6}$"},
+    "colorToken": {"type": "object", "required": ["value"], "properties": {"value": {"$ref": "#/$defs/hex"}, "label": {"type": "string"}, "designName": {"type": "string"}}, "additionalProperties": false},
+    "assetRef": {"type": "object", "required": ["asset"], "properties": {"asset": {"type": "string", "pattern": "^(ast|fnt|fntf|bnd)_[A-Za-z0-9_]+$"}}, "additionalProperties": false},
+    "fontRef": {"type": "object", "required": ["asset", "weight"], "properties": {"asset": {"type": "string", "pattern": "^fnt_[a-z0-9_]+$"}, "weight": {"type": "integer", "minimum": 100, "maximum": 900}}, "additionalProperties": false},
+    "fontFamily": {
+      "type": "object", "required": ["asset", "label", "faces"],
+      "properties": {
+        "asset": {"type": "string", "pattern": "^fnt_[a-z0-9_]+$"}, "label": {"type": "string"}, "version": {"type": "string"},
+        "roles": {"type": "array", "items": {"enum": ["display", "label", "body"]}},
+        "faces": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["file", "weight"],
+          "properties": {"file": {"type": "string", "pattern": "^fntf_[a-z0-9_]+$"}, "weight": {"type": "string", "pattern": "^[1-9]00( [1-9]00)?$"}, "style": {"enum": ["normal", "italic"]}}, "additionalProperties": false}}
+      },
+      "additionalProperties": false
+    }
+  }
+}
