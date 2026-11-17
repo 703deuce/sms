@@ -51,6 +51,7 @@ import { MotionStudioTracks } from './motion-studio-tracks'
 import { MotionExportDialog } from './export-dialog'
 import { AgentJobPanel, type MotionAgentJob } from './agent-job-panel'
 import { AgentChatPanel } from './agent-chat-panel'
+import { PortableElementsPanel } from './portable-elements-panel'
 
 const SECTION_ICON: Record<MsProjectSection, typeof BookOpen> = { Story: BookOpen, Media: FolderOpen, Scenes: Film, Graphics: Shapes, Audio: AudioLines }
 type MobileTab = 'chat' | 'storyboard' | 'preview' | 'timeline'
@@ -349,6 +350,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
     <div className="flex flex-col gap-3">
       <h2 className="text-xs font-semibold tracking-wide text-muted-foreground">{MS_LABELS.inspector}</h2>
       <Inspector project={project} scene={scene} busy={busy} onPatch={patchScene} onRegenerate={regenerate} onEditTimeline={editTimeline} />
+      <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId} />
     </div>
   )
 
@@ -454,6 +456,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
           <main className="min-w-0"><AgentJobPanel job={agentJob} showChat={false} onOpenEditor={agentJob.status === 'complete' ? openEditor : undefined} /></main>
           <aside className="min-h-[420px] min-w-0 md:sticky md:top-4 md:self-start" aria-label="Transovo AI Assistant" data-testid="ms-agent-assistant-sidebar">
             <AgentChatPanel projectId={project.id} selectedTimeMs={playheadMs} />
+            <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId} />
           </aside>
         </div>
       ) : project.status === 'setup' ? (
