@@ -11120,3 +11120,107 @@ model MotionStudioBrandKit {
 
   @@index([workspaceId])
 }
+
+
+//// Motion Studio portable source manifests: metadata only. Bytes remain in managed storage.
+model MotionStudioPortableVersion {
+  id            String   @id
+  projectId     String
+  workspaceId   String
+  revision      Int
+  parentId      String?
+  sourceJobId   String?
+  status        String   @default("draft")
+  manifest      Json
+  theme         Json
+  overrides     Json
+  manifestHash  String
+  createdAt     DateTime @default(now())
+  committedAt   DateTime?
+
+  @@unique([projectId, revision])
+  @@index([workspaceId, projectId, createdAt])
+}
+
+model MotionStudioRenderRequest {
+  id          String   @id
+  workspaceId String
+  projectId   String
+  versionId   String
+  sceneId     String
+  idempotencyKey String
+  patch       Json
+  status      String   @default("queued")
+  resultAssetId String?
+  workerId    String?
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([versionId, sceneId, idempotencyKey])
+  @@index([status, createdAt])
+}
+
+//// Physical machine and shared Grok plan are deliberately not modeled as a bot.
+model MotionStudioWorkerMachine {
+  id          String   @id
+  name        String
+  maxRenders  Int      @default(1)
+  enabled     Boolean  @default(true)
+  lastSeenAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MotionStudioWorkerPlan {
+  id           String   @id
+  name         String
+  maxConcurrentAi Int   @default(1)
+  weeklyLimitPercent Float @default(95)
+  observedPercent Float?
+  observedAt   DateTime?
+  resetsAt     DateTime?
+  enabled      Boolean @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model MotionStudioProducerWorker {
+  id           String   @id
+  name         String
+  machineId    String
+  planId       String
+  webhookUrl   String
+  credentialHash String
+  capabilities Json
+  maxConcurrent Int     @default(1)
+  enabled      Boolean  @default(true)
+  lastSeenAt   DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([machineId])
+  @@index([planId])
+}
+
+model MotionStudioWorkerAssignment {
+  id           String   @id
+  jobId        String   @unique
+  workspaceId  String
+  workerId     String
+  machineId    String
+  planId       String
+  leaseSecretHash String
+  leaseExpiresAt DateTime
+  status       String   @default("reserved")
+  usageBefore  Float?
+  usageAfter   Float?
+  usageObservedAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status, leaseExpiresAt])
+  @@index([workerId, status])
+  @@index([machineId, status])
+  @@index([planId, status])
+}
