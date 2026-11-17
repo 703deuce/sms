@@ -204,7 +204,7 @@ export async function botGetAssignment(id: string, request: Request) {
   const projectAssets = await db().studioAsset.findMany({ where: { projectId: job.projectId, workspaceId: job.workspaceId } })
   const uploads = await db().clipUpload.findMany({ where: { id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } })
   const inputs = await Promise.all(uploads.map(async upload => ({
-    filename: upload.filename, mime: upload.mime,
+    uploadId: upload.id, filename: upload.filename, mime: upload.mime,
     url: await createReadableSignedUrl(upload.key, 1800).catch(() => null),
   })))
   return { ...publicJob(job), title: project.title, prompt: project.brief,
