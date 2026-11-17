@@ -52,6 +52,27 @@ describe('Motion Studio create screen (FE-1)', () => {
     expect(String(push.mock.calls.at(-1)![0])).toMatch(/^\/app\/motion-studio\/ms_/)
   })
 
+  it('preserves the customer prompt and sends selected video type, style and brand direction', async () => {
+    const client = createMockMotionStudioClient({ storage: null, seedExample: false })
+    const spy = vi.spyOn(client, 'createProject')
+    render(<MotionStudioCreate client={client} initialView="create" />)
+    fireEvent.change(screen.getByTestId('ms-video-type'), { target: { value: 'animated_ad' } })
+    fireEvent.change(screen.getByTestId('ms-creative-style'), { target: { value: 'minimalist' } })
+    fireEvent.change(screen.getByTestId('ms-aspect-ratio'), { target: { value: '9:16' } })
+    fireEvent.change(screen.getByTestId('ms-brand-mode'), { target: { value: 'project' } })
+    fireEvent.change(screen.getByTestId('ms-brand-name'), { target: { value: 'Studio X' } })
+    fireEvent.change(screen.getByTestId('ms-creative-notes'), { target: { value: 'Emphasize the call to action' } })
+    fireEvent.change(screen.getByTestId('ms-prompt'), { target: { value: 'Make an ad for our small business.' } })
+    fireEvent.click(screen.getByTestId('ms-start'))
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    expect(spy.mock.calls[0]![0]).toMatchObject({
+      prompt: 'Make an ad for our small business.',
+      format: '9:16_480p',
+      creative: { videoType: 'animated_ad', style: 'minimalist', brandMode: 'project',
+        brand: { name: 'Studio X' }, instructions: 'Emphasize the call to action' },
+    })
+  })
+
   it('lists projects with the Example project badge', async () => {
     render(<MotionStudioCreate client={createMockMotionStudioClient({ storage: null })} initialView="projects" />)
     await waitFor(() => expect(screen.getByTestId('ms-projects')).toBeTruthy())
