@@ -21,12 +21,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [renderId,setRenderId]=useState('')
   const [renderState,setRenderState]=useState('')
   const [renderUrl,setRenderUrl]=useState<string|null>(null)
+  const [history,setHistory]=useState<{id:string;revision:number;createdAt:string}[]>([])
+  const [restoreId,setRestoreId]=useState('')
   const load=useCallback(async()=>{
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
       if(!response.ok) throw new Error('Could not load editable project')
-      const data=await response.json() as {version:Version|null}
+      const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[]}
       setVersion(data.version)
+      setHistory(data.history||[])
       setSceneId(s=>s||data.version?.manifest.scenes[0]?.id||'')
     } catch(err){setStatus(err instanceof Error?err.message:'Could not load editable project')}
     finally {setLoading(false)}
@@ -73,7 +76,23 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     }catch(err){setStatus(err instanceof Error?err.message:'Render request failed')}
     finally{setRendering(false)}
   }
-  const scenes=version?.manifest.scenes||[]
+  const restore=async()=>{
+    if(!version||!restoreId||restoreId===version.id||saving)return
+    setSaving(true);setStatus('')
+    try{
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({baseVersionId:version.id,restoreVersionId:restoreId}),
+      })
+      const data=await response.json() as {version?:Version;error?:string;message?:string}
+      if(!response.ok||!data.version)throw new Error(data.message||data.error||'Restore failed')
+      setVersion(data.version);setPatch({});setColors({});setRenderId('');setRenderUrl(null)
+      setRestoreId('');setStatus('Restored earlier settings as version '+data.version.revision)
+      void load()
+    }catch(err){setStatus(err instanceof Error?err.message:'Restore failed')}
+    finally{setSaving(false)}
+  }
+    const scenes=version?.manifest.scenes||[]
   const scene=useMemo(()=>scenes.find(s=>s.id===sceneId)||
     scenes.find(s=>s.id===preferredSceneId)||scenes[0], [scenes,sceneId,preferredSceneId])
   const currentSceneOverrides=asObj(asObj(asObj(version?.overrides).scenes)[scene?.id||''])
@@ -94,7 +113,8 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       const data=await response.json() as {version?:Version; affectedSceneIds?:string[]; error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Could not save changes')
       setVersion(data.version)
-      setPatch({});setColors({})
+      setPatch({});setColors({});setRenderId('');setRenderUrl(null)
+      void load()
       setStatus('Saved as project version '+data.version.revision+'. Changes are ready for preview/export rendering.')
     }catch(err){setStatus(err instanceof Error?err.message:'Save failed')}
     finally{setSaving(false)}
@@ -108,6 +128,19 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         <h3 className="text-sm font-semibold">Edit original graphics</h3>
         <p className="text-xs text-muted-foreground">Version {version.revision} · Original animation protected</p>
       </div>
+      {history.length>1?<div className="flex flex-col gap-1">
+        <label className="text-xs font-medium" htmlFor="ms-restore-version">Previous versions</label>
+        <select id="ms-restore-version" className={inputCls} value={restoreId}
+          onChange={e=>setRestoreId(e.target.value)}>
+          <option value="">Choose a version to restore</option>
+          {history.filter(h=>h.id!==version.id).map(h=><option key={h.id} value={h.id}>
+            Version {h.revision}
+          </option>)}
+        </select>
+        <button type="button" className="h-8 rounded-md border border-input text-xs"
+          disabled={!restoreId||saving||Object.keys(patch).length>0||Object.keys(colors).length>0}
+          onClick={()=>void restore()}>Restore as new version</button>
+      </div>:null}
       <label className="text-xs font-medium">Scene
         <select className={inputCls} value={scene?.id||''} onChange={e=>{setSceneId(e.target.value);setPatch({})}}>
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
