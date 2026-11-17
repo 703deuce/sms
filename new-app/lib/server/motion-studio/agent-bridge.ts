@@ -59,7 +59,7 @@ async function expireStaleQuestion<T extends { id: string; status: string; waiti
       message: 'We did not receive your answer within 24 hours. You can start another production request.',
       completedAt: new Date() },
   })
-  return result.count ? { ...job, status: 'failed', phase: 'failed' } : job
+  return result.count ? await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id: job.id } }) as unknown as T : job
 }
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
