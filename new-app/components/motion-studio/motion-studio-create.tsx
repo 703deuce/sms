@@ -197,7 +197,7 @@ export function MotionStudioCreate({
         }
         void uploadOne(att)
       }
-      if (next.some((a) => a.kind === 'video') && !prompt.trim()) setWorkflow((w) => (w === 'idea' ? 'footage' : w))
+      if (next.some((a) => a.kind === 'video' && !a.role) && !prompt.trim()) setWorkflow((w) => (w === 'idea' ? 'footage' : w))
     },
     [uploadOne, prompt],
   )
