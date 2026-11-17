@@ -16,6 +16,10 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [colors,setColors]=useState<Record<string,string>>({})
   const [status,setStatus]=useState('')
   const [saving,setSaving]=useState(false)
+  const [rendering,setRendering]=useState(false)
+  const [renderId,setRenderId]=useState('')
+  const [renderState,setRenderState]=useState('')
+  const [renderUrl,setRenderUrl]=useState<string|null>(null)
   const load=useCallback(async()=>{
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
@@ -27,6 +31,40 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     finally {setLoading(false)}
   },[projectId])
   useEffect(()=>{void load()},[load])
+  useEffect(()=>{
+    if(!renderId)return
+    let active=true
+    const check=async()=>{
+      try{
+        const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+          '/portable/render/'+encodeURIComponent(renderId),{cache:'no-store'})
+        if(!response.ok)return
+        const data=await response.json() as {render?:{status:string;url?:string|null;error?:string}}
+        if(!active)return
+        setRenderState(data.render?.status||'')
+        if(data.render?.url)setRenderUrl(data.render.url)
+        if(data.render?.status==='failed')setStatus(data.render.error||'Scene rendering failed')
+      }catch{/* Keep the last valid preview while the worker finishes. */}
+    }
+    void check()
+    const interval=window.setInterval(()=>void check(),3000)
+    return()=>{active=false;window.clearInterval(interval)}
+  },[renderId,projectId])
+  const requestRender=async()=>{
+    if(!version||!scene||rendering)return
+    setRendering(true);setStatus('');setRenderUrl(null)
+    try{
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/render',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({versionId:version.id,sceneId:scene.id,
+          idempotencyKey:'preview-'+version.id+'-'+scene.id,patch:{}}),
+      })
+      const data=await response.json() as {id?:string;error?:string;message?:string}
+      if(!response.ok||!data.id)throw new Error(data.message||data.error||'Could not submit render')
+      setRenderId(data.id);setRenderState('queued')
+    }catch(err){setStatus(err instanceof Error?err.message:'Render request failed')}
+    finally{setRendering(false)}
+  }
   const scenes=version?.manifest.scenes||[]
   const scene=useMemo(()=>scenes.find(s=>s.id===sceneId)||
     scenes.find(s=>s.id===preferredSceneId)||scenes[0], [scenes,sceneId,preferredSceneId])
@@ -102,7 +140,14 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         type="button" onClick={()=>void save()} disabled={saving||(!Object.keys(patch).length&&!Object.keys(colors).length)}>
         {saving?'Saving…':'Save editable changes'}
       </button>
-      <p className="text-xs text-muted-foreground">Edits are versioned. A compatible rendering worker must apply them for the final export. No AI is needed for supported properties.</p>
+      <button className="h-8 rounded-md border border-input px-3 text-xs font-medium disabled:opacity-50"
+        type="button" onClick={()=>void requestRender()} disabled={rendering||saving||!!Object.keys(patch).length||!!Object.keys(colors).length}>
+        {rendering?'Submitting…':'Render selected scene without AI'}
+      </button>
+      {renderId?<p className="text-xs text-muted-foreground" role="status">Render: {renderState||'queued'}</p>:null}
+      {renderUrl?<video controls playsInline className="w-full rounded-md" src={renderUrl}
+        aria-label="Updated rendered scene"/>:null}
+      <p className="text-xs text-muted-foreground">Edits are versioned. Rendering uses compatible workers without AI. Save pending changes before requesting a render.</p>
     </section>
   )
 }
