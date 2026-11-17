@@ -1,5 +1,5 @@
 import 'server-only'
-import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
@@ -269,7 +269,9 @@ export async function botGetAssignment(id: string, request: Request) {
       projectId: project.id, workspaceId: project.workspaceId,
       timelineVersion: project.timelineVersion, story: project.story, plan: project.plan,
       narration: project.narration, music: project.music, qa: project.qa,
-      exportInfo: project.exportInfo,
+      exportInfo: { durationMs: toObject(project.exportInfo).durationMs ?? null,
+        source: toObject(project.exportInfo).source ?? null,
+        agentJobId: toObject(project.exportInfo).agentJobId ?? null },
     },
     checkpoint: job.checkpoint ?? null, inputs, versions,
     resumeAnswer: (await db().motionStudioAgentMessage.findFirst({ where: {
@@ -540,13 +542,26 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         return { job: null, intent: 'conversation' }
       }
       if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
+      // Deterministic fresh access for the existing job: an identical retry
+      // derives the same token even if webhook acceptance preceded a DB failure.
+      const resumedToken = createHmac('sha256', process.env.GROKBOT_WEBHOOK_KEY!)
+        .update('motion-studio-answer:v1:' + answerJob.id + ':' + key).digest('base64url')
+      const resumedExpires = new Date(Date.now() + 36 * 3600_000)
+      await db().motionStudioAgentJob.updateMany({ where: {
+        id: answerJob.id, workspaceId, projectId,
+        status: { in: ['needs_input','running'] } }, data: {
+        tokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'),
+        tokenExpiresAt: resumedExpires,
+      } })
       let accepted = false
       try {
         const response = await fetch(process.env.GROKBOT_WEBHOOK_URL!, {
           method: 'POST', redirect: 'error', cache: 'no-store',
           headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'answer_input', jobId: answerJob.id, projectId,
-            text: instruction, idempotencyKey: key }),
+          body: JSON.stringify({ action: 'answer_input', jobId: answerJob.id, workspaceId, projectId,
+            text: instruction, idempotencyKey: key,
+            jobUrl: baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(answerJob.id),
+            jobToken: resumedToken, tokenExpiresAt: resumedExpires.toISOString() }),
           signal: AbortSignal.timeout(15_000),
         })
         accepted = response.ok
