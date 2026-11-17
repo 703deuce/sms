@@ -83,6 +83,8 @@ export function MotionStudioCreate({
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
   const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 120 | 180 | 300>(30)
+  const [durationTouched, setDurationTouched] = useState(false)
+  const [formatTouched, setFormatTouched] = useState(false)
   const [prompt, setPrompt] = useState('')
   const [videoType, setVideoType] = useState<MsVideoType>('anything')
   const [style, setStyle] = useState<MsCreativeStyle>('automatic')
@@ -327,7 +329,9 @@ export function MotionStudioCreate({
             </div>
             <section className="rounded-xl border border-border bg-card p-4" aria-label="Video type">
               <label htmlFor="ms-video-type" className="mb-2 block text-sm font-medium">What kind of video are you creating?</label>
-              <select id="ms-video-type" data-testid="ms-video-type" value={videoType} onChange={e => setVideoType(e.target.value as MsVideoType)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <select id="ms-video-type" data-testid="ms-video-type" value={videoType} onChange={e => { const type = e.target.value as MsVideoType; setVideoType(type);
+                  if (!durationTouched) setDurationSeconds(['documentary','educational','explainer'].includes(type) ? 180 : type === 'product_demo' ? 60 : 30)
+                  if (!formatTouched) setFormat(['social_video','audiogram'].includes(type) ? '9:16' : '16:9') }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                 {['General','Stories & Content','Marketing','Motion Design','Editing & Repurposing'].map(group => <optgroup key={group} label={group}>
                   {MS_VIDEO_TYPES.filter(t => t.group === group).map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </optgroup>)}
@@ -337,7 +341,7 @@ export function MotionStudioCreate({
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
               <label htmlFor="ms-duration" className="text-sm font-medium">Video length</label>
               <select id="ms-duration" data-testid="ms-duration" value={durationSeconds}
-                onChange={e => setDurationSeconds(Number(e.target.value) as 30 | 60 | 120 | 180 | 300)}
+                onChange={e => { setDurationSeconds(Number(e.target.value) as 30 | 60 | 120 | 180 | 300); setDurationTouched(true) }}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value={30}>30 seconds</option>
                 <option value={60}>1 minute</option>
@@ -356,7 +360,7 @@ export function MotionStudioCreate({
                   </select>
                 </label>
                 <label className="flex flex-col gap-1 text-sm">Canvas
-                  <select data-testid="ms-aspect-ratio" value={format} onChange={e => setFormat(e.target.value as typeof format)} className="h-10 rounded-md border border-input bg-background px-3">
+                  <select data-testid="ms-aspect-ratio" value={format} onChange={e => { setFormat(e.target.value as typeof format); setFormatTouched(true) }} className="h-10 rounded-md border border-input bg-background px-3">
                     <option value="16:9">16:9 · Landscape</option><option value="9:16">9:16 · Vertical</option><option value="1:1">1:1 · Square</option>
                   </select>
                 </label>
