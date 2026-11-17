@@ -9,7 +9,7 @@ Branch: `feat/motion-studio-video-types-brand-kits-20261117` (NOT merged to mast
 - Independent source workflows remain: idea, script, footage. Duration remains 30/60/120/180/300 sec.
 - Optional project branding: brand name, primary/secondary/accent HEX colors, typography preference, personality/tone, brand guidelines, uploaded image logo, logo placement (ai_decides/intro/outro/watermark/none), consistency (guided/strict/creative).
 - Optional visual reference image/video uploads, optional free-text creative notes, optional 16:9/9:16/1:1.
-- Workspace Brand Kits: GET/POST `/api/motion-studio/brand-kits`, DELETE `/api/motion-studio/brand-kits/:id`. POST with existing ID updates. Database migration `20261117090000_motion_studio_brand_kits` required; authorization is still testing-only and MUST be hardened before opening paid access.
+- Workspace Brand Kits: GET/POST `/api/motion-studio/brand-kits`, DELETE `/api/motion-studio/brand-kits/:id`. POST with existing ID updates. Database migration `20261117090000_motion_studio_brand_kits` required. Preserve the current no-login testing setup unless the owner explicitly requests a change.
 - The selected kit is snapshotted into `MotionStudioProject.settings.creative.brand` at project creation; later edits to the kit must not rewrite earlier jobs.
 - Logo and reference media use existing `clipUpload` and `studioAsset` infrastructure, not external URLs.
 
@@ -60,21 +60,21 @@ The backend calls a lightweight conversation model to classify `question`, `clar
 
 - `question` and `clarify`: persistent customer and assistant messages, **NO Grokbot production job**; progress/status questions are handled deterministically from actual job state.
 - `edit` after a completed video: one existing revision job via `dispatchAgentJob`; preserve previous video/version; the assistant confirms only that production accepted the job, not that edits are complete.
-- `edit` while a job is still running: acknowledge the request but **do not** start an overlapping job. Customer must resubmit after current job is finished. Queueing pending edits is a follow-up enhancement.
+- `edit` while a job is running or waiting: store a `queued_edit` internal message tied to that job (without starting another job). After successful completion, combine queued requests and dispatch at most one follow-up revision, with stable idempotency `queued-after-<jobId>`. If dispatch cannot run (quotas/network), requests remain queued for review; do not silently discard them.
 - Producer `needs_input`: producer calls authenticated `POST /api/motion-studio/agent/jobs/:jobId/messages` with `{"text":"Your one question","needsInput":true}`. The active job becomes `needs_input`. A subsequent customer message submitted with `answerInput: true` (selected in the chat UI) other than a simple status check is forwarded to the existing `GROKBOT_WEBHOOK_URL` as:
 ```json
 {"action":"answer_input","jobId":"msaj_...","projectId":"msp_...","text":"Use the first photo.","idempotencyKey":"ms_revision_..."}
 ```
-The producer **must implement** `answer_input`, accept it idempotently, and continue the same job rather than generate a fresh revision. Return HTTP 2xx only after accepting the answer. The backend then marks this same job `running` and records the dialogue. Until Brock implements the producer-side action, this resume path is NOT fully tested.
+The producer **must implement** `answer_input`, accept it idempotently, and continue the same job rather than generate a fresh revision. Return HTTP 2xx only after accepting the answer. The backend persists the customer's answer BEFORE webhook delivery, then acknowledges it using a deterministic confirmation ID; a retry reuses the same idempotency key and can repair a failed post-webhook database write. The producer now supports `answer_input` according to Brock, but end-to-end confirmation is still pending.
 
-Customer-facing message thread persists in `MotionStudioAgentMessage`; versions remain in `MotionStudioAgentJob`. The UI polls every four seconds and exposes Restore without removing later versions. Internal vendor names and secrets should never be emitted to the customer. The customer knows it is the Transovo **AI** Assistant, not a human.
+**Producer question safety:** `needsInput: true` messages retain up to 2,000 characters, including ordinary URLs, dollar values, and the word "bot". Do not apply the 240-character progress filter to questions. Late `/progress` calls do not clear `needs_input`, and a concurrent terminal status cannot be reset by progress.\n\n**24-hour unanswered window:** the frontend displays a deadline from the waiting job's `updatedAt`. If unanswered for 24 hours, the backend marks the job failed cleanly on subsequent client/producer polling. It is a lazy timeout, NOT an exact wall-clock scheduled job: for unattended expiration, the producer must also enforce its own 24-hour fallback or a dedicated worker must periodically check queued questions.\n\nCustomer-facing message thread persists in `MotionStudioAgentMessage`; versions remain in `MotionStudioAgentJob`. The UI polls every four seconds and exposes Restore without removing later versions. Internal vendor names and secrets should never be emitted to the customer. The customer knows it is the Transovo **AI** Assistant, not a human.
 
 **Not implemented:** deterministic direct visual edits through this chat; actionable edits currently go through existing Grokbot revision route. Do not claim zero-cost direct edits, immediate rerenders, or full production/consumer end-to-end verification. No new authentication gate has been added.
 
 ## Production readiness
-- Run `prisma migrate deploy` (and Prisma generate if needed), scoped `vitest`, `tsc`, and a real end-to-end create/dispatch.
-- SVG brand logos are validated and converted to PNG in the browser before upload. The existing server upload remains PNG/JPEG/WebP-only; test safe SVG rendering and conversion.
-- Real login/tenant authorization is NOT enabled for Motion Studio: `auth.ts` resolves pinned testing workspace. This must be fixed before public launch.
+- Re-run `prisma validate`, scoped `vitest`, `tsc` against master, and a real create/chat/clarify/answer/revision test. The 52/52 reported by Brock was from before this newest patch series and does not validate these changes.
+- SVG brand logos with standard `xmlns`/`xmlns:xlink` are accepted and converted to PNG in the browser; SVG script/external content is rejected. The server continues to accept PNG/JPEG/WebP.
+- Keep the existing no-login testing resolver intact. No login or account-auth work is part of this branch.
 - Existing agent testing quotas (3 initial jobs/day and 3 active jobs/user) remain unchanged; they are not a SaaS quota system.
 - Ensure 9:16 and 1:1 render, preview, timeline, and export have parity beyond the creation form.
 - Ensure actual Grokbot producer consumes the new assignment fields; this branch adds sending, NOT changes to the external Grokbot prompt/agent code.
