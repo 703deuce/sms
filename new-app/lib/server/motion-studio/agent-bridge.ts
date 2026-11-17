@@ -59,7 +59,7 @@ async function expireStaleQuestion<T extends { id: string; status: string; updat
       message: 'We did not receive your answer within 24 hours. You can start another production request.',
       completedAt: new Date() },
   })
-  return result.count ? (await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id: job.id } })) as T : job
+  return result.count ? { ...job, status: 'failed', phase: 'failed' } as T : job
 }
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
@@ -609,7 +609,6 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     }
   }
   // Store the visible customer-facing conversation in the existing project thread.
-  const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
   await db().motionStudioAgentMessage.create({ data: { id: messageId,
     projectId, role: 'customer', text: instruction, jobId: job?.id } })
   await db().motionStudioAgentMessage.create({ data: { id: 'msmsg_' + randomUUID(),
