@@ -54,6 +54,20 @@ describe('pull worker queue', () => {
     expect(result.job!.leaseId).toBeTruthy()
     expect(state.job.tokenHash).not.toContain(result.job!.jobToken)
   })
+  it('does not hand out a second concurrent job from the same workspace', async () => {
+    state.count.mockResolvedValueOnce(1)
+    const response = await claimProducerJob(request(), { workerId: 'producer-2' })
+    expect(response).toEqual({ job: null })
+    expect(state.update).not.toHaveBeenCalled()
+  })
+  it('extends an active lease with a heartbeat without rotating its token', async () => {
+    const claimed = await claimProducerJob(request(), { workerId: 'producer-1' })
+    const heartbeat = await updateProducerLease(request(), {
+      action: 'heartbeat', jobId: state.job.id, workerId: 'producer-1', leaseId: claimed.job!.leaseId,
+    })
+    expect(heartbeat.action).toBe('heartbeat')
+    expect(heartbeat.jobToken).toBeUndefined()
+  })
   it('renews an active lease and rotates an expired job token without client login', async () => {
     const claimed = await claimProducerJob(request(), { workerId: 'producer-1' })
     const renewed = await updateProducerLease(request(), {
