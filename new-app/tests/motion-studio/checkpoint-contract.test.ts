@@ -19,6 +19,10 @@ describe('durable worker checkpoint contract', () => {
     expect(() => validateProducerCheckpoint({ revision: 1, checkpoint: { accessToken: 'something-secret' } }, null)).toThrow()
     expect(() => validateProducerCheckpoint({ revision: 1, checkpoint: { scenes: [{ path: 'ws/acme/scene.mp4' }] } }, null)).toThrow()
   })
+  it('preserves harmless research and narration links', () => {
+    expect(validateProducerCheckpoint({ revision: 1, checkpoint: {
+      script: 'Visit https://example.com to find more information about the story.' } }, null).revision).toBe(1)
+  })
   it('rejects missing or oversized checkpoint state', () => {
     expect(() => validateProducerCheckpoint({ revision: 1, checkpoint: null }, null)).toThrow()
     expect(() => validateProducerCheckpoint({ revision: 1, checkpoint: { big: 'x'.repeat(257000) } }, null)).toThrow()
