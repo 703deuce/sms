@@ -391,7 +391,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
  * repeated completion callbacks from starting duplicate productions. */
 async function dispatchQueuedAfterFinish(job: { id: string; workspaceId: string; userId: string; projectId: string }, request: Request) {
   const queued = await db().motionStudioAgentMessage.findMany({ where: {
-    projectId: job.projectId, jobId: job.id, role: 'queued_edit' },
+    projectId: job.projectId, role: 'queued_edit' },
     orderBy: { createdAt: 'asc' }, take: 20 })
   if (!queued.length) return
   const instruction = queued.map((m, i) => `${i + 1}. ${m.text}`).join('\n').slice(0, 2500)
@@ -400,7 +400,8 @@ async function dispatchQueuedAfterFinish(job: { id: string; workspaceId: string;
       'queued-after-' + job.id, request, { instruction })
     if (!['dispatch_failed','failed','cancelled'].includes(result.status)) {
       await db().motionStudioAgentMessage.updateMany({ where: {
-        projectId: job.projectId, jobId: job.id, role: 'queued_edit' }, data: { role: 'queued_sent' } })
+        projectId: job.projectId, id: { in: queued.map(item => item.id) }, role: 'queued_edit' },
+        data: { role: 'queued_sent' } })
       await db().motionStudioAgentMessage.create({ data: {
         id: 'msmsg_' + randomUUID(), projectId: job.projectId, jobId: result.id, role: 'agent',
         text: 'The previous video is complete, and I’ve submitted your queued changes as the next version.' } })
@@ -423,6 +424,11 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     const message = "We hit a snag finishing your video. Please try again."
     const failed = await db().motionStudioAgentJob.update({ where: { id },
       data: { status: 'failed', phase: 'failed', message, completedAt: new Date() } })
+    // Do not discard queued creative requests. A later successful production
+    // will collect these from the project's persistent queued_edit messages.
+    await db().motionStudioAgentMessage.create({ data: {
+      id: 'msmsg_' + randomUUID(), projectId: job.projectId, jobId: id, role: 'agent',
+      text: 'Production stopped, but your requested follow-up edits are saved in this project.' } })
     return publicJob(failed)
   }
   const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.mime === 'video/mp4' && a.state === 'ready')
