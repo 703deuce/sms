@@ -69,13 +69,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       </label>
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-medium">Whole-video theme</h4>
-        {Object.entries(themeColors).filter(([k,v])=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v)).map(([key,value])=>(
+        {Object.entries(themeColors).filter(([,v])=>{
+          const actual=typeof v==='string'?v:asObj(v).value
+          return typeof actual==='string'&&/^#[0-9a-f]{6}$/i.test(actual)
+        }).map(([key,value])=>{const hex=typeof value==='string'?value:String(asObj(value).value);return (
           <label key={key} className="flex items-center gap-2 text-xs">
-            <input type="color" aria-label={'Theme '+key} value={colors[key]||String(value)}
+            <input type="color" aria-label={'Theme '+key} value={colors[key]||hex}
               onChange={e=>setColors(old=>({...old,[key]:e.target.value}))}/>
-            <span className="flex-1">{key}</span><code>{colors[key]||String(value)}</code>
-          </label>
-        ))}
+            <span className="flex-1">{key}</span><code>{colors[key]||hex}</code>
+          </label>);})}
       </div>
       {(scene?.manifest.elements||[]).map(element=>{
         const editable=Object.entries(element.properties).filter(([,p])=>
