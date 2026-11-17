@@ -26,6 +26,7 @@ import {
   selectedWorkflowLine,
 } from '@/lib/motion-studio/config'
 import { formatClock, relativeTime } from '@/lib/motion-studio/format'
+import { normalizeLogoUpload } from '@/lib/motion-studio/logo-upload'
 import { MS_VIDEO_TYPES, MS_CREATIVE_STYLES, type MsVideoType, type MsCreativeStyle, type MsBrandMode, type MsBrandConsistency, type MsLogoPlacement, type MsSavedBrandKit } from '@/lib/motion-studio/creative-options'
 import type { MsAssetKind, MsMediaPolicy, MsProjectSummary, MsWorkflow } from '@/lib/motion-studio/types'
 import type { UploadProgress } from '@/lib/clips/upload'
@@ -187,7 +188,7 @@ export function MotionStudioCreate({
         role,
         progress: { filename: file.name, bytes: file.size, loaded: 0, percent: 0, state: 'uploading' },
       }))
-      setAttachments((prev) => [...prev, ...next])
+      setAttachments((prev) => role === 'logo' ? [...prev.filter(a => a.role !== 'logo'), ...next] : [...prev, ...next])
       // Scripts are read as text and routed to Story; media goes through the upload path.
       for (const att of next) {
         if (att.kind === 'script' && /\.(txt|md)$/i.test(att.file.name)) {
@@ -202,6 +203,17 @@ export function MotionStudioCreate({
     },
     [uploadOne, prompt],
   )
+
+  const selectLogo = async (files: FileList | null) => {
+    const file = files?.[0]
+    if (!file) return
+    try {
+      const normalized = await normalizeLogoUpload(file)
+      addFiles([normalized], 'logo')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not read the logo.')
+    }
+  }
 
   const brandProfile = {
     name: brandName || undefined, primaryColor, secondaryColor, accentColor,
@@ -429,7 +441,7 @@ export function MotionStudioCreate({
                   </label>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button type="button" variant="outline" size="sm" onClick={() => logoRef.current?.click()}>Upload logo</Button>
-                    <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={e => { addFiles(e.target.files, 'logo'); e.target.value = '' }} />
+                    <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg" className="hidden" onChange={e => { void selectLogo(e.target.files); e.target.value = '' }} />
                     {attachments.filter(a => a.role === 'logo').map(a => <span key={a.key} className="text-xs text-muted-foreground">{a.file.name}</span>)}
                     <Button type="button" variant="outline" size="sm" disabled={!brandName.trim() || savingBrand || uploading || client.mode !== 'live'} onClick={() => void saveBrand()}>{savingBrand ? 'Saving…' : editingBrandKitId ? 'Update Brand Kit' : 'Save as Brand Kit'}</Button>
                   </div>
