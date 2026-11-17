@@ -46,7 +46,7 @@ export function agentBridgeLive(): boolean { return process.env.GROKBOT_LIVE_MOD
 type PublicJob = {
   id: string; projectId: string; status: string; phase: string; progress: number;
   message: string | null; resultKey: string | null; createdAt: Date; updatedAt: Date;
-  completedAt: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
+  completedAt: Date | null; waitingStartedAt?: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
 }
 async function expireStaleQuestion<T extends { id: string; status: string; waitingStartedAt?: Date | null }>(job: T): Promise<T> {
   if (job.status !== 'needs_input' || !job.waitingStartedAt || !waitingExpired(job.waitingStartedAt)) return job
@@ -65,7 +65,8 @@ function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
     parentJobId: job.parentJobId ?? null, revision: job.revision ?? 0,
     progress: job.progress, message: job.message, createdAt: job.createdAt.toISOString(),
-    updatedAt: job.updatedAt.toISOString(), completedAt: job.completedAt?.toISOString() ?? null,
+    updatedAt: job.updatedAt.toISOString(), waitingStartedAt: job.waitingStartedAt?.toISOString() ?? null,
+    completedAt: job.completedAt?.toISOString() ?? null,
     artifacts: artifacts(job.artifacts).filter(a => a.state === 'ready')
       .map(a => ({ id: a.id, kind: a.kind, filename: a.filename, bytes: a.bytes })) }
 }
