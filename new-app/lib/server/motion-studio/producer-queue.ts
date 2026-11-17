@@ -12,6 +12,10 @@ const safeEqual = (a: string, b: string) => {
   return timingSafeEqual(left, right)
 }
 export function pullProducerQueueEnabled() { return process.env.MOTION_STUDIO_PULL_QUEUE === '1' }
+export function pullProducerQueueConfigured() {
+  return (process.env.MOTION_STUDIO_PRODUCER_QUEUE_KEY || '').length >= 32 &&
+    Boolean(process.env.MOTION_STUDIO_AGENT_PUBLIC_URL)
+}
 function producerSecret(): string {
   const secret = process.env.MOTION_STUDIO_PRODUCER_QUEUE_KEY || ''
   if (secret.length < 32) throw new MotionStudioError('INTERNAL', 'Producer queue secret must be configured.', 503)
