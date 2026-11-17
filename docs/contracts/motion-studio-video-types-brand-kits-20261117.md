@@ -78,3 +78,16 @@ The producer **must implement** `answer_input`, accept it idempotently, and cont
 - Existing agent testing quotas (3 initial jobs/day and 3 active jobs/user) remain unchanged; they are not a SaaS quota system.
 - Ensure 9:16 and 1:1 render, preview, timeline, and export have parity beyond the creation form.
 - Ensure actual Grokbot producer consumes the new assignment fields; this branch adds sending, NOT changes to the external Grokbot prompt/agent code.
+
+## Persistent workspace/project production context
+
+**Grokbot workers are stateless executors.** Transovo's PostgreSQL project/job records and persistent asset storage are the source of truth. A customer's browser and a Grokbot process can both disappear without losing the project.
+
+- Every new assignment includes `workspaceId`, `projectId`, and `jobId` as distinct IDs. `userId` is stored on the job. Do not use a single process-wide session, memory buffer, or on-disk folder as the durable owner of a project.
+- `GET /api/motion-studio/agent/jobs/:id` using the job-scoped bearer token now returns `projectContext` (workspace and project IDs, story, plan, narration, music, QA, editor timeline version and export metadata), `checkpoint`, `inputs` with stable `uploadId` and source role, `versions` with previous production artifact IDs/metadata and fresh signed preview URL, and a recent `conversation`.
+- For full individual parent-version media, use existing `GET /api/motion-studio/agent/jobs/:id/parent-artifacts` (job bearer). Never rely on original short-lived signed URLs beyond their expiry. Fetch new signed URLs when a new job starts.
+- New additive column `MotionStudioAgentJob.checkpoint Json?` and migration `20261117093000_motion_studio_job_checkpoint` support durable producer checkpoints. Read `GET /api/motion-studio/agent/jobs/:id/checkpoint`; write `PUT` to the same URL with `{"revision":1,"checkpoint":{"stage":"visuals","finishedSceneIds":["scene_a"],"remainingSceneIds":["scene_b"],"manifestAssetIds":["asset_123"]}}`. Keep under 256 KB. Increase the monotonic revision for subsequent saves; conflicts mean reload latest checkpoint. Never store signed URLs, large scene files, raw videos, or secrets inside the checkpoint. Upload those into persistent storage and refer to durable asset IDs.
+- Once a producer checkpoint is committed, it can stop using CPU resources to wait for customer input; later processing can run on another worker. The running-job bearer currently lasts 36 hours; it is **not** a 30-day credential. A new revision after 30 days receives a fresh job/token and can retrieve the same project and stored media. Long-lived resume of the *same* unfinished job beyond bearer expiry needs an explicit token re-issuance protocol and is not implemented.
+- The current dispatcher still sends immediately and has testing concurrency limits. This is NOT yet a durable multi-tenant worker leasing/scheduling system. Before scaling to many simultaneous users, implement a persistent queue with leases, heartbeat/recovery, workspace fairness and per-workspace concurrency/usage budgets. Never add this by making Grokbot hold open a user session or a computer process.
+- Existing no-login testing configuration remains unchanged. Job bearer verification is producer-to-server access, not a customer login gate.
+
