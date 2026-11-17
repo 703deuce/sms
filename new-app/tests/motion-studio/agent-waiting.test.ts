@@ -5,6 +5,7 @@ const state = vi.hoisted(() => ({
   job: {} as Record<string, any>,
   messages: [] as Record<string, any>[],
   failAck: false,
+  routeIntent: 'question' as 'question' | 'edit',
   webhook: vi.fn(),
 }))
 
@@ -52,7 +53,7 @@ vi.mock('@/lib/server/db', () => ({
 vi.mock('@/lib/storage', () => ({ createReadableSignedUrl: vi.fn(), getClipStorage: vi.fn(), storageDriverName: () => 'test' }))
 vi.mock('@/lib/server/clips/prisma-json', () => ({ toPrismaJson: (x: unknown) => x }))
 vi.mock('@/lib/server/motion-studio/chat-assistant', () => ({
-  interpretCustomerMessage: vi.fn(async () => ({ intent: 'question', reply: 'Hello', instruction: '' })),
+  interpretCustomerMessage: vi.fn(async () => ({ intent: state.routeIntent, reply: 'I understand.', instruction: 'Redesign the intro.' })),
 }))
 
 const { submitAgentRevision, botPostMessage, botProgress } = await import('../../lib/server/motion-studio/agent-bridge')
@@ -60,6 +61,7 @@ const { submitAgentRevision, botPostMessage, botProgress } = await import('../..
 beforeEach(() => {
   state.messages = []
   state.failAck = false
+  state.routeIntent = 'question'
   state.webhook.mockReset()
   state.job = {
     id: 'msaj_test', projectId: 'msp_test', workspaceId: 'ws_test', userId: 'user_test',
@@ -105,4 +107,17 @@ describe('producer clarification and retries', () => {
     expect(second).toEqual(first)
     expect(state.messages.filter(m => m.role === 'agent')).toHaveLength(1)
   })
+  it('queues a creative edit behind a waiting job without starting another production', async () => {
+    state.routeIntent = 'edit'
+    const request = new Request('https://transovo.ai/api/motion-studio/agent/projects/msp_test/chat',
+      { method: 'POST', headers: { 'Idempotency-Key': 'queued-edit' } })
+    const result = await submitAgentRevision('ws_test','user_test','msp_test',request,
+      { instruction: 'Change the opening color to gold', answerInput: false })
+    expect(result.intent).toBe('conversation')
+    expect(state.job.status).toBe('needs_input')
+    expect(state.webhook).not.toHaveBeenCalled()
+    expect(state.messages.filter(m => m.role === 'queued_edit')).toHaveLength(1)
+    expect(state.messages.filter(m => m.role === 'agent')[0]?.text).toContain('queued')
+  })
+
 })
