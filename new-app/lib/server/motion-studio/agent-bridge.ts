@@ -153,7 +153,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       selectedElementIds: revisionRequest?.selectedElementIds ?? [],
       timeRangeMs: revisionRequest?.timeRangeMs ?? null,
       messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','answer','agent'] } },
-        orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role, text: m.text })) } : {}),
+        orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role === 'answer' ? 'customer' : m.role, text: m.text })) } : {}),
     title: project.title, prompt: project.brief,
     videoType: creative.videoType,
     categoryGuidance: directorCategoryGuidance(creative.videoType),
@@ -615,7 +615,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     : await interpretCustomerMessage({
         message: instruction, title: project.title, status: selectedStatus, phase: latest?.phase || '',
         currentTimeMs: timeRangeMs?.[0], selectedElementIds, brand: toObject(project.settings).creative,
-        recent: recent.reverse().map(m => ({ role: m.role, text: m.text })),
+        recent: recent.reverse().map(m => ({ role: m.role === 'answer' ? 'customer' : m.role, text: m.text })),
       })
   // While rendering, requests are conversational only; do not create overlapping revision jobs.
   let response = publicAssistantText(decision.reply) || 'Could you give me a little more detail?'
