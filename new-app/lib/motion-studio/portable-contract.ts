@@ -13,8 +13,13 @@ export type MsEditProperty = {
   min?: number
   max?: number
   maxChars?: number
+  maxCharsPerLine?: number
+  maxLines?: number
+  autoFitMin?: number
   choices?: string[]
   values?: string[]
+  enum?: string[]
+  formats?: string[]
 }
 export type MsEditElement = {
   id: string
@@ -126,11 +131,19 @@ export function validateScenePropertyPatch(
       if (['text','font','color','image','enum'].includes(spec.type)) {
         if (typeof value !== 'string' || value.length > 2048 || !safeText(value))
           return fail('Invalid string property')
-        if (spec.type === 'text' && spec.maxChars !== undefined && value.length > spec.maxChars)
-          return fail('Text is too long')
+        if (spec.type === 'text') {
+          if (spec.maxChars !== undefined && value.length > spec.maxChars)
+            return fail('Text is too long')
+          const lines=value.split(/\\r?\\n/)
+          if (spec.maxLines !== undefined && lines.length > spec.maxLines)
+            return fail('Text has too many lines')
+          if (spec.maxCharsPerLine !== undefined &&
+              lines.some(line=>line.length>spec.maxCharsPerLine!))
+            return fail('Text line exceeds its safe width')
+        }
         if (spec.type === 'color' && !/^#[0-9a-f]{6}$/i.test(value)) return fail('Invalid color')
         if (spec.type === 'image' && !idsContain(manifest, value)) return fail('Image asset not in project')
-        const choices = spec.choices ?? spec.values
+        const choices = spec.choices ?? spec.values ?? spec.enum
         if (choices && !choices.includes(value)) return fail('Property not supported by scene')
       }
       if (spec.type === 'point' && (!plain(value) || !Number.isFinite(value.x) ||
