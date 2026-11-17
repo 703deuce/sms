@@ -144,6 +144,9 @@ async function reserveOne(): Promise<Pending|null> {
         const capabilities=Array.isArray(w.capabilities)?w.capabilities:[]
         return machine && plan && availableBudget(plan) &&
           capabilities.includes('motion-studio-produce') &&
+          (plan.observedPercent===null || plan.resetsAt && plan.resetsAt.getTime()<=Date.now() ||
+            plan.observedPercent + ((planCounts.get(w.planId)||0)+1)*
+              Math.max(0.1,Math.min(10,Number(process.env.MOTION_STUDIO_AI_RESERVE_PERCENT)||2)) <= plan.weeklyLimitPercent) &&
           (workerCounts.get(w.id)||0)<w.maxConcurrent &&
           (machineCounts.get(w.machineId)||0)<machine.maxRenders &&
           (planCounts.get(w.planId)||0)<plan.maxConcurrentAi
@@ -228,25 +231,34 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
     problem('Worker lease not owned or expired','CONFLICT',409)
   const status=input.status==='complete'?'complete':input.status==='failed'?'failed':'running'
   const observed=Number(input.weeklyUsagePercent)
-  const validObservation=Number.isFinite(observed)&&observed>=0&&observed<=100
+  const validObservation=input.weeklyUsagePercent!==undefined &&
+    Number.isFinite(observed)&&observed>=0&&observed<=100
+  const usageMoment=input.usageMoment==='before'?'before':'after'
+  const observedAt=typeof input.observedAt==='string'?new Date(input.observedAt):new Date()
+  if(validObservation && (!Number.isFinite(observedAt.getTime()) ||
+      observedAt.getTime()>Date.now()+60_000 ||
+      observedAt.getTime()<Date.now()-7*24*3600_000))
+    problem('Invalid Grok plan usage observation timestamp')
   const expires=new Date(Date.now()+5*60_000)
   await db().$transaction(async tx=>{
     await tx.motionStudioWorkerAssignment.update({
       where:{id:assignment.id},data:{
         status,leaseExpiresAt:status==='running'?expires:new Date(),
-        ...(validObservation?{usageAfter:observed,usageObservedAt:new Date()}:{}),
+        ...(validObservation?{...(usageMoment==='before'?{usageBefore:observed}:{usageAfter:observed}),
+          usageObservedAt:observedAt}:{}),
       },
     })
     if (validObservation) {
       const plan=await tx.motionStudioWorkerPlan.findUnique({where:{id:assignment.planId}})
-      if (plan && (!plan.observedAt || plan.observedAt.getTime()<Date.now())) {
+      if (plan && (!plan.observedAt || plan.observedAt.getTime()<=observedAt.getTime())) {
         await tx.motionStudioWorkerPlan.update({where:{id:assignment.planId},
-          data:{observedPercent:observed,observedAt:new Date()}})
+          data:{observedPercent:observed,observedAt}})
       }
     }
     if(status==='running') await tx.motionStudioAgentJob.updateMany({where:{id:jobId,leaseOwner:worker.id},
       data:{leaseExpiresAt:expires}})
   })
+  if(status!=='running') await coordinatePendingJobs(1)
   return {ok:true,status,leaseExpiresAt:expires.toISOString()}
 }
 export async function coordinatorSweep() {
