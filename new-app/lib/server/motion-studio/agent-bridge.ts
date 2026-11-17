@@ -209,6 +209,11 @@ export async function requireBotJob(id: string, request: Request) {
   if (!token || token.length > 256) throw new MotionStudioError('UNAUTHENTICATED', 'Job bearer token required.', 401)
   const job = await db().motionStudioAgentJob.findUnique({ where: { id } })
   if (!job || job.tokenExpiresAt.getTime() <= Date.now()) throw new MotionStudioError('UNAUTHENTICATED', 'Expired or invalid token.', 401)
+  // Pull-queue worker credentials are valid only while that worker holds an
+  // unexpired lease. Paused jobs are released and must be claimed again.
+  if (pullProducerQueueEnabled() && (!job.leaseOwner || !job.leaseExpiresAt ||
+      job.leaseExpiresAt.getTime() <= Date.now()))
+    throw new MotionStudioError('UNAUTHENTICATED', 'Producer lease expired; claim this job again.', 401)
   const given = sha(id + ':' + token)
   const expected = Buffer.from(job.tokenHash, 'hex')
   if (expected.length !== given.length || !timingSafeEqual(given, expected)) {
