@@ -4,6 +4,7 @@ import { getPrisma } from '@/lib/server/db'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 
 const db = () => getPrisma()
 const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {}
@@ -120,6 +121,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const webhook = new URL(rawUrl)
   if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
   const settings = toObject(project.settings)
+  const creative = sanitizeCreativeBrief(settings.creative)
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
@@ -130,6 +132,10 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId },
         orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role, text: m.text })) } : {}),
     title: project.title, prompt: project.brief,
+    videoType: creative.videoType,
+    categoryGuidance: directorCategoryGuidance(creative.videoType),
+    creative: { ...creative, brand: creative.brandMode === 'none' ? undefined : creative.brand },
+    // Original prompt always remains intact; creative guidance is separate, never a scene template.
     durationSeconds: [30,60,120,180,300].includes(Number(settings.durationSeconds))
       ? Number(settings.durationSeconds) : Math.round((Number(settings.lengthMin) || 3) * 60),
     aspectRatio: str(settings.format, 30).split('_')[0] || '16:9',
