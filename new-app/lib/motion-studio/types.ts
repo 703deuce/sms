@@ -1,3 +1,4 @@
+import type { MsCreativeBrief } from './creative-options'
 /**
  * Motion Studio (documentary-first) client types.
  * Mirrors the planned `/api/motion-studio/*` contract (spec ST-API-001, ST-DM-001).
@@ -13,7 +14,7 @@ export type MsLengthMin = number
 export type MsVisualDirection = 'cinematic' | 'explainer' | 'investigative' | 'technical_3d'
 export type MsVoiceover = 'ai' | 'upload'
 export type MsProductionMode = 'checkpoint' | 'auto'
-export type MsFormat = '16:9_480p' | '16:9_720p' | '16:9_1080p' | '16:9_2160p'
+export type MsFormat = `${'16:9' | '9:16' | '1:1'}_${'480p' | '720p' | '1080p' | '2160p'}`
 
 /** Contract v1.1 `settings.music` (PATCH-only extra). `elevenlabs` is the optional premium tier (#1230). */
 export type MsMusicChoice = 'generated' | 'upload' | 'elevenlabs' | 'none'
@@ -256,6 +257,8 @@ export type MsCreateInput = {
   mediaPolicy: MsMediaPolicy
   durationSeconds?: 30 | 60 | 120 | 180 | 300
   idempotencyKey: string
+  creative?: MsCreativeBrief
+  format?: MsFormat
 }
 
 export type MsScenePatch = Partial<Pick<MsScene, 'startMs' | 'endMs' | 'style' | 'camera' | 'text'>> & {
