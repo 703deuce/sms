@@ -11155,6 +11155,9 @@ model MotionStudioRenderRequest {
   status      String   @default("queued")
   resultAssetId String?
   workerId    String?
+  leaseHash   String?
+  leaseExpiresAt DateTime?
+  attempts    Int      @default(0)
   error       String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
