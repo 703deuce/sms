@@ -120,6 +120,16 @@ export function MotionStudioCreate({
   const idemKey = useRef(newIdempotencyKey('ms_create'))
 
   useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('type')
+    if (requested && MS_VIDEO_TYPES.some(t => t.id === requested)) {
+      const category = requested as MsVideoType
+      setVideoType(category)
+      if (['documentary','educational','explainer'].includes(category)) setDurationSeconds(180)
+      if (['social_video','audiogram'].includes(category)) setFormat('9:16')
+      if (category === 'video_editing') setWorkflow('footage')
+    }
+  }, [])
+  useEffect(() => {
     // Folder upload needs the non-standard attribute (interviews, photos, charts, narration).
     folderRef.current?.setAttribute('webkitdirectory', '')
     folderRef.current?.setAttribute('directory', '')
