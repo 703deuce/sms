@@ -31,6 +31,13 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     finally {setLoading(false)}
   },[projectId])
   useEffect(()=>{void load()},[load])
+  // The editor may be open while the producer is still uploading its source.
+  // Refresh until the first immutable portable version arrives (ordinary API, no AI).
+  useEffect(()=>{
+    if(version)return
+    const interval=window.setInterval(()=>void load(),20000)
+    return()=>window.clearInterval(interval)
+  },[version,load])
   useEffect(()=>{
     if(!renderId)return
     let active=true
