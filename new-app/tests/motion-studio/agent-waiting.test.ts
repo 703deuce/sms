@@ -120,4 +120,14 @@ describe('producer clarification and retries', () => {
     expect(state.messages.filter(m => m.role === 'agent')[0]?.text).toContain('queued')
   })
 
+  it('closes an unanswered production after 24 hours instead of accepting a late answer', async () => {
+    state.job.updatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000)
+    const request = new Request('https://transovo.ai/api/motion-studio/agent/projects/msp_test/chat',
+      { method: 'POST', headers: { 'Idempotency-Key': 'late-answer' } })
+    await expect(submitAgentRevision('ws_test','user_test','msp_test',request,
+      { instruction: 'Use the first image', answerInput: true })).rejects.toThrow('no longer waiting')
+    expect(state.job.status).toBe('failed')
+    expect(state.webhook).not.toHaveBeenCalled()
+  })
+
 })
