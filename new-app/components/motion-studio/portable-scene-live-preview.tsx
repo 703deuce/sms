@@ -9,10 +9,10 @@ type HostMsg={protocol:string;type:string;nonce:string;payload?:unknown}
  * Its origin must serve pre-published, inspected scene bundle assets.
  * sandbox without allow-same-origin gives the frame an opaque origin.
  */
-export function PortableSceneLivePreview({projectId,versionId,scene,theme,overrides,patch,seconds}:{
+export function PortableSceneLivePreview({projectId,versionId,scene,theme,overrides,patch,themeColors,seconds}:{
  projectId:string;versionId:string;scene:MsPortableScene;
  theme:Record<string,unknown>;overrides:Record<string,unknown>;
- patch:Record<string,Record<string,unknown>>;seconds:number
+ patch:Record<string,Record<string,unknown>>;themeColors:Record<string,string>;seconds:number
 }){
  const element=useRef<HTMLIFrameElement>(null)
  const nonce=useRef('')
@@ -82,8 +82,8 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
        spec.properties[name]?.tier==='live_editable'))
      if(Object.keys(allowed).length)live[elId]=allowed
    }
-   send('setProps',{scenes:{[scene.id]:{elements:live}}})
- },[ready,patch,scene,urls])
+   send('setProps',{theme:{colors:themeColors},scenes:{[scene.id]:{elements:live}}})
+ },[ready,patch,scene,urls,themeColors])
  useEffect(()=>{if(ready)send('seek',{seconds:Math.max(0,seconds)})},[ready,seconds])
  if(!link)return null
  if(!urls)return <p className="text-xs text-muted-foreground">{error||'Loading original scene assets…'}</p>
