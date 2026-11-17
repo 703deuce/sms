@@ -99,7 +99,7 @@ export const MS_LENGTHS: { value: MsLengthMin; label: string; beta: boolean }[] 
 ]
 
 export const MS_DIRECTIONS: { value: MsVisualDirection; label: string }[] = [
-  { value: 'cinematic', label: 'Cinematic video' },
+  { value: 'cinematic', label: 'Cinematic' },
   { value: 'explainer', label: 'Modern explainer' },
   { value: 'investigative', label: 'Investigative' },
   { value: 'technical_3d', label: '3D technical' },
