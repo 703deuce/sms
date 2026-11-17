@@ -7,6 +7,24 @@ export function validateProducerCheckpoint(raw: unknown, current: unknown): Prod
   const revision = Number(o.revision)
   if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('Checkpoint revision must be a positive integer.')
   const state = o.checkpoint as Record<string, unknown>
+  // Checkpoints only hold stable references and progress. They must never become
+  // a durable store for signed media URLs, storage paths or access credentials.
+  const inspect = (value: unknown, path: string, depth: number): void => {
+    if (depth > 24) throw new Error('Checkpoint is too deeply nested.')
+    if (typeof value === 'string') {
+      if (/(?:https?:\\/\\/|s3:\\/\\/|gs:\\/\\/|\\bBearer\\s+|(?:^|\\/)ws\\/[^\\s]+)/i.test(value))
+        throw new Error('Checkpoint must contain stable asset IDs, not signed URLs or storage keys.')
+      return
+    }
+    if (!value || typeof value !== 'object') return
+    if (Array.isArray(value)) { value.forEach((item, i) => inspect(item, path + '.' + i, depth + 1)); return }
+    for (const [key, item] of Object.entries(value)) {
+      if (/(?:token|secret|password|credential|authorization|signature|signedurl|storagekey|objectkey|accesskey|privatekey|api.?key)/i.test(key))
+        throw new Error('Checkpoint contains a prohibited credential or storage field.')
+      inspect(item, path + '.' + key, depth + 1)
+    }
+  }
+  inspect(state, 'checkpoint', 0)
   const encoded = JSON.stringify(state)
   if (!encoded || encoded.length > 256_000) throw new Error('Checkpoint must be under 256 KB.')
   const old = current && typeof current === 'object' && !Array.isArray(current) ? current as Record<string, unknown> : {}
