@@ -11058,6 +11058,8 @@ model MotionStudioAgentJob {
   tokenExpiresAt   DateTime
   pendingTokenHash String?
   pendingTokenExpiresAt DateTime?
+  answerInFlightKey String?
+  answerInFlightUntil DateTime?
   status           String   @default("dispatching")
   phase            String   @default("dispatch")
   progress         Int      @default(0)
