@@ -97,6 +97,7 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   if (typeof o.webResearch === 'boolean') out.webResearch = o.webResearch
   out.webResearch = out.webResearch === true
   if (typeof o.preflightOnly === 'boolean') out.preflightOnly = o.preflightOnly
+  if (o.creative) out.creative = sanitizeCreativeBrief(o.creative)
   const FORMAT_RE = /^(16:9|9:16|1:1)_(480p|720p|1080p|2160p)$/
   if (typeof o.format === 'string' && FORMAT_RE.test(o.format)) out.format = o.format as MsSettings['format']
   const rs = typeof o.renderSize === 'string' ? o.renderSize.trim().toLowerCase()
