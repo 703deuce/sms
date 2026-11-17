@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Send, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,6 +16,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const pendingSubmission = useRef<{ text: string; key: string } | null>(null)
   const [answerQuestion, setAnswerQuestion] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,10 +68,13 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     if (!instruction || busy) return
     setBusy(true)
     setError(null)
+    const key = pendingSubmission.current?.text === instruction
+      ? pendingSubmission.current.key : 'ms_revision_' + crypto.randomUUID()
+    pendingSubmission.current = { text: instruction, key }
     try {
       const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json',
-          'Idempotency-Key': 'ms_revision_' + crypto.randomUUID() },
+          'Idempotency-Key': key },
         body: JSON.stringify({ instruction, answerInput: liveJob?.status === 'needs_input' && answerQuestion,
           selectedElementIds: selectedElementIds ?? [],
           ...(selectedTimeMs != null && Number.isFinite(selectedTimeMs) ? {
@@ -78,6 +82,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
       })
       if (!response.ok) throw new Error('We could not send your message yet. Please try again.')
       setDraft('')
+      pendingSubmission.current = null
       setAnswerQuestion(true)
       await reload()
     } catch (err) {
