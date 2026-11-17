@@ -58,7 +58,7 @@ function titleFromCreate(o: Json, prompt: string, script: string): string {
   const src = prompt || script
   const line = (src.split(/\r?\n/).find((l) => l.trim()) || src).trim()
   const sentence = (line.split(/(?<=[.?!])\s+/)[0] || line).replace(/\s+/g, ' ').trim()
-  return sentence.slice(0, 80) || 'Documentary'
+  return sentence.slice(0, 80) || 'Untitled video'
 }
 
 export function motionStudioEnabled(): boolean {
