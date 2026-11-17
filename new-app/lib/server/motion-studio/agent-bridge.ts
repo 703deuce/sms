@@ -2,6 +2,7 @@ import 'server-only'
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { coordinatorEnabled, coordinatePendingJobs } from '@/lib/server/motion-studio/coordinator'
+import { portableAssetSession } from '@/lib/server/motion-studio/portable-assets'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
@@ -277,7 +278,20 @@ export async function botGetAssignment(id: string, request: Request) {
     videoUrl: previous.resultKey
       ? await createReadableSignedUrl(previous.resultKey, 1800).catch(() => null) : null,
   })))
+  const latestSource = await db().motionStudioPortableVersion.findFirst({
+    where:{projectId:job.projectId,workspaceId:job.workspaceId,status:'committed'},
+    orderBy:{revision:'desc'},
+  })
+  const portableProject = latestSource ? {
+    id:latestSource.id,revision:latestSource.revision,
+    parentId:latestSource.parentId,manifest:latestSource.manifest,
+    theme:latestSource.theme,overrides:latestSource.overrides,
+    assetSession:await portableAssetSession(job.workspaceId,job.projectId,latestSource.id),
+    refreshUrl:baseUrl(request)+'/api/motion-studio/agent/jobs/'+encodeURIComponent(id)+
+      '/portable?versionId='+encodeURIComponent(latestSource.id),
+  }:null
   return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
+    portableProject,
     title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
     projectContext: {
       projectId: project.id, workspaceId: project.workspaceId,
