@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
+import { PortableSceneLivePreview } from './portable-scene-live-preview'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
   theme:Record<string,unknown>; overrides:Record<string,unknown> }
 const asObj=(v:unknown):Record<string,unknown> =>
@@ -112,6 +113,10 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
         </select>
       </label>
+      {scene && <PortableSceneLivePreview key={version.id+':'+scene.id}
+        projectId={projectId} versionId={version.id} scene={scene}
+        theme={version.theme} overrides={version.overrides}
+        patch={patch} themeColors={colors} seconds={2.0}/>}
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-medium">Whole-video theme</h4>
         {Object.entries(themeColors).filter(([,v])=>{
