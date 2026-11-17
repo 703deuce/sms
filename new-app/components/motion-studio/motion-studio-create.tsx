@@ -90,6 +90,7 @@ export function MotionStudioCreate({
   const [style, setStyle] = useState<MsCreativeStyle>('automatic')
   const [customStyle, setCustomStyle] = useState('')
   const [format, setFormat] = useState<'16:9' | '9:16' | '1:1'>('16:9')
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('480p')
   const [brandMode, setBrandMode] = useState<MsBrandMode>('none')
   const [brandKitId, setBrandKitId] = useState('')
   const [editingBrandKitId, setEditingBrandKitId] = useState('')
@@ -277,7 +278,7 @@ export function MotionStudioCreate({
         uploads: ready.map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
         mediaPolicy: 'auto_plus_uploads',
         durationSeconds,
-        format: `${format}_480p`,
+        format: `${format}_${resolution}`,
         creative: { videoType, style, customStyle: style === 'custom' ? customStyle : undefined,
           instructions: creativeInstructions, brandMode,
           brandKitId: brandMode === 'saved' ? brandKitId : undefined,
@@ -373,6 +374,11 @@ export function MotionStudioCreate({
                 <label className="flex flex-col gap-1 text-sm">Canvas
                   <select data-testid="ms-aspect-ratio" value={format} onChange={e => { setFormat(e.target.value as typeof format); setFormatTouched(true) }} className="h-10 rounded-md border border-input bg-background px-3">
                     <option value="16:9">16:9 · Landscape</option><option value="9:16">9:16 · Vertical</option><option value="1:1">1:1 · Square</option>
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm">Output resolution
+                  <select data-testid="ms-resolution" value={resolution} onChange={e => setResolution(e.target.value as typeof resolution)} className="h-10 rounded-md border border-input bg-background px-3">
+                    <option value="480p">480p · Faster preview</option><option value="720p">720p · HD</option><option value="1080p">1080p · Full HD</option>
                   </select>
                 </label>
               </div>
