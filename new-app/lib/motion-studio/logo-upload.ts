@@ -7,17 +7,30 @@ export function validateSvgLogoMarkup(raw: string): Document {
     throw new Error('This is not a valid SVG logo.')
   const allowed = new Set(['svg','g','defs','symbol','use','path','rect','circle','ellipse','line','polyline',
     'polygon','text','tspan','linearGradient','radialGradient','stop','clipPath','mask','pattern','title','desc'])
+  // Inkscape/Illustrator add namespace declarations and editor-only metadata.
+  // Drop those non-rendered nodes instead of rejecting otherwise safe logos.
+  for (const el of Array.from(root.querySelectorAll('*')).reverse()) {
+    if (el.namespaceURI !== 'http://www.w3.org/2000/svg' ||
+        ['metadata','desc'].includes(el.localName)) {
+      if (['script','foreignObject'].includes(el.localName))
+        throw new Error('SVG contains executable or embedded content.')
+      el.remove()
+    }
+  }
   for (const el of Array.from(root.querySelectorAll('*')).concat(root)) {
     if (!allowed.has(el.localName)) throw new Error('This SVG contains unsupported embedded or interactive content. Export it as PNG.')
     for (const attr of Array.from(el.attributes)) {
       const name = attr.localName.toLowerCase()
       const qualified = attr.name.toLowerCase()
       const value = attr.value.trim()
-      if (qualified === 'xmlns' && value === 'http://www.w3.org/2000/svg') continue
-      if (qualified === 'xmlns:xlink' && value === 'http://www.w3.org/1999/xlink') continue
+      // Namespace declarations are XML metadata, not external resource loads.
+      if (qualified === 'xmlns' || qualified.startsWith('xmlns:')) continue
       if (name.startsWith('on') || (name === 'href' && !value.startsWith('#')) ||
-        /(?:javascript:|data:|https?:|url\(\s*['"]?(?!#))/i.test(value))
+        /(?:javascript:|data:|https?:|url\\(\\s*['"]?(?!#))/i.test(value))
         throw new Error('This SVG includes external or interactive content. Export it as PNG.')
+      // Editor-specific namespaced attributes are metadata; don't pass them to renderer.
+      if (attr.namespaceURI && !['http://www.w3.org/1999/xlink'].includes(attr.namespaceURI))
+        el.removeAttributeNode(attr)
     }
   }
   return xml
