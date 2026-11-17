@@ -16,6 +16,7 @@ export const MS_VIDEO_TYPES = [
   { id: 'cinemagraph', label: 'Cinemagraph', group: 'Motion Design', guidance: 'Create a subtle, localized repeating motion while the rest of the picture remains still.' },
   { id: 'display_loop', label: 'Digital Display Loop', group: 'Motion Design', guidance: 'Design a visually clear, seamlessly looping display suitable for repeated playback.' },
   { id: 'ui_animation', label: 'UI/UX Animation', group: 'Motion Design', guidance: 'Respect supplied interface states and demonstrate accurate, meaningful interactions.' },
+  { id: 'nft_design', label: 'NFT Design', group: 'Motion Design', guidance: 'Create original digital collectible designs and animations; never copy protected artwork.' },
   { id: 'gif', label: 'GIF / Short Loop', group: 'Motion Design', guidance: 'Create a short self-contained animation with a clear loop; output format depends on supported export options.' },
   { id: 'video_editing', label: 'Edit Existing Video', group: 'Editing & Repurposing', guidance: 'Preserve user footage and meaning while improving structure, pacing and presentation.' },
   { id: 'audiogram', label: 'Audiogram', group: 'Editing & Repurposing', guidance: 'Keep uploaded audio accurate and synchronize original visual elements to it.' },
