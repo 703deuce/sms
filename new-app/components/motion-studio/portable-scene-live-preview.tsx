@@ -17,6 +17,7 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
  const element=useRef<HTMLIFrameElement>(null)
  const nonce=useRef('')
  const [ready,setReady]=useState(false)
+ const [frameLoaded,setFrameLoaded]=useState(false)
  const [error,setError]=useState('')
  const [urls,setUrls]=useState<Record<string,string>|null>(null)
  const origin=process.env.NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN||''
@@ -34,7 +35,7 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
  useEffect(()=>{
    if(!link)return
    let current=true
-   setReady(false);setError('');setUrls(null)
+   setReady(false);setFrameLoaded(false);setError('');setUrls(null)
    nonce.current=crypto.randomUUID()
    fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
      '/portable/assets?versionId='+encodeURIComponent(versionId),{cache:'no-store'})
@@ -86,14 +87,15 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
  useEffect(()=>{if(ready)send('seek',{seconds:Math.max(0,seconds)})},[ready,seconds])
  if(!link)return null
  if(!urls)return <p className="text-xs text-muted-foreground">{error||'Loading original scene assets…'}</p>
- const init=()=>{
+ useEffect(()=>{
+   if(!frameLoaded||!urls)return
    setReady(false)
    send('init',{theme,overrides,assetUrls:urls,mode:'live'})
- }
+ },[frameLoaded,urls,theme,overrides])
  return <section className="flex flex-col gap-1" aria-label="Original scene live preview">
    <p className="text-xs font-medium">Live scene preview</p>
    <iframe ref={element} title={'Editable '+scene.id} src={link}
-     sandbox="allow-scripts" referrerPolicy="no-referrer" onLoad={init}
+     sandbox="allow-scripts" referrerPolicy="no-referrer" onLoad={()=>setFrameLoaded(true)}
      className="aspect-video w-full rounded-md border border-border bg-black"/>
    {error?<p role="status" className="text-xs text-destructive">{error}</p>:null}
    {!ready&&!error?<p className="text-xs text-muted-foreground">Initializing scene…</p>:null}
