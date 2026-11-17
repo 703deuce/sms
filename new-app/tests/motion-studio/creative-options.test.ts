@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MS_VIDEO_TYPES, sanitizeBrandProfile, sanitizeCreativeBrief, directorCategoryGuidance } from '../../lib/motion-studio/creative-options'
 describe('Motion Studio creative contract', () => {
   it('ships a broad category catalog and preserves an open-ended mode', () => {
-    expect(MS_VIDEO_TYPES.length).toBeGreaterThanOrEqual(20)
+    expect(MS_VIDEO_TYPES.length).toBeGreaterThanOrEqual(21)
     expect(MS_VIDEO_TYPES.some(x => x.id === 'anything')).toBe(true)
     expect(directorCategoryGuidance('documentary')).toContain('verify')
   })
