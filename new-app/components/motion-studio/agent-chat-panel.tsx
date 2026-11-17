@@ -16,6 +16,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [answerQuestion, setAnswerQuestion] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showVersions, setShowVersions] = useState(false)
@@ -70,12 +71,14 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
       const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
         method: 'POST', headers: { 'Content-Type': 'application/json',
           'Idempotency-Key': 'ms_revision_' + crypto.randomUUID() },
-        body: JSON.stringify({ instruction, selectedElementIds: selectedElementIds ?? [],
+        body: JSON.stringify({ instruction, answerInput: liveJob?.status === 'needs_input' && answerQuestion,
+          selectedElementIds: selectedElementIds ?? [],
           ...(selectedTimeMs != null && Number.isFinite(selectedTimeMs) ? {
             timeRangeMs: [Math.max(0,Math.floor(selectedTimeMs)),Math.floor(selectedTimeMs)+1000] } : {}) }),
       })
       if (!response.ok) throw new Error('We could not send your message yet. Please try again.')
       setDraft('')
+      setAnswerQuestion(true)
       await reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send your message.')
@@ -126,6 +129,10 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
         Ask me about your video, request an edit, or check production progress. I can help while it renders.
       </li> : null}
     </ol>
+    {liveJob?.status === 'needs_input' ? <label className="flex items-start gap-2 rounded-lg border border-amber-500/30 p-3 text-xs">
+      <input type="checkbox" checked={answerQuestion} onChange={e => setAnswerQuestion(e.target.checked)} className="mt-0.5" />
+      <span><strong>Production needs your input.</strong> Check this if your next message answers the most recent producer question; uncheck it to ask the assistant something else.</span>
+    </label> : null}
     <label className="sr-only" htmlFor={'ms-agent-instruction-' + projectId}>Message Transovo AI Assistant</label>
     <Textarea id={'ms-agent-instruction-' + projectId} value={draft}
       onChange={e => setDraft(e.target.value)}
