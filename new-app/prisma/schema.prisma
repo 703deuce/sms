@@ -11070,6 +11070,7 @@ model MotionStudioAgentJob {
   @@unique([projectId, idempotencyKey])
   @@index([workspaceId, projectId, createdAt])
   @@index([status, leaseExpiresAt, createdAt])
+  @@index([status, waitingStartedAt])
 }
 
 
