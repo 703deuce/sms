@@ -636,6 +636,29 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
   return { id:item.id, role:'agent',text:item.text,timestamp:item.createdAt.toISOString() }
 }
 
+/** An active producer can recover *ready* artifacts from an earlier job of the
+ * same project and workspace, including incomplete attempts. URLs are minted
+ * on demand; neither stale tokens nor foreign project files can be reused. */
+export async function botRecoveryArtifacts(id: string, request: Request, sourceJobId: string) {
+  const job = await requireBotJob(id, request)
+  if (!/^msaj_[a-f0-9-]{36}$/.test(sourceJobId))
+    throw new MotionStudioError('INVALID', 'Valid source job required.', 400)
+  const source = await db().motionStudioAgentJob.findFirst({ where: {
+    id: sourceJobId, projectId: job.projectId, workspaceId: job.workspaceId,
+  } })
+  if (!source) throw new MotionStudioError('NOT_FOUND', 'Saved production artifacts not found.', 404)
+  const ready = artifacts(source.artifacts).filter(a => a.state === 'ready').slice(0, 300)
+  return { workspaceId: job.workspaceId, projectId: job.projectId,
+    sourceJobId, status: source.status,
+    checkpoint: source.checkpoint ?? null,
+    artifacts: await Promise.all(ready.map(async a => ({
+      id: a.id, elementId: a.elementId, trackId: a.trackId, kind: a.kind,
+      filename: a.filename, mime: a.mime, bytes: a.bytes,
+      url: await createReadableSignedUrl(a.key, 900).catch(() => null),
+    }))),
+  }
+}
+
 /** A revision's bearer token can retrieve only its own declared parent artifacts. */
 export async function botParentArtifacts(id: string, request: Request) {
   const job = await requireBotJob(id,request)
