@@ -4,6 +4,8 @@ import { getPrisma } from '@/lib/server/db'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assistant'
+import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 
 const db = () => getPrisma()
@@ -350,26 +352,75 @@ export async function agentThread(workspaceId: string, projectId: string) {
     versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,durationMs:j.durationMs,createdAt:j.createdAt.toISOString() })) }
 }
 
+/** The only customer-facing message entrypoint: natural-language assistant first, production
+ * jobs only for confirmed, actionable edits. No additional login gate in testing mode. */
 export async function submitAgentRevision(workspaceId: string, userId: string, projectId: string, request: Request, raw: unknown) {
   const input = toObject(raw)
   const instruction = str(input.instruction || input.text, 2500)
-  if (instruction.length < 2) throw new MotionStudioError('INVALID', 'Tell Transovo what to change.', 400)
+  if (instruction.length < 2) throw new MotionStudioError('INVALID', 'Tell Transovo what you need.', 400)
   const selectedElementIds = Array.isArray(input.selectedElementIds)
     ? input.selectedElementIds.slice(0,20).map(v=>str(v,80)).filter(Boolean) : []
   const times = Array.isArray(input.timeRangeMs) ? input.timeRangeMs.map(Number) : []
   const timeRangeMs: [number,number] | undefined = times.length === 2 && times.every(Number.isSafeInteger) &&
     times[0] >= 0 && times[1] > times[0] ? [times[0],times[1]] : undefined
-  const existing = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true } })
-  if (!existing) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  const key = str(request.headers.get('Idempotency-Key'),120) || 'revision-' + randomUUID()
-  const prior = await db().motionStudioAgentJob.findUnique({ where: { projectId_idempotencyKey: {
-    projectId, idempotencyKey: key } } })
-  if (prior) return publicJob(prior)
-  const message = await db().motionStudioAgentMessage.create({ data: { id: 'msmsg_' + randomUUID(),
-    projectId, role: 'customer', text: instruction } })
-  const job = await dispatchAgentJob(workspaceId,userId,projectId,key,request,{instruction,selectedElementIds,timeRangeMs})
-  await db().motionStudioAgentMessage.update({ where: { id: message.id }, data: { jobId: job.id } })
-  return job
+  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId },
+    select: { id: true, title: true, status: true, settings: true } })
+  if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
+
+  const key = str(request.headers.get('Idempotency-Key'),120) || 'message-' + randomUUID()
+  // Idempotent message handling — two retries of the same POST must never dispatch twice.
+  const existingMessage = await db().motionStudioAgentMessage.findFirst({
+    where: { projectId, id: 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32) } })
+  if (existingMessage) {
+    const previousJob = existingMessage.jobId ? await db().motionStudioAgentJob.findFirst({
+      where: { workspaceId, projectId, id: existingMessage.jobId } }) : null
+    return { job: previousJob ? publicJob(previousJob) : null, intent: previousJob ? 'edit' : 'conversation' }
+  }
+
+  const recent = await db().motionStudioAgentMessage.findMany({ where: { projectId },
+    orderBy: { createdAt: 'desc' }, take: 12 })
+  const latest = await db().motionStudioAgentJob.findFirst({
+    where: { projectId, workspaceId }, orderBy: { createdAt: 'desc' } })
+  const selectedStatus = latest?.status || project.status
+  const pending = latest && !isDone(latest.status)
+  const knownQuestion = isStatusQuestion(instruction)
+  const decision = knownQuestion
+    ? { intent: 'question' as const, reply: statusReply(selectedStatus, latest?.phase || project.status, latest?.progress || 0), instruction: '' }
+    : await interpretCustomerMessage({
+        message: instruction, title: project.title, status: selectedStatus, phase: latest?.phase || '',
+        currentTimeMs: timeRangeMs?.[0], selectedElementIds, brand: toObject(project.settings).creative,
+        recent: recent.reverse().map(m => ({ role: m.role, text: m.text })),
+      })
+  // While rendering, requests are conversational only; do not create overlapping revision jobs.
+  let response = publicAssistantText(decision.reply)
+  let job: Awaited<ReturnType<typeof dispatchAgentJob>> | null = null
+  const wantsEdit = decision.intent === 'edit'
+  if (wantsEdit && pending) {
+    response = latest.status === 'needs_input'
+      ? 'Thanks. I have your instruction, but this production is waiting for an answer. Please respond to the specific question from the video team.'
+      : 'I understand the change. The current video is still processing; please send this request again once the video is ready so I can apply it.'
+  } else if (wantsEdit && !latest?.resultKey) {
+    response = 'I understand the change. Once your first video is ready, I can submit this as a revision.'
+  } else if (wantsEdit) {
+    // Dispatch before recording the assistant success reply. If dispatch fails we tell the truth.
+    try {
+      job = await dispatchAgentJob(workspaceId, userId, projectId, key, request, {
+        instruction: decision.instruction || instruction, selectedElementIds, timeRangeMs,
+      })
+      response = ['dispatch_failed','failed'].includes(job.status)
+        ? 'I understood the edit, but the production system could not accept it. Please try again.'
+        : 'I’ve sent your requested changes to production. I’ll show progress here and keep the previous version available.'
+    } catch {
+      response = 'I understood your edit, but could not submit it yet. Please try again.'
+    }
+  }
+  // Store the visible customer-facing conversation in the existing project thread.
+  const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
+  await db().motionStudioAgentMessage.create({ data: { id: messageId,
+    projectId, role: 'customer', text: instruction, jobId: job?.id } })
+  await db().motionStudioAgentMessage.create({ data: { id: 'msmsg_' + randomUUID(),
+    projectId, role: 'agent', text: response, jobId: job?.id } })
+  return { job, intent: wantsEdit && job ? 'edit' : 'conversation' }
 }
 
 export async function botPostMessage(id: string, request: Request, raw: unknown) {
