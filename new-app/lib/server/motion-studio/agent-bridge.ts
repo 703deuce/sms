@@ -8,6 +8,7 @@ import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assist
 import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
+import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
 
 const db = () => getPrisma()
 const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {}
@@ -274,22 +275,14 @@ export async function botGetCheckpoint(id: string, request: Request) {
 export async function botSaveCheckpoint(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id, request)
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Cannot change a completed job.', 409)
-  const input = toObject(raw)
-  const checkpoint = toObject(input.checkpoint)
-  const encoded = JSON.stringify(checkpoint)
-  if (!encoded || encoded.length > 256_000)
-    throw new MotionStudioError('INVALID', 'Checkpoint must be a JSON object under 256 KB.', 400)
-  const revision = Number(input.revision)
-  if (!Number.isSafeInteger(revision) || revision < 1)
-    throw new MotionStudioError('INVALID', 'Checkpoint revision must be a positive integer.', 400)
+  let parsed
+  try { parsed = validateProducerCheckpoint(raw, job.checkpoint) }
+  catch (err) { throw new MotionStudioError('INVALID',
+    err instanceof Error ? err.message : 'Invalid checkpoint.', 400) }
+  const { revision, state: checkpoint } = parsed
   const current = toObject(job.checkpoint)
   const previousRevision = Number(current.revision) || 0
-  if (revision < previousRevision) throw new MotionStudioError('CONFLICT', 'Stale checkpoint revision.', 409)
-  if (revision === previousRevision) {
-    if (JSON.stringify(current.state) !== encoded)
-      throw new MotionStudioError('CONFLICT', 'Checkpoint revision already used with different state.', 409)
-    return { jobId: id, revision, saved: true }
-  }
+  if (revision === previousRevision) return { jobId: id, revision, saved: true }
   const state = { revision, state: checkpoint, savedAt: new Date().toISOString() }
   // Conditional update avoids advancing a stale worker after another worker
   // has persisted a newer checkpoint.
