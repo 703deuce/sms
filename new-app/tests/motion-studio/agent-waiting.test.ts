@@ -72,6 +72,7 @@ beforeEach(() => {
   }
   process.env.GROKBOT_WEBHOOK_URL = 'https://example.com/producer'
   process.env.GROKBOT_WEBHOOK_KEY = 'key'
+  process.env.MOTION_STUDIO_JOB_TOKEN_SECRET = 'a'.repeat(48)
   vi.stubGlobal('fetch', state.webhook)
   state.webhook.mockResolvedValue({ ok: true, status: 200 })
 })
