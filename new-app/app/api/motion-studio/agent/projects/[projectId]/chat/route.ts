@@ -15,6 +15,6 @@ export async function POST(request: Request, ctx: Ctx) {
   try {
     const { projectId } = await ctx.params
     const { workspaceId, userId } = await requireMotionStudioCaller(request)
-    return NextResponse.json({ job: await submitAgentRevision(workspaceId, userId, projectId, request, await request.json()) }, { status: 202 })
+    return NextResponse.json(await submitAgentRevision(workspaceId, userId, projectId, request, await request.json()))
   } catch (err) { return motionStudioJsonError(err) }
 }
