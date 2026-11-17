@@ -1,9 +1,6 @@
 /** Safely convert an SVG logo to PNG before using the existing photo upload API.
  * No SVG markup is stored or rendered as executable HTML by Motion Studio. */
-export async function normalizeLogoUpload(file: File): Promise<File> {
-  if (file.type !== 'image/svg+xml' && !/\.svg$/i.test(file.name)) return file
-  if (file.size > 1024 * 1024) throw new Error('SVG logo must be under 1 MB.')
-  const raw = await file.text()
+export function validateSvgLogoMarkup(raw: string): Document {
   const xml = new DOMParser().parseFromString(raw, 'image/svg+xml')
   const root = xml.documentElement
   if (root.localName !== 'svg' || root.namespaceURI !== 'http://www.w3.org/2000/svg' || xml.querySelector('parsererror'))
@@ -14,12 +11,24 @@ export async function normalizeLogoUpload(file: File): Promise<File> {
     if (!allowed.has(el.localName)) throw new Error('This SVG contains unsupported embedded or interactive content. Export it as PNG.')
     for (const attr of Array.from(el.attributes)) {
       const name = attr.localName.toLowerCase()
+      const qualified = attr.name.toLowerCase()
       const value = attr.value.trim()
-      if (name.startsWith('on') || name === 'href' && !value.startsWith('#') ||
+      if (qualified === 'xmlns' && value === 'http://www.w3.org/2000/svg') continue
+      if (qualified === 'xmlns:xlink' && value === 'http://www.w3.org/1999/xlink') continue
+      if (name.startsWith('on') || (name === 'href' && !value.startsWith('#')) ||
         /(?:javascript:|data:|https?:|url\(\s*['"]?(?!#))/i.test(value))
         throw new Error('This SVG includes external or interactive content. Export it as PNG.')
     }
   }
+  return xml
+}
+
+export async function normalizeLogoUpload(file: File): Promise<File> {
+  if (file.type !== 'image/svg+xml' && !/\.svg$/i.test(file.name)) return file
+  if (file.size > 1024 * 1024) throw new Error('SVG logo must be under 1 MB.')
+  const raw = await file.text()
+  const xml = validateSvgLogoMarkup(raw)
+  const root = xml.documentElement
   const parseDimension = (s: string | null) => {
     const n = Number.parseFloat(s || '')
     return Number.isFinite(n) && n > 0 ? n : null
