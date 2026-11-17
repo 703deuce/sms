@@ -104,7 +104,11 @@ describe('producer clarification and retries', () => {
     const first = JSON.parse(state.webhook.mock.calls[0]![1].body)
     const second = JSON.parse(state.webhook.mock.calls[1]![1].body)
     expect(first).toMatchObject({ action: 'answer_input', jobId: 'msaj_test', idempotencyKey: 'answer-one' })
-    expect(second).toEqual(first)
+    expect(second).toMatchObject({ action: first.action, jobId: first.jobId,
+      projectId: first.projectId, idempotencyKey: first.idempotencyKey,
+      jobUrl: first.jobUrl, jobToken: first.jobToken })
+    expect(first.jobUrl).toContain('/agent/jobs/msaj_test')
+    expect(first.jobToken).toBeTruthy()
     expect(state.messages.filter(m => m.role === 'agent')).toHaveLength(1)
   })
   it('queues a creative edit behind a waiting job without starting another production', async () => {
