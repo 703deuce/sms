@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { sanitizeBrandProfile, type MsBrandProfile } from '@/lib/motion-studio/creative-options'
-import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 type BrandKitRow = { id: string; name: string; profile: MsBrandProfile; createdAt: Date; updatedAt: Date }
 export async function listBrandKits(workspaceId: string) {
   const rows = await getPrisma().$queryRaw<BrandKitRow[]>`
@@ -31,9 +30,9 @@ export async function saveBrandKit(workspaceId: string, raw: unknown) {
   const id = typeof o.id === 'string' && /^msbk_[a-f0-9-]{36}$/.test(o.id) ? o.id : 'msbk_' + randomUUID()
   if (o.id) {
     const prior = await loadBrandKit(workspaceId, id)
-    await getPrisma().$executeRaw`UPDATE "MotionStudioBrandKit" SET "name" = ${name}, "profile" = ${toPrismaJson(profile)}::jsonb, "updatedAt" = CURRENT_TIMESTAMP WHERE "workspaceId" = ${workspaceId} AND "id" = ${prior.id}`
+    await getPrisma().$executeRaw`UPDATE "MotionStudioBrandKit" SET "name" = ${name}, "profile" = ${JSON.stringify(profile)}::jsonb, "updatedAt" = CURRENT_TIMESTAMP WHERE "workspaceId" = ${workspaceId} AND "id" = ${prior.id}`
   } else {
-    await getPrisma().$executeRaw`INSERT INTO "MotionStudioBrandKit" ("id", "workspaceId", "name", "profile") VALUES (${id}, ${workspaceId}, ${name}, ${toPrismaJson(profile)}::jsonb)`
+    await getPrisma().$executeRaw`INSERT INTO "MotionStudioBrandKit" ("id", "workspaceId", "name", "profile") VALUES (${id}, ${workspaceId}, ${name}, ${JSON.stringify(profile)}::jsonb)`
   }
   const updated = await loadBrandKit(workspaceId, id)
   return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() }
