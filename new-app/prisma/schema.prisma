@@ -11096,3 +11096,17 @@ model ClipAgentFinishJob {
   @@index([clipId, createdAt])
   @@map("clip_agent_finish_jobs")
 }
+
+
+/// Workspace-owned creative identity. Snapshot into MotionStudioProject.settings.creative
+/// so edits to the saved kit never retroactively change earlier jobs.
+model MotionStudioBrandKit {
+  id          String   @id
+  workspaceId String
+  name        String
+  profile     Json     @default("{}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([workspaceId])
+}
