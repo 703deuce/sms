@@ -36,6 +36,8 @@ export type MsSettings = {
   finalRenderSize?: string
   /** When true, run story/plan/design/lint/compile only and do not enqueue render segments. */
   preflightOnly?: boolean
+  /** Immutable creative snapshot for this production (not a scene template). */
+  creative?: MsCreativeBrief
 }
 
 export type MsProjectStatus =
