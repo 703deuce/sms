@@ -20,7 +20,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showVersions, setShowVersions] = useState(false)
-  const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
+  const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; updatedAt?:string; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
   const reload = useCallback(async () => {
     const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
       cache: 'no-store',
@@ -131,7 +131,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     </ol>
     {liveJob?.status === 'needs_input' ? <label className="flex items-start gap-2 rounded-lg border border-amber-500/30 p-3 text-xs">
       <input type="checkbox" checked={answerQuestion} onChange={e => setAnswerQuestion(e.target.checked)} className="mt-0.5" />
-      <span><strong>Production needs your input.</strong> Check this if your next message answers the most recent producer question; uncheck it to ask the assistant something else.</span>
+      <span><strong>Production needs your input.</strong> {liveJob.updatedAt ? `Please answer before ${new Date(new Date(liveJob.updatedAt).getTime() + 24 * 60 * 60 * 1000).toLocaleString()}. ` : ''}Check this if your message answers the question; uncheck it to ask the assistant something else.</span>
     </label> : null}
     <label className="sr-only" htmlFor={'ms-agent-instruction-' + projectId}>Message Transovo AI Assistant</label>
     <Textarea id={'ms-agent-instruction-' + projectId} value={draft}
