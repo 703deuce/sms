@@ -451,6 +451,11 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     await db().motionStudioAgentMessage.create({ data: {
       id: 'msmsg_' + randomUUID(), projectId: job.projectId, jobId: id, role: 'agent',
       text: 'Production stopped, but your requested follow-up edits are saved in this project.' } })
+    if (coordinatorEnabled()) {
+      await db().motionStudioWorkerAssignment.updateMany({where:{jobId:id,status:{in:['reserved','dispatched','running']}},
+        data:{status:'failed',leaseExpiresAt:new Date()}})
+      await coordinatePendingJobs(1)
+    }
     return publicJob(failed)
   }
   const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.mime === 'video/mp4' && a.state === 'ready')
@@ -499,7 +504,12 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'complete', kind: 'agent_progress', message: DEFAULT_STAGE_MESSAGES.complete,
     data: toPrismaJson({ jobId: id, percent: 100 }) } })
   if (pullProducerQueueEnabled()) await releaseProducerLease(id)
+  if (coordinatorEnabled()) await db().motionStudioWorkerAssignment.updateMany({
+    where:{jobId:id,status:{in:['reserved','dispatched','running']}},
+    data:{status:'complete',leaseExpiresAt:new Date()},
+  })
   await dispatchQueuedAfterFinish(job, request)
+  if (coordinatorEnabled()) await coordinatePendingJobs(1)
   return publicJob(completed)
 }
 
