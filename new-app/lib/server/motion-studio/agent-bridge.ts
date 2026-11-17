@@ -384,6 +384,33 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   const selectedStatus = latest?.status || project.status
   const pending = latest && !isDone(latest.status)
   const knownQuestion = isStatusQuestion(instruction)
+  // Answers to producer questions continue the existing job; they must NOT create
+  // a fresh paid revision or silently disappear inside the chat.
+  if (latest?.status === 'needs_input' && !knownQuestion) {
+    const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
+    if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL','Video production is not connected.',503)
+    let accepted = false
+    try {
+      const response = await fetch(process.env.GROKBOT_WEBHOOK_URL!, {
+        method: 'POST', redirect: 'error', cache: 'no-store',
+        headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'answer_input', jobId: latest.id, projectId,
+          text: instruction, idempotencyKey: key }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      accepted = response.ok
+    } catch { /* Keep the current job waiting until delivery succeeds. */ }
+    if (!accepted) throw new MotionStudioError('CONFLICT','Could not deliver your answer. Please try again.',503)
+    await db().motionStudioAgentMessage.create({ data: {
+      id: messageId, projectId, jobId: latest.id, role: 'customer', text: instruction } })
+    await db().motionStudioAgentMessage.create({ data: {
+      id: 'msmsg_' + randomUUID(), projectId, jobId: latest.id, role: 'agent',
+      text: 'Thanks, I’ve passed your answer to production. I’ll update you when the video progresses.' } })
+    await db().motionStudioAgentJob.updateMany({ where: {
+      workspaceId, projectId, id: latest.id, status: 'needs_input' }, data: {
+      status: 'running', message: "We're continuing with your direction…" } })
+    return { job: null, intent: 'conversation' }
+  }
   const decision = knownQuestion
     ? { intent: 'question' as const, reply: statusReply(selectedStatus, latest?.phase || project.status, latest?.progress || 0), instruction: '' }
     : await interpretCustomerMessage({
