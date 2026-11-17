@@ -236,8 +236,8 @@ export async function botGetAssignment(id: string, request: Request) {
       orderBy: { createdAt: 'desc' }, take: 50 }),
     db().motionStudioAgentJob.findMany({ where: {
       projectId: job.projectId, workspaceId: job.workspaceId,
-      id: { not: job.id }, checkpoint: { not: { equals: null } } },
-      orderBy: { createdAt: 'desc' }, take: 5 }),
+      id: { not: job.id } },
+      orderBy: { createdAt: 'desc' }, take: 15 }),
   ])
   const uploads = projectAssets.length ? await db().clipUpload.findMany({ where: {
     id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } }) : []
@@ -264,7 +264,7 @@ export async function botGetAssignment(id: string, request: Request) {
       exportInfo: project.exportInfo,
     },
     checkpoint: job.checkpoint ?? null, inputs, versions,
-    recoverableCheckpoints: recoverableJobs.map(previous => ({
+    recoverableCheckpoints: recoverableJobs.filter(previous => previous.checkpoint != null).slice(0, 5).map(previous => ({
       jobId: previous.id, revision: previous.revision, status: previous.status,
       savedAt: previous.updatedAt.toISOString(), checkpoint: previous.checkpoint,
       durableArtifacts: artifacts(previous.artifacts).filter(a => a.state === 'ready')
