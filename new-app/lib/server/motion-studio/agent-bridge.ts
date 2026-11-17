@@ -152,7 +152,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       instruction: revisionRequest?.instruction,
       selectedElementIds: revisionRequest?.selectedElementIds ?? [],
       timeRangeMs: revisionRequest?.timeRangeMs ?? null,
-      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','agent'] } },
+      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','answer','agent'] } },
         orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role, text: m.text })) } : {}),
     title: project.title, prompt: project.brief,
     videoType: creative.videoType,
@@ -248,7 +248,7 @@ export async function botGetAssignment(id: string, request: Request) {
       projectId: job.projectId, workspaceId: job.workspaceId, status: 'complete' },
       orderBy: [{ revision: 'desc' }, { createdAt: 'desc' }], take: 20 }),
     db().motionStudioAgentMessage.findMany({ where: {
-      projectId: job.projectId, role: { in: ['customer', 'agent'] } },
+      projectId: job.projectId, role: { in: ['customer', 'answer', 'agent'] } },
       orderBy: { createdAt: 'desc' }, take: 50 }),
     db().motionStudioAgentJob.findMany({ where: {
       projectId: job.projectId, workspaceId: job.workspaceId,
@@ -283,7 +283,7 @@ export async function botGetAssignment(id: string, request: Request) {
     },
     checkpoint: job.checkpoint ?? null, inputs, versions,
     resumeAnswer: (await db().motionStudioAgentMessage.findFirst({ where: {
-      projectId: job.projectId, jobId: job.id, role: 'customer' }, orderBy: { createdAt: 'desc' } }))?.text || null,
+      projectId: job.projectId, jobId: job.id, role: 'answer' }, orderBy: { createdAt: 'desc' } }))?.text || null,
     recoverableCheckpoints: recoverableJobs.filter(previous => previous.checkpoint != null).slice(0, 5).map(previous => ({
       jobId: previous.id, revision: previous.revision, status: previous.status,
       savedAt: previous.updatedAt.toISOString(), checkpoint: previous.checkpoint,
@@ -291,7 +291,7 @@ export async function botGetAssignment(id: string, request: Request) {
         .map(a => ({ id: a.id, kind: a.kind, filename: a.filename, mime: a.mime,
           elementId: a.elementId, trackId: a.trackId })),
     })),
-    conversation: recentMessages.reverse().map(m => ({ role: m.role, text: m.text,
+    conversation: recentMessages.reverse().map(m => ({ role: m.role === 'answer' ? 'customer' : m.role, text: m.text,
       timestamp: m.createdAt.toISOString(), jobId: m.jobId })),
   }
 }
@@ -495,11 +495,11 @@ export async function agentThread(workspaceId: string, projectId: string) {
   const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true, exportInfo: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const [messages, jobs] = await Promise.all([
-    db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','agent'] } }, orderBy: { createdAt: 'asc' }, take: 250 }),
+    db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','answer','agent'] } }, orderBy: { createdAt: 'asc' }, take: 250 }),
     db().motionStudioAgentJob.findMany({ where: { workspaceId, projectId, status: 'complete' },
       select: { id: true, revision: true, durationMs: true, createdAt: true }, orderBy: { revision: 'asc' } }),
   ])
-  return { threadId: projectId, activeJobId: str(toObject(project.exportInfo).agentJobId, 100) || jobs.at(-1)?.id || null, messages: messages.map(m=>({ id:m.id,role:m.role,text:m.text,
+  return { threadId: projectId, activeJobId: str(toObject(project.exportInfo).agentJobId, 100) || jobs.at(-1)?.id || null, messages: messages.map(m=>({ id:m.id,role:m.role === 'answer' ? 'customer' : m.role,text:m.text,
     timestamp:m.createdAt.toISOString(),jobId:m.jobId })),
     versions: jobs.map(j=>({ jobId:j.id,revision:j.revision,durationMs:j.durationMs,createdAt:j.createdAt.toISOString() })) }
 }
@@ -541,7 +541,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     if (existingMessage && existingMessage.text !== instruction)
       throw new MotionStudioError('CONFLICT', 'An answer retry must use the original message.', 409)
     if (!existingMessage) await db().motionStudioAgentMessage.create({ data: {
-      id: messageId, projectId, jobId: answerJob.id, role: 'customer', text: instruction } })
+      id: messageId, projectId, jobId: answerJob.id, role: 'answer', text: instruction } })
     const confirmed = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: confirmationId } })
     if (!confirmed) {
       if (pullProducerQueueEnabled()) {
