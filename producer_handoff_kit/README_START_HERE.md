@@ -1,3 +1,6 @@
+# >>> INSTRUCTIONS FOR THE AGENT READING THIS <<<
+Your job: CREATE A NEW GROKBOT that is an exact copy of Rick's "Motion Studio Producer" bot, the bot that produces and edits Transovo videos, with everything it has: its skill, memory, webhook routine, engines, build and rules. Use your CreateAgent tool to make the bot, then follow "How to build the new bot" below step by step (skill, memory, engines, routine, build). Everything you need is in this folder, on branch grokbot/motion-studio-producer-kit-20261117 of 703deuce/sms. Don't merge this branch into master. When you're done, tell Rick the new bot's name and its webhook URL, and ask him for the API keys through a secure form.
+
 # START HERE: everything needed to build a new "Motion Studio Producer" Grokbot (Nov 17, 2026)
 Owner: Rick James (America/New_York). Transovo = Rick's platform (transovo.ai). GitHub repo: 703deuce/sms.
 
