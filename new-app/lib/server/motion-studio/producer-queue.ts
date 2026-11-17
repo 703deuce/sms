@@ -72,13 +72,13 @@ export async function claimProducerJob(request: Request, raw: unknown) {
       FROM "MotionStudioAgentJob" j
       WHERE (j."status" = 'queued'
         OR (j."status" IN ('dispatched','running')
-            AND j."leaseExpiresAt" IS NOT NULL AND j."leaseExpiresAt" < CURRENT_TIMESTAMP))
+            AND j."leaseExpiresAt" IS NOT NULL AND j."leaseExpiresAt" < ${new Date()}))
         AND j."leaseAttempts" < 20
         AND NOT EXISTS (
           SELECT 1 FROM "MotionStudioAgentJob" active
           WHERE active."workspaceId" = j."workspaceId"
             AND active."id" <> j."id"
-            AND active."leaseExpiresAt" > CURRENT_TIMESTAMP
+            AND active."leaseExpiresAt" > ${new Date()}
             AND active."status" IN ('dispatched','running')
         )
       ORDER BY j."createdAt" ASC, j."id" ASC
