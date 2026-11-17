@@ -40,5 +40,8 @@ export async function saveBrandKit(workspaceId: string, raw: unknown) {
   return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() }
 }
 export async function deleteBrandKit(workspaceId: string, id: string) {
-  await getPrisma().$executeRaw`DELETE FROM "MotionStudioBrandKit" WHERE "workspaceId" = ${workspaceId} AND "id" = ${id}`
+  if (!/^msbk_[a-f0-9-]{36}$/.test(id))
+    throw new MotionStudioError('INVALID', 'Invalid Brand Kit ID.', 400)
+  const deleted = await getPrisma().$executeRaw`DELETE FROM "MotionStudioBrandKit" WHERE "workspaceId" = ${workspaceId} AND "id" = ${id}`
+  if (!deleted) throw new MotionStudioError('NOT_FOUND', 'Brand Kit not found in this workspace.', 404)
 }
