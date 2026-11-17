@@ -130,7 +130,7 @@ The default existing webhook delivery remains enabled. The following is **opt-in
 ## Follow-up corrections for the 74/75 validation report
 
 - Fixed accidental doubled escapes in the literal regexes in `checkpoint-contract.ts` and `logo-upload.ts`; the long-question test now compares against the intentionally trimmed question.
-- Lease claim comparisons no longer depend on a database session-local `CURRENT_TIMESTAMP`: Prisma parameterizes UTC `Date` values in the SQL claim predicate. Re-test with the PostgreSQL session time zone set to `America/New_York` and a just-expired lease.
+- Lease claim comparisons now use `timezone('UTC', CURRENT_TIMESTAMP)` (timestamp without time zone), so a PostgreSQL session set to New York time does not miscompare UTC timestamps stored in lease columns. Re-test with the PostgreSQL session time zone set to `America/New_York` and a just-expired lease.
 - Created migration `20261117104500_motion_studio_waiting_backfill` to initialize `waitingStartedAt` for legacy `needs_input` jobs from their last known `updatedAt`. Further checkpoint updates do not change the response deadline.
 - A successful answer resets the job's crash-claim counter (`leaseAttempts=0`) so normal multi-round clarifications are not mistaken for twenty interrupted workers.
 - Revision eligibility checks for any completed version of the same workspace/project, not only `latest.resultKey`; a failed latest attempt does not hide an earlier completed version.
