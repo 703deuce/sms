@@ -134,7 +134,7 @@ export function validateScenePropertyPatch(
         if (spec.type === 'text') {
           if (spec.maxChars !== undefined && value.length > spec.maxChars)
             return fail('Text is too long')
-          const lines=value.split(/\\r?\\n/)
+          const lines=value.split(/\r?\n/)
           if (spec.maxLines !== undefined && lines.length > spec.maxLines)
             return fail('Text has too many lines')
           if (spec.maxCharsPerLine !== undefined &&
