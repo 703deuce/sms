@@ -419,7 +419,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         recent: recent.reverse().map(m => ({ role: m.role, text: m.text })),
       })
   // While rendering, requests are conversational only; do not create overlapping revision jobs.
-  let response = publicAssistantText(decision.reply)
+  let response = publicAssistantText(decision.reply) || 'Could you give me a little more detail?'
   let job: Awaited<ReturnType<typeof dispatchAgentJob>> | null = null
   const wantsEdit = decision.intent === 'edit'
   if (wantsEdit && pending) {
