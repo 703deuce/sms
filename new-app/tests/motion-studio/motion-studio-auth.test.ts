@@ -5,11 +5,11 @@ const resolveWorkspaceId = vi.fn(async () => 'ws_default')
 const resolveInternalUserId = vi.fn(async () => 'user_operator')
 
 vi.mock('@/lib/server/workspace', () => ({
-  resolveWorkspaceId: (...args: unknown[]) => resolveWorkspaceId(...args),
+  resolveWorkspaceId: () => resolveWorkspaceId(),
 }))
 
 vi.mock('@/lib/server/internal-user', () => ({
-  resolveInternalUserId: (...args: unknown[]) => resolveInternalUserId(),
+  resolveInternalUserId: () => resolveInternalUserId(),
 }))
 
 describe('Motion Studio caller resolution (no login gate)', () => {
@@ -28,7 +28,7 @@ describe('Motion Studio caller resolution (no login gate)', () => {
     expect(resolveInternalUserId).toHaveBeenCalledOnce()
   })
 
-  it('uses a signed-in user when the rest of the app would, still on the default workspace', async () => {
+  it('uses the configured internal test operator without a login gate', async () => {
     resolveInternalUserId.mockResolvedValue('user_signed_in')
     const { requireMotionStudioCaller } = await import('@/lib/server/motion-studio/auth')
     const caller = await requireMotionStudioCaller(new Request('http://local/api/motion-studio/projects'))
@@ -46,7 +46,7 @@ describe('Motion Studio caller resolution (no login gate)', () => {
       resolveWorkspaceId: (...args: unknown[]) => resolveWorkspaceId(...args),
     }))
     vi.doMock('@/lib/server/internal-user', () => ({
-      resolveInternalUserId: (...args: unknown[]) => resolveInternalUserId(...(args as [Request?])),
+      resolveInternalUserId: () => resolveInternalUserId(),
     }))
     vi.doMock('@/lib/server/motion-studio/service', () => ({ createProject, listProjects }))
 
