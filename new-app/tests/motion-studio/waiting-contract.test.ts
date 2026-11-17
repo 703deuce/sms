@@ -5,7 +5,8 @@ describe('Motion Studio producer waiting contract', () => {
   it('preserves long questions with links, dollar amounts, and the word bot', () => {
     const question = 'Which bot logo should we use? See https://example.com/brand and the $50 package. ' + 'Details '.repeat(38)
     expect(customerQuestion(question)).toBe(question.trim())
-    expect(customerQuestion('a'.repeat(2500)).toHaveLength(2000)
+    expect(customerQuestion('a'.repeat(2500))).toHaveLength(2000)
+    expect(customerQuestion('Use Bearer abcdefghijklmnop in testing')).not.toContain('abcdefghijklmnop')
   })
   it('does not let progress calls clear unanswered questions', () => {
     expect(progressMayChangeWaiting('needs_input')).toBe(false)
