@@ -182,6 +182,10 @@ export async function reportSceneRender(request:Request,id:string,raw:unknown){
   return{ok:true,status}
 }
 export async function sweepSceneRenders(){
+  const abandoned=await db().motionStudioRenderRequest.updateMany({
+    where:{status:'queued',attempts:{gte:15}},
+    data:{status:'failed',error:'No compatible worker could complete this render.'},
+  })
   const expired=await db().motionStudioRenderRequest.updateMany({
     where:{status:{in:['reserved','running']},leaseExpiresAt:{lte:new Date()},attempts:{lt:15}},
     data:{status:'queued',workerId:null,leaseHash:null,leaseExpiresAt:null},
@@ -191,5 +195,5 @@ export async function sweepSceneRenders(){
     data:{status:'failed',error:'No compatible worker could complete this render.'},
   })
   const scheduled=await coordinateSceneRenders()
-  return{expired:expired.count,...scheduled}
+  return{expired:expired.count,abandoned:abandoned.count,...scheduled}
 }
