@@ -1,6 +1,8 @@
 # START HERE: everything needed to build a new "Motion Studio Producer" Grokbot (Nov 17, 2026)
 Owner: Rick James (America/New_York). Transovo = Rick's platform (transovo.ai). GitHub repo: 703deuce/sms.
 
+**Also read ADDENDUM_FROM_MAIN_AGENT.md (coordinator context, open issues, clipper status).**
+
 ## Where everything is
 - This kit: GitHub repo 703deuce/sms, branch `grokbot/motion-studio-producer-kit-20261117` (folder producer_handoff_kit/), and as a zip on the old bot's box: /workspace/producer_handoff_kit.zip
 - Transovo-side code (ChatGPT's), validated green for preview, NOT merged or deployed: branch `feat/motion-studio-video-types-brand-kits-20261117` in 703deuce/sms, commit 05e6d7a. Contract doc in that branch: docs/contracts/motion-studio-video-types-brand-kits-20261117.md. Validation report: validation/REPORT_05e6d7a.md (5 non-blocking issues listed there for ChatGPT).
