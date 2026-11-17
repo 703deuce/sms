@@ -207,6 +207,8 @@ async function reserveOne(): Promise<Pending|null> {
 }
 export async function coordinatePendingJobs(max = 3) {
   if (!coordinatorEnabled()) return { enabled:false, dispatched:0 }
+  // Preserve legacy setup-mode safety: never wake AI production unless explicitly enabled.
+  if (process.env.GROKBOT_LIVE_MODE !== '1') return {enabled:true,dispatched:0,setupMode:true}
   const root=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL
   const secret=process.env.MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY || ''
   if (!root || secret.length<32) problem('Coordinator webhook configuration missing','INTERNAL',503)
