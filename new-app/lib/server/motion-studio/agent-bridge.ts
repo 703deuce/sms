@@ -48,18 +48,18 @@ type PublicJob = {
   message: string | null; resultKey: string | null; createdAt: Date; updatedAt: Date;
   completedAt: Date | null; artifacts: unknown; parentJobId?: string | null; revision?: number
 }
-async function expireStaleQuestion<T extends { id: string; status: string; updatedAt: Date }>(job: T): Promise<T> {
-  if (job.status !== 'needs_input' || !waitingExpired(job.updatedAt)) return job
+async function expireStaleQuestion<T extends { id: string; status: string; waitingStartedAt?: Date | null }>(job: T): Promise<T> {
+  if (job.status !== 'needs_input' || !job.waitingStartedAt || !waitingExpired(job.waitingStartedAt)) return job
   // Lazy fail-safe: enforced whenever client or producer polls the job. The producer
   // may choose an earlier best-effort continuation on its own 24-hour clock.
   const deadline = new Date(Date.now() - CUSTOMER_WAIT_MS)
   const result = await db().motionStudioAgentJob.updateMany({
-    where: { id: job.id, status: 'needs_input', updatedAt: { lte: deadline } },
+    where: { id: job.id, status: 'needs_input', waitingStartedAt: { lte: deadline } },
     data: { status: 'failed', phase: 'failed',
       message: 'We did not receive your answer within 24 hours. You can start another production request.',
       completedAt: new Date() },
   })
-  return result.count ? { ...job, status: 'failed', phase: 'failed' } as T : job
+  return result.count ? { ...job, status: 'failed', phase: 'failed' } : job
 }
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
@@ -531,7 +531,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (pullProducerQueueEnabled()) {
         await db().motionStudioAgentJob.updateMany({ where: {
           id: answerJob.id, workspaceId, projectId, status: 'needs_input' }, data: {
-          status: 'queued', phase: 'accepted', message: 'Your answer was received. Production will resume on an available worker.',
+          status: 'queued', phase: 'accepted', waitingStartedAt: null, message: 'Your answer was received. Production will resume on an available worker.',
           leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null,
         } })
         await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
@@ -554,7 +554,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (!accepted) throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
       await db().motionStudioAgentJob.updateMany({ where: {
         workspaceId, projectId, id: answerJob.id, status: 'needs_input' }, data: {
-        status: 'running', message: "We're continuing with your direction…" } })
+        status: 'running', waitingStartedAt: null, message: "We're continuing with your direction…" } })
       await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
         create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
           text: 'Thanks, I’ve passed your answer to production. I’ll update you as it progresses.' },
@@ -626,7 +626,8 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
     if (input.needsInput === true && !isDone(job.status)) {
       await tx.motionStudioAgentJob.updateMany({ where: {
         id, status: { in: ['dispatching','dispatched','running','needs_input'] } }, data: {
-        status: 'needs_input', tokenExpiresAt: new Date(Date.now() + 36*3600_000),
+        status: 'needs_input', waitingStartedAt: job.status === 'needs_input' ? job.waitingStartedAt : new Date(),
+        tokenExpiresAt: new Date(Date.now() + 36*3600_000),
         ...(pullProducerQueueEnabled() ? { leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null } : {}),
         message: "We're waiting for your direction…" } })
     }
