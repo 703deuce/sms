@@ -155,11 +155,22 @@ async function reserveOne(): Promise<Pending|null> {
     })
     for (const job of jobs) {
       if ((workspaceCounts.get(job.workspaceId)||0)>=workspacesMax) continue
+      const latestSource=await tx.motionStudioPortableVersion.findFirst({
+        where:{projectId:job.projectId,workspaceId:job.workspaceId,status:'committed'},
+        orderBy:{revision:'desc'},select:{manifest:true},
+      })
+      const scenes=latestSource?.manifest&&typeof latestSource.manifest==='object'?
+        (latestSource.manifest as {scenes?:unknown}).scenes:null
+      const requiredEngines=Array.isArray(scenes)?Array.from(new Set(scenes.map(x=>
+        x&&typeof x==='object'?(x as {engine?:unknown}).engine:null
+      ).filter((x):x is string=>typeof x==='string'))):[]
       const viable = workers.filter(w=>{
         const machine=machinesById.get(w.machineId),plan=plansById.get(w.planId)
         const capabilities=Array.isArray(w.capabilities)?w.capabilities:[]
         return machine && plan && availableBudget(plan) &&
           capabilities.includes('motion-studio-produce') &&
+          requiredEngines.every(engine=>capabilities.includes('render:'+engine) ||
+            capabilities.includes('motion-studio-all-engines')) &&
           (plan.observedPercent===null || plan.resetsAt && plan.resetsAt.getTime()<=Date.now() ||
             plan.observedPercent + ((planCounts.get(w.planId)||0)+1)*
               Math.max(0.1,Math.min(10,Number(process.env.MOTION_STUDIO_AI_RESERVE_PERCENT)||2)) <= plan.weeklyLimitPercent) &&
