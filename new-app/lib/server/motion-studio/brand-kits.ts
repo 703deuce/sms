@@ -25,7 +25,7 @@ export async function saveBrandKit(workspaceId: string, raw: unknown) {
   // Upload IDs are validated against this workspace, never blindly trusted.
   if (profile.logoUploadId) {
     const logo = await getPrisma().clipUpload.findFirst({ where: { workspaceId, id: profile.logoUploadId, status: 'COMPLETE' }, select: { mime: true } })
-    if (!logo || !logo.mime.startsWith('image/')) throw new MotionStudioError('INVALID', 'Upload a valid logo image.', 400)
+    if (!logo || !['image/png','image/jpeg','image/webp'].includes(logo.mime)) throw new MotionStudioError('INVALID', 'Upload a valid logo image.', 400)
   }
   const id = typeof o.id === 'string' && /^msbk_[a-f0-9-]{36}$/.test(o.id) ? o.id : 'msbk_' + randomUUID()
   if (o.id) {
