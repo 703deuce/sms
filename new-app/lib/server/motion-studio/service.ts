@@ -73,7 +73,7 @@ function assertEnabled() {
 export function motionStudioConfig() {
   return {
     lengths: [...LENGTHS], lengthInput: { min: 1, max: MAX_LENGTH_MIN, step: 1 }, betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
-    productionModes: ['checkpoint', 'auto'], formats: ['16:9_480p', '16:9_720p', '16:9_1080p', '16:9_2160p'], mediaPolicy: 'uploads_only',
+    productionModes: ['checkpoint', 'auto'], formats: ['16:9_480p', '16:9_720p', '16:9_1080p', '16:9_2160p', '9:16_480p', '9:16_720p', '9:16_1080p', '9:16_2160p', '1:1_480p', '1:1_720p', '1:1_1080p', '1:1_2160p'], mediaPolicy: 'uploads_only',
     music: ['generated', 'upload', 'elevenlabs', 'none'],
     features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'blueprint' },
   }
@@ -230,7 +230,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
   if (o.mediaPolicy && !['uploads_only','auto_plus_uploads','auto_only'].includes(String(o.mediaPolicy)))
     throw new MotionStudioError('INVALID', 'Unsupported media policy.', 400)
   const uploads = parseUploads(o.uploads ?? o.uploadIds)
-  if (!prompt && !script && !uploads.length) throw new MotionStudioError('INVALID', 'Describe the documentary, paste a script or add media.', 400)
+  if (!prompt && !script && !uploads.length) throw new MotionStudioError('INVALID', 'Describe the video, paste a script or add media.', 400)
   if (workflow === 'footage' && !uploads.length) throw new MotionStudioError('INVALID', 'Add the footage to edit.', 400)
   const rawKey = (headerKey || str(o.idempotencyKey, 120) || createId('msk')).slice(0, 120)
   const key = `${userId}:${rawKey}`.slice(0, 190)     // dedupe per user
