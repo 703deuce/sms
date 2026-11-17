@@ -161,6 +161,10 @@ export async function reportSceneRender(request:Request,id:string,raw:unknown){
   let resultAssetId:string|null=null
   if(status==='complete'){
     resultAssetId=String(obj.resultAssetId||'')
+    const ownUpload=old!.upload && typeof old!.upload==='object' && !Array.isArray(old!.upload)
+      ?old!.upload as Record<string,unknown>:{}
+    if(ownUpload.id!==resultAssetId || ownUpload.state!=='ready')
+      error('Only the completed output upload for this render may be published')
     const asset=await db().studioAsset.findFirst({where:{
       id:resultAssetId,workspaceId:old!.workspaceId,projectId:old!.projectId,status:'ready',
     }})
