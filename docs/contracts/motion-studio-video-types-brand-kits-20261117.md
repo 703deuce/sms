@@ -61,7 +61,7 @@ The backend calls a lightweight conversation model to classify `question`, `clar
 - `question` and `clarify`: persistent customer and assistant messages, **NO Grokbot production job**; progress/status questions are handled deterministically from actual job state.
 - `edit` after a completed video: one existing revision job via `dispatchAgentJob`; preserve previous video/version; the assistant confirms only that production accepted the job, not that edits are complete.
 - `edit` while a job is still running: acknowledge the request but **do not** start an overlapping job. Customer must resubmit after current job is finished. Queueing pending edits is a follow-up enhancement.
-- Producer `needs_input`: producer calls authenticated `POST /api/motion-studio/agent/jobs/:jobId/messages` with `{"text":"Your one question","needsInput":true}`. The active job becomes `needs_input`. A subsequent customer message other than a simple status check is forwarded to the existing `GROKBOT_WEBHOOK_URL` as:
+- Producer `needs_input`: producer calls authenticated `POST /api/motion-studio/agent/jobs/:jobId/messages` with `{"text":"Your one question","needsInput":true}`. The active job becomes `needs_input`. A subsequent customer message submitted with `answerInput: true` (selected in the chat UI) other than a simple status check is forwarded to the existing `GROKBOT_WEBHOOK_URL` as:
 ```json
 {"action":"answer_input","jobId":"msaj_...","projectId":"msp_...","text":"Use the first photo.","idempotencyKey":"ms_revision_..."}
 ```
