@@ -41,7 +41,7 @@ describe('Motion Studio create screen (FE-1)', () => {
     expect(screen.getByText('Use only my uploaded media')).toBeTruthy()
   })
 
-  it('Start creates a planning project (uploads_only) and opens the workspace', async () => {
+  it('Start creates a project with structured creative metadata and opens the workspace', async () => {
     const client = createMockMotionStudioClient({ storage: null, seedExample: false })
     const spy = vi.spyOn(client, 'createProject')
     render(<MotionStudioCreate client={client} initialView="create" />)
