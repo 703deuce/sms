@@ -59,6 +59,7 @@ describe('Motion Studio create screen (FE-1)', () => {
     fireEvent.change(screen.getByTestId('ms-video-type'), { target: { value: 'animated_ad' } })
     fireEvent.change(screen.getByTestId('ms-creative-style'), { target: { value: 'minimalist' } })
     fireEvent.change(screen.getByTestId('ms-aspect-ratio'), { target: { value: '9:16' } })
+    fireEvent.change(screen.getByTestId('ms-resolution'), { target: { value: '720p' } })
     fireEvent.change(screen.getByTestId('ms-brand-mode'), { target: { value: 'project' } })
     fireEvent.change(screen.getByTestId('ms-brand-name'), { target: { value: 'Studio X' } })
     fireEvent.change(screen.getByTestId('ms-creative-notes'), { target: { value: 'Emphasize the call to action' } })
@@ -67,7 +68,7 @@ describe('Motion Studio create screen (FE-1)', () => {
     await waitFor(() => expect(spy).toHaveBeenCalled())
     expect(spy.mock.calls[0]![0]).toMatchObject({
       prompt: 'Make an ad for our small business.',
-      format: '9:16_480p',
+      format: '9:16_720p',
       creative: { videoType: 'animated_ad', style: 'minimalist', brandMode: 'project',
         brand: { name: 'Studio X' }, instructions: 'Emphasize the call to action' },
     })
