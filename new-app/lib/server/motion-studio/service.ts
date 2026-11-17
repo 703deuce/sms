@@ -21,6 +21,8 @@ import {
   applyOps, buildBlueprint, effectOf, noCurrency, scenesPhrase, validateItems, type DirectorItem, type DirectorOp,
 } from '@/lib/motion-studio/director-ops'
 import { askDirector } from '@/lib/server/motion-studio/director-llm'
+import { sanitizeCreativeBrief } from '@/lib/motion-studio/creative-options'
+import { loadBrandKit } from '@/lib/server/motion-studio/brand-kits'
 
 /**
  * Motion Studio service — matches the frontend client (lib/motion-studio/client.ts, PR #1260) exactly.
@@ -236,8 +238,20 @@ export async function createProject(workspaceId: string, userId: string, body: u
     console.info('[motion-studio:create] idempotent_replay', { projectId: existing.id })
     return { project: await getProject(workspaceId, existing.id), created: false }
   }
-  const rows = await loadUploads(workspaceId, uploads.map(u => u.uploadId))
-  const settings: MsSettings = { ...DEFAULT_SETTINGS }
+  const creative = sanitizeCreativeBrief(o.creative)
+  if (creative.brandMode === 'saved') {
+    if (!creative.brandKitId) throw new MotionStudioError('INVALID', 'Choose a saved brand kit.', 400)
+    const saved = await loadBrandKit(workspaceId, creative.brandKitId)
+    creative.brand = { ...saved.profile }
+  }
+  // Validate every referenced brand asset independently of user-upload metadata.
+  const extraIds = [creative.brandMode !== 'none' ? creative.brand?.logoUploadId : undefined, ...(creative.referenceUploadIds || [])].filter((x): x is string => Boolean(x))
+  const allUploads = [...uploads]
+  for (const uploadId of extraIds) if (!allUploads.some(x => x.uploadId === uploadId)) allUploads.push({ uploadId, kind: 'photo' })
+  const rows = await loadUploads(workspaceId, allUploads.map(u => u.uploadId))
+  if (creative.brand?.logoUploadId && !rows.get(creative.brand.logoUploadId)?.mime.startsWith('image/')) throw new MotionStudioError('INVALID', 'Brand logo must be an image.', 400)
+  if (creative.referenceUploadIds?.some(id => !rows.get(id)?.mime.startsWith('image/') && !rows.get(id)?.mime.startsWith('video/'))) throw new MotionStudioError('INVALID', 'References must be images or video.', 400)
+  const settings: MsSettings = parseSettings({ format: o.format || J(o.settings).format }, DEFAULT_SETTINGS)
   const reqMusic = J(o.settings).music ?? o.music
   if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
   const requested = o.lengthMin ?? J(o.settings).lengthMin
@@ -261,15 +275,15 @@ export async function createProject(workspaceId: string, userId: string, body: u
   try {
     await db().$transaction(async (tx: Tx) => {
       await tx.clipUpload.create({ data: { id: canvasUploadId, workspaceId, key: uploadSourceKey(workspaceId, canvasUploadId, 'mp4'),
-        filename: 'Motion Studio documentary.mp4', bytes: BigInt(0), mime: 'video/mp4', status: 'PENDING', storageDriver: storageDriverName(), kind: 'source' } })
+        filename: 'Motion Studio video.mp4', bytes: BigInt(0), mime: 'video/mp4', status: 'PENDING', storageDriver: storageDriverName(), kind: 'source' } })
       await tx.clipProject.create({ data: { id: clipProjectId, workspaceId, createdById: userId, title: (title || prompt || 'Documentary').slice(0, 120),
         uploadId: canvasUploadId, sourceKind: 'motion_studio',
         settings: toPrismaJson(defaultClipSettings({ aspectRatio: '16:9', rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, byo: true,
           fullVideo: true, blank: true, captions: { enabled: false, presetId: 'bold_pop', language: 'en' } })),
         rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
-      await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'documentary', clipProjectId, clipId, title,
+      await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'creative', clipProjectId, clipId, title,
         brief: prompt || script, workflow,
-        settings: toPrismaJson({ ...settings, aspect: '16:9', automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads' }),
+        settings: toPrismaJson({ ...settings, aspect: settings.format.split('_')[0], automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads', creative }),
         status: 'setup', stage: 'story', stages: toPrismaJson({}), idempotencyKey: key } })
       await tx.studioActivityEvent.create({ data: { projectId: id, stage: 'story', kind: 'stage', message: 'Project created. Nothing renders until you create the plan.' } })
     })
@@ -280,7 +294,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
     }
     throw err
   }
-  const roles = await attachUploads(workspaceId, id, clipProjectId, uploads, rows)
+  const roles = await attachUploads(workspaceId, id, clipProjectId, allUploads, rows)
   if (roles.narration || roles.music) {
     await updateSettingsLocked(id, s => ({
       ...s,
