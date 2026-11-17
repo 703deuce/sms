@@ -83,7 +83,7 @@ describe('producer clarification and retries', () => {
     const request = new Request('https://transovo.ai/test', { headers: { Authorization: 'Bearer secret' } })
     const question = 'Which bot logo? https://example.com/logo costs $50. ' + 'More detail '.repeat(45)
     const posted = await botPostMessage('msaj_test', request, { text: question, needsInput: true })
-    expect(posted.text).toBe(question)
+    expect(posted.text).toBe(question.trim())
     expect(state.job.status).toBe('needs_input')
     await botProgress('msaj_test', request, { stage: 'scenes', percent: 90 })
     expect(state.job.status).toBe('needs_input')
