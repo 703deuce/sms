@@ -723,6 +723,7 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
  * on demand; neither stale tokens nor foreign project files can be reused. */
 export async function botRecoveryArtifacts(id: string, request: Request, sourceJobId: string) {
   const job = await requireBotJob(id, request)
+  if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Finished jobs cannot access recovery assets.', 409)
   if (!/^msaj_[a-f0-9-]{36}$/.test(sourceJobId))
     throw new MotionStudioError('INVALID', 'Valid source job required.', 400)
   const source = await db().motionStudioAgentJob.findFirst({ where: {
