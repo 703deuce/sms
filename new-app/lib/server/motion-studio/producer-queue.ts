@@ -85,7 +85,7 @@ export async function claimProducerJob(request: Request, raw: unknown) {
     if (!row) return { job: null }
     // Serialize claims per workspace as well as per job; concurrent pollers
     // must not lease two projects from the same workspace simultaneously.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${row.workspaceId}))`
+    await tx.$queryRaw`SELECT 1 AS ok FROM (SELECT pg_advisory_xact_lock(hashtext(${row.workspaceId}))) AS acquired`
     const active = await tx.motionStudioAgentJob.count({ where: {
       workspaceId: row.workspaceId, id: { not: row.id },
       status: { in: ['dispatched', 'running'] }, leaseExpiresAt: { gt: new Date() },
