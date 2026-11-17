@@ -265,11 +265,12 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
       },
     })
     if (validObservation) {
-      const plan=await tx.motionStudioWorkerPlan.findUnique({where:{id:assignment.planId}})
-      if (plan && (!plan.observedAt || plan.observedAt.getTime()<=observedAt.getTime())) {
-        await tx.motionStudioWorkerPlan.update({where:{id:assignment.planId},
-          data:{observedPercent:observed,observedAt}})
-      }
+      // The timestamp predicate is atomic: two bots sharing a plan must not
+      // overwrite a newer reading with a delayed, older usage observation.
+      await tx.motionStudioWorkerPlan.updateMany({where:{
+        id:assignment.planId,
+        OR:[{observedAt:null},{observedAt:{lt:observedAt}}],
+      },data:{observedPercent:observed,observedAt}})
     }
     if(status==='running') await tx.motionStudioAgentJob.updateMany({where:{id:jobId,leaseOwner:worker.id},
       data:{leaseExpiresAt:expires}})
