@@ -127,13 +127,19 @@ export function SetupStep({
           <Segmented
             testId="ms-setting-format"
             label={MS_LABELS.format}
-            value={s.renderSize || '480p'}
+            value={s.format || '16:9_480p'}
             options={[
-              { value: '480p', label: '16:9 · 480p' },
-              { value: '720p', label: '16:9 · 720p' },
-              { value: '1080p', label: '16:9 · 1080p' },
+              { value: '16:9_480p', label: '16:9 · 480p' },
+              { value: '16:9_720p', label: '16:9 · 720p' },
+              { value: '16:9_1080p', label: '16:9 · 1080p' },
+              { value: '9:16_480p', label: '9:16 · 480p' },
+              { value: '9:16_720p', label: '9:16 · 720p' },
+              { value: '9:16_1080p', label: '9:16 · 1080p' },
+              { value: '1:1_480p', label: '1:1 · 480p' },
+              { value: '1:1_720p', label: '1:1 · 720p' },
+              { value: '1:1_1080p', label: '1:1 · 1080p' },
             ]}
-            onChange={(v) => onChange({ renderSize: v, format: `16:9_${v}` as MsSettings['format'], finalRenderSize: v })}
+            onChange={(v) => onChange({ renderSize: v.split('_')[1], format: v as MsSettings['format'], finalRenderSize: v.split('_')[1] })}
           />
           <div className="grid grid-cols-1 gap-2 py-4 sm:grid-cols-[200px_1fr] sm:items-center" data-testid="ms-setting-media">
             <p className="text-sm font-medium">{MS_LABELS.media}</p>
