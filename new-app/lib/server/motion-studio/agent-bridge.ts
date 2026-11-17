@@ -373,15 +373,9 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
 
   const key = str(request.headers.get('Idempotency-Key'),120) || 'message-' + randomUUID()
-  // Idempotent message handling — two retries of the same POST must never dispatch twice.
-  const existingMessage = await db().motionStudioAgentMessage.findFirst({
-    where: { projectId, id: 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32) } })
-  if (existingMessage) {
-    const previousJob = existingMessage.jobId ? await db().motionStudioAgentJob.findFirst({
-      where: { workspaceId, projectId, id: existingMessage.jobId } }) : null
-    return { job: previousJob ? publicJob(previousJob) : null, intent: previousJob ? 'edit' : 'conversation' }
-  }
-
+  const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
+  const confirmationId = 'msmsg_ack_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
+  const existingMessage = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: messageId } })
   const recent = await db().motionStudioAgentMessage.findMany({ where: { projectId },
     orderBy: { createdAt: 'desc' }, take: 12 })
   const latest = await db().motionStudioAgentJob.findFirst({
@@ -389,32 +383,49 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   const selectedStatus = latest?.status || project.status
   const pending = latest && !isDone(latest.status)
   const knownQuestion = isStatusQuestion(instruction)
-  // Answers to producer questions continue the existing job; they must NOT create
-  // a fresh paid revision or silently disappear inside the chat.
-  if (latest?.status === 'needs_input' && input.answerInput === true && !knownQuestion) {
-    const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
-    if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL','Video production is not connected.',503)
-    let accepted = false
-    try {
-      const response = await fetch(process.env.GROKBOT_WEBHOOK_URL!, {
-        method: 'POST', redirect: 'error', cache: 'no-store',
-        headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'answer_input', jobId: latest.id, projectId,
-          text: instruction, idempotencyKey: key }),
-        signal: AbortSignal.timeout(15_000),
-      })
-      accepted = response.ok
-    } catch { /* Keep the current job waiting until delivery succeeds. */ }
-    if (!accepted) throw new MotionStudioError('CONFLICT','Could not deliver your answer. Please try again.',503)
-    await db().motionStudioAgentMessage.create({ data: {
-      id: messageId, projectId, jobId: latest.id, role: 'customer', text: instruction } })
-    await db().motionStudioAgentMessage.create({ data: {
-      id: 'msmsg_' + randomUUID(), projectId, jobId: latest.id, role: 'agent',
-      text: 'Thanks, I’ve passed your answer to production. I’ll update you when the video progresses.' } })
-    await db().motionStudioAgentJob.updateMany({ where: {
-      workspaceId, projectId, id: latest.id, status: 'needs_input' }, data: {
-      status: 'running', message: "We're continuing with your direction…" } })
+  // An answer is persisted BEFORE the webhook. If a later DB write fails, a retry
+  // replays the same stable key to the producer and repairs the local confirmation.
+  const answerJob = input.answerInput === true && !knownQuestion
+    ? existingMessage?.jobId ? await db().motionStudioAgentJob.findFirst({
+        where: { workspaceId, projectId, id: existingMessage.jobId } }) : latest?.status === 'needs_input' ? latest : null
+    : null
+  if (answerJob && !isDone(answerJob.status)) {
+    if (existingMessage && existingMessage.text !== instruction)
+      throw new MotionStudioError('CONFLICT', 'An answer retry must use the original message.', 409)
+    if (!existingMessage) await db().motionStudioAgentMessage.create({ data: {
+      id: messageId, projectId, jobId: answerJob.id, role: 'customer', text: instruction } })
+    const confirmed = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: confirmationId } })
+    if (!confirmed) {
+      if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
+      let accepted = false
+      try {
+        const response = await fetch(process.env.GROKBOT_WEBHOOK_URL!, {
+          method: 'POST', redirect: 'error', cache: 'no-store',
+          headers: { Authorization: 'Bearer ' + process.env.GROKBOT_WEBHOOK_KEY!, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'answer_input', jobId: answerJob.id, projectId,
+            text: instruction, idempotencyKey: key }),
+          signal: AbortSignal.timeout(15_000),
+        })
+        accepted = response.ok
+      } catch { /* The saved answer survives, allowing an identical-key retry. */ }
+      if (!accepted) throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
+      await db().motionStudioAgentJob.updateMany({ where: {
+        workspaceId, projectId, id: answerJob.id, status: 'needs_input' }, data: {
+        status: 'running', message: "We're continuing with your direction…" } })
+      await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
+        create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
+          text: 'Thanks, I’ve passed your answer to production. I’ll update you as it progresses.' },
+        update: {} })
+    }
     return { job: null, intent: 'conversation' }
+  }
+  if (existingMessage) {
+    const previousJob = existingMessage.jobId ? await db().motionStudioAgentJob.findFirst({
+      where: { workspaceId, projectId, id: existingMessage.jobId } }) : null
+    return { job: previousJob ? publicJob(previousJob) : null, intent: previousJob ? 'edit' : 'conversation' }
+  }
+  if (input.answerInput === true && latest?.status !== 'needs_input') {
+    throw new MotionStudioError('CONFLICT', 'That production is no longer waiting for an answer.', 409)
   }
   const decision = knownQuestion
     ? { intent: 'question' as const, reply: statusReply(selectedStatus, latest?.phase || project.status, latest?.progress || 0), instruction: '' }
