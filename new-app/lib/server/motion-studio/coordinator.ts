@@ -160,7 +160,7 @@ async function reserveOne(): Promise<Pending|null> {
         orderBy:{revision:'desc'},select:{manifest:true},
       })
       const scenes=latestSource?.manifest&&typeof latestSource.manifest==='object'?
-        (latestSource.manifest as {scenes?:unknown}).scenes:null
+        (latestSource.manifest as unknown as {scenes?:unknown}).scenes:null
       const requiredEngines=Array.isArray(scenes)?Array.from(new Set(scenes.map(x=>
         x&&typeof x==='object'?(x as {engine?:unknown}).engine:null
       ).filter((x):x is string=>typeof x==='string'))):[]
