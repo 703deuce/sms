@@ -41,7 +41,7 @@ Branch: `feat/motion-studio-video-types-brand-kits-20261117` (NOT merged to mast
   }
 }
 ```
-Read `GET jobUrl` with the existing bearer token to fetch signed `inputs` URLs of uploaded media. These assets include logos/references; correlate the upload ID with `creative.brand.logoUploadId` or `creative.referenceUploadIds` only if the producer receives IDs via future asset metadata enhancement. Currently the `inputs` entries expose `filename`, `mime`, `url` but not `uploadId`: fix this before promising precise automated distinction among multiple similar files.
+Read `GET jobUrl` with the existing bearer token to fetch signed `inputs` URLs of uploaded media. These assets include logos/references; correlate the upload ID with `creative.brand.logoUploadId` or `creative.referenceUploadIds` only if the producer receives IDs via future asset metadata enhancement. The `inputs` entries now expose `uploadId`, `filename`, `mime`, and `url` for exact matching.
 
 **Precedence**: validated mandatory facts and safety > user's explicit instructions > strict brand constraints > category guidance > optional style suggestion. Never overwrite `prompt`, and do not treat brand or category as a scene template. Original concepts, compositions, animation, footage selection and storytelling remain the responsibility of the creative agents. `brandMode=none` means ignore brand fields; `guided` means stylistic consistency, `strict` means follow the approved identity, `creative` means broader art direction unless user states mandatory requirements.
 
