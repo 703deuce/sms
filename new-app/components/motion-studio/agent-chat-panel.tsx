@@ -74,11 +74,11 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
           ...(selectedTimeMs != null && Number.isFinite(selectedTimeMs) ? {
             timeRangeMs: [Math.max(0,Math.floor(selectedTimeMs)),Math.floor(selectedTimeMs)+1000] } : {}) }),
       })
-      if (!response.ok) throw new Error('We could not send that change yet. Please try again.')
+      if (!response.ok) throw new Error('We could not send your message yet. Please try again.')
       setDraft('')
       await reload()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not send the edit.')
+      setError(err instanceof Error ? err.message : 'Could not send your message.')
     } finally { setBusy(false) }
   }
 
@@ -106,7 +106,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     </div>
     {liveJob && !['complete','failed','cancelled','dispatch_failed'].includes(liveJob.status) ?
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs" role="status">
-        <p className="font-medium">We're working on your edit · {Math.round(liveJob.progress)}%</p>
+        <p className="font-medium">We're working on your video · {Math.round(liveJob.progress)}%</p>
         <p className="mt-1 text-muted-foreground">{liveJob.message || "We're preparing your changes…"}</p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div className="h-full rounded-full bg-primary transition-all" style={{width:liveJob.progress+'%'}} />
@@ -126,7 +126,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
         Ask me about your video, request an edit, or check production progress. I can help while it renders.
       </li> : null}
     </ol>
-    <label className="sr-only" htmlFor={'ms-agent-instruction-' + projectId}>Tell Transovo what to change</label>
+    <label className="sr-only" htmlFor={'ms-agent-instruction-' + projectId}>Message Transovo AI Assistant</label>
     <Textarea id={'ms-agent-instruction-' + projectId} value={draft}
       onChange={e => setDraft(e.target.value)}
       onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {e.preventDefault(); void send()} }}
