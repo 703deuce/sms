@@ -90,6 +90,8 @@ export function MotionStudioCreate({
   const [format, setFormat] = useState<'16:9' | '9:16' | '1:1'>('16:9')
   const [brandMode, setBrandMode] = useState<MsBrandMode>('none')
   const [brandKitId, setBrandKitId] = useState('')
+  const [editingBrandKitId, setEditingBrandKitId] = useState('')
+  const [existingLogoUploadId, setExistingLogoUploadId] = useState('')
   const [brandKits, setBrandKits] = useState<MsSavedBrandKit[]>([])
   const [brandName, setBrandName] = useState('')
   const [primaryColor, setPrimaryColor] = useState('#D6AD55')
@@ -192,7 +194,7 @@ export function MotionStudioCreate({
     name: brandName || undefined, primaryColor, secondaryColor, accentColor,
     fontPreference: fontPreference || undefined, tone: brandTone || undefined,
     guidelines: brandGuidelines || undefined,
-    logoUploadId: attachments.find(a => a.role === 'logo' && a.uploadId)?.uploadId || undefined,
+    logoUploadId: attachments.find(a => a.role === 'logo' && a.uploadId)?.uploadId || existingLogoUploadId || undefined,
     logoPlacement, consistency,
   }
   const saveBrand = async () => {
@@ -203,17 +205,45 @@ export function MotionStudioCreate({
       if (uploading) throw new Error('Finish uploads before saving the brand.')
       const response = await fetch('/api/motion-studio/brand-kits', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: brandName, profile: brandProfile }),
+        body: JSON.stringify({ ...(editingBrandKitId ? { id: editingBrandKitId } : {}), name: brandName, profile: brandProfile }),
       })
       if (!response.ok) throw new Error(((await response.json().catch(() => ({}))) as { error?: string }).error || 'Could not save brand.')
       const { kit } = await response.json() as { kit: MsSavedBrandKit }
       await loadBrandKits()
       setBrandKitId(kit.id)
+      setEditingBrandKitId('')
       setBrandMode('saved')
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not save brand.') }
     finally { setSavingBrand(false) }
   }
 
+  const editSavedBrand = () => {
+    const kit = brandKits.find(k => k.id === brandKitId)
+    if (!kit) return
+    const b = kit.profile
+    setEditingBrandKitId(kit.id)
+    setBrandName(kit.name)
+    setPrimaryColor(b.primaryColor || '#D6AD55')
+    setSecondaryColor(b.secondaryColor || '#171717')
+    setAccentColor(b.accentColor || '#FFFFFF')
+    setFontPreference(b.fontPreference || '')
+    setBrandTone(b.tone || '')
+    setBrandGuidelines(b.guidelines || '')
+    setConsistency(b.consistency || 'guided')
+    setLogoPlacement(b.logoPlacement || 'ai_decides')
+    setExistingLogoUploadId(b.logoUploadId || '')
+    setBrandMode('project')
+  }
+  const deleteSavedBrand = async () => {
+    if (!brandKitId || client.mode !== 'live') return
+    try {
+      const response = await fetch('/api/motion-studio/brand-kits/' + encodeURIComponent(brandKitId), { method: 'DELETE' })
+      if (!response.ok) throw new Error('Could not delete saved brand.')
+      setBrandKitId('')
+      setBrandMode('none')
+      await loadBrandKits()
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not delete brand.') }
+  }
   const removeAttachment = (key: string) => setAttachments((prev) => prev.filter((a) => a.key !== key))
 
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
@@ -342,6 +372,7 @@ export function MotionStudioCreate({
                     <option value="">Choose a saved brand</option>{brandKits.map(k => <option key={k.id} value={k.id}>{k.name}</option>)}
                   </select>
                   {!brandKits.length ? <p className="mt-2 text-xs text-muted-foreground">Create a kit from “Customize this video” first.</p> : null}
+                  {brandKitId ? <div className="mt-2 flex gap-2"><Button type="button" size="sm" variant="outline" onClick={editSavedBrand}>Edit Brand Kit</Button><Button type="button" size="sm" variant="outline" onClick={() => void deleteSavedBrand()}>Delete Brand Kit</Button></div> : null}
                 </div> : null}
                 {brandMode === 'project' ? <div className="mt-3 space-y-3">
                   <label className="flex flex-col gap-1 text-sm">Brand or channel name
@@ -379,7 +410,7 @@ export function MotionStudioCreate({
                     <Button type="button" variant="outline" size="sm" onClick={() => logoRef.current?.click()}>Upload logo</Button>
                     <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={e => { addFiles(e.target.files, 'logo'); e.target.value = '' }} />
                     {attachments.filter(a => a.role === 'logo').map(a => <span key={a.key} className="text-xs text-muted-foreground">{a.file.name}</span>)}
-                    <Button type="button" variant="outline" size="sm" disabled={!brandName.trim() || savingBrand || uploading || client.mode !== 'live'} onClick={() => void saveBrand()}>{savingBrand ? 'Saving…' : 'Save as Brand Kit'}</Button>
+                    <Button type="button" variant="outline" size="sm" disabled={!brandName.trim() || savingBrand || uploading || client.mode !== 'live'} onClick={() => void saveBrand()}>{savingBrand ? 'Saving…' : editingBrandKitId ? 'Update Brand Kit' : 'Save as Brand Kit'}</Button>
                   </div>
                 </div> : null}
               </div>
