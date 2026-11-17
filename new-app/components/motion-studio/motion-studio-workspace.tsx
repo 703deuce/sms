@@ -50,6 +50,7 @@ import { PreviewStage } from './preview-stage'
 import { MotionStudioTracks } from './motion-studio-tracks'
 import { MotionExportDialog } from './export-dialog'
 import { AgentJobPanel, type MotionAgentJob } from './agent-job-panel'
+import { AgentChatPanel } from './agent-chat-panel'
 
 const SECTION_ICON: Record<MsProjectSection, typeof BookOpen> = { Story: BookOpen, Media: FolderOpen, Scenes: Film, Graphics: Shapes, Audio: AudioLines }
 type MobileTab = 'chat' | 'storyboard' | 'preview' | 'timeline'
@@ -449,7 +450,12 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
       </div>
 
       {agentJob ? (
-        <AgentJobPanel job={agentJob} onOpenEditor={agentJob.status === 'complete' ? openEditor : undefined} />
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_360px] md:px-6" data-testid="ms-agent-workspace">
+          <main className="min-w-0"><AgentJobPanel job={agentJob} showChat={false} onOpenEditor={agentJob.status === 'complete' ? openEditor : undefined} /></main>
+          <aside className="min-h-[420px] min-w-0 md:sticky md:top-4 md:self-start" aria-label="Transovo AI Assistant" data-testid="ms-agent-assistant-sidebar">
+            <AgentChatPanel projectId={project.id} selectedTimeMs={playheadMs} />
+          </aside>
+        </div>
       ) : project.status === 'setup' ? (
         <SetupStep project={project} busy={busy} onChange={patchSettings} onPlan={createPlan} />
       ) : (
