@@ -104,3 +104,28 @@ If the host is not configured or the device cannot run the scene, the existing M
 - Test real Bot 1 → Bot 4 handoff with Bot 1's local files unavailable.
 
 Until those end-to-end tests pass, this new implementation is **not production-certified and must not be deployed to public users**.
+
+## New version recovery and cross-bot handoff
+
+GET customer portable-project returns `{version,history}`. POST the same endpoint with `{baseVersionId,restoreVersionId}` creates a new immutable version from the selected older snapshot; it never rewrites the previous version.
+
+`GET /api/motion-studio/agent/jobs/:id` now includes `portableProject` on a running assignment, containing the latest committed source manifest, theme, overrides, signed asset URLs, version ID and refresh URL. Active producers can renew scoped 15-minute asset links using `GET /api/motion-studio/agent/jobs/:id/portable?versionId=...`. Finished producer bearer tokens cannot retrieve recovery files or publish new source packages.
+
+Two bots sharing a machine or Grok plan must still be represented by **two workers, one machine and one plan**. Coordinator selection checks the saved project's scene engine requirements against the worker capabilities, so a new bot is only assigned when it declares support for all required engines.
+
+## Preview validation commands (not yet run against the new branch)
+
+From `new-app/`:
+
+```bash
+pnpm exec prisma validate --schema=prisma/schema.prisma
+pnpm exec prisma generate --schema=prisma/schema.prisma
+pnpm exec vitest run tests/motion-studio
+pnpm exec tsc --noEmit
+```
+
+Use a fresh throwaway PostgreSQL database to validate all additive migrations and replay `prisma migrate deploy`; do not experiment on production data. The previous `05e6d7a` test result covers **only the earlier branch head**. Every new full-system commit is unvalidated until independent tests run.
+
+Full-system acceptance must additionally cover concurrent claims, two answers racing, paused-question lease release, 24-hour deadlines under NY/UTC, the worker credential hash, weekly usage before/after observations, overlapping bot capacities, asset upload and sign/renew, immutable snapshots, restoration, portable source import and multiple edits, and the real cross-account Bot 1 → Bot 4 handoff with local folders unavailable.
+
+**Known integration boundaries:** The producer must publish pinned browser bundles to the separately isolated scene host before live canvas preview works. The deterministic scene renderer must deliver real edited MP4s, and the full master assembly/ClipEditsV2 refresh path must be validated with those outputs. Public multi-tenant operation is still blocked by the deliberately unchanged no-login internal workspace mode. Do not claim the system is production-ready before these pass.
