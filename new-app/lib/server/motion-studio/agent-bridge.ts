@@ -76,7 +76,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const selectedJobId = str(toObject(project.exportInfo).agentJobId, 100)
   const selected = selectedJobId ? await db().motionStudioAgentJob.findFirst({ where: {
     id: selectedJobId, workspaceId, projectId, status: 'complete' } }) : null
-  const job = latest && ['dispatching','dispatched','running','needs_input'].includes(latest.status)
+  const timedOut = latest?.status === 'failed' && latest.message?.includes('within 24 hours')
+  const job = latest && (['dispatching','dispatched','running','needs_input'].includes(latest.status) || timedOut)
     ? latest : selected ?? latest
   if (!job) return null
   const previousVideo = !job.resultKey && job.parentJobId
