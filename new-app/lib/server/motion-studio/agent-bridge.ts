@@ -540,7 +540,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (pullProducerQueueEnabled()) {
         await db().motionStudioAgentJob.updateMany({ where: {
           id: answerJob.id, workspaceId, projectId, status: 'needs_input' }, data: {
-          status: 'queued', phase: 'accepted', waitingStartedAt: null, message: 'Your answer was received. Production will resume on an available worker.',
+          status: 'queued', phase: 'accepted', waitingStartedAt: null, leaseAttempts: 0, message: 'Your answer was received. Production will resume on an available worker.',
           leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null,
         } })
         await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
@@ -576,7 +576,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (!accepted) throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
       await db().motionStudioAgentJob.updateMany({ where: {
         workspaceId, projectId, id: answerJob.id, status: 'needs_input' }, data: {
-        status: 'running', waitingStartedAt: null, message: "We're continuing with your direction…" } })
+        status: 'running', waitingStartedAt: null, leaseAttempts: 0, message: "We're continuing with your direction…" } })
       await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
         create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
           text: 'Thanks, I’ve passed your answer to production. I’ll update you as it progresses.' },
