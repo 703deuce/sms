@@ -395,6 +395,14 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const size = await storage.getObjectSizeBytes(item.key)
     if (!size || size > MAX_FILE) throw new MotionStudioError('INVALID', 'Uploaded object is missing or invalid.', 400)
     item.state = 'ready'
+    // Every producer artifact also receives a durable Transovo project asset ID.
+    // This is necessary for portable manifests to reference assets by ID, never by path.
+    await db().studioAsset.upsert({
+      where: { id: item.id },
+      create: { id: item.id, projectId: job.projectId, workspaceId: job.workspaceId,
+        uploadId: item.id, kind: item.kind, filename: item.filename, status: 'ready' },
+      update: { status: 'ready' },
+    })
     await db().motionStudioAgentJob.update({ where: { id }, data: { artifacts: toPrismaJson(all) } })
     return { uploadId: item.id, status: 'ready', bytes: size }
   }
@@ -550,7 +558,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       id: messageId, projectId, jobId: answerJob.id, role: 'answer', text: instruction } })
     const confirmed = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: confirmationId } })
     if (!confirmed) {
-      if (pullProducerQueueEnabled()) {
+      if (pullProducerQueueEnabled() || coordinatorEnabled()) {
         await db().motionStudioAgentJob.updateMany({ where: {
           id: answerJob.id, workspaceId, projectId, status: 'needs_input' }, data: {
           status: 'queued', phase: 'accepted', waitingStartedAt: null, leaseAttempts: 0, message: 'Your answer was received. Production will resume on an available worker.',
@@ -559,6 +567,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
           create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
             text: 'Thanks, your answer was saved. Production will resume from its saved checkpoint.' }, update: {} })
+        if (coordinatorEnabled()) await coordinatePendingJobs(1)
         return { job: null, intent: 'conversation' }
       }
       if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
