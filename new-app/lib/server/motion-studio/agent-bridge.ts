@@ -98,6 +98,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
 
 export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
+  if (pullProducerQueueEnabled() && coordinatorEnabled())
+    throw new MotionStudioError('INTERNAL', 'Choose either pull queue or webhook coordinator, not both.', 503)
   if (!pullProducerQueueEnabled() && !coordinatorEnabled() && !agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
   if (pullProducerQueueEnabled() && !pullProducerQueueConfigured()) throw new MotionStudioError('INTERNAL', 'Producer queue configuration is incomplete.', 503)
   const project = await db().motionStudioProject.findFirst({
