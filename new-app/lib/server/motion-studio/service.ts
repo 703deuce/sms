@@ -252,7 +252,9 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const rows = await loadUploads(workspaceId, allUploads.map(u => u.uploadId))
   if (creative.brand?.logoUploadId && !['image/png','image/jpeg','image/webp'].includes(rows.get(creative.brand.logoUploadId)?.mime || '')) throw new MotionStudioError('INVALID', 'Brand logo must be an image.', 400)
   if (creative.referenceUploadIds?.some(id => !rows.get(id)?.mime.startsWith('image/') && !rows.get(id)?.mime.startsWith('video/'))) throw new MotionStudioError('INVALID', 'References must be images or video.', 400)
-  const settings: MsSettings = parseSettings({ format: o.format || J(o.settings).format }, DEFAULT_SETTINGS)
+  const requestedFormat = String(o.format || J(o.settings).format || DEFAULT_SETTINGS.format)
+  const requestedSize = requestedFormat.split('_')[1]
+  const settings: MsSettings = parseSettings({ format: requestedFormat, renderSize: requestedSize, finalRenderSize: requestedSize }, DEFAULT_SETTINGS)
   const reqMusic = J(o.settings).music ?? o.music
   if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
   const requested = o.lengthMin ?? J(o.settings).lengthMin
