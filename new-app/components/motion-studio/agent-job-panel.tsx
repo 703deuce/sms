@@ -20,7 +20,7 @@ export type MotionAgentJob = {
   events?: { id: number; stage: string; message: string; timestamp: string; percent?: number; sceneId?: string }[]
 }
 
-export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOpenEditor?: () => void }) {
+export function AgentJobPanel({ job, onOpenEditor, showChat = true }: { job: MotionAgentJob; onOpenEditor?: () => void; showChat?: boolean }) {
   const complete = job.status === 'complete'
   const failed = ['failed', 'dispatch_failed', 'cancelled'].includes(job.status)
   const stages = job.stages ?? ['research','story','voice','scenes','review','fixing','rendering','delivering','complete']
@@ -84,7 +84,7 @@ export function AgentJobPanel({ job, onOpenEditor }: { job: MotionAgentJob; onOp
         </div>
       ) : null}
       {complete && !job.videoUrl ? <p className="text-sm text-muted-foreground">The video is complete. Its playback link is being prepared.</p> : null}
-      {complete || job.parentJobId ? <AgentChatPanel projectId={job.projectId} /> : null}
+      {showChat ? <AgentChatPanel projectId={job.projectId} /> : null}
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Clapperboard className="size-4" aria-hidden />
         <Link href="/app/motion-studio" className="text-primary hover:underline">All Motion Studio projects</Link>
