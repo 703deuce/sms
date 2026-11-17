@@ -14,5 +14,7 @@ export function publicAssistantText(value: unknown): string {
   // Protect the UI against accidental internal traces, credentials and provider details.
   const text = value.trim().slice(0, 1200)
   return /\b(?:grok(?:bot)?|gemini|openai|webhook|api.?key|bearer token|stack trace)\b|\/workspace\/|\/tmp\//i.test(text)
-    ? 'I’m working with the production system on your request.' : text
+    ? 'I’m working with the production system on your request.'
+    : /\b(?:i have|i've|we have|we've)\s+(?:already\s+)?(?:updated|changed|rendered|applied|saved|completed|finished)\b/i.test(text)
+      ? 'I can help with that request. The video status and confirmed changes will appear here.' : text
 }
