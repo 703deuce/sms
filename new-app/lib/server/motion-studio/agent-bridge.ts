@@ -559,8 +559,8 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       // Deterministic fresh access for the existing job: an identical retry
       // derives the same token even if webhook acceptance preceded a DB failure.
       const resumeSecret = process.env.MOTION_STUDIO_JOB_TOKEN_SECRET || ''
-      if (resumeSecret.length < 32)
-        throw new MotionStudioError('INTERNAL', 'Independent producer token secret is not configured.', 503)
+      if (resumeSecret.length < 32 || resumeSecret === process.env.GROKBOT_WEBHOOK_KEY)
+        throw new MotionStudioError('INTERNAL', 'Configure a separate producer token secret (32+ characters).', 503)
       const resumedToken = createHmac('sha256', resumeSecret)
         .update('motion-studio-answer:v2:' + answerJob.id + ':' + key).digest('base64url')
       const resumedExpires = new Date(Date.now() + 36 * 3600_000)
