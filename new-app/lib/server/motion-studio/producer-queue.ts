@@ -54,7 +54,7 @@ export async function claimProducerJob(request: Request, raw: unknown) {
   // Continuous producer polling also sweeps unanswered jobs, even when the
   // customer never reopens the browser. No resident video worker is held.
   await db().motionStudioAgentJob.updateMany({ where: {
-    status: 'needs_input', updatedAt: { lte: new Date(Date.now() - 24 * 3600_000) },
+    status: 'needs_input', waitingStartedAt: { lte: new Date(Date.now() - 24 * 3600_000) },
   }, data: { status: 'failed', phase: 'failed', completedAt: new Date(),
     message: 'We did not receive your answer within 24 hours. You can request another video or edit.',
     leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null,
