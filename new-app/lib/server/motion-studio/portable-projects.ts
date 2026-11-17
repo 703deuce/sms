@@ -112,10 +112,19 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
       ...prev, scenes: { ...oldScenes, ...(validated ? { [sceneId]: { ...oldScene, elements: mergedElements } } : {}) },
     }
     const previousTheme = obj(latest.theme)
+    // Preserve producer-specific design metadata around theme tokens.
+    // A color entry may be a raw hex or {value,label,designName}.
+    const nextColors:Record<string,unknown>={...obj(previousTheme.colors)}
+    for(const [key,value] of Object.entries(obj(themePatch.colors))){
+      const previous=nextColors[key]
+      if(value===null){delete nextColors[key];continue}
+      nextColors[key]=previous && typeof previous==='object' && !Array.isArray(previous)
+        ? {...obj(previous),value}:value
+    }
     const nextTheme = {
       ...previousTheme,
       ...themePatch,
-      colors: { ...obj(previousTheme.colors), ...obj(themePatch.colors) },
+      colors: nextColors,
       fonts: { ...obj(previousTheme.fonts), ...obj(themePatch.fonts) },
     }
     const next = await tx.motionStudioPortableVersion.create({ data: {
