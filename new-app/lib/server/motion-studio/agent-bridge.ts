@@ -210,16 +210,23 @@ export async function requireBotJob(id: string, request: Request) {
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : ''
   if (!token || token.length > 256) throw new MotionStudioError('UNAUTHENTICATED', 'Job bearer token required.', 401)
   const job = await db().motionStudioAgentJob.findUnique({ where: { id } })
-  if (!job || job.tokenExpiresAt.getTime() <= Date.now()) throw new MotionStudioError('UNAUTHENTICATED', 'Expired or invalid token.', 401)
+  if (!job) throw new MotionStudioError('UNAUTHENTICATED', 'Expired or invalid token.', 401)
   // Pull-queue worker credentials are valid only while that worker holds an
   // unexpired lease. Paused jobs are released and must be claimed again.
   if (pullProducerQueueEnabled() && !isDone(job.status) && (!job.leaseOwner || !job.leaseExpiresAt ||
       job.leaseExpiresAt.getTime() <= Date.now()))
     throw new MotionStudioError('UNAUTHENTICATED', 'Producer lease expired; claim this job again.', 401)
   const given = sha(id + ':' + token)
-  const expected = Buffer.from(job.tokenHash, 'hex')
-  if (expected.length !== given.length || !timingSafeEqual(given, expected)) {
-    throw new MotionStudioError('UNAUTHENTICATED', 'Invalid token.', 401)
+  const checkHash = (hex: string | null | undefined) => {
+    if (!hex || !/^[a-f0-9]{64}$/.test(hex)) return false
+    const expected = Buffer.from(hex, 'hex')
+    return expected.length === given.length && timingSafeEqual(given, expected)
+  }
+  const validPrimary = job.tokenExpiresAt.getTime() > Date.now() && checkHash(job.tokenHash)
+  const validStaged = Boolean(job.pendingTokenExpiresAt &&
+    job.pendingTokenExpiresAt.getTime() > Date.now() && checkHash(job.pendingTokenHash))
+  if (!validPrimary && !validStaged) {
+    throw new MotionStudioError('UNAUTHENTICATED', 'Invalid or expired job token.', 401)
   }
   return await expireStaleQuestion(job)
 }
@@ -551,14 +558,17 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
       // Deterministic fresh access for the existing job: an identical retry
       // derives the same token even if webhook acceptance preceded a DB failure.
-      const resumedToken = createHmac('sha256', process.env.GROKBOT_WEBHOOK_KEY!)
-        .update('motion-studio-answer:v1:' + answerJob.id + ':' + key).digest('base64url')
+      const resumeSecret = process.env.MOTION_STUDIO_JOB_TOKEN_SECRET || ''
+      if (resumeSecret.length < 32)
+        throw new MotionStudioError('INTERNAL', 'Independent producer token secret is not configured.', 503)
+      const resumedToken = createHmac('sha256', resumeSecret)
+        .update('motion-studio-answer:v2:' + answerJob.id + ':' + key).digest('base64url')
       const resumedExpires = new Date(Date.now() + 36 * 3600_000)
       await db().motionStudioAgentJob.updateMany({ where: {
         id: answerJob.id, workspaceId, projectId,
         status: { in: ['needs_input','running'] } }, data: {
-        tokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'),
-        tokenExpiresAt: resumedExpires,
+        pendingTokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'),
+        pendingTokenExpiresAt: resumedExpires,
       } })
       let accepted = false
       try {
@@ -573,9 +583,17 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
         })
         accepted = response.ok
       } catch { /* The saved answer survives, allowing an identical-key retry. */ }
-      if (!accepted) throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
+      if (!accepted) {
+        await db().motionStudioAgentJob.updateMany({ where: {
+          id: answerJob.id, workspaceId, projectId, pendingTokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'),
+        }, data: { pendingTokenHash: null, pendingTokenExpiresAt: null } })
+        throw new MotionStudioError('CONFLICT', 'Could not deliver your answer. Please retry.', 503)
+      }
       await db().motionStudioAgentJob.updateMany({ where: {
-        workspaceId, projectId, id: answerJob.id, status: 'needs_input' }, data: {
+        workspaceId, projectId, id: answerJob.id, status: { in: ['needs_input','running'] },
+        pendingTokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex') }, data: {
+        tokenHash: sha(answerJob.id + ':' + resumedToken).toString('hex'), tokenExpiresAt: resumedExpires,
+        pendingTokenHash: null, pendingTokenExpiresAt: null,
         status: 'running', waitingStartedAt: null, leaseAttempts: 0, message: "We're continuing with your direction…" } })
       await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
         create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
@@ -615,7 +633,8 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     response = latest.status === 'needs_input'
       ? 'I’ve queued that change for the next version. Please also answer the production question so the current video can finish.'
       : 'I’ve queued that change for the next version. I won’t interrupt the video that is currently processing.'
-  } else if (wantsEdit && !latest?.resultKey) {
+  } else if (wantsEdit && !latest?.resultKey && !await db().motionStudioAgentJob.findFirst({
+    where: { projectId, workspaceId, status: 'complete' }, select: { id: true } })) {
     response = 'I understand the change. Once your first video is ready, I can submit this as a revision.'
   } else if (wantsEdit) {
     // Dispatch before recording the assistant success reply. If dispatch fails we tell the truth.
