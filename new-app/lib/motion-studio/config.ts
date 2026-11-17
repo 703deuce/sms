@@ -13,20 +13,20 @@ import type {
 export const MOTION_STUDIO_NAME = 'Motion Studio'
 export const MOTION_STUDIO_ROUTE = '/app/motion-studio'
 /** v1 entry (FE-12, #1242). */
-export const MOTION_STUDIO_NEW_ROUTE = '/app/motion-studio/new?type=documentary'
+export const MOTION_STUDIO_NEW_ROUTE = '/app/motion-studio/new'
 /** API namespace (John 12:53 AM, supersedes D3: /api/motion-studio/*). */
 export const MOTION_STUDIO_API_BASE = '/api/motion-studio'
 
 /** Vision statement, verbatim (ST-VIS-001). */
 export const MOTION_STUDIO_VISION =
-  'Give Transovo an idea. It researches the subject, finds usable media, writes the story, designs professional motion graphics, assembles real footage, and produces an editable documentary.'
+  'Give Transovo an idea. It can research, write, design original animated scenes, assemble footage, and deliver an editable video.'
 
 /** Exact UI labels from the binding concept (spec §2.1, "must appear verbatim"). */
 export const MS_LABELS = {
   myProjects: 'My projects',
   headline: 'What are we creating today?',
-  subhead: 'Turn an idea, script, or footage into a cinematic documentary.',
-  promptPlaceholder: 'Describe the documentary you want to make. You can attach photos and clips.',
+  subhead: 'Create original videos, animated graphics, ads, and stories from an idea, script, or footage.',
+  promptPlaceholder: 'Describe what you want to make. Add a story, brand direction, photos or footage.',
   attach: 'Add photos, footage, script or audio',
   start: 'Start',
   modeIdea: 'Start with idea',
@@ -99,7 +99,7 @@ export const MS_LENGTHS: { value: MsLengthMin; label: string; beta: boolean }[] 
 ]
 
 export const MS_DIRECTIONS: { value: MsVisualDirection; label: string }[] = [
-  { value: 'cinematic', label: 'Cinematic documentary' },
+  { value: 'cinematic', label: 'Cinematic video' },
   { value: 'explainer', label: 'Modern explainer' },
   { value: 'investigative', label: 'Investigative' },
   { value: 'technical_3d', label: '3D technical' },
@@ -152,7 +152,7 @@ export const MS_COSTS = {
 
 /** Selected workflow line (ST-UI-103), v1 = uploads_only for every mode. */
 export function selectedWorkflowLine(workflow: MsWorkflow, opts: { lengthMin?: MsLengthMin; uploads?: number } = {}): string {
-  const len = `${opts.lengthMin ?? 5}-minute documentary`
+  const len = `${opts.lengthMin ?? 5}-minute video`
   const media = opts.uploads && opts.uploads > 0
     ? `use your ${opts.uploads} uploaded ${opts.uploads === 1 ? 'file' : 'files'}`
     : 'use the photos, images and clips you upload'
