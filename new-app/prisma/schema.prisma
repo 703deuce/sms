@@ -11039,6 +11039,7 @@ model MotionStudioAgentMessage {
 }
 
 model MotionStudioAgentJob {
+  checkpoint       Json?
   id               String   @id
   projectId        String
   workspaceId      String
