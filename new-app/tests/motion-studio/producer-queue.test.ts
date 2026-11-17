@@ -53,6 +53,8 @@ describe('pull worker queue', () => {
     expect(result.job!.jobToken).toBeTruthy()
     expect(result.job!.leaseId).toBeTruthy()
     expect(state.job.tokenHash).not.toContain(result.job!.jobToken)
+    const sql = state.query.mock.calls[0]?.[0]?.join('') || ''
+    expect(sql).toContain("timezone('UTC', CURRENT_TIMESTAMP)")
   })
   it('does not hand out a second concurrent job from the same workspace', async () => {
     state.count.mockResolvedValueOnce(1)
