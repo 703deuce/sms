@@ -9,6 +9,7 @@ import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
+import { pullProducerQueueEnabled, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
 
 const db = () => getPrisma()
 const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {}
@@ -78,7 +79,7 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const selected = selectedJobId ? await db().motionStudioAgentJob.findFirst({ where: {
     id: selectedJobId, workspaceId, projectId, status: 'complete' } }) : null
   const timedOut = latest?.status === 'failed' && latest.message?.includes('within 24 hours')
-  const job = latest && (['dispatching','dispatched','running','needs_input'].includes(latest.status) || timedOut)
+  const job = latest && (['queued','dispatching','dispatched','running','needs_input'].includes(latest.status) || timedOut)
     ? latest : selected ?? latest
   if (!job) return null
   const previousVideo = !job.resultKey && job.parentJobId
@@ -93,7 +94,7 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
 
 export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
-  if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
+  if (!pullProducerQueueEnabled() && !agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Grokbot webhook is not configured.', 503)
   const project = await db().motionStudioProject.findFirst({
     where: { workspaceId, id: projectId }, select: { id: true, userId: true, brief: true, title: true, settings: true, status: true },
   })
@@ -117,7 +118,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   })
   if (jobsToday >= (revisionRequest ? 12 : 3)) throw new MotionStudioError('CONFLICT', 'Daily testing limit reached.', 429)
   const active = await db().motionStudioAgentJob.count({
-    where: { userId, status: { in: ['dispatching', 'dispatched', 'running'] } },
+    where: { userId, status: { in: ['dispatching', 'dispatched', 'running', 'queued'] } },
   })
   if (active >= 3) throw new MotionStudioError('CONFLICT', 'Maximum concurrent agent jobs reached.', 429)
   const id = 'msaj_' + randomUUID()
@@ -128,14 +129,15 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     job = await db().motionStudioAgentJob.create({ data: { id, projectId, workspaceId, userId,
       idempotencyKey, parentJobId: parent?.id ?? null, revision: parent ? parent.revision + 1 : 0,
       tokenHash, tokenExpiresAt: new Date(Date.now() + 36 * 3600_000),
-      status: 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
-      message: 'Submitting assignment to the production bot.' } })
+      status: pullProducerQueueEnabled() ? 'queued' : 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
+      message: pullProducerQueueEnabled() ? 'Your video is in the production queue.' : 'Submitting assignment to the production bot.' } })
   } catch (err) {
     if ((err as { code?: string })?.code !== 'P2002') throw err
     const duplicate = await db().motionStudioAgentJob.findUnique({ where })
     if (!duplicate) throw err
     return publicJob(duplicate)
   }
+  if (pullProducerQueueEnabled()) return publicJob(job)
   const rawUrl = process.env.GROKBOT_WEBHOOK_URL!
   const webhook = new URL(rawUrl)
   if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
@@ -264,6 +266,8 @@ export async function botGetAssignment(id: string, request: Request) {
       exportInfo: project.exportInfo,
     },
     checkpoint: job.checkpoint ?? null, inputs, versions,
+    resumeAnswer: (await db().motionStudioAgentMessage.findFirst({ where: {
+      projectId: job.projectId, jobId: job.id, role: 'customer' }, orderBy: { createdAt: 'desc' } }))?.text || null,
     recoverableCheckpoints: recoverableJobs.filter(previous => previous.checkpoint != null).slice(0, 5).map(previous => ({
       jobId: previous.id, revision: previous.revision, status: previous.status,
       savedAt: previous.updatedAt.toISOString(), checkpoint: previous.checkpoint,
@@ -458,6 +462,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   }
   await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'complete', kind: 'agent_progress', message: DEFAULT_STAGE_MESSAGES.complete,
     data: toPrismaJson({ jobId: id, percent: 100 }) } })
+  if (pullProducerQueueEnabled()) await releaseProducerLease(id)
   await dispatchQueuedAfterFinish(job, request)
   return publicJob(completed)
 }
@@ -517,6 +522,17 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
       id: messageId, projectId, jobId: answerJob.id, role: 'customer', text: instruction } })
     const confirmed = await db().motionStudioAgentMessage.findFirst({ where: { projectId, id: confirmationId } })
     if (!confirmed) {
+      if (pullProducerQueueEnabled()) {
+        await db().motionStudioAgentJob.updateMany({ where: {
+          id: answerJob.id, workspaceId, projectId, status: 'needs_input' }, data: {
+          status: 'queued', phase: 'accepted', message: 'Your answer was received. Production will resume on an available worker.',
+          leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null,
+        } })
+        await db().motionStudioAgentMessage.upsert({ where: { id: confirmationId },
+          create: { id: confirmationId, projectId, jobId: answerJob.id, role: 'agent',
+            text: 'Thanks, your answer was saved. Production will resume from its saved checkpoint.' }, update: {} })
+        return { job: null, intent: 'conversation' }
+      }
       if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL', 'Video production is not connected.', 503)
       let accepted = false
       try {
@@ -606,6 +622,7 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
       await tx.motionStudioAgentJob.updateMany({ where: {
         id, status: { in: ['dispatching','dispatched','running','needs_input'] } }, data: {
         status: 'needs_input', tokenExpiresAt: new Date(Date.now() + 36*3600_000),
+        ...(pullProducerQueueEnabled() ? { leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null } : {}),
         message: "We're waiting for your direction…" } })
     }
     return tx.motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
