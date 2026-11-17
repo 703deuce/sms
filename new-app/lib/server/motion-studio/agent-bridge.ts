@@ -386,7 +386,7 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   const knownQuestion = isStatusQuestion(instruction)
   // Answers to producer questions continue the existing job; they must NOT create
   // a fresh paid revision or silently disappear inside the chat.
-  if (latest?.status === 'needs_input' && !knownQuestion) {
+  if (latest?.status === 'needs_input' && input.answerInput === true && !knownQuestion) {
     const messageId = 'msmsg_' + createHash('sha256').update(projectId + ':' + key).digest('hex').slice(0, 32)
     if (!agentBridgeConfigured()) throw new MotionStudioError('INTERNAL','Video production is not connected.',503)
     let accepted = false
