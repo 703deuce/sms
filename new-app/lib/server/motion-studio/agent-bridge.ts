@@ -723,12 +723,19 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
         id, status: { in: ['dispatching','dispatched','running','needs_input'] } }, data: {
         status: 'needs_input', waitingStartedAt: job.status === 'needs_input' && job.waitingStartedAt ? job.waitingStartedAt : new Date(),
         tokenExpiresAt: new Date(Date.now() + 36*3600_000),
-        ...(pullProducerQueueEnabled() ? { leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null } : {}),
+        ...((pullProducerQueueEnabled() || coordinatorEnabled()) ? { leaseOwner: null, leaseIdHash: null, leaseExpiresAt: null } : {}),
         message: "We're waiting for your direction…" } })
     }
     return tx.motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
       projectId:job.projectId,jobId:id,role:'agent',text } })
   })
+  if (input.needsInput===true && coordinatorEnabled()) {
+    await db().motionStudioWorkerAssignment.updateMany({
+      where:{jobId:id,status:{in:['reserved','dispatched','running']}},
+      data:{status:'paused',leaseExpiresAt:new Date()},
+    })
+    await coordinatePendingJobs(1)
+  }
   return { id:item.id, role:'agent',text:item.text,timestamp:item.createdAt.toISOString() }
 }
 
