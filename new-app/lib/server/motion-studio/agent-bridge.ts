@@ -297,9 +297,36 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
   throw new MotionStudioError('INVALID', 'Expected prepare or commit.', 400)
 }
 
+/** Queue exactly one follow-up revision after a completed job. Its stable key keeps
+ * repeated completion callbacks from starting duplicate productions. */
+async function dispatchQueuedAfterFinish(job: { id: string; workspaceId: string; userId: string; projectId: string }, request: Request) {
+  const queued = await db().motionStudioAgentMessage.findMany({ where: {
+    projectId: job.projectId, jobId: job.id, role: 'queued_edit' },
+    orderBy: { createdAt: 'asc' }, take: 20 })
+  if (!queued.length) return
+  const instruction = queued.map((m, i) => `${i + 1}. ${m.text}`).join('\n').slice(0, 2500)
+  try {
+    const result = await dispatchAgentJob(job.workspaceId, job.userId, job.projectId,
+      'queued-after-' + job.id, request, { instruction })
+    if (!['dispatch_failed','failed','cancelled'].includes(result.status)) {
+      await db().motionStudioAgentMessage.updateMany({ where: {
+        projectId: job.projectId, jobId: job.id, role: 'queued_edit' }, data: { role: 'queued_sent' } })
+      await db().motionStudioAgentMessage.create({ data: {
+        id: 'msmsg_' + randomUUID(), projectId: job.projectId, jobId: result.id, role: 'agent',
+        text: 'The previous video is complete, and I’ve submitted your queued changes as the next version.' } })
+    }
+  } catch (err) {
+    console.warn('[motion-studio:chat] queued_dispatch_deferred', { projectId: job.projectId,
+      jobId: job.id, error: err instanceof Error ? err.name : typeof err })
+  }
+}
+
 export async function botFinish(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id, request)
-  if (job.status === 'complete') return publicJob(job)
+  if (job.status === 'complete') {
+    await dispatchQueuedAfterFinish(job, request)
+    return publicJob(job)
+  }
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
   const input = toObject(raw)
   if (input.status === 'failed') {
@@ -353,6 +380,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
   }
   await db().studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'complete', kind: 'agent_progress', message: DEFAULT_STAGE_MESSAGES.complete,
     data: toPrismaJson({ jobId: id, percent: 100 }) } })
+  await dispatchQueuedAfterFinish(job, request)
   return publicJob(completed)
 }
 
@@ -362,7 +390,7 @@ export async function agentThread(workspaceId: string, projectId: string) {
   const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id: true, exportInfo: true } })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const [messages, jobs] = await Promise.all([
-    db().motionStudioAgentMessage.findMany({ where: { projectId }, orderBy: { createdAt: 'asc' }, take: 250 }),
+    db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','agent'] } }, orderBy: { createdAt: 'asc' }, take: 250 }),
     db().motionStudioAgentJob.findMany({ where: { workspaceId, projectId, status: 'complete' },
       select: { id: true, revision: true, durationMs: true, createdAt: true }, orderBy: { revision: 'asc' } }),
   ])
@@ -453,9 +481,14 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
   let job: Awaited<ReturnType<typeof dispatchAgentJob>> | null = null
   const wantsEdit = decision.intent === 'edit'
   if (wantsEdit && pending) {
+    // Never launch overlapping generations. Durable queue is drained on the
+    // current job's successful completion, not while it waits for a customer.
+    await db().motionStudioAgentMessage.upsert({ where: { id: 'msmsg_queue_' + messageId.slice(6) },
+      create: { id: 'msmsg_queue_' + messageId.slice(6), projectId, jobId: latest.id,
+        role: 'queued_edit', text: (decision.instruction || instruction).slice(0, 2500) }, update: {} })
     response = latest.status === 'needs_input'
-      ? 'Thanks. I have your instruction, but this production is waiting for an answer. Please respond to the specific question from the video team.'
-      : 'I understand the change. The current video is still processing; please send this request again once the video is ready so I can apply it.'
+      ? 'I’ve queued that change for the next version. Please also answer the production question so the current video can finish.'
+      : 'I’ve queued that change for the next version. I won’t interrupt the video that is currently processing.'
   } else if (wantsEdit && !latest?.resultKey) {
     response = 'I understand the change. Once your first video is ready, I can submit this as a revision.'
   } else if (wantsEdit) {
