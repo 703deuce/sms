@@ -295,7 +295,7 @@ export async function botSaveCheckpoint(id: string, request: Request, raw: unkno
   // has persisted a newer checkpoint.
   const count = await db().motionStudioAgentJob.updateMany({ where: {
     id, workspaceId: job.workspaceId, projectId: job.projectId,
-    checkpoint: job.checkpoint === null ? { equals: null } : { equals: job.checkpoint as object },
+    updatedAt: job.updatedAt,
     status: { in: ['dispatching', 'dispatched', 'running', 'needs_input'] },
   }, data: { checkpoint: toPrismaJson(state) } })
   if (!count.count) throw new MotionStudioError('CONFLICT', 'Checkpoint changed. Reload before saving.', 409)
