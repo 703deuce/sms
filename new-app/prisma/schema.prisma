@@ -11056,6 +11056,8 @@ model MotionStudioAgentJob {
   usage            Json?
   tokenHash        String
   tokenExpiresAt   DateTime
+  pendingTokenHash String?
+  pendingTokenExpiresAt DateTime?
   status           String   @default("dispatching")
   phase            String   @default("dispatch")
   progress         Int      @default(0)
