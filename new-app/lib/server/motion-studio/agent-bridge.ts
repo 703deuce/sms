@@ -226,7 +226,7 @@ export async function botGetAssignment(id: string, request: Request) {
       exportInfo: true, timelineVersion: true },
   })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
-  const [projectAssets, priorVersions, recentMessages] = await Promise.all([
+  const [projectAssets, priorVersions, recentMessages, recoverableJobs] = await Promise.all([
     db().studioAsset.findMany({ where: { projectId: job.projectId, workspaceId: job.workspaceId } }),
     db().motionStudioAgentJob.findMany({ where: {
       projectId: job.projectId, workspaceId: job.workspaceId, status: 'complete' },
@@ -234,6 +234,10 @@ export async function botGetAssignment(id: string, request: Request) {
     db().motionStudioAgentMessage.findMany({ where: {
       projectId: job.projectId, role: { in: ['customer', 'agent'] } },
       orderBy: { createdAt: 'desc' }, take: 50 }),
+    db().motionStudioAgentJob.findMany({ where: {
+      projectId: job.projectId, workspaceId: job.workspaceId,
+      id: { not: job.id }, checkpoint: { not: { equals: null } } },
+      orderBy: { createdAt: 'desc' }, take: 5 }),
   ])
   const uploads = projectAssets.length ? await db().clipUpload.findMany({ where: {
     id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } }) : []
@@ -260,6 +264,13 @@ export async function botGetAssignment(id: string, request: Request) {
       exportInfo: project.exportInfo,
     },
     checkpoint: job.checkpoint ?? null, inputs, versions,
+    recoverableCheckpoints: recoverableJobs.map(previous => ({
+      jobId: previous.id, revision: previous.revision, status: previous.status,
+      savedAt: previous.updatedAt.toISOString(), checkpoint: previous.checkpoint,
+      durableArtifacts: artifacts(previous.artifacts).filter(a => a.state === 'ready')
+        .map(a => ({ id: a.id, kind: a.kind, filename: a.filename, mime: a.mime,
+          elementId: a.elementId, trackId: a.trackId })),
+    })),
     conversation: recentMessages.reverse().map(m => ({ role: m.role, text: m.text,
       timestamp: m.createdAt.toISOString(), jobId: m.jobId })),
   }
