@@ -274,7 +274,7 @@ export function MotionStudioCreate({
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
   const ready = attachments.filter((a) => a.uploadId)
   const hasInput =
-    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video')
+    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && !a.role)
   const canStart = hasInput && !uploading && !starting && (brandMode !== 'saved' || !!brandKitId)
 
   const start = async () => {
@@ -287,7 +287,7 @@ export function MotionStudioCreate({
         workflow,
         prompt: prompt.trim(),
         script: workflow === 'idea' ? null : script.trim() || null,
-        uploads: ready.filter(a => a.role !== 'logo' || brandMode !== 'none').map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
+        uploads: ready.filter(a => a.role !== 'logo' || brandMode === 'project').map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
         mediaPolicy: 'auto_plus_uploads',
         durationSeconds,
         format: `${format}_${resolution}`,
