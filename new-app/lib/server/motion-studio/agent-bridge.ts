@@ -240,7 +240,7 @@ export async function botProgress(id: string, request: Request, raw: unknown) {
   const progress = Number.isFinite(proposed) ? Math.max(job.progress, Math.min(99, Math.round(proposed))) : job.progress
   const message = friendlyMessage(input.message, phase)
   const sceneId = str(input.sceneId, 80)
-  const change = await db().motionStudioAgentJob.updateMany({ where: { id, status: { not: 'needs_input' } },
+  const change = await db().motionStudioAgentJob.updateMany({ where: { id, status: { in: ['dispatching','dispatched','running'] } },
     data: { status: 'running', phase, progress, message } })
   if (!change.count) return publicJob(await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id } }))
   const updated = await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id } })
@@ -518,13 +518,16 @@ export async function botPostMessage(id: string, request: Request, raw: unknown)
   const input = toObject(raw)
   const text = input.needsInput === true ? customerQuestion(input.text) : friendlyMessage(input.text, 'review')
   if (!text) throw new MotionStudioError('INVALID','Message required.',400)
-  const item = await db().motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
-    projectId:job.projectId,jobId:id,role:'agent',text } })
-  if (input.needsInput === true && !isDone(job.status)) {
-    await db().motionStudioAgentJob.update({ where: { id }, data: {
-      status: 'needs_input', tokenExpiresAt: new Date(Date.now() + 36*3600_000),
-      message: "We're waiting for your direction…" } })
-  }
+  const item = await db().$transaction(async tx => {
+    if (input.needsInput === true && !isDone(job.status)) {
+      await tx.motionStudioAgentJob.updateMany({ where: {
+        id, status: { in: ['dispatching','dispatched','running','needs_input'] } }, data: {
+        status: 'needs_input', tokenExpiresAt: new Date(Date.now() + 36*3600_000),
+        message: "We're waiting for your direction…" } })
+    }
+    return tx.motionStudioAgentMessage.create({ data: { id:'msmsg_'+randomUUID(),
+      projectId:job.projectId,jobId:id,role:'agent',text } })
+  })
   return { id:item.id, role:'agent',text:item.text,timestamp:item.createdAt.toISOString() }
 }
 
