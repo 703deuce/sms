@@ -46,9 +46,22 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
   const assets = manifest.assets.map(x => x.id)
   const registered = await db().studioAsset.findMany({ where: {
     projectId, workspaceId, id: { in: assets }, status: 'ready',
-  }, select: { id: true } })
+  }, select: { id: true, kind:true, provenanceLog:true } })
   if (registered.length !== assets.length)
     bad('Every portable asset must be registered and ready in this project.', 'CONFLICT', 409)
+  if (input.document !== undefined) {
+    // A bundle or font is executable/render-critical source; never accept an
+    // unverified digest that a producer merely declared in a JSON document.
+    const byId=new Map(registered.map(item=>[item.id,item]))
+    for(const source of manifest.assets){
+      if(!['bundle','font','image'].includes(source.kind))continue
+      const stored=byId.get(source.id)
+      const provenance=obj(stored?.provenanceLog)
+      if(provenance.verifiedSha256!==true ||
+          String(provenance.sha256||'').toLowerCase()!==source.sha256.toLowerCase())
+        bad('Native scene source must be uploaded with a verified SHA-256 before publication.', 'CONFLICT', 409)
+    }
+  }
   // Preserve producer-native theme and user-edit patch exactly on first import.
   // Explicit Transovo overrides are only accepted on the portable path.
   const nativeDoc = input.document !== undefined ? obj(input.document) : null
