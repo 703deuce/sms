@@ -83,7 +83,8 @@ export function MotionStudioCreate({
   const router = useRouter()
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
-  const [durationSeconds, setDurationSeconds] = useState<10 | 15 | 30 | 60 | 120 | 180 | 300>(30)
+  const [durationSeconds, setDurationSeconds] = useState<number>(30)
+  const [customDuration, setCustomDuration] = useState(false)
   const [durationTouched, setDurationTouched] = useState(false)
   const [formatTouched, setFormatTouched] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -364,9 +365,16 @@ export function MotionStudioCreate({
             </section>
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
               <label htmlFor="ms-duration" className="text-sm font-medium">Video length</label>
-              <select id="ms-duration" data-testid="ms-duration" value={durationSeconds}
-                onChange={e => { setDurationSeconds(Number(e.target.value) as 10 | 15 | 30 | 60 | 120 | 180 | 300); setDurationTouched(true) }}
+              <div className="flex flex-wrap items-center gap-2">
+              <select id="ms-duration" data-testid="ms-duration" value={customDuration ? 'custom' : durationSeconds}
+                onChange={e => {
+                  setDurationTouched(true)
+                  if(e.target.value === 'custom'){setCustomDuration(true);return}
+                  setCustomDuration(false)
+                  setDurationSeconds(Number(e.target.value))
+                }}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value={5}>5 seconds · Quick test</option>
                 <option value={10}>10 seconds · Shorts/TikTok</option>
                 <option value={15}>15 seconds · Shorts/TikTok</option>
                 <option value={30}>30 seconds</option>
@@ -374,7 +382,16 @@ export function MotionStudioCreate({
                 <option value={120}>2 minutes</option>
                 <option value={180}>3 minutes</option>
                 <option value={300}>5 minutes</option>
+                <option value="custom">Custom duration</option>
               </select>
+              {customDuration ? <label className="flex items-center gap-2 text-xs">
+                <input type="number" data-testid="ms-custom-duration" aria-label="Custom video length in seconds"
+                  min={5} max={2147483} step={1} value={durationSeconds}
+                  onChange={e => {const n=Number(e.target.value);if(Number.isSafeInteger(n)&&n>=5&&n<=2147483)setDurationSeconds(n)}}
+                  className="h-9 w-28 rounded-md border border-input bg-background px-2" />
+                seconds
+              </label> : null}
+              </div>
             </div>
 
             <section className="rounded-xl border border-border bg-card p-4" aria-label="Creative direction and branding" data-testid="ms-creative-options">
@@ -562,7 +579,7 @@ export function MotionStudioCreate({
             </div>
 
             <p className="text-center text-sm text-muted-foreground" data-testid="ms-selected-workflow" aria-live="polite">
-              {selectedWorkflowLine(workflow, { uploads: ready.length })}
+              {selectedWorkflowLine(workflow, { uploads: ready.length, durationSeconds })}
             </p>
             {/* ST-UI-107: the "Where should we get the media?" picker stays hidden in v1 (mediaPolicy = uploads_only). */}
             {mediaPickerEnabled ? <MediaSourcePicker /> : null}
