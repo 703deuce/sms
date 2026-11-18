@@ -17,7 +17,7 @@ const safeId=(id:string)=>/^[A-Za-z0-9_.:-]{1,128}$/.test(id)
 const sign=(parts:string[])=>createHmac('sha256',secret()).update(parts.join('|')).digest('hex')
 const safePath=(v:string)=>{
   if(!v||v.length>512||v.startsWith('/')||v.includes('\\')||v.includes('\0')||
-     v.split('/').some(part=>!part||part==='.'||part==='..'||! /^[A-Za-z0-9_.@+\-]+$/.test(part)))
+     v.split('/').some(part=>!part||part==='.'||part==='..'||! /^[A-Za-z0-9_.@+\-\[\]]+$/.test(part)))
     fail('Invalid scene source path')
   return v
 }
