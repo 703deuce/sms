@@ -175,6 +175,9 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
   // hashes/aliases and publish a new native document as the next version.
   const version=await publishPortableVersion(job.workspaceId,job.projectId,{
     document,assets,bundles,sourceJobId:id,expectedBaseVersionId:job.versionId,
+    // Export produces an MP4 artifact, not a flattened replacement timeline.
+    // The next immutable version must remain browser-playable and editable.
+    ...(oldManifest.liveProject?{liveProject:oldManifest.liveProject}:{}),
   })
   const target=await db().motionStudioProject.findFirst({
     where:{workspaceId:job.workspaceId,id:job.projectId},
