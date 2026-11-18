@@ -62,7 +62,7 @@ const assetId = (v: unknown): v is string => isId(v) && v.length <= 128
 
 function enforceBoundedJson(value: unknown, maxBytes: number, name: string) {
   const json = JSON.stringify(value)
-  if (!json || Buffer.byteLength(json,'utf8') > maxBytes) fail(name + ' exceeds its size limit')
+  if (!json || new TextEncoder().encode(json).length > maxBytes) fail(name + ' exceeds its size limit')
   // Check actual object KEYS, not story text. A documentary is allowed to
   // mention a constructor or prototype without being flagged as an attack.
   const queue:unknown[]=[value]
@@ -71,7 +71,7 @@ function enforceBoundedJson(value: unknown, maxBytes: number, name: string) {
     const current=queue.pop()
     if(!current||typeof current!=='object')continue
     if(++visited>250000)fail(name + ' contains too many nested values')
-    if(Array.isArray(current)){queue.push(...current);continue}
+    if(Array.isArray(current)){for(const item of current)queue.push(item);continue}
     for(const [key,child] of Object.entries(current)){
       if(['__proto__','constructor','prototype'].includes(key))
         fail(name + ' contains a prohibited key')
