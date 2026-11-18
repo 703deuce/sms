@@ -74,6 +74,31 @@ describe('Motion Studio create screen (FE-1)', () => {
     })
   })
 
+  it('creates a five-second video and shows the correct duration in its summary', async () => {
+    const client=createMockMotionStudioClient({storage:null,seedExample:false})
+    const spy=vi.spyOn(client,'createProject')
+    render(<MotionStudioCreate client={client} initialView="create" />)
+    fireEvent.change(screen.getByTestId('ms-duration'),{target:{value:'5'}})
+    expect(screen.getByTestId('ms-selected-workflow').textContent).toContain('5-second video')
+    fireEvent.change(screen.getByTestId('ms-prompt'),{target:{value:'Make a short motion graphics test'}})
+    fireEvent.click(screen.getByTestId('ms-start'))
+    await waitFor(()=>expect(spy).toHaveBeenCalled())
+    expect(spy.mock.calls[0]![0]).toMatchObject({durationSeconds:5})
+  })
+
+  it('allows a custom duration instead of imposing the old five-minute ceiling', async () => {
+    const client=createMockMotionStudioClient({storage:null,seedExample:false})
+    const spy=vi.spyOn(client,'createProject')
+    render(<MotionStudioCreate client={client} initialView="create" />)
+    fireEvent.change(screen.getByTestId('ms-duration'),{target:{value:'custom'}})
+    fireEvent.change(screen.getByTestId('ms-custom-duration'),{target:{value:'720'}})
+    expect(screen.getByTestId('ms-selected-workflow').textContent).toContain('12-minute video')
+    fireEvent.change(screen.getByTestId('ms-prompt'),{target:{value:'Make a longer documentary test'}})
+    fireEvent.click(screen.getByTestId('ms-start'))
+    await waitFor(()=>expect(spy).toHaveBeenCalled())
+    expect(spy.mock.calls[0]![0]).toMatchObject({durationSeconds:720})
+  })
+
   it('lists projects with the Example project badge', async () => {
     render(<MotionStudioCreate client={createMockMotionStudioClient({ storage: null })} initialView="projects" />)
     await waitFor(() => expect(screen.getByTestId('ms-projects')).toBeTruthy())
