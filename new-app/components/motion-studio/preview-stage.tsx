@@ -33,6 +33,9 @@ export function PreviewStage({
   const total = project.durationMs || project.scenes.at(-1)?.endMs || project.settings.lengthMin * 60_000
   const videoRef = useRef<HTMLVideoElement>(null)
   const [videoFailed, setVideoFailed] = useState(false)
+  const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearStall = () => { if (stallTimer.current) clearTimeout(stallTimer.current); stallTimer.current = null }
+  useEffect(() => () => clearStall(), [])
   useEffect(() => setVideoFailed(false), [project.previewUrl])
   const playableVideo = Boolean(project.previewUrl && !videoFailed)
   const raf = useRef<number | null>(null)
@@ -82,7 +85,10 @@ export function PreviewStage({
           <video
             ref={videoRef}
             src={project.previewUrl || undefined}
-            onError={() => { setVideoFailed(true); onPlayingChange(false) }}
+            onError={() => { clearStall(); setVideoFailed(true); onPlayingChange(false) }}
+            onWaiting={() => { clearStall(); stallTimer.current = setTimeout(() => { setVideoFailed(true); onPlayingChange(false) }, 8000) }}
+            onLoadedData={clearStall}
+            onCanPlay={clearStall}
             className="size-full object-contain"
             playsInline
             onTimeUpdate={(e) => onTime(e.currentTarget.currentTime * 1000)}
