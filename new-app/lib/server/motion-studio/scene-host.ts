@@ -186,8 +186,6 @@ export async function sceneFileResponse(args:{
     }
     const allowed=/^(?:audio\/(?:wav|mpeg|mp4|ogg)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml)|font\/(?:ttf|otf|woff|woff2)|application\/(?:font-woff|octet-stream|wasm))$/
     if(!allowed.test(mime))fail('Unsupported signed scene asset type',415)
-    const prefix=appOrigin+'/api/motion-studio/_scene/'+
-      [projectId,versionId,bundleAssetId,expires,signature].map(encodeURIComponent).join('/')+'/'
     return new Response(new Uint8Array(bytes),{status:200,headers:{
       'Content-Type':mime,'Content-Disposition':'inline',
       'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; frame-ancestors 'self'",
