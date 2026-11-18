@@ -43,7 +43,7 @@ describe('Motion Studio caller resolution (no login gate)', () => {
     resolveWorkspaceId.mockResolvedValue('ws_default')
     resolveInternalUserId.mockResolvedValue('user_operator')
     vi.doMock('@/lib/server/workspace', () => ({
-      resolveWorkspaceId: (...args: unknown[]) => resolveWorkspaceId(...args),
+      resolveWorkspaceId: () => resolveWorkspaceId(),
     }))
     vi.doMock('@/lib/server/internal-user', () => ({
       resolveInternalUserId: () => resolveInternalUserId(),

@@ -880,7 +880,8 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
   const job = await dbi.motionStudioAgentJob.findFirst({ where: {
     id: jobId, projectId, workspaceId, status:'complete' } })
   if (!job?.resultKey) throw new MotionStudioError('NOT_FOUND','That version is unavailable.',404)
-  const asset = artifacts(job.artifacts).find(a => a.state === 'ready' && a.key === job.resultKey)
+  const resultKey = job.resultKey
+  const asset = artifacts(job.artifacts).find(a => a.state === 'ready' && a.key === resultKey)
   if (!asset) throw new MotionStudioError('CONFLICT','That version has no completed MP4.',409)
   const durationMs = job.durationMs || Number(toObject(project.exportInfo).durationMs) || 0
   if (!Number.isSafeInteger(durationMs) || durationMs <= 0) throw new MotionStudioError('CONFLICT','Version duration is unavailable.',409)
@@ -893,7 +894,7 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
         agentJobId:jobId,storageDriver:storageDriverName()
       }) } })
     if (source?.uploadId) await tx.clipUpload.update({ where: { id:source.uploadId }, data:{
-      key:job.resultKey,bytes:BigInt(asset.bytes),filename:asset.filename,mime:'video/mp4',
+      key:resultKey,bytes:BigInt(asset.bytes),filename:asset.filename,mime:'video/mp4',
       durationMs,status:'READY',storageDriver:storageDriverName() } })
     await tx.clipProject.update({ where:{id:project.clipProjectId!},data:{
       status:'READY',rangeEndMs:durationMs,proxyKey:job.resultKey,progress:100 } })

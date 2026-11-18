@@ -39,6 +39,6 @@ describe('Grokbot shares existing ClipEditsV2 editor operations',()=>{
   it('exposes real discoverable commands rather than a raw JSON mutation tool',()=>{
     expect(AGENT_EDITOR_TOOLS.some(t=>t.name==='set_text')).toBe(true)
     expect(AGENT_EDITOR_TOOLS.some(t=>t.name==='inspect_timeline')).toBe(true)
-    expect(AGENT_EDITOR_TOOLS.some(t=>t.name==='apply_arbitrary_code')).toBe(false)
+    expect(AGENT_EDITOR_TOOLS.map(t=>t.name)).not.toContain('apply_arbitrary_code')
   })
 })

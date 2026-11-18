@@ -10,7 +10,7 @@ import {validateNativeProducerEnvelope,type ProducerAssetRecord,type ProducerSce
 
 const db=()=>getPrisma()
 const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{}
-const bad=(m:string,s=409):never=>{throw new MotionStudioError('CONFLICT',m,s)}
+function bad(m:string,s=409): never {throw new MotionStudioError('CONFLICT',m,s)}
 const sha=(v:Buffer)=>createHash('sha256').update(v).digest('hex')
 type SourceUpload={id:string;key:string;filename:string;kind:string;mime:string;bytes:number;
   state:'pending'|'ready';sha256?:string;s3UploadId?:string}
@@ -71,8 +71,28 @@ export async function deterministicAssetAction(request:Request,id:string,raw:unk
     const actualBytes=await storage.getObjectSizeBytes(original.key)
     if(actualBytes!==original.bytes)bad('Output file size does not match declared bytes')
     if(original.sha256){
-      if(actualBytes>25*1024*1024)bad('Hashed source output exceeds 25 MB')
-      const computed=sha(await storage.getObjectBytes(original.key))
+      let computed:string
+      if(actualBytes<=25*1024*1024){
+        computed=sha(await storage.getObjectBytes(original.key))
+      }else{
+        const url=await storage.createSignedDownloadUrl(original.key,900)
+        const response=await fetch(url,{redirect:'error',cache:'no-store'})
+        if(!response.ok||!response.body)bad('Unable to verify rendered media')
+        const hash=createHash('sha256')
+        const reader=response.body.getReader()
+        let count=0
+        try{
+          for(;;){
+            const {value,done}=await reader.read()
+            if(done)break
+            count+=value.byteLength
+            if(count>original.bytes)bad('Uploaded media grew during verification')
+            hash.update(value)
+          }
+        }finally{await reader.cancel()}
+        if(count!==original.bytes)bad('Incomplete media during verification')
+        computed=hash.digest('hex')
+      }
       if(computed!==original.sha256)bad('Output SHA-256 mismatch',422)
     }
     // Register a native upload record so the shared portable asset resolver

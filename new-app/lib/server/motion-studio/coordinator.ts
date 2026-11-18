@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
-import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { MotionStudioError, type MsErrorCode } from '@/lib/server/motion-studio/errors'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 const db = () => getPrisma()
 const hash = (s: string) => createHash('sha256').update(s).digest('hex')
@@ -15,7 +15,7 @@ const matchesStoredHash = (given:string,stored:string) =>
 const uid = (v: unknown) => typeof v === 'string' && /^[a-zA-Z0-9_.:-]{3,96}$/.test(v)
 const obj = (x: unknown): Record<string, unknown> =>
   x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string,unknown> : {}
-const problem = (text: string, code = 'INVALID', status = 400): never => {
+function problem(text: string, code: MsErrorCode = 'INVALID', status = 400): never {
   throw new MotionStudioError(code, text, status)
 }
 export const coordinatorEnabled = () => process.env.MOTION_STUDIO_COORDINATOR === '1'

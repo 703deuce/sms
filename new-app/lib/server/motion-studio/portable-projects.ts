@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
-import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { MotionStudioError, type MsErrorCode } from '@/lib/server/motion-studio/errors'
 import { coordinatorEnabled } from '@/lib/server/motion-studio/coordinator'
 import { coordinateSceneRenders } from '@/lib/server/motion-studio/render-coordinator'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
@@ -12,7 +12,7 @@ import {
 } from '@/lib/motion-studio/portable-contract'
 
 const db = () => getPrisma()
-const bad = (msg: string, code = 'INVALID', status = 400): never => { throw new MotionStudioError(code, msg, status) }
+function bad(msg: string, code: MsErrorCode = 'INVALID', status = 400): never { throw new MotionStudioError(code, msg, status) }
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {}
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex')

@@ -1,7 +1,7 @@
 import 'server-only'
 import {createHash} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
-import {MotionStudioError} from '@/lib/server/motion-studio/errors'
+import { MotionStudioError, type MsErrorCode } from '@/lib/server/motion-studio/errors'
 import {requireBotJob} from '@/lib/server/motion-studio/agent-bridge'
 import {normalizeEdits,type ClipEditsV2} from '@/lib/clips/edits'
 import {toPrismaJson} from '@/lib/server/clips/prisma-json'
@@ -9,7 +9,7 @@ import {AGENT_EDITOR_TOOLS,agentEditorTool,applyAgentEditorOperation,type AgentE
 
 const db=()=>getPrisma()
 const obj=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:{}
-const err=(message:string,code='CONFLICT',status=409):never=>{
+function err(message:string,code: MsErrorCode = 'CONFLICT',status=409): never {
   throw new MotionStudioError(code,message,status)
 }
 async function editorClip(workspaceId:string,projectId:string){

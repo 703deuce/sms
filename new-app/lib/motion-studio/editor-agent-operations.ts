@@ -22,7 +22,7 @@ export type AgentEditorTool=(typeof AGENT_EDITOR_TOOLS)[number]['name']
 export const agentEditorTool=(v:unknown):v is AgentEditorTool=>
   typeof v==='string'&&AGENT_EDITOR_TOOLS.some(t=>t.name===v)
 const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{}
-const err=(m:string):never=>{throw new Error('Agent editor operation: '+m)}
+function err(m:string): never {throw new Error('Agent editor operation: '+m)}
 const number=(v:unknown,lo:number,hi:number):number=>{
   if(typeof v!=='number'||!Number.isFinite(v)||v<lo||v>hi)err('numeric parameter out of bounds')
   return v as number
@@ -78,7 +78,7 @@ export function applyAgentEditorOperation(args:{
     textItems.splice(index,1)
     edits.textItems=textItems
     edits.keyframes=(edits.keyframes||[]).filter(k=>k.target!=='text:'+id)
-    edits.tracks=(edits.tracks||[]).map(t=>({...t,items:t.items.filter(x=>x!==id)}))
+    edits.tracks=(edits.tracks||[]).map(t=>({...t,items:t.items?.filter(x=>x!==id)}))
   }else if(tool==='split_video'){
     const ms=Math.round(number(raw.sourceMs,args.bounds.clipStartMs+1,args.bounds.clipEndMs-1))
     edits.videoSplits=[...new Set([...(edits.videoSplits||[]),ms])].sort((a,b)=>a-b)

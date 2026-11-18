@@ -1,7 +1,7 @@
 import 'server-only'
 import {createHash,randomBytes,randomUUID} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
-import {MotionStudioError} from '@/lib/server/motion-studio/errors'
+import { MotionStudioError, type MsErrorCode } from '@/lib/server/motion-studio/errors'
 import {buildDeterministicProducerJob} from '@/lib/motion-studio/producer-render-job'
 import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
@@ -12,7 +12,7 @@ const db=()=>getPrisma()
 const sha=(v:string)=>createHash('sha256').update(v).digest('hex')
 const plain=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
 const obj=(v:unknown):Record<string,unknown>=>plain(v)?v:{}
-const problem=(m:string,code='CONFLICT',status=409):never=>{
+function problem(m:string,code: MsErrorCode = 'CONFLICT',status=409): never {
   throw new MotionStudioError(code,m,status)
 }
 export const PROJECT_RENDER_CAPABILITY='motion-studio-deterministic-render'
@@ -196,7 +196,23 @@ export async function getWorkerDeterministicJob(request:Request,id:string){
   const session=await portableAssetSession(job.workspaceId,job.projectId,version!.id)
   if(session.unavailableAssetIds.length)
     problem('Original source assets are unavailable')
-  return {id:job.id,mode:'deterministic_render',status:job.status,
+  const nativeIds=new Map(Object.entries(manifest.producerAssetMap!).map(([native,stored])=>[stored,native]))
+  const nativeId=(storageId:string)=>{
+    const native=nativeIds.get(storageId)
+    if(!native)problem('Producer asset alias missing')
+    return native
+  }
+  const sources=manifest.assets.map(asset=>{
+    const info=session.metadata[asset.id]
+    if(!info?.mime || !Number.isSafeInteger(info.bytes) || info.bytes<1)problem('Producer asset metadata missing')
+    return {...asset,...info,id:nativeId(asset.id),storageId:asset.id}
+  })
+  const bundles=manifest.scenes.map(scene=>({
+    sceneId:scene.id,bundleId:nativeId(scene.bundleAssetId),sha256:scene.bundleSha256,
+    engine:scene.engine,runtime:scene.runtime,manifest:scene.manifest,
+    dependencies:(scene.dependencies||[]).map(nativeId),
+  }))
+  return {id:job.id,mode:'deterministic_render',status:job.status,sources,bundles,
     projectId:job.projectId,versionId:job.versionId,
     input:job.jobInput,producerDocument:manifest.producerDocument,
     producerAssetMap:manifest.producerAssetMap,assetUrls:session.assetUrls,

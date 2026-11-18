@@ -20,21 +20,27 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
     where:{workspaceId,projectId},select:{artifacts:true},
   })
   const keys=new Map<string,string>()
+  const metadata:Record<string,{bytes:number;mime:string}> = {}
   for(const job of artifactJobs)for(const item of Array.isArray(job.artifacts)?job.artifacts:[]){
     if(!item||typeof item!=='object'||Array.isArray(item))continue
     const a=item as Record<string,unknown>
-    if(typeof a.id==='string'&&typeof a.key==='string'&&a.state==='ready'&&registeredIds.has(a.id))
+    if(typeof a.id==='string'&&typeof a.key==='string'&&a.state==='ready'&&registeredIds.has(a.id)){
       keys.set(a.id,a.key)
+      if(typeof a.bytes==='number' && typeof a.mime==='string') metadata[a.id]={bytes:a.bytes,mime:a.mime}
+    }
   }
   // Customer-uploaded assets have native clipUpload IDs rather than bot artifact IDs.
   const uploads=await db().clipUpload.findMany({
-    where:{id:{in:registered.map(a=>a.uploadId)}},
-    select:{id:true,key:true,status:true},
+    where:{workspaceId,id:{in:registered.map(a=>a.uploadId)}},
+    select:{id:true,key:true,status:true,bytes:true,mime:true},
   })
   for(const a of registered){
     if(keys.has(a.id))continue
     const upload=uploads.find(u=>u.id===a.uploadId)
-    if(upload && (upload.status==='READY'||upload.status==='COMPLETE'))keys.set(a.id,upload.key)
+    if(upload && (upload.status==='READY'||upload.status==='COMPLETE')){
+      keys.set(a.id,upload.key)
+      metadata[a.id]={bytes:Number(upload.bytes),mime:upload.mime}
+    }
   }
   const urls:Record<string,string>={}
   for(const asset of manifest.assets){
@@ -43,6 +49,6 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
     const url=await createReadableSignedUrl(key,900).catch(()=>null)
     if(url)urls[asset.id]=url
   }
-  return {versionId,expiresInSeconds:900,assetUrls:urls,
+  return {versionId,expiresInSeconds:900,assetUrls:urls,metadata,
     unavailableAssetIds:manifest.assets.map(a=>a.id).filter(id=>!urls[id])}
 }

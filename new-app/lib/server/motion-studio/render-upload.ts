@@ -9,7 +9,7 @@ const db=()=>getPrisma()
 type Upload={id:string;key:string;filename:string;mime:string;bytes:number;
   state:'pending'|'ready';s3UploadId?:string}
 const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{}
-const fail=(m:string,s=400):never=>{throw new MotionStudioError('INVALID',m,s)}
+function fail(m:string,s=400): never {throw new MotionStudioError('INVALID',m,s)}
 const sha=(v:string)=>createHash('sha256').update(v).digest('hex')
 async function lease(request:Request,id:string,input:Record<string,unknown>){
   const workerId=String(input.workerId||'')

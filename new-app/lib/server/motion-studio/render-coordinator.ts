@@ -7,7 +7,7 @@ import { coordinatorEnabled,requireRegisteredWorker } from '@/lib/server/motion-
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 const db=()=>getPrisma()
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex')
-const error=(message:string,status=409):never=>{throw new MotionStudioError('CONFLICT',message,status)}
+function error(message:string,status=409): never {throw new MotionStudioError('CONFLICT',message,status)}
 type Reserved={id:string;workerId:string;webhookUrl:string;lease:string;sceneId:string;versionId:string}
 async function reserveOneRender():Promise<Reserved|null> {
   return db().$transaction(async tx=>{

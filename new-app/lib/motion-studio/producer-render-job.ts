@@ -20,7 +20,7 @@ export type DeterministicProducerJob = {
 }
 const object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v)
 const copy=<T>(x:T):T=>JSON.parse(JSON.stringify(x)) as T
-const fail=(message:string):never=>{throw new Error('Deterministic producer job: '+message)}
+function fail(message:string): never {throw new Error('Deterministic producer job: '+message)}
 const has=(o:Record<string,unknown>,k:string)=>Object.prototype.hasOwnProperty.call(o,k)
 export function buildDeterministicProducerJob(args:{
   manifest:MsPortableManifest

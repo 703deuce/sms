@@ -2,7 +2,7 @@
 
 ## Scope and safety
 
-This branch implements Transovo app-side infrastructure for native producer project documents, no-AI whole-film jobs, shared worker capacity, scene previews and the first native editor tools. **It is not deployed, master has not been updated, and no real producer integration or live rendering test has passed.** GitHub remote edits alone do not prove it compiles. Keep the current production system unchanged until the gates below are met.
+This branch implements Transovo app-side infrastructure for native producer project documents, no-AI whole-film jobs, shared worker capacity, scene previews and the first native editor tools. **It is not deployed, master has not been updated, and no real producer integration or live rendering test has passed.** Local app and producer results are recorded below. Keep the current production system unchanged until the gates below are met.
 
 Old producer source is preserved on `grokbot/motion-studio-producer-kit-20261117`. Its full-suite rerun was stopped; it was previously connected to a local simulator only. The new app-side branch does **not** contain the producer's live engine installations.
 
@@ -39,24 +39,18 @@ Old producer source is preserved on `grokbot/motion-studio-producer-kit-20261117
 - Dedicated source host: `MOTION_STUDIO_SCENE_HOST_ORIGIN=https://<separate-preview-host>` on server and `NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN` in browser, with **a separate origin from the main app**, dedicated host routed to the scene API only; `MOTION_STUDIO_SCENE_HOST_KEY` must be ≥32 random characters. `MOTION_STUDIO_AGENT_PUBLIC_URL` must be the main application HTTPS origin; optional `MOTION_STUDIO_SCENE_ASSET_ORIGINS` for signed storage CORS/CSP. Avoid a preview host sharing the app's session cookies; best is a separate registrable domain.
 - No production feature flags should be enabled until source-host separation and an actual two-minute browser producer scene are verified.
 
-## CRITICAL OPEN BLOCKER: Old producer simulator client
+## Leased producer transport
 
-The old producer worker is **not yet compatible** with the new API. Its unchanged `producer/lib/store-client.mjs` calls:
+The deterministic worker entry point is `new-app/scripts/motion-studio/run-leased-render.mjs`. An authenticated worker receiver passes the coordinator's JSON assignment on stdin. The runner reads the trusted app origin from `MOTION_STUDIO_AGENT_PUBLIC_URL`, the registered worker ID and bearer from `MOTION_STUDIO_WORKER_ID` and `MOTION_STUDIO_WORKER_TOKEN`, and the installed kit directory from `MOTION_STUDIO_PRODUCER_KIT`. The kit directory contains `producer/lib/render-job.mjs` and its installed dependencies. Run inside the isolated producer environment with Node 22 or newer, the selected engines and FFmpeg. The existing creative-production runner keeps its own entry point.
 
-- `POST /assets`, `GET /assets/:nativeId`, `POST /assets/lookup` etc.
-- `GET /projects/:id/versions`, `GET /projects/:id/versions/:n`, `POST /projects/:id/versions`.
-- `GET /fonts/catalog/index`, `PUT /fonts/catalog/:engine`.
-- `GET/POST/PUT /agent/jobs/:id/...`, `PUT/POST /workers/:id/...`.
+The adapter loads the assigned immutable source, resolves registered native assets, renews the lease, and submits the measured master duration with the new document, bundle descriptions and upload receipts. Its work directory and content cache are private to the assignment. On worker loss a new attempt starts from the saved source version. Per-scene checkpoints cover the current attempt only.
 
-The new worker instead gets a **registered worker credential, job ID and lease**. This release requires a producer-side transport adapter that:
-1. Builds an `StoreClient`-compatible facade whose `getVersion/listVersions` resolve from the new GET job's `producerDocument`; every original `fnt_ / ast_ / bnd_` lookup must return the original SHA, byte size, MIME, and freshly signed URL via `producerAssetMap`.
-2. Uploads changed assets using the leased `/assets` endpoint, tracks returned tenant upload IDs while preserving content-hashed producer IDs and the SHA mapping.
-3. Handles FontCatalog from original stored `fontRecords` (and adds user-selected fonts only with registered source assets).
-4. Replaces simulator `publishVersion` with a complete `POST /report` final handoff: **new native document + all referenced assets + complete verified scene-bundle descriptions + finished MP4 upload**. No fake final success on uploading individual scenes.
-5. Submits heartbeats, stage events and local usage without exposing leases or signed URLs. Uses deterministic engine mode **without calling Grok's generative model**.
-6. Supports continuation/retry from prior source version with no local original disk paths.
+Local checks on November 18:
 
-Do not attempt to run the unmodified old `msp run-job --api https://transovo.ai/api/motion-studio` yet; it will call endpoints that do not exist. No API key should be pasted into chats or source code.
+- All 111 Motion Studio app tests passed. Prisma schema validation and client generation passed.
+- The real producer kit from `263ba27` applied a theme edit and reassembled a one-second MP4 with FFmpeg. The test decoded the entire output, checked duration, original scene reuse, immutable v1, v2 master registration, and that the worker bearer was not forwarded to storage. Job API and storage responses were test doubles. A separate test checked multipart boundaries and ETags.
+- Reproduce the runner tests from `new-app` with `MOTION_STUDIO_PRODUCER_KIT=/absolute/path/to/ms_producer_editable node --test scripts/motion-studio/run-leased-render.test.mjs`.
+- The live bot receiver, stage/usage reporting, two-minute film, dedicated preview host, storage-provider uploads and cross-machine recovery still need integration proof.
 
 ## Acceptance commands — development checkout
 
@@ -71,7 +65,7 @@ npx vitest run tests/motion-studio/motion-studio-scene-graph.test.ts \
   tests/motion-studio/motion-studio-editor-agent-operations.test.ts \
   tests/motion-studio/motion-studio-editor-timeline.test.ts
 ```
-Compare type-check results against the same base feature branch. No test results have been recorded yet.
+Compare type-check results against the same base feature branch. Scoped results are recorded above.
 
 ## Required integration proof
 
@@ -86,4 +80,4 @@ Compare type-check results against the same base feature branch. No test results
 
 ## Release gate
 
-Never merge into master or deploy this branch merely because it includes these files. **Its integration code is not certified**. The remaining live producer-side transport adapter and execution testing are mandatory. Only after build + scoped tests + security + full E2E green should deployment be considered.
+Never merge into master or deploy this branch merely because it includes these files. **Its integration code is not certified**. The live receiver integration and production-equivalent execution tests are still mandatory. Only after build + scoped tests + security + full E2E green should deployment be considered.

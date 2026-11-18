@@ -37,7 +37,7 @@ type ProducerImport = {
   bundles:ProducerSceneBundle[]
 }
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==='object'&&!Array.isArray(v)
-const reject=(m:string):never=>{throw new Error('Producer project bridge: '+m)}
+function reject(m:string): never {throw new Error('Producer project bridge: '+m)}
 const ID=/^[A-Za-z0-9_.:-]{1,128}$/
 const sha=/^[0-9a-f]{64}$/i
 const id=(x:unknown):x is string=>typeof x==='string'&&ID.test(x)
@@ -78,7 +78,7 @@ export function adaptProducerProject(input:ProducerImport):MsPortableManifest{
   // Do not lose the native project's stems/assembly/font/source references.
   for(const ref of native.assetRefs)if(!assetMap.has(ref))reject('native asset missing: '+ref)
   const critical=[native.master.asset,native.master.recipe]
-  for(const ref of critical)if(!assetMap.has(ref))reject('master asset missing: '+ref)
+  for(const ref of critical)if(!id(ref)||!assetMap.has(ref))reject('master asset missing: '+ref)
   const bundleMap=new Map<string,ProducerSceneBundle>()
   for(const b of input.bundles){
     if(!object(b)||!id(b.sceneId)||bundleMap.has(b.sceneId)||!id(b.bundleId)||

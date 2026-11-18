@@ -56,7 +56,7 @@ const ID = /^[a-zA-Z0-9_.:-]{1,128}$/
 const SHA = /^[a-f0-9]{64}$/i
 const plain = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
 const safeText = (v: string) => !/(?:https?:\/\/|file:\/\/|(?:^|\s)\.{1,2}\/|\/workspace\/|\/tmp\/)/i.test(v)
-const fail = (message: string): never => { throw new Error(message) }
+function fail(message: string): never { throw new Error(message) }
 const isId = (v: unknown): v is string => typeof v === 'string' && ID.test(v)
 const assetId = (v: unknown): v is string => isId(v) && v.length <= 128
 

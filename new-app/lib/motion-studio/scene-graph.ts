@@ -57,10 +57,10 @@ const isObject = (x: unknown): x is Record<string, unknown> =>
   x !== null && typeof x === 'object' && !Array.isArray(x)
 const ID = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/
 const HASH_ID = /^[A-Za-z][A-Za-z0-9_.:-]{0,127}$/
-const okId = (x: unknown) => typeof x === 'string' && ID.test(x)
-const fail = (m: string): never => { throw new Error('Motion scene graph: ' + m) }
-const nonnegative = (x: unknown) => typeof x === 'number' && Number.isSafeInteger(x) && x >= 0
-const finite = (x: unknown) => typeof x === 'number' && Number.isFinite(x)
+const okId = (x: unknown): x is string => typeof x === 'string' && ID.test(x)
+function fail(m: string): never { throw new Error('Motion scene graph: ' + m) }
+const nonnegative = (x: unknown): x is number => typeof x === 'number' && Number.isSafeInteger(x) && x >= 0
+const finite = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x)
 const valueOk = (type: MotionAnimatedProperty['type'], v: unknown): boolean => {
   if (v === null) return true
   if (type === 'number') return finite(v)

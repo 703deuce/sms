@@ -7,7 +7,7 @@ import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 
 const db=()=>getPrisma()
-const fail=(m:string,status=403):never=>{throw new MotionStudioError('UNAUTHENTICATED',m,status)}
+function fail(m:string,status=403): never {throw new MotionStudioError('UNAUTHENTICATED',m,status)}
 const secret=()=>{
   const value=process.env.MOTION_STUDIO_SCENE_HOST_KEY||''
   if(value.length<32)fail('Scene preview host is not configured',503)
