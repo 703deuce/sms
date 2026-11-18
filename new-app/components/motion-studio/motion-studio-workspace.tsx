@@ -457,10 +457,16 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
 
       {agentJob ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_360px] md:px-6" data-testid="ms-agent-workspace">
-          <main className="min-w-0"><AgentJobPanel job={agentJob} showChat={false} onOpenEditor={agentJob.status === 'complete' ? openEditor : undefined} /></main>
+          <main className="min-w-0">
+            {agentJob.status==='complete'&&agentJob.delivery==='live'&&agentJob.editableReady
+              ? <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId}/>
+              : <AgentJobPanel job={agentJob} showChat={false}
+                  onOpenEditor={agentJob.status==='complete'?openEditor:undefined}/>}
+          </main>
           <aside className="min-h-[420px] min-w-0 md:sticky md:top-4 md:self-start" aria-label="Transovo AI Assistant" data-testid="ms-agent-assistant-sidebar">
             <AgentChatPanel projectId={project.id} selectedTimeMs={playheadMs} />
-            <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId} />
+            {agentJob.delivery==='live'&&agentJob.status==='complete'&&agentJob.editableReady
+              ? null : <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId}/>}
           </aside>
         </div>
       ) : project.status === 'setup' ? (
