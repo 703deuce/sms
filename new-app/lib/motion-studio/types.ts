@@ -257,7 +257,7 @@ export type MsCreateInput = {
   script?: string | null
   uploads: MsUploadInput[]
   mediaPolicy: MsMediaPolicy
-  durationSeconds?: 30 | 60 | 120 | 180 | 300
+  durationSeconds?: 10 | 15 | 30 | 60 | 120 | 180 | 300
   idempotencyKey: string
   creative?: MsCreativeBrief
   format?: MsFormat

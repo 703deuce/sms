@@ -83,7 +83,7 @@ export function MotionStudioCreate({
   const router = useRouter()
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
-  const [durationSeconds, setDurationSeconds] = useState<30 | 60 | 120 | 180 | 300>(30)
+  const [durationSeconds, setDurationSeconds] = useState<10 | 15 | 30 | 60 | 120 | 180 | 300>(30)
   const [durationTouched, setDurationTouched] = useState(false)
   const [formatTouched, setFormatTouched] = useState(false)
   const [prompt, setPrompt] = useState('')
@@ -365,8 +365,10 @@ export function MotionStudioCreate({
             <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
               <label htmlFor="ms-duration" className="text-sm font-medium">Video length</label>
               <select id="ms-duration" data-testid="ms-duration" value={durationSeconds}
-                onChange={e => { setDurationSeconds(Number(e.target.value) as 30 | 60 | 120 | 180 | 300); setDurationTouched(true) }}
+                onChange={e => { setDurationSeconds(Number(e.target.value) as 10 | 15 | 30 | 60 | 120 | 180 | 300); setDurationTouched(true) }}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value={10}>10 seconds · Shorts/TikTok</option>
+                <option value={15}>15 seconds · Shorts/TikTok</option>
                 <option value={30}>30 seconds</option>
                 <option value={60}>1 minute</option>
                 <option value={120}>2 minutes</option>

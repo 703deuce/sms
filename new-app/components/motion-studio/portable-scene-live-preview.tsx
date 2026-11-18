@@ -9,10 +9,12 @@ type Session={
   sceneUrl:string;expiresAt:string;assetUrls:Record<string,string>;
   assetRecords:Record<string,unknown>;fonts:Record<string,unknown>;
 }
-export function PortableSceneLivePreview({projectId,versionId,scene,theme,overrides,patch,themeColors,seconds}:{
+export function PortableSceneLivePreview({projectId,versionId,scene,theme,overrides,patch,themeColors,seconds,onUnavailable}:{
   projectId:string;versionId:string;scene:MsPortableScene;
   theme:Record<string,unknown>;overrides:Record<string,unknown>;
   patch:Record<string,Record<string,unknown>>;themeColors:Record<string,string>;seconds:number
+  /** No preview host or a render-only scene: the parent shows a still-frame layer picker instead of an error. */
+  onUnavailable?:()=>void
 }){
   const frame=useRef<HTMLIFrameElement>(null)
   const serial=useRef(0)
@@ -49,9 +51,14 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
       // URL path, so their capabilities survive relative module imports.
       link.searchParams.set('host',window.location.origin)
       setSession({...data,sceneUrl:link.toString()})
-    }).catch(e=>{if(active)setError(e instanceof Error?e.message:'Scene preview unavailable')})
+    }).catch(e=>{
+      if(!active)return
+      if(onUnavailable){onUnavailable();return}
+      setError(e instanceof Error?e.message:'Scene preview unavailable')
+    })
       .finally(()=>{if(active)setLoading(false)})
     return()=>{active=false}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[projectId,versionId,scene.id])
 
   useEffect(()=>{

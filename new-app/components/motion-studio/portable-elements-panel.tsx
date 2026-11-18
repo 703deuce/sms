@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableSceneLivePreview } from './portable-scene-live-preview'
+import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
   theme:Record<string,unknown>; overrides:Record<string,unknown> }
 const asObj=(v:unknown):Record<string,unknown> =>
@@ -26,6 +27,9 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [projectRendering,setProjectRendering]=useState(false)
   const [history,setHistory]=useState<{id:string;revision:number;createdAt:string}[]>([])
   const [restoreId,setRestoreId]=useState('')
+  const [selectedLayer,setSelectedLayer]=useState('')
+  const [liveUnavailable,setLiveUnavailable]=useState(false)
+  const [masterUrl,setMasterUrl]=useState<string|null>(null)
   const load=useCallback(async()=>{
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
@@ -38,6 +42,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     finally {setLoading(false)}
   },[projectId])
   useEffect(()=>{void load()},[load])
+  // Still-frame layer picker: the newest committed master (refreshed after every no-AI render).
+  useEffect(()=>{
+    let active=true
+    fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId),{cache:'no-store'})
+      .then(r=>r.ok?r.json():null).then((d:{project?:{previewUrl?:string|null};previewUrl?:string|null}|null)=>{
+        if(active)setMasterUrl(d?.project?.previewUrl??d?.previewUrl??null)
+      }).catch(()=>undefined)
+    return()=>{active=false}
+  },[projectId,version?.id])
   // The editor may be open while the producer is still uploading its source.
   // Refresh until the first immutable portable version arrives (ordinary API, no AI).
   useEffect(()=>{
@@ -189,10 +202,16 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
         </select>
       </label>
-      {scene && <PortableSceneLivePreview key={version.id+':'+scene.id}
-        projectId={projectId} versionId={version.id} scene={scene}
-        theme={version.theme} overrides={version.overrides}
-        patch={patch} themeColors={colors} seconds={2.0}/>}
+      {scene && (scene.manifest.livePreview?.capability==='render_only'||liveUnavailable
+        ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
+            selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch}/>
+        : <PortableSceneLivePreview key={version.id+':'+scene.id}
+            projectId={projectId} versionId={version.id} scene={scene}
+            theme={version.theme} overrides={version.overrides}
+            patch={patch} themeColors={colors} seconds={2.0}
+            onUnavailable={()=>setLiveUnavailable(true)}/>)}
+      {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
+        onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-medium">Whole-video theme</h4>
         {Object.entries(themeColors).filter(([,v])=>{
@@ -205,9 +224,12 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
             <span className="flex-1">{key}</span><code>{colors[key]||hex}</code>
           </label>);})}
       </div>
-      {(scene?.manifest.elements||[]).map(element=>{
-        const editable=Object.entries(element.properties).filter(([,p])=>
-          p.tier==='live_editable'||p.tier==='render_editable')
+      {(scene?.manifest.elements||[]).filter(element=>!scene?.manifest.motionTree||element.id===selectedLayer||
+        (element.id==='sceneSettings'&&!selectedLayer)).map(element=>{
+        const layerProps=new Set(scene?.manifest.motionTree?['name','locked','visible']:[])
+        const locked=Boolean((patch[element.id]||{}).locked??asObj(savedElements[element.id]).locked)
+        const editable=Object.entries(element.properties).filter(([key,p])=>!layerProps.has(key)&&
+          (p.tier==='live_editable'||p.tier==='render_editable'))
         if(!editable.length)return null
         return <fieldset key={element.id} className="rounded-lg border border-border p-2">
           <legend className="px-1 text-xs font-semibold">{element.id}</legend>
@@ -217,7 +239,8 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
                 asObj(savedElements[element.id])[key]??spec.default??''
               return <label key={key} className="flex flex-col gap-1 text-xs">
                 <span>{key} {spec.tier==='render_editable'?'· worker render':''}</span>
-                <PropertyControl spec={spec} value={value} onChange={v=>setProperty(element.id,key,v)}/>
+                <PropertyControl spec={spec} value={value} disabled={locked}
+                  onChange={v=>setProperty(element.id,key,v)}/>
               </label>
             })}
           </div>
@@ -248,7 +271,8 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     </section>
   )
 }
-function PropertyControl({spec,value,onChange}:{spec:MsEditProperty;value:unknown;onChange:(v:unknown)=>void}) {
+function PropertyControl({spec,value,onChange,disabled=false}:{spec:MsEditProperty;value:unknown;onChange:(v:unknown)=>void;disabled?:boolean}) {
+  if(disabled)return <span className="text-xs text-muted-foreground">{typeof value==='object'?'…':String(value)} (locked)</span>
   if(spec.type==='color')return <input aria-label="Color" type="color" value={typeof value==='string'?value:'#ffffff'}
     onChange={e=>onChange(e.target.value)}/>
   if(spec.type==='boolean')return <input aria-label="Enabled" type="checkbox" checked={Boolean(value)}
@@ -260,6 +284,7 @@ function PropertyControl({spec,value,onChange}:{spec:MsEditProperty;value:unknow
     </select>
   }
   if(spec.type==='number')return <input className={inputCls} type="number" min={spec.min} max={spec.max}
+    step={spec.max!==undefined&&spec.max<=1?0.05:spec.max!==undefined&&spec.max<=30?0.1:1}
     value={typeof value==='number'?value:0} onChange={e=>onChange(Number(e.target.value))}/>
   if(spec.type==='point'){
     const p=asObj(value)

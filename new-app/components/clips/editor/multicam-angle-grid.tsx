@@ -85,7 +85,7 @@ function AngleTile({
     const v = videoRef.current
     if (!v || !url) return
     if (!playing) {
-      if (Math.abs(v.currentTime - targetT) > 0.05) v.currentTime = targetT
+      if (Math.abs(v.currentTime - targetT) > 0.001) v.currentTime = targetT // paused tiles must show the exact frame (a 1-frame step is < 50 ms)
       v.pause()
       return
     }

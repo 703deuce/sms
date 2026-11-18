@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
-import { coordinatorEnabled, coordinatePendingJobs } from '@/lib/server/motion-studio/coordinator'
+import { coordinatorEnabled, coordinatePendingJobs, renewCreativeLease } from '@/lib/server/motion-studio/coordinator'
 import { portableAssetSession } from '@/lib/server/motion-studio/portable-assets'
 import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
@@ -89,7 +89,11 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const previousVideo = !job.resultKey && job.parentJobId
     ? await db().motionStudioAgentJob.findFirst({ where: { id: job.parentJobId,
       workspaceId, projectId, status: 'complete' }, select: { resultKey: true } }) : null
-  const activeVideoKey = job.resultKey || previousVideo?.resultKey
+  // exportInfo.masterKey is rewritten by every completion, including a
+  // no-AI render-project re-render, so it is always the newest committed MP4.
+  const latestMaster = str(toObject(project.exportInfo).masterKey, 600)
+  const activeVideoKey = (job.status === 'complete' || job.parentJobId ? latestMaster : '') ||
+    job.resultKey || previousVideo?.resultKey
   const videoUrl = activeVideoKey ? await createReadableSignedUrl(activeVideoKey, 3600).catch(() => null) : null
   const events = await db().studioActivityEvent.findMany({ where: { projectId, kind: 'agent_progress' }, orderBy: { id: 'asc' }, take: 500 })
   return { ...publicJob(job), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
@@ -211,7 +215,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     categoryGuidance: directorCategoryGuidance(creative.videoType),
     creative: { ...creative, brand: creative.brandMode === 'none' ? undefined : creative.brand },
     // Original prompt always remains intact; creative guidance is separate, never a scene template.
-    durationSeconds: [30,60,120,180,300].includes(Number(settings.durationSeconds))
+    durationSeconds: [10,15,30,60,120,180,300].includes(Number(settings.durationSeconds))
       ? Number(settings.durationSeconds) : Math.round((Number(settings.lengthMin) || 3) * 60),
     aspectRatio: str(settings.format, 30).split('_')[0] || '16:9',
     ...(() => {
@@ -280,6 +284,10 @@ export async function requireBotJob(id: string, request: Request) {
   if (!validPrimary && !validStaged) {
     throw new MotionStudioError('UNAUTHENTICATED', 'Invalid or expired job token.', 401)
   }
+  // An authenticated job-token call proves the worker is still producing:
+  // renew its lease so the sweep never re-dispatches a live creative job.
+  if (coordinatorEnabled() && job.leaseOwner && !isDone(job.status))
+    await renewCreativeLease(job.id, job.leaseOwner, job.leaseExpiresAt).catch(() => undefined)
   return await expireStaleQuestion(job)
 }
 

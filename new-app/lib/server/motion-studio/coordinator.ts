@@ -19,6 +19,27 @@ function problem(text: string, code: MsErrorCode = 'INVALID', status = 400): nev
   throw new MotionStudioError(code, text, status)
 }
 export const coordinatorEnabled = () => process.env.MOTION_STUDIO_COORDINATOR === '1'
+/** Creative jobs run long render stages; the lease is also renewed by every job-token call. */
+export const CREATIVE_LEASE_MS = Math.max(5*60_000,
+  Math.min(4*3600_000,Number(process.env.MOTION_STUDIO_CREATIVE_LEASE_MS)||30*60_000))
+/** Bounded wait for the shared advisory lock so a busy moment returns quickly instead of 500ing. */
+export const COORDINATOR_TX = {maxWait:10_000,timeout:20_000} as const
+/**
+ * Renew a creative lease while its worker keeps making authenticated job-token
+ * calls (progress, assets, messages). Throttled so most calls do not write.
+ */
+export async function renewCreativeLease(jobId: string, workerId: string, current: Date|null) {
+  if (!coordinatorEnabled()) return
+  const now = Date.now()
+  if (current && current.getTime() - now > CREATIVE_LEASE_MS - 2*60_000) return
+  const expires = new Date(now + CREATIVE_LEASE_MS)
+  await db().$transaction([
+    db().motionStudioAgentJob.updateMany({where:{id:jobId,leaseOwner:workerId,
+      status:{in:['dispatched','running']},leaseExpiresAt:{gt:new Date(now)}},data:{leaseExpiresAt:expires}}),
+    db().motionStudioWorkerAssignment.updateMany({where:{jobId,workerId,
+      status:{in:['reserved','dispatched','running']},leaseExpiresAt:{gt:new Date(now)}},data:{leaseExpiresAt:expires}}),
+  ])
+}
 export function requireCoordinatorAdmin(request: Request) {
   const key = process.env.MOTION_STUDIO_COORDINATOR_ADMIN_KEY || ''
   const auth = request.headers.get('authorization') || ''
@@ -248,7 +269,7 @@ async function reserveOne(): Promise<Pending|null> {
       if (!selected) continue
       const lease=randomBytes(32).toString('base64url')
       const token=randomBytes(32).toString('base64url')
-      const expires=new Date(Date.now()+5*60_000)
+      const expires=new Date(Date.now()+CREATIVE_LEASE_MS)
       await tx.motionStudioWorkerAssignment.upsert({
         where:{ jobId:job.id },
         create:{ id:'mswa_'+randomUUID(),jobId:job.id,workspaceId:job.workspaceId,
@@ -268,7 +289,7 @@ async function reserveOne(): Promise<Pending|null> {
         webhookUrl:selected.webhookUrl,lease,token}
     }
     return null
-  },{timeout:15000})
+  },COORDINATOR_TX)
 }
 export async function coordinatePendingJobs(max = 3) {
   if (!coordinatorEnabled()) return { enabled:false, dispatched:0 }
@@ -302,7 +323,7 @@ export async function coordinatePendingJobs(max = 3) {
         await tx.motionStudioWorkerAssignment.updateMany({where:{jobId:item.jobId,workerId:item.workerId,status:'reserved'},data:{status:'failed'}})
         await tx.motionStudioAgentJob.updateMany({where:{id:item.jobId,leaseOwner:item.workerId,status:'dispatched'},
           data:{status:'queued',leaseOwner:null,leaseIdHash:null,leaseExpiresAt:null}})
-      })
+      },COORDINATOR_TX)
       continue
     }
     dispatched++
@@ -317,13 +338,31 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
   const worker=await requireRegisteredWorker(request,id)
   const jobId=String(input.jobId||'')
   const lease=String(input.leaseId||'')
+  const status=input.status==='complete'?'complete':input.status==='failed'?'failed':'running'
   const assignment=await db().motionStudioWorkerAssignment.findFirst({
     where:{jobId,workerId:worker.id,status:{in:['reserved','dispatched','running']}},
   })
   if (!assignment || assignment.leaseExpiresAt.getTime()<=Date.now() ||
-      !eq(hash(jobId+':'+lease),assignment.leaseSecretHash))
+      !eq(hash(jobId+':'+lease),assignment.leaseSecretHash)) {
+    // /complete and /fail release the assignment first. Accept the producer's
+    // final usage-after report for an assignment that just finished.
+    if (status!=='running') {
+      const finished=await db().motionStudioWorkerAssignment.findFirst({
+        where:{jobId,workerId:worker.id,status:{in:['complete','failed']},
+          updatedAt:{gt:new Date(Date.now()-10*60_000)}},
+      })
+      if (finished && eq(hash(jobId+':'+lease),finished.leaseSecretHash)) {
+        if (input.weeklyUsagePercent!==undefined) {
+          const reading=parseUsageObservation(input)
+          await db().motionStudioWorkerAssignment.update({where:{id:finished.id},
+            data:{usageAfter:reading.observed,usageObservedAt:reading.observedAt}})
+          await recordPlanUsage(finished.planId,reading)
+        }
+        return {ok:true,status:finished.status,alreadyFinished:true}
+      }
+    }
     problem('Worker lease not owned or expired','CONFLICT',409)
-  const status=input.status==='complete'?'complete':input.status==='failed'?'failed':'running'
+  }
   const observed=Number(input.weeklyUsagePercent)
   const validObservation=input.weeklyUsagePercent!==undefined &&
     Number.isFinite(observed)&&observed>=0&&observed<=100
@@ -337,7 +376,7 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
       observedAt.getTime()>Date.now()+60_000 ||
       observedAt.getTime()<Date.now()-7*24*3600_000))
     problem('Invalid Grok plan usage observation timestamp')
-  const expires=new Date(Date.now()+5*60_000)
+  const expires=new Date(Date.now()+CREATIVE_LEASE_MS)
   await db().$transaction(async tx=>{
     await tx.motionStudioWorkerAssignment.update({
       where:{id:assignment.id},data:{
@@ -356,7 +395,7 @@ export async function reportWorkerProgress(request: Request, raw: unknown) {
     }
     if(status==='running') await tx.motionStudioAgentJob.updateMany({where:{id:jobId,leaseOwner:worker.id},
       data:{leaseExpiresAt:expires}})
-  })
+  },COORDINATOR_TX)
   if(status!=='running') await coordinatePendingJobs(1)
   return {ok:true,status,leaseExpiresAt:expires.toISOString()}
 }
@@ -392,7 +431,7 @@ export async function coordinatorSweep() {
         status:{in:['dispatched','running']},leaseExpiresAt:{lte:now}},
         data:{status:'queued',leaseOwner:null,leaseIdHash:null,leaseExpiresAt:null},
       })
-    })
+    },COORDINATOR_TX)
   }
   const dispatched=await coordinatePendingJobs()
   return { ...dispatched,expired:expired.length,staleQuestions:staleQuestions.count,abandoned:abandoned.count }

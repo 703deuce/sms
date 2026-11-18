@@ -84,13 +84,25 @@ export function buildMotionStudioEditorEdits(i: BuildEditorEditsInput): ClipEdit
     }
   }
 
+  // A producer re-render (new timelineVersion) must not disturb the customer's
+  // own timeline decisions: keep their trim, canvas and splits; only the
+  // Motion Studio-owned scene boundaries are replaced.
+  const prevMsSplits = new Set(sceneSplitsMs(base.motionStudio, Number.MAX_SAFE_INTEGER))
+  const userSplits = i.base ? (base.videoSplits ?? []).filter(t => !prevMsSplits.has(t) && t > 0 && t < d) : []
+  const prevEnd = Number(base.motionStudio?.durationMs) ||
+    Math.max(0, ...((base.motionStudio?.segments ?? []) as Segment[]).map(s => Number(s.endMs) || 0))
+  let trim = { in: 0, out: d }
+  if (i.base && base.trim) {
+    const out = prevEnd > 0 && base.trim.out >= prevEnd - 1 ? d : Math.min(d, Math.max(1, base.trim.out))
+    trim = { in: Math.max(0, Math.min(base.trim.in, out - 1)), out }
+  }
   return {
     ...base,
-    trim: { in: 0, out: d },
-    aspectRatio: '16:9',
+    trim,
+    aspectRatio: i.base ? (base.aspectRatio ?? '16:9') : '16:9',
     layout: { ...(base.layout ?? { shotOverrides: [] }), mode: 'full_frame', shotOverrides: base.layout?.shotOverrides ?? [] },
     markers,
-    videoSplits: sceneSplitsMs(i.patch.motionStudio, d),
+    videoSplits: [...new Set([...sceneSplitsMs(i.patch.motionStudio, d), ...userSplits])].sort((a, b) => a - b),
     audio: { music, sfx: base.audio?.sfx ?? [], ...(base.audio?.studioSound !== undefined ? { studioSound: base.audio.studioSound } : {}) },
     motionStudio: i.patch.motionStudio,
   }

@@ -21,12 +21,15 @@ export function previewExportMatchesDefault(edits: ClipEditsV2, bounds: ClipBoun
 
   const cap = edits.captions ?? {}
   const dcap = d.captions ?? {}
-  const keys = ['enabled', 'presetId', 'animation', 'size', 'position', 'case', 'wordsPerLine'] as const
+  // Compare EVERY caption property (colors, highlight, font, stroke, …), not a
+  // subset: any change the caption renderer reads must force a real render.
+  const same = (x: unknown, y: unknown) => JSON.stringify(x ?? null) === JSON.stringify(y ?? null)
+  const keys = new Set([...Object.keys(cap), ...Object.keys(dcap)])
   for (const k of keys) {
     const a = (cap as Record<string, unknown>)[k]
     const b = (dcap as Record<string, unknown>)[k]
-    if (a !== undefined && b !== undefined && a !== b) return false
-    if (a !== undefined && b === undefined && a !== b) return false
+    if (a === undefined) continue
+    if (!same(a, b)) return false
   }
   return true
 }

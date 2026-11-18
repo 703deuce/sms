@@ -70,8 +70,17 @@ export function speedBaseMs(map: ExportTimeMap, displayMs: number, rate: number,
 }
 
 /** A black/silent gap occupies display time but has no corresponding main-video frame. */
-export function gapAtDisplayMs(map: ExportTimeMap, displayMs: number) {
-  return map.wins.find(w => w.gap && displayMs >= w.startMs && displayMs < w.endMs) ?? null
+export function gapAtDisplayMs(map: ExportTimeMap, displayMs: number, rate = 1) {
+  // Same coordinates as the ruler (speedDisplayMs): source footage is warped by
+  // the global speed, inserted gaps are not. Returned start/end are display ms.
+  const v = Number.isFinite(rate) && rate > 0 ? rate : 1
+  let inserted = 0
+  for (const w of map.wins) {
+    const startMs = w.baseMs / v + inserted
+    if (w.gap && displayMs >= startMs && displayMs < startMs + w.durMs) return { ...w, startMs, endMs: startMs + w.durMs }
+    inserted += w.durMs
+  }
+  return null
 }
 
 /** Export ms → base ms; a point inside an insert maps to the insert's base point. */

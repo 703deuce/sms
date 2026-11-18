@@ -89,7 +89,11 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         const response = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId), { cache: 'no-store' })
         if (!response.ok) return
         const data = await response.json() as { job?: MotionAgentJob | null }
-        if (active) setAgentJob(data.job ?? null)
+        // Keep the current signed link while it points at the same MP4, so polling
+        // never restarts playback; a new render (new object path) swaps it in.
+        const path = (u?: string | null) => (u ? u.split('?')[0] : null)
+        if (active) setAgentJob(prev => data.job && prev?.videoUrl && path(prev.videoUrl) === path(data.job.videoUrl)
+          ? { ...data.job, videoUrl: prev.videoUrl } : data.job ?? null)
       } catch { /* The regular project polling and its error display remain available. */ }
     }
     void load()

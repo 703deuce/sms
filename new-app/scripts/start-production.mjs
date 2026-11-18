@@ -60,6 +60,7 @@ async function startServer() {
     cwd: path.dirname(standaloneServer),
   });
 
+  startMotionStudioAutoSweep();
   child.on("exit", (code, signal) => {
     if (signal) {
       process.kill(process.pid, signal);
@@ -67,6 +68,40 @@ async function startServer() {
     }
     process.exit(code ?? 1);
   });
+}
+
+/**
+ * Motion Studio coordinator sweep, run by the web server itself (DB-only).
+ * Requeues expired leases and dispatches queued work. It never contacts a
+ * producer unless a job is actually waiting, so producers need no heartbeat.
+ */
+function startMotionStudioAutoSweep() {
+  const key = process.env.MOTION_STUDIO_COORDINATOR_ADMIN_KEY || "";
+  if (process.env.MOTION_STUDIO_COORDINATOR !== "1" || key.length < 32) return;
+  if (process.env.MOTION_STUDIO_AUTO_SWEEP === "0") return;
+  const everyMs = Math.max(30_000, Number(process.env.MOTION_STUDIO_AUTO_SWEEP_MS) || 60_000);
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/motion-studio/agent/coordinator`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ sweep: true }),
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (!res.ok) console.warn("[new-app/start] motion-studio auto sweep HTTP", res.status);
+    } catch (err) {
+      console.warn("[new-app/start] motion-studio auto sweep failed:", err?.name || "error");
+    } finally {
+      running = false;
+    }
+  };
+  setTimeout(() => {
+    tick();
+    setInterval(tick, everyMs).unref?.();
+  }, 90_000).unref?.();
 }
 
 runMigrations()

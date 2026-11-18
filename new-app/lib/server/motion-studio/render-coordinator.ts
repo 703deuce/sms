@@ -3,7 +3,7 @@ import { createHash,randomBytes } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
 import { portableAssetSession } from '@/lib/server/motion-studio/portable-assets'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
-import { coordinatorEnabled,requireRegisteredWorker } from '@/lib/server/motion-studio/coordinator'
+import { coordinatorEnabled,requireRegisteredWorker,COORDINATOR_TX } from '@/lib/server/motion-studio/coordinator'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 const db=()=>getPrisma()
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex')
@@ -82,7 +82,7 @@ async function reserveOneRender():Promise<Reserved|null> {
         lease,sceneId:request.sceneId,versionId:request.versionId}
     }
     return null
-  },{timeout:15000})
+  },COORDINATOR_TX)
 }
 /** Server calls the existing idle-cost-free webhook. AI is never invoked. */
 export async function coordinateSceneRenders(limit=3){

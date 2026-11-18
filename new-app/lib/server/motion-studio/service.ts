@@ -83,7 +83,7 @@ export function motionStudioConfig() {
 function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   const o = J(raw)
   const out = { ...prev }
-  if (o.durationSeconds !== undefined && [30,60,120,180,300].includes(Number(o.durationSeconds))) out.durationSeconds = Number(o.durationSeconds)
+  if (o.durationSeconds !== undefined && [10,15,30,60,120,180,300].includes(Number(o.durationSeconds))) out.durationSeconds = Number(o.durationSeconds)
   if (o.lengthMin !== undefined) {
     const minutes = Number(o.lengthMin)
     if (!validMinutes(minutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
@@ -266,10 +266,12 @@ export async function createProject(workspaceId: string, userId: string, body: u
   }
   const requestedSeconds = Number(o.durationSeconds)
   if (o.durationSeconds !== undefined) {
-    if (![30, 60, 120, 180, 300].includes(requestedSeconds)) throw new MotionStudioError('INVALID','Choose 30 seconds, 1, 2, 3 or 5 minutes.',400)
+    if (![10, 15, 30, 60, 120, 180, 300].includes(requestedSeconds)) throw new MotionStudioError('INVALID','Choose 10, 15 or 30 seconds, or 1, 2, 3 or 5 minutes.',400)
     settings.durationSeconds = requestedSeconds
     settings.lengthMin = Math.ceil(requestedSeconds / 60)
   }
+  // A 30s pick must not round up to a one-minute canvas (it showed 01:00).
+  const plannedMs = settings.durationSeconds ? settings.durationSeconds * 1000 : settings.lengthMin * 60_000
   const id = createId('msp')
   const clipProjectId = createId('proj')
   const canvasUploadId = createId('upl')
@@ -281,9 +283,9 @@ export async function createProject(workspaceId: string, userId: string, body: u
         filename: 'Motion Studio video.mp4', bytes: BigInt(0), mime: 'video/mp4', status: 'PENDING', storageDriver: storageDriverName(), kind: 'source' } })
       await tx.clipProject.create({ data: { id: clipProjectId, workspaceId, createdById: userId, title: (title || prompt || 'Video').slice(0, 120),
         uploadId: canvasUploadId, sourceKind: 'motion_studio',
-        settings: toPrismaJson(defaultClipSettings({ aspectRatio: settings.format.split('_')[0] as '16:9' | '9:16' | '1:1', rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, byo: true,
+        settings: toPrismaJson(defaultClipSettings({ aspectRatio: settings.format.split('_')[0] as '16:9' | '9:16' | '1:1', rangeStartMs: 0, rangeEndMs: plannedMs, byo: true,
           fullVideo: true, blank: true, captions: { enabled: false, presetId: 'bold_pop', language: 'en' } })),
-        rangeStartMs: 0, rangeEndMs: settings.lengthMin * 60_000, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
+        rangeStartMs: 0, rangeEndMs: plannedMs, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'creative', clipProjectId, clipId, title,
         brief: prompt || script, workflow,
         settings: toPrismaJson({ ...settings, aspect: settings.format.split('_')[0], automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads', creative }),
@@ -693,7 +695,7 @@ export async function listProjects(workspaceId: string, q: { limit?: string | nu
     const c: Ctx = { row: r, s: J(r.settings), story: null, plan: r.plan ? J(r.plan) : null, scenes: [], assets: [] }
     return { id: r.id, title: r.title || str(J(r.story).title, 120) || 'Documentary', isExample: false, createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(), status: feStatus(c), workflow: r.workflow as MsWorkflow, sceneCount,
-      durationMs: Number(J(r.exportInfo).durationMs) || (Number(J(r.settings).lengthMin) || 3) * 60_000, thumbnailUrl: await sign(thumb?.stillKey) }
+      durationMs: Number(J(r.exportInfo).durationMs) || (Number(J(r.settings).durationSeconds) * 1000) || (Number(J(r.settings).lengthMin) || 3) * 60_000, thumbnailUrl: await sign(thumb?.stillKey) }
   }))
   return { projects, nextCursor: rows.length > limit ? page[page.length - 1].id : null }
 }

@@ -35,6 +35,16 @@ describe('Motion Studio -> Compact Editor timeline', () => {
     expect(buildMotionStudioEditorEdits({ base: removed, durationMs: 20000, patch: { motionStudio: ext }, musicUploadId: 'msmuB', lastPlacedMusicUploadId: 'msmuA' }).audio?.music).toBeNull()
   })
 
+  it('a producer refresh keeps the customer trim, canvas and own splits (ChatGPT audit #2)', () => {
+    const first = buildMotionStudioEditorEdits({ base: null, durationMs: 10000, patch: { motionStudio: { ...ext, durationMs: 10000, segments: [{ startMs: 0, endMs: 10000 }] } }, musicUploadId: null, lastPlacedMusicUploadId: null })
+    const customer = { ...first, aspectRatio: '9:16' as const, trim: { in: 1000, out: 9000 }, videoSplits: [3500] }
+    const v2 = { ...ext, durationMs: 10000, timelineVersion: 2, segments: [{ startMs: 0, endMs: 5000 }, { startMs: 5000, endMs: 10000 }] }
+    const again = buildMotionStudioEditorEdits({ base: customer, durationMs: 10000, patch: { motionStudio: v2 }, musicUploadId: null, lastPlacedMusicUploadId: null })
+    expect(again.aspectRatio).toBe('9:16')
+    expect(again.trim).toEqual({ in: 1000, out: 9000 })
+    expect(again.videoSplits).toEqual([3500, 5000])
+  })
+
   it('keeps a 3:11 eight-scene film on the full canvas, including baked narration', () => {
     const durationMs = 191_000
     const boundaries = [0, 10_000, 33_000, 56_000, 78_000, 102_000, 129_000, 156_000, durationMs]

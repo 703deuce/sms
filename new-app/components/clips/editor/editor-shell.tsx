@@ -48,7 +48,7 @@ import { patchClip } from '@/lib/clips-api'
 import { editorPreviewDurationMs, editorPreviewEdits } from '@/lib/clips/editor-preview-edits'
 import { seedEditorExportTemplate } from '@/lib/clips/editor-export-template-seed'
 import { hostOnlyFromUrl, logEditorDecision } from '@/lib/clips/editor-decision-log'
-import { exportTimeMap, toExportMs, gapAtDisplayMs } from '@/lib/clips/editor/export-time'
+import { exportTimeMap, toExportMs, speedDisplayMs, gapAtDisplayMs } from '@/lib/clips/editor/export-time'
 import { timebaseFor } from '@/lib/clips/editor/clip-timeline'
 import { sourceMsToEditorMs } from '@/lib/clips/editor/source-ms-to-editor'
 import { transcriptCutForSelection } from '@/lib/clips/editor/transcript-cut-map'
@@ -1729,7 +1729,7 @@ export function EditorShell({
   const seekTimelineDisplay = useCallback(
     (baseMs: number, displayMs?: number) => {
       seekOutput(baseMs)
-      const gap = displayMs == null ? null : gapAtDisplayMs(exportMap, displayMs)
+      const gap = displayMs == null ? null : gapAtDisplayMs(exportMap, displayMs, normalizeEditSpeed(edits.speed) ?? 1)
       if (!gap) return
       videoRef.current?.pause()
       const next: GapPreview = { displayMs: Math.max(gap.startMs, Math.min(displayMs!, gap.endMs - 1)),
@@ -1738,7 +1738,7 @@ export function EditorShell({
       setGapPreview(next)
       setPlaying(false)
     },
-    [exportMap, seekOutput],
+    [exportMap, seekOutput, edits.speed],
   )
 
   // When the only clip is moved right, its new opening gap should appear black
@@ -1748,7 +1748,7 @@ export function EditorShell({
     if (active) {
       // Undoing the drag can remove its insert. Never strand the preview on
       // a phantom black frame, and keep an enlarged/shrunk gap in sync.
-      const stillThere = gapAtDisplayMs(exportMap, active.displayMs)
+      const stillThere = gapAtDisplayMs(exportMap, active.displayMs, normalizeEditSpeed(edits.speed) ?? 1)
       if (!stillThere) {
         gapPreviewRef.current = null
         setGapPreview(null)
@@ -1762,15 +1762,16 @@ export function EditorShell({
       }
       return
     }
-    const at = toExportMs(exportMap, outputMsRef.current, 'end')
-    const gap = gapAtDisplayMs(exportMap, at)
+    const rate = normalizeEditSpeed(edits.speed) ?? 1
+    const at = speedDisplayMs(exportMap, outputMsRef.current, rate, 'end')
+    const gap = gapAtDisplayMs(exportMap, at, rate)
     if (!gap) return
     videoRef.current?.pause()
     const next: GapPreview = { displayMs: gap.startMs, endMs: gap.endMs, baseMs: gap.baseMs, playing: false }
     gapPreviewRef.current = next
     setGapPreview(next)
     setPlaying(false)
-  }, [exportMap])
+  }, [exportMap, edits.speed])
 
   // Black/silent insert playback is clocked in export time, not by the paused
   // source video. Resume the real clip only once the inserted gap has elapsed.
@@ -2835,6 +2836,11 @@ export function EditorShell({
         canvasBgImageUrl={
           edits.canvasBg?.type === 'image' && edits.canvasBg.imageId
             ? uploadUrlFor(edits.canvasBg.imageId)
+            : null
+        }
+        bgReplaceImageUrl={
+          edits.bgRemoval?.background.type === 'image' && edits.bgRemoval.background.uploadId
+            ? uploadUrlFor(edits.bgRemoval.background.uploadId)
             : null
         }
         mainVideoSize={mainVideoSize}

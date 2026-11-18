@@ -165,6 +165,7 @@ export function PreviewStage({
   sourceUrls = null,
   canvas = null,
   canvasBgImageUrl = null,
+  bgReplaceImageUrl = null,
   mainVideoSize = null,
   previewQuality = 'full',
   previewZoom = 'fit',
@@ -219,6 +220,8 @@ export function PreviewStage({
     captionQuickStyle?: { onMore: () => void }
   } | null
   canvasBgImageUrl?: string | null
+  /** Replacement background image for background removal (signed upload URL). */
+  bgReplaceImageUrl?: string | null
   mainVideoSize?: { width: number; height: number } | null
   previewQuality?: PreviewQuality
   previewZoom?: PreviewZoom
@@ -1937,7 +1940,7 @@ export function PreviewStage({
         ) : null}
         {clipId && edits.bgRemoval?.enabled && !templatePreview && !segmentLayoutActive ? (
           <BgMatteCompositePreview clipId={clipId} mediaKind={matteMediaKind} video={videoRefInner} outMs={outMsRef}
-            enabled={true} removal={edits.bgRemoval} />
+            enabled={true} removal={edits.bgRemoval} backgroundImageUrl={bgReplaceImageUrl} />
         ) : null}
         <InsertPlayback videoRef={videoRefInner} edits={edits} words={words} sourceUrls={sourceUrls} mediaOffsetMs={mediaOffsetMs} />
         {videoUrl && edits.splitEdits?.length ? (

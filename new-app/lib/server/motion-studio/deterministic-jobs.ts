@@ -5,7 +5,7 @@ import { MotionStudioError, type MsErrorCode } from '@/lib/server/motion-studio/
 import {buildDeterministicProducerJob} from '@/lib/motion-studio/producer-render-job'
 import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
-import {coordinatorEnabled,requireRegisteredWorker} from '@/lib/server/motion-studio/coordinator'
+import {coordinatorEnabled,requireRegisteredWorker,COORDINATOR_TX} from '@/lib/server/motion-studio/coordinator'
 import {toPrismaJson} from '@/lib/server/clips/prisma-json'
 
 const db=()=>getPrisma()
@@ -130,7 +130,7 @@ async function reserveOne():Promise<Reservation|null>{
         leaseId,versionId:job.versionId}
     }
     return null
-  },{timeout:15000})
+  },COORDINATOR_TX)
 }
 /** The server wakes a producer using the existing webhook; no bot polling, no AI calls. */
 export async function coordinateDeterministicJobs(limit=3){
@@ -181,7 +181,15 @@ export async function workerDeterministicLease(request:Request,id:string,workerI
   })
   if(!job||!job.leaseHash||job.leaseHash!==sha(id+':'+leaseId))
     problem('Deterministic worker lease expired or unauthorized','UNAUTHENTICATED',401)
-  return job
+  // Every authenticated worker call renews a short render lease, so an active
+  // render is never re-dispatched to a second worker.
+  if(job!.leaseExpiresAt&&job!.leaseExpiresAt.getTime()-Date.now()<3*60_000){
+    const leaseExpiresAt=new Date(Date.now()+10*60_000)
+    await db().motionStudioDeterministicJob.updateMany({where:{id,workerId:worker.id,
+      status:{in:['reserved','running']}},data:{leaseExpiresAt}})
+    job!.leaseExpiresAt=leaseExpiresAt
+  }
+  return job!
 }
 export async function getWorkerDeterministicJob(request:Request,id:string){
   const query=new URL(request.url).searchParams

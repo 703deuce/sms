@@ -161,6 +161,26 @@ def loop_state(typ: str, t: float, period: int) -> dict:
     return {"op": 1.0, "sc": 1.0, "dy": 0.0, "rot": 0.0}
 
 
+def graphemes(text: str) -> list[str]:
+    """User-perceived characters (emoji ZWJ sequences, skin tones, flags, accents); parity with text-anim.ts."""
+    import unicodedata
+    out: list[str] = []
+    prev_zwj = False
+    for ch in text:
+        cp = ord(ch)
+        last = out[-1] if out else ""
+        ri = 0x1F1E6 <= cp <= 0x1F1FF
+        last_ri = len(last) == 1 and 0x1F1E6 <= ord(last) <= 0x1F1FF
+        extend = (unicodedata.category(ch).startswith("M") or cp == 0x200D or 0xFE00 <= cp <= 0xFE0F
+                  or 0x1F3FB <= cp <= 0x1F3FF or 0xE0020 <= cp <= 0xE007F or prev_zwj or (ri and last_ri))
+        if out and extend and ch not in (" ", "\n"):
+            out[-1] = last + ch
+        else:
+            out.append(ch)
+        prev_zwj = cp == 0x200D
+    return out
+
+
 def split_units(text: str, unit: str) -> list[tuple[str, bool]]:
     """Display text → [(piece, is_unit)]; separators (spaces / newlines) are not units."""
     out: list[tuple[str, bool]] = []
@@ -173,7 +193,7 @@ def split_units(text: str, unit: str) -> list[tuple[str, bool]]:
                 out.append((ln, True))
         return out
     cur = ""
-    for ch in text:
+    for ch in graphemes(text):
         if ch in (" ", "\n"):
             if cur:
                 out.append((cur, True))

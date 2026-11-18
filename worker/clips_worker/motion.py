@@ -33,13 +33,14 @@ PROP_SPECS = {
 }
 # G4a: keyframable color (Adjust sliders) on video / B-roll / adjustment layers. Read by the color
 # pass (color_grade.spec_with_overrides), never by the motion chain (has_motion skips them).
+# Same list as the app (motion-schema.ts COLOR_PROPS): Whites/Blacks/Fade were dropped on export.
 COLOR_PROPS = ("cExposure", "cBrightness", "cContrast", "cSaturation", "cTemperature", "cTint",
-               "cHighlights", "cShadows", "cVibrance")
+               "cHighlights", "cShadows", "cWhites", "cBlacks", "cFade", "cVibrance")
 for _p in COLOR_PROPS:
     PROP_SPECS[_p] = (-100.0, 100.0, 0.0)
 # G4c: keyframable effect amounts (spec.fx, 0..100). Same color pass (stepped windows), so they
 # ride on COLOR_PROPS; values are quantized to FX_KEY_QUANT like the preview.
-FX_PROPS = ("fxSharpen", "fxVignette", "fxGrain", "fxBlur", "fxGlow", "fxRgbsplit", "fxGlitch",
+FX_PROPS = ("fxPixelate", "fxSharpen", "fxVignette", "fxGrain", "fxBlur", "fxGlow", "fxRgbsplit", "fxGlitch",
             "fxShake", "fxFlicker", "fxScanlines")
 for _p in FX_PROPS:
     PROP_SPECS[_p] = (0.0, 100.0, 0.0)

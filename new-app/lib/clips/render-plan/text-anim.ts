@@ -165,7 +165,7 @@ export function splitUnits(text: string, unit: string): [string, boolean][] {
     return out
   }
   let cur = ''
-  for (const ch of Array.from(text)) {
+  for (const ch of graphemes(text)) {
     if (ch === ' ' || ch === '\n') {
       if (cur) {
         out.push([cur, true])
@@ -176,6 +176,29 @@ export function splitUnits(text: string, unit: string): [string, boolean][] {
     else cur += ch
   }
   if (cur) out.push([cur, true])
+  return out
+}
+
+/**
+ * User-perceived characters (emoji ZWJ sequences, skin tones, flags, accents)
+ * so a char animation never splits one glyph. Same rule as the worker's
+ * text_anim.graphemes (parity: no Intl.Segmenter differences).
+ */
+export function graphemes(text: string): string[] {
+  const out: string[] = []
+  let prevZwj = false
+  for (const ch of Array.from(text)) {
+    const cp = ch.codePointAt(0) ?? 0
+    const last = out.length ? out[out.length - 1]! : ''
+    const lastCps = Array.from(last)
+    const ri = cp >= 0x1f1e6 && cp <= 0x1f1ff
+    const lastRi = lastCps.length === 1 && (lastCps[0]!.codePointAt(0) ?? 0) >= 0x1f1e6 && (lastCps[0]!.codePointAt(0) ?? 0) <= 0x1f1ff
+    const extend = /\p{M}/u.test(ch) || cp === 0x200d || (cp >= 0xfe00 && cp <= 0xfe0f) ||
+      (cp >= 0x1f3fb && cp <= 0x1f3ff) || (cp >= 0xe0020 && cp <= 0xe007f) || prevZwj || (ri && lastRi)
+    if (out.length && extend && ch !== ' ' && ch !== '\n') out[out.length - 1] = last + ch
+    else out.push(ch)
+    prevZwj = cp === 0x200d
+  }
   return out
 }
 

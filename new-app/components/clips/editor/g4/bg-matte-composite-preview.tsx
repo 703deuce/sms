@@ -61,8 +61,10 @@ export function visibleVideoPlacement(
  * video frame and the real mask rather than drawing an approximate silhouette.
  */
 export function BgMatteCompositePreview({
-  clipId, mediaKind, video, outMs, enabled, removal,
+  clipId, mediaKind, video, outMs, enabled, removal, backgroundImageUrl = null,
 }: {
+  /** Signed URL of the replacement image (background.type === 'image'); without it the preview filled black. */
+  backgroundImageUrl?: string | null
   clipId: string
   mediaKind?: string | null
   video: React.RefObject<HTMLVideoElement | null>
@@ -71,6 +73,14 @@ export function BgMatteCompositePreview({
   removal: BgRemoval | undefined
 }) {
   const [maskUrl, setMaskUrl] = useState<string | null>(null)
+  const bgImageRef = useRef<HTMLImageElement | null>(null)
+  useEffect(() => {
+    if (!backgroundImageUrl) { bgImageRef.current = null; return }
+    const img = new Image()
+    img.onload = () => { bgImageRef.current = img }
+    img.src = backgroundImageUrl
+    return () => { img.onload = null }
+  }, [backgroundImageUrl])
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const maskRef = useRef<HTMLVideoElement>(null)
   const sourceRef = useRef<HTMLVideoElement>(null)
@@ -222,6 +232,12 @@ export function BgMatteCompositePreview({
           ctx.filter = `blur(${Math.max(1, (background.amount / 100) * 35)}px)`
           ctx.drawImage(frame, 0, 0, w, h)
           ctx.filter = 'none'
+        } else if (background?.type === 'image' && bgImageRef.current?.naturalWidth) {
+          // Cover-fit like the worker's replacement image.
+          const img = bgImageRef.current
+          const s = Math.max(w / img.naturalWidth, h / img.naturalHeight)
+          const iw = img.naturalWidth * s, ih = img.naturalHeight * s
+          ctx.drawImage(img, (w - iw) / 2, (h - ih) / 2, iw, ih)
         } else if (background?.type !== 'none') {
           ctx.fillStyle = '#000000'
           ctx.fillRect(0, 0, w, h)
