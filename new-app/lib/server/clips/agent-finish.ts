@@ -402,7 +402,7 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       ...(checksum?{sha256:checksum}:{}),
       ...(upload.s3Multipart?{s3UploadId:upload.s3Multipart.uploadId}:{})}
     await updateArtifactsLocked(id,current=>{
-      if(current.length>=100) throw problem('Too many job artifacts.',400)
+      if(current.length>=10000) throw problem('Too many job artifacts.',400)
       return [...current,item]
     })
     return {uploadId,objectKey,mode:upload.mode,signedPut:upload.signedPut,
