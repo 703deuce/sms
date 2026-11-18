@@ -98,7 +98,17 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       const res=await fetch(url,{cache:'no-store',credentials:'omit'})
       if(!res.ok)return []
       return readTimelineCaptions(await res.text())
-    })).then(cues=>{if(alive)setSidecarCaptions(cues.flat())})
+    })).then(cues=>{
+      if(!alive)return
+      const seen=new Set<string>()
+      const unique=cues.flat().filter(cue=>{
+        const key=cue.startMs+':'+cue.endMs+':'+cue.text.trim()
+        if(seen.has(key))return false
+        seen.add(key)
+        return true
+      })
+      setSidecarCaptions(unique)
+    })
       .catch(()=>{if(alive)setError('Caption file could not be loaded')})
     return()=>{alive=false}
   },[timeline.captionsAssetIds,assetUrls])
@@ -296,6 +306,21 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         {(timeMs/1000).toFixed(2)} / {(timeline.durationMs/1000).toFixed(2)}s
       </span>
     </div>
+    {timeline.sceneLayers.length?<details className="rounded-md border border-border px-2 py-1 text-xs">
+      <summary className="cursor-pointer font-medium">
+        Main Visuals and editable footage layers ({timeline.sceneLayers.length})
+      </summary>
+      <div className="mt-2 max-h-40 space-y-1 overflow-y-auto">
+        {timeline.sceneLayers.map(layer=><button type="button" key={layer.id}
+          onClick={()=>seek(layer.startMs)}
+          className="flex w-full items-center justify-between gap-2 rounded border border-input px-2 py-1 text-left">
+          <span className="truncate">{layer.label} · {layer.kind}</span>
+          <span className="shrink-0 tabular-nums text-muted-foreground">
+            {(layer.startMs/1000).toFixed(1)}–{(layer.endMs/1000).toFixed(1)}s
+          </span>
+        </button>)}
+      </div>
+    </details>:null}
     <div className="flex flex-wrap items-center gap-3 text-xs">
       <label className="flex items-center gap-1">Speed
         <select aria-label="Preview speed" value={rate}
