@@ -83,7 +83,13 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
         where:{id:sourceJobId,workspaceId,projectId},
         select:{id:true},
       })
-      if(!deterministic)bad('Producer or deterministic job does not belong to this project')
+      if(!deterministic){
+        const clipJob=await db().clipAgentFinishJob.findFirst({
+          where:{id:sourceJobId,workspaceId,projectId},
+          select:{id:true},
+        })
+        if(!clipJob)bad('Producer, clip or deterministic job does not belong to this project')
+      }
     }
   }
   return db().$transaction(async tx => {
