@@ -1,5 +1,5 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableSceneLivePreview } from './portable-scene-live-preview'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
@@ -31,12 +31,20 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [selectedLayer,setSelectedLayer]=useState('')
   const [liveUnavailable,setLiveUnavailable]=useState(false)
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
+  const headRef=useRef<Version|null>(null)
+  const savingRef=useRef(false)
+  const revisionRef=useRef(0)
   const load=useCallback(async()=>{
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
       if(!response.ok) throw new Error('Could not load editable project')
       const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[]}
-      setVersion(data.version)
+      // An older GET may finish after a successful save. Never roll the editor back.
+      if(data.version && data.version.revision >= revisionRef.current) {
+        revisionRef.current=data.version.revision
+        headRef.current=data.version
+        setVersion(data.version)
+      }
       setHistory(data.history||[])
       setSceneId(s=>s||data.version?.manifest.scenes[0]?.id||'')
     } catch(err){setStatus(err instanceof Error?err.message:'Could not load editable project')}
@@ -143,6 +151,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       })
       const data=await response.json() as {version?:Version;error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Restore failed')
+      revisionRef.current=data.version.revision;headRef.current=data.version
       setVersion(data.version);setPatch({});setColors({});setRenderId('');setRenderUrl(null)
       setRestoreId('');setStatus('Restored earlier settings as version '+data.version.revision)
       void load()
@@ -157,8 +166,8 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const setProperty=(elementId:string,prop:string,value:unknown)=>
     setPatch(prev=>({...prev,[elementId]:{...(prev[elementId]||{}),[prop]:value}}))
   const save=async()=>{
-    if(!version||!scene||saving)return
-    setSaving(true);setStatus('')
+    if(!version||!scene||savingRef.current)return
+    savingRef.current=true;setSaving(true);setStatus('')
     const themePatch=Object.keys(colors).length?{colors}:{}
     const hasPatch=Object.keys(patch).length>0
     try {
@@ -169,12 +178,25 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       })
       const data=await response.json() as {version?:Version; affectedSceneIds?:string[]; error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Could not save changes')
+      // Confirm the server committed exactly the layer values we sent before
+      // claiming success or discarding local edits. No rendering occurs here.
+      const savedScenes=asObj(asObj(data.version.overrides).scenes)
+      const committed=asObj(asObj(savedScenes[scene.id]).elements)
+      for(const [id,values] of Object.entries(patch)){
+        const actual=asObj(committed[id])
+        for(const [key,value] of Object.entries(values)){
+          if(JSON.stringify(actual[key])!==JSON.stringify(value))
+            throw new Error('Save verification failed for '+id+'.'+key+'. Your edits are still here; retry saving.')
+        }
+      }
+      revisionRef.current=data.version.revision
+      headRef.current=data.version
       setVersion(data.version)
       setPatch({});setColors({});setRenderId('');setRenderUrl(null)
-      void load()
-      setStatus('Saved as project version '+data.version.revision+'. Changes are saved without rendering. Export when ready.')
+      setHistory(old=>[{id:data.version!.id,revision:data.version!.revision,createdAt:new Date().toISOString()},...old])
+      setStatus('Version '+data.version.revision+' saved and verified. No render started.')
     }catch(err){setStatus(err instanceof Error?err.message:'Save failed')}
-    finally{setSaving(false)}
+    finally{savingRef.current=false;setSaving(false)}
   }
   if(loading)return <div className="text-xs text-muted-foreground">Loading editable scene sources…</div>
   if(!version)return null
