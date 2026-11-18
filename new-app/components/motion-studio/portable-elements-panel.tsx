@@ -1,7 +1,7 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
-import { PortableSceneLivePreview } from './portable-scene-live-preview'
+import { PortableLiveFilmPlayer } from './portable-live-film-player'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
 import { PortableLayerTiming } from './portable-layer-timing'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
@@ -29,7 +29,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [history,setHistory]=useState<{id:string;revision:number;createdAt:string}[]>([])
   const [restoreId,setRestoreId]=useState('')
   const [selectedLayer,setSelectedLayer]=useState('')
-  const [liveUnavailable,setLiveUnavailable]=useState(false)
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
   const savingRef=useRef(false)
   const revisionRef=useRef(0)
@@ -247,14 +246,13 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
         </select>
       </label>
-      {scene && (scene.manifest.livePreview?.capability==='render_only'||liveUnavailable
+      {scene && (scene.manifest.livePreview?.capability==='render_only'
         ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
             selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/>
-        : <PortableSceneLivePreview key={version.id+':'+scene.id}
-            projectId={projectId} versionId={version.id} scene={scene}
-            theme={version.theme} overrides={version.overrides}
-            patch={patch} themeColors={colors} seconds={2.0}
-            onUnavailable={()=>setLiveUnavailable(true)}/>)}
+        : <PortableLiveFilmPlayer projectId={projectId} versionId={version.id}
+            manifest={version.manifest} theme={{...version.theme,
+              colors:{...asObj(version.theme.colors),...colors}}}
+            overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}/>)}
       {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
         onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
       {scene && selectedLayer ? <PortableLayerTiming scene={scene} layerId={selectedLayer}
