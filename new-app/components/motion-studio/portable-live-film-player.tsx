@@ -21,8 +21,9 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   const [active,setActive]=useState(sceneIds[0]||'')
   const [sessions,setSessions]=useState<Record<string,BrowserSceneSession>>({})
   const [failure,setFailure]=useState('')
+  const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({})
   const index=Math.max(0,sceneIds.indexOf(active))
-  useEffect(()=>{setSessions({});setActive(sceneIds[0]||'');setFailure('')},
+  useEffect(()=>{setSessions({});setMediaUrls({});setActive(sceneIds[0]||'');setFailure('')},
     [versionId,sceneIds])
   useEffect(()=>{
     const ids=sceneIds.slice(index,index+3).filter(id=>{
@@ -38,7 +39,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       body:JSON.stringify({versionId,sceneIds:ids}),
     }).then(async response=>{
       if(!response.ok)throw new Error('Could not load editable scene sources')
-      return response.json() as Promise<{sessions:BrowserSceneSession[]}>
+      return response.json() as Promise<{sessions:BrowserSceneSession[];mediaUrls?:Record<string,string>}>
     }).then(data=>{
       if(!alive)return
       const safe=data.sessions.filter(item=>{
@@ -54,6 +55,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       })
       if(safe.length!==ids.length)throw new Error('Scene source URL validation failed')
       setSessions(previous=>({...previous,...Object.fromEntries(safe)}))
+      if(data.mediaUrls)setMediaUrls(previous=>({...previous,...data.mediaUrls}))
       setFailure('')
     }).catch(err=>{if(alive)setFailure(err instanceof Error?err.message:'Scene session error')})
     return()=>{alive=false;controller.abort()}
@@ -64,8 +66,8 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     for(const session of Object.values(sessions)){
       for(const [id,url] of Object.entries(session.assetUrls))result[id]=url
     }
-    return result
-  },[sessions])
+    return {...result,...mediaUrls}
+  },[sessions,mediaUrls])
   const selected=useCallback((sceneId:string)=>{
     setActive(sceneId)
     onSceneChange?.(sceneId)
