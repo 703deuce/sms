@@ -52,12 +52,12 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   // Still-frame layer picker: the newest committed master (refreshed after every no-AI render).
   useEffect(()=>{
     let active=true
-    fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId),{cache:'no-store'})
-      .then(r=>r.ok?r.json():null).then((d:{project?:{previewUrl?:string|null};previewUrl?:string|null}|null)=>{
-        if(active)setMasterUrl(d?.project?.previewUrl??d?.previewUrl??null)
+    fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/preview',{cache:'no-store'})
+      .then(r=>r.ok?r.json():null).then((d:{url?:string|null}|null)=>{
+        if(active)setMasterUrl(d?.url??null)
       }).catch(()=>undefined)
     return()=>{active=false}
-  },[projectId,version?.id])
+  },[projectId])
   // The editor may be open while the producer is still uploading its source.
   // Refresh until the first immutable portable version arrives (ordinary API, no AI).
   useEffect(()=>{
