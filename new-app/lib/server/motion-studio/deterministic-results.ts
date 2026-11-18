@@ -30,8 +30,8 @@ export async function deterministicAssetAction(request:Request,id:string,raw:unk
     if(!filename||!['video/mp4','video/quicktime','image/png','image/jpeg',
       'image/webp','image/svg+xml','application/zip','application/json','text/plain',
       'font/ttf','font/otf','font/woff','font/woff2','text/javascript','application/javascript',
-      'application/wasm','text/css','audio/mp4','audio/wav'].includes(mime)||
-      !['video','media','image','font','bundle','project','audio'].includes(kind)||
+      'application/wasm','text/css','audio/mp4','audio/wav','text/vtt','application/x-subrip'].includes(mime)||
+      !['video','media','image','font','bundle','project','audio','caption','subtitle'].includes(kind)||
       !Number.isSafeInteger(bytes)||bytes<1||bytes>2_000_000_000||
       (checksum&&!/^[a-f0-9]{64}$/.test(checksum))||
       (['font','image','bundle'].includes(kind)&&(!checksum||bytes>25*1024*1024)))
