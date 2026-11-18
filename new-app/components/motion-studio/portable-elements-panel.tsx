@@ -252,7 +252,9 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         : <PortableLiveFilmPlayer projectId={projectId} versionId={version.id}
             manifest={version.manifest} theme={{...version.theme,
               colors:{...asObj(version.theme.colors),...colors}}}
-            overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}/>)}
+            overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}
+            selectedLayer={selectedLayer} onSelectLayer={setSelectedLayer}
+            onLayerChange={(id,key,value)=>setProperty(id,key,value)}/>)}
       {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
         onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
       {scene && selectedLayer ? <PortableLayerTiming scene={scene} layerId={selectedLayer}
