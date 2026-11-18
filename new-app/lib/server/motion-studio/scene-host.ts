@@ -184,7 +184,7 @@ export async function sceneFileResponse(args:{
         if(found){mime=String(asObj(found).mime||'');break}
       }
     }
-    const allowed=/^(?:audio\/(?:wav|mpeg|mp4|ogg)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml)|font\/(?:ttf|otf|woff|woff2)|application\/(?:font-woff|octet-stream|wasm))$/
+    const allowed=/^(?:audio\/(?:wav|mpeg|mp4|ogg|x-wav)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml)|font\/(?:ttf|otf|woff|woff2)|text\/vtt|application\/(?:x-subrip|json|font-woff|octet-stream|wasm))$/
     if(!allowed.test(mime))fail('Unsupported signed scene asset type',415)
     return new Response(new Uint8Array(bytes),{status:200,headers:{
       'Content-Type':mime,'Content-Disposition':'inline',
