@@ -11,6 +11,7 @@ import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
 import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
+import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 import { pullProducerQueueEnabled, pullProducerQueueConfigured, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
 
 const db = () => getPrisma()
@@ -105,7 +106,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const editable = await db().motionStudioPortableVersion.findFirst({
     where:{workspaceId,projectId,sourceJobId:job.id,status:'committed'}, select:{id:true},
   })
-  return { ...publicJob(job), editableReady:Boolean(editable), masterReady:Boolean(job.resultKey), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
+  return { ...publicJob(job), delivery:toObject(project.exportInfo).delivery||'legacy', editableReady:Boolean(editable), masterReady:Boolean(job.resultKey)||
+      (toObject(project.exportInfo).delivery==='live'&&Boolean(editable)), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
 
@@ -199,6 +201,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, workspaceId, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
+    delivery:{mode:'live'},
     ...(revisionRequest ? {
       ...(parent ? {parentJobId:parent.id} : {}),
       revision:(parent?.revision ?? 0)+1,threadId:projectId,
@@ -347,11 +350,12 @@ export async function botGetAssignment(id: string, request: Request) {
   }:null
   return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
     portableProject,
+    delivery:{mode:'live'},
     productionInstructions: {
-      editableTimeline: 'Deliver the clean cut as editor-base.mp4 and the reviewed composite as the master. Put editable text, graphics and audio on timed items in project.json (startMs, endMs, sourceInMs); use original artwork or scene code and active-duration overlays. Keep cut points and source handles for editable transitions. Keep capture/review output outside scene inputs. Declare genuine sequence inputs in buildBundle sourceFiles.',
-      review: 'Inspect full-size first, busiest and last frames per scene. After an edit review only affected frames and adjacent cuts. Play short excerpts for timing, motion or sound. Watch the approved master once before delivery.',
+      editableTimeline: 'Deliver a transovo.live-project/1 timeline and registered original scene bundles, footage layers, editable text and caption tracks, grouped audio stems and active-duration effects. DO NOT render or upload a master MP4. Customer previews the full project live in Transovo. Retain source handles and edits.',
+      review: 'Inspect the first, busiest and last frames and adjacent cuts. Final full review uses the live browser player, never a pre-rendered master.',
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
-      delivery: 'Use the master producer kit bundle and frame-packs modules. Export the immutable native package and ingest bundle records to persistent job storage before upload. Publish with new-app/scripts/motion-studio/publish-editable.mjs. Resume that directory after interruption; reuse the approved master.',
+      delivery: 'Publish the immutable producer document AND transovo.live-project/1 as the portable version, together with all registered media and caption assets. Complete with delivery:live and portableVersionId. Never export a master until a user presses Export.',
       heartbeat: 'Do not schedule agent-level heartbeats or periodic pings. Every job-token call renews the lease, and publish-editable.mjs and the render runner ping the checkpoint themselves while they run.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
