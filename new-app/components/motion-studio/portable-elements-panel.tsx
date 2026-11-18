@@ -247,7 +247,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       </label>
       {scene && (scene.manifest.livePreview?.capability==='render_only'||liveUnavailable
         ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
-            selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch}/>
+            selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/>
         : <PortableSceneLivePreview key={version.id+':'+scene.id}
             projectId={projectId} versionId={version.id} scene={scene}
             theme={version.theme} overrides={version.overrides}
