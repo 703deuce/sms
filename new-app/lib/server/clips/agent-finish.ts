@@ -137,6 +137,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
   const endMs=fromOriginal ? clip.endMs : clip.endMs-clip.startMs
   const payload={
     version:1,action:'finish_clip',mode:'source_footage_enhancement',
+    delivery:{mode:'live'},
     jobId:id,projectId,clipId,jobToken:token,jobUrl:root,callbackUrl:root,
     title:clip.title,projectTitle:clip.project.title,
     source:{url:sourceUrl,filename:clip.project.upload?.filename||'source.mp4',
@@ -219,7 +220,8 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
     return publicJob(duplicate)
   }
   const payload={
-    version:1,action:'clip_and_finish',mode:'autonomous_clipper',jobId:id,
+    version:1,action:'clip_and_finish',mode:'autonomous_clipper',
+    delivery:{mode:'live'},jobId:id,
     projectId,jobToken:token,jobUrl:root,callbackUrl:root,
     title:project.title,
     source:{url:sourceUrl,filename:project.upload.filename,mime:project.upload.mime,
@@ -334,7 +336,9 @@ export async function authorizeClipAgentCallback(id: string,request: Request) {
 
 export async function getClipAgentAssignment(id: string,request: Request) {
   const j=await authorizeClipAgentCallback(id,request)
-  return {...publicJob(j),mode:'source_footage_enhancement'}
+  return {...publicJob(j),mode:'source_footage_enhancement',
+    delivery:{mode:'live'},
+    portableUrl:callbackOrigin(request)+'/api/clips/agent/jobs/'+encodeURIComponent(id)+'/portable'}
 }
 
 export async function updateClipAgentProgress(id: string,request: Request,raw: unknown) {
