@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableSceneLivePreview } from './portable-scene-live-preview'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
+import { PortableLayerTiming } from './portable-layer-timing'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
   theme:Record<string,unknown>; overrides:Record<string,unknown> }
 const asObj=(v:unknown):Record<string,unknown> =>
@@ -171,7 +172,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       setVersion(data.version)
       setPatch({});setColors({});setRenderId('');setRenderUrl(null)
       void load()
-      setStatus('Saved as project version '+data.version.revision+'. Changes are ready for preview/export rendering.')
+      setStatus('Saved as project version '+data.version.revision+'. Changes are saved without rendering. Export when ready.')
     }catch(err){setStatus(err instanceof Error?err.message:'Save failed')}
     finally{setSaving(false)}
   }
@@ -212,6 +213,8 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
             onUnavailable={()=>setLiveUnavailable(true)}/>)}
       {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
         onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
+      {scene && selectedLayer ? <PortableLayerTiming scene={scene} layerId={selectedLayer}
+        savedElements={savedElements} patch={patch} onChange={setProperty} /> : null}
       <div className="flex flex-col gap-2">
         <h4 className="text-xs font-medium">Whole-video theme</h4>
         {Object.entries(themeColors).filter(([,v])=>{
