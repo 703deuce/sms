@@ -166,11 +166,19 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
   const assets=input.assets as ProducerAssetRecord[]
   const bundles=input.bundles as ProducerSceneBundle[]
   if(!Array.isArray(assets)||!Array.isArray(bundles))bad('Worker must publish complete source metadata')
-  const master=assets.find(a=>a.id===document.master.asset)
-  if(!master||typeof master.storageId!=='string')bad('Master asset alias missing')
-  const ready=sourceUploads(job.upload).find(v=>v.id===master.storageId&&
-    v.state==='ready'&&v.mime==='video/mp4')
-  if(!ready)bad('The new complete master must be uploaded by this render job')
+  // Masterless live sources are exported from their scene bundles, not from
+  // a previously encoded clip. The worker uploads exactly one new MP4 only
+  // after the user explicitly exports.
+  const completedMp4s=sourceUploads(job.upload).filter(v=>
+    v.state==='ready'&&v.mime==='video/mp4'&&v.kind==='video')
+  const originalMasterId=document.master?.asset
+  const master=originalMasterId?assets.find(a=>a.id===originalMasterId):null
+  const ready=master?.storageId?completedMp4s.find(v=>v.id===master.storageId):
+    completedMp4s.length===1?completedMp4s[0]:null
+  if(!ready)bad('Export worker must upload one completed MP4 for this version')
+  // A live worker may return a masterless producer document while its newly
+  // encoded MP4 stays a separate export artifact. Preserve the source graph.
+  const liveInput=Boolean(oldManifest.liveProject)
   // Do not mutate the previous source version. Reuse its original content
   // hashes/aliases and publish a new native document as the next version.
   const version=await publishPortableVersion(job.workspaceId,job.projectId,{
