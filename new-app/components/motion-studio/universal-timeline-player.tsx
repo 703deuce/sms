@@ -76,7 +76,10 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   useEffect(()=>{
     audio.current?.configure(timeline.audio,assetUrls)
     return()=>audio.current?.pause()
-  },[timeline.audio,assetUrls])
+  // Changes to source tracks reset the transport; freshly signed URLs do not.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[timeline.audio])
+  useEffect(()=>audio.current?.updateUrls(assetUrls),[assetUrls])
   useEffect(()=>()=>{audio.current?.dispose();audio.current=null},[])
 
   useEffect(()=>{
