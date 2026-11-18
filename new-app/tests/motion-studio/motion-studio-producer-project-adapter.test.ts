@@ -41,6 +41,15 @@ describe('native producer project -> editable portable project',()=>{
     expect(m.audio).toEqual(original.sources)
     expect(m.timeline).toMatchObject({nativeScenePlacements:[{sceneId:'S01',timeline:{startMs:0,endMs:4000}}]})
   })
+  it('maps producer content IDs to Transovo upload IDs and preserves native references',()=>{
+    const mapped=assets.map((a,i)=>({...a,storageId:'upload_'+(i+1)}))
+    const m=adaptProducerProject({document:document(),assets:mapped,bundles})
+    expect(m.scenes[0]?.bundleAssetId).toBe('upload_1')
+    expect(m.scenes[0]?.dependencies).toEqual(['upload_5'])
+    expect(m.assets.map(x=>x.id)).toEqual(mapped.map(x=>x.storageId))
+    expect((m as unknown as {producerAssetMap:Record<string,string>}).producerAssetMap.fnt_display).toBe('upload_5')
+    expect((m as unknown as {producerDocument:ReturnType<typeof document>}).producerDocument.assetRefs).toContain('fnt_display')
+  })
   it('refuses missing referenced media rather than silently omitting',()=>{
     expect(()=>adaptProducerProject({document:document(),assets:assets.slice(1),bundles})).toThrow()
   })
