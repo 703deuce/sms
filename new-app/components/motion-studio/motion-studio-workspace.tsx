@@ -85,7 +85,12 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   useEffect(() => {
     if (client.mode !== 'live') return
     let active = true
+    let inFlight = false
+    let timer: ReturnType<typeof setTimeout> | undefined
     const load = async () => {
+      if (!active || inFlight) return
+      inFlight = true
+      let completed = false
       try {
         const response = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId), { cache: 'no-store' })
         if (!response.ok) return
@@ -95,11 +100,15 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         const path = (u?: string | null) => (u ? u.split('?')[0] : null)
         if (active) setAgentJob(prev => data.job && prev?.videoUrl && path(prev.videoUrl) === path(data.job.videoUrl)
           ? { ...data.job, videoUrl: prev.videoUrl } : data.job ?? null)
-      } catch { /* The regular project polling and its error display remain available. */ }
+        completed = Boolean(data.job && ['complete','failed','cancelled','dispatch_failed'].includes(data.job.status))
+      } catch { /* Preserve last known job state on transient read failures. */ }
+      finally {
+        inFlight = false
+        if (active && !completed) timer = window.setTimeout(() => void load(), Math.max(5000, pollMs))
+      }
     }
     void load()
-    const poll = window.setInterval(() => void load(), Math.max(1500, pollMs))
-    return () => { active = false; window.clearInterval(poll) }
+    return () => { active = false; if (timer) window.clearTimeout(timer) }
   }, [client.mode, projectId, pollMs])
 
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
@@ -177,7 +186,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   const awaitingReview = project.status === 'awaiting_review' && project.settings.productionMode === 'checkpoint' && !project.story?.approved
   const canExport = project.status === 'review' || project.status === 'complete' || project.status === 'exporting'
   // Contract v1.1: the Compact Editor opens the assembled program MP4, which exists once the first cut is assembled.
-  const canOpenEditor = canExport && !project.isExample
+  const canOpenEditor = (canExport || agentJob?.delivery === 'live') && !project.isExample
   const editorHint = project.isExample ? 'The example project is read-only' : agentJob?.delivery==='live' ? 'Edit the original scene, timeline, audio and captions in this browser workspace' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
   const canCancel = !project.isExample && (project.status === 'planning' || project.status === 'producing' || project.status === 'exporting')
   const cancel = () =>
@@ -210,8 +219,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   }
   const openEditor = () => {
     if(agentJob?.delivery==='live'){
-      document.querySelector('[data-testid="ms-portable-elements"]')
-        ?.scrollIntoView({behavior:'smooth',block:'start'})
+      router.push('/app/motion-studio/'+encodeURIComponent(project.id)+'/live')
       return
     }
     void act('editor', async () => {
@@ -465,14 +473,14 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
       {agentJob ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_360px] md:px-6" data-testid="ms-agent-workspace">
           <main className="min-w-0">
-            {agentJob.status==='complete'&&agentJob.delivery==='live'&&agentJob.editableReady
+            {agentJob.status==='complete'&&agentJob.delivery==='live'
               ? <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId}/>
               : <AgentJobPanel job={agentJob} showChat={false}
                   onOpenEditor={agentJob.status==='complete'?openEditor:undefined}/>}
           </main>
           <aside className="min-h-[420px] min-w-0 md:sticky md:top-4 md:self-start" aria-label="Transovo AI Assistant" data-testid="ms-agent-assistant-sidebar">
             <AgentChatPanel projectId={project.id} selectedTimeMs={playheadMs} />
-            {agentJob.delivery==='live'&&agentJob.status==='complete'&&agentJob.editableReady
+            {agentJob.delivery==='live'&&agentJob.status==='complete'
               ? null : <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId}/>}
           </aside>
         </div>
