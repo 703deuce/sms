@@ -49,6 +49,7 @@ import { DirectorChat } from './director-chat'
 import { PreviewStage } from './preview-stage'
 import { MotionStudioTracks } from './motion-studio-tracks'
 import { MotionExportDialog } from './export-dialog'
+import { LiveExportDialog } from './live-export-dialog'
 import { AgentJobPanel, type MotionAgentJob } from './agent-job-panel'
 import { AgentChatPanel } from './agent-chat-panel'
 import { PortableElementsPanel } from './portable-elements-panel'
@@ -587,6 +588,9 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {agentJob?.delivery==='live'?
+        <LiveExportDialog open={exportOpen} onOpenChange={setExportOpen}
+          projectId={project.id} title={project.title}/>:
       <MotionExportDialog
         open={exportOpen}
         onOpenChange={setExportOpen}
@@ -604,7 +608,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
           })
         }
         onOpenEditor={openEditor}
-      />
+      />}
     </div>
   )
 
