@@ -21,6 +21,9 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [renderId,setRenderId]=useState('')
   const [renderState,setRenderState]=useState('')
   const [renderUrl,setRenderUrl]=useState<string|null>(null)
+  const [projectRenderId,setProjectRenderId]=useState('')
+  const [projectRenderState,setProjectRenderState]=useState('')
+  const [projectRendering,setProjectRendering]=useState(false)
   const [history,setHistory]=useState<{id:string;revision:number;createdAt:string}[]>([])
   const [restoreId,setRestoreId]=useState('')
   const load=useCallback(async()=>{
@@ -61,6 +64,46 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     const interval=window.setInterval(()=>void check(),3000)
     return()=>{active=false;window.clearInterval(interval)}
   },[renderId,projectId])
+  useEffect(()=>{
+    if(!projectRenderId)return
+    let active=true
+    const check=async()=>{
+      try{
+        const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+          '/portable/render-project/'+encodeURIComponent(projectRenderId),{cache:'no-store'})
+        if(!response.ok)return
+        const result=await response.json() as {job?:{status:string;error?:string|null;publishedVersionId?:string|null}}
+        if(!active||!result.job)return
+        setProjectRenderState(result.job.status)
+        if(result.job.status==='failed')setStatus(result.job.error||'Full video rendering failed')
+        if(result.job.status==='complete'){
+          setStatus('The full edited video has been rendered and added to your project.')
+          void load()
+        }
+      }catch{/* Preserve the current version during temporary network failures. */}
+    }
+    void check()
+    const timer=window.setInterval(()=>void check(),5000)
+    return()=>{active=false;window.clearInterval(timer)}
+  },[projectRenderId,projectId,load])
+
+  const requestProjectRender=async()=>{
+    if(!version||projectRendering)return
+    setProjectRendering(true);setStatus('')
+    try{
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+        '/portable/render-project',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({versionId:version.id,
+            idempotencyKey:'final-'+version.id}),
+        })
+      const data=await response.json() as {id?:string;status?:string;error?:string;message?:string}
+      if(!response.ok||!data.id)throw new Error(data.message||data.error||'Could not submit the full render')
+      setProjectRenderId(data.id);setProjectRenderState(data.status||'queued')
+    }catch(e){setStatus(e instanceof Error?e.message:'Could not submit full render')}
+    finally{setProjectRendering(false)}
+  }
+
   const requestRender=async()=>{
     if(!version||!scene||rendering)return
     setRendering(true);setStatus('');setRenderUrl(null)
@@ -192,6 +235,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       {renderId?<p className="text-xs text-muted-foreground" role="status">Render: {renderState||'queued'}</p>:null}
       {renderUrl?<video controls playsInline className="w-full rounded-md" src={renderUrl}
         aria-label="Updated rendered scene"/>:null}
+      <button type="button" className="h-8 rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground disabled:opacity-50"
+        disabled={projectRendering||saving||!!Object.keys(patch).length||!!Object.keys(colors).length||
+          (projectRenderState==='queued'||projectRenderState==='reserved'||projectRenderState==='running')}
+        onClick={()=>void requestProjectRender()}>
+        {projectRendering?'Submitting…':'Render complete edited video without AI'}
+      </button>
+      {projectRenderId?<p role="status" className="text-xs text-muted-foreground">
+        Full video render: {projectRenderState||'queued'}
+      </p>:null}
       <p className="text-xs text-muted-foreground">Edits are versioned. Rendering uses compatible workers without AI. Save pending changes before requesting a render.</p>
     </section>
   )
