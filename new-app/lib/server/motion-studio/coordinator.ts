@@ -46,6 +46,25 @@ export async function registerMachine(request: Request, raw: unknown) {
     update: { name: x.name, maxRenders: x.maxRenders as number, enabled: x.enabled !== false },
   })
 }
+/**
+ * Validates a Grok plan usage reading. Shared by the job progress report,
+ * the job-free worker heartbeat and the administrator seed path.
+ */
+function parseUsageObservation(input: Record<string, unknown>) {
+  const observed=Number(input.weeklyUsagePercent ?? input.observedPercent)
+  if (!Number.isFinite(observed) || observed<0 || observed>100)
+    problem('Invalid Grok plan usage percent')
+  const observedAt=typeof input.observedAt==='string'?new Date(input.observedAt):new Date()
+  if (!Number.isFinite(observedAt.getTime()) ||
+      observedAt.getTime()>Date.now()+60_000 ||
+      observedAt.getTime()<Date.now()-7*24*3600_000)
+    problem('Invalid Grok plan usage observation timestamp')
+  const resetRaw=typeof input.resetsAt==='string'?new Date(input.resetsAt):null
+  const resetsAt=resetRaw && Number.isFinite(resetRaw.getTime()) &&
+    resetRaw.getTime()>observedAt.getTime() &&
+    resetRaw.getTime()<=observedAt.getTime()+8*24*3600_000?resetRaw:null
+  return {observed,observedAt,resetsAt}
+}
 export async function registerPlan(request: Request, raw: unknown) {
   requireCoordinatorAdmin(request)
   const x = obj(raw)
@@ -54,13 +73,42 @@ export async function registerPlan(request: Request, raw: unknown) {
       !Number.isFinite(x.weeklyLimitPercent) || Number(x.weeklyLimitPercent) <= 0 ||
       Number(x.weeklyLimitPercent) > 100)
     problem('Invalid plan configuration')
-  return db().motionStudioWorkerPlan.upsert({
+  const reading = x.observedPercent!==undefined || x.weeklyUsagePercent!==undefined ?
+    parseUsageObservation(x) : null
+  const plan = await db().motionStudioWorkerPlan.upsert({
     where: { id: x.id as string },
     create: { id: x.id as string, name: x.name, maxConcurrentAi: x.maxConcurrentAi as number,
       weeklyLimitPercent: x.weeklyLimitPercent as number },
     update: { name: x.name, maxConcurrentAi: x.maxConcurrentAi as number,
       weeklyLimitPercent: x.weeklyLimitPercent as number, enabled: x.enabled !== false },
   })
+  if (!reading) return plan
+  await recordPlanUsage(plan.id, reading)
+  await coordinatePendingJobs(1)
+  return db().motionStudioWorkerPlan.findUniqueOrThrow({ where: { id: plan.id } })
+}
+// The timestamp predicate is atomic: two bots sharing a plan must not
+// overwrite a newer reading with a delayed, older usage observation.
+async function recordPlanUsage(planId: string,
+  r: {observed:number;observedAt:Date;resetsAt:Date|null}) {
+  const result = await db().motionStudioWorkerPlan.updateMany({where:{
+    id:planId, OR:[{observedAt:null},{observedAt:{lt:r.observedAt}}],
+  },data:{observedPercent:r.observed,observedAt:r.observedAt,...(r.resetsAt?{resetsAt:r.resetsAt}:{})}})
+  return result.count>0
+}
+/**
+ * Job-free usage heartbeat. Without it a plan with no fresh observation can
+ * never receive its first assignment, because progress reports need a lease.
+ */
+export async function reportWorkerUsage(request: Request, raw: unknown) {
+  const input=obj(raw), id=String(input.workerId||'')
+  const worker=await requireRegisteredWorker(request,id)
+  if (input.weeklyUsagePercent===undefined) problem('weeklyUsagePercent is required')
+  const reading=parseUsageObservation(input)
+  const recorded=await recordPlanUsage(worker.planId,reading)
+  await db().motionStudioProducerWorker.update({where:{id:worker.id},data:{lastSeenAt:new Date()}})
+  const dispatched=await coordinatePendingJobs(1)
+  return {ok:true,recorded,dispatched}
 }
 export async function registerWorker(request: Request, raw: unknown) {
   requireCoordinatorAdmin(request)
@@ -100,15 +148,17 @@ export async function requireRegisteredWorker(request: Request, id: string) {
     problem('Valid worker credential required.', 'UNAUTHENTICATED', 401)
   return worker!
 }
-function availableBudget(plan: {observedPercent: number|null; observedAt:Date|null; resetsAt:Date|null;
+function currentUsage(plan: {observedPercent: number|null; resetsAt:Date|null}) {
+  // No reading yet, or the reading belongs to a previous weekly window: treat
+  // as 0%. Producers report usage at job start, never by scheduled heartbeat.
+  if (plan.observedPercent === null) return 0
+  if (plan.resetsAt && plan.resetsAt.getTime() <= Date.now()) return 0
+  return plan.observedPercent
+}
+function availableBudget(plan: {observedPercent: number|null; resetsAt:Date|null;
  weeklyLimitPercent:number}) {
-  // Never spend a Grok plan from an unknown, stale, or previous-window
-  // observation. One shared plan may have several workers on other machines.
-  if (plan.observedPercent === null || !plan.observedAt || !plan.resetsAt) return false
-  if (plan.resetsAt.getTime() <= Date.now()) return false
-  if (plan.observedAt.getTime() > Date.now()+60_000 ||
-      Date.now()-plan.observedAt.getTime() > 15*60_000) return false
-  return plan.observedPercent < plan.weeklyLimitPercent
+  // Trust the latest observation until its reset; cap only on a current reading.
+  return currentUsage(plan) < plan.weeklyLimitPercent
 }
 type Pending = {jobId:string;workspaceId:string;projectId:string;userId:string;
  workerId:string;machineId:string;planId:string;webhookUrl:string;lease:string;token:string}
@@ -186,7 +236,7 @@ async function reserveOne(): Promise<Pending|null> {
           capabilities.includes('motion-studio-produce') &&
           requiredEngines.every(engine=>capabilities.includes('render:'+engine) ||
             capabilities.includes('motion-studio-all-engines')) &&
-          (plan.observedPercent! +
+          (currentUsage(plan) +
             ((planCounts.get(w.planId)||0)+1)*
               Math.max(0.1,Math.min(10,Number(process.env.MOTION_STUDIO_AI_RESERVE_PERCENT)||2)) <= plan.weeklyLimitPercent) &&
           (workerCounts.get(w.id)||0)<w.maxConcurrent &&
