@@ -169,6 +169,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     const themePatch=Object.keys(colors).length?{colors}:{}
     const hasPatch=Object.keys(patch).length>0
     const controller=new AbortController()
+    let committedHead:Version|null=null
     const timer=window.setTimeout(()=>controller.abort(),12000)
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{
@@ -179,6 +180,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       })
       const data=await response.json() as {version?:Version; affectedSceneIds?:string[]; error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Could not save changes')
+      committedHead=data.version
       // Read back the immutable version from the database, rather than trusting
       // a 200 response that might contain a transient or stale payload.
       const readback=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
@@ -205,7 +207,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       setPatch({});setColors({});setRenderId('');setRenderUrl(null)
       setHistory(old=>[{id:data.version!.id,revision:data.version!.revision,createdAt:new Date().toISOString()},...old])
       setStatus('Version '+data.version.revision+' saved and verified. No render started.')
-    }catch(err){setStatus(err instanceof Error?err.message:'Save failed')}
+    }catch(err){
+      // A write may succeed even when its readback times out. Retain the
+      // draft but advance the base so the next Save does not conflict.
+      if(committedHead){
+        revisionRef.current=Math.max(revisionRef.current,committedHead.revision)
+        setVersion(committedHead)
+      }
+      setStatus(err instanceof Error?err.message:'Save failed')
+    }
     finally{window.clearTimeout(timer);savingRef.current=false;setSaving(false)}
   }
   if(loading)return <div className="text-xs text-muted-foreground">Loading editable scene sources…</div>
