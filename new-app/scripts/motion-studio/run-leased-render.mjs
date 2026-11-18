@@ -161,8 +161,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     await runLeasedRender(JSON.parse(payload), { origin: process.env.MOTION_STUDIO_AGENT_PUBLIC_URL,
       workerId: process.env.MOTION_STUDIO_WORKER_ID, credential: process.env.MOTION_STUDIO_WORKER_TOKEN,
       kitRoot: process.env.MOTION_STUDIO_PRODUCER_KIT })
-  } catch {
-    console.error('Leased render failed')
+  } catch (error) {
+    // Messages are fixed strings and HTTP status codes; never tokens or URLs.
+    console.error('Leased render failed: ' + String(error?.message || error).replace(/https?:\/\/\S+/g, '[url]').slice(0, 300))
     process.exitCode = 1
   }
 }
