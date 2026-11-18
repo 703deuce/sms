@@ -1,6 +1,7 @@
 'use client'
 import {useCallback,useEffect,useMemo,useState} from 'react'
 import type {MsPortableManifest} from '@/lib/motion-studio/portable-contract'
+import {LiveCanvasLayerOverlay} from './live-canvas-layer-overlay'
 import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-timeline-player'
 
@@ -9,11 +10,14 @@ import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-time
  * loaded in windows of three, not one network call per source frame.
  */
 export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overrides,
-  scenePatch={},onSceneChange}:{
+  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange}:{
     projectId:string;versionId:string;manifest:MsPortableManifest;
     theme:Record<string,unknown>;overrides:Record<string,unknown>;
     scenePatch?:Record<string,Record<string,unknown>>;
     onSceneChange?:(sceneId:string)=>void
+    selectedLayer?:string
+    onSelectLayer?:(id:string)=>void
+    onLayerChange?:(elementId:string,key:string,value:number)=>void
   }){
   const timeline=useMemo(()=>normalizeUniversalTimeline(manifest),[manifest])
   const sceneIds=useMemo(()=>[...new Set(timeline.visuals.filter(v=>v.type==='scene')
@@ -87,7 +91,23 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   return <div className="flex flex-col gap-1">
     <UniversalTimelinePlayer timeline={timeline} sessions={sessions}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
-      scenePatch={validLivePatch} onSceneChange={selected}/>
+      scenePatch={validLivePatch} onSceneChange={selected}
+      overlay={currentScene&&onSelectLayer&&onLayerChange?
+        <LiveCanvasLayerOverlay scene={currentScene}
+          width={timeline.width} height={timeline.height}
+          selected={selectedLayer} onSelect={onSelectLayer}
+          savedElements={(() => {
+            const scenes=overrides.scenes&&typeof overrides.scenes==='object'
+              ? overrides.scenes as Record<string,unknown>:{}
+            const saved=scenes[currentScene.id]
+            const object=saved&&typeof saved==='object'&&!Array.isArray(saved)
+              ? saved as Record<string,unknown>:{}
+            const values=object.elements
+            return values&&typeof values==='object'&&!Array.isArray(values)
+              ? values as Record<string,unknown>:{}
+          })()}
+          patch={scenePatch} onChange={onLayerChange}/>
+        :null}/>
     {failure?<p role="status" className="text-xs text-destructive">{failure}</p>:null}
   </div>
 }
