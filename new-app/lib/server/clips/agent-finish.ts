@@ -31,7 +31,7 @@ const friendly = (raw: unknown, stage: string) => {
 }
 type Artifact = {
   id: string; key: string; filename: string; kind: string; mime: string; bytes: number;
-  state: 'pending' | 'ready'; s3UploadId?: string
+  state: 'pending' | 'ready'; s3UploadId?: string; sha256?: string
 }
 const items = (value: unknown) => Array.isArray(value) ? value as Artifact[] : []
 const publicJob = (j: {
@@ -374,9 +374,16 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
   if (action==='prepare') {
     const filename=word(input.filename,150).replace(/[^A-Za-z0-9._-]/g,'_')
     const kind=word(input.kind,24),mime=word(input.mime,80),bytes=Number(input.bytes)
-    if (!filename || !['video','project','media','audio'].includes(kind)
-      || !['video/mp4','video/webm','application/json','image/png','image/jpeg','audio/mpeg','audio/wav','audio/mp4'].includes(mime)
-      || !Number.isSafeInteger(bytes)||bytes<1||bytes>MAX_FILE_BYTES||all.length>=100) {
+    const checksum=word(input.sha256,64).toLowerCase()
+    const sourceKind=['bundle','font','image'].includes(kind)
+    if (!filename || !['video','project','media','audio','source','bundle','font','image','caption','subtitle'].includes(kind)
+      || !['video/mp4','video/webm','application/json','image/png','image/jpeg','image/webp',
+        'audio/mpeg','audio/wav','audio/mp4','text/vtt','application/x-subrip',
+        'text/javascript','application/javascript','application/wasm','text/css',
+        'font/ttf','font/otf','font/woff','font/woff2','application/octet-stream'].includes(mime)
+      || (sourceKind&&(!/^[a-f0-9]{64}$/.test(checksum)||bytes>25*1024*1024))
+      || (checksum&&!/^[a-f0-9]{64}$/.test(checksum))
+      || !Number.isSafeInteger(bytes)||bytes<1||bytes>MAX_FILE_BYTES||all.length>=10000) {
       throw problem('Invalid artifact.',400)
     }
     const uploadId=randomUUID()
@@ -384,6 +391,7 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
     const upload=await getClipStorage().createUpload({workspaceId:j.workspaceId,uploadId,
       filename,mime,bytes,objectKey})
     const item:Artifact={id:uploadId,key:objectKey,filename,kind,mime,bytes,state:'pending',
+      ...(checksum?{sha256:checksum}:{}),
       ...(upload.s3Multipart?{s3UploadId:upload.s3Multipart.uploadId}:{})}
     await updateArtifactsLocked(id,current=>{
       if(current.length>=100) throw problem('Too many job artifacts.',400)
@@ -405,7 +413,13 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
     const storage=getClipStorage()
     await storage.completeUpload({objectKey:item.key,s3UploadId:item.s3UploadId,parts})
     const size=await storage.getObjectSizeBytes(item.key)
-    if (!size||size>MAX_FILE_BYTES) throw problem('Uploaded artifact missing.',400)
+    if (!size||size>MAX_FILE_BYTES||size!==item.bytes)
+      throw problem('Uploaded artifact size mismatch.',400)
+    if(item.sha256){
+      if(size>25*1024*1024)throw problem('Hashed clip scene asset exceeds 25 MB.',413)
+      const actual=createHash('sha256').update(await storage.getObjectBytes(item.key)).digest('hex')
+      if(actual!==item.sha256)throw problem('Uploaded asset SHA-256 mismatch.',422)
+    }
     await updateArtifactsLocked(id,current=>{
       const latest=current.find(a=>a.id===item.id)
       if(!latest) throw problem('Prepared artifact no longer exists.',409)
