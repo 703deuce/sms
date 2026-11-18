@@ -505,7 +505,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const allowedMime = [
       'video/mp4','video/webm','video/quicktime','application/json','image/png',
       'image/jpeg','image/webp','image/svg+xml','audio/mpeg','audio/wav',
-      'audio/x-wav','audio/mp4','text/plain','application/x-subrip','application/zip',
+      'audio/x-wav','audio/mp4','text/plain','text/vtt','application/x-subrip','application/zip',
       'font/ttf','font/otf','font/woff','font/woff2',
       'application/octet-stream','application/wasm','application/javascript','text/javascript','text/css',
     ]
