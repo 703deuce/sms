@@ -28,7 +28,7 @@ export type NativeProducerDocument = Record<string,unknown> & {
   scenes: Array<Record<string,unknown>>
   theme:Record<string,unknown>
   overrides:Record<string,unknown>
-  master:Record<string,unknown>
+  master?:Record<string,unknown>
   assetRefs:string[]
 }
 type ProducerImport = {
@@ -50,14 +50,14 @@ export function validateNativeProducerEnvelope(value:unknown):NativeProducerDocu
        (Number.isSafeInteger(value.parentVersion)&&Number(value.parentVersion)>=1&&Number(value.parentVersion)<Number(value.version)))||
      !object(value.format)||!Array.isArray(value.scenes)||value.scenes.length<1||
      value.scenes.length>1000||!object(value.theme)||!object(value.overrides)||
-     !object(value.master)||!id(value.master.asset)||!id(value.master.recipe)||
+     (value.master!==undefined&&(!object(value.master)||!id(value.master.asset)||!id(value.master.recipe)))||
      !Array.isArray(value.assetRefs)||value.assetRefs.length>10000||
      value.assetRefs.some(v=>!id(v)))
     reject('invalid producer document envelope')
   const used=new Set<string>()
   for(const scene of value.scenes){
     if(!object(scene)||!id(scene.sceneId)||used.has(scene.sceneId)||
-       !id(scene.bundle)||!object(scene.clip)||!id(scene.clip.asset))
+       !id(scene.bundle)||(scene.clip!==undefined&&(!object(scene.clip)||!id(scene.clip.asset))))
       reject('invalid producer scene')
     used.add(scene.sceneId)
   }
@@ -77,7 +77,7 @@ export function adaptProducerProject(input:ProducerImport):MsPortableManifest{
   }
   // Do not lose the native project's stems/assembly/font/source references.
   for(const ref of native.assetRefs)if(!assetMap.has(ref))reject('native asset missing: '+ref)
-  const critical=[native.master.asset,native.master.recipe]
+  const critical=native.master?[native.master.asset,native.master.recipe]:[]
   for(const ref of critical)if(!id(ref)||!assetMap.has(ref))reject('master asset missing: '+ref)
   const bundleMap=new Map<string,ProducerSceneBundle>()
   for(const b of input.bundles){
@@ -97,7 +97,7 @@ export function adaptProducerProject(input:ProducerImport):MsPortableManifest{
   for(const scene of native.scenes){
     const sceneId=String(scene.sceneId), bundle=bundleMap.get(sceneId)
     if(!bundle||scene.bundle!==bundle.bundleId)reject('scene source bundle mismatch: '+sceneId)
-    if(!assetMap.has(String((scene.clip as Record<string,unknown>).asset)))
+    if(scene.clip&&!assetMap.has(String((scene.clip as Record<string,unknown>).asset)))
       reject('scene clip missing: '+sceneId)
     scenes.push({id:sceneId,bundleAssetId:assetMap.get(bundle.bundleId)!.storageId||bundle.bundleId,bundleSha256:bundle.sha256,
       engine:bundle.engine,runtime:bundle.runtime,manifest:bundle.manifest,
