@@ -2,6 +2,7 @@ import {NextResponse} from 'next/server'
 import {requireMotionStudioCaller} from '@/lib/server/motion-studio/auth'
 import {motionStudioJsonError} from '@/lib/server/motion-studio/http'
 import {createSceneSession} from '@/lib/server/motion-studio/scene-host'
+import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 import {getPortableProject} from '@/lib/server/motion-studio/portable-projects'
 
 type Ctx={params:Promise<{id:string}>}
@@ -22,8 +23,10 @@ export async function POST(request:Request,ctx:Ctx){
     const known=new Set(version.manifest.scenes.map(s=>s.id))
     if(sceneIds.some(id=>!known.has(id)))
       return NextResponse.json({error:'Scene not in this project'},{status:400})
+    // Signing every asset per scene is expensive on large producer projects.
+    const assets=await portableAssetSession(workspaceId,projectId,versionId)
     const sessions=await Promise.all(sceneIds.map(async id=>({
-      sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url)
+      sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url,assets)
     })))
     return NextResponse.json({versionId,sessions},{headers:{'Cache-Control':'private, no-store'}})
   }catch(error){return motionStudioJsonError(error)}
