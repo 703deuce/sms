@@ -5,7 +5,7 @@ import fs from 'node:fs'; import path from 'node:path';
 import { canon, walk, mimeOf, mkdirp, sha256File } from './util.mjs';
 import { CFG } from './config.mjs';
 import { assertSchema } from './schemas.mjs';
-export const RUNTIME_FILES = ['ms-props-core.js', 'ms-resolve.js', 'ms-bridge.js'];
+export const RUNTIME_FILES = ['ms-props-core.js', 'ms-resolve.js', 'ms-bridge.js', 'ms-layers.js'];
 const kindOf = f => /\.(mp4|mov|webm)$/i.test(f) ? 'video' : /\.(wav|mp3|m4a)$/i.test(f) ? 'audio' : /\.(png|jpe?g|webp|svg)$/i.test(f) ? 'image' : /\.(ttf|otf|woff2?)$/i.test(f) ? 'font' : 'source';
 async function imageMeta(file) {
   if (/\.svg$/i.test(file)) { const s = fs.readFileSync(file, 'utf8'); const m = /viewBox="[\d.\s-]*?\s([\d.]+)\s+([\d.]+)"/.exec(s);

@@ -106,7 +106,7 @@ export async function deterministicRender(ctx) {
     done[s.sceneId] = { renderKey: s.newKey, clip: s.sc.clip }; await store.checkpoint(ctx.jobId, ++cpRev, { stage: 'scenes', done });
   }
   // ---- master re-assembly ----
-  const newBound = themeBound(recipe, doc.theme); const mkey = masterRenderKey({ recipe: doc.master.recipe, segmentClips: doc.scenes.map(s => s.clip.asset), themeBound: newBound, runtimeLock: lockId });
+  const newBound = themeBound(recipe, doc.theme); const mkey = masterRenderKey({ recipe: doc.master.recipe, segmentClips: doc.scenes.map(s => s.clip.parts?.length ? [s.clip.asset, ...s.clip.parts] : s.clip.asset), themeBound: newBound, runtimeLock: lockId });
   let masterOut = null;
   if (mkey !== doc.master.renderKey && input.output?.master !== false) {
     await progress('assemble', 75, 'master re-assembly');
