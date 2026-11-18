@@ -3,7 +3,9 @@ import { getPrisma } from '@/lib/server/db'
 import { createReadableSignedUrl } from '@/lib/storage'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
 const db=()=>getPrisma()
+const SIGN_CONCURRENCY=6
 /** Mint short-lived URLs from registered project assets; never persist URLs or raw storage keys. */
 export async function portableAssetSession(workspaceId:string,projectId:string,versionId:string){
   const version=await db().motionStudioPortableVersion.findFirst({
@@ -42,13 +44,17 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
       metadata[a.id]={bytes:Number(upload.bytes),mime:upload.mime}
     }
   }
+  // Signing was sequential (one storage round trip per asset: ~17s for a
+  // 29-asset live project). Bounded parallelism keeps it to a few seconds
+  // without flooding the storage API. No DB connection is held meanwhile.
   const urls:Record<string,string>={}
-  for(const asset of manifest.assets){
+  const signable=manifest.assets.flatMap(asset=>{
     const key=keys.get(asset.id)
-    if(!key)continue
-    const url=await createReadableSignedUrl(key,900).catch(()=>null)
-    if(url)urls[asset.id]=url
-  }
+    return key?[{id:asset.id,key}]:[]
+  })
+  const signed=await runWithConcurrency(signable,SIGN_CONCURRENCY,async item=>
+    [item.id,await createReadableSignedUrl(item.key,900).catch(()=>null)] as const)
+  for(const [id,url] of signed)if(url)urls[id]=url
   return {versionId,expiresInSeconds:900,assetUrls:urls,metadata,
     unavailableAssetIds:manifest.assets.map(a=>a.id).filter(id=>!urls[id])}
 }

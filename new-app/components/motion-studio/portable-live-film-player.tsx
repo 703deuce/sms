@@ -2,6 +2,7 @@
 import {useCallback,useEffect,useMemo,useState} from 'react'
 import type {MsPortableManifest} from '@/lib/motion-studio/portable-contract'
 import {LiveCanvasLayerOverlay} from './live-canvas-layer-overlay'
+import {PlayerErrorBoundary} from './player-error-boundary'
 import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-timeline-player'
 
@@ -89,6 +90,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     onSceneChange?.(sceneId)
   },[onSceneChange])
   return <div className="flex flex-col gap-1">
+    <PlayerErrorBoundary resetKey={versionId}>
     <UniversalTimelinePlayer timeline={timeline} sessions={sessions}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
       scenePatch={validLivePatch} onSceneChange={selected}
@@ -108,6 +110,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
           })()}
           patch={scenePatch} onChange={onLayerChange}/>
         :null}/>
+    </PlayerErrorBoundary>
     {failure?<p role="status" className="text-xs text-destructive">{failure}</p>:null}
   </div>
 }

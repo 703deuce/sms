@@ -4,6 +4,7 @@ import {motionStudioJsonError} from '@/lib/server/motion-studio/http'
 import {createSceneSession} from '@/lib/server/motion-studio/scene-host'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 import {getPortableProject} from '@/lib/server/motion-studio/portable-projects'
+import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 
 type Ctx={params:Promise<{id:string}>}
 export async function POST(request:Request,ctx:Ctx){
@@ -20,7 +21,8 @@ export async function POST(request:Request,ctx:Ctx){
       return NextResponse.json({error:'Provide one to three distinct scene IDs and a version ID'},{status:400})
     const {version}=await getPortableProject(workspaceId,projectId,versionId)
     if(!version)return NextResponse.json({error:'Version unavailable'},{status:404})
-    const known=new Set(version.manifest.scenes.map(s=>s.id))
+    const manifest=validatePortableManifest(version.manifest)
+    const known=new Set(manifest.scenes.map(s=>s.id))
     if(sceneIds.some(id=>!known.has(id)))
       return NextResponse.json({error:'Scene not in this project'},{status:400})
     // Signing every asset per scene is expensive on large producer projects.
@@ -31,7 +33,7 @@ export async function POST(request:Request,ctx:Ctx){
     // The authenticated HOST may stream large original media directly. Do not
     // forward these signed storage URLs to an executable scene iframe: its
     // init.assetUrls remain limited to the scene-scoped signed proxy paths.
-    const mediaUrls=Object.fromEntries(version.manifest.assets
+    const mediaUrls=Object.fromEntries(manifest.assets
       .filter(asset=>['audio','video','image','font','caption','subtitle'].includes(asset.kind))
       .flatMap(asset=>assets.assetUrls[asset.id]?[[asset.id,assets.assetUrls[asset.id]]]:[]))
     return NextResponse.json({versionId,sessions,mediaUrls},{headers:{'Cache-Control':'private, no-store'}})

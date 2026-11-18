@@ -36,6 +36,22 @@ export class UniversalBrowserAudio {
     this.decoded.clear()
     this.generation++
   }
+  /**
+   * Freshly signed URLs (scene sessions load after the timeline mounts and are
+   * re-signed before expiry) must not reset the transport. Merge them in; a
+   * paused stream picks up its new source, a playing one keeps its current URL.
+   */
+  updateUrls(urls:Record<string,string>){
+    this.urls={...this.urls,...urls}
+    for(const {element,clip} of this.streams.values()){
+      const next=this.urls[clip.assetId]
+      if(next&&element.paused&&element.src!==next){
+        const at=element.currentTime
+        element.src=next
+        try{element.currentTime=at}catch{/* Metadata not loaded yet. */}
+      }
+    }
+  }
   async prepare(){
     if(!this.clips.length)return
     const ctx=this.ctx||(this.ctx=new AudioContext())

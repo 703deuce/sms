@@ -123,6 +123,16 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
     return () => { active = false; stop() }
   }, [client.mode, projectId, pollMs, projectRunning, jobEpoch])
 
+  // A finished live (masterless) production plays in the dedicated browser editor.
+  // The server route redirects on first load; this covers a job finishing while the
+  // page is open. `?view=workspace` opts out (chat / version history).
+  const liveReady = client.mode === 'live' && agentJob?.status === 'complete' && agentJob.delivery === 'live'
+  useEffect(() => {
+    if (!liveReady) return
+    if (new URLSearchParams(window.location.search).get('view') === 'workspace') return
+    router.replace('/app/motion-studio/' + encodeURIComponent(projectId) + '/live')
+  }, [liveReady, projectId, router])
+
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
   const bottomRef = useRef<HTMLDivElement>(null)
 

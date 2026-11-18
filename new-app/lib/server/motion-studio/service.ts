@@ -496,7 +496,13 @@ function feStatus(c: Ctx): MsProjectStatus {
   if (row.status === 'setup') return 'setup'
   if (row.status === 'awaiting_approval') return 'awaiting_review'
   if (row.status === 'preflight_ok') return 'preflight_ok'
-  if (row.status === 'review') return (s.exportRequested || ['transovo_agent','grokbot_agent'].includes(String(J(row.exportInfo).source))) && row.exportInfo ? 'complete' : 'review'
+  if (row.status === 'review') {
+    const ex = J(row.exportInfo)
+    // Masterless live delivery: the video plays in the browser, but nothing has been exported
+    // to an MP4 yet. Show "Ready", not "Exported", until a real master exists.
+    if (ex.delivery === 'live' && !ex.masterKey) return 'review'
+    return (s.exportRequested || ['transovo_agent','grokbot_agent'].includes(String(ex.source))) && row.exportInfo ? 'complete' : 'review'
+  }
   if (!row.plan || row.stage === 'story' || row.stage === 'direct') return 'planning'
   return s.exportRequested ? 'exporting' : 'producing'
 }
@@ -1223,4 +1229,21 @@ export async function getTimelineSnapshot(workspaceId: string, id: string) {
 export async function getTimeline(workspaceId: string, id: string) {
   const r = await ensureEditorClip(workspaceId, id)
   return { ...r, compactEditorUrl: `/app/video-editor/${r.clipProjectId}/edit/${r.clipId}?motionStudio=${encodeURIComponent(id)}` }
+}
+
+
+/**
+ * Where a project page should open. A finished masterless (delivery.mode=live)
+ * production has no MP4 or storyboard scenes for the legacy workspace, so it
+ * opens in the dedicated browser editor (/live) that plays the portable version.
+ */
+export async function projectOpenTarget(workspaceId: string, id: string): Promise<'live' | 'workspace'> {
+  const row = await db().motionStudioProject.findFirst({ where: { id, workspaceId }, select: { status: true, exportInfo: true } })
+  if (!row) return 'workspace'
+  const ex = J(row.exportInfo)
+  if (ex.delivery !== 'live' || !['review', 'complete'].includes(row.status)) return 'workspace'
+  const committed = await db().motionStudioPortableVersion.findFirst({
+    where: { workspaceId, projectId: id, status: 'committed' }, select: { id: true },
+  })
+  return committed ? 'live' : 'workspace'
 }

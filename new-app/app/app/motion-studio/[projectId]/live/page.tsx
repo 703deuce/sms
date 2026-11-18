@@ -7,9 +7,12 @@ export default async function LiveVideoPage({params}:{
 }){
   const {projectId}=await params
   return <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 p-4 md:p-6">
-    <Link href="/app" className="text-sm text-muted-foreground hover:underline">
-      Back to projects
-    </Link>
+    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+      <Link href="/app/motion-studio" className="hover:underline">Back to projects</Link>
+      <Link href={'/app/motion-studio/'+encodeURIComponent(projectId)+'?view=workspace'} className="hover:underline">
+        Assistant and version history
+      </Link>
+    </div>
     <LiveProjectEditorPage projectId={projectId}/>
   </main>
 }
