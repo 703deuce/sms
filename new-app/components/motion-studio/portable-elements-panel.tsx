@@ -57,7 +57,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         if(active)setMasterUrl(d?.url??null)
       }).catch(()=>undefined)
     return()=>{active=false}
-  },[projectId])
+  },[projectId,version?.id])
   // The editor may be open while the producer is still uploading its source.
   // Refresh until the first immutable portable version arrives (ordinary API, no AI).
   useEffect(()=>{
