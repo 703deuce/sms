@@ -181,7 +181,7 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
     }
     const next = await tx.motionStudioPortableVersion.create({ data: {
       id: 'mspv_' + randomUUID(), projectId, workspaceId,
-      revision: latest.revision + 1, parentId: latest.id, sourceJobId: latest.sourceJobId,
+      revision: latest.revision + 1, parentId: latest.id, sourceJobId: null,
       status: 'committed', manifest: toPrismaJson(latest.manifest),
       manifestHash: latest.manifestHash, theme: toPrismaJson(nextTheme),
       overrides: toPrismaJson(nextOverrides), committedAt: new Date(),
@@ -211,7 +211,7 @@ export async function restorePortableVersion(workspaceId:string,projectId:string
     if(!source)bad('Version to restore not found.','NOT_FOUND',404)
     const version=await tx.motionStudioPortableVersion.create({data:{
       id:'mspv_'+randomUUID(),projectId,workspaceId,
-      revision:latest.revision+1,parentId:latest.id,sourceJobId:source!.sourceJobId,
+      revision:latest.revision+1,parentId:latest.id,sourceJobId:null,
       status:'committed',manifest:toPrismaJson(source!.manifest),
       theme:toPrismaJson(source!.theme),overrides:toPrismaJson(source!.overrides),
       manifestHash:source!.manifestHash,committedAt:new Date(),
