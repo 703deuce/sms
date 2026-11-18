@@ -34,6 +34,19 @@ export function sceneSplitsMs(ext: ClipMotionStudioExt | undefined, durationMs: 
   return [...out].sort((a, b) => a - b)
 }
 
+/**
+ * Agent films have a fully assembled master MP4 as the editor canvas. Each
+ * manifest scene is a cut on THAT canvas, never a partial secondary source
+ * replacement. Preserve customer-authored source overrides across reimports.
+ */
+export function agentCanvasVideoLayout(base: ClipEditsV2, ext: ClipMotionStudioExt, durationMs: number):
+  Pick<ClipEditsV2, 'videoSplits' | 'sourceSegments'> {
+  return {
+    videoSplits: sceneSplitsMs(ext, durationMs),
+    sourceSegments: (base.sourceSegments ?? []).filter(item => !item.id.startsWith('ms_')),
+  }
+}
+
 export type BuildEditorEditsInput = {
   base: ClipEditsV2 | null
   durationMs: number
