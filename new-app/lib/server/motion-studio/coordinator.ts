@@ -118,7 +118,7 @@ type Pending = {jobId:string;workspaceId:string;projectId:string;userId:string;
  */
 async function reserveOne(): Promise<Pending|null> {
   return db().$transaction(async tx => {
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(117131771)`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(117131771)`
     const now = new Date()
     const active = await tx.motionStudioWorkerAssignment.findMany({
       where:{ status:{ in:['reserved','dispatched','running'] }, leaseExpiresAt:{ gt:now } },

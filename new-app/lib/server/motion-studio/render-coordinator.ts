@@ -11,7 +11,7 @@ function error(message:string,status=409): never {throw new MotionStudioError('C
 type Reserved={id:string;workerId:string;webhookUrl:string;lease:string;sceneId:string;versionId:string}
 async function reserveOneRender():Promise<Reserved|null> {
   return db().$transaction(async tx=>{
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(117131771)`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(117131771)`
     const now=new Date()
     const active=await tx.motionStudioRenderRequest.findMany({
       where:{status:{in:['reserved','running']},leaseExpiresAt:{gt:now}},

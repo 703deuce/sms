@@ -73,7 +73,7 @@ type Reservation={id:string;workerId:string;webhookUrl:string;leaseId:string;ver
 async function reserveOne():Promise<Reservation|null>{
   return db().$transaction(async tx=>{
     // Same lock used by creative and scene jobs: one physical-machine budget.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(117131771)`
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(117131771)`
     const now=new Date()
     const jobs=await tx.motionStudioDeterministicJob.findMany({
       where:{status:'queued',attempts:{lt:12}},orderBy:{createdAt:'asc'},take:30})
