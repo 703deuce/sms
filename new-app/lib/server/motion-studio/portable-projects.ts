@@ -5,6 +5,7 @@ import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { coordinatorEnabled } from '@/lib/server/motion-studio/coordinator'
 import { coordinateSceneRenders } from '@/lib/server/motion-studio/render-coordinator'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
+import { adaptProducerProject, type ProducerAssetRecord, type ProducerSceneBundle } from '@/lib/motion-studio/producer-project-adapter'
 import {
   validatePortableManifest, validateScenePropertyPatch, validateThemePatch,
   type MsPortableManifest,
@@ -27,7 +28,19 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
   await requireProject(workspaceId, projectId)
   const input = obj(raw)
   let manifest: MsPortableManifest
-  try { manifest = validatePortableManifest(input.manifest) }
+  try {
+    // Native producer payload: preserve the exact transovo.motion-project/1
+    // document and map only the verified scene metadata into the older editor.
+    // The producer must supply extracted scene bundle metadata and registered
+    // asset records; absence is an error, never an implicit flattened scene.
+    manifest = input.document !== undefined
+      ? adaptProducerProject({
+          document: input.document,
+          assets: input.assets as ProducerAssetRecord[],
+          bundles: input.bundles as ProducerSceneBundle[],
+        })
+      : validatePortableManifest(input.manifest)
+  }
   catch (error) { return bad(error instanceof Error ? error.message : 'Invalid portable manifest') }
   if (manifest.projectId !== projectId) bad('Portable manifest belongs to another project')
   const assets = manifest.assets.map(x => x.id)
@@ -36,8 +49,11 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
   }, select: { id: true } })
   if (registered.length !== assets.length)
     bad('Every portable asset must be registered and ready in this project.', 'CONFLICT', 409)
-  const theme = obj(input.theme)
-  const overrides = obj(input.overrides)
+  // Preserve producer-native theme and user-edit patch exactly on first import.
+  // Explicit Transovo overrides are only accepted on the portable path.
+  const nativeDoc = input.document !== undefined ? obj(input.document) : null
+  const theme = nativeDoc ? obj(nativeDoc.theme) : obj(input.theme)
+  const overrides = nativeDoc ? obj(nativeDoc.overrides) : obj(input.overrides)
   const manifestHash = digest(manifest)
   const sourceJobId = typeof input.sourceJobId === 'string' ? input.sourceJobId : null
   if (sourceJobId) {
