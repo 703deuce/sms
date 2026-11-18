@@ -64,6 +64,7 @@ const nextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https:",
               "media-src 'self' blob: https:",
+              "frame-src 'self'",
               "connect-src 'self' https: wss://*.livekit.cloud wss://*.livekit.io https://*.livekit.cloud https://*.turn.livekit.cloud https://*.b-cdn.net",
               "worker-src 'self' blob:",
             ].join("; "),
