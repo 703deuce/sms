@@ -13,13 +13,17 @@ export type UniversalAudio={
   id:string;assetId:string;trackId:string;startMs:number;inMs:number;
   durationMs:number;gainDb:number;muted:boolean
 }
+export type UniversalSceneLayer={
+  id:string;sceneId:string;elementId:string;label:string;kind:string;
+  startMs:number;endMs:number;trackId:string
+}
 export type UniversalCaption={
   id:string;text:string;startMs:number;endMs:number;style?:Record<string,unknown>
 }
 export type UniversalTimeline={
   durationMs:number;fps:number;width:number;height:number;
   visuals:UniversalVisual[];audio:UniversalAudio[];captions:UniversalCaption[];
-  captionsAssetIds:string[]
+  captionsAssetIds:string[];sceneLayers:UniversalSceneLayer[]
 }
 const rec=(x:unknown):Record<string,unknown>=>x!==null&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:{}
 const list=(x:unknown):unknown[]=>Array.isArray(x)?x:[]
@@ -44,6 +48,7 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
   const audio:UniversalAudio[]=[]
   const captions:UniversalCaption[]=[]
   const captionsAssetIds:string[]=[]
+  const sceneLayers:UniversalSceneLayer[]=[]
   const tracks=list(doc.tracks)
   if(tracks.length){
     for(let ti=0;ti<tracks.length;ti++){
@@ -63,6 +68,16 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
         if((itemType==='scene'||(kind==='visual'&&itemType==='scene'))&&id(item.id)){
           visuals.push({id:itemId,sceneId:id(item.sceneId)||itemId,type:'scene',
             startMs,durationMs,inMs:nonnegative(item.sceneInMs),layer:ti})
+        }else if(itemType==='sceneLayer'){
+          // This layer is drawn by its browser scene runtime, not by a
+          // second media element. Expose it on its editable timeline lane.
+          const endMs=positive(item.endMs,startMs+durationMs)
+          const sceneId=id(item.sceneId)
+          if(sceneId&&endMs>startMs)sceneLayers.push({
+            id:itemId,sceneId,elementId:id(item.elementId)||itemId,
+            label:id(item.label)||itemId,kind:id(item.kind)||kind,
+            startMs,endMs,trackId,
+          })
         }else if(itemType==='video'||itemType==='image'){
           if(assetId&&durationMs>0)visuals.push({id:itemId,type:itemType,assetId,
             startMs,durationMs,inMs:nonnegative(item.inMs),layer:ti})
@@ -70,7 +85,7 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
           if(assetId&&durationMs>0)audio.push({id:itemId,assetId,trackId,startMs,
             inMs:nonnegative(item.inMs),durationMs,
             gainDb:trackGain+(value(item.gainDb)??0),muted:item.muted===true})
-        }else if(itemType==='caption'&&typeof item.text==='string'){
+        }else if(itemType==='caption'&&!captionAsset&&typeof item.text==='string'){
           const endMs=positive(item.endMs,startMs+durationMs)
           if(endMs>startMs)captions.push({id:itemId,text:item.text,startMs,endMs,
             style:rec(item.style)})
@@ -105,7 +120,7 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
   return {durationMs:Math.round(durationMs),fps,width,height,
     visuals:visuals.sort((a,b)=>a.startMs-b.startMs||a.layer-b.layer),
     audio:audio.sort((a,b)=>a.startMs-b.startMs),
-    captions:captions.sort((a,b)=>a.startMs-b.startMs),captionsAssetIds}
+    captions:captions.sort((a,b)=>a.startMs-b.startMs),captionsAssetIds,sceneLayers}
 }
 export function visualsAt(timeline:UniversalTimeline,timeMs:number):UniversalVisual[]{
   return timeline.visuals.filter(item=>timeMs>=item.startMs&&timeMs<item.startMs+item.durationMs)
