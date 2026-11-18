@@ -151,8 +151,11 @@ export const MS_COSTS = {
 }
 
 /** Selected workflow line (ST-UI-103), v1 = uploads_only for every mode. */
-export function selectedWorkflowLine(workflow: MsWorkflow, opts: { lengthMin?: MsLengthMin; uploads?: number } = {}): string {
-  const len = `${opts.lengthMin ?? 5}-minute video`
+export function selectedWorkflowLine(workflow: MsWorkflow, opts: { lengthMin?: MsLengthMin; durationSeconds?: number; uploads?: number } = {}): string {
+  const sec=opts.durationSeconds
+  const len = sec !== undefined && Number.isFinite(sec)
+    ? (sec < 60 ? `${sec}-second video` : sec % 60 === 0 ? `${sec / 60}-minute video` : `${Math.floor(sec / 60)}-minute ${sec % 60}-second video`)
+    : `${opts.lengthMin ?? 5}-minute video`
   const media = opts.uploads && opts.uploads > 0
     ? `use your ${opts.uploads} uploaded ${opts.uploads === 1 ? 'file' : 'files'}`
     : 'use your uploads and source additional media as needed'
