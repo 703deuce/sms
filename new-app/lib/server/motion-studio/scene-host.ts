@@ -7,7 +7,16 @@ import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 
 const db=()=>getPrisma()
-function fail(m:string,status=403): never {throw new MotionStudioError('UNAUTHENTICATED',m,status)}
+function fail(m:string,status=403): never {
+  // A signed URL does not require a customer login. Do not mislabel
+  // unsupported MIME, missing storage, or invalid paths as authentication.
+  const code = status === 401 ? 'UNAUTHENTICATED'
+    : status === 403 ? 'FORBIDDEN'
+    : status === 404 ? 'NOT_FOUND'
+    : status === 409 ? 'CONFLICT'
+    : status === 503 ? 'BUSY' : 'INVALID'
+  throw new MotionStudioError(code,m,status)
+}
 /**
  * Scene-session signing key. Prefer a dedicated MOTION_STUDIO_SCENE_HOST_KEY
  * (>= 32 chars). When it is not configured, derive an independent key from an
@@ -186,7 +195,7 @@ export async function sceneFileResponse(args:{
     const bytes=await findAssetBytes(workspaceId,projectId,assetId)
     const upload=await db().studioAsset.findFirst({
       where:{id:assetId,workspaceId,projectId,status:'ready'},
-      select:{uploadId:true},
+      select:{uploadId:true,kind:true},
     })
     const media=upload?await db().clipUpload.findFirst({
       where:{id:upload.uploadId,workspaceId},select:{mime:true},
@@ -202,8 +211,22 @@ export async function sceneFileResponse(args:{
         if(found){mime=String(asObj(found).mime||'');break}
       }
     }
-    const allowed=/^(?:audio\/(?:wav|mpeg|mp4|ogg|x-wav)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml)|font\/(?:ttf|otf|woff|woff2)|text\/vtt|application\/(?:x-subrip|json|font-woff|octet-stream|wasm))$/
-    if(!allowed.test(mime))fail('Unsupported signed scene asset type',415)
+    // Producer uploads may include a charset or use text/plain for VTT/JSON.
+    // Accept these only for declared caption/text assets; never permit arbitrary
+    // HTML or JS uploads to run inside the signed scene.
+    const declaredKind=registered.kind
+    const baseMime=mime.split(';',1)[0]!.trim().toLowerCase()
+    const standard=/^(?:audio\/(?:wav|mpeg|mp4|ogg|x-wav|aac|x-m4a)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml|avif)|font\/(?:ttf|otf|woff|woff2)|text\/vtt|application\/(?:x-subrip|json|font-woff|octet-stream|wasm))$/
+    const textAsset=['caption','subtitle'].includes(declaredKind) &&
+      ['text/plain','application/json','text/vtt'].includes(baseMime)
+    if(!standard.test(baseMime)&&!textAsset){
+      console.warn('[motion-studio:scene-host] unsupported_asset_mime',{
+        kind:declaredKind,mime:baseMime||'(empty)',assetId,projectId,
+      })
+      fail('Unsupported signed scene asset type: '+(baseMime||'(missing)'),415)
+    }
+    // Text-only caption uploads must never acquire an executable MIME.
+    mime=baseMime==='text/plain'&&textAsset?'text/plain; charset=utf-8':baseMime
     return new Response(new Uint8Array(bytes),{status:200,headers:{
       'Content-Type':mime,'Content-Disposition':'inline',
       'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; frame-ancestors 'self'",
