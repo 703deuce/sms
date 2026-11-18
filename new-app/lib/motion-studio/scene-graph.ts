@@ -89,7 +89,7 @@ function validateProperty(raw: unknown, validAssetIds: Set<string>, durationMs: 
   let prev = -1
   for (const k of raw.keyframes) {
     if (!isObject(k) || !okId(k.id) || seen.has(k.id) ||
-        !nonnegative(k.timeMs) || k.timeMs > durationMs || k.timeMs <= prev ||
+        !nonnegative(k.timeMs) || Number(k.timeMs) > durationMs || Number(k.timeMs) <= prev ||
         !valueOk(raw.type as MotionAnimatedProperty['type'], k.value) ||
         (k.interpolation !== undefined && !['hold','linear','bezier'].includes(String(k.interpolation))))
       fail('invalid, duplicate, or out-of-order keyframe')
@@ -134,8 +134,8 @@ export function validateMotionSceneGraph(value: unknown, registeredAssets: Itera
         (n.parentId !== undefined && !okId(n.parentId)) ||
         (n.enabled !== undefined && typeof n.enabled !== 'boolean') ||
         (n.startMs !== undefined && !nonnegative(n.startMs)) ||
-        (n.endMs !== undefined && (!nonnegative(n.endMs) || n.endMs > value.durationMs)) ||
-        (n.startMs !== undefined && n.endMs !== undefined && n.endMs <= n.startMs))
+        (n.endMs !== undefined && (!nonnegative(n.endMs) || Number(n.endMs) > Number(value.durationMs))) ||
+        (n.startMs !== undefined && n.endMs !== undefined && Number(n.endMs) <= Number(n.startMs)))
       fail('invalid or duplicate node')
     validateProperties(n.properties, assets, value.durationMs as number)
     if (n.component !== undefined) validateComponent(n.component, assets)
