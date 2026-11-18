@@ -70,11 +70,14 @@ export function PortableLayerList({ scene, selected, onSelect, savedElements, pa
 }
 
 /** Still-frame picker: the newest rendered video at this scene, with clickable layer boxes. */
-export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSelect, savedElements, patch }: {
+export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSelect, savedElements, patch, onChange }: {
   scene: MsPortableScene; manifest: MsPortableManifest; videoUrl: string | null
   selected: string; onSelect: (id: string) => void; savedElements: Record<string, unknown>; patch: Patch
+  onChange?: (id:string, key:string, value:number)=>void
 }) {
   const ref = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{id:string;clientX:number;clientY:number;x:number;y:number}|null>(null)
   const [scale, setScale] = useState(0)
   const [time, setTime] = useState(0)
   const [playbackFailed, setPlaybackFailed] = useState(false)
@@ -88,14 +91,13 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
     ? Number(asObj(asObj(placements.find(p => asObj(p).sceneId === scene.id)).timeline).startSec) || 0 : 0
   useEffect(() => {
     const v = ref.current
-    if (!v) return
-    const seek = () => { try { v.currentTime = startSec + 0.9 * Math.max(0.1, (tree?.durationMs || 2000) / 1000) } catch { /* not seekable yet */ } }
-    v.addEventListener('loadedmetadata', seek)
-    const fit = () => setScale(v.clientWidth / width)
+    const seek = () => { try { if(!v)return; v.currentTime = startSec + 0.9 * Math.max(0.1, (tree?.durationMs || 2000) / 1000) } catch { /* not seekable yet */ } }
+    v?.addEventListener('loadedmetadata', seek)
+    const fit = () => setScale((containerRef.current?.clientWidth || 0) / width)
     fit()
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
-    ro?.observe(v)
-    return () => { v.removeEventListener('loadedmetadata', seek); ro?.disconnect() }
+    if(containerRef.current)ro?.observe(containerRef.current)
+    return () => { v?.removeEventListener('loadedmetadata', seek); ro?.disconnect() }
   }, [videoUrl, startSec, width, tree?.durationMs])
   const boxes = useMemo(() => {
     const byId = new Map(scene.manifest.elements.map(e => [e.id, e]))
@@ -114,7 +116,7 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
   }, [scene, patch, savedElements])
   return <section className="flex flex-col gap-1" aria-label="Scene layer picker">
     <p className="text-xs font-medium">Scene preview</p>
-    <div className="relative w-full overflow-hidden rounded-md border border-border bg-black" style={{ aspectRatio: `${width}/${height}` }}>
+    <div ref={containerRef} className="relative w-full overflow-hidden rounded-md border border-border bg-black" style={{ aspectRatio: `${width}/${height}` }}>
       {videoUrl && !playbackFailed ? <video ref={ref} src={videoUrl} muted playsInline preload="metadata"
         onTimeUpdate={e=>setTime(e.currentTarget.currentTime)}
         onError={()=>setPlaybackFailed(true)}
@@ -124,7 +126,24 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
       </div> : null}
       {scale > 0 ? boxes.map(({ id, box }) => <button key={id} type="button" aria-label={'Select layer ' + id}
         onClick={() => onSelect(id)}
-        className={'absolute rounded-sm border ' + (selected === id ? 'border-primary bg-primary/10' : 'border-transparent hover:border-white/60')}
+        onPointerDown={e=>{
+          if(!onChange || !scale)return
+          e.preventDefault()
+          onSelect(id)
+          dragRef.current={id,clientX:e.clientX,clientY:e.clientY,
+            x:Number(val(patch,savedElements,id,'x',0))||0,
+            y:Number(val(patch,savedElements,id,'y',0))||0}
+          e.currentTarget.setPointerCapture(e.pointerId)
+        }}
+        onPointerMove={e=>{
+          const drag=dragRef.current
+          if(!drag||drag.id!==id||!onChange||!scale)return
+          onChange(id,'x',Math.round((drag.x+(e.clientX-drag.clientX)/scale)*100)/100)
+          onChange(id,'y',Math.round((drag.y+(e.clientY-drag.clientY)/scale)*100)/100)
+        }}
+        onPointerUp={()=>{dragRef.current=null}}
+        onPointerCancel={()=>{dragRef.current=null}}
+        className={'absolute touch-none rounded-sm border ' + (selected === id ? 'border-primary bg-primary/10' : 'border-transparent hover:border-white/60')}
         style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale }} />) : null}
     </div>
     {videoUrl && !playbackFailed ? <div className="flex items-center gap-2">
