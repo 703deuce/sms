@@ -165,18 +165,10 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const where = { projectId_idempotencyKey: { projectId, idempotencyKey } }
   const previous = await db().motionStudioAgentJob.findUnique({ where })
   if (previous) return publicJob(previous)
-  // Until billing and a proper tenant quota are connected, refuse unlimited
-  // public webhook dispatch. This also bounds setup-mode routine usage.
-  const today = new Date()
-  today.setUTCHours(0, 0, 0, 0)
-  const jobsToday = await db().motionStudioAgentJob.count({
-    where: { userId, createdAt: { gte: today } },
-  })
-  if (jobsToday >= (revisionRequest ? 12 : 3)) throw new MotionStudioError('CONFLICT', 'Daily testing limit reached.', 429)
-  const active = await db().motionStudioAgentJob.count({
-    where: { userId, status: { in: ['dispatching', 'dispatched', 'running', 'queued'] } },
-  })
-  if (active >= 3) throw new MotionStudioError('CONFLICT', 'Maximum concurrent agent jobs reached.', 429)
+  // Internal/no-login testing has no per-account daily or concurrent creation
+  // quota. Idempotency keys and the durable producer/worker scheduler still
+  // prevent duplicate dispatches and control physical render concurrency.
+  // Introduce tenant usage quotas only when billing and tenant auth are live.
   const id = 'msaj_' + randomUUID()
   const token = randomBytes(32).toString('base64url')
   const tokenHash = sha(id + ':' + token).toString('hex')
@@ -224,7 +216,8 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
     categoryGuidance: directorCategoryGuidance(creative.videoType),
     creative: { ...creative, brand: creative.brandMode === 'none' ? undefined : creative.brand },
     // Original prompt always remains intact; creative guidance is separate, never a scene template.
-    durationSeconds: [10,15,30,60,120,180,300].includes(Number(settings.durationSeconds))
+    durationSeconds: Number.isSafeInteger(Number(settings.durationSeconds)) &&
+      Number(settings.durationSeconds) >= 5 && Number(settings.durationSeconds) <= 2147483
       ? Number(settings.durationSeconds) : Math.round((Number(settings.lengthMin) || 3) * 60),
     aspectRatio: str(settings.format, 30).split('_')[0] || '16:9',
     ...(() => {
