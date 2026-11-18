@@ -73,13 +73,31 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
     const source = await db().motionStudioAgentJob.findFirst({
       where: { id: sourceJobId, workspaceId, projectId }, select: { id: true },
     })
-    if (!source) bad('Production job does not belong to this project')
+    if (!source) {
+      const deterministic=await db().motionStudioDeterministicJob.findFirst({
+        where:{id:sourceJobId,workspaceId,projectId},
+        select:{id:true},
+      })
+      if(!deterministic)bad('Producer or deterministic job does not belong to this project')
+    }
   }
   return db().$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${projectId} FOR UPDATE`
     const last = await tx.motionStudioPortableVersion.findFirst({
       where: { projectId }, orderBy: { revision: 'desc' },
     })
+    // Replayed worker callbacks must be idempotent and cannot silently
+    // publish against a different active edit head.
+    if(sourceJobId){
+      const prior=await tx.motionStudioPortableVersion.findFirst({
+        where:{workspaceId,projectId,sourceJobId,status:'committed'},
+        orderBy:{revision:'desc'},
+      })
+      if(prior)return prior
+    }
+    const expectedBaseId=typeof input.expectedBaseVersionId==='string'?input.expectedBaseVersionId:null
+    if(expectedBaseId && last?.id!==expectedBaseId)
+      bad('Another editor published a newer version; rebase before rendering.','CONFLICT',409)
     const revision = (last?.revision ?? -1) + 1
     return tx.motionStudioPortableVersion.create({ data: {
       id: 'mspv_' + randomUUID(), projectId, workspaceId, revision,
