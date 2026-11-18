@@ -148,6 +148,19 @@ async function reserveOne(): Promise<Pending|null> {
       workerCounts.set(renderer.id,(workerCounts.get(renderer.id)||0)+1)
       machineCounts.set(renderer.machineId,(machineCounts.get(renderer.machineId)||0)+1)
     }
+    // Whole-film deterministic jobs share the same machine but must not
+    // consume a Grok plan AI reservation.
+    const activeProjectRenders=await tx.motionStudioDeterministicJob.findMany({
+      where:{status:{in:['reserved','running']},leaseExpiresAt:{gt:now},workerId:{not:null}},
+      select:{workerId:true},
+    })
+    for(const render of activeProjectRenders){
+      if(!render.workerId)continue
+      const renderer=workers.find(w=>w.id===render.workerId)
+      if(!renderer)continue
+      workerCounts.set(renderer.id,(workerCounts.get(renderer.id)||0)+1)
+      machineCounts.set(renderer.machineId,(machineCounts.get(renderer.machineId)||0)+1)
+    }
     const machines = await tx.motionStudioWorkerMachine.findMany({ where:{ enabled:true } })
     const plans = await tx.motionStudioWorkerPlan.findMany({ where:{ enabled:true } })
     const machinesById = new Map(machines.map(m=>[m.id,m]))
