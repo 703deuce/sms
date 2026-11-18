@@ -63,8 +63,15 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
     fail('This scene is missing its original source dependencies',409)
   const native=asObj(manifest.producerDocument)
   const aliases=manifest.producerAssetMap||{}
-  const urls:Record<string,string>={...refs.assetUrls}
+  const issued=issueSceneSessionUrl({requestUrl,projectId,versionId,bundleAssetId:scene.bundleAssetId})
+  const signedPrefix=issued.sceneUrl.slice(0,issued.sceneUrl.lastIndexOf('/')+1)
+  // Do not leak raw storage URLs to sandboxed executable scenes. Every asset
+  // download stays under this scene's time-limited signed CSP prefix.
+  const urls:Record<string,string>={}
   const records:Record<string,unknown>={}
+  for(const asset of manifest.assets){
+    if(refs.assetUrls[asset.id])urls[asset.id]=signedPrefix+'_asset/'+encodeURIComponent(asset.id)
+  }
   for(const [nativeId,storageId] of Object.entries(aliases)){
     if(urls[storageId])urls[nativeId]=urls[storageId]
     const asset=manifest.assets.find(a=>a.id===storageId)
@@ -77,8 +84,7 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
       typeof record.sha256==='string'?'fnt_'+record.sha256.slice(0,32):''
     if(safeId(explicit))fonts[explicit]=record
   }
-  return {...issueSceneSessionUrl({requestUrl,projectId,versionId,
-    bundleAssetId:scene.bundleAssetId}),assetUrls:urls,assetRecords:records,
+  return {...issued,assetUrls:urls,assetRecords:records,
     fonts,livePreview:scene.manifest.livePreview??null}
 }
 async function findAssetBytes(workspaceId:string,projectId:string,assetId:string){
@@ -151,6 +157,45 @@ export async function sceneFileResponse(args:{
   const manifest=validatePortableManifest(version.manifest)
   const scene=manifest.scenes.find(s=>s.bundleAssetId===bundleAssetId)
   if(!scene)fail('Bundle is not part of this immutable version')
+  // Named font/media resources use the SAME signed path as scene code.
+  // Only assets already declared in the immutable project can be requested.
+  if(file.startsWith('_asset/')){
+    const parts=file.split('/')
+    if(parts.length!==2)fail('Invalid signed scene asset path',404)
+    const assetId=parts[1]!
+    const registered=manifest.assets.find(a=>a.id===assetId)
+    if(!registered)fail('Asset not declared in scene project',404)
+    const bytes=await findAssetBytes(workspaceId,projectId,assetId)
+    const upload=await db().studioAsset.findFirst({
+      where:{id:assetId,workspaceId,projectId,status:'ready'},
+      select:{uploadId:true},
+    })
+    const media=upload?await db().clipUpload.findFirst({
+      where:{id:upload.uploadId,workspaceId},select:{mime:true},
+    }):null
+    let mime=media?.mime||''
+    if(!mime){
+      const jobs=await db().motionStudioAgentJob.findMany({
+        where:{workspaceId,projectId},select:{artifacts:true},take:20,
+      })
+      for(const job of jobs){
+        if(!Array.isArray(job.artifacts))continue
+        const found=job.artifacts.find(a=>asObj(a).id===assetId)
+        if(found){mime=String(asObj(found).mime||'');break}
+      }
+    }
+    const allowed=/^(?:audio\/(?:wav|mpeg|mp4|ogg)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml)|font\/(?:ttf|otf|woff|woff2)|application\/(?:font-woff|octet-stream|wasm))$/
+    if(!allowed.test(mime))fail('Unsupported signed scene asset type',415)
+    const prefix=appOrigin+'/api/motion-studio/_scene/'+
+      [projectId,versionId,bundleAssetId,expires,signature].map(encodeURIComponent).join('/')+'/'
+    return new Response(new Uint8Array(bytes),{status:200,headers:{
+      'Content-Type':mime,'Content-Disposition':'inline',
+      'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; frame-ancestors 'self'",
+      'X-Content-Type-Options':'nosniff',
+      'Access-Control-Allow-Origin':'*','Cross-Origin-Resource-Policy':'cross-origin',
+      'Cache-Control':'private, max-age=300','Referrer-Policy':'no-referrer',
+    }})
+  }
   // The content-addressed bundle is a JSON file listing each permitted
   // relative path and its exact asset digest, not a directory on the server.
   const raw=await findAssetBytes(workspaceId,projectId,bundleAssetId)
