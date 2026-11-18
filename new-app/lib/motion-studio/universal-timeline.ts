@@ -36,8 +36,10 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
   const doc=rec(manifest.liveProject)
   const format=rec(doc.format)
   const fps=positive(format.fps,30)
-  const width=positive(format.width,1920)
-  const height=positive(format.height,1080)
+  const nativeRoot=manifest.scenes[0]?.manifest.motionTree?.nodes.find(n=>
+    n.id===manifest.scenes[0]?.manifest.motionTree?.rootId)
+  const width=positive(format.width,positive(nativeRoot?.properties.width?.value,1920))
+  const height=positive(format.height,positive(nativeRoot?.properties.height?.value,1080))
   const visuals:UniversalVisual[]=[]
   const audio:UniversalAudio[]=[]
   const captions:UniversalCaption[]=[]
