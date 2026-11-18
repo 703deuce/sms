@@ -328,9 +328,8 @@ function PropertyControl({spec,value,onChange,disabled=false}:{spec:MsEditProper
       {choices.map(c=><option key={c} value={c}>{c}</option>)}
     </select>
   }
-  if(spec.type==='number')return <input className={inputCls} type="number" min={spec.min} max={spec.max}
-    step={spec.max!==undefined&&spec.max<=1?0.05:spec.max!==undefined&&spec.max<=30?0.1:1}
-    value={typeof value==='number'?value:0} onChange={e=>onChange(Number(e.target.value))}/>
+  if(spec.type==='number')return <EditableNumber value={typeof value==='number'?value:0}
+    min={spec.min} max={spec.max} onChange={onChange}/>
   if(spec.type==='point'){
     const p=asObj(value)
     return <div className="grid grid-cols-2 gap-2">
@@ -342,4 +341,28 @@ function PropertyControl({spec,value,onChange,disabled=false}:{spec:MsEditProper
   }
   return <input className={inputCls} type="text" value={String(value)}
     maxLength={spec.maxChars||2048} onChange={e=>onChange(e.target.value)}/>
+}
+
+/** A numeric draft can temporarily be '-' or '-6' while typing -60.
+ * Clamp only when the user commits; do not erase partial input per keystroke.
+ */
+function EditableNumber({value,min,max,onChange}:{
+  value:number;min?:number;max?:number;onChange:(v:number)=>void
+}){
+  const [draft,setDraft]=useState(String(value))
+  const [editing,setEditing]=useState(false)
+  useEffect(()=>{if(!editing)setDraft(String(value))},[value,editing])
+  const commit=()=>{
+    const parsed=Number(draft)
+    if(draft.trim()!==''&&Number.isFinite(parsed))
+      onChange(Math.max(min??-Infinity,Math.min(max??Infinity,parsed)))
+    else setDraft(String(value))
+    setEditing(false)
+  }
+  return <input className={inputCls} type="text" inputMode="decimal" value={draft}
+    onFocus={()=>setEditing(true)} onChange={e=>setDraft(e.target.value)}
+    onBlur={commit} onKeyDown={e=>{
+      if(e.key==='Enter')e.currentTarget.blur()
+      if(e.key==='Escape'){setDraft(String(value));setEditing(false);e.currentTarget.blur()}
+    }}/>
 }
