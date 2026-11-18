@@ -37,7 +37,8 @@ import { formatClock } from '@/lib/motion-studio/format'
 import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsScenePatch, MsSettings } from '@/lib/motion-studio/types'
 import { STATUS_LABEL, STATUS_TONE } from './motion-studio-create'
-import { useMotionProject } from './use-motion-project'
+import { needsPolling, useMotionProject } from './use-motion-project'
+import { AGENT_JOB_CHANGED_EVENT, PollHttpError, agentJobIsActive, fetchAgentJobShared, startPolling } from '@/lib/motion-studio/poll'
 import { ExampleNotice, InlineError, MockDataNotice, StageStatusIcon } from './motion-studio-shared'
 import { SetupStep } from './setup-step'
 import { ProductionActivity } from './production-activity'
@@ -64,7 +65,7 @@ const MOBILE_TABS: { id: MobileTab; label: string }[] = [
 ]
 
 /** One workspace for every stage (ST-UX-040): setup → plan → production → review → export. */
-export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 1500 }: { projectId: string; client?: MotionStudioClient; pollMs?: number }) {
+export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 5000 }: { projectId: string; client?: MotionStudioClient; pollMs?: number }) {
   const client = useMemo(() => injected ?? getMotionStudioClient(), [injected])
   const router = useRouter()
   const { project, events, loadError, loadStatus, actionError, setActionError, busy, act, refresh } = useMotionProject(client, projectId, pollMs)
@@ -82,34 +83,45 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   const [titleDraft, setTitleDraft] = useState('')
   const [uploads, setUploads] = useState<{ key: string; name: string; percent: number; error?: string | null }[]>([])
   const [agentJob, setAgentJob] = useState<MotionAgentJob | null>(null)
+  // Live projects decide their whole layout from the agent job (live editor vs. legacy storyboard).
+  // Until the first answer arrives, show a neutral loading state instead of the legacy
+  // "preview appears once the visual plan is ready" frame with a disabled Play button.
+  const [agentJobChecked, setAgentJobChecked] = useState(client.mode !== 'live')
+  // Agent job status: shared with the chat panel (one request per tick), polled only while
+  // the job or the project is still running, and resumed when a panel starts a new job.
+  const projectRunning = needsPolling(project)
+  const [jobEpoch, setJobEpoch] = useState(0)
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      if ((e as CustomEvent<{ projectId?: string }>).detail?.projectId === projectId) setJobEpoch(n => n + 1)
+    }
+    window.addEventListener(AGENT_JOB_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(AGENT_JOB_CHANGED_EVENT, onChanged)
+  }, [projectId])
   useEffect(() => {
     if (client.mode !== 'live') return
     let active = true
-    let inFlight = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const load = async () => {
-      if (!active || inFlight) return
-      inFlight = true
-      let completed = false
+    const load = async (): Promise<boolean> => {
+      let data: { job: MotionAgentJob | null }
       try {
-        const response = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId), { cache: 'no-store' })
-        if (!response.ok) return
-        const data = await response.json() as { job?: MotionAgentJob | null }
-        // Keep the current signed link while it points at the same MP4, so polling
-        // never restarts playback; a new render (new object path) swaps it in.
-        const path = (u?: string | null) => (u ? u.split('?')[0] : null)
-        if (active) setAgentJob(prev => data.job && prev?.videoUrl && path(prev.videoUrl) === path(data.job.videoUrl)
-          ? { ...data.job, videoUrl: prev.videoUrl } : data.job ?? null)
-        completed = Boolean(data.job && ['complete','failed','cancelled','dispatch_failed'].includes(data.job.status))
-      } catch { /* Preserve last known job state on transient read failures. */ }
-      finally {
-        inFlight = false
-        if (active && !completed) timer = window.setTimeout(() => void load(), Math.max(5000, pollMs))
+        data = await fetchAgentJobShared<MotionAgentJob>(projectId)
+      } catch (err) {
+        // Busy (503) keeps the loading state and retries with backoff; other failures fall back.
+        if (active && !(err instanceof PollHttpError && err.status === 503)) setAgentJobChecked(true)
+        throw err
       }
+      if (active) setAgentJobChecked(true)
+      // Keep the current signed link while it points at the same MP4, so polling
+      // never restarts playback; a new render (new object path) swaps it in.
+      const path = (u?: string | null) => (u ? u.split('?')[0] : null)
+      if (active) setAgentJob(prev => data.job && prev?.videoUrl && path(prev.videoUrl) === path(data.job.videoUrl)
+        ? { ...data.job, videoUrl: prev.videoUrl } : data.job ?? null)
+      // Stop once the job is finished and the project has nothing else running.
+      return agentJobIsActive(data.job) || projectRunning
     }
-    void load()
-    return () => { active = false; if (timer) window.clearTimeout(timer) }
-  }, [client.mode, projectId, pollMs])
+    const stop = startPolling(load, { intervalMs: pollMs, immediate: true })
+    return () => { active = false; stop() }
+  }, [client.mode, projectId, pollMs, projectRunning, jobEpoch])
 
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -470,7 +482,11 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         ) : null}
       </div>
 
-      {agentJob ? (
+      {!agentJobChecked && !project.isExample && project.status !== 'setup' ? (
+        <div className="grid min-h-[320px] flex-1 place-items-center px-4 py-4 text-sm text-muted-foreground md:px-6" role="status" data-testid="ms-agent-job-loading">
+          Loading your video…
+        </div>
+      ) : agentJob ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_360px] md:px-6" data-testid="ms-agent-workspace">
           <main className="min-w-0">
             {agentJob.status==='complete'&&agentJob.delivery==='live'

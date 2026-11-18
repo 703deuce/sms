@@ -1,5 +1,6 @@
 'use client'
 import {useCallback,useEffect,useState} from 'react'
+import {startPolling} from '@/lib/motion-studio/poll'
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog'
 import {Button} from '@/components/ui/button'
 
@@ -30,12 +31,12 @@ export function LiveExportDialog({open,onOpenChange,projectId,title}:{
     if(data.downloadUrl)setDownloadUrl(data.downloadUrl)
     if(data.job.status==='failed')setMessage(data.job.error||'Final render failed')
   },[jobId,projectId])
+  const finished=['complete','failed','cancelled'].includes(status)
   useEffect(()=>{
-    if(!open||!jobId||['complete','failed','cancelled'].includes(status))return
-    void refresh().catch(()=>undefined)
-    const timer=window.setInterval(()=>void refresh().catch(()=>undefined),4000)
-    return()=>window.clearInterval(timer)
-  },[open,jobId,status,refresh])
+    if(!open||!jobId||finished)return
+    // Sequential, >= 5s, backs off on errors; `finished` tears this down.
+    return startPolling(async()=>{await refresh()},{intervalMs:5000,immediate:true})
+  },[open,jobId,finished,refresh])
   const submit=async()=>{
     if(busy)return
     setBusy(true);setMessage('')

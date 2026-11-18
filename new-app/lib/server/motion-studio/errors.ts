@@ -1,4 +1,4 @@
-export type MsErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN' | 'INVALID' | 'NOT_FOUND' | 'CONFLICT' | 'STAGE_NOT_RETRYABLE' | 'DISABLED' | 'INTERNAL'
+export type MsErrorCode = 'UNAUTHENTICATED' | 'FORBIDDEN' | 'INVALID' | 'NOT_FOUND' | 'CONFLICT' | 'STAGE_NOT_RETRYABLE' | 'DISABLED' | 'BUSY' | 'INTERNAL'
 
 export class MotionStudioError extends Error {
   constructor(public code: MsErrorCode, message: string, public status = 400) {

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Loader2, Send, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
+import { AGENT_JOB_CHANGED_EVENT, PollHttpError, agentJobIsActive, fetchAgentJobShared, notifyAgentJobChanged, startPolling } from '@/lib/motion-studio/poll'
 
 type Message = { id: string; role: 'customer' | 'agent'; text: string; timestamp: string }
 type Version = { jobId: string; revision: number; createdAt: string }
@@ -13,6 +14,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
 }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [versions, setVersions] = useState<Version[]>([])
+  const [versionsLoaded, setVersionsLoaded] = useState(false)
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [restoring, setRestoring] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -22,31 +24,48 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
   const [error, setError] = useState<string | null>(null)
   const [showVersions, setShowVersions] = useState(false)
   const [liveJob, setLiveJob] = useState<{status:string; phase:string; progress:number; updatedAt?:string; waitingStartedAt?:string | null; message?:string; events?:{id:number;message:string;timestamp:string}[]} | null>(null)
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (opts: { fresh?: boolean } = {}): Promise<boolean> => {
     const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId) + '/chat', {
       cache: 'no-store',
     })
-    if (!response.ok) throw new Error('Could not load your conversation.')
+    if (!response.ok) throw new PollHttpError(response.status)
     const data = await response.json() as { messages: Message[]; versions: Version[]; activeJobId: string | null }
     setMessages(data.messages ?? [])
     setVersions(data.versions ?? [])
+    setVersionsLoaded(true)
     setActiveJobId(data.activeJobId ?? null)
-    const jobResponse = await fetch('/api/motion-studio/agent/jobs?projectId=' + encodeURIComponent(projectId),
-      {cache:'no-store'})
-    if (jobResponse.ok) {
-      const jobs = await jobResponse.json() as {job?: typeof liveJob}
-      setLiveJob(jobs.job ?? null)
+    setError(null)
+    // Shared with the workspace header poll: one /agent/jobs request per tick for the whole page.
+    const jobs = await fetchAgentJobShared<NonNullable<typeof liveJob>>(projectId, opts).catch(() => null)
+    if (jobs) setLiveJob(jobs.job ?? null)
+    return agentJobIsActive(jobs?.job ?? null)
+  }, [projectId])
+  // Poll (>= 5s, sequential, paused in hidden tabs) only while a job is running; resume when a job changes.
+  const [pollEpoch, setPollEpoch] = useState(0)
+  useEffect(() => {
+    const onChanged = (e: Event) => {
+      if ((e as CustomEvent<{ projectId?: string }>).detail?.projectId === projectId) setPollEpoch(n => n + 1)
     }
+    window.addEventListener(AGENT_JOB_CHANGED_EVENT, onChanged)
+    return () => window.removeEventListener(AGENT_JOB_CHANGED_EVENT, onChanged)
   }, [projectId])
   useEffect(() => {
     let active = true
-    const load = () => { if (active) void reload().catch(() => {
-      if (active) setError('Version history and chat could not load. Please refresh or try again.')
-    }) }
-    load()
-    const timer = window.setInterval(load, 4000)
-    return () => { active = false; window.clearInterval(timer) }
-  }, [reload])
+    let loadedOnce = false
+    const stop = startPolling(async () => {
+      try {
+        const running = await reload()
+        loadedOnce = true
+        return running
+      } catch (err) {
+        // A 503 means "server busy, try again shortly": back off quietly.
+        if (active && !(err instanceof PollHttpError && err.status === 503) && !loadedOnce)
+          setError('Version history and chat could not load. Please refresh or try again.')
+        throw err
+      }
+    }, { intervalMs: 5000, immediate: true })
+    return () => { active = false; stop() }
+  }, [reload, pollEpoch])
 
   const restore = async (jobId: string) => {
     if (restoring) return
@@ -56,7 +75,8 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
       const response = await fetch('/api/motion-studio/agent/projects/' + encodeURIComponent(projectId)
         + '/versions/' + encodeURIComponent(jobId) + '/restore', { method: 'POST' })
       if (!response.ok) throw new Error('Could not restore that version.')
-      await reload()
+      await reload({ fresh: true }).catch(() => false)
+      notifyAgentJobChanged(projectId)
       window.location.reload()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not restore that version.')
@@ -84,7 +104,8 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
       setDraft('')
       pendingSubmission.current = null
       setAnswerQuestion(true)
-      await reload()
+      notifyAgentJobChanged(projectId)
+      await reload({ fresh: true }).catch(() => false)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send your message.')
     } finally { setBusy(false) }
@@ -98,7 +119,7 @@ export function AgentChatPanel({ projectId, selectedElementIds, selectedTimeMs }
     <div className="rounded-lg border border-border p-3" data-testid="ms-agent-versions">
       <button type="button" className="flex w-full items-center justify-between text-left text-sm font-semibold"
         onClick={() => setShowVersions(v => !v)} aria-expanded={showVersions}>
-        Version history <span className="text-xs font-normal text-muted-foreground">{versions.length} saved {showVersions ? '▴' : '▾'}</span>
+        Version history <span className="text-xs font-normal text-muted-foreground">{versionsLoaded ? `${versions.length} saved` : 'Loading…'} {showVersions ? '▴' : '▾'}</span>
       </button>
       {showVersions ? <ol className="mt-3 space-y-2 text-xs">
         {!versions.length ? <li className="text-muted-foreground">No saved versions are available yet.</li> : null}

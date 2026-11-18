@@ -102,7 +102,13 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const activeVideoKey = (job.status !== 'complete' && job.resultKey) || (job.status === 'complete' || job.parentJobId ? latestMaster : '') ||
     job.resultKey || previousVideo?.resultKey
   const videoUrl = activeVideoKey ? await createReadableSignedUrl(activeVideoKey, 3600).catch(() => null) : null
-  const events = await db().studioActivityEvent.findMany({ where: { projectId, kind: 'agent_progress' }, orderBy: { id: 'asc' }, take: 500 })
+  // Polled by every open project page: filter to this job in SQL and read only the
+  // columns the timeline needs (newest 200), instead of 500 full rows per tick.
+  const events = (await db().studioActivityEvent.findMany({
+    where: { projectId, kind: 'agent_progress', data: { path: ['jobId'], equals: job.id } },
+    orderBy: { id: 'desc' }, take: 200,
+    select: { id: true, stage: true, message: true, data: true, createdAt: true },
+  })).reverse()
   const editable = await db().motionStudioPortableVersion.findFirst({
     where:{workspaceId,projectId,sourceJobId:job.id,status:'committed'}, select:{id:true},
   })

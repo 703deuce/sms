@@ -3,16 +3,17 @@ import { requireMotionStudioCaller } from '@/lib/server/motion-studio/auth'
 import { motionStudioJsonError } from '@/lib/server/motion-studio/http'
 import { dispatchAgentJob, userAgentJob } from '@/lib/server/motion-studio/agent-bridge'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
+import { pollingRoute } from '@/lib/server/db-read-gate'
 
 
-export async function GET(request: Request) {
+export const GET = pollingRoute(async function GET(request: Request) {
   try {
     const { workspaceId, userId } = await requireMotionStudioCaller(request)
     const projectId = new URL(request.url).searchParams.get('projectId') || ''
     if (!projectId) throw new MotionStudioError('INVALID', 'projectId required.', 400)
     return NextResponse.json({ job: await userAgentJob(workspaceId, projectId, userId) })
   } catch (err) { return motionStudioJsonError(err) }
-}
+})
 
 export async function POST(request: Request) {
   try {

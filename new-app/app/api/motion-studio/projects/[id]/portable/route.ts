@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server'
 import { requireMotionStudioCaller } from '@/lib/server/motion-studio/auth'
 import { motionStudioJsonError } from '@/lib/server/motion-studio/http'
 import { getPortableProject, commitPortableEdit, restorePortableVersion } from '@/lib/server/motion-studio/portable-projects'
+import { pollingRoute } from '@/lib/server/db-read-gate'
 type Ctx={params:Promise<{id:string}>}
-export async function GET(request:Request,ctx:Ctx) {
+export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
   try {
     const {id:projectId}=await ctx.params
     const {workspaceId}=await requireMotionStudioCaller(request)
     const versionId=new URL(request.url).searchParams.get('versionId')||undefined
     return NextResponse.json(await getPortableProject(workspaceId,projectId,versionId))
   } catch(e) { return motionStudioJsonError(e) }
-}
+})
 export async function PATCH(request:Request,ctx:Ctx) {
   const started=Date.now()
   let outcome='failed'

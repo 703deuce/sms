@@ -10,6 +10,7 @@ import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsProject } from '@/lib/motion-studio/types'
 import { MotionStudioTracks } from './motion-studio-tracks'
 import { AgentChatPanel } from './agent-chat-panel'
+import { startPolling } from '@/lib/motion-studio/poll'
 
 /**
  * Motion Studio lanes mounted inside the existing Compact Editor (EditorShell `motionStudioSlot`).
@@ -49,34 +50,40 @@ export function MotionStudioEditorLanes({
       })
     // Passive reads only: never start an import while React mounts the editor.
     // Poll briefly so separated lanes appear if the async manifest import finishes later.
-    let tracksPoll: number | null = null
+    // Sequential (>= 5s), paused in hidden tabs, and bounded: stop when the lanes arrive
+    // or after ~24 attempts (the import either finished or is not coming).
+    let stopTracks: (() => void) | null = null
     if (client.mode === 'live') {
-      const loadTracks = async () => {
-        try {
-          const response = await fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline?passive=1',
-            { cache: 'no-store' })
-          if (!response.ok || !alive) return
-          const data = await response.json() as {
-            edits?: { motionStudio?: { tracks?: { id: string; label: string; kind?: string; items: object[] }[]; durationMs?: number } }
-          }
-          const ext = data.edits?.motionStudio
-          if (!alive || !ext?.tracks?.length) return
-          setAgentTracks(ext.tracks.map(t => ({
-            id: t.id, label: t.label, kind: t.kind, items: (t.items ?? []).map(v => {
-              const o = v as { id?: string; startMs?: number; endMs?: number }
-              return { id: String(o.id ?? ''), startMs: Number(o.startMs) || 0, endMs: Number(o.endMs) || 0 }
-            }).filter(x => x.endMs > x.startMs)
-          })))
-          setAgentDurationMs(ext.durationMs || 0)
-          if (tracksPoll) window.clearInterval(tracksPoll)
-        } catch { /* The main editor stays usable without optional agent lanes. */ }
+      let attempts = 0
+      const loadTracks = async (): Promise<boolean> => {
+        attempts += 1
+        const response = await fetch('/api/motion-studio/projects/' + encodeURIComponent(projectId) + '/timeline?passive=1',
+          { cache: 'no-store' })
+        if (!alive) return false
+        if (!response.ok) {
+          if (attempts >= 24) return false
+          throw new Error('Lanes are not available yet.')
+        }
+        const data = await response.json() as {
+          edits?: { motionStudio?: { tracks?: { id: string; label: string; kind?: string; items: object[] }[]; durationMs?: number } }
+        }
+        const ext = data.edits?.motionStudio
+        if (!alive) return false
+        if (!ext?.tracks?.length) return attempts < 24
+        setAgentTracks(ext.tracks.map(t => ({
+          id: t.id, label: t.label, kind: t.kind, items: (t.items ?? []).map(v => {
+            const o = v as { id?: string; startMs?: number; endMs?: number }
+            return { id: String(o.id ?? ''), startMs: Number(o.startMs) || 0, endMs: Number(o.endMs) || 0 }
+          }).filter(x => x.endMs > x.startMs)
+        })))
+        setAgentDurationMs(ext.durationMs || 0)
+        return false
       }
-      void loadTracks()
-      tracksPoll = window.setInterval(() => void loadTracks(), 5000)
+      stopTracks = startPolling(loadTracks, { intervalMs: 5000, maxIntervalMs: 30000, immediate: true })
     }
     return () => {
       alive = false
-      if (tracksPoll) window.clearInterval(tracksPoll)
+      stopTracks?.()
     }
   }, [client, projectId])
 

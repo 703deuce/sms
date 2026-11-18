@@ -5,6 +5,10 @@ import { getPrisma } from '@/lib/server/db'
 import { Prisma } from '@prisma/client'
 import { isClipUserHidden } from '@/lib/clips/clip-results-chips'
 import { enqueueClipCardThumbnail } from '@/lib/server/clips/card-thumbnails'
+import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
+
+/** Max projects resolved at once (each may run several DB queries and sign URLs). */
+const PREVIEW_BACKFILL_CONCURRENCY = 4
 
 export type { ClipProjectListItem } from '@/lib/clips/project-list-item'
 
@@ -125,8 +129,10 @@ export async function listClipProjectsForPage(
     if (!prev || pub.publishedAt > prev) publishedAtByProject.set(pid, pub.publishedAt)
   }
 
-  return Promise.all(
-    projects.map(async (p): Promise<ClipProjectListItem> => {
+  // Bounded: an unbounded fan-out (one backfill per project, ~70 at once) used to
+  // queue every pooled Prisma connection and starve all other requests.
+  return runWithConcurrency(
+    projects, PREVIEW_BACKFILL_CONCURRENCY, async (p): Promise<ClipProjectListItem> => {
       let thumbKey = p.thumbKey
       let sourceFrameUrl: string | null = null
       let sourceFrameStartMs = 0
@@ -251,6 +257,6 @@ export async function listClipProjectsForPage(
         t2vDraftProgress: t2v?.progress ?? null,
         t2vSceneCount: t2v?.sceneCount ?? null,
       }
-    }),
+    },
   )
 }

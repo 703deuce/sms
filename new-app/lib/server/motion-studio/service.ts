@@ -1,4 +1,5 @@
 import 'server-only'
+import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
 import { createHash } from 'node:crypto'
 import * as PrismaPkg from '@prisma/client'
 import { getPrisma } from '@/lib/server/db'
@@ -687,7 +688,8 @@ export async function listProjects(workspaceId: string, q: { limit?: string | nu
   const rows = await db().motionStudioProject.findMany({ where: { workspaceId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: limit + 1,
     ...(q.cursor ? { cursor: { id: q.cursor }, skip: 1 } : {}) })
   const page = rows.slice(0, limit)
-  const projects = await Promise.all(page.map(async (r: (typeof page)[number]) => {
+  // Bounded fan-out: 50 projects x 2 queries at once would occupy every pooled connection.
+  const projects = await runWithConcurrency(page, 4, async (r: (typeof page)[number]) => {
     const [sceneCount, thumb] = await Promise.all([
       db().motionStudioScene.count({ where: { projectId: r.id } }),
       db().motionStudioScene.findFirst({ where: { projectId: r.id, stillKey: { not: null } }, orderBy: { index: 'asc' }, select: { stillKey: true } }),
@@ -696,7 +698,7 @@ export async function listProjects(workspaceId: string, q: { limit?: string | nu
     return { id: r.id, title: r.title || str(J(r.story).title, 120) || 'Documentary', isExample: false, createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(), status: feStatus(c), workflow: r.workflow as MsWorkflow, sceneCount,
       durationMs: Number(J(r.exportInfo).durationMs) || (Number(J(r.settings).durationSeconds) * 1000) || (Number(J(r.settings).lengthMin) || 3) * 60_000, thumbnailUrl: await sign(thumb?.stillKey) }
-  }))
+  })
   return { projects, nextCursor: rows.length > limit ? page[page.length - 1].id : null }
 }
 

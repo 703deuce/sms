@@ -46,39 +46,72 @@ export function resolvePrismaDatabaseUrl(raw: string): string {
 }
 
 /**
- * Retry read-only Prisma model queries when the shared transaction pooler briefly
- * runs out of sessions during overlapping deployments. Never retry writes:
- * a failed response could follow an already-committed mutation.
+ * Retry policy for read-only Prisma model queries.
+ *
+ * P2024 ("Timed out fetching a new connection from the connection pool") means
+ * THIS process's pool was already full for `pool_timeout` seconds. Retrying it
+ * puts the same request straight back into the same full queue, so one slow
+ * page used to turn into 3x the load (and ~60s per request) and starve every
+ * other caller, including the producer's uploads. Fail fast on P2024.
+ *
+ * Only a server-side rejection from the shared pooler (Supavisor/PgBouncer
+ * "max clients", "too many connections", EMAXCONNSESSION) is retried, once,
+ * with jitter: that is a brief cross-deployment blip, not local exhaustion.
+ * Never retry writes: a failed response could follow an already-committed mutation.
  */
 const RETRYABLE_POOL_READS = new Set([
   "findFirst", "findFirstOrThrow", "findMany", "findUnique", "findUniqueOrThrow",
   "count", "aggregate", "groupBy",
 ]);
 
-function isTransientPoolError(error: unknown): boolean {
+export type PoolErrorKind = "local_pool_timeout" | "pooler_rejected" | null;
+
+export function classifyPoolError(error: unknown): PoolErrorKind {
   const typed = error as { code?: unknown; message?: unknown } | null;
   const code = typeof typed?.code === "string" ? typed.code : "";
   const message = typeof typed?.message === "string" ? typed.message : "";
-  return code === "P2024" ||
-    /EMAXCONNSESSION|too many connections|max clients|remaining connection slots|connection pool timeout|timed out fetching a new connection/i.test(message);
+  if (code === "P2024" || /connection pool timeout|timed out fetching a new connection/i.test(message)) {
+    return "local_pool_timeout";
+  }
+  if (/EMAXCONNSESSION|too many connections|max clients|remaining connection slots/i.test(message)) {
+    return "pooler_rejected";
+  }
+  return null;
 }
 
 export async function withPrismaPoolRetry<T>(operation: string, execute: () => Promise<T>): Promise<T> {
-  const backoffs = [150, 400];
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return await execute();
-    } catch (error) {
-      if (!isTransientPoolError(error)) throw error;
-      const code = typeof (error as { code?: unknown })?.code === "string"
-        ? (error as { code: string }).code : "pool_exhausted";
-      if (attempt >= backoffs.length) {
-        console.error("[db:pool]", { action: "retry_exhausted", operation, code, attempts: attempt + 1 });
-        throw error;
-      }
-      console.warn("[db:pool]", { action: "retry", operation, code, attempt: attempt + 1, backoffMs: backoffs[attempt] });
-      await new Promise<void>((resolve) => setTimeout(resolve, backoffs[attempt]));
+  try {
+    return await execute();
+  } catch (error) {
+    const kind = classifyPoolError(error);
+    if (kind !== "pooler_rejected") {
+      if (kind === "local_pool_timeout") console.warn("[db:pool]", { action: "fail_fast", operation, code: "P2024" });
+      throw error;
     }
+    const backoffMs = 200 + Math.floor(Math.random() * 300);
+    console.warn("[db:pool]", { action: "retry_once", operation, code: "pooler_rejected", backoffMs });
+    await new Promise<void>((resolve) => setTimeout(resolve, backoffMs));
+    return execute();
+  }
+}
+
+/**
+ * Defaults for interactive `$transaction(async tx => ...)` calls that do not pass
+ * their own options. A transaction holds one pooled connection for its whole
+ * lifetime, so keep both bounds short: callers must never await storage, fetch,
+ * signed URLs or other external I/O inside the callback.
+ */
+export const DEFAULT_INTERACTIVE_TX = { maxWait: 4_000, timeout: 5_000 } as const;
+
+/** Effective Prisma pool size for this process (from the resolved DATABASE_URL). */
+export function prismaConnectionLimit(): number {
+  const raw = process.env.DATABASE_URL?.trim();
+  if (!raw) return 3;
+  try {
+    const n = Number(new URL(resolvePrismaDatabaseUrl(raw)).searchParams.get("connection_limit"));
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 10;
+  } catch {
+    return 3;
   }
 }
 
@@ -91,6 +124,7 @@ export function getPrisma(): PrismaClient {
     const datasourceUrl = resolvePrismaDatabaseUrl(raw);
     globalForPrisma.prisma = new PrismaClient({
       datasources: { db: { url: datasourceUrl } },
+      transactionOptions: DEFAULT_INTERACTIVE_TX,
     }).$extends({
       query: {
         $allModels: {

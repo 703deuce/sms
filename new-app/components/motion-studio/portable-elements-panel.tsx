@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {PollHttpError,startPolling} from '@/lib/motion-studio/poll'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableLiveFilmPlayer } from './portable-live-film-player'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
@@ -61,49 +62,43 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   // Refresh until the first immutable portable version arrives (ordinary API, no AI).
   useEffect(()=>{
     if(version)return
-    const interval=window.setInterval(()=>void load(),20000)
-    return()=>window.clearInterval(interval)
+    return startPolling(async()=>{await load()},{intervalMs:20000,maxIntervalMs:120000})
   },[version,load])
   useEffect(()=>{
     if(!renderId)return
     let active=true
-    const check=async()=>{
-      try{
-        const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
-          '/portable/render/'+encodeURIComponent(renderId),{cache:'no-store'})
-        if(!response.ok)return
-        const data=await response.json() as {render?:{status:string;url?:string|null;error?:string}}
-        if(!active)return
-        setRenderState(data.render?.status||'')
-        if(data.render?.url)setRenderUrl(data.render.url)
-        if(data.render?.status==='failed')setStatus(data.render.error||'Scene rendering failed')
-      }catch{/* Keep the last valid preview while the worker finishes. */}
-    }
-    void check()
-    const interval=window.setInterval(()=>void check(),3000)
-    return()=>{active=false;window.clearInterval(interval)}
+    // Sequential, >= 5s, stops when the render finished or failed.
+    const stop=startPolling(async()=>{
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+        '/portable/render/'+encodeURIComponent(renderId),{cache:'no-store'})
+      if(!response.ok)throw new PollHttpError(response.status)
+      const data=await response.json() as {render?:{status:string;url?:string|null;error?:string}}
+      if(!active)return false
+      setRenderState(data.render?.status||'')
+      if(data.render?.url)setRenderUrl(data.render.url)
+      if(data.render?.status==='failed')setStatus(data.render.error||'Scene rendering failed')
+      return !['complete','completed','ready','failed','cancelled'].includes(data.render?.status||'')
+    },{intervalMs:5000,immediate:true})
+    return()=>{active=false;stop()}
   },[renderId,projectId])
   useEffect(()=>{
     if(!projectRenderId)return
     let active=true
-    const check=async()=>{
-      try{
-        const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
-          '/portable/render-project/'+encodeURIComponent(projectRenderId),{cache:'no-store'})
-        if(!response.ok)return
-        const result=await response.json() as {job?:{status:string;error?:string|null;publishedVersionId?:string|null}}
-        if(!active||!result.job)return
-        setProjectRenderState(result.job.status)
-        if(result.job.status==='failed')setStatus(result.job.error||'Full video rendering failed')
-        if(result.job.status==='complete'){
-          setStatus('The full edited video has been rendered and added to your project.')
-          void load()
-        }
-      }catch{/* Preserve the current version during temporary network failures. */}
-    }
-    void check()
-    const timer=window.setInterval(()=>void check(),5000)
-    return()=>{active=false;window.clearInterval(timer)}
+    const stop=startPolling(async()=>{
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+        '/portable/render-project/'+encodeURIComponent(projectRenderId),{cache:'no-store'})
+      if(!response.ok)throw new PollHttpError(response.status)
+      const result=await response.json() as {job?:{status:string;error?:string|null;publishedVersionId?:string|null}}
+      if(!active||!result.job)return active
+      setProjectRenderState(result.job.status)
+      if(result.job.status==='failed')setStatus(result.job.error||'Full video rendering failed')
+      if(result.job.status==='complete'){
+        setStatus('The full edited video has been rendered and added to your project.')
+        void load()
+      }
+      return !['complete','failed','cancelled'].includes(result.job.status)
+    },{intervalMs:5000,immediate:true})
+    return()=>{active=false;stop()}
   },[projectRenderId,projectId,load])
 
   const requestProjectRender=async()=>{

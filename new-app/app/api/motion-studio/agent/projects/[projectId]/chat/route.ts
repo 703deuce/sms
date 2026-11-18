@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server'
 import { requireMotionStudioCaller } from '@/lib/server/motion-studio/auth'
 import { motionStudioJsonError } from '@/lib/server/motion-studio/http'
 import { agentThread, submitAgentRevision } from '@/lib/server/motion-studio/agent-bridge'
+import { pollingRoute } from '@/lib/server/db-read-gate'
 
 type Ctx = { params: Promise<{ projectId: string }> }
-export async function GET(request: Request, ctx: Ctx) {
+export const GET = pollingRoute(async function GET(request: Request, ctx: Ctx) {
   try {
     const { projectId } = await ctx.params
     const { workspaceId } = await requireMotionStudioCaller(request)
     return NextResponse.json(await agentThread(workspaceId, projectId))
   } catch (err) { return motionStudioJsonError(err) }
-}
+})
 export async function POST(request: Request, ctx: Ctx) {
   try {
     const { projectId } = await ctx.params

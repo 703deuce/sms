@@ -1,5 +1,5 @@
 import 'server-only'
-import {createHmac,timingSafeEqual,createHash} from 'node:crypto'
+import {createHmac,timingSafeEqual,createHash,hkdfSync} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
 import {getClipStorage} from '@/lib/storage'
 import {MotionStudioError} from '@/lib/server/motion-studio/errors'
@@ -8,10 +8,28 @@ import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 
 const db=()=>getPrisma()
 function fail(m:string,status=403): never {throw new MotionStudioError('UNAUTHENTICATED',m,status)}
+/**
+ * Scene-session signing key. Prefer a dedicated MOTION_STUDIO_SCENE_HOST_KEY
+ * (>= 32 chars). When it is not configured, derive an independent key from an
+ * existing server-only secret with HKDF-SHA256 and a fixed purpose label, so
+ * live (masterless) projects can still play. The derived key never reveals the
+ * base secret, and the signed scene URLs it protects live only 15 minutes.
+ */
+let derivedSceneKey:string|null=null
+let warnedDerived=false
 const secret=()=>{
   const value=process.env.MOTION_STUDIO_SCENE_HOST_KEY||''
-  if(value.length<32)fail('Scene preview host is not configured',503)
-  return value
+  if(value.length>=32)return value
+  const base=process.env.INTEGRATION_SECRET_KEY||process.env.WORKER_SHARED_SECRET||''
+  if(base.length<32)fail('Scene preview host is not configured',503)
+  if(!derivedSceneKey){
+    derivedSceneKey=Buffer.from(hkdfSync('sha256',base,'transovo-scene-host','motion-studio/scene-host/v1',32)).toString('hex')
+  }
+  if(!warnedDerived){
+    warnedDerived=true
+    console.warn('[motion-studio:scene-host] using derived signing key; set MOTION_STUDIO_SCENE_HOST_KEY to a dedicated value')
+  }
+  return derivedSceneKey
 }
 function sceneHostOrigin(requestUrl:string){
   const origin=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||new URL(requestUrl).origin

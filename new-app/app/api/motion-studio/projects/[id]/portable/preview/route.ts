@@ -4,6 +4,7 @@ import {motionStudioJsonError} from '@/lib/server/motion-studio/http'
 import {getPrisma} from '@/lib/server/db'
 import {createReadableSignedUrl} from '@/lib/storage'
 import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
+import { pollingRoute } from '@/lib/server/db-read-gate'
 
 type Ctx={params:Promise<{id:string}>}
 const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{}
@@ -12,7 +13,7 @@ const obj=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isA
  * editable-scene host or signing every one of the packed scene's assets.
  * This is a browser playback URL; it never schedules a render.
  */
-export async function GET(request:Request,ctx:Ctx){
+export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx){
   try{
     const {id:projectId}=await ctx.params
     const {workspaceId}=await requireMotionStudioCaller(request)
@@ -60,4 +61,4 @@ export async function GET(request:Request,ctx:Ctx){
       headers:{'Cache-Control':'private, no-store'},
     })
   }catch(error){return motionStudioJsonError(error)}
-}
+})
