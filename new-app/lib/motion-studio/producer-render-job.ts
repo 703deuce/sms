@@ -61,7 +61,8 @@ export function buildDeterministicProducerJob(args:{
     patchedScenes[sceneId]=copy({elements})
   }
   if(Object.keys(patchedScenes).length)edits.scenes=patchedScenes
-  if(!edits.theme&&!edits.scenes)fail('no deterministic edits to render')
+  // Export is an explicit customer action. It is valid even when the live
+  // project has no override patch; the original project is still editable.
   return {
     schema:'transovo.motion-job/1',mode:'deterministic_render',
     projectId:source.projectId,baseVersion:source.version,
