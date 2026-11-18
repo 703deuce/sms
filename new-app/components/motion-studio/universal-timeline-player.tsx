@@ -254,9 +254,14 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
 
   // Do not alter a committed project when the viewer toggles captions or
   // audio controls. Editing persistence is owned by the timeline editor.
+  const visibleCaptions=[
+    ...sidecarCaptions.filter(c=>timeMs>=c.startMs&&timeMs<c.endMs),
+    ...captionsAt(timeline,timeMs),
+  ]
   const captionText=captionsOn?
-    [...captionsAt(timeline,timeMs),...sidecarCaptions.filter(c=>timeMs>=c.startMs&&timeMs<c.endMs)]
-      .map(c=>c.text).join('\n'):''
+    [...new Map(visibleCaptions.map(c=>[
+      c.startMs+':'+c.endMs+':'+c.text.trim(),c.text,
+    ])).values()].join('\n'):''
   const showing=visualsAt(timeline,timeMs)
   const sessionScenes=[...new Set(nextScenes)].filter(id=>sessions[id])
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
