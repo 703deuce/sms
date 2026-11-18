@@ -13,6 +13,17 @@ const secret=()=>{
   if(value.length<32)fail('Scene preview host is not configured',503)
   return value
 }
+function sceneHostOrigin(){
+  const host=process.env.MOTION_STUDIO_SCENE_HOST_ORIGIN||''
+  const app=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||''
+  if(!host||!app)fail('Dedicated scene host and app origin must be configured',503)
+  const scene=new URL(host),application=new URL(app)
+  if(scene.protocol!=='https:'||application.protocol!=='https:'||
+     scene.username||scene.password||application.username||application.password||
+     scene.hostname===application.hostname||scene.port!==''||application.port!=='')
+    fail('Scene source host must be a dedicated HTTPS origin',503)
+  return {scene:scene.origin,app:application.origin}
+}
 const safeId=(id:string)=>/^[A-Za-z0-9_.:-]{1,128}$/.test(id)
 const sign=(parts:string[])=>createHmac('sha256',secret()).update(parts.join('|')).digest('hex')
 const safePath=(v:string)=>{
@@ -34,12 +45,12 @@ export function issueSceneSessionUrl(args:{
   if(![projectId,versionId,bundleAssetId].every(safeId))fail('Invalid scene host request')
   const expires=Math.floor(Date.now()/1000)+15*60
   const signature=sign([projectId,versionId,bundleAssetId,String(expires)])
-  const url=new URL(args.requestUrl)
+  const {scene}=sceneHostOrigin()
   // Public preview sessions are path-signed, not query-signed: scene-relative
   // script and font imports inherit the capability without client rewriting.
   const path=['api','motion-studio','_scene',projectId,versionId,
     bundleAssetId,String(expires),signature,'index.html'].map(encodeURIComponent).join('/')
-  return {sceneUrl:url.origin+'/'+path,expiresAt:new Date(expires*1000).toISOString()}
+  return {sceneUrl:scene+'/'+path,expiresAt:new Date(expires*1000).toISOString()}
 }
 export async function createSceneSession(workspaceId:string,projectId:string,versionId:string,sceneId:string,requestUrl:string){
   const version=await db().motionStudioPortableVersion.findFirst({
@@ -122,6 +133,9 @@ export async function sceneFileResponse(args:{
   filePath:string;requestUrl:string
 }):Promise<Response>{
   const {projectId,versionId,bundleAssetId,expires,signature}=args
+  const hosts=sceneHostOrigin()
+  if(new URL(args.requestUrl).origin!==hosts.scene)
+    fail('Executable scene files may only be served from the dedicated preview host')
   if(![projectId,versionId,bundleAssetId].every(safeId)||
      !/^\d{10}$/.test(expires))fail('Invalid scene session')
   const expiry=Number(expires)
@@ -156,19 +170,19 @@ export async function sceneFileResponse(args:{
     fail('Scene source integrity mismatch',422)
   // The iframe has an opaque origin. It cannot access the parent DOM, cookies
   // or storage. Tight CSP restricts all network connections to known origins.
-  const appOrigin=new URL(args.requestUrl).origin
+  const appOrigin=hosts.app
   const allowedStorage=(process.env.MOTION_STUDIO_SCENE_ASSET_ORIGINS||'')
     .split(',').map(x=>x.trim()).filter(x=>{
       try{return new URL(x).protocol==='https:' && new URL(x).origin===x}catch{return false}
     }).join(' ')
   const csp=[
     `default-src 'none'`,
-    `script-src 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' ${appOrigin}`,
-    `style-src 'unsafe-inline' ${appOrigin}`,
-    `connect-src ${appOrigin} ${allowedStorage}`,
-    `img-src data: blob: ${appOrigin} ${allowedStorage}`,
-    `font-src data: ${appOrigin} ${allowedStorage}`,
-    `media-src blob: ${appOrigin} ${allowedStorage}`,
+    `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'`,
+    `style-src 'self' 'unsafe-inline'`,
+    `connect-src 'self' ${allowedStorage}`,
+    `img-src 'self' data: blob: ${allowedStorage}`,
+    `font-src 'self' data: ${allowedStorage}`,
+    `media-src 'self' blob: ${allowedStorage}`,
     `frame-ancestors ${appOrigin}`,
     `form-action 'none'`,`base-uri 'none'`,`object-src 'none'`,
   ].join('; ')
