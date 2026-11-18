@@ -15,7 +15,6 @@ const obj=(v:unknown):Record<string,unknown>=>plain(v)?v:{}
 const problem=(m:string,code='CONFLICT',status=409):never=>{
   throw new MotionStudioError(code,m,status)
 }
-const final=(s:string)=>['complete','failed','cancelled'].includes(s)
 export const PROJECT_RENDER_CAPABILITY='motion-studio-deterministic-render'
 
 async function getCurrentVersion(workspaceId:string,projectId:string,versionId:string){
