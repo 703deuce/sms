@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pause, Play, SkipBack } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -32,6 +32,9 @@ export function PreviewStage({
 }) {
   const total = project.durationMs || project.scenes.at(-1)?.endMs || project.settings.lengthMin * 60_000
   const videoRef = useRef<HTMLVideoElement>(null)
+  const [videoFailed, setVideoFailed] = useState(false)
+  useEffect(() => setVideoFailed(false), [project.previewUrl])
+  const playableVideo = Boolean(project.previewUrl && !videoFailed)
   const raf = useRef<number | null>(null)
   const last = useRef<number | null>(null)
   const playheadRef = useRef(playheadMs)
@@ -39,7 +42,7 @@ export function PreviewStage({
 
   // Virtual clock for storyboard playback (no real render yet).
   useEffect(() => {
-    if (project.previewUrl || !playing) return
+    if (playableVideo || !playing) return
     const tick = (t: number) => {
       const dt = last.current == null ? 0 : t - last.current
       last.current = t
@@ -57,7 +60,7 @@ export function PreviewStage({
       if (raf.current != null) cancelAnimationFrame(raf.current)
       last.current = null
     }
-  }, [playing, project.previewUrl, total, onTime, onPlayingChange])
+  }, [playing, playableVideo, total, onTime, onPlayingChange])
 
   // Real preview: keep the <video> element in step with play/pause and seeks.
   useEffect(() => {
@@ -75,10 +78,11 @@ export function PreviewStage({
   return (
     <div className="flex min-h-0 flex-col gap-2" data-testid="ms-preview">
       <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-panel ring-1 ring-border">
-        {project.previewUrl ? (
+        {playableVideo ? (
           <video
             ref={videoRef}
-            src={project.previewUrl}
+            src={project.previewUrl || undefined}
+            onError={() => { setVideoFailed(true); onPlayingChange(false) }}
             className="size-full object-contain"
             playsInline
             onTimeUpdate={(e) => onTime(e.currentTarget.currentTime * 1000)}
@@ -91,17 +95,18 @@ export function PreviewStage({
         ) : (
           <div className="grid size-full place-items-center text-sm text-muted-foreground">The preview appears once the visual plan is ready.</div>
         )}
-        {!project.previewUrl && scene?.status === 'failed' ? (
+        {!playableVideo && scene?.status === 'failed' ? (
           <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-lg bg-destructive/85 px-3 py-2 text-xs text-white" role="status" data-testid="ms-preview-scene-failed">
             Scene {scene.index + 1} failed to render. {scene.error || 'Regenerate it to try again.'}
           </div>
         ) : null}
-        {!project.previewUrl && project.scenes.length ? (
+        {!playableVideo && project.scenes.length ? (
           <Badge variant="onMedia" className="absolute top-2 left-2">
             {ready === project.scenes.length ? 'Storyboard preview' : `Rendering ${ready} of ${project.scenes.length} scenes`}
           </Badge>
         ) : null}
       </div>
+      {videoFailed ? <p role="status" className="text-xs text-amber-600">The rendered preview could not play. Showing the storyboard instead; original scene files remain available in the editor.</p> : null}
       <div className="flex items-center gap-2">
         <Button size="icon-sm" variant="ghost" aria-label="Back to start" onClick={() => onTime(0)}>
           <SkipBack className="size-4" />
