@@ -14,6 +14,7 @@ export type MotionAgentJob = {
   message: string | null
   masterReady?: boolean
   editableReady?: boolean
+  delivery?: string
   videoUrl?: string | null
   parentJobId?: string | null
   revision?: number
