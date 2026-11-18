@@ -83,4 +83,23 @@ describe('portable project contract',()=>{
     })
     expect(()=>validateThemePatch({colors:{primary:'red'}})).toThrow()
   })
+  it('accepts bounded graph layer timing and position edits as a no-render save patch',()=>{
+    const input=make()
+    const scene=input.scenes[0]!
+    const m=validatePortableManifest({...input,scenes:[{
+      ...scene,manifest:{...scene.manifest,motionTree:{
+        schema:'transovo.motion-scene-graph/1',rootId:'root',durationMs:2300,
+        nodes:[
+          {id:'root',name:'Scene',kind:'composition',properties:{}},
+          {id:'title',name:'Date title',kind:'text',parentId:'root',startMs:0,endMs:2300,properties:{}},
+        ],
+      }},
+    }]})
+    const edited=validateScenePropertyPatch(m,'S01',{title:{startMs:300,endMs:1800}},'render')
+    expect(edited.patch.title).toEqual({startMs:300,endMs:1800})
+    expect(edited.requiresRender).toBe(false)
+    expect(()=>validateScenePropertyPatch(m,'S01',{title:{startMs:2400}})).toThrow()
+    expect(()=>validateScenePropertyPatch(m,'S01',{title:{endMs:0}})).toThrow()
+  })
+
 })
