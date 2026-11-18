@@ -47,6 +47,10 @@ export type MsPortableManifest = {
   timeline?: unknown
   audio?: unknown
   captions?: unknown
+  /** Producer v1 retained losslessly for a deterministic re-render. */
+  producerDocument?: Record<string,unknown>
+  /** Producer content-hash IDs to Transovo's tenant-scoped upload IDs. */
+  producerAssetMap?: Record<string,string>
 }
 const ID = /^[a-zA-Z0-9_.:-]{1,128}$/
 const SHA = /^[a-f0-9]{64}$/i
@@ -108,6 +112,20 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
           return fail('Invalid editable property declaration')
       }
     }
+  }
+  if (value.producerDocument !== undefined || value.producerAssetMap !== undefined) {
+    if (!plain(value.producerDocument) || value.producerDocument.schema !== 'transovo.motion-project/1' ||
+        value.producerDocument.projectId !== value.projectId ||
+        !plain(value.producerAssetMap))
+      return fail('Invalid native producer source')
+    const producer = value.producerDocument
+    if (!Array.isArray(producer.assetRefs) || producer.assetRefs.length > 10000 ||
+        producer.assetRefs.some(ref=>!assetId(ref)||!assetId(value.producerAssetMap?.[ref])||
+          !ids.has(value.producerAssetMap[ref])))
+      return fail('Native project references an unregistered asset')
+    if (Object.keys(value.producerAssetMap).some(ref=>!assetId(ref)||!assetId(value.producerAssetMap?.[ref])||
+        !ids.has(value.producerAssetMap[ref])))
+      return fail('Invalid producer asset alias')
   }
   enforceBoundedJson(value, 2_000_000, 'Portable manifest')
   return value as unknown as MsPortableManifest
