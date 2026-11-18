@@ -4,7 +4,7 @@ import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 
 const sha = 'b'.repeat(64)
 const asset = 'bnd_scene_v1'
-const graph = () => ({
+const graph = (): any => ({
   schema: 'transovo.motion-scene-graph/1' as const,
   rootId: 'comp',
   durationMs: 5000,
