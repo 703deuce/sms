@@ -82,7 +82,9 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
     }
   }
   return db().$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${projectId} FOR UPDATE`
+    // Serialize only portable-version changes. Locking MotionStudioProject also
+    // blocks unrelated producer/editor activity on this heavily used project.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
     const last = await tx.motionStudioPortableVersion.findFirst({
       where: { projectId }, orderBy: { revision: 'desc' },
     })
@@ -106,7 +108,7 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
       theme: toPrismaJson(theme), overrides: toPrismaJson(overrides),
       manifestHash, committedAt: new Date(),
     } })
-  })
+  }, {maxWait: 2500, timeout: 7000})
 }
 
 export async function getPortableProject(workspaceId: string, projectId: string, versionId?: string) {
@@ -143,7 +145,9 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
   } catch (error) { bad(error instanceof Error ? error.message : 'Invalid scene edit') }
   if (!validated && !Object.keys(themePatch).length) bad('No changes were provided')
   return db().$transaction(async tx => {
-    await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${projectId} FOR UPDATE`
+    // Serialize only portable-version changes. Locking MotionStudioProject also
+    // blocks unrelated producer/editor activity on this heavily used project.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
     const latest = await tx.motionStudioPortableVersion.findFirst({
       where: { projectId }, orderBy: { revision: 'desc' },
     })
@@ -188,7 +192,7 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
     } })
     return { version: next, requiresRender: Boolean(validated?.requiresRender), affectedSceneIds:
       validated ? [sceneId] : manifest.scenes.map(s => s.id) }
-  })
+  }, {maxWait: 2500, timeout: 7000})
 }
 
 /** Restore an earlier immutable version by copying it into a new latest version. */
@@ -199,7 +203,9 @@ export async function restorePortableVersion(workspaceId:string,projectId:string
   const restoreVersionId=typeof input.restoreVersionId==='string'?input.restoreVersionId:''
   if(!baseVersionId||!restoreVersionId)bad('Current and restored version IDs required')
   return db().$transaction(async tx=>{
-    await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${projectId} FOR UPDATE`
+    // Serialize only portable-version changes. Locking MotionStudioProject also
+    // blocks unrelated producer/editor activity on this heavily used project.
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
     const latest=await tx.motionStudioPortableVersion.findFirst({
       where:{projectId,workspaceId,status:'committed'},orderBy:{revision:'desc'},
     })
@@ -217,7 +223,7 @@ export async function restorePortableVersion(workspaceId:string,projectId:string
       manifestHash:source!.manifestHash,committedAt:new Date(),
     }})
     return{version,restoredFrom:restoreVersionId}
-  })
+  }, {maxWait: 2500, timeout: 7000})
 }
 
 export async function requestSceneRender(workspaceId: string, projectId: string, raw: unknown) {
