@@ -21,6 +21,10 @@ async function reserveOneRender():Promise<Reserved|null> {
       where:{status:{in:['reserved','dispatched','running']},leaseExpiresAt:{gt:now}},
       select:{workerId:true,machineId:true},
     })
+    const activeProjects=await tx.motionStudioDeterministicJob.findMany({
+      where:{status:{in:['reserved','running']},leaseExpiresAt:{gt:now}},
+      select:{workerId:true},
+    })
     const workers=await tx.motionStudioProducerWorker.findMany({where:{enabled:true}})
     const machines=await tx.motionStudioWorkerMachine.findMany({where:{enabled:true}})
     const machineById=new Map(machines.map(m=>[m.id,m]))
@@ -34,6 +38,13 @@ async function reserveOneRender():Promise<Reserved|null> {
     for(const a of activeAi){
       byWorker.set(a.workerId,(byWorker.get(a.workerId)||0)+1)
       byMachine.set(a.machineId,(byMachine.get(a.machineId)||0)+1)
+    }
+    for(const a of activeProjects){
+      if(!a.workerId)continue
+      const w=workers.find(x=>x.id===a.workerId)
+      if(!w)continue
+      byWorker.set(w.id,(byWorker.get(w.id)||0)+1)
+      byMachine.set(w.machineId,(byMachine.get(w.machineId)||0)+1)
     }
     const renderMax=Math.max(1,Math.min(50,Number(process.env.MOTION_STUDIO_MAX_ACTIVE_RENDERS)||4))
     if(active.length>=renderMax)return null
