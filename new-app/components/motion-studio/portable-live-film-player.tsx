@@ -68,6 +68,18 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     }
     return {...result,...mediaUrls}
   },[sessions,mediaUrls])
+  const currentScene=manifest.scenes.find(scene=>scene.id===active)
+  const validLivePatch=useMemo(()=>{
+    const result:Record<string,Record<string,unknown>>={}
+    for(const [elementId,values] of Object.entries(scenePatch)){
+      const element=currentScene?.manifest.elements.find(e=>e.id===elementId)
+      if(!element)continue
+      const allowed=Object.fromEntries(Object.entries(values).filter(([key])=>
+        element.properties[key]?.tier==='live_editable'))
+      if(Object.keys(allowed).length)result[elementId]=allowed
+    }
+    return result
+  },[scenePatch,currentScene])
   const selected=useCallback((sceneId:string)=>{
     setActive(sceneId)
     onSceneChange?.(sceneId)
@@ -75,7 +87,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   return <div className="flex flex-col gap-1">
     <UniversalTimelinePlayer timeline={timeline} sessions={sessions}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
-      scenePatch={scenePatch} onSceneChange={selected}/>
+      scenePatch={validLivePatch} onSceneChange={selected}/>
     {failure?<p role="status" className="text-xs text-destructive">{failure}</p>:null}
   </div>
 }
