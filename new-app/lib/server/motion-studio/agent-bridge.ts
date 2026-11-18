@@ -359,7 +359,7 @@ export async function botGetAssignment(id: string, request: Request) {
       review: 'Inspect full-size first, busiest and last frames per scene. After an edit review only affected frames and adjacent cuts. Play short excerpts for timing, motion or sound. Watch the approved master once before delivery.',
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
       delivery: 'Use the master producer kit bundle and frame-packs modules. Export the immutable native package and ingest bundle records to persistent job storage before upload. Publish with new-app/scripts/motion-studio/publish-editable.mjs. Resume that directory after interruption; reuse the approved master.',
-      heartbeat: 'While actively working, GET the job checkpoint every 60 seconds with the current job token, including during rendering.',
+      heartbeat: 'Do not schedule agent-level heartbeats or periodic pings. Every job-token call renews the lease, and publish-editable.mjs and the render runner ping the checkpoint themselves while they run.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
     title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
