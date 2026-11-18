@@ -5,7 +5,7 @@ import {MotionStudioError} from '@/lib/server/motion-studio/errors'
 import {requireBotJob} from '@/lib/server/motion-studio/agent-bridge'
 import {normalizeEdits,type ClipEditsV2} from '@/lib/clips/edits'
 import {toPrismaJson} from '@/lib/server/clips/prisma-json'
-import {AGENT_EDITOR_TOOLS,agentEditorTool,applyAgentEditorOperation} from '@/lib/motion-studio/editor-agent-operations'
+import {AGENT_EDITOR_TOOLS,agentEditorTool,applyAgentEditorOperation,type AgentEditorTool} from '@/lib/motion-studio/editor-agent-operations'
 
 const db=()=>getPrisma()
 const obj=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:{}
@@ -66,7 +66,7 @@ export async function applyEditorAgentTool(id:string,request:Request,raw:unknown
     const current=normalizeEdits(clip!.edits,bounds)
     let next:ClipEditsV2
     try{next=applyAgentEditorOperation({
-      edits:current,bounds,tool:input.tool as Exclude<typeof input.tool,'inspect_timeline'>,
+      edits:current,bounds,tool:input.tool as AgentEditorTool,
       parameters:input.parameters,
     })}catch(error){
       err(error instanceof Error?error.message:'Invalid editor operation','INVALID',400)
