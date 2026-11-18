@@ -78,7 +78,6 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
   const ref = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{id:string;clientX:number;clientY:number;x:number;y:number}|null>(null)
-  const [scale, setScale] = useState(0)
   const [time, setTime] = useState(0)
   const [playbackFailed, setPlaybackFailed] = useState(false)
   useEffect(() => setPlaybackFailed(false), [videoUrl])
@@ -93,12 +92,8 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
     const v = ref.current
     const seek = () => { try { if(!v)return; v.currentTime = startSec + 0.9 * Math.max(0.1, (tree?.durationMs || 2000) / 1000) } catch { /* not seekable yet */ } }
     v?.addEventListener('loadedmetadata', seek)
-    const fit = () => setScale((containerRef.current?.clientWidth || 0) / width)
-    fit()
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(fit) : null
-    if(containerRef.current)ro?.observe(containerRef.current)
-    return () => { v?.removeEventListener('loadedmetadata', seek); ro?.disconnect() }
-  }, [videoUrl, startSec, width, tree?.durationMs])
+    return () => { v?.removeEventListener('loadedmetadata', seek) }
+  }, [videoUrl, startSec, tree?.durationMs])
   const boxes = useMemo(() => {
     const byId = new Map(scene.manifest.elements.map(e => [e.id, e]))
     const abs = (id: string, n = 0): Box | null => {
@@ -124,10 +119,10 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
       {(!videoUrl || playbackFailed) ? <div className="absolute inset-0 grid place-items-center p-4 text-center text-xs text-white/80">
         {playbackFailed ? 'Base video is not playable in this browser. Original layers are still editable.' : 'Base video is not available yet. Original layers are still editable.'}
       </div> : null}
-      {scale > 0 ? boxes.map(({ id, box }) => <button key={id} type="button" aria-label={'Select layer ' + id}
+      {boxes.map(({ id, box }) => <button key={id} type="button" aria-label={'Select layer ' + id}
         onClick={() => onSelect(id)}
         onPointerDown={e=>{
-          if(!onChange || !scale)return
+          if(!onChange || !containerRef.current?.clientWidth)return
           e.preventDefault()
           onSelect(id)
           dragRef.current={id,clientX:e.clientX,clientY:e.clientY,
@@ -137,14 +132,15 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
         }}
         onPointerMove={e=>{
           const drag=dragRef.current
-          if(!drag||drag.id!==id||!onChange||!scale)return
-          onChange(id,'x',Math.round((drag.x+(e.clientX-drag.clientX)/scale)*100)/100)
-          onChange(id,'y',Math.round((drag.y+(e.clientY-drag.clientY)/scale)*100)/100)
+          const host=containerRef.current
+          if(!drag||drag.id!==id||!onChange||!host?.clientWidth||!host.clientHeight)return
+          onChange(id,'x',Math.round((drag.x+(e.clientX-drag.clientX)*width/host.clientWidth)*100)/100)
+          onChange(id,'y',Math.round((drag.y+(e.clientY-drag.clientY)*height/host.clientHeight)*100)/100)
         }}
         onPointerUp={()=>{dragRef.current=null}}
         onPointerCancel={()=>{dragRef.current=null}}
         className={'absolute touch-none rounded-sm border ' + (selected === id ? 'border-primary bg-primary/10' : 'border-transparent hover:border-white/60')}
-        style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale }} />) : null}
+        style={{ left:(box.x/width*100)+'%', top:(box.y/height*100)+'%', width:(box.w/width*100)+'%', height:(box.h/height*100)+'%', minHeight:8 }} />)}
     </div>
     {videoUrl && !playbackFailed ? <div className="flex items-center gap-2">
       <button className="rounded border border-input px-2 py-1 text-xs" type="button"
