@@ -431,6 +431,54 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
   throw problem('Expected prepare or commit.',400)
 }
 
+async function completeDiscoveredLiveClips(
+  job:Awaited<ReturnType<typeof authorizeClipAgentCallback>>,
+  body:Record<string,unknown>,versionId:string,durationMs:number,
+){
+  const raw=Array.isArray(body.clips)?body.clips:[]
+  if(!raw.length||raw.length>10)
+    throw problem('Live discovery must return scored clip windows.',400)
+  const clips=raw.map(value=>{
+    const row=object(value)
+    const title=word(row.title,120)||'Highlight'
+    const startMs=Number(row.startMs),endMs=Number(row.endMs),score=Number(row.score)
+    const sceneId=word(row.sceneId,128)
+    if(!Number.isSafeInteger(startMs)||!Number.isSafeInteger(endMs)||
+       startMs<0||endMs<=startMs||endMs>durationMs||
+       !Number.isInteger(score)||score<0||score>100||!sceneId)
+      throw problem('Invalid live clip window.',400)
+    return {title,startMs,endMs,score,sceneId,why:word(row.why,300)}
+  })
+  const project=await prisma().motionStudioPortableVersion.findFirst({
+    where:{id:versionId,workspaceId:job.workspaceId,projectId:job.projectId},
+    select:{manifest:true},
+  })
+  const scenes=Array.isArray(object(project?.manifest).scenes)?
+    (object(project?.manifest).scenes as unknown[]).map(a=>object(a).id):[]
+  if(clips.some(c=>!scenes.includes(c.sceneId)))
+    throw problem('Discovered clip references a missing live scene.',400)
+  const now=new Date()
+  const result=await prisma().$transaction(async tx=>{
+    for(const clip of clips){
+      await tx.clip.create({data:{
+        id:'clip_'+randomUUID(),workspaceId:job.workspaceId,projectId:job.projectId,
+        title:clip.title,reason:clip.why||'Selected by Transovo Agent',
+        startMs:clip.startMs,endMs:clip.endMs,score:clip.score,
+        scores:toPrismaJson({overall:clip.score}),
+        aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:job.id,
+          agentFinishDelivery:'live',agentFinishLiveProjectId:job.projectId,
+          agentFinishLiveVersionId:versionId,sceneId:clip.sceneId}),
+      }})
+    }
+    return tx.clipAgentFinishJob.update({where:{id:job.id},data:{
+      status:'complete',phase:'complete',progress:100,
+      message:clips.length+' editable clips are ready.',
+      resultKey:null,durationMs,completedAt:now,
+    }})
+  })
+  return {...publicJob(result),delivery:'live',portableVersionId:versionId}
+}
+
 export async function completeClipAgentJob(id: string,request: Request,raw: unknown) {
   const job=await authorizeClipAgentCallback(id,request)
   if (job.status==='complete') return publicJob(job)
@@ -442,6 +490,46 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       completedAt:new Date(),error:'Producer reported failure.',
     }})
     return publicJob(j)
+  }
+  if (body.delivery==='live'){
+    const versionId=word(body.portableVersionId,128)
+    const durationMs=Number(body.durationMs)
+    const version=await prisma().motionStudioPortableVersion.findFirst({
+      where:{id:versionId,workspaceId:job.workspaceId,projectId:job.projectId,
+        sourceJobId:id,status:'committed'},
+    })
+    if(!version||!Number.isSafeInteger(durationMs)||durationMs<1||durationMs>2_147_483_647)
+      throw problem('Publish the clip live timeline before completing.',409)
+    const manifest=object(version.manifest)
+    const live=object(manifest.liveProject)
+    if(live.schema!=='transovo.live-project/1'||Number(object(live.format).durationMs)!==durationMs)
+      throw problem('Invalid live clip timeline or duration.',409)
+    const assets=Array.isArray(manifest.assets)?manifest.assets:[]
+    const assetIds=assets.map(a=>String(object(a).id||''))
+    const present=await prisma().studioAsset.count({where:{
+      workspaceId:job.workspaceId,projectId:job.projectId,status:'ready',
+      id:{in:assetIds},
+    }})
+    if(present!==assetIds.length)throw problem('Live clip media is incomplete.',409)
+    if(job.clipId==='project:'+job.projectId)
+      return completeDiscoveredLiveClips(job,body,versionId,durationMs)
+    const now=new Date()
+    const completed=await prisma().$transaction(async tx=>{
+      const clip=await tx.clip.findFirst({where:{
+        id:job.clipId,workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null,
+      },select:{aiMeta:true}})
+      if(!clip)throw problem('Original clip no longer exists.',404)
+      await tx.clip.update({where:{id:job.clipId},data:{aiMeta:toPrismaJson({
+        ...object(clip.aiMeta),agentFinishLiveVersionId:versionId,
+        agentFinishLiveProjectId:job.projectId,agentFinishActiveJobId:id,
+        agentFinishDelivery:'live',
+      })}})
+      return tx.clipAgentFinishJob.update({where:{id},data:{
+        status:'complete',phase:'complete',progress:100,message:messages.complete,
+        resultKey:null,durationMs,completedAt:now,
+      }})
+    })
+    return {...publicJob(completed),delivery:'live',portableVersionId:versionId}
   }
   if (job.clipId==='project:'+job.projectId) return completeDiscoveredClips(job,body)
   const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4')
