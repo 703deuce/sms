@@ -83,8 +83,7 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
     for(const scene of manifest.scenes){
       const placement=rec(placements.find(p=>rec(p).sceneId===scene.id))
       const t=rec(placement.timeline)
-      const startMs=nonnegative(t.startMs,nonnegative(t.startSec,nullToNaN(cursor))*1000)
-      const start= value(t.startMs)!==null?startMs:
+      const start= value(t.startMs)!==null?Math.max(0,Number(t.startMs)):
         value(t.startSec)!==null?Math.max(0,Number(t.startSec)*1000):cursor
       const end=value(t.endMs)!==null?Number(t.endMs):
         value(t.endSec)!==null?Number(t.endSec)*1000:null
@@ -106,7 +105,6 @@ export function normalizeUniversalTimeline(manifest:MsPortableManifest):Universa
     audio:audio.sort((a,b)=>a.startMs-b.startMs),
     captions:captions.sort((a,b)=>a.startMs-b.startMs),captionsAssetIds}
 }
-function nullToNaN(x:number){return x/1000}
 export function visualsAt(timeline:UniversalTimeline,timeMs:number):UniversalVisual[]{
   return timeline.visuals.filter(item=>timeMs>=item.startMs&&timeMs<item.startMs+item.durationMs)
 }
