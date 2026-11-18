@@ -41,8 +41,10 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     }).then(data=>{
       if(!active)return
       const link=new URL(data.sceneUrl)
-      if(link.origin!==window.location.origin)
-        throw new Error('Scene host must use the authenticated Transovo origin')
+      const allowed=process.env.NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN||''
+      if(!allowed||new URL(allowed).origin!==link.origin||
+         link.protocol!=='https:'||link.origin===window.location.origin)
+        throw new Error('Scene code must load on a separate, configured HTTPS preview origin')
       // This query belongs to the iframe document; files fetch via the signed
       // URL path, so their capabilities survive relative module imports.
       link.searchParams.set('host',window.location.origin)
