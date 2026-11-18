@@ -148,8 +148,10 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
         const src=item.assetId??item.src
         if(src!==undefined&&(!assetId(src)||!ids.has(src)))
           return fail('Timeline media must reference a registered asset ID')
-        if(typeof item.startMs!=='number'||!Number.isSafeInteger(item.startMs)||item.startMs<0||
-           typeof item.durationMs!=='number'||!Number.isSafeInteger(item.durationMs)||item.durationMs<0)
+        const hasDuration=Number.isSafeInteger(item.durationMs)&&Number(item.durationMs)>=0
+        const hasEnd=Number.isSafeInteger(item.endMs)&&Number(item.endMs)>Number(item.startMs)
+        if(!Number.isSafeInteger(item.startMs)||Number(item.startMs)<0||
+           (!hasDuration&&!hasEnd))
           return fail('Invalid timeline item timing')
         if(item.type==='scene'&&!sceneIds.has(String(item.sceneId??item.id)))
           return fail('Timeline references an unknown scene')
