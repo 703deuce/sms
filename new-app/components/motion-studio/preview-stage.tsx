@@ -85,6 +85,10 @@ export function PreviewStage({
           <video
             ref={videoRef}
             src={project.previewUrl || undefined}
+            onLoadStart={() => {
+              clearStall()
+              stallTimer.current=setTimeout(() => { setVideoFailed(true); onPlayingChange(false) },8000)
+            }}
             onError={() => { clearStall(); setVideoFailed(true); onPlayingChange(false) }}
             onWaiting={() => { clearStall(); stallTimer.current = setTimeout(() => { setVideoFailed(true); onPlayingChange(false) }, 8000) }}
             onLoadedData={clearStall}
