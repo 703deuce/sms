@@ -76,6 +76,9 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
 }) {
   const ref = useRef<HTMLVideoElement>(null)
   const [scale, setScale] = useState(0)
+  const [time, setTime] = useState(0)
+  const [playbackFailed, setPlaybackFailed] = useState(false)
+  useEffect(() => setPlaybackFailed(false), [videoUrl])
   const tree = scene.manifest.motionTree
   const root = tree?.nodes.find(n => n.id === tree.rootId)
   const width = Number(root?.properties.width?.value) || 1920
@@ -112,12 +115,27 @@ export function PortableScenePicker({ scene, manifest, videoUrl, selected, onSel
   return <section className="flex flex-col gap-1" aria-label="Scene layer picker">
     <p className="text-xs font-medium">Scene preview</p>
     <div className="relative w-full overflow-hidden rounded-md border border-border bg-black" style={{ aspectRatio: `${width}/${height}` }}>
-      {videoUrl ? <video ref={ref} src={videoUrl} muted playsInline preload="metadata" className="absolute inset-0 size-full object-contain" /> : null}
+      {videoUrl && !playbackFailed ? <video ref={ref} src={videoUrl} muted playsInline preload="metadata"
+        onTimeUpdate={e=>setTime(e.currentTarget.currentTime)}
+        onError={()=>setPlaybackFailed(true)}
+        className="absolute inset-0 size-full object-contain" /> : null}
+      {(!videoUrl || playbackFailed) ? <div className="absolute inset-0 grid place-items-center p-4 text-center text-xs text-white/80">
+        {playbackFailed ? 'Base video is not playable in this browser. Original layers are still editable.' : 'Base video is not available yet. Original layers are still editable.'}
+      </div> : null}
       {scale > 0 ? boxes.map(({ id, box }) => <button key={id} type="button" aria-label={'Select layer ' + id}
         onClick={() => onSelect(id)}
         className={'absolute rounded-sm border ' + (selected === id ? 'border-primary bg-primary/10' : 'border-transparent hover:border-white/60')}
         style={{ left: box.x * scale, top: box.y * scale, width: box.w * scale, height: box.h * scale }} />) : null}
     </div>
-    <p className="text-[11px] text-muted-foreground">Edits show here after you save and render. Rendering never uses AI.</p>
+    {videoUrl && !playbackFailed ? <div className="flex items-center gap-2">
+      <button className="rounded border border-input px-2 py-1 text-xs" type="button"
+        onClick={()=>{const v=ref.current;if(!v)return;if(v.paused)void v.play().catch(()=>setPlaybackFailed(true));else v.pause()}}>Play / pause</button>
+      <input type="range" aria-label="Scrub scene preview" className="min-w-0 flex-1"
+        min={startSec} max={startSec + Math.max(0.1,(tree?.durationMs || 2000)/1000)} step={0.01}
+        value={Math.max(startSec,Math.min(time||startSec,startSec+Math.max(0.1,(tree?.durationMs || 2000)/1000)))}
+        onChange={e=>{const v=ref.current;if(v)v.currentTime=Number(e.target.value);setTime(Number(e.target.value))}} />
+      <span className="text-xs tabular-nums">{Math.max(0,time-startSec).toFixed(2)}s</span>
+    </div> : null}
+    <p className="text-[11px] text-muted-foreground">Browser scrubbing does not encode video. Exact effects and motion still require the original scene host or a final render.</p>
   </section>
 }
