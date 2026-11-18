@@ -158,6 +158,17 @@ export function validateScenePropertyPatch(
     if (!element || !plain(values)) return fail('Unknown editable element')
     const out: Record<string, unknown> = Object.create(null)
     for (const [key, value] of Object.entries(values)) {
+      // Timing is a graph-native editable range, not a producer property.
+      // Save as an override so source bundles and keyframes remain immutable.
+      if (key === 'startMs' || key === 'endMs') {
+        const graph = scene.manifest.motionTree
+        const node = graph?.nodes.find(n => n.id === elementId && n.id !== graph.rootId)
+        if (!node || !Number.isSafeInteger(value) || (value as number) < 0 ||
+            (value as number) > graph!.durationMs)
+          return fail('Layer timing outside scene bounds')
+        out[key] = value
+        continue
+      }
       const spec = element.properties[key]
       if (!spec || spec.tier === 'protected' || spec.tier === 'ai_editable')
         return fail('Property requires an AI revision or is protected')
@@ -192,6 +203,13 @@ export function validateScenePropertyPatch(
           Number(value.y) < 0 || Number(value.y) > 1))
         return fail('Invalid normalized focal point')
       out[key] = value
+    }
+    if (out.startMs !== undefined || out.endMs !== undefined) {
+      const graph = scene.manifest.motionTree!
+      const node = graph.nodes.find(n => n.id === elementId)!
+      const start = Number(out.startMs ?? node.startMs ?? 0)
+      const end = Number(out.endMs ?? node.endMs ?? graph.durationMs)
+      if (end <= start) return fail('Layer end must follow its start')
     }
     clean[elementId] = out
   }
