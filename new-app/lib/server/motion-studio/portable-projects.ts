@@ -84,7 +84,8 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
   return db().$transaction(async tx => {
     // Serialize only portable-version changes. Locking MotionStudioProject also
     // blocks unrelated producer/editor activity on this heavily used project.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
+    const locks=await tx.$queryRaw<Array<{acquired:boolean}>>`SELECT pg_try_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId})) AS acquired`
+    if(!locks[0]?.acquired)bad('Another scene version is being saved. Retry after it finishes.','CONFLICT',409)
     const last = await tx.motionStudioPortableVersion.findFirst({
       where: { projectId }, orderBy: { revision: 'desc' },
     })
@@ -147,7 +148,8 @@ export async function commitPortableEdit(workspaceId: string, projectId: string,
   return db().$transaction(async tx => {
     // Serialize only portable-version changes. Locking MotionStudioProject also
     // blocks unrelated producer/editor activity on this heavily used project.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
+    const locks=await tx.$queryRaw<Array<{acquired:boolean}>>`SELECT pg_try_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId})) AS acquired`
+    if(!locks[0]?.acquired)bad('Another scene version is being saved. Retry after it finishes.','CONFLICT',409)
     const latest = await tx.motionStudioPortableVersion.findFirst({
       where: { projectId }, orderBy: { revision: 'desc' },
     })
@@ -205,7 +207,8 @@ export async function restorePortableVersion(workspaceId:string,projectId:string
   return db().$transaction(async tx=>{
     // Serialize only portable-version changes. Locking MotionStudioProject also
     // blocks unrelated producer/editor activity on this heavily used project.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId}))`
+    const locks=await tx.$queryRaw<Array<{acquired:boolean}>>`SELECT pg_try_advisory_xact_lock(hashtext('motion_studio_portable'), hashtext(${projectId})) AS acquired`
+    if(!locks[0]?.acquired)bad('Another scene version is being saved. Retry after it finishes.','CONFLICT',409)
     const latest=await tx.motionStudioPortableVersion.findFirst({
       where:{projectId,workspaceId,status:'committed'},orderBy:{revision:'desc'},
     })
