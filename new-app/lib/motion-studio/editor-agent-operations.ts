@@ -3,6 +3,7 @@
  * editor. No arbitrary JSON merge, JavaScript evaluation, or secret tool calls.
  * The server applies optimistic version control before committing.
  */
+import {randomUUID} from 'node:crypto'
 import {normalizeEdits, type ClipEditsV2} from '@/lib/clips/edits'
 import {DEFAULT_TEXT_STYLE,TEXT_MAX_ITEMS,TEXT_MAX_CHARS,TEXT_MIN_MS} from '@/lib/clips/editor/text-items'
 import {PROP_SPECS,FX_PROPS,type KeyProp} from '@/lib/clips/editor/motion-schema'
@@ -96,7 +97,6 @@ export function applyAgentEditorOperation(args:{
   // Reuse the editor's own normalizer and worker-compatible constraints.
   return normalizeEdits(edits,args.bounds)
 }
-let serial=0
-const cryptoRandomId=()=>String(Date.now())+'_'+String(++serial)
+const cryptoRandomId=()=>randomUUID()
 // The persistent server pathway additionally checks the clip edit version; no
 // client should ever use this pure function to bypass optimistic concurrency.
