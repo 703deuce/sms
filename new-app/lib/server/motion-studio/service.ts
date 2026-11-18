@@ -83,7 +83,7 @@ export function motionStudioConfig() {
 function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   const o = J(raw)
   const out = { ...prev }
-  if (o.durationSeconds !== undefined && [10,15,30,60,120,180,300].includes(Number(o.durationSeconds))) out.durationSeconds = Number(o.durationSeconds)
+  if (o.durationSeconds !== undefined && Number.isSafeInteger(Number(o.durationSeconds)) && Number(o.durationSeconds) >= 5 && Number(o.durationSeconds) <= 2147483) out.durationSeconds = Number(o.durationSeconds)
   if (o.lengthMin !== undefined) {
     const minutes = Number(o.lengthMin)
     if (!validMinutes(minutes)) throw new MotionStudioError('INVALID', 'Length must be a positive whole number of minutes.', 400)
@@ -266,7 +266,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
   }
   const requestedSeconds = Number(o.durationSeconds)
   if (o.durationSeconds !== undefined) {
-    if (![10, 15, 30, 60, 120, 180, 300].includes(requestedSeconds)) throw new MotionStudioError('INVALID','Choose 10, 15 or 30 seconds, or 1, 2, 3 or 5 minutes.',400)
+    if (!Number.isSafeInteger(requestedSeconds) || requestedSeconds < 5 || requestedSeconds > 2147483) throw new MotionStudioError('INVALID','Video duration must be at least 5 seconds and within the timeline storage capacity.',400)
     settings.durationSeconds = requestedSeconds
     settings.lengthMin = Math.ceil(requestedSeconds / 60)
   }
