@@ -11167,6 +11167,35 @@ model MotionStudioRenderRequest {
   @@index([status, createdAt])
 }
 
+/**
+ * Whole-film deterministic render: distinct from scene still/clip renders and
+ * from AI creative jobs. No model usage, full master reassembly required.
+ */
+model MotionStudioDeterministicJob {
+  id             String   @id
+  workspaceId    String
+  projectId      String
+  versionId      String
+  idempotencyKey String
+  jobInput       Json
+  status         String   @default("queued")
+  workerId       String?
+  leaseHash      String?
+  leaseExpiresAt DateTime?
+  attempts       Int      @default(0)
+  upload         Json?
+  resultAssetId  String?
+  publishedVersionId String?
+  durationMs     Int?
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([versionId, idempotencyKey])
+  @@index([status, createdAt])
+  @@index([workspaceId, projectId, createdAt])
+}
+
 //// Physical machine and shared Grok plan are deliberately not modeled as a bot.
 model MotionStudioWorkerMachine {
   id          String   @id
