@@ -119,12 +119,13 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
         !plain(value.producerAssetMap))
       return fail('Invalid native producer source')
     const producer = value.producerDocument
+    const aliases = value.producerAssetMap as Record<string,unknown>
     if (!Array.isArray(producer.assetRefs) || producer.assetRefs.length > 10000 ||
-        producer.assetRefs.some(ref=>!assetId(ref)||!assetId(value.producerAssetMap?.[ref])||
-          !ids.has(value.producerAssetMap[ref])))
+        producer.assetRefs.some(ref=>!assetId(ref)||!assetId(aliases[ref])||
+          !ids.has(aliases[ref] as string)))
       return fail('Native project references an unregistered asset')
-    if (Object.keys(value.producerAssetMap).some(ref=>!assetId(ref)||!assetId(value.producerAssetMap?.[ref])||
-        !ids.has(value.producerAssetMap[ref])))
+    if (Object.entries(aliases).some(([ref,storageId])=>!assetId(ref)||!assetId(storageId)||
+        !ids.has(storageId as string)))
       return fail('Invalid producer asset alias')
   }
   enforceBoundedJson(value, 2_000_000, 'Portable manifest')
