@@ -64,7 +64,7 @@ export async function listClipAgentFinishes(workspaceId: string, projectId: stri
     return {...publicJob(j),
       delivery:portable?'live':'legacy',
       portableVersionId:portable?.id||null,
-      liveEditorUrl:portable?'/app/motion-studio/'+encodeURIComponent(projectId):null,
+      liveEditorUrl:portable?'/app/motion-studio/'+encodeURIComponent(projectId)+'/live':null,
       videoUrl:j.resultKey&&j.status==='complete'
         ?await createReadableSignedUrl(j.resultKey,3600).catch(()=>null):null,
     }
