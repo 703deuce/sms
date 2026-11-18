@@ -31,7 +31,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [selectedLayer,setSelectedLayer]=useState('')
   const [liveUnavailable,setLiveUnavailable]=useState(false)
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
-  const headRef=useRef<Version|null>(null)
   const savingRef=useRef(false)
   const revisionRef=useRef(0)
   const load=useCallback(async()=>{
@@ -42,7 +41,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       // An older GET may finish after a successful save. Never roll the editor back.
       if(data.version && data.version.revision >= revisionRef.current) {
         revisionRef.current=data.version.revision
-        headRef.current=data.version
         setVersion(data.version)
       }
       setHistory(data.history||[])
@@ -151,7 +149,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       })
       const data=await response.json() as {version?:Version;error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Restore failed')
-      revisionRef.current=data.version.revision;headRef.current=data.version
+      revisionRef.current=data.version.revision
       setVersion(data.version);setPatch({});setColors({});setRenderId('');setRenderUrl(null)
       setRestoreId('');setStatus('Restored earlier settings as version '+data.version.revision)
       void load()
@@ -203,7 +201,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         }
       }
       revisionRef.current=data.version.revision
-      headRef.current=data.version
       setVersion(data.version)
       setPatch({});setColors({});setRenderId('');setRenderUrl(null)
       setHistory(old=>[{id:data.version!.id,revision:data.version!.revision,createdAt:new Date().toISOString()},...old])
