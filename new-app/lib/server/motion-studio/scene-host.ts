@@ -49,7 +49,7 @@ export function issueSceneSessionUrl(args:{
     bundleAssetId,String(expires),signature,'index.html'].map(encodeURIComponent).join('/')
   return {sceneUrl:scene+'/'+path,expiresAt:new Date(expires*1000).toISOString()}
 }
-export async function createSceneSession(workspaceId:string,projectId:string,versionId:string,sceneId:string,requestUrl:string){
+export async function createSceneSession(workspaceId:string,projectId:string,versionId:string,sceneId:string,requestUrl:string,sharedAssets?:Awaited<ReturnType<typeof portableAssetSession>>){
   const version=await db().motionStudioPortableVersion.findFirst({
     where:{id:versionId,projectId,workspaceId,status:'committed'},
   })
@@ -57,7 +57,7 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   const manifest=validatePortableManifest(version!.manifest)
   const scene=manifest.scenes.find(s=>s.id===sceneId)
   if(!scene)fail('Scene not found',404)
-  const refs=await portableAssetSession(workspaceId,projectId,versionId)
+  const refs=sharedAssets??await portableAssetSession(workspaceId,projectId,versionId)
   const essential=[scene.bundleAssetId,...(scene.dependencies||[])]
   if(essential.some(id=>refs.unavailableAssetIds.includes(id)))
     fail('This scene is missing its original source dependencies',409)
