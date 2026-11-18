@@ -33,13 +33,18 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
     // document and map only the verified scene metadata into the older editor.
     // The producer must supply extracted scene bundle metadata and registered
     // asset records; absence is an error, never an implicit flattened scene.
-    manifest = input.document !== undefined
+    const base = input.document !== undefined
       ? adaptProducerProject({
           document: input.document,
           assets: input.assets as ProducerAssetRecord[],
           bundles: input.bundles as ProducerSceneBundle[],
         })
       : validatePortableManifest(input.manifest)
+    // Live projects attach one timeline to the existing immutable scene package.
+    // Do not replace the producer's source document or lose old project data.
+    manifest = input.liveProject!==undefined
+      ? validatePortableManifest({...base,liveProject:input.liveProject})
+      : base
   }
   catch (error) { return bad(error instanceof Error ? error.message : 'Invalid portable manifest') }
   if (manifest.projectId !== projectId) bad('Portable manifest belongs to another project')
