@@ -214,7 +214,9 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         revisionRef.current=Math.max(revisionRef.current,committedHead.revision)
         setVersion(committedHead)
       }
-      setStatus(err instanceof Error?err.message:'Save failed')
+      setStatus(controller.signal.aborted
+        ? 'Save timed out before confirmation. Changes are still in the editor; check the project version before retrying.'
+        : err instanceof Error?err.message:'Save failed')
     }
     finally{window.clearTimeout(timer);savingRef.current=false;setSaving(false)}
   }
