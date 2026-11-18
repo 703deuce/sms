@@ -1,5 +1,5 @@
 'use client'
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MsPortableScene } from '@/lib/motion-studio/portable-contract'
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -28,16 +28,10 @@ export function PortableLayerTiming({scene, layerId, savedElements, patch, onCha
   return <fieldset className="rounded-md border border-border p-2" data-testid="ms-layer-timing">
     <legend className="px-1 text-xs font-semibold">Layer timing · {node.name}</legend>
     <div className="grid grid-cols-2 gap-2">
-      <label className="flex flex-col gap-1 text-xs">Start (seconds)
-        <input className="h-8 w-full rounded border border-input bg-transparent px-2"
-          type="number" min={0} max={seconds(end-1)} step={0.01}
-          value={seconds(start)} onChange={e => changeStart(Number(e.target.value)*1000)} />
-      </label>
-      <label className="flex flex-col gap-1 text-xs">End (seconds)
-        <input className="h-8 w-full rounded border border-input bg-transparent px-2"
-          type="number" min={seconds(start+1)} max={seconds(duration)} step={0.01}
-          value={seconds(end)} onChange={e => changeEnd(Number(e.target.value)*1000)} />
-      </label>
+      <SecondsField key={layerId+':start'} label="Start (seconds)" ms={start}
+        minMs={0} maxMs={end-1} onCommit={changeStart} />
+      <SecondsField key={layerId+':end'} label="End (seconds)" ms={end}
+        minMs={start+1} maxMs={duration} onCommit={changeEnd} />
     </div>
     <div className="relative mt-3 h-8 cursor-ew-resize rounded bg-muted touch-none"
       aria-label="Drag layer timing handles"
@@ -67,4 +61,29 @@ export function PortableLayerTiming({scene, layerId, savedElements, patch, onCha
     </div>
     <p className="mt-1 text-[11px] text-muted-foreground">Timing saves without a render. Export applies the saved edit.</p>
   </fieldset>
+}
+
+/** Keep the text being typed separate from the clamped numeric time.
+ * Committing each keystroke made 1.8 become 1.01 as soon as the user typed 1.
+ */
+function SecondsField({label,ms,minMs,maxMs,onCommit}: {
+  label:string;ms:number;minMs:number;maxMs:number;onCommit:(value:number)=>void
+}) {
+  const [draft,setDraft]=useState(seconds(ms))
+  const [editing,setEditing]=useState(false)
+  useEffect(()=>{if(!editing)setDraft(seconds(ms))},[ms,editing])
+  const commit=()=>{
+    const parsed=Number(draft)
+    if(Number.isFinite(parsed)&&draft.trim()!=='')
+      onCommit(Math.min(maxMs,Math.max(minMs,Math.round(parsed*1000))))
+    else setDraft(seconds(ms))
+    setEditing(false)
+  }
+  return <label className="flex flex-col gap-1 text-xs">{label}
+    <input className="h-8 w-full rounded border border-input bg-transparent px-2"
+      inputMode="decimal" type="text" value={draft}
+      onFocus={()=>setEditing(true)} onChange={e=>setDraft(e.target.value)}
+      onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')e.currentTarget.blur()
+        if(e.key==='Escape'){setDraft(seconds(ms));setEditing(false);e.currentTarget.blur()}}} />
+  </label>
 }
