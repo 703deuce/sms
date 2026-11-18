@@ -2,7 +2,7 @@
 import type {UniversalAudio} from './universal-timeline'
 import {gainFromDb} from './universal-timeline'
 
-type Started={source:AudioBufferSourceNode;gain:GainNode;trackId:string}
+type Started={source:AudioBufferSourceNode;gain:GainNode;clip:UniversalAudio}
 type Stream={element:HTMLAudioElement;clip:UniversalAudio}
 const AUDIO_BUFFER_MAX_MS=20_000
 
@@ -64,6 +64,8 @@ export class UniversalBrowserAudio {
     }
   }
   private context(){return this.ctx||(this.ctx=new AudioContext())}
+  /** Invoke directly inside the Play click, before any awaited network work. */
+  unlock(){return this.context().resume()}
   async play(fromMs:number,speed=1){
     this.pause()
     const ctx=this.context()
@@ -89,7 +91,7 @@ export class UniversalBrowserAudio {
       if(offset<buffer.duration&&remaining>0){
         source.start(at+Math.max(0,clip.startMs-fromMs)/1000/speed,offset,
           Math.min(remaining,buffer.duration-offset))
-        this.started.push({source,gain,trackId:clip.trackId})
+        this.started.push({source,gain,clip})
       }else{source.disconnect();gain.disconnect()}
     }
     this.syncStreams(fromMs)
@@ -152,18 +154,14 @@ export class UniversalBrowserAudio {
   }
   setTrackGain(trackId:string,db:number){
     this.gains.set(trackId,db)
-    for(const started of this.started.filter(s=>s.trackId===trackId)){
-      // Each scheduled source retains its clip-specific base gain.
-      const clip=this.clips.find(c=>c.trackId===trackId&&
-        this.decoded.get(c.assetId)===started.source.buffer)
-      if(clip)started.gain.gain.value=this.gainOf(clip)
-    }
+    for(const started of this.started.filter(s=>s.clip.trackId===trackId))
+      started.gain.gain.value=this.gainOf(started.clip)
     this.syncStreams()
   }
   setTrackMuted(trackId:string,muted:boolean){
     this.muted.set(trackId,muted)
-    for(const started of this.started.filter(s=>s.trackId===trackId))
-      started.gain.gain.value=muted?0:gainFromDb(this.gains.get(trackId)||0)
+    for(const started of this.started.filter(s=>s.clip.trackId===trackId))
+      started.gain.gain.value=this.gainOf(started.clip)
     this.syncStreams()
   }
   isPlaying(){return this.running}
