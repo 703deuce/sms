@@ -4,7 +4,8 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, storageDriverName } from '@/lib/storage'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
-import type { ClipMediaSource, SourceSegment } from '@/lib/clips/editor/sources'
+import type { ClipMediaSource } from '@/lib/clips/editor/sources'
+import { agentCanvasVideoLayout } from '@/lib/motion-studio/editor-timeline'
 import type { BrollItem } from '@/lib/clips/broll'
 import type { ClipAudioSfx } from '@/lib/clips/audio'
 import type { Marker } from '@/lib/clips/editor/markers'
@@ -119,7 +120,6 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     }
   }
   const sources: ClipMediaSource[] = []
-  const sourceSegments: SourceSegment[] = []
   const broll: BrollItem[] = []
   const sfx: ClipAudioSfx[] = []
   const tracks: Track[] = []
@@ -161,7 +161,8 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
           sources.push({ id:file.id,ref:'upload',refId:file.id,mediaType:'video',label:file.filename })
           sourceSeen.add(file.id)
         }
-        sourceSegments.push({ id:itemId,sourceId:file.id,startMs:e.startMs,endMs:e.endMs,inMs:e.sourceInMs,audio:'main' })
+        // Keep individual scene clips available for manual replacements, but do not
+        // replace the authoritative full-film canvas with incomplete scene media.
       } else if (file && (kind === 'footage' || kind === 'text') && file.mediaType !== 'audio') {
         broll.push({ id:itemId,source:'upload',uploadId:file.id, ...(file.mediaType==='image'?{still:true as const}:{}),
           startMs:e.startMs,endMs:e.endMs,inMs:e.sourceInMs,placement:'manual' })
@@ -210,10 +211,18 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     }
   } catch { /* Missing sidecars never block production import. */ }
 
+  const sceneElements = manifest.elements.filter(e=>lane(e.trackId)==='video').sort((a,b)=>a.startMs-b.startMs)
   const motionStudio: ClipMotionStudioExt = { v:1,projectId:args.motionProjectId,timelineVersion:1,
-    durationMs:args.durationMs,fps:30,tracks:extTracks,segments:manifest.elements.filter(e=>lane(e.trackId)==='video').map(e=>({
+    durationMs:args.durationMs,fps:30,tracks:extTracks,segments:sceneElements.map(e=>({
       id:e.id,startMs:e.startMs,endMs:e.endMs,elementId:e.id
     })) }
+  // A scene is a cut in the original assembled film, not necessarily an
+  // independent source-media replacement. Keep other user-owned overrides.
+  const canvasLayout = agentCanvasVideoLayout(args.base, motionStudio, args.durationMs)
+  console.info('[motion-studio:manifest] imported_canvas',{
+    projectId:args.motionProjectId,durationMs:args.durationMs,
+    scenes:sceneElements.length,splits:canvasLayout.videoSplits?.length??0,
+  })
   // Preserve the full master as the default picture/canvas. Only replace its
   // baked audio when every audio manifest element has a playable registered stem.
   // Otherwise the master mix remains authoritative (avoids silent exports).
@@ -232,7 +241,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
   return { ...args.base,
     ...(replaceAudio ? { audioMuteRanges: [[0,args.durationMs] as [number,number]],
       audio: { ...args.base.audio, music:null, sfx } } : {}),
-    sources:[...manualSources,...sources], sourceSegments,
+    sources:[...manualSources,...sources], ...canvasLayout,
     broll:[...manualBroll,...broll], textItems:[...manualText,...textItems],
     tracks:[...manualTracks,...tracks],
     markers:[...(args.base.markers??[]).filter(m=>!String(m.id).startsWith('ms_ch_')),...manifest.chapters],
