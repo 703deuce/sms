@@ -225,6 +225,8 @@ export async function getWorkerDeterministicJob(request:Request,id:string){
     input:job.jobInput,producerDocument:manifest.producerDocument,
     producerAssetMap:manifest.producerAssetMap,assetUrls:session.assetUrls,
     theme:version!.theme,overrides:version!.overrides,
+    liveProject:manifest.liveProject??null,
+    renderFromBundles:Boolean(manifest.liveProject),
   }
 }
 export async function sweepDeterministicJobs(){
