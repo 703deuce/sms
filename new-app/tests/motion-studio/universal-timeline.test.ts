@@ -38,7 +38,7 @@ describe('Universal timeline playback contract',()=>{
     expect(captionsAt(result,3500)).toEqual([])
   })
   it('accepts out-of-order caption cues in VTT without embedding video pixels',()=>{
-    const cues=readTimelineCaptions('WEBVTT\\n\\n00:00:02.300 --> 00:00:03.500\\nAn editable caption')
+    const cues=readTimelineCaptions('WEBVTT\n\n00:00:02.300 --> 00:00:03.500\nAn editable caption')
     expect(cues[0]).toMatchObject({startMs:2300,endMs:3500,text:'An editable caption'})
     expect(gainFromDb(-6)).toBeCloseTo(0.501187,5)
   })
