@@ -55,13 +55,19 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   readyRef.current=ready
   const active=sceneAt(timeline,timeMs)
   const activeId=active?.sceneId||''
+  const lastDrawnScene=useRef('')
+  if(activeId&&ready[activeId]&&Boolean(drawn[activeId]))
+    lastDrawnScene.current=activeId
+  const displayedScene=activeId&&ready[activeId]&&drawn[activeId]
+    ? activeId:lastDrawnScene.current
   const timelineRef=useRef(timeline)
   timelineRef.current=timeline
   const nextScenes=useMemo(()=>{
     const now=timeMs
-    const future=timeline.visuals.filter(item=>item.type==='scene'&&
-      item.startMs+item.durationMs>now).slice(0,3)
-    return future.map(v=>v.sceneId!).filter(Boolean)
+    const scenes=timeline.visuals.filter(item=>item.type==='scene')
+    const previous=scenes.filter(item=>item.startMs<=now).slice(-1)
+    const future=scenes.filter(item=>item.startMs>now).slice(0,2)
+    return [...previous,...future].map(v=>v.sceneId!).filter(Boolean)
   },[timeline,timeMs])
   const trackIds=useMemo(()=>[...new Set(timeline.audio.map(a=>a.trackId))],[timeline.audio])
 
@@ -261,7 +267,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       })}
       {sessionScenes.map(id=>{
         const item=timeline.visuals.find(v=>v.sceneId===id)
-        const visible=showing.some(v=>v.sceneId===id)&&ready[id]&&Boolean(drawn[id])
+        const visible=id===displayedScene&&ready[id]&&Boolean(drawn[id])
         return <iframe key={sessions[id]!.sceneUrl} title={'Editable scene '+id}
           ref={el=>{frames.current[id]=el}}
           src={sessions[id]!.sceneUrl} sandbox="allow-scripts" referrerPolicy="no-referrer"
@@ -270,7 +276,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       })}
       {captionText?<div aria-label="Preview captions" className="pointer-events-none absolute inset-x-3 bottom-[8%] z-50 whitespace-pre-line text-center text-lg font-extrabold text-white drop-shadow-[0_2px_3px_black]">
         {captionText}</div>:null}
-      {activeId&&!ready[activeId]?
+      {activeId&&!ready[activeId]&&!displayedScene?
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-black/75 text-xs text-white">
           Loading editable scene…
         </div>:null}
