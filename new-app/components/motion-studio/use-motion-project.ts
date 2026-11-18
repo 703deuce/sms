@@ -27,8 +27,12 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
   const [busy, setBusy] = useState<string | null>(null)
   const cursor = useRef<string | null>(null)
   const alive = useRef(true)
+  const refreshInFlight = useRef<Promise<void> | null>(null)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback((): Promise<void> => {
+    // A slow read must never accumulate overlapping database requests.
+    if (refreshInFlight.current) return refreshInFlight.current
+    const request = (async () => {
     try {
       const [p, a] = await Promise.all([client.getProject(projectId), client.listActivity(projectId, cursor.current)])
       if (!alive.current) return
@@ -56,6 +60,12 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
       setLoadStatus(status)
       setLoadError(msg)
     }
+    })()
+    refreshInFlight.current = request
+    void request.finally(() => {
+      if (refreshInFlight.current === request) refreshInFlight.current = null
+    })
+    return request
   }, [client, projectId])
 
   useEffect(() => {
@@ -71,8 +81,15 @@ export function useMotionProject(client: MotionStudioClient, projectId: string, 
   const polling = needsPolling(project)
   useEffect(() => {
     if (!polling || pollMs <= 0) return
-    const t = setInterval(() => void refresh(), pollMs)
-    return () => clearInterval(t)
+    // Await each refresh and allow breathing room between polls; never stack calls.
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const run = async () => {
+      await refresh()
+      if (!cancelled) timer = setTimeout(() => void run(), Math.max(5000, pollMs))
+    }
+    timer = setTimeout(() => void run(), Math.max(5000, pollMs))
+    return () => { cancelled = true; if (timer) clearTimeout(timer) }
   }, [polling, pollMs, refresh])
 
   /** Run a mutation; the returned project replaces local state. Errors stay visible with a recovery path. */
