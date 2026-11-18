@@ -31,10 +31,18 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     let active=true
     setSession(null);setHello(false);setReady(false);setError('');setLoading(true)
     initialized.current=false
+    // Avoid the scene-session request entirely when a separate host is not configured.
+    if(!process.env.NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN){
+      setLoading(false)
+      onUnavailable?.()
+      return
+    }
+    const controller=new AbortController()
+    const timeout=window.setTimeout(()=>controller.abort(),5000)
     const url='/api/motion-studio/projects/'+encodeURIComponent(projectId)+
       '/portable/scene-session?versionId='+encodeURIComponent(versionId)+
       '&sceneId='+encodeURIComponent(scene.id)
-    fetch(url,{cache:'no-store'}).then(async response=>{
+    fetch(url,{cache:'no-store',signal:controller.signal}).then(async response=>{
       if(!response.ok){
         const failure=await response.json().catch(()=>({message:'Scene preview unavailable'}))
         throw new Error(failure.message||'Scene preview unavailable')
@@ -56,8 +64,8 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
       if(onUnavailable){onUnavailable();return}
       setError(e instanceof Error?e.message:'Scene preview unavailable')
     })
-      .finally(()=>{if(active)setLoading(false)})
-    return()=>{active=false}
+      .finally(()=>{window.clearTimeout(timeout);if(active)setLoading(false)})
+    return()=>{active=false;window.clearTimeout(timeout);controller.abort()}
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[projectId,versionId,scene.id])
 
