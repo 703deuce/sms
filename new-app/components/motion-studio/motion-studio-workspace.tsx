@@ -178,7 +178,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
   const canExport = project.status === 'review' || project.status === 'complete' || project.status === 'exporting'
   // Contract v1.1: the Compact Editor opens the assembled program MP4, which exists once the first cut is assembled.
   const canOpenEditor = canExport && !project.isExample
-  const editorHint = project.isExample ? 'The example project is read-only' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
+  const editorHint = project.isExample ? 'The example project is read-only' : agentJob?.delivery==='live' ? 'Edit the original scene, timeline, audio and captions in this browser workspace' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
   const canCancel = !project.isExample && (project.status === 'planning' || project.status === 'producing' || project.status === 'exporting')
   const cancel = () =>
     void act('cancel', async () => {
@@ -208,12 +208,18 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
     setMobileTab('timeline')
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
   }
-  const openEditor = () =>
+  const openEditor = () => {
+    if(agentJob?.delivery==='live'){
+      document.querySelector('[data-testid="ms-portable-elements"]')
+        ?.scrollIntoView({behavior:'smooth',block:'start'})
+      return
+    }
     void act('editor', async () => {
       const h = await client.openInEditor(project.id)
       // Compact Editor with the Motion Studio lanes (EditorShell `motionStudioSlot`); existing clip editing is unchanged.
       router.push(`/app/video-editor/${encodeURIComponent(h.clipProjectId)}/edit/${encodeURIComponent(h.clipId)}?motionStudio=${encodeURIComponent(project.id)}`)
     })
+  }
   const uploadToLibrary = (files: File[]) => {
     for (const file of files) {
       const key = `${file.name}-${Math.random().toString(36).slice(2, 7)}`
@@ -380,7 +386,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 15
         {bottom === 'timeline' ? (
           <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canOpenEditor} title={editorHint} data-testid="ms-open-editor-timeline">
             <Rows3 className="size-3.5" aria-hidden />
-            {MS_LABELS.openAdvanced}
+            {agentJob?.delivery==='live'?'Open live editor':MS_LABELS.openAdvanced}
           </Button>
         ) : null}
       </div>
