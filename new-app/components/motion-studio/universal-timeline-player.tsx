@@ -1,5 +1,5 @@
 'use client'
-import {useCallback,useEffect,useMemo,useRef,useState} from 'react'
+import {useCallback,useEffect,useMemo,useRef,useState,type CSSProperties} from 'react'
 import type {UniversalTimeline,UniversalVisual,UniversalCaption} from '@/lib/motion-studio/universal-timeline'
 import {captionsAt,visualsAt} from '@/lib/motion-studio/universal-timeline'
 import {readTimelineCaptions} from '@/lib/motion-studio/universal-captions'
@@ -9,7 +9,6 @@ export type BrowserSceneSession={sceneId:string;sceneUrl:string;expiresAt:string
   assetUrls:Record<string,string>;assetRecords:Record<string,unknown>;
   fonts:Record<string,unknown>}
 type Wire={ms?:number;event?:string;id?:number;ok?:boolean;error?:string}
-type SceneState={ready:boolean;drawnMs:number}
 const safeMs=(ms:number,max:number)=>Math.max(0,Math.min(max,Number.isFinite(ms)?ms:0))
 function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
   const candidate=visualsAt(timeline,t).filter(v=>v.type==='scene')
@@ -44,10 +43,10 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   const [seekEpoch,setSeekEpoch]=useState(0)
   const frames=useRef<Record<string,HTMLIFrameElement|null>>({})
   const media=useRef<Record<string,HTMLVideoElement|null>>({})
-  const started=new Set<string>()
   const audio=useRef<UniversalBrowserAudio|null>(null)
   if(!audio.current)audio.current=new UniversalBrowserAudio()
   const pending=useRef<Record<string,number>>({})
+  const requested=useRef<Record<string,number>>({})
   const sequence=useRef(0)
   const clock=useRef<number|null>(null)
   const position=useRef(timeMs)
@@ -58,8 +57,6 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   const activeId=active?.sceneId||''
   const timelineRef=useRef(timeline)
   timelineRef.current=timeline
-  const currentIdRef=useRef(activeId)
-  currentIdRef.current=activeId
   const nextScenes=useMemo(()=>{
     const now=timeMs
     const future=timeline.visuals.filter(item=>item.type==='scene'&&
@@ -135,14 +132,17 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     const visual=sceneAt(timeline,now)
     if(visual?.sceneId&&ready[visual.sceneId]&&!pending.current[visual.sceneId]){
       const localMs=visual.inMs+now-visual.startMs
-      const id=send(visual.sceneId,'seek',Math.max(0,localMs)/1000)
-      if(id!==null)pending.current[visual.sceneId]=id
+      if(Math.abs((requested.current[visual.sceneId]??-Infinity)-localMs)>0.25){
+        const id=send(visual.sceneId,'seek',Math.max(0,localMs)/1000)
+        if(id!==null){pending.current[visual.sceneId]=id;requested.current[visual.sceneId]=localMs}
+      }
     }
     // Prepare the next cut without affecting the displayed scene.
     const next=timeline.visuals.find(v=>v.type==='scene'&&v.startMs>now)
-    if(next?.sceneId&&ready[next.sceneId]&&!pending.current[next.sceneId]){
+    if(next?.sceneId&&ready[next.sceneId]&&!pending.current[next.sceneId]&&
+      requested.current[next.sceneId]===undefined){
       const id=send(next.sceneId,'seek',next.inMs/1000)
-      if(id!==null)pending.current[next.sceneId]=id
+      if(id!==null){pending.current[next.sceneId]=id;requested.current[next.sceneId]=next.inMs}
     }
   },[timeMs,ready,send,timeline,seekEpoch])
 
@@ -239,7 +239,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       .map(c=>c.text).join('\n'):''
   const showing=visualsAt(timeline,timeMs)
   const sessionScenes=[...new Set(nextScenes)].filter(id=>sessions[id])
-  const bg:React.CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
+  const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
     <div className="flex items-center justify-between gap-2 text-xs">
       <span className="font-medium">Live project playback</span>
