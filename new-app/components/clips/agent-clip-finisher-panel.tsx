@@ -8,7 +8,8 @@ import type { ClipCardData } from './clip-grid'
 
 type Job = {
   id:string;clipId:string;projectId:string;status:string;phase:string;progress:number;
-  message:string|null;videoUrl:string|null;durationMs:number|null
+  message:string|null;videoUrl:string|null;durationMs:number|null;
+  delivery?:string;liveEditorUrl?:string|null
 }
 type Props = {
   projectId:string
@@ -105,8 +106,11 @@ export function AgentClipFinisherPanel({projectId,clips,selectedClipIds,onFinish
           </div>
           {done&&job.videoUrl?<a href={job.videoUrl} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-1 font-medium text-primary underline"><Download className="size-3"/> Finished MP4</a>:null}
-          {done?<Link href={'/app/video-editor/'+encodeURIComponent(projectId)+'/edit/'+encodeURIComponent(job.clipId)}
-            className="font-medium text-primary underline">Open editor</Link>:null}
+          {done?<Link href={job.delivery==='live'&&job.liveEditorUrl?
+              job.liveEditorUrl:
+              '/app/video-editor/'+encodeURIComponent(projectId)+'/edit/'+encodeURIComponent(job.clipId)}
+            className="font-medium text-primary underline">
+            {job.delivery==='live'?'Edit live project':'Open editor'}</Link>:null}
         </div>
       })}
     </div>:null}
