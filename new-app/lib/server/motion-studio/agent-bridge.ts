@@ -441,8 +441,10 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     await db().studioAsset.upsert({
       where: { id: item.id },
       create: { id: item.id, projectId: job.projectId, workspaceId: job.workspaceId,
-        uploadId: item.id, kind: item.kind, filename: item.filename, status: 'ready' },
-      update: { status: 'ready' },
+        uploadId: item.id, kind: item.kind, filename: item.filename, status: 'ready',
+        ...(item.sha256 ? {provenanceLog: toPrismaJson({source:'producer',sha256:item.sha256,verifiedSha256:true})} : {}) },
+      update: { status: 'ready',
+        ...(item.sha256 ? {provenanceLog: toPrismaJson({source:'producer',sha256:item.sha256,verifiedSha256:true})} : {}) },
     })
     await db().motionStudioAgentJob.update({ where: { id }, data: { artifacts: toPrismaJson(all) } })
     return { uploadId: item.id, status: 'ready', bytes: size }
