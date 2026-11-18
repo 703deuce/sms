@@ -100,6 +100,7 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     {session?<iframe key={session.sceneUrl} ref={frame}
       title={'Editable '+scene.id} src={session.sceneUrl}
       sandbox="allow-scripts" referrerPolicy="no-referrer"
+      onLoad={()=>setHello(true)}
       className="aspect-video w-full rounded-md border border-border bg-black"/>:null}
     {error?<p role="status" className="text-xs text-destructive">{error}</p>:null}
     {(loading||(session&&!ready))&&!error?
