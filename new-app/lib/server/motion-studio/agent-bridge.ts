@@ -96,6 +96,40 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
 
+/**
+ * A manually edited timeline is a valid revision base even if no previous
+ * Grokbot video job has finished. Source files and edits are workspace scoped;
+ * URLs are short-lived and never embedded in durable job state.
+ */
+async function manualEditorBase(workspaceId:string,projectId:string){
+  const project=await db().motionStudioProject.findFirst({
+    where:{workspaceId,id:projectId},
+    select:{clipId:true,clipProjectId:true},
+  })
+  if(!project?.clipId||!project.clipProjectId)return null
+  const [clip,clipProject]=await Promise.all([
+    db().clip.findFirst({where:{id:project.clipId,workspaceId},
+      select:{id:true,edits:true,startMs:true,endMs:true}}),
+    db().clipProject.findFirst({where:{id:project.clipProjectId,workspaceId},
+      select:{id:true,uploadId:true,status:true,rangeEndMs:true}}),
+  ])
+  if(!clip||!clipProject?.uploadId||clipProject.status!=='READY')return null
+  const upload=await db().clipUpload.findFirst({
+    where:{id:clipProject.uploadId,workspaceId},
+    select:{id:true,key:true,status:true,mime:true,durationMs:true},
+  })
+  if(!upload||!['READY','COMPLETE'].includes(upload.status)||!upload.mime.startsWith('video/'))
+    return null
+  const url=await createReadableSignedUrl(upload.key,1800).catch(()=>null)
+  if(!url)return null
+  return {
+    clipId:clip.id,clipProjectId:clipProject.id,sourceUploadId:upload.id,
+    sourceUrl:url,sourceMime:upload.mime,
+    durationMs:Number(upload.durationMs||clipProject.rangeEndMs||clip.endMs),
+    edits:clip.edits,
+  }
+}
+
 export type RevisionRequest = { instruction: string; selectedElementIds?: string[]; timeRangeMs?: [number, number] }
 export async function dispatchAgentJob(workspaceId: string, userId: string, projectId: string, key: string | null, request: Request, revisionRequest?: RevisionRequest) {
   if (pullProducerQueueEnabled() && coordinatorEnabled())
@@ -111,7 +145,9 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   if (!revisionRequest && project.status !== 'setup') throw new MotionStudioError('CONFLICT', 'The old production pipeline has started.', 409)
   const parent = revisionRequest ? await db().motionStudioAgentJob.findFirst({
     where: { workspaceId, projectId, status: 'complete' }, orderBy: [{ revision: 'desc' }, { createdAt: 'desc' }] }) : null
-  if (revisionRequest && !parent) throw new MotionStudioError('CONFLICT', 'Finish a video before requesting edits.', 409)
+  const manualBase = revisionRequest ? await manualEditorBase(workspaceId,projectId) : null
+  if (revisionRequest && !parent && !manualBase)
+    throw new MotionStudioError('CONFLICT', 'A finished video or a playable manual timeline is required before requesting edits.', 409)
   const idempotencyKey = str(key, 120) || 'initial-production'
   const where = { projectId_idempotencyKey: { projectId, idempotencyKey } }
   const previous = await db().motionStudioAgentJob.findUnique({ where })
@@ -134,7 +170,8 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   let job
   try {
     job = await db().motionStudioAgentJob.create({ data: { id, projectId, workspaceId, userId,
-      idempotencyKey, parentJobId: parent?.id ?? null, revision: parent ? parent.revision + 1 : 0,
+      idempotencyKey, parentJobId: parent?.id ?? null,
+      revision: revisionRequest ? (parent?.revision ?? 0) + 1 : 0,
       tokenHash, tokenExpiresAt: new Date(Date.now() + 36 * 3600_000),
       status: (pullProducerQueueEnabled() || coordinatorEnabled()) ? 'queued' : 'dispatching', phase: 'dispatch', progress: 0, artifacts: toPrismaJson([]),
       message: (pullProducerQueueEnabled() || coordinatorEnabled()) ? 'Your video is in the production queue.' : 'Submitting assignment to the production bot.' } })
@@ -157,12 +194,18 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, workspaceId, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
-    ...(parent ? { parentJobId: parent.id, revision: parent.revision + 1, threadId: projectId,
-      instruction: revisionRequest?.instruction,
-      selectedElementIds: revisionRequest?.selectedElementIds ?? [],
-      timeRangeMs: revisionRequest?.timeRangeMs ?? null,
-      messageHistory: (await db().motionStudioAgentMessage.findMany({ where: { projectId, role: { in: ['customer','answer','agent'] } },
-        orderBy: { createdAt: 'desc' }, take: 20 })).reverse().map(m => ({ role: m.role === 'answer' ? 'customer' : m.role, text: m.text })) } : {}),
+    ...(revisionRequest ? {
+      ...(parent ? {parentJobId:parent.id} : {}),
+      revision:(parent?.revision ?? 0)+1,threadId:projectId,
+      instruction:revisionRequest.instruction,
+      selectedElementIds:revisionRequest.selectedElementIds??[],
+      timeRangeMs:revisionRequest.timeRangeMs??null,
+      ...(manualBase?{manualTimeline:manualBase}:{}),
+      messageHistory:(await db().motionStudioAgentMessage.findMany({
+        where:{projectId,role:{in:['customer','answer','agent']}},
+        orderBy:{createdAt:'desc'},take:20,
+      })).reverse().map(m=>({role:m.role==='answer'?'customer':m.role,text:m.text})),
+    } : {}),
     title: project.title, prompt: project.brief,
     videoType: creative.videoType,
     categoryGuidance: directorCategoryGuidance(creative.videoType),
@@ -294,6 +337,7 @@ export async function botGetAssignment(id: string, request: Request) {
   }:null
   return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
     portableProject,
+    manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
     title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
     projectContext: {
       projectId: project.id, workspaceId: project.workspaceId,
@@ -716,9 +760,11 @@ export async function submitAgentRevision(workspaceId: string, userId: string, p
     response = latest.status === 'needs_input'
       ? 'I’ve queued that change for the next version. Please also answer the production question so the current video can finish.'
       : 'I’ve queued that change for the next version. I won’t interrupt the video that is currently processing.'
-  } else if (wantsEdit && !latest?.resultKey && !await db().motionStudioAgentJob.findFirst({
-    where: { projectId, workspaceId, status: 'complete' }, select: { id: true } })) {
-    response = 'I understand the change. Once your first video is ready, I can submit this as a revision.'
+  } else if (wantsEdit && !latest?.resultKey &&
+    !await db().motionStudioAgentJob.findFirst({
+      where: { projectId, workspaceId, status: 'complete' }, select: { id: true } }) &&
+    !await manualEditorBase(workspaceId,projectId)) {
+    response = 'I understand the change. Once your video or manual timeline is ready, I can submit this as a revision.'
   } else if (wantsEdit) {
     // Dispatch before recording the assistant success reply. If dispatch fails we tell the truth.
     try {
