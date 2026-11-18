@@ -64,6 +64,12 @@ async function expireStaleQuestion<T extends { id: string; status: string; waiti
   })
   return result.count ? await db().motionStudioAgentJob.findUniqueOrThrow({ where: { id: job.id } }) as unknown as T : job
 }
+// An optional clean picture track is scoped to the same finished assignment.
+function editorPicture(raw: unknown, master: Artifact) {
+  return artifacts(raw).find(a => a.state==='ready' && a.filename==='editor-base.mp4' &&
+    a.kind==='video' && a.mime==='video/mp4') ?? master
+}
+
 function publicJob(job: PublicJob) {
   return { id: job.id, projectId: job.projectId, status: job.status, phase: job.phase,
     parentJobId: job.parentJobId ?? null, revision: job.revision ?? 0,
@@ -349,6 +355,7 @@ export async function botGetAssignment(id: string, request: Request) {
   return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
     portableProject,
     productionInstructions: {
+      editableTimeline: 'Deliver the clean cut as editor-base.mp4 and the reviewed composite as the master. Put editable text, graphics and audio on timed items in project.json (startMs, endMs, sourceInMs); use original artwork or scene code and active-duration overlays. Keep cut points and source handles for editable transitions. Keep capture/review output outside scene inputs. Declare genuine sequence inputs in buildBundle sourceFiles.',
       review: 'Inspect full-size first, busiest and last frames per scene. After an edit review only affected frames and adjacent cuts. Play short excerpts for timing, motion or sound. Watch the approved master once before delivery.',
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
       delivery: 'Use the master producer kit bundle and frame-packs modules. Export the immutable native package and ingest bundle records to persistent job storage before upload. Publish with new-app/scripts/motion-studio/publish-editable.mjs. Resume that directory after interruption; reuse the approved master.',
@@ -432,17 +439,20 @@ export async function botProgress(id: string, request: Request, raw: unknown) {
 
 // Storage I/O happens outside this transaction. Merge only this receipt under the
 // row lock, so concurrent completions cannot overwrite another upload's receipt.
-async function storeArtifact(owner:{id:string;tokenHash:string}, item:Artifact) {
+async function storeArtifact(owner:{id:string;tokenHash:string}, incoming:Artifact | Artifact[]) {
   await db().$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "MotionStudioAgentJob" WHERE "id" = ${owner.id} FOR UPDATE`
     const current=await tx.motionStudioAgentJob.findUniqueOrThrow({where:{id:owner.id}})
     if (isDone(current.status) || current.tokenHash !== owner.tokenHash)
       throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
     const list=artifacts(current.artifacts)
-    const index=list.findIndex(a=>a.id===item.id)
-    if (index<0 && list.length>=10000) throw new MotionStudioError('INVALID','Too many artifacts.',400)
-    if (index<0) list.push(item)
-    else list[index]=item
+    const items=Array.isArray(incoming)?incoming:[incoming]
+    for (const item of items) {
+      const index=list.findIndex(a=>a.id===item.id)
+      if (index<0 && list.length>=10000) throw new MotionStudioError('INVALID','Too many artifacts.',400)
+      if (index<0) list.push(item)
+      else list[index]=item
+    }
     await tx.motionStudioAgentJob.update({where:{id:owner.id},data:{artifacts:toPrismaJson(list)}})
   })
 }
@@ -454,7 +464,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
   const action = str(input.action, 20)
   const all = artifacts(job.artifacts)
   if (action === 'approveMaster') {
-    const isMaster=(a:Artifact)=>a.id===input.uploadId && a.state==='ready' && a.mime==='video/mp4' && a.kind==='video'
+    const isMaster=(a:Artifact)=>a.id===input.uploadId && a.filename!=='editor-base.mp4' && a.state==='ready' && a.mime==='video/mp4' && a.kind==='video'
     let master=all.find(isMaster)
     if (!master && typeof input.sourceJobId==='string') {
       const source=await db().motionStudioAgentJob.findFirst({where:{id:input.sourceJobId,
@@ -468,14 +478,26 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     if (!updated.count) throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
     return {videoReady:true}
   }
+  if (action === 'reuse') {
+    if (typeof input.sourceJobId!=='string' || !Array.isArray(input.ids) || input.ids.length>10000)
+      throw new MotionStudioError('INVALID','Invalid recovery receipts.',400)
+    const source=await db().motionStudioAgentJob.findFirst({where:{id:input.sourceJobId,
+      workspaceId:job.workspaceId,projectId:job.projectId},select:{artifacts:true}})
+    const wanted=new Set(input.ids)
+    const borrowed=artifacts(source?.artifacts).filter(a=>wanted.has(a.id) && a.state==='ready' && a.sha256)
+    if (borrowed.length!==wanted.size) throw new MotionStudioError('CONFLICT','Incomplete recovery receipts.',409)
+    await storeArtifact(job,borrowed)
+    return {reused:borrowed.length}
+  }
   if (action === 'receipts') {
     const sourceId = str(input.sourceJobId,100)
     const source = sourceId && sourceId !== job.id
       ? await db().motionStudioAgentJob.findFirst({where:{id:sourceId,workspaceId:job.workspaceId,
           projectId:job.projectId},select:{artifacts:true}}) : null
+    const currentIds=new Set(all.map(a=>a.id))
     return {receipts:[...artifacts(source?.artifacts),...all]
       .filter(a=>a.state==='ready' && a.sha256)
-      .map(({id,sha256,kind,filename,bytes,mime})=>({id,sha256,kind,filename,bytes,mime}))}
+      .map(({id,sha256,kind,filename,bytes,mime})=>({id,sha256,kind,filename,bytes,mime,currentJob:currentIds.has(id)}))}
   }
   if (action === 'prepare') {
     const filename = str(input.filename, 150).replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -621,8 +643,9 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     }
     return publicJob(failed)
   }
-  const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.mime === 'video/mp4' && a.state === 'ready' && (!job.resultKey || a.key===job.resultKey))
+  const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.filename !== 'editor-base.mp4' && a.mime === 'video/mp4' && a.state === 'ready' && (!job.resultKey || a.key===job.resultKey))
   if (!video) throw new MotionStudioError('CONFLICT', 'Upload and commit an MP4 before completing.', 409)
+  const picture = editorPicture(job.artifacts, video)
   const durationMs = Number(input.durationMs)
   if (!Number.isSafeInteger(durationMs) || durationMs <= 0 || durationMs > 2_147_483_647) {
     throw new MotionStudioError('INVALID', 'Rendered durationMs required.', 400)
@@ -635,7 +658,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
       select: { clipProjectId: true } })
     await tx.motionStudioProject.update({ where: { id: job.projectId }, data: { status: 'review',
       stage: 'review', completedAt: now, timelineVersion: { increment: 1 }, exportInfo: toPrismaJson({
-        masterKey: video.key, smallKey: video.key, durationMs, source: 'transovo_agent', agentJobId: id,
+        masterKey: video.key, smallKey: video.key, ...(picture.id!==video.id ? {editorBaseKey:picture.key} : {}), durationMs, source: 'transovo_agent', agentJobId: id,
         storageDriver: storageDriverName(),
       }) } })
     // The initial Motion Studio project creates an empty editor canvas. Attach
@@ -646,13 +669,13 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
         select: { uploadId: true } })
       if (clipProject?.uploadId) {
         await tx.clipUpload.update({ where: { id: clipProject.uploadId }, data: {
-          key: video.key, bytes: BigInt(video.bytes), durationMs, mime: 'video/mp4',
-          filename: video.filename, status: 'READY', storageDriver: storageDriverName(),
+          key: picture.key, bytes: BigInt(picture.bytes), durationMs, mime: 'video/mp4',
+          filename: picture.filename, status: 'READY', storageDriver: storageDriverName(),
         } })
       }
       await tx.clipProject.update({ where: { id: motionProject.clipProjectId }, data: {
         status: 'READY', stage: 'motion_studio', progress: 100,
-        rangeEndMs: durationMs, proxyKey: video.key,
+        rangeEndMs: durationMs, proxyKey: picture.key,
       } })
     }
     await tx.studioActivityEvent.create({ data: { projectId: job.projectId, stage: 'review',
@@ -959,6 +982,7 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
   const resultKey = job.resultKey
   const asset = artifacts(job.artifacts).find(a => a.state === 'ready' && a.key === resultKey)
   if (!asset) throw new MotionStudioError('CONFLICT','That version has no completed MP4.',409)
+  const picture = editorPicture(job.artifacts, asset)
   const durationMs = job.durationMs || Number(toObject(project.exportInfo).durationMs) || 0
   if (!Number.isSafeInteger(durationMs) || durationMs <= 0) throw new MotionStudioError('CONFLICT','Version duration is unavailable.',409)
   const source = await dbi.clipProject.findFirst({ where: { id:project.clipProjectId,workspaceId },
@@ -966,14 +990,14 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
   await dbi.$transaction(async tx => {
     await tx.motionStudioProject.update({ where:{id:projectId},data:{
       status:'review',stage:'review',timelineVersion:{increment:1},exportInfo:toPrismaJson({
-        masterKey:job.resultKey,smallKey:job.resultKey,durationMs,source:'transovo_agent',
+        masterKey:job.resultKey,smallKey:job.resultKey,...(picture.id!==asset.id ? {editorBaseKey:picture.key} : {}),durationMs,source:'transovo_agent',
         agentJobId:jobId,storageDriver:storageDriverName()
       }) } })
     if (source?.uploadId) await tx.clipUpload.update({ where: { id:source.uploadId }, data:{
-      key:resultKey,bytes:BigInt(asset.bytes),filename:asset.filename,mime:'video/mp4',
+      key:picture.key,bytes:BigInt(picture.bytes),filename:picture.filename,mime:'video/mp4',
       durationMs,status:'READY',storageDriver:storageDriverName() } })
     await tx.clipProject.update({ where:{id:project.clipProjectId!},data:{
-      status:'READY',rangeEndMs:durationMs,proxyKey:job.resultKey,progress:100 } })
+      status:'READY',rangeEndMs:durationMs,proxyKey:picture.key,progress:100 } })
   })
   return { activeJobId:jobId,revision:job.revision }
 }

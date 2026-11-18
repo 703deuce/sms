@@ -24,9 +24,24 @@ export async function uploadAsset(store, file, extraMeta = {}) {
 export async function buildBundle(store, o) {
   const ex = f => (o.exclude || []).some(x => f === x || f.startsWith(x.endsWith('/') ? x : x + '/'));
   const rels = walk(o.dir, (f, isDir) => isDir ? !/(^|\/)(out|node_modules|\.git)\/$/.test(f) && !ex(f.slice(0, -1)) : !ex(f) && !/\.original\./.test(f));
-  const src = Object.fromEntries(rels.map(r => [r, path.join(o.dir, r)]));
+  // Explicit sourceFiles can name files or whole source directories (including
+  // authored image sequences). Otherwise omit recognizable render/review output.
+  const declared = o.sourceFiles;
+  if (declared !== undefined && (!Array.isArray(declared) || declared.some(f =>
+    typeof f !== 'string' || !f || path.isAbsolute(f) || f.split('/').includes('..') ||
+    !fs.existsSync(path.join(o.dir,f))))) throw new Error('Invalid scene sourceFiles');
+  const inputs = rels.filter(rel => {
+    if (rel === o.entry || rel === o.manifest) return true;
+    if (declared) return declared.some(f => rel === f || rel.startsWith(f.replace(/\/$/, '') + '/'));
+    return !/(?:^|\/)(?:frames|render[-_]?frames|review[-_]?frames|screenshots|render[-_]?cache)(?:\/|$)/i.test(rel) &&
+      !/(?:^|\/)(?:f_|frame[-_]?|screenshot[-_]?)\d+\.(?:png|jpe?g|webp)$/i.test(rel);
+  });
+  const src = Object.fromEntries(inputs.map(r => [r, path.join(o.dir, r)]));
   if (o.engine === 'browser') for (const f of RUNTIME_FILES) src['ms/' + f] = path.join(CFG.root, 'producer/runtime', f);   // one runtime source of truth
   Object.assign(src, o.extraFiles || {});
+  const authoredFrameInputs = Object.keys(src).filter(rel =>
+    /(?:^|\/)(?:frames|render[-_]?frames|review[-_]?frames|screenshots|render[-_]?cache)(?:\/|$)/i.test(rel) ||
+    /(?:^|\/)(?:f_|frame[-_]?|screenshot[-_]?)\d+\.(?:png|jpe?g|webp)$/i.test(rel));
   const files = {}; const tokens = {};
   // manifest: replace "@asset:<relpath>" tokens by real asset ids (uploaded first)
   let manifestDoc = null;
@@ -44,7 +59,7 @@ export async function buildBundle(store, o) {
     files[rel] = {asset: r.assetId, sha256: r.sha256, bytes: r.bytes};
   });
   const doc = { schema: 'transovo.scene-bundle/1', sceneId: o.sceneId, revision: o.revision || 1, parentBundle: o.parentBundle || null, engine: o.engine, entry: o.entry || null, manifest: o.manifest || null,
-    files, dependencies: o.dependencies || { assets: [] }, liveAssets: [...new Set([...(o.liveAssets || []), ...Object.values(tokens)])], capabilities: o.capabilities, runtime: o.runtime || {}, render: o.render, createdBy: o.createdBy || {} };
+    files, ...(authoredFrameInputs.length ? {authoredFrameInputs} : {}), dependencies: o.dependencies || { assets: [] }, liveAssets: [...new Set([...(o.liveAssets || []), ...Object.values(tokens)])], capabilities: o.capabilities, runtime: o.runtime || {}, render: o.render, createdBy: o.createdBy || {} };
   assertSchema('scene-bundle', doc);
   const buf = Buffer.from(canon(doc)); const r = await store.uploadBuffer(buf, { kind: 'bundle', mime: 'application/json', filename: `${o.sceneId}.bundle.json` });
   return { bundleId: r.assetId, doc, manifest: manifestDoc, assetTokens: tokens };

@@ -70,3 +70,20 @@ test('an interrupted delivery resumes from committed receipts and publishes only
   assert.equal(puts.size,12)
   assert.ok([...puts.values()].every(n=>n===1))
 })
+
+test('an undeclared render cache is refused before transfer; an authored source sequence passes',async t=>{
+  const {checkSceneInputs}=await import('./publish-editable.mjs')
+  const dir=await mkdtemp(path.join(tmpdir(),'ms-inputs-'))
+  t.after(()=>rm(dir,{recursive:true,force:true}))
+  await mkdir(path.join(dir,'blobs'))
+  const rel='frames/f_00001.png'
+  for (const explicit of [false,true]) {
+    const bytes=Buffer.from(JSON.stringify({sceneId:'S01',files:{[rel]:{asset:'ast_frame'}},
+      authoredFrameInputs:explicit?[rel]:[]}))
+    const sha256=digest(bytes)
+    await writeFile(path.join(dir,'blobs',sha256),bytes)
+    const check=checkSceneInputs({assets:{bnd_scene:{kind:'bundle',sha256},ast_frame:{filename:'f_00001.png'}}},dir)
+    if(explicit) await check
+    else await assert.rejects(check,/Repackage scene S01/)
+  }
+})

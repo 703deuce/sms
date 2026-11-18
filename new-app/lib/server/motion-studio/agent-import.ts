@@ -106,7 +106,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     if (asset.state !== 'ready') continue
     const mediaType = asset.mime.startsWith('video/') ? 'video' : asset.mime.startsWith('audio/') ? 'audio' :
       asset.mime.startsWith('image/') ? 'image' : null
-    if (!mediaType || asset.kind === 'video' && asset.filename === 'video.mp4') continue
+    if (!mediaType || asset.kind === 'video' && ['video.mp4','editor-base.mp4'].includes(asset.filename)) continue
     const uploadId = idFor(asset.key)
     try {
       await db.clipUpload.upsert({ where: { id: uploadId },
@@ -130,7 +130,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     const t = manifest.tracks.find(v=>v.id===trackId)
     const k = (t?.kind + ' ' + t?.label + ' ' + trackId).toLowerCase()
     if (/(ad[ _-]?libs?|narration|music|sfx|sound|audio|dialog|voice|\ba[1-9]\b)/.test(k)) return 'audio'
-    if (/(title|text|overlay|caption|lower.third)/.test(k)) return 'text'
+    if (/(title|text|overlay|caption|lower.third|graphic)/.test(k)) return 'text'
     if (/(footage|insert|b.roll|\bv2\b)/.test(k)) return 'footage'
     return 'video'
   }

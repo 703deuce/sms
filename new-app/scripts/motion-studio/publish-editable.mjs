@@ -19,6 +19,28 @@ async function retry(action) {
   }
 }
 
+// Validate the finished native bundle before the first network request. Do not
+// edit an immutable package in place: its document and bundle IDs are hashes.
+export async function checkSceneInputs(pkg,directory) {
+  const declared=new Set()
+  for (const [id,asset] of Object.entries(pkg.assets)) {
+    if (!id.startsWith('bnd_') && asset.kind!=='bundle') continue
+    if (!/^[a-f0-9]{64}$/.test(asset.sha256)) throw new Error('Invalid bundle digest')
+    const bundle=JSON.parse(await readFile(path.join(directory,'blobs',asset.sha256),'utf8'))
+    const inputs=new Set(bundle.authoredFrameInputs || [])
+    for (const [rel,file] of Object.entries(bundle.files || {})) {
+      if (inputs.has(rel)) declared.add(file.asset)
+      else if (/(?:^|\/)(?:frames|render[-_]?frames|review[-_]?frames|screenshots|render[-_]?cache)\//i.test(rel) ||
+          /(?:^|\/)(?:f_|frame[-_]?|screenshot[-_]?)\d+\.(?:png|jpe?g|webp)$/i.test(rel))
+        throw new Error('Repackage scene '+bundle.sceneId+' without capture output. Declare genuine source frames in sourceFiles: '+rel)
+    }
+  }
+  for (const [id,asset] of Object.entries(pkg.assets)) {
+    if (!declared.has(id) && /^(?:f_|frame[-_]?|screenshot[-_]?)\d+\.(?:png|jpe?g|webp)$/i.test(asset.filename || ''))
+      throw new Error('Unclassified frame in editable package: '+asset.filename)
+  }
+}
+
 export async function publishEditable({directory,bundles,jobUrl,token,sourceJobId,complete=false}) {
   const endpoint=new URL(jobUrl)
   if (endpoint.protocol!=='https:' || !token) throw new Error('HTTPS job URL and job credential required')
@@ -31,6 +53,7 @@ export async function publishEditable({directory,bundles,jobUrl,token,sourceJobI
   }
   const pkg=JSON.parse(await readFile(path.join(directory,'package.json'),'utf8'))
   if (pkg.schema!=='transovo.motion-package/1' || !Array.isArray(bundles)) throw new Error('Invalid producer export')
+  await checkSceneInputs(pkg,directory)
   const entries=Object.entries(pkg.assets)
   const records=[]
   const key=a=>JSON.stringify([a.sha256,a.kind,a.filename,a.bytes,a.mime])
@@ -87,6 +110,11 @@ export async function publishEditable({directory,bundles,jobUrl,token,sourceJobI
     await reporting
     if (failure) throw failure
     records.sort((a,b)=>a.id.localeCompare(b.id))
+    if (sourceJobId) {
+      const used=new Set(records.map(r=>r.storageId))
+      const ids=[...new Set(ready.receipts.filter(r=>r.currentJob===false && used.has(r.id)).map(r=>r.id))]
+      if (ids.length) await retry(()=>api('/assets',{action:'reuse',sourceJobId,ids}))
+    }
     const version=await retry(()=>api('/portable',{document:pkg.document,assets:records,bundles}))
     if (complete) {
       const {stdout}=await promisify(execFile)('ffprobe',['-v','error','-show_entries','format=duration',

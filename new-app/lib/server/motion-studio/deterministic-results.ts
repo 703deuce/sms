@@ -198,7 +198,7 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
         durationMs,source:'deterministic_render',storageDriver:storageDriverName(),
         deterministicJobId:id}),
     }})
-    if(target.clipProjectId){
+    if(target.clipProjectId && !exported.editorBaseKey){
       const project=await tx.clipProject.findUnique({
         where:{id:target.clipProjectId},select:{uploadId:true},
       })
