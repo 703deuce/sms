@@ -16,6 +16,8 @@ export type DeterministicProducerJob = {
   baseVersion:number
   edits:{schema:'transovo.edit-patch/1';theme?:Record<string,unknown>;scenes?:Record<string,unknown>}
   output:{master:true;previews:true}
+  delivery?:'live'|'legacy'
+  renderFromBundles?:boolean
   dryRun:boolean
 }
 const object=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==='object'&&!Array.isArray(v)
@@ -67,5 +69,6 @@ export function buildDeterministicProducerJob(args:{
     schema:'transovo.motion-job/1',mode:'deterministic_render',
     projectId:source.projectId,baseVersion:source.version,
     edits,output:{master:true,previews:true},dryRun:args.dryRun===true,
+    ...(manifest.liveProject?{delivery:'live' as const,renderFromBundles:true}:{}),
   }
 }
