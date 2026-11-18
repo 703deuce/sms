@@ -1,7 +1,7 @@
 import 'server-only'
 import { createHash,randomBytes } from 'node:crypto'
 import { getPrisma } from '@/lib/server/db'
-import { createReadableSignedUrl } from '@/lib/storage'
+import { portableAssetSession } from '@/lib/server/motion-studio/portable-assets'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { coordinatorEnabled,requireRegisteredWorker } from '@/lib/server/motion-studio/coordinator'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
@@ -124,24 +124,16 @@ export async function getWorkerSceneRender(request:Request,id:string){
   })
   if(!version)error('Project version missing',404)
   const manifest=validatePortableManifest(version!.manifest)
-  const jobs=await db().motionStudioAgentJob.findMany({
-    where:{workspaceId:render!.workspaceId,projectId:render!.projectId},
-    select:{artifacts:true},
-  })
-  const artifacts=jobs.flatMap(job=>Array.isArray(job.artifacts)?job.artifacts:[])
-    .filter((v):v is {id:string;key:string;state:string}=>{
-      const x=v as {id?:unknown;key?:unknown;state?:unknown}|null
-      return !!x&&typeof x.id==='string'&&typeof x.key==='string'&&x.state==='ready'
-    })
-  const urls:Record<string,string>={}
-  for(const entry of manifest.assets){
-    const asset=artifacts.find(a=>a.id===entry.id)
-    if(!asset)continue
-    const url=await createReadableSignedUrl(asset.key,900).catch(()=>null)
-    if(url)urls[entry.id]=url
-  }
-  if(!urls[manifest.scenes.find(s=>s.id===render!.sceneId)!.bundleAssetId])
+  // Use the shared registered-asset resolver. Real producer source may be
+  // stored as a job artifact OR a user upload; do not assume all assets
+  // appear in the agent's artifact list.
+  const session=await portableAssetSession(render!.workspaceId,render!.projectId,version!.id)
+  const urls=session.assetUrls
+  const selected=manifest.scenes.find(scene=>scene.id===render!.sceneId)
+  if(!selected || !urls[selected.bundleAssetId])
     error('Scene bundle has no signed download',409)
+  const unavailable=manifest.assets.filter(asset=>!urls[asset.id])
+  if(unavailable.length)error('Source assets required for this scene are unavailable',409)
   return{renderRequestId:render!.id,workspaceId:render!.workspaceId,
     projectId:render!.projectId,versionId:version!.id,sceneId:render!.sceneId,
     patch:render!.patch,manifest,theme:version!.theme,overrides:version!.overrides,
