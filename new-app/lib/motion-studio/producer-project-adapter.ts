@@ -28,7 +28,7 @@ export type NativeProducerDocument = Record<string,unknown> & {
   scenes: Array<Record<string,unknown>>
   theme:Record<string,unknown>
   overrides:Record<string,unknown>
-  master?:Record<string,unknown>
+  master?:Record<string,unknown>|null
   assetRefs:string[]
 }
 type ProducerImport = {
@@ -50,14 +50,14 @@ export function validateNativeProducerEnvelope(value:unknown):NativeProducerDocu
        (Number.isSafeInteger(value.parentVersion)&&Number(value.parentVersion)>=1&&Number(value.parentVersion)<Number(value.version)))||
      !object(value.format)||!Array.isArray(value.scenes)||value.scenes.length<1||
      value.scenes.length>1000||!object(value.theme)||!object(value.overrides)||
-     (value.master!==undefined&&(!object(value.master)||!id(value.master.asset)||!id(value.master.recipe)))||
+     (value.master!=null&&(!object(value.master)||!id(value.master.asset)||!id(value.master.recipe)))||
      !Array.isArray(value.assetRefs)||value.assetRefs.length>10000||
      value.assetRefs.some(v=>!id(v)))
     reject('invalid producer document envelope')
   const used=new Set<string>()
   for(const scene of value.scenes){
     if(!object(scene)||!id(scene.sceneId)||used.has(scene.sceneId)||
-       !id(scene.bundle)||(scene.clip!==undefined&&(!object(scene.clip)||!id(scene.clip.asset))))
+       !id(scene.bundle)||(scene.clip!=null&&(!object(scene.clip)||!id(scene.clip.asset))))
       reject('invalid producer scene')
     used.add(scene.sceneId)
   }
