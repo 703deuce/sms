@@ -12,11 +12,22 @@ export async function GET(request:Request,ctx:Ctx) {
   } catch(e) { return motionStudioJsonError(e) }
 }
 export async function PATCH(request:Request,ctx:Ctx) {
+  const started=Date.now()
+  let outcome='failed'
   try {
     const {id:projectId}=await ctx.params
     const {workspaceId}=await requireMotionStudioCaller(request)
-    return NextResponse.json(await commitPortableEdit(workspaceId,projectId,await request.json()))
-  } catch(e) { return motionStudioJsonError(e) }
+    const body=await request.json()
+    const result=await commitPortableEdit(workspaceId,projectId,body)
+    outcome='committed'
+    return NextResponse.json(result)
+  } catch(e) {
+    outcome=e instanceof Error ? e.name : 'unknown_error'
+    return motionStudioJsonError(e)
+  } finally {
+    // Timing only; never log the customer's scene content or signed URLs.
+    console.info('[motion-studio:portable-save]',{outcome,elapsedMs:Date.now()-started})
+  }
 }
 
 export async function POST(request:Request,ctx:Ctx){
