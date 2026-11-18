@@ -50,7 +50,9 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   const scene=manifest.scenes.find(s=>s.id===sceneId)
   if(!scene)fail('Scene not found',404)
   const refs=await portableAssetSession(workspaceId,projectId,versionId)
-  if(refs.unavailableAssetIds.length)fail('Original scene assets are unavailable',409)
+  const essential=[scene.bundleAssetId,...(scene.dependencies||[])]
+  if(essential.some(id=>refs.unavailableAssetIds.includes(id)))
+    fail('This scene is missing its original source dependencies',409)
   const native=asObj(manifest.producerDocument)
   const aliases=manifest.producerAssetMap||{}
   const urls:Record<string,string>={...refs.assetUrls}
