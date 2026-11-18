@@ -18,7 +18,7 @@ const toObject = (x: unknown): Record<string, unknown> => x && typeof x === 'obj
 const str = (x: unknown, max = 4000): string => typeof x === 'string' ? x.trim().slice(0, max) : ''
 const sha = (x: string): Buffer => createHash('sha256').update(x).digest()
 const MAX_FILE = 2_000_000_000
-type Artifact = { id: string; key: string; kind: string; filename: string; mime: string; bytes: number; state: 'pending' | 'ready'; s3UploadId?: string; elementId?: string; trackId?: string }
+type Artifact = { id: string; key: string; kind: string; filename: string; mime: string; bytes: number; state: 'pending' | 'ready'; s3UploadId?: string; elementId?: string; trackId?: string; sha256?: string }
 const artifacts = (raw: unknown): Artifact[] => Array.isArray(raw) ? raw as Artifact[] : []
 const isDone = (status: string) => ['complete', 'failed', 'dispatch_failed', 'cancelled'].includes(status)
 const CUSTOMER_STAGES = ['research','story','voice','scenes','review','fixing','rendering','delivering','complete'] as const
@@ -379,8 +379,19 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const filename = str(input.filename, 150).replace(/[^a-zA-Z0-9._-]/g, '_')
     const kind = str(input.kind, 30), mime = str(input.mime, 80), bytes = Number(input.bytes)
     const elementId = str(input.elementId, 100), trackId = str(input.trackId, 100)
-    if (!filename || !['video', 'project', 'media', 'audio', 'source'].includes(kind)
-      || !['video/mp4', 'video/webm', 'video/quicktime', 'application/json', 'image/png', 'image/jpeg', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'text/plain', 'application/x-subrip', 'application/zip'].includes(mime)
+    const checksum = str(input.sha256, 64).toLowerCase()
+    const nativeKind = ['font','image','bundle'].includes(kind)
+    const allowedMime = [
+      'video/mp4','video/webm','video/quicktime','application/json','image/png',
+      'image/jpeg','image/webp','image/svg+xml','audio/mpeg','audio/wav',
+      'audio/x-wav','audio/mp4','text/plain','application/x-subrip','application/zip',
+      'font/ttf','font/otf','font/woff','font/woff2',
+      'application/wasm','application/javascript','text/javascript','text/css',
+    ]
+    if (!filename || !['video', 'project', 'media', 'audio', 'source','font','image','bundle'].includes(kind)
+      || !allowedMime.includes(mime)
+      || (nativeKind && (!/^[a-f0-9]{64}$/.test(checksum)||bytes>25*1024*1024))
+      || (checksum && !/^[a-f0-9]{64}$/.test(checksum))
       || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE || all.length >= 300) {
       throw new MotionStudioError('INVALID', 'Invalid artifact details.', 400)
     }
@@ -390,7 +401,8 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       filename, mime, bytes, objectKey })
     const item: Artifact = { id: uploadId, key: objectKey, kind, filename, mime, bytes, state: 'pending',
       ...(upload.s3Multipart ? { s3UploadId: upload.s3Multipart.uploadId } : {}),
-      ...(elementId ? { elementId } : {}), ...(trackId ? { trackId } : {}) }
+      ...(elementId ? { elementId } : {}), ...(trackId ? { trackId } : {}),
+      ...(checksum ? {sha256:checksum} : {}) }
     await db().motionStudioAgentJob.update({ where: { id },
       data: { artifacts: toPrismaJson([...all, item]) } })
     return { uploadId, objectKey, mode: upload.mode, signedPut: upload.signedPut,
@@ -409,7 +421,20 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const storage = getClipStorage()
     await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
     const size = await storage.getObjectSizeBytes(item.key)
-    if (!size || size > MAX_FILE) throw new MotionStudioError('INVALID', 'Uploaded object is missing or invalid.', 400)
+    if (!size || size !== item.bytes || size > MAX_FILE)
+      throw new MotionStudioError('INVALID', 'Uploaded size does not match the prepared object.', 400)
+    if (item.sha256) {
+      // Hash-check producer scene bundles, images and pinned font binaries
+      // before making them available to the editor/render worker.
+      // Large general media can use the existing upload pipeline, which
+      // does not promise byte-level producer source verification.
+      if (size > 25*1024*1024)
+        throw new MotionStudioError('INVALID', 'Checksummed assets must be 25 MB or smaller.', 400)
+      const bytes = await storage.getObjectBytes(item.key)
+      const actual = createHash('sha256').update(bytes).digest('hex')
+      if (actual !== item.sha256)
+        throw new MotionStudioError('INVALID', 'Uploaded source does not match SHA-256.', 422)
+    }
     item.state = 'ready'
     // Every producer artifact also receives a durable Transovo project asset ID.
     // This is necessary for portable manifests to reference assets by ID, never by path.
