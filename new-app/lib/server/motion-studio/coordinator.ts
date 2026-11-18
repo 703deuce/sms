@@ -102,10 +102,12 @@ export async function requireRegisteredWorker(request: Request, id: string) {
 }
 function availableBudget(plan: {observedPercent: number|null; observedAt:Date|null; resetsAt:Date|null;
  weeklyLimitPercent:number}) {
-  if (plan.resetsAt && plan.resetsAt.getTime() <= Date.now()) return true
-  if (plan.observedPercent === null) return true // no observation yet; honor reservations
-  // Don't treat an old low observation as a promise of available credits.
-  if (!plan.observedAt || Date.now()-plan.observedAt.getTime()>48*3600_000) return false
+  // Never spend a Grok plan from an unknown, stale, or previous-window
+  // observation. One shared plan may have several workers on other machines.
+  if (plan.observedPercent === null || !plan.observedAt || !plan.resetsAt) return false
+  if (plan.resetsAt.getTime() <= Date.now()) return false
+  if (plan.observedAt.getTime() > Date.now()+60_000 ||
+      Date.now()-plan.observedAt.getTime() > 15*60_000) return false
   return plan.observedPercent < plan.weeklyLimitPercent
 }
 type Pending = {jobId:string;workspaceId:string;projectId:string;userId:string;
@@ -171,8 +173,8 @@ async function reserveOne(): Promise<Pending|null> {
           capabilities.includes('motion-studio-produce') &&
           requiredEngines.every(engine=>capabilities.includes('render:'+engine) ||
             capabilities.includes('motion-studio-all-engines')) &&
-          (plan.observedPercent===null || plan.resetsAt && plan.resetsAt.getTime()<=Date.now() ||
-            plan.observedPercent + ((planCounts.get(w.planId)||0)+1)*
+          (plan.observedPercent! +
+            ((planCounts.get(w.planId)||0)+1)*
               Math.max(0.1,Math.min(10,Number(process.env.MOTION_STUDIO_AI_RESERVE_PERCENT)||2)) <= plan.weeklyLimitPercent) &&
           (workerCounts.get(w.id)||0)<w.maxConcurrent &&
           (machineCounts.get(w.machineId)||0)<machine.maxRenders &&
