@@ -13,16 +13,13 @@ const secret=()=>{
   if(value.length<32)fail('Scene preview host is not configured',503)
   return value
 }
-function sceneHostOrigin(){
-  const host=process.env.MOTION_STUDIO_SCENE_HOST_ORIGIN||''
-  const app=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||''
-  if(!host||!app)fail('Dedicated scene host and app origin must be configured',503)
-  const scene=new URL(host),application=new URL(app)
-  if(scene.protocol!=='https:'||application.protocol!=='https:'||
-     scene.username||scene.password||application.username||application.password||
-     scene.hostname===application.hostname||scene.port!==''||application.port!=='')
-    fail('Scene source host must be a dedicated HTTPS origin',503)
-  return {scene:scene.origin,app:application.origin}
+function sceneHostOrigin(requestUrl:string){
+  const origin=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||new URL(requestUrl).origin
+  const app=new URL(origin)
+  const local=process.env.NODE_ENV!=='production'&&['localhost','127.0.0.1'].includes(app.hostname)
+  if((app.protocol!=='https:'&&!local)||app.username||app.password||
+     (app.port!==''&&!local))fail('Configure the main Transovo HTTPS app origin for scene playback',503)
+  return app.origin
 }
 const safeId=(id:string)=>/^[A-Za-z0-9_.:-]{1,128}$/.test(id)
 const sign=(parts:string[])=>createHmac('sha256',secret()).update(parts.join('|')).digest('hex')
@@ -45,7 +42,7 @@ export function issueSceneSessionUrl(args:{
   if(![projectId,versionId,bundleAssetId].every(safeId))fail('Invalid scene host request')
   const expires=Math.floor(Date.now()/1000)+15*60
   const signature=sign([projectId,versionId,bundleAssetId,String(expires)])
-  const {scene}=sceneHostOrigin()
+  const scene=sceneHostOrigin(args.requestUrl)
   // Public preview sessions are path-signed, not query-signed: scene-relative
   // script and font imports inherit the capability without client rewriting.
   const path=['api','motion-studio','_scene',projectId,versionId,
@@ -125,6 +122,8 @@ const contentType=(file:string)=>{
     json:'application/json',svg:'image/svg+xml',png:'image/png',
     jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',wasm:'application/wasm',
     ttf:'font/ttf',otf:'font/otf',woff:'font/woff',woff2:'font/woff2',
+    wav:'audio/wav',mp3:'audio/mpeg',m4a:'audio/mp4',mp4:'video/mp4',
+    webm:'video/webm',vtt:'text/vtt; charset=utf-8',srt:'application/x-subrip',
   }
   return mime[ext||'']||'application/octet-stream'
 }
@@ -133,9 +132,9 @@ export async function sceneFileResponse(args:{
   filePath:string;requestUrl:string
 }):Promise<Response>{
   const {projectId,versionId,bundleAssetId,expires,signature}=args
-  const hosts=sceneHostOrigin()
-  if(new URL(args.requestUrl).origin!==hosts.scene)
-    fail('Executable scene files may only be served from the dedicated preview host')
+  const appOrigin=sceneHostOrigin(args.requestUrl)
+  if(new URL(args.requestUrl).origin!==appOrigin)
+    fail('Scene resource host does not match the Transovo application')
   if(![projectId,versionId,bundleAssetId].every(safeId)||
      !/^\d{10}$/.test(expires))fail('Invalid scene session')
   const expiry=Number(expires)
@@ -177,21 +176,23 @@ export async function sceneFileResponse(args:{
     fail('Scene source integrity mismatch',422)
   // The iframe has an opaque origin. It cannot access the parent DOM, cookies
   // or storage. Tight CSP restricts all network connections to known origins.
-  const appOrigin=hosts.app
-  const allowedStorage=(process.env.MOTION_STUDIO_SCENE_ASSET_ORIGINS||'')
-    .split(',').map(x=>x.trim()).filter(x=>{
-      try{return new URL(x).protocol==='https:' && new URL(x).origin===x}catch{return false}
-    }).join(' ')
+  // CSP sandbox applies even to top-level navigation, giving executable
+  // producer files an opaque origin. Never allow a generated frame the parent
+  // app's origin, cookies, storage or arbitrary API requests.
+  const prefix=appOrigin+'/api/motion-studio/_scene/'+
+    [projectId,versionId,bundleAssetId,expires,signature].map(encodeURIComponent).join('/')+'/'
   const csp=[
-    `default-src 'none'`,
-    `script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'`,
-    `style-src 'self' 'unsafe-inline'`,
-    `connect-src 'self' ${allowedStorage}`,
-    `img-src 'self' data: blob: ${allowedStorage}`,
-    `font-src 'self' data: ${allowedStorage}`,
-    `media-src 'self' blob: ${allowedStorage}`,
-    `frame-ancestors ${appOrigin}`,
-    `form-action 'none'`,`base-uri 'none'`,`object-src 'none'`,
+    'sandbox allow-scripts',
+    "default-src 'none'",
+    `script-src ${prefix} 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'`,
+    `style-src ${prefix} 'unsafe-inline'`,
+    `connect-src ${prefix}`,
+    `img-src ${prefix} data: blob:`,
+    `font-src ${prefix} data:`,
+    `media-src ${prefix} blob:`,
+    `worker-src ${prefix} blob:`,
+    `frame-ancestors 'self'`,
+    "form-action 'none'","base-uri 'none'","object-src 'none'",
   ].join('; ')
   return new Response(new Uint8Array(bytes),{status:200,headers:{
     'Content-Type':contentType(file),'X-Content-Type-Options':'nosniff',
@@ -199,6 +200,7 @@ export async function sceneFileResponse(args:{
     'Cross-Origin-Resource-Policy':'cross-origin',
     'Referrer-Policy':'no-referrer',
     'Cache-Control':'private, max-age=300',
+    'Content-Disposition':'inline',
     'Content-Security-Policy':csp,
   }})
 }
