@@ -155,6 +155,54 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
   })
   if(!source)bad('Original version no longer exists')
   const oldManifest=obj(source!.manifest)
+  if(oldManifest.liveProject){
+    // A live export is a derived download, NOT a new scene revision.
+    // Preserve the immutable source and every editable track unchanged.
+    const live=obj(oldManifest.liveProject)
+    const declaredDuration=Number(obj(live.format).durationMs)
+    const durationMs=Number(input.durationMs)
+    if(!Number.isSafeInteger(durationMs)||durationMs<1||durationMs!==declaredDuration)
+      bad('Exported live video does not match the saved timeline duration',400)
+    const output=sourceUploads(job.upload).filter(a=>
+      a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4')
+    const selected=typeof input.resultAssetId==='string'
+      ?output.find(a=>a.id===input.resultAssetId)
+      :output.length===1?output[0]:null
+    if(!selected)bad('Upload exactly one final live MP4 before reporting completion')
+    const ready=selected!
+    await db().$transaction(async tx=>{
+      await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${job.projectId} FOR UPDATE`
+      const current=await tx.motionStudioDeterministicJob.findUniqueOrThrow({where:{id}})
+      if(current.status==='complete')return
+      if(!['reserved','running'].includes(current.status))
+        bad('Export job is no longer active')
+      const head=await tx.motionStudioPortableVersion.findFirst({
+        where:{projectId:job.projectId,workspaceId:job.workspaceId,status:'committed'},
+        orderBy:{revision:'desc'},select:{id:true},
+      })
+      if(head?.id!==source!.id)
+        bad('The live video changed while exporting; do not publish a stale MP4')
+      const project=await tx.motionStudioProject.findFirst({
+        where:{id:job.projectId,workspaceId:job.workspaceId},select:{exportInfo:true},
+      })
+      if(!project)bad('Project was removed')
+      await tx.motionStudioProject.update({where:{id:job.projectId},data:{
+        status:'review',stage:'review',
+        exportInfo:toPrismaJson({...obj(project.exportInfo),delivery:'live',
+          portableVersionId:source!.id,
+          masterKey:ready.key,smallKey:ready.key,
+          durationMs,storageDriver:storageDriverName(),
+          deterministicJobId:id}),
+      }})
+      await tx.motionStudioDeterministicJob.update({where:{id},data:{
+        status:'complete',leaseExpiresAt:new Date(),
+        resultAssetId:ready.id,publishedVersionId:source!.id,durationMs,
+      }})
+    })
+    await coordinateDeterministicJobs(1)
+    return {ok:true,status:'complete',publishedVersionId:source!.id,
+      masterAssetId:ready.id,delivery:'live'}
+  }
   const original=validateNativeProducerEnvelope(oldManifest.producerDocument)
   const document=validateNativeProducerEnvelope(input.document)
   if(document.projectId!==job.projectId || document.version!==original.version+1 ||
