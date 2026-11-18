@@ -31,6 +31,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [restoreId,setRestoreId]=useState('')
   const [selectedLayer,setSelectedLayer]=useState('')
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
+  const [liveUnavailable,setLiveUnavailable]=useState(false)
   const savingRef=useRef(false)
   const revisionRef=useRef(0)
   const load=useCallback(async()=>{
@@ -159,6 +160,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     const scenes=version?.manifest.scenes||[]
   const scene=useMemo(()=>scenes.find(s=>s.id===sceneId)||
     scenes.find(s=>s.id===preferredSceneId)||scenes[0], [scenes,sceneId,preferredSceneId])
+  useEffect(()=>setLiveUnavailable(false),[version?.id,scene?.id])
   const currentSceneOverrides=asObj(asObj(asObj(version?.overrides).scenes)[scene?.id||''])
   const savedElements=asObj(currentSceneOverrides.elements)
   const setProperty=(elementId:string,prop:string,value:unknown)=>
@@ -247,7 +249,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
         </select>
       </label>
-      {scene && (scene.manifest.livePreview?.capability==='render_only'
+      {scene && ((scene.manifest.livePreview?.capability==='render_only'||liveUnavailable)
         ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
             selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/>
         : process.env.NEXT_PUBLIC_MOTION_STUDIO_LIVE_PLAYER_ENABLED==='1'
@@ -259,7 +261,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
               projectId={projectId} versionId={version.id} scene={scene}
               theme={version.theme} overrides={version.overrides}
               patch={patch} themeColors={colors} seconds={2.0}
-              onUnavailable={()=>undefined}/>)}
+              onUnavailable={()=>setLiveUnavailable(true}/>)}
       {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
         onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
       {scene && selectedLayer ? <PortableLayerTiming scene={scene} layerId={selectedLayer}
