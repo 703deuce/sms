@@ -61,6 +61,16 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[projectId,versionId,scene.id])
 
+  // A reachable iframe can still fail to boot its renderer. Never leave the editor waiting forever.
+  useEffect(()=>{
+    if(!session||ready||error)return
+    const timeout=window.setTimeout(()=>{
+      if(onUnavailable)onUnavailable()
+      else setError('Original scene host did not become ready; use the browser fallback.')
+    },8000)
+    return()=>window.clearTimeout(timeout)
+  },[session,ready,error,onUnavailable])
+
   useEffect(()=>{
     if(!session)return
     const onMessage=(event:MessageEvent)=>{
