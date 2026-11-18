@@ -47,6 +47,8 @@ export type MsPortableManifest = {
   timeline?: unknown
   audio?: unknown
   captions?: unknown
+  /** Shared browser timeline, containing registered asset IDs rather than URLs. */
+  liveProject?: Record<string,unknown>
   /** Producer v1 retained losslessly for a deterministic re-render. */
   producerDocument?: Record<string,unknown>
   /** Producer content-hash IDs to Transovo's tenant-scoped upload IDs. */
@@ -124,6 +126,33 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
             !['live_editable','render_editable','ai_editable','protected'].includes(String(prop.tier)) ||
             !['text','color','number','boolean','point','image','font','enum'].includes(String(prop.type)))
           return fail('Invalid editable property declaration')
+      }
+    }
+  }
+  if(value.liveProject!==undefined){
+    const live=value.liveProject
+    if(!plain(live)||live.schema!=='transovo.live-project/1'||
+       live.projectId!==value.projectId||!plain(live.format)||
+       !Array.isArray(live.tracks)||live.tracks.length>100||
+       !Number.isSafeInteger(live.format.durationMs)||
+       Number(live.format.durationMs)<1||Number(live.format.durationMs)>2_147_483_647)
+      return fail('Invalid live browser timeline')
+    let count=0
+    for(const entry of live.tracks){
+      if(!plain(entry)||!Array.isArray(entry.items))return fail('Invalid browser timeline track')
+      const captionAsset=entry.captions
+      if(captionAsset!==undefined&&(!assetId(captionAsset)||!ids.has(captionAsset)))
+        return fail('Caption track references an unregistered project asset')
+      for(const item of entry.items){
+        if(++count>20000||!plain(item))return fail('Too many browser timeline items')
+        const src=item.assetId??item.src
+        if(src!==undefined&&(!assetId(src)||!ids.has(src)))
+          return fail('Timeline media must reference a registered asset ID')
+        if(typeof item.startMs!=='number'||!Number.isSafeInteger(item.startMs)||item.startMs<0||
+           typeof item.durationMs!=='number'||!Number.isSafeInteger(item.durationMs)||item.durationMs<0)
+          return fail('Invalid timeline item timing')
+        if(item.type==='scene'&&!sceneIds.has(String(item.sceneId??item.id)))
+          return fail('Timeline references an unknown scene')
       }
     }
   }
