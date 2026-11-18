@@ -18,7 +18,7 @@ const obj = (v: unknown): Record<string, unknown> =>
 const digest = (v: unknown) => createHash('sha256').update(JSON.stringify(v)).digest('hex')
 
 async function requireProject(workspaceId: string, projectId: string) {
-  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId } })
+  const project = await db().motionStudioProject.findFirst({ where: { id: projectId, workspaceId }, select: { id:true } })
   if (!project) bad('Motion Studio project not found.', 'NOT_FOUND', 404)
   return project!
 }
