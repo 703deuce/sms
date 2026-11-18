@@ -640,6 +640,62 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     }
     return publicJob(failed)
   }
+  // Browser-first delivery: a committed, validated portable timeline is the
+  // deliverable. No master MP4, fake clipUpload, or server render is created.
+  if(input.delivery==='live'){
+    const versionId=str(input.portableVersionId,128)
+    const durationMs=Number(input.durationMs)
+    if(!versionId||!Number.isSafeInteger(durationMs)||durationMs<1||durationMs>2_147_483_647)
+      throw new MotionStudioError('INVALID','Live delivery requires its committed version and duration.',400)
+    const portable=await db().motionStudioPortableVersion.findFirst({
+      where:{id:versionId,workspaceId:job.workspaceId,projectId:job.projectId,
+        sourceJobId:id,status:'committed'},
+    })
+    if(!portable)throw new MotionStudioError('CONFLICT','The live project must be published by this job first.',409)
+    let manifest
+    try{manifest=validatePortableManifest(portable.manifest)}
+    catch{throw new MotionStudioError('INVALID','Live project manifest failed validation.',400)}
+    const live=toObject(manifest.liveProject)
+    const format=toObject(live.format)
+    if(live.schema!=='transovo.live-project/1'||Number(format.durationMs)!==durationMs)
+      throw new MotionStudioError('INVALID','Live project duration or track format is missing.',400)
+    const requiredIds=manifest.assets.map(a=>a.id)
+    const readyAssets=await db().studioAsset.count({
+      where:{workspaceId:job.workspaceId,projectId:job.projectId,
+        id:{in:requiredIds},status:'ready'},
+    })
+    if(readyAssets!==requiredIds.length)
+      throw new MotionStudioError('CONFLICT','All live scene, audio and caption assets must be ready.',409)
+    const now=new Date()
+    const completed=await db().$transaction(async tx=>{
+      const updated=await tx.motionStudioAgentJob.update({
+        where:{id},data:{status:'complete',phase:'complete',progress:100,
+          message:DEFAULT_STAGE_MESSAGES.complete,resultKey:null,durationMs,
+          completedAt:now},
+      })
+      await tx.motionStudioProject.update({where:{id:job.projectId},data:{
+        status:'review',stage:'review',completedAt:now,
+        timelineVersion:{increment:1},
+        exportInfo:toPrismaJson({delivery:'live',portableVersionId:versionId,
+          durationMs,masterKey:null,smallKey:null,source:'transovo_agent',
+          agentJobId:id}),
+      }})
+      await tx.studioActivityEvent.create({data:{projectId:job.projectId,
+        stage:'review',kind:'stage',message:'Editable video ready for live playback.'}})
+      return updated
+    })
+    await db().studioActivityEvent.create({data:{projectId:job.projectId,
+      stage:'complete',kind:'agent_progress',message:DEFAULT_STAGE_MESSAGES.complete,
+      data:toPrismaJson({jobId:id,percent:100,delivery:'live'})}})
+    if(pullProducerQueueEnabled())await releaseProducerLease(id)
+    if(coordinatorEnabled())await db().motionStudioWorkerAssignment.updateMany({
+      where:{jobId:id,status:{in:['reserved','dispatched','running']}},
+      data:{status:'complete',leaseExpiresAt:new Date()},
+    })
+    await dispatchQueuedAfterFinish(job,request)
+    if(coordinatorEnabled())await coordinatePendingJobs(1)
+    return publicJob(completed)
+  }
   const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.filename !== 'editor-base.mp4' && a.mime === 'video/mp4' && a.state === 'ready' && (!job.resultKey || a.key===job.resultKey))
   if (!video) throw new MotionStudioError('CONFLICT', 'Upload and commit an MP4 before completing.', 409)
   const picture = editorPicture(job.artifacts, video)
