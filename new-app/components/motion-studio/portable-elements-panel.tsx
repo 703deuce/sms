@@ -170,14 +170,27 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     savingRef.current=true;setSaving(true);setStatus('')
     const themePatch=Object.keys(colors).length?{colors}:{}
     const hasPatch=Object.keys(patch).length>0
+    const controller=new AbortController()
+    const timer=window.setTimeout(()=>controller.abort(),12000)
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{
         method:'PATCH',headers:{'Content-Type':'application/json'},
         body:JSON.stringify({baseVersionId:version.id,sceneId:scene.id,
           ...(hasPatch?{elements:patch}:{}),themePatch}),
+        signal:controller.signal,
       })
       const data=await response.json() as {version?:Version; affectedSceneIds?:string[]; error?:string;message?:string}
       if(!response.ok||!data.version)throw new Error(data.message||data.error||'Could not save changes')
+      // Read back the immutable version from the database, rather than trusting
+      // a 200 response that might contain a transient or stale payload.
+      const readback=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+
+        '/portable?versionId='+encodeURIComponent(data.version.id),
+        {cache:'no-store',signal:controller.signal})
+      if(!readback.ok)throw new Error('Saved version could not be read back. Keep your edits and retry.')
+      const persisted=await readback.json() as {version:Version|null}
+      if(!persisted.version||persisted.version.id!==data.version.id)
+        throw new Error('Saved version was not found on reload. Your local edits were kept.')
+      data.version=persisted.version
       // Confirm the server committed exactly the layer values we sent before
       // claiming success or discarding local edits. No rendering occurs here.
       const savedScenes=asObj(asObj(data.version.overrides).scenes)
@@ -196,7 +209,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       setHistory(old=>[{id:data.version!.id,revision:data.version!.revision,createdAt:new Date().toISOString()},...old])
       setStatus('Version '+data.version.revision+' saved and verified. No render started.')
     }catch(err){setStatus(err instanceof Error?err.message:'Save failed')}
-    finally{savingRef.current=false;setSaving(false)}
+    finally{window.clearTimeout(timer);savingRef.current=false;setSaving(false)}
   }
   if(loading)return <div className="text-xs text-muted-foreground">Loading editable scene sources…</div>
   if(!version)return null
