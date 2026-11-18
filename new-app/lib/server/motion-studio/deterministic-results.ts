@@ -178,7 +178,6 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
   if(!ready)bad('Export worker must upload one completed MP4 for this version')
   // A live worker may return a masterless producer document while its newly
   // encoded MP4 stays a separate export artifact. Preserve the source graph.
-  const liveInput=Boolean(oldManifest.liveProject)
   // Do not mutate the previous source version. Reuse its original content
   // hashes/aliases and publish a new native document as the next version.
   const version=await publishPortableVersion(job.workspaceId,job.projectId,{
