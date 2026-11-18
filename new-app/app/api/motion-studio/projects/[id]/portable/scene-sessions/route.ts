@@ -28,6 +28,12 @@ export async function POST(request:Request,ctx:Ctx){
     const sessions=await Promise.all(sceneIds.map(async id=>({
       sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url,assets)
     })))
-    return NextResponse.json({versionId,sessions},{headers:{'Cache-Control':'private, no-store'}})
+    // The authenticated HOST may stream large original media directly. Do not
+    // forward these signed storage URLs to an executable scene iframe: its
+    // init.assetUrls remain limited to the scene-scoped signed proxy paths.
+    const mediaUrls=Object.fromEntries(version.manifest.assets
+      .filter(asset=>['audio','video','image','font','caption','subtitle'].includes(asset.kind))
+      .flatMap(asset=>assets.assetUrls[asset.id]?[[asset.id,assets.assetUrls[asset.id]]]:[]))
+    return NextResponse.json({versionId,sessions,mediaUrls},{headers:{'Cache-Control':'private, no-store'}})
   }catch(error){return motionStudioJsonError(error)}
 }
