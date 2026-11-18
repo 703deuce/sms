@@ -55,6 +55,7 @@ export class UniversalBrowserAudio {
       for(const item of result)this.decoded.set(item.id,item.buffer)
     }
     for(const clip of this.clips.filter(c=>c.durationMs>AUDIO_BUFFER_MAX_MS)){
+      if(this.streams.has(clip.id))continue
       const url=this.urls[clip.assetId]
       if(!url)throw Error('Audio track has no registered media: '+clip.assetId)
       const element=new Audio(url)
