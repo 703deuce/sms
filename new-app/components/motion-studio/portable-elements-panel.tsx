@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableLiveFilmPlayer } from './portable-live-film-player'
-import { PortableSceneLivePreview } from './portable-scene-live-preview'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
 import { PortableLayerTiming } from './portable-layer-timing'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
@@ -31,7 +30,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [restoreId,setRestoreId]=useState('')
   const [selectedLayer,setSelectedLayer]=useState('')
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
-  const [liveUnavailable,setLiveUnavailable]=useState(false)
   const savingRef=useRef(false)
   const revisionRef=useRef(0)
   const load=useCallback(async()=>{
@@ -160,7 +158,6 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     const scenes=version?.manifest.scenes||[]
   const scene=useMemo(()=>scenes.find(s=>s.id===sceneId)||
     scenes.find(s=>s.id===preferredSceneId)||scenes[0], [scenes,sceneId,preferredSceneId])
-  useEffect(()=>setLiveUnavailable(false),[version?.id,scene?.id])
   const currentSceneOverrides=asObj(asObj(asObj(version?.overrides).scenes)[scene?.id||''])
   const savedElements=asObj(currentSceneOverrides.elements)
   const setProperty=(elementId:string,prop:string,value:unknown)=>
@@ -249,19 +246,13 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
         </select>
       </label>
-      {scene && ((scene.manifest.livePreview?.capability==='render_only'||liveUnavailable)
+      {scene && (scene.manifest.livePreview?.capability==='render_only'
         ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
             selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/>
-        : process.env.NEXT_PUBLIC_MOTION_STUDIO_LIVE_PLAYER_ENABLED==='1'
-          ? <PortableLiveFilmPlayer projectId={projectId} versionId={version.id}
-              manifest={version.manifest} theme={{...version.theme,
-                colors:{...asObj(version.theme.colors),...colors}}}
-              overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}/>
-          : <PortableSceneLivePreview key={version.id+':'+scene.id}
-              projectId={projectId} versionId={version.id} scene={scene}
-              theme={version.theme} overrides={version.overrides}
-              patch={patch} themeColors={colors} seconds={2.0}
-              onUnavailable={()=>setLiveUnavailable(true}/>)}
+        : <PortableLiveFilmPlayer projectId={projectId} versionId={version.id}
+            manifest={version.manifest} theme={{...version.theme,
+              colors:{...asObj(version.theme.colors),...colors}}}
+            overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}/>)}
       {scene && sceneLayers(scene).length>0 ? <PortableLayerList scene={scene} selected={selectedLayer}
         onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/> : null}
       {scene && selectedLayer ? <PortableLayerTiming scene={scene} layerId={selectedLayer}
