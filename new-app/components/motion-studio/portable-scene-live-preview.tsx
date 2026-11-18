@@ -31,12 +31,6 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     let active=true
     setSession(null);setHello(false);setReady(false);setError('');setLoading(true)
     initialized.current=false
-    // Avoid the scene-session request entirely when a separate host is not configured.
-    if(!process.env.NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN){
-      setLoading(false)
-      onUnavailable?.()
-      return
-    }
     const controller=new AbortController()
     const timeout=window.setTimeout(()=>controller.abort(),5000)
     const url='/api/motion-studio/projects/'+encodeURIComponent(projectId)+
@@ -51,10 +45,9 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     }).then(data=>{
       if(!active)return
       const link=new URL(data.sceneUrl)
-      const allowed=process.env.NEXT_PUBLIC_MOTION_STUDIO_SCENE_HOST_ORIGIN||''
-      if(!allowed||new URL(allowed).origin!==link.origin||
-         link.protocol!=='https:'||link.origin===window.location.origin)
-        throw new Error('Scene code must load on a separate, configured HTTPS preview origin')
+      if(link.origin!==window.location.origin||
+         !link.pathname.startsWith('/api/motion-studio/_scene/'))
+        throw new Error('Scene source must use the signed Transovo browser playback path')
       // This query belongs to the iframe document; files fetch via the signed
       // URL path, so their capabilities survive relative module imports.
       link.searchParams.set('host',window.location.origin)
@@ -75,7 +68,7 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     const timeout=window.setTimeout(()=>{
       if(onUnavailable)onUnavailable()
       else setError('Original scene host did not become ready; use the browser fallback.')
-    },8000)
+    },30000)
     return()=>window.clearTimeout(timeout)
   },[session,ready,error,onUnavailable])
 
@@ -83,7 +76,7 @@ export function PortableSceneLivePreview({projectId,versionId,scene,theme,overri
     if(!session)return
     const onMessage=(event:MessageEvent)=>{
       if(event.source!==frame.current?.contentWindow)return
-      if(event.origin!=='null'&&event.origin!==new URL(session.sceneUrl).origin)return
+      if(event.origin!=='null')return
       const value=event.data as SceneReply|null
       if(!value||value.ms!==1)return
       if(value.event==='hello')setHello(true)
