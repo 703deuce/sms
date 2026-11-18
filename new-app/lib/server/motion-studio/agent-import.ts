@@ -129,7 +129,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
   const lane = (trackId: string): 'video'|'footage'|'text'|'audio' => {
     const t = manifest.tracks.find(v=>v.id===trackId)
     const k = (t?.kind + ' ' + t?.label + ' ' + trackId).toLowerCase()
-    if (/(narration|music|sfx|sound|audio|dialog|voice|\ba[1-9]\b)/.test(k)) return 'audio'
+    if (/(ad[ _-]?libs?|narration|music|sfx|sound|audio|dialog|voice|\ba[1-9]\b)/.test(k)) return 'audio'
     if (/(title|text|overlay|caption|lower.third)/.test(k)) return 'text'
     if (/(footage|insert|b.roll|\bv2\b)/.test(k)) return 'footage'
     return 'video'
@@ -138,6 +138,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
     const k = lane(id)
     const t = manifest.tracks.find(v=>v.id===id)
     const name = (t?.label || '').toLowerCase()
+    if (/ad[ _-]?libs?/i.test([t?.id,t?.label,t?.kind].join(' '))) return 'Ad-libs'
     if (k === 'video') return 'Scenes'
     if (k === 'footage') return 'Footage'
     if (k === 'text') return 'Titles and graphics'
@@ -174,7 +175,7 @@ export async function importAgentTimeline(args: { workspaceId: string; motionPro
         members.push(file.id)
       }
     }
-    extTracks.push({ id:t.id,kind:t.kind,label:friendlyLane(t.id),items:manifest.elements.filter(x=>x.trackId===t.id).map(e=>({
+    extTracks.push({ id:t.id,kind:t.kind,label:t.label || friendlyLane(t.id),items:manifest.elements.filter(x=>x.trackId===t.id).map(e=>({
       id:e.id, startMs:e.startMs,endMs:e.endMs,sourceInMs:e.sourceInMs,
       editable:e.editable, itemId:mapped.get(e.id) || null,
       engine:e.engine ?? null, codeRef:e.codeRef ?? null

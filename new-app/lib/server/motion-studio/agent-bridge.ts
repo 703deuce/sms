@@ -21,8 +21,8 @@ const MAX_FILE = 2_000_000_000
 type Artifact = { id: string; key: string; kind: string; filename: string; mime: string; bytes: number; state: 'pending' | 'ready'; s3UploadId?: string; elementId?: string; trackId?: string; sha256?: string }
 const artifacts = (raw: unknown): Artifact[] => Array.isArray(raw) ? raw as Artifact[] : []
 const isDone = (status: string) => ['complete', 'failed', 'dispatch_failed', 'cancelled'].includes(status)
-const CUSTOMER_STAGES = ['research','story','voice','scenes','review','fixing','rendering','delivering','complete'] as const
-const DEFAULT_STAGE_MESSAGES: Record<string, string> = { research: "We're finding the best photos and clips…", story: "We're writing your story…", voice: "We're recording narration…", scenes: "We're building your scenes…", review: "We're reviewing the cut…", fixing: "We're polishing a few details…", rendering: "We're rendering your final video…", delivering: "We're adding the video to your timeline…", complete: "Done! Your film is ready to edit." }
+const CUSTOMER_STAGES = ['research','story','voice','design','scenes','review','fixing','rendering','delivering','complete'] as const
+const DEFAULT_STAGE_MESSAGES: Record<string, string> = { research: "We're finding the best photos and clips…", story: "We're writing your story…", design: "We're designing the visual look…", voice: "We're recording narration…", scenes: "We're building your scenes…", review: "We're reviewing the cut…", fixing: "We're polishing a few details…", rendering: "We're rendering your final video…", delivering: "We're adding the video to your timeline…", complete: "Your video is ready." }
 function friendlyMessage(raw: unknown, stage: string): string {
   const message = str(raw, 240)
   if (!message || /grok|bot\b|model|engine|\/workspace|\/tmp\/|https?:\/\/|token|stack trace|api[_ -]?key|\$\d|usd|ffmpeg|python|exception|traceback/i.test(message)) return DEFAULT_STAGE_MESSAGES[stage] || "We're working on your video…"
@@ -92,11 +92,14 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   // exportInfo.masterKey is rewritten by every completion, including a
   // no-AI render-project re-render, so it is always the newest committed MP4.
   const latestMaster = str(toObject(project.exportInfo).masterKey, 600)
-  const activeVideoKey = (job.status === 'complete' || job.parentJobId ? latestMaster : '') ||
+  const activeVideoKey = (job.status !== 'complete' && job.resultKey) || (job.status === 'complete' || job.parentJobId ? latestMaster : '') ||
     job.resultKey || previousVideo?.resultKey
   const videoUrl = activeVideoKey ? await createReadableSignedUrl(activeVideoKey, 3600).catch(() => null) : null
   const events = await db().studioActivityEvent.findMany({ where: { projectId, kind: 'agent_progress' }, orderBy: { id: 'asc' }, take: 500 })
-  return { ...publicJob(job), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
+  const editable = await db().motionStudioPortableVersion.findFirst({
+    where:{workspaceId,projectId,sourceJobId:job.id,status:'committed'}, select:{id:true},
+  })
+  return { ...publicJob(job), editableReady:Boolean(editable), masterReady:Boolean(job.resultKey), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
 
@@ -345,6 +348,12 @@ export async function botGetAssignment(id: string, request: Request) {
   }:null
   return { ...publicJob(job), workspaceId: job.workspaceId, userId: job.userId,
     portableProject,
+    productionInstructions: {
+      review: 'Inspect full-size first, busiest and last frames per scene. After an edit review only affected frames and adjacent cuts. Play short excerpts for timing, motion or sound. Watch the approved master once before delivery.',
+      progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
+      delivery: 'Use the master producer kit bundle and frame-packs modules. Export the immutable native package and ingest bundle records to persistent job storage before upload. Publish with new-app/scripts/motion-studio/publish-editable.mjs. Resume that directory after interruption; reuse the approved master.',
+      heartbeat: 'While actively working, GET the job checkpoint every 60 seconds with the current job token, including during rendering.',
+    },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
     title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
     projectContext: {
@@ -421,12 +430,53 @@ export async function botProgress(id: string, request: Request, raw: unknown) {
   return publicJob(updated)
 }
 
+// Storage I/O happens outside this transaction. Merge only this receipt under the
+// row lock, so concurrent completions cannot overwrite another upload's receipt.
+async function storeArtifact(owner:{id:string;tokenHash:string}, item:Artifact) {
+  await db().$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "MotionStudioAgentJob" WHERE "id" = ${owner.id} FOR UPDATE`
+    const current=await tx.motionStudioAgentJob.findUniqueOrThrow({where:{id:owner.id}})
+    if (isDone(current.status) || current.tokenHash !== owner.tokenHash)
+      throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
+    const list=artifacts(current.artifacts)
+    const index=list.findIndex(a=>a.id===item.id)
+    if (index<0 && list.length>=10000) throw new MotionStudioError('INVALID','Too many artifacts.',400)
+    if (index<0) list.push(item)
+    else list[index]=item
+    await tx.motionStudioAgentJob.update({where:{id:owner.id},data:{artifacts:toPrismaJson(list)}})
+  })
+}
+
 export async function botAssets(id: string, request: Request, raw: unknown) {
   const job = await requireBotJob(id, request)
   if (isDone(job.status)) throw new MotionStudioError('CONFLICT', 'Job already finished.', 409)
   const input = toObject(raw)
   const action = str(input.action, 20)
   const all = artifacts(job.artifacts)
+  if (action === 'approveMaster') {
+    const isMaster=(a:Artifact)=>a.id===input.uploadId && a.state==='ready' && a.mime==='video/mp4' && a.kind==='video'
+    let master=all.find(isMaster)
+    if (!master && typeof input.sourceJobId==='string') {
+      const source=await db().motionStudioAgentJob.findFirst({where:{id:input.sourceJobId,
+        projectId:job.projectId,workspaceId:job.workspaceId},select:{artifacts:true}})
+      master=artifacts(source?.artifacts).find(isMaster)
+      if (master) await storeArtifact(job,master)
+    }
+    if (!master) throw new MotionStudioError('INVALID','A committed MP4 master is required.',400)
+    const updated=await db().motionStudioAgentJob.updateMany({where:{id,tokenHash:job.tokenHash,
+      status:{in:['dispatched','dispatching','running']}},data:{resultKey:master.key}})
+    if (!updated.count) throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
+    return {videoReady:true}
+  }
+  if (action === 'receipts') {
+    const sourceId = str(input.sourceJobId,100)
+    const source = sourceId && sourceId !== job.id
+      ? await db().motionStudioAgentJob.findFirst({where:{id:sourceId,workspaceId:job.workspaceId,
+          projectId:job.projectId},select:{artifacts:true}}) : null
+    return {receipts:[...artifacts(source?.artifacts),...all]
+      .filter(a=>a.state==='ready' && a.sha256)
+      .map(({id,sha256,kind,filename,bytes,mime})=>({id,sha256,kind,filename,bytes,mime}))}
+  }
   if (action === 'prepare') {
     const filename = str(input.filename, 150).replace(/[^a-zA-Z0-9._-]/g, '_')
     const kind = str(input.kind, 30), mime = str(input.mime, 80), bytes = Number(input.bytes)
@@ -438,14 +488,21 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       'image/jpeg','image/webp','image/svg+xml','audio/mpeg','audio/wav',
       'audio/x-wav','audio/mp4','text/plain','application/x-subrip','application/zip',
       'font/ttf','font/otf','font/woff','font/woff2',
-      'application/wasm','application/javascript','text/javascript','text/css',
+      'application/octet-stream','application/wasm','application/javascript','text/javascript','text/css',
     ]
     if (!filename || !['video', 'project', 'media', 'audio', 'source','font','image','bundle'].includes(kind)
       || !allowedMime.includes(mime)
+      || (mime==='application/octet-stream' && (kind!=='source' || !checksum || bytes>16*1024*1024 || !filename.endsWith('.frames')))
       || (nativeKind && (!/^[a-f0-9]{64}$/.test(checksum)||bytes>25*1024*1024))
       || (checksum && !/^[a-f0-9]{64}$/.test(checksum))
-      || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE || all.length >= 300) {
+      || !Number.isSafeInteger(bytes) || bytes < 1 || bytes > MAX_FILE || all.length >= 10000) {
       throw new MotionStudioError('INVALID', 'Invalid artifact details.', 400)
+    }
+    if (input.resume === true && checksum) {
+      const ready = all.find(a => a.state === 'ready' && a.sha256 === checksum &&
+        a.bytes === bytes && a.kind === kind && a.mime === mime && a.filename === filename &&
+        (a.elementId || '') === elementId && (a.trackId || '') === trackId)
+      if (ready) return {uploadId:ready.id, status:'ready', exists:true}
     }
     const uploadId = randomUUID()
     const objectKey = 'ws/' + job.workspaceId + '/motion-studio/agent/' + job.id + '/' + uploadId + '/' + filename
@@ -455,8 +512,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       ...(upload.s3Multipart ? { s3UploadId: upload.s3Multipart.uploadId } : {}),
       ...(elementId ? { elementId } : {}), ...(trackId ? { trackId } : {}),
       ...(checksum ? {sha256:checksum} : {}) }
-    await db().motionStudioAgentJob.update({ where: { id },
-      data: { artifacts: toPrismaJson([...all, item]) } })
+    await storeArtifact(job, item)
     return { uploadId, objectKey, mode: upload.mode, signedPut: upload.signedPut,
       tus: upload.tus, s3Multipart: upload.s3Multipart }
   }
@@ -476,14 +532,26 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     if (!size || size !== item.bytes || size > MAX_FILE)
       throw new MotionStudioError('INVALID', 'Uploaded size does not match the prepared object.', 400)
     if (item.sha256) {
-      // Hash-check producer scene bundles, images and pinned font binaries
-      // before making them available to the editor/render worker.
-      // Large general media can use the existing upload pipeline, which
-      // does not promise byte-level producer source verification.
-      if (size > 25*1024*1024)
-        throw new MotionStudioError('INVALID', 'Checksummed assets must be 25 MB or smaller.', 400)
-      const bytes = await storage.getObjectBytes(item.key)
-      const actual = createHash('sha256').update(bytes).digest('hex')
+      const hash=createHash('sha256')
+      if (size<=25*1024*1024) hash.update(await storage.getObjectBytes(item.key))
+      else {
+        const url=await storage.createSignedDownloadUrl(item.key,900)
+        const response=await fetch(url,{redirect:'error',cache:'no-store'})
+        if (!response.ok || !response.body) throw new MotionStudioError('INVALID','Cannot verify uploaded media.',422)
+        const reader=response.body.getReader()
+        let count=0
+        try {
+          for (;;) {
+            const {done,value}=await reader.read()
+            if (done) break
+            count+=value.length
+            if (count>size) throw new MotionStudioError('INVALID','Uploaded media size changed.',422)
+            hash.update(value)
+          }
+        } finally { await reader.cancel() }
+        if (count!==size) throw new MotionStudioError('INVALID','Incomplete uploaded media.',422)
+      }
+      const actual=hash.digest('hex')
       if (actual !== item.sha256)
         throw new MotionStudioError('INVALID', 'Uploaded source does not match SHA-256.', 422)
     }
@@ -498,7 +566,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       update: { status: 'ready',
         ...(item.sha256 ? {provenanceLog: toPrismaJson({source:'producer',sha256:item.sha256,verifiedSha256:true})} : {}) },
     })
-    await db().motionStudioAgentJob.update({ where: { id }, data: { artifacts: toPrismaJson(all) } })
+    await storeArtifact(job, item)
     return { uploadId: item.id, status: 'ready', bytes: size }
   }
   throw new MotionStudioError('INVALID', 'Expected prepare or commit.', 400)
@@ -553,7 +621,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     }
     return publicJob(failed)
   }
-  const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.mime === 'video/mp4' && a.state === 'ready')
+  const video = artifacts(job.artifacts).find(a => a.kind === 'video' && a.mime === 'video/mp4' && a.state === 'ready' && (!job.resultKey || a.key===job.resultKey))
   if (!video) throw new MotionStudioError('CONFLICT', 'Upload and commit an MP4 before completing.', 409)
   const durationMs = Number(input.durationMs)
   if (!Number.isSafeInteger(durationMs) || durationMs <= 0 || durationMs > 2_147_483_647) {

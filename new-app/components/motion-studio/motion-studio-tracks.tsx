@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { buildMotionTracks, type MsTrackItemTone } from '@/lib/motion-studio/timeline'
 import { formatClock } from '@/lib/motion-studio/format'
@@ -35,6 +35,8 @@ export function MotionStudioTracks({
   className?: string
 }) {
   const { tracks, durationMs } = useMemo(() => buildMotionTracks(project), [project])
+  const [visualsOpen,setVisualsOpen]=useState(false)
+  const visibleTracks=tracks.filter(t=>visualsOpen || (t.id!=='video' && t.id!=='graphics'))
   const laneRef = useRef<HTMLDivElement>(null)
   const pct = (ms: number) => `${(Math.max(0, Math.min(durationMs, ms)) / Math.max(1, durationMs)) * 100}%`
   const ticks = useMemo(() => {
@@ -51,9 +53,11 @@ export function MotionStudioTracks({
     <div className={cn('flex gap-2 select-none', className)} data-testid="ms-tracks" role="group" aria-label="Motion Studio timeline">
       <div className="flex w-22 shrink-0 flex-col gap-1">
         <span className="h-5" />
-        {tracks.map((track) => (
+        {visibleTracks.map((track) => (
           <span key={track.id} className="flex h-7 items-center truncate text-xs font-medium tracking-wide text-muted-foreground">
-            {track.label}
+            {track.id==='scenes' ? <button type="button" aria-expanded={visualsOpen}
+              onClick={()=>setVisualsOpen(open=>!open)}>{visualsOpen?'▾':'▸'} Main Visuals</button>
+              : track.id==='voice' ? 'Main Voice' : track.label}
           </span>
         ))}
       </div>
@@ -81,7 +85,7 @@ export function MotionStudioTracks({
             </span>
           ))}
         </div>
-        {tracks.map((track) => (
+        {visibleTracks.map((track) => (
           <div key={track.id} className="relative h-7 rounded-md bg-muted/40" data-testid={`ms-track-${track.id}`} aria-label={track.label}>
             {track.items.map((it) => {
               const selected = it.sceneId != null && it.sceneId === selectedSceneId

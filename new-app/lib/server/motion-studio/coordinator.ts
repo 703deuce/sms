@@ -21,7 +21,7 @@ function problem(text: string, code: MsErrorCode = 'INVALID', status = 400): nev
 export const coordinatorEnabled = () => process.env.MOTION_STUDIO_COORDINATOR === '1'
 /** Creative jobs run long render stages; the lease is also renewed by every job-token call. */
 export const CREATIVE_LEASE_MS = Math.max(5*60_000,
-  Math.min(4*3600_000,Number(process.env.MOTION_STUDIO_CREATIVE_LEASE_MS)||30*60_000))
+  Math.min(4*3600_000,Number(process.env.MOTION_STUDIO_CREATIVE_LEASE_MS)||5*60_000))
 /** Bounded wait for the shared advisory lock so a busy moment returns quickly instead of 500ing. */
 export const COORDINATOR_TX = {maxWait:10_000,timeout:20_000} as const
 /**

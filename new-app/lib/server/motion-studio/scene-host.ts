@@ -161,11 +161,18 @@ export async function sceneFileResponse(args:{
   const nativeId=typeof info.asset==='string'?info.asset:''
   const claimedSha=typeof info.sha256==='string'?info.sha256.toLowerCase():''
   const aliases=manifest.producerAssetMap||{}
+  const assetSha=info.packSha256 === undefined ? claimedSha : String(info.packSha256)
   const storedId=aliases[nativeId]||nativeId
   if(!safeId(nativeId)||!safeId(storedId)||
-     !manifest.assets.some(a=>a.id===storedId&&a.sha256.toLowerCase()===claimedSha))
+     !manifest.assets.some(a=>a.id===storedId&&a.sha256.toLowerCase()===assetSha))
     fail('Scene file not registered in its project',404)
-  const bytes=await findAssetBytes(workspaceId,projectId,storedId)
+  let bytes=await findAssetBytes(workspaceId,projectId,storedId)
+  if (info.packSha256 !== undefined) {
+    const offset=Number(info.offset), length=Number(info.bytes)
+    if (!Number.isSafeInteger(offset) || offset<0 || !Number.isSafeInteger(length) ||
+        length<1 || offset+length>bytes.length) fail('Invalid packed frame',422)
+    bytes=bytes.subarray(offset,offset+length)
+  }
   if(!same(createHash('sha256').update(bytes).digest('hex'),claimedSha))
     fail('Scene source integrity mismatch',422)
   // The iframe has an opaque origin. It cannot access the parent DOM, cookies

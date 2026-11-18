@@ -2,7 +2,7 @@
 // @ts-ignore vitest is resolved in new-app; root tsc has no vitest types
 import { afterEach, describe, expect, it, vi } from 'vitest'
 // @ts-ignore testing-library is resolved in new-app; root tsc does not include its test types
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }), usePathname: () => '/app/motion-studio/x' }))
 
@@ -43,7 +43,11 @@ describe('Motion Studio workspace (FE-5/6/7)', () => {
     const onSeek = vi.fn()
     render(<MotionStudioEditorLanes projectId="ms_example_documentary" outputMs={0} onSeek={onSeek} client={client} />)
     await waitFor(() => expect(screen.getByTestId('ms-editor-lanes')).toBeTruthy())
-    for (const label of ['SCENES', 'VIDEO', 'GRAPHICS', 'VOICE', 'MUSIC']) expect(screen.getByText(label)).toBeTruthy()
+    const visuals=screen.getByRole('button',{name:/Main Visuals/})
+    expect(visuals.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(visuals)
+    expect(visuals.getAttribute('aria-expanded')).toBe('true')
+    for (const label of ['VIDEO', 'GRAPHICS', 'Main Voice', 'MUSIC']) expect(screen.getByText(label)).toBeTruthy()
     expect(screen.getByText('Back to workspace').closest('a')?.getAttribute('href')).toBe('/app/motion-studio/ms_example_documentary')
   })
 })

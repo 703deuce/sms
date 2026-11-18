@@ -28,7 +28,7 @@ export function MotionStudioEditorLanes({
 }) {
   const client = useMemo(() => injected ?? getMotionStudioClient(), [injected])
   const [project, setProject] = useState<MsProject | null>(null)
-  const [agentTracks, setAgentTracks] = useState<{ id: string; label: string; items: { id: string; startMs: number; endMs: number }[] }[] | null>(null)
+  const [agentTracks, setAgentTracks] = useState<{ id: string; label: string; kind?: string; items: { id: string; startMs: number; endMs: number }[] }[] | null>(null)
   const [agentDurationMs, setAgentDurationMs] = useState(0)
   const [selectedAgentElementId, setSelectedAgentElementId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -57,12 +57,12 @@ export function MotionStudioEditorLanes({
             { cache: 'no-store' })
           if (!response.ok || !alive) return
           const data = await response.json() as {
-            edits?: { motionStudio?: { tracks?: { id: string; label: string; items: object[] }[]; durationMs?: number } }
+            edits?: { motionStudio?: { tracks?: { id: string; label: string; kind?: string; items: object[] }[]; durationMs?: number } }
           }
           const ext = data.edits?.motionStudio
           if (!alive || !ext?.tracks?.length) return
           setAgentTracks(ext.tracks.map(t => ({
-            id: t.id, label: t.label, items: (t.items ?? []).map(v => {
+            id: t.id, label: t.label, kind: t.kind, items: (t.items ?? []).map(v => {
               const o = v as { id?: string; startMs?: number; endMs?: number }
               return { id: String(o.id ?? ''), startMs: Number(o.startMs) || 0, endMs: Number(o.endMs) || 0 }
             }).filter(x => x.endMs > x.startMs)
@@ -94,6 +94,17 @@ export function MotionStudioEditorLanes({
         Loading Motion Studio lanes…
       </p>
     )
+  const groups = new Map<string, NonNullable<typeof agentTracks>>()
+  for (const track of agentTracks ?? []) {
+    const role = [track.id, track.kind, track.label].join(' ')
+    let group = 'Main Visuals'
+    if (/ad[ _-]?libs?/i.test(role)) group = 'Ad-libs'
+    else if (/narrat|voice|dialog|speech/i.test(role)) group = 'Main Voice'
+    else if (/music|score|sfx|audio|sound/i.test(role)) group = 'Music and audio'
+    const members = groups.get(group) ?? []
+    members.push(track)
+    groups.set(group, members)
+  }
   const current = project ? sceneAt(project.scenes, outputMs) : null
   return (
     <div className="flex flex-col gap-2" data-testid="ms-editor-lanes">
@@ -113,7 +124,9 @@ export function MotionStudioEditorLanes({
         <div className="min-w-0 overflow-x-auto">
           {agentTracks?.length ? <div className="min-w-[560px] space-y-2 rounded-lg border border-border p-3"
             aria-label="Imported production tracks" data-testid="ms-agent-timeline-tracks">
-            {agentTracks.map(track=><div key={track.id} className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 text-xs">
+            {Array.from(groups, ([group, tracks]) => <details key={group}>
+              <summary className="cursor-pointer py-1 text-xs font-medium">{group} · {tracks.length}</summary>
+              {tracks.map(track=><div key={track.id} className="grid grid-cols-[112px_minmax(0,1fr)] items-center gap-2 text-xs">
               <span className="truncate text-muted-foreground">{track.label}</span>
               <div className="relative h-8 rounded bg-muted">
                 {track.items.map(item=>{
@@ -129,6 +142,7 @@ export function MotionStudioEditorLanes({
                 })}
               </div>
             </div>)}
+            </details>)}
           </div> : project ? <div className="min-w-[560px]">
             <MotionStudioTracks project={project} playheadMs={outputMs} selectedSceneId={current?.id ?? null} onSeek={onSeek} />
           </div> : <p className="text-xs text-muted-foreground">We're loading your saved tracks…</p>}
