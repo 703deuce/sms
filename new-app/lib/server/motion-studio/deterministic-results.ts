@@ -165,6 +165,12 @@ export async function reportDeterministicJob(request:Request,id:string,raw:unkno
     await tx.$queryRaw`SELECT "id" FROM "MotionStudioProject" WHERE "id" = ${job.projectId} FOR UPDATE`
     const current=await tx.motionStudioDeterministicJob.findUniqueOrThrow({where:{id}})
     if(current.status==='complete')return
+    const head=await tx.motionStudioPortableVersion.findFirst({
+      where:{projectId:job.projectId,workspaceId:job.workspaceId,status:'committed'},
+      orderBy:{revision:'desc'},select:{id:true},
+    })
+    if(head?.id!==version.id)
+      bad('The editable project changed before the final master was attached; do not overwrite customer work.')
     const exported=obj(target.exportInfo)
     await tx.motionStudioProject.update({where:{id:job.projectId},data:{
       timelineVersion:{increment:1},status:'review',stage:'review',
