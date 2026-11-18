@@ -56,11 +56,19 @@ export async function listClipAgentFinishes(workspaceId: string, projectId: stri
   })
   const latest = new Map<string, typeof rows[number]>()
   for (const j of rows) if (!latest.has(j.clipId)) latest.set(j.clipId,j)
-  return await Promise.all([...latest.values()].map(async j => ({
-    ...publicJob(j),
-    videoUrl:j.resultKey && j.status==='complete'
-      ? await createReadableSignedUrl(j.resultKey,3600).catch(()=>null) : null,
-  })))
+  return await Promise.all([...latest.values()].map(async j => {
+    const portable=j.status==='complete'?await prisma().motionStudioPortableVersion.findFirst({
+      where:{workspaceId,projectId,sourceJobId:j.id,status:'committed'},
+      orderBy:{revision:'desc'},select:{id:true},
+    }):null
+    return {...publicJob(j),
+      delivery:portable?'live':'legacy',
+      portableVersionId:portable?.id||null,
+      liveEditorUrl:portable?'/app/motion-studio/'+encodeURIComponent(projectId):null,
+      videoUrl:j.resultKey&&j.status==='complete'
+        ?await createReadableSignedUrl(j.resultKey,3600).catch(()=>null):null,
+    }
+  }))
 }
 
 function callbackOrigin(request: Request) {
