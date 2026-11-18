@@ -51,9 +51,25 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   if(!scene)fail('Scene not found',404)
   const refs=await portableAssetSession(workspaceId,projectId,versionId)
   if(refs.unavailableAssetIds.length)fail('Original scene assets are unavailable',409)
+  const native=asObj(manifest.producerDocument)
+  const aliases=manifest.producerAssetMap||{}
+  const urls:Record<string,string>={...refs.assetUrls}
+  const records:Record<string,unknown>={}
+  for(const [nativeId,storageId] of Object.entries(aliases)){
+    if(urls[storageId])urls[nativeId]=urls[storageId]
+    const asset=manifest.assets.find(a=>a.id===storageId)
+    if(asset)records[nativeId]={kind:asset.kind,sha256:asset.sha256}
+  }
+  const fonts:Record<string,unknown>={}
+  if(Array.isArray(native.fontRecords))for(const raw of native.fontRecords){
+    const record=asObj(raw)
+    const explicit=typeof record.fontId==='string'?record.fontId:
+      typeof record.sha256==='string'?'fnt_'+record.sha256.slice(0,32):''
+    if(safeId(explicit))fonts[explicit]=record
+  }
   return {...issueSceneSessionUrl({requestUrl,projectId,versionId,
-    bundleAssetId:scene.bundleAssetId}),assets:refs.assetUrls,
-    livePreview:scene.manifest.livePreview??null}
+    bundleAssetId:scene.bundleAssetId}),assetUrls:urls,assetRecords:records,
+    fonts,livePreview:scene.manifest.livePreview??null}
 }
 async function findAssetBytes(workspaceId:string,projectId:string,assetId:string){
   const asset=await db().studioAsset.findFirst({
