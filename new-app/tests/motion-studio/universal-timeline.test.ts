@@ -34,8 +34,25 @@ describe('Universal timeline playback contract',()=>{
     expect(result.visuals).toHaveLength(2)
     expect(result.audio[0]).toMatchObject({assetId:'ast_voice',gainDb:-2})
     expect(visualsAt(result,2400)[0]).toMatchObject({type:'video',assetId:'ast_original'})
-    expect(captionsAt(result,2400).map(c=>c.text)).toEqual(['Watch this'])
+    // Sidecar captions are authoritative; the inlined copy must never
+    // display in parallel with the same file.
+    expect(captionsAt(result,2400)).toEqual([])
     expect(captionsAt(result,3500)).toEqual([])
+  })
+  it('includes footage sceneLayer items without double-rendering the scene',()=>{
+    const project:MsPortableManifest={...manifest,liveProject:{
+      schema:'transovo.live-project/1',projectId:'msp_example',
+      format:{width:480,height:854,fps:30,durationMs:2300},
+      tracks:[{id:'main_visuals',kind:'visual',items:[
+        {id:'S1',type:'scene',startMs:0,durationMs:2300},
+        {id:'footage_S1',type:'sceneLayer',sceneId:'S1',
+          elementId:'plate',label:'Original footage',kind:'video',startMs:0,endMs:2300},
+      ]}],
+    }}
+    const result=normalizeUniversalTimeline(project)
+    expect(result.sceneLayers).toMatchObject([{id:'footage_S1',sceneId:'S1',
+      label:'Original footage',startMs:0,endMs:2300}])
+    expect(result.visuals).toHaveLength(1)
   })
   it('accepts out-of-order caption cues in VTT without embedding video pixels',()=>{
     const cues=readTimelineCaptions('WEBVTT\n\n00:00:02.300 --> 00:00:03.500\nAn editable caption')
