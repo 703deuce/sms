@@ -65,11 +65,28 @@ async function findAssetBytes(workspaceId:string,projectId:string,assetId:string
     where:{id:asset.uploadId,workspaceId},
     select:{key:true,bytes:true,status:true},
   })
-  if(!upload||!['READY','COMPLETE'].includes(upload.status))
-    fail('Source asset not registered as a completed upload',404)
-  if(upload.bytes>BigInt(25*1024*1024))
-    fail('Source file too large for live scene hosting',413)
-  return getClipStorage().getObjectBytes(upload.key)
+  let key:string|null=null
+  if(upload&&['READY','COMPLETE'].includes(upload.status)){
+    if(upload.bytes>BigInt(25*1024*1024))fail('Source file too large for live scene hosting',413)
+    key=upload.key
+  }else{
+    // Existing AI source assets were registered in StudioAsset without a
+    // ClipUpload row. They remain durable in the job artifact manifest.
+    const jobs=await db().motionStudioAgentJob.findMany({
+      where:{workspaceId,projectId},select:{artifacts:true},
+    })
+    for(const job of jobs){
+      if(!Array.isArray(job.artifacts))continue
+      const matched=job.artifacts.find(value=>{
+        const x=asObj(value)
+        return x.id===assetId&&x.state==='ready'&&typeof x.key==='string'&&
+          typeof x.bytes==='number'&&x.bytes<=25*1024*1024
+      })
+      if(matched){key=String(asObj(matched).key);break}
+    }
+  }
+  if(!key)fail('Source asset has no verified storage location',404)
+  return getClipStorage().getObjectBytes(key)
 }
 const contentType=(file:string)=>{
   const ext=file.split('.').pop()?.toLowerCase()
