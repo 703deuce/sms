@@ -1,4 +1,5 @@
 'use client'
+import { useRef } from 'react'
 import type { MsPortableScene } from '@/lib/motion-studio/portable-contract'
 
 const object = (value: unknown): Record<string, unknown> =>
@@ -13,6 +14,7 @@ export function PortableLayerTiming({scene, layerId, savedElements, patch, onCha
   patch: Record<string, Record<string, unknown>>
   onChange: (elementId: string, key: string, value: number) => void
 }) {
+  const dragging = useRef<'start' | 'end' | null>(null)
   const graph = scene.manifest.motionTree
   const node = graph?.nodes.find(n => n.id === layerId && n.id !== graph.rootId)
   if (!graph || !node || !scene.manifest.elements.some(e => e.id === layerId)) return null
@@ -37,15 +39,31 @@ export function PortableLayerTiming({scene, layerId, savedElements, patch, onCha
           value={seconds(end)} onChange={e => changeEnd(Number(e.target.value)*1000)} />
       </label>
     </div>
-    <div className="relative mt-3 h-7 rounded bg-muted" aria-label="Layer timing bar">
-      <div className="absolute inset-y-1 rounded bg-primary/70"
-        style={{left: (start/duration*100)+'%', width: ((end-start)/duration*100)+'%'}} />
-      <input aria-label="Drag layer start" type="range" min={0} max={Math.max(0,end-1)}
-        step={10} value={start} onChange={e=>changeStart(Number(e.target.value))}
-        className="absolute inset-0 h-full w-full cursor-ew-resize accent-[var(--primary)]" />
-      <input aria-label="Drag layer end" type="range" min={start+1} max={duration}
-        step={10} value={end} onChange={e=>changeEnd(Number(e.target.value))}
-        className="absolute inset-0 h-full w-full cursor-ew-resize accent-[var(--primary)]" />
+    <div className="relative mt-3 h-8 cursor-ew-resize rounded bg-muted touch-none"
+      aria-label="Drag layer timing handles"
+      onPointerDown={e => {
+        const bounds=e.currentTarget.getBoundingClientRect()
+        const ms=Math.round(Math.max(0,Math.min(1,(e.clientX-bounds.left)/bounds.width))*duration)
+        dragging.current=Math.abs(ms-start)<=Math.abs(ms-end)?'start':'end'
+        e.currentTarget.setPointerCapture(e.pointerId)
+        if(dragging.current==='start')changeStart(ms)
+        else changeEnd(ms)
+      }}
+      onPointerMove={e => {
+        if(!dragging.current)return
+        const bounds=e.currentTarget.getBoundingClientRect()
+        const ms=Math.round(Math.max(0,Math.min(1,(e.clientX-bounds.left)/bounds.width))*duration)
+        if(dragging.current==='start')changeStart(ms)
+        else changeEnd(ms)
+      }}
+      onPointerUp={()=>{dragging.current=null}}
+      onPointerCancel={()=>{dragging.current=null}}>
+      <div className="absolute inset-y-1 rounded bg-primary/70 pointer-events-none"
+        style={{left:(start/duration*100)+'%',width:((end-start)/duration*100)+'%'}} />
+      <span className="absolute inset-y-0 w-1.5 rounded bg-white shadow pointer-events-none"
+        style={{left:'calc('+(start/duration*100)+'% - 3px)'}} />
+      <span className="absolute inset-y-0 w-1.5 rounded bg-white shadow pointer-events-none"
+        style={{left:'calc('+(end/duration*100)+'% - 3px)'}} />
     </div>
     <p className="mt-1 text-[11px] text-muted-foreground">Timing saves without a render. Export applies the saved edit.</p>
   </fieldset>
