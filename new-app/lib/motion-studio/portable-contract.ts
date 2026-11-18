@@ -3,6 +3,8 @@
  * The producer owns scene code and the props resolver. Transovo owns stable
  * asset identities, immutable versions, validation and edit authorization.
  */
+import { validateMotionSceneGraph, type MotionSceneGraph } from './scene-graph'
+
 export type MsEditTier = 'live_editable' | 'render_editable' | 'ai_editable' | 'protected'
 export type MsPropertyKind = 'text' | 'color' | 'number' | 'boolean' | 'point' | 'image' | 'font' | 'enum'
 export type MsEditProperty = {
@@ -33,7 +35,7 @@ export type MsPortableScene = {
   bundleSha256: string
   engine: string
   runtime: string
-  manifest: { elements: MsEditElement[]; livePreview?: Record<string, unknown> }
+  manifest: { elements: MsEditElement[]; livePreview?: Record<string, unknown>; motionTree?: MotionSceneGraph }
   dependencies?: string[]
 }
 export type MsPortableManifest = {
@@ -88,6 +90,12 @@ export function validatePortableManifest(value: unknown): MsPortableManifest {
     if (scene.dependencies !== undefined &&
         (!Array.isArray(scene.dependencies) || scene.dependencies.some(x => !assetId(x) || !ids.has(x))))
       return fail('Scene references an unregistered asset')
+    // Optional additive After Effects-style tree. Legacy producer manifests stay
+    // valid and preserve the original immutable source bundle unchanged.
+    if (scene.manifest.motionTree !== undefined) {
+      const registeredAssets = new Set(value.assets.map(a => a.id))
+      validateMotionSceneGraph(scene.manifest.motionTree, registeredAssets)
+    }
     const elementIds = new Set<string>()
     for (const el of scene.manifest.elements) {
       if (!plain(el) || !isId(el.id) || !isId(el.kind) || elementIds.has(el.id) || !plain(el.properties))
