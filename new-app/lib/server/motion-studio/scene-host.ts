@@ -164,6 +164,31 @@ async function readSceneAssetBytes(projectId:string,versionId:string,assetId:str
     bytes:bytes.length})
   return bytes
 }
+/** Prewarm only the immutable first scene's index backing object. This
+ * overlaps the session's DB/signing work with the otherwise serial B2 cold
+ * read. Errors do not fail project loading; the normal signed route remains
+ * authoritative and will retry on demand.
+ */
+export async function prewarmSceneIndex(projectId:string,versionId:string,bundleAssetId:string){
+  const started=Date.now()
+  try{
+    const {manifest,sources}=await sceneSourceContext(projectId,versionId)
+    if(!manifest.scenes.some(scene=>scene.bundleAssetId===bundleAssetId))return
+    const raw=await cachedAssetBytes(projectId,versionId,bundleAssetId)
+    const bundle=asObj(JSON.parse(raw.toString('utf8')))
+    const info=asObj(asObj(bundle.files)['index.html'])
+    const nativeId=typeof info.asset==='string'?info.asset:''
+    const id=manifest.producerAssetMap?.[nativeId]||nativeId
+    if(!safeId(id)||!sources.has(id))return
+    await cachedAssetBytes(projectId,versionId,id)
+    console.info('[motion-studio:load]',{kind:'scene-index-prewarm',
+      projectId,status:'ready',elapsedMs:Date.now()-started})
+  }catch(error){
+    console.warn('[motion-studio:load]',{kind:'scene-index-prewarm',
+      projectId,status:'miss',elapsedMs:Date.now()-started,
+      error:error instanceof Error?error.message:'unknown'})
+  }
+}
 const contentType=(file:string)=>{
   const ext=file.split('.').pop()?.toLowerCase()
   const mime:Record<string,string>={
