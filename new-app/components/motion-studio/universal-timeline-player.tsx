@@ -145,6 +145,20 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
       }else if(message.event==='ready'){
         console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
         reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current,undefined,projectId,sceneId)
+        // Request the opening frame immediately, without waiting for React's
+        // ready-state render/effect cycle. Future scenes get their own first
+        // frame ready before playback reaches the cut.
+        const item=timelineRef.current.visuals.find(v=>v.sceneId===sceneId)
+        if(item&&!pending.current[sceneId]){
+          const playhead=position.current
+          const localMs=item.inMs+(playhead>=item.startMs&&playhead<item.startMs+item.durationMs?
+            playhead-item.startMs:0)
+          const id=send(sceneId,'seek',Math.max(0,localMs)/1000)
+          if(id!==null){
+            pending.current[sceneId]=id
+            requested.current[sceneId]=localMs
+          }
+        }
         setReady(old=>({...old,[sceneId]:true}))
         setSeekEpoch(n=>n+1)
       }else if(message.ok===false&&typeof message.error==='string'){
