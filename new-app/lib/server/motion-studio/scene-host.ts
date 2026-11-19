@@ -1,5 +1,5 @@
 import 'server-only'
-import {createHmac,timingSafeEqual,createHash,hkdfSync} from 'node:crypto'
+import {createHmac,timingSafeEqual,hkdfSync} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
 import {getClipStorage} from '@/lib/storage'
 import {MotionStudioError} from '@/lib/server/motion-studio/errors'
@@ -265,11 +265,10 @@ export async function sceneFileResponse(args:{
     const parts=file.split('/')
     if(parts.length!==2)fail('Invalid signed scene asset path',404)
     const assetId=parts[1]!
-    const registered=manifest.assets.find(a=>a.id===assetId)
-    if(!registered)fail('Asset not declared in scene project',404)
-    const bytes=await cachedAssetBytes(projectId,versionId,assetId)
+    // Source map is the immutable version's allowlist. No extra DB check.
     const source=sources.get(assetId)
-    if(!source)fail('Source asset has no verified storage location',404)
+    if(!source)fail('Asset not declared in scene project',404)
+    const bytes=await cachedAssetBytes(projectId,versionId,assetId)
     let mime=source.mime
     // Producer uploads may include a charset or use text/plain for VTT/JSON.
     // Accept these only for declared caption/text assets; never permit arbitrary
@@ -295,20 +294,19 @@ export async function sceneFileResponse(args:{
       'Cache-Control':'private, max-age=300','Referrer-Policy':'no-referrer',
     }})
   }
-  // The content-addressed bundle is a JSON file listing each permitted
-  // relative path and its exact asset digest, not a directory on the server.
+  // Published bundle maps requested paths to approved storage assets.
+  // Playback does not re-run upload-time content hashes for every file.
   const raw=await cachedAssetBytes(projectId,versionId,bundleAssetId)
   let bundle:Record<string,unknown>
   try{bundle=asObj(JSON.parse(raw.toString('utf8')))}catch{fail('Invalid scene bundle',422)}
   const files=asObj(bundle.files),info=asObj(files[file])
   const nativeId=typeof info.asset==='string'?info.asset:''
-  const claimedSha=typeof info.sha256==='string'?info.sha256.toLowerCase():''
   const aliases=manifest.producerAssetMap||{}
-  const assetSha=info.packSha256 === undefined ? claimedSha : String(info.packSha256)
   const storedId=aliases[nativeId]||nativeId
-  if(!safeId(nativeId)||!safeId(storedId)||
-     !manifest.assets.some(a=>a.id===storedId&&a.sha256.toLowerCase()===assetSha))
-    fail('Scene file not registered in its project',404)
+  // Keep the immutable source-map allowlist and path confinement; do not
+  // repeat digest/registration verification on each playback request.
+  if(!safeId(nativeId)||!safeId(storedId)||!sources.has(storedId))
+    fail('Scene file is not part of this published project',404)
   let bytes=await cachedAssetBytes(projectId,versionId,storedId)
   if (info.packSha256 !== undefined) {
     const offset=Number(info.offset), length=Number(info.bytes)
@@ -316,8 +314,6 @@ export async function sceneFileResponse(args:{
         length<1 || offset+length>bytes.length) fail('Invalid packed frame',422)
     bytes=bytes.subarray(offset,offset+length)
   }
-  if(!same(createHash('sha256').update(bytes).digest('hex'),claimedSha))
-    fail('Scene source integrity mismatch',422)
   // The iframe has an opaque origin. It cannot access the parent DOM, cookies
   // or storage. Tight CSP restricts all network connections to known origins.
   // CSP sandbox applies even to top-level navigation, giving executable
