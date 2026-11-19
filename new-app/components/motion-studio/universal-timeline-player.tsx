@@ -281,10 +281,14 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       c.startMs+':'+c.endMs+':'+c.text.trim(),c.text,
     ])).values()].join('\n'):''
   const showing=visualsAt(timeline,timeMs)
-  // Keep all signed scene frames mounted for short projects. Previously S3 was
-  // inserted only as playback approached S2, causing first-play buffering.
-  const sessionScenes=timeline.visuals.filter(v=>v.type==='scene').map(v=>v.sceneId!).filter((id,i,all)=>
-    Boolean(id&&sessions[id])&&all.indexOf(id)===i)
+  // Prioritize the first picture: do not flood the scene host with S2/S3
+  // scripts, fonts and frame packs before S1 has drawn its opening frame.
+  // Once S1 draws, mount every remaining scene in parallel. Play stays gated
+  // on readiness of all short-film scenes to avoid buffering at the cut.
+  const allSceneIds=timeline.visuals.filter(v=>v.type==='scene').map(v=>v.sceneId!).filter(Boolean)
+  const firstSceneId=allSceneIds[0]||''
+  const sessionScenes=[...new Set(allSceneIds)].filter(id=>Boolean(sessions[id])&&
+    (firstFrameRendered||id===firstSceneId))
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
     <div className="flex items-center justify-between gap-2 text-xs">
