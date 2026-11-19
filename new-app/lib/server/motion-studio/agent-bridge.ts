@@ -358,10 +358,10 @@ export async function botGetAssignment(id: string, request: Request) {
     portableProject,
     delivery:{mode:'live'},
     productionInstructions: {
-      editableTimeline: 'Deliver a transovo.live-project/1 timeline and registered original scene bundles, footage layers, editable text and caption tracks, grouped audio stems and active-duration effects. DO NOT render or upload a master MP4. Customer previews the full project live in Transovo. Retain source handles and edits.',
-      review: 'Inspect the first, busiest and last frames and adjacent cuts. Final full review uses the live browser player, never a pre-rendered master.',
+      editableTimeline: 'Render and approve the completed master MP4 first so the customer can watch while the job remains open. Then deliver transovo.live-project/1 with registered original scene bundles, footage layers, editable text and caption tracks, grouped audio stems and active-duration effects. Retain source handles and edits.',
+      review: 'Inspect the first, busiest and last frames and adjacent cuts in the approved master and confirm the editable scene structure reproduces them.',
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
-      delivery: 'Publish the immutable producer document AND transovo.live-project/1 as the portable version, together with all registered media and caption assets. Complete with delivery:live and portableVersionId. Never export a master until a user presses Export.',
+      delivery: 'After approval, upload and approveMaster the MP4 without completing the job. Upload the immutable editable project in the background, publish the producer document and transovo.live-project/1 with registered assets, then complete with delivery:live and portableVersionId. Keep the already-approved MP4 as the original preview.',
       heartbeat: 'Do not schedule agent-level heartbeats or periodic pings. Every job-token call renews the lease, and publish-editable.mjs and the render runner ping the checkpoint themselves while they run.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
@@ -646,8 +646,9 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
     }
     return publicJob(failed)
   }
-  // Browser-first delivery: a committed, validated portable timeline is the
-  // deliverable. No master MP4, fake clipUpload, or server render is created.
+  // Render-first live delivery: keep an already-approved MP4 available while
+  // publishing the immutable editable timeline and after job completion.
+  // Legacy masterless live jobs remain valid; never create a render here.
   if(input.delivery==='live'){
     const versionId=str(input.portableVersionId,128)
     const durationMs=Number(input.durationMs)
@@ -674,17 +675,31 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
       throw new MotionStudioError('CONFLICT','All live scene, audio and caption assets must be ready.',409)
     const now=new Date()
     const completed=await db().$transaction(async tx=>{
+      // Re-read the approved master inside the completion transaction. It
+      // must match a ready MP4 belonging to this very job; an arbitrary
+      // resultKey or an earlier job's master is never accepted.
+      const current=await tx.motionStudioAgentJob.findUniqueOrThrow({
+        where:{id},select:{resultKey:true,artifacts:true},
+      })
+      const approved=artifacts(current.artifacts).find(a=>
+        a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&
+        a.filename!=='editor-base.mp4'&&a.key===current.resultKey)
+      const masterKey=approved?.key??null
+      const project=await tx.motionStudioProject.findUniqueOrThrow({
+        where:{id:job.projectId},select:{exportInfo:true},
+      })
       const updated=await tx.motionStudioAgentJob.update({
         where:{id},data:{status:'complete',phase:'complete',progress:100,
-          message:DEFAULT_STAGE_MESSAGES.complete,resultKey:null,durationMs,
+          message:DEFAULT_STAGE_MESSAGES.complete,resultKey:masterKey,durationMs,
           completedAt:now},
       })
       await tx.motionStudioProject.update({where:{id:job.projectId},data:{
         status:'review',stage:'review',completedAt:now,
         timelineVersion:{increment:1},
-        exportInfo:toPrismaJson({delivery:'live',portableVersionId:versionId,
-          durationMs,masterKey:null,smallKey:null,source:'transovo_agent',
-          agentJobId:id}),
+        exportInfo:toPrismaJson({...toObject(project.exportInfo),
+          delivery:'live',portableVersionId:versionId,
+          durationMs,masterKey,smallKey:masterKey,source:'transovo_agent',
+          agentJobId:id,storageDriver:masterKey?storageDriverName():undefined}),
       }})
       await tx.studioActivityEvent.create({data:{projectId:job.projectId,
         stage:'review',kind:'stage',message:'Editable video ready for live playback.'}})
