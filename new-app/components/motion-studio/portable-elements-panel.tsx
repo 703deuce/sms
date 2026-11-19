@@ -40,7 +40,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
       if(!response.ok) throw new Error('Could not load editable project')
       const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[]}
-      reportMotionStudioLoad('project-response',performance.now()-mountedAt.current)
+      reportMotionStudioLoad('project-response',performance.now()-mountedAt.current,undefined,projectId)
       // An older GET may finish after a successful save. Never roll the editor back.
       if(data.version && data.version.revision >= revisionRef.current) {
         revisionRef.current=data.version.revision
