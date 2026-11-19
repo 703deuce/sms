@@ -55,7 +55,8 @@ function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]
  * loaded in windows of three, not one network call per source frame.
  */
 export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overrides,
-  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange,previewVideoUrl=null,initialPlayback=null}:{
+  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange,previewVideoUrl=null,initialPlayback=null,
+  embeddedCanvas=false,externalTimeMs}:{
     projectId:string;versionId:string;manifest:MsPortableManifest;
     theme:Record<string,unknown>;overrides:Record<string,unknown>;
     scenePatch?:Record<string,Record<string,unknown>>;
@@ -63,6 +64,8 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     selectedLayer?:string
     previewVideoUrl?:string|null
     initialPlayback?:SessionResponse|null
+    embeddedCanvas?:boolean
+    externalTimeMs?:number
     onSelectLayer?:(id:string)=>void
     onLayerChange?:(elementId:string,key:string,value:number)=>void
   }){
@@ -146,9 +149,11 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     setActive(sceneId)
     onSceneChange?.(sceneId)
   },[onSceneChange])
-  return <div className="flex flex-col gap-1">
+  return <div className={embeddedCanvas?'absolute inset-0':'flex flex-col gap-1'}>
     <PlayerErrorBoundary resetKey={versionId}>
-    <UniversalTimelinePlayer projectId={projectId} timeline={timeline} sessions={sessions} previewVideoUrl={signedPreviewUrl||previewVideoUrl}
+    <UniversalTimelinePlayer projectId={projectId} timeline={timeline} sessions={sessions}
+      embeddedCanvas={embeddedCanvas} externalTimeMs={externalTimeMs}
+      previewVideoUrl={signedPreviewUrl||previewVideoUrl}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
       scenePatch={validLivePatch} onSceneChange={selected}
       overlay={currentScene&&onSelectLayer&&onLayerChange?
@@ -168,6 +173,6 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
           patch={scenePatch} onChange={onLayerChange}/>
         :null}/>
     </PlayerErrorBoundary>
-    {failure?<p role="status" className="text-xs text-destructive">{failure}</p>:null}
+    {failure&&!embeddedCanvas?<p role="status" className="text-xs text-destructive">{failure}</p>:null}
   </div>
 }
