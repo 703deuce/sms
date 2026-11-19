@@ -338,7 +338,22 @@ export async function sceneFileResponse(args:{
     `frame-ancestors 'self'`,
     "form-action 'none'","base-uri 'none'","object-src 'none'",
   ].join('; ')
+  // index.html is the only route the browser knows initially. Hint its
+  // approved JS/CSS siblings immediately, instead of discovering each file
+  // sequentially after fetching and evaluating the previous script.
+  const preload=file==='index.html'
+    ? Object.keys(files).filter(name=>name!=='index.html'&&
+        /\\.(?:js|mjs|css)$/.test(name)&&name.length<256&&
+        name.split('/').every(part=>/^[A-Za-z0-9_.@+\\-\\[\\]]+$/.test(part)))
+        .slice(0,12).map(name=>
+          '<'+prefix+name.split('/').map(encodeURIComponent).join('/')+
+          '>; rel=preload; as='+(name.endsWith('.css')?'style':'script'))
+        .join(', ')
+    : ''
+  if(preload)console.info('[motion-studio:load]',{kind:'index-preload',
+    projectId,count:preload.split(', ').length})
   return new Response(new Uint8Array(bytes),{status:200,headers:{
+    ...(preload?{'Link':preload}:{}),
     'Content-Type':contentType(file),'X-Content-Type-Options':'nosniff',
     'Access-Control-Allow-Origin':'*',
     'Cross-Origin-Resource-Policy':'cross-origin',
