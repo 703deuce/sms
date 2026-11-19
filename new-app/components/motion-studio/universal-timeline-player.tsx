@@ -191,8 +191,20 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     if(playing){pause();return}
     const engine=audio.current
     if(!engine)return
+    const allScenes=timeline.visuals.filter(v=>v.type==='scene').map(v=>v.sceneId!).filter(Boolean)
+    // Starting before the upcoming scene initializes made playback freeze at a cut.
+    if(allScenes.length<=3&&allScenes.some(id=>!ready[id])){
+      setError('Preparing all scenes for uninterrupted playback…')
+      return
+    }
     if(activeId&&!ready[activeId]){setError('Current scene is still loading');return}
     setError('')
+    if(position.current>=timeline.durationMs-1){
+      position.current=0
+      setTimeMs(0)
+      engine.seek(0)
+      setSeekEpoch(n=>n+1)
+    }
     try{
       // Unlock during the click; browsers disallow asynchronous autoplay.
       const unlocked=engine.unlock()
@@ -204,7 +216,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       setError(e instanceof Error?e.message:'Could not start soundtrack')
       engine.pause()
     }
-  },[playing,pause,activeId,ready,rate])
+  },[playing,pause,activeId,ready,rate,timeline])
 
   useEffect(()=>{
     if(!playing)return
@@ -263,7 +275,10 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       c.startMs+':'+c.endMs+':'+c.text.trim(),c.text,
     ])).values()].join('\n'):''
   const showing=visualsAt(timeline,timeMs)
-  const sessionScenes=[...new Set(nextScenes)].filter(id=>sessions[id])
+  // Keep all signed scene frames mounted for short projects. Previously S3 was
+  // inserted only as playback approached S2, causing first-play buffering.
+  const sessionScenes=timeline.visuals.filter(v=>v.type==='scene').map(v=>v.sceneId!).filter((id,i,all)=>
+    Boolean(id&&sessions[id])&&all.indexOf(id)===i)
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
     <div className="flex items-center justify-between gap-2 text-xs">
@@ -286,7 +301,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         const visible=id===displayedScene&&ready[id]&&Boolean(drawn[id])
         return <iframe key={sessions[id]!.sceneUrl} title={'Editable scene '+id}
           ref={el=>{frames.current[id]=el}}
-          src={sessions[id]!.sceneUrl} sandbox="allow-scripts" referrerPolicy="no-referrer"
+          src={sessions[id]!.sceneUrl} loading="eager" sandbox="allow-scripts" referrerPolicy="no-referrer"
           className="absolute inset-0 size-full border-0"
           style={{zIndex:(item?.layer??0)+1,opacity:visible?1:0,pointerEvents:'none'}}/>
       })}
@@ -301,7 +316,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     <div className="flex items-center gap-2">
       <button type="button" onClick={()=>void togglePlay()}
         className="rounded-md border border-input px-3 py-1 text-xs"
-        disabled={Boolean(activeId&&!ready[activeId])}>
+        disabled={Boolean(activeId&&!ready[activeId]) || (sessionScenes.length<=3 && sessionScenes.some(id=>!ready[id]))}>
         {playing?'Pause':'Play'}
       </button>
       <input aria-label="Scrub complete timeline" type="range" className="min-w-0 flex-1"
