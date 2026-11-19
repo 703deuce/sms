@@ -299,6 +299,17 @@ export async function requireBotJob(id: string, request: Request) {
   // renew its lease so the sweep never re-dispatches a live creative job.
   if (coordinatorEnabled() && job.leaseOwner && !isDone(job.status))
     await renewCreativeLease(job.id, job.leaseOwner, job.leaseExpiresAt).catch(() => undefined)
+  // A detached, job-token-authenticated Modal worker needs lease survival even
+  // under pull-queue mode. Limit renewal to the current, unexpired owner;
+  // never permit a stale token to reclaim an expired or reassigned lease.
+  if (pullProducerQueueEnabled() && job.leaseOwner && !isDone(job.status)) {
+    await db().motionStudioAgentJob.updateMany({
+      where:{id:job.id,leaseOwner:job.leaseOwner,
+        leaseExpiresAt:{gt:new Date()},
+        status:{in:['queued','dispatched','running','dispatching']}},
+      data:{leaseExpiresAt:new Date(Date.now()+5*60_000)},
+    })
+  }
   return await expireStaleQuestion(job)
 }
 
