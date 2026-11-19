@@ -23,10 +23,11 @@ function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
  * This component is intentionally renderer-neutral: ordinary user footage and
  * AI-generated scenes are two kinds of visual item on the SAME timeline.
  */
-export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overrides,
+export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overrides,previewVideoUrl,
   scenePatch={},onSceneChange,overlay}:{
     timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
     assetUrls:Record<string,string>;theme:Record<string,unknown>;
+    previewVideoUrl?:string|null;
     overrides:Record<string,unknown>;
     scenePatch?:Record<string,Record<string,unknown>>;
     onSceneChange?:(sceneId:string)=>void
@@ -308,10 +309,15 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
           className="absolute inset-0 size-full border-0"
           style={{zIndex:(item?.layer??0)+1,opacity:visible?1:0,pointerEvents:'none'}}/>
       })}
+      {previewVideoUrl&&activeId&&!drawn[activeId]?
+        <video key={previewVideoUrl} src={previewVideoUrl} autoPlay muted playsInline loop
+          preload="auto" aria-label="Rendered preview while editable scenes load"
+          className="pointer-events-none absolute inset-0 size-full object-contain"
+          style={{zIndex:30}}/>:null}
       {overlay}
       {captionText?<div aria-label="Preview captions" className="pointer-events-none absolute inset-x-3 bottom-[8%] z-50 whitespace-pre-line text-center text-lg font-extrabold text-white drop-shadow-[0_2px_3px_black]">
         {captionText}</div>:null}
-      {activeId&&!ready[activeId]&&!displayedScene?
+      {activeId&&!ready[activeId]&&!displayedScene&&!previewVideoUrl?
         <div className="pointer-events-none absolute inset-0 z-40 grid place-items-center bg-black/75 text-xs text-white">
           Loading editable scene…
         </div>:null}
