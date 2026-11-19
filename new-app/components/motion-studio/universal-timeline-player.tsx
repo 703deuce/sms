@@ -133,7 +133,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
               iframeElapsedMs:Math.round(local),parentElapsedMs:Math.round(performance.now()-loadStart.current),
               resourceCount:message.count,maxResourceMs:message.maxMs})
             reportMotionStudioLoad('iframe-'+message.stage,performance.now()-loadStart.current,
-              local,projectId,sceneId)
+              local,projectId,sceneId,{count:message.count,maxMs:message.maxMs})
           }
         }
         return
