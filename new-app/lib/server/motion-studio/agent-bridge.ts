@@ -362,7 +362,7 @@ export async function botGetAssignment(id: string, request: Request) {
       review: 'Inspect the first, busiest and last frames and adjacent cuts in the approved master and confirm the editable scene structure reproduces them.',
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
       delivery: 'After approval, upload and approveMaster the MP4 without completing the job. Upload the immutable editable project in the background, publish the producer document and transovo.live-project/1 with registered assets, then complete with delivery:live and portableVersionId. Keep the already-approved MP4 as the original preview.',
-      heartbeat: 'Do not schedule agent-level heartbeats or periodic pings. Every job-token call renews the lease, and publish-editable.mjs and the render runner ping the checkpoint themselves while they run.',
+      heartbeat: 'The detached editable-delivery worker sends /checkpoint while uploading and retrying. Resume unfinished uploads before starting the next job. The job-token lease must remain valid; after an expired producer lease, obtain a new assignment rather than reusing an expired token.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
     title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
