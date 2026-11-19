@@ -352,7 +352,8 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player"
     className={embeddedCanvas?'absolute inset-0 overflow-hidden':'flex flex-col gap-2'}
-    style={embeddedCanvas&&!firstFrameRendered?{opacity:0,pointerEvents:'none'}:undefined}>
+    style={embeddedCanvas&&(!firstFrameRendered||!activeId||!ready[activeId]||!drawn[activeId])
+      ?{opacity:0,pointerEvents:'none'}:undefined}>
     {!embeddedCanvas?<div className="flex items-center justify-between gap-2 text-xs">
       <span className="font-medium">Live project playback</span>
       <span className="text-muted-foreground">Scene code + footage + audio + captions</span>
