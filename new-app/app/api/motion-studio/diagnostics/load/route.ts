@@ -37,12 +37,18 @@ export async function POST(request:Request){
   const navStart=typeof x.navigationStartEpochMs==='number'&&Number.isFinite(x.navigationStartEpochMs)
     ?Math.round(x.navigationStartEpochMs):null
   const projectId=typeof x.projectId==='string'&&/^msp_[A-Za-z0-9]{8,64}$/.test(x.projectId)?x.projectId:'unknown'
+  const count=typeof x.count==='number'&&Number.isSafeInteger(x.count)?
+    Math.max(0,Math.min(10000,x.count)):null
+  const maxMs=typeof x.maxMs==='number'&&Number.isFinite(x.maxMs)?
+    Math.max(0,Math.min(120000,Math.round(x.maxMs))):null
   const sceneId=typeof x.sceneId==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(x.sceneId)?x.sceneId:undefined
   console.info('[motion-studio:load]',{
     kind:'browser-milestone',projectId,...(sceneId?{sceneId}:{}),stage,elapsedMs:ms,
     ...(navMs!==null?{navigationElapsedMs:navMs}:{}),
     ...(navStart!==null?{navigationStartEpochMs:navStart}:{}),
     ...(requestMs!==null?{requestMs}:{}),
+    ...(count!==null?{count}:{}),
+    ...(maxMs!==null?{maxMs}:{}),
   })
   return new NextResponse(null,{status:204})
 }
