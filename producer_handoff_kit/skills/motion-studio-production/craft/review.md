@@ -2,7 +2,7 @@
 
 Rhythm only exists in real time, and we cannot watch real-time playback, so we reconstruct it from cut timings, frame strips and audio. Pros watch at full speed, then with the sound off (eyes and picture logic), then with the picture off (the rhythm of speech, music and breath), and come back with fresh eyes (Walker, [Frame.io](https://blog.frame.io/2021/10/27/art-of-the-cut-dune-joe-walker/); Hamilton, [Slashfilm](https://www.slashfilm.com/1095254/top-gun-maverick-editor-eddie-hamilton-felt-the-weight-of-expectations-exclusive-interview/)).
 
-**Live rules that frame this file:** no rendering until everything is approved. Creative review is on browser stills at 480p (full size only for a frame you can't judge at 480p). The final watch is live browser playback on a live job, or the single master otherwise (`../SKILL.md`, `../qa.md`). Nothing below adds an encode before approval. The audio passes use the working voice/mix stems, which the sound stage builds anyway.
+**Live rules that frame this file:** no rendering until everything is approved. Creative review is on browser stills at 480p (full size only for a frame you can't judge at 480p). The final watch is on the single master, rendered once after approval on every job, live or not (`../SKILL.md`, `../qa.md`). Nothing below adds an encode before approval. The audio passes use the working voice/mix stems, which the sound stage builds anyway.
 
 **Be honest about how we see.** We perceive through sampled frames plus continuous audio, not continuous motion. So sample densely where it matters (cuts, turns, moves), use the audio as a continuous signal, and never call a section "fine" from three stills.
 
