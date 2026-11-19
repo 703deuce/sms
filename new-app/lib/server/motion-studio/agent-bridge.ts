@@ -1123,8 +1123,33 @@ export async function botRecordUsage(id: string, request: Request, raw: unknown)
       throw new MotionStudioError('INVALID','Invalid usage item.',400)
     return {provider,units,usd}
   })
-  const updated = await db().motionStudioAgentJob.update({ where:{id},data:{usage:toPrismaJson({
-    items,recordedAt:new Date().toISOString()
-  }) } })
+  // A callback may be retried after a network timeout. One AiUsage record per
+  // Motion Studio job means retries cannot double-charge the shared Modal cap.
+  const modalItems=items.filter(item=>item.provider==='modal')
+  const modalMicros=Math.round(modalItems.reduce((n,item)=>n+item.usd,0)*1_000_000)
+  if(!Number.isSafeInteger(modalMicros)||modalMicros>2_000_000_000)
+    throw new MotionStudioError('INVALID','Usage exceeds safe bounds.',400)
+  const updated=await db().$transaction(async tx=>{
+    await tx.$queryRaw`SELECT "id" FROM "MotionStudioAgentJob" WHERE "id"=${id} FOR UPDATE`
+    const current=await tx.motionStudioAgentJob.findUniqueOrThrow({where:{id}})
+    // Do not turn a stale runner's usage into another job's bill.
+    if(current.tokenHash!==job.tokenHash||current.workspaceId!==job.workspaceId)
+      throw new MotionStudioError('CONFLICT','Job assignment changed.',409)
+    if(modalItems.length){
+      const prior=await tx.aiUsage.findFirst({
+        where:{provider:'modal',generationId:id,workspaceId:job.workspaceId},
+        orderBy:{createdAt:'desc'},select:{id:true},
+      })
+      const record={workspaceId:job.workspaceId,projectId:job.projectId,
+        generationId:id,provider:'modal',model:'motion-studio-render',
+        units:modalItems.reduce((n,item)=>n+item.units,0),
+        unitType:'render_units',costUsdMicros:modalMicros}
+      if(prior)await tx.aiUsage.update({where:{id:prior.id},data:record})
+      else await tx.aiUsage.create({data:record})
+    }
+    return tx.motionStudioAgentJob.update({where:{id},data:{usage:toPrismaJson({
+      items,recordedAt:new Date().toISOString()
+    })}})
+  })
   return {jobId:updated.id,stored:true}
 }
