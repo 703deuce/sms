@@ -686,7 +686,7 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
         a.filename!=='editor-base.mp4'&&a.key===current.resultKey)
       const masterKey=approved?.key??null
       const project=await tx.motionStudioProject.findUniqueOrThrow({
-        where:{id:job.projectId},select:{exportInfo:true},
+        where:{id:job.projectId},select:{exportInfo:true,clipProjectId:true},
       })
       const updated=await tx.motionStudioAgentJob.update({
         where:{id},data:{status:'complete',phase:'complete',progress:100,
@@ -701,8 +701,30 @@ export async function botFinish(id: string, request: Request, raw: unknown) {
           durationMs,masterKey,smallKey:masterKey,source:'transovo_agent',
           agentJobId:id,storageDriver:masterKey?storageDriverName():undefined}),
       }})
+      // Motion Studio's actual Compact Editor already owns a placeholder
+      // ClipProject and ClipUpload. Attach the approved master as its canvas,
+      // retaining the project and editor identities (no new editor/page).
+      if(approved&&project.clipProjectId){
+        const clipProject=await tx.clipProject.findFirst({
+          where:{id:project.clipProjectId,workspaceId:job.workspaceId},
+          select:{uploadId:true},
+        })
+        if(clipProject?.uploadId){
+          await tx.clipUpload.updateMany({
+            where:{id:clipProject.uploadId,workspaceId:job.workspaceId},
+            data:{key:approved.key,bytes:BigInt(approved.bytes),mime:'video/mp4',
+              filename:approved.filename,durationMs,status:'READY',
+              storageDriver:storageDriverName()},
+          })
+        }
+        await tx.clipProject.updateMany({
+          where:{id:project.clipProjectId,workspaceId:job.workspaceId},
+          data:{status:'READY',rangeEndMs:durationMs,
+            proxyKey:approved.key,progress:100},
+        })
+      }
       await tx.studioActivityEvent.create({data:{projectId:job.projectId,
-        stage:'review',kind:'stage',message:'Editable video ready for live playback.'}})
+        stage:'review',kind:'stage',message:'Editable video ready in Compact Editor.'}})
       return updated
     })
     await db().studioActivityEvent.create({data:{projectId:job.projectId,
