@@ -71,6 +71,8 @@ export function MotionStudioCompactLayerEditor({projectId,outputMs,onSeek}:{
   const overrides=obj(obj(saved.elements)[current?.elementId||''])
   const editable=Object.entries(element?.properties||{}).filter(([,spec])=>
     spec.tier==='live_editable'||spec.tier==='render_editable')
+  const graph=scene?.manifest.motionTree
+  const timedNode=graph?.nodes.find(node=>node.id===current?.elementId&&node.id!==graph.rootId)
   const save=async()=>{
     if(!version||!current||!Object.keys(patch).length)return
     setSaving(true);setError('');setNotice('')
@@ -125,7 +127,20 @@ export function MotionStudioCompactLayerEditor({projectId,outputMs,onSeek}:{
             onChange={v=>{setPatch(old=>({...old,[key]:v}));setNotice('')}}/>
         </label>)}
       </div>
-      {!editable.length?<p className="text-xs text-muted-foreground">This layer has no directly editable properties.</p>:null}
+      {timedNode?<div className="grid gap-2 sm:grid-cols-2">
+        {(['startMs','endMs'] as const).map(key=><label key={key} className="flex min-w-0 flex-col gap-1 text-[11px]">
+          <span>{key==='startMs'?'Layer start (scene ms)':'Layer end (scene ms)'}</span>
+          <input type="number" min={0} max={graph?.durationMs} step={1}
+            className="h-8 w-full rounded border border-border bg-background px-2 text-xs"
+            value={typeof patch[key]==='number'?patch[key] as number:
+              typeof overrides[key]==='number'?overrides[key] as number:
+              (key==='startMs'?timedNode.startMs??0:timedNode.endMs??graph?.durationMs??0)}
+            onChange={e=>{
+              if(e.target.value!=='')setPatch(old=>({...old,[key]:Math.round(Number(e.target.value))}))
+            }}/>
+        </label>)}
+      </div>:null}
+      {!editable.length&&!timedNode?<p className="text-xs text-muted-foreground">This layer has no directly editable properties.</p>:null}
       <div className="flex items-center gap-2">
         <button type="button" className="rounded bg-primary px-3 py-1.5 text-xs text-primary-foreground disabled:opacity-50"
           disabled={!Object.keys(patch).length||saving} onClick={()=>void save()}>
