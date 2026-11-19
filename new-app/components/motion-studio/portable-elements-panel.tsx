@@ -35,6 +35,12 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   const [masterUrl,setMasterUrl]=useState<string|null>(null)
   const savingRef=useRef(false)
   const revisionRef=useRef(0)
+  const mountReported=useRef(false)
+  useEffect(()=>{
+    if(mountReported.current)return
+    mountReported.current=true
+    reportMotionStudioLoad('project-mounted',0,undefined,projectId)
+  },[projectId])
   const load=useCallback(async()=>{
     try {
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
