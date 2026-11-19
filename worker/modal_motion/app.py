@@ -84,7 +84,8 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         cost_key="MOTION_GPU_USD_PER_SECOND" if mode=="gpu" else "MOTION_CPU_USD_PER_SECOND"
         rate=float(os.environ.get(cost_key,"0"))
         if rate<=0:raise ValueError("An operator-approved Modal rate is required for cost tracking")
-        api(job_id,"POST","/usage",{"items":[{"provider":"modal",
+        api(job_id,"POST","/usage",{"usageId":"modal_"+mode+"_"+bundle_name,
+          "items":[{"provider":"modal",
           "units":work_seconds,"usd":round(work_seconds*rate,6)}]})
         summary={"jobId":job_id,"mode":mode,"segments":len(results),
           "retries":retry_count,"masterBytes":joined["masterBytes"],
@@ -118,8 +119,9 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         reason=str(error)[:800]
         try:api(job_id,"POST","/render-status",{"stage":"qa_fail","reason":reason})
         except Exception:pass
-        try:api(job_id,"POST","/complete",{"status":"failed"})
-        except Exception:pass
+        if not benchmark_only:
+            try:api(job_id,"POST","/complete",{"status":"failed"})
+            except Exception:pass
         raise RuntimeError("Motion Studio Modal render failed; see authenticated render status")
     finally:
         stop.set()
