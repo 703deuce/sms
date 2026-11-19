@@ -8,6 +8,19 @@ import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-time
 import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 
 type SessionResponse={sessions:BrowserSceneSession[];mediaUrls?:Record<string,string>}
+function initialSessions(data:SessionResponse|null|undefined):Record<string,BrowserSceneSession>{
+  if(!data||typeof window==='undefined')return {}
+  const safe:Record<string,BrowserSceneSession>={}
+  for(const item of data.sessions){
+    try{
+      const url=new URL(item.sceneUrl)
+      if(url.origin!==window.location.origin||!url.pathname.startsWith('/api/motion-studio/_scene/'))continue
+      url.searchParams.set('host',window.location.origin)
+      safe[item.sceneId]={...item,sceneUrl:url.toString()}
+    }catch{}
+  }
+  return safe
+}
 const sessionRequests=new Map<string,{promise:Promise<SessionResponse>;expiresAt:number}>()
 function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]):Promise<SessionResponse>{
   const key=JSON.stringify([projectId,versionId,sceneIds])
@@ -42,13 +55,14 @@ function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]
  * loaded in windows of three, not one network call per source frame.
  */
 export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overrides,
-  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange,previewVideoUrl=null}:{
+  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange,previewVideoUrl=null,initialPlayback=null}:{
     projectId:string;versionId:string;manifest:MsPortableManifest;
     theme:Record<string,unknown>;overrides:Record<string,unknown>;
     scenePatch?:Record<string,Record<string,unknown>>;
     onSceneChange?:(sceneId:string)=>void
     selectedLayer?:string
     previewVideoUrl?:string|null
+    initialPlayback?:SessionResponse|null
     onSelectLayer?:(id:string)=>void
     onLayerChange?:(elementId:string,key:string,value:number)=>void
   }){
@@ -57,13 +71,19 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   const sceneIds=useMemo(()=>[...new Set(timeline.visuals.filter(v=>v.type==='scene')
     .map(v=>v.sceneId).filter((x):x is string=>Boolean(x)))],[timeline])
   const [active,setActive]=useState(sceneIds[0]||'')
-  const [sessions,setSessions]=useState<Record<string,BrowserSceneSession>>({})
+  const [sessions,setSessions]=useState<Record<string,BrowserSceneSession>>(()=>initialSessions(initialPlayback))
   const [failure,setFailure]=useState('')
-  const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({})
+  const [mediaUrls,setMediaUrls]=useState<Record<string,string>>(()=>initialPlayback?.mediaUrls||{})
   const index=Math.max(0,sceneIds.indexOf(active))
   const shortFilm=sceneIds.length<=3
-  useEffect(()=>{setSessions({});setMediaUrls({});setActive(sceneIds[0]||'');setFailure('')},
-    [versionId,sceneIds])
+  useEffect(()=>{
+    setSessions(initialSessions(initialPlayback))
+    setMediaUrls(initialPlayback?.mediaUrls||{})
+    setActive(sceneIds[0]||'');setFailure('')
+  // Initial signed sessions are fixed for this immutable version; refreshing
+  // props must not discard sessions fetched after bootstrap.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[versionId,sceneIds])
   useEffect(()=>{
     const windowIds=shortFilm?sceneIds:sceneIds.slice(index,index+3)
     const ids=windowIds.filter(id=>{
