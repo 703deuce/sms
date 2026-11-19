@@ -371,7 +371,7 @@ export async function sceneFileResponse(args:{
         })})).then(function(){report('images-ready',{count:images.length})});
       },{once:true});
     })();</script>`
-    const head=/<head(?:\\s[^>]*)?>/i
+    const head=/<head(?:\s[^>]*)?>/i
     if(head.test(html))responseBytes=Buffer.from(html.replace(head,match=>match+snippet),'utf8')
     else console.info('[motion-studio:load]',{kind:'index-instrumentation',status:'missing-head',projectId})
   }
