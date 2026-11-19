@@ -1257,20 +1257,16 @@ export async function getTimeline(workspaceId: string, id: string) {
 
 
 /**
- * Route completed live projects to the existing Compact Editor, never a second
- * standalone editor. The native editable portable version stays authoritative.
+ * Completed live projects open a watch-only preview. Editing is explicitly
+ * entered through the existing Compact Editor, not a separate live editor.
  */
-export async function projectOpenTarget(workspaceId: string, id: string): Promise<'compact' | 'workspace'> {
+export async function projectOpenTarget(workspaceId: string, id: string): Promise<'live' | 'workspace'> {
   const row = await db().motionStudioProject.findFirst({ where: { id, workspaceId }, select: { status: true, exportInfo: true } })
   if (!row) return 'workspace'
   const ex = J(row.exportInfo)
   if (ex.delivery !== 'live' || !['review', 'complete'].includes(row.status)) return 'workspace'
-  // The existing Clip Editor needs its original MP4 as the source canvas.
-  // Historical masterless live jobs still use their working native scene
-  // player in the workspace, rather than entering a blank Compact canvas.
-  if(typeof ex.masterKey!=='string'||!ex.masterKey)return 'workspace'
   const committed = await db().motionStudioPortableVersion.findFirst({
     where: { workspaceId, projectId: id, status: 'committed' }, select: { id: true },
   })
-  return committed ? 'compact' : 'workspace'
+  return committed ? 'live' : 'workspace'
 }
