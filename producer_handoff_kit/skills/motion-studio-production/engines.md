@@ -219,3 +219,7 @@ Every scene is delivered as its own clip, so the editor can place it on a track:
 | Image/video generation | `KIE_API_KEY`, `REPLICATE_API_TOKEN` | optional, priced and logged first |
 
 None of these variables is set in this box's default shell environment (checked 15 Nov 2026). The production bot must be given its keys through its own vault or env (Rick configures that). Check for a key by testing whether it is set (`[ -n "$ELEVENLABS_API_KEY" ]`), never by printing it. Free paths that need no key: edge-tts scratch voice, Wikimedia Commons, yt-dlp, synthesised SFX and music.
+
+## Final render path (Rick, Nov 19)
+
+The `render` / `record` / `--out *.tmp.mp4` commands above are the **box path**: used for plates of non-browser engines, for jobs without `delivery.mode:"live"` and as the fallback. Live film jobs are rendered on **Modal CPU** from one composed browser page (`/workspace/motion_kit/modal/`, SKILL.md section 8, `delivery.md` "Modal render"): capture is software GL, 2D canvas/DOM is proven, GPU only helps real 3D/WebGL scenes (Open 3D Skills / three.js) and must measurably help before it is used. A non-browser engine's approved plate still renders once on the box as media for the page.

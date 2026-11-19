@@ -2,9 +2,9 @@
 
 No rendering until everything is approved (Rick, Nov 18). **Creative review (section 2) is done in the browser on still screenshots of each scene (480p review size; full size only for a frame that cannot be judged at 480p) while it is being built**, never on contact sheets or frames decoded from a rendered video. Valid code, a schema that validates, or a render that exits 0 is *not* proof. The Motion Lab produced films that passed every contract check and still looked like slideshows.
 
-After every scene is approved, render the master once, watch it in full, and run the scripted technical report (section 1) on that single final render. Save everything under `$J/qa/`, and put a summary in `project.json` → `qa`.
+After every scene is approved: **live jobs on Modal (Rick, Nov 19): Modal's automatic QA on its output is the final check** (decoded frame count equals the plan, duration, audio present, no black gap over 0.6 s, integrated loudness -16.5 to -13.5 LUFS; any failure stops the job with a reason in `render-status`), with no local render and no full watch. Jobs rendered on the box (non-live jobs, clip jobs, the Modal fallback): render the master once, watch it in full, and run the scripted technical report (section 1) on that single final render. Save everything under `$J/qa/`, and put a summary in `project.json` → `qa`.
 
-## 1. Automated technical report (once, on the final master)
+## 1. Automated technical report (once, on the final master; box-rendered masters only, Modal films use Modal's QA)
 
 ```bash
 Q=scripts/qa_report.py
@@ -55,7 +55,7 @@ Take still screenshots of each scene in the browser at exact times at 480p revie
 
 Also look at a **phone-size copy** (480 px wide) of the key stills, since many customers watch on phones.
 
-After every scene is approved and the master is rendered once, watch that master in full (pacing and sound across the whole cut).
+After every scene is approved and a box-rendered master exists, watch that master in full (pacing and sound across the whole cut). Modal films skip this: the stills review plus Modal's QA is the check.
 
 ### The checklist, with the failures it catches
 
@@ -121,7 +121,7 @@ Each item below happened in a real render (Motion Lab stage 1 runs in `/workspac
 
 1. List every failure as one line in `$J/qa/fixes.md`: element, symptom, cause found in the code, fix.
 2. Fix the cause in that element's source. Batch every fix from one look (optionally run `scene_lint.mjs` as a hint), then re-check stills once.
-3. Before approval: re-check that scene's exposing stills and the frames around them in the browser, plus both sides of any touched cut; never frames or scenes the fix did not touch; no re-renders. After the final render: if the watch or the report finds a problem, fix the scene in the browser, re-check its stills, and render the master again.
+3. Before approval: re-check that scene's exposing stills and the frames around them in the browser, plus both sides of any touched cut; never frames or scenes the fix did not touch; no re-renders. After the final render (box) or a Modal QA failure: fix the scene in the browser, re-check its stills, and render the master again (Modal: only with Rick's go-ahead, as a new bundle name).
 4. No round cap. The final render should already be right because everything was fixed in the browser first. Never ship a known-broken film; if a problem truly cannot be fixed, complete the job as `failed` with an honest message.
 5. When a watch-model or vision review and the measurements disagree, **the frames and measurements decide**.
 
