@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import traceback
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -142,7 +143,37 @@ def progress_base_urls() -> list[str]:
     return urls
 
 
-def _post_progress_once(job_id: str, payload: dict, base_url: str) -> None:
+# Progress callbacks are best-effort status pings. They must never block or
+# fail the job: the worker writes terminal job state itself (clip_jobs), and a
+# web handler that is slow (or waiting on a row lock) must not hold the slot.
+# Before this, terminal posts used a 120s read timeout x 60 attempts (~2h).
+_PROGRESS_DEFAULT_TIMEOUT_SEC = 10.0
+_PROGRESS_DEFAULT_ATTEMPTS_TERMINAL = 4
+_PROGRESS_DEFAULT_ATTEMPTS = 2
+_PROGRESS_DEFAULT_BACKOFF_SEC = 0.5
+_PROGRESS_BACKOFF_CAP_SEC = 4.0
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = (os.environ.get(name) or "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _progress_timeout_sec() -> float:
+    return max(1.0, _env_float("WORKER_PROGRESS_TIMEOUT_SEC", _PROGRESS_DEFAULT_TIMEOUT_SEC))
+
+
+def _progress_max_attempts(*, terminal: bool) -> int:
+    default = _PROGRESS_DEFAULT_ATTEMPTS_TERMINAL if terminal else _PROGRESS_DEFAULT_ATTEMPTS
+    return max(1, int(_env_float("WORKER_PROGRESS_MAX_ATTEMPTS", float(default))))
+
+
+def _post_progress_once(job_id: str, payload: dict, base_url: str, timeout: float | None = None) -> None:
     secret = env("WORKER_SHARED_SECRET")
     body = json.dumps(payload)
     req = urllib.request.Request(
@@ -151,8 +182,7 @@ def _post_progress_once(job_id: str, payload: dict, base_url: str) -> None:
         headers={"Content-Type": "application/json", "x-worker-signature": sign_body(secret, body)},
         method="POST",
     )
-    timeout = int(os.environ.get("WORKER_PROGRESS_TIMEOUT_SEC", "120"))
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout if timeout is not None else _progress_timeout_sec()) as resp:
         resp.read()
 
 
@@ -162,54 +192,110 @@ def _progress_retryable(exc: BaseException) -> bool:
     return isinstance(exc, (urllib.error.URLError, TimeoutError, ConnectionError, OSError))
 
 
+def _record_terminal_status_fallback(job_id: str, payload: dict) -> None:
+    """A terminal progress post failed: write the job's terminal status ourselves.
+
+    Only touches a clip_jobs row this worker slot still owns and that is still
+    RUNNING, so it never overrides web state, a cancel or a newer attempt.
+    """
+    from clips_worker.job_reliability import bound_job_connection
+    from clips_worker.worker_identity import worker_instance_id
+
+    status = payload.get("jobStatus")
+    if status not in ("DONE", "FAILED"):
+        return
+    conn = bound_job_connection(job_id)
+    if conn is None:
+        log(f"[clipper:progress] terminal_fallback_skipped job={job_id} status={status} reason=no_bound_connection")
+        return
+    error = payload.get("error") if status == "FAILED" else None
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE clip_jobs
+                SET status = %s,
+                    "finishedAt" = NOW(),
+                    error = COALESCE(%s, error)
+                WHERE id = %s AND status = 'RUNNING' AND "lockedBy" = %s
+                """,
+                (status, (str(error)[:4000] if error else None), job_id, worker_instance_id()),
+            )
+            updated = cur.rowcount
+        conn.commit()
+        log(f"[clipper:progress] terminal_fallback_written job={job_id} status={status} rows={updated}")
+    except Exception as exc:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        log(f"[clipper:progress] terminal_fallback_failed job={job_id} status={status} exception={type(exc).__name__}")
+
+
 def post_progress(job_id: str, payload: dict, *, must_succeed: bool = False) -> None:
+    """Best-effort progress callback. Never raises on HTTP/network failure.
+
+    ``must_succeed`` (and terminal jobStatus DONE/FAILED) only buys a few more
+    short attempts; on give-up the terminal status is written via the worker's
+    own DB connection instead of failing or stranding the job.
+    """
     from clips_worker.job_reliability import commit_before_progress
 
     stage = str(payload.get("stage") or payload.get("projectStatus") or "unknown")
     # All worker callback variants funnel through here. Commit any SQL writes
     # before the first network attempt, including terminal callbacks and retries.
+    # (A failed commit still raises: that is a DB failure, not a callback failure.)
     commit_before_progress(job_id, stage)
     log(f"[clipper:progress] http_send_begin job={job_id} stage={stage[:120]}")
     terminal = payload.get("jobStatus") in ("DONE", "FAILED")
-    must = must_succeed or terminal
     if "workerId" not in payload:
         # FV4a: lets the web ignore heartbeats from a copy whose job was requeued / re-claimed.
         from clips_worker.worker_identity import worker_instance_id
 
         payload = {**payload, "workerId": worker_instance_id()}
-    default_attempts = 60 if must else 4
-    max_attempts = int(os.environ.get("WORKER_PROGRESS_MAX_ATTEMPTS", str(default_attempts)))
+    max_attempts = _progress_max_attempts(terminal=bool(terminal or must_succeed))
     urls = progress_base_urls()
-    delay = float(os.environ.get("WORKER_PROGRESS_BACKOFF_SEC", "2"))
+    delay = _env_float("WORKER_PROGRESS_BACKOFF_SEC", _PROGRESS_DEFAULT_BACKOFF_SEC)
     last_err: BaseException | None = None
+    started = time.monotonic()
+
+    def _elapsed_ms() -> int:
+        return int((time.monotonic() - started) * 1000)
 
     for attempt in range(max_attempts):
         for base in urls:
             try:
                 _post_progress_once(job_id, payload, base)
-                log(f"[clipper:progress] http_send_ok job={job_id} stage={stage[:120]} attempt={attempt + 1}")
-                if attempt > 0:
-                    log(f"progress post ok job={job_id} after attempt={attempt + 1} base={base}")
+                log(
+                    f"[clipper:progress] http_send_ok job={job_id} stage={stage[:120]} "
+                    f"attempt={attempt + 1} latency_ms={_elapsed_ms()}"
+                )
                 return
             except Exception as exc:
                 last_err = exc
-                log(f"[clipper:progress] http_send_error job={job_id} stage={stage[:120]} attempt={attempt + 1} exception={type(exc).__name__}")
+                log(
+                    f"[clipper:progress] http_send_error job={job_id} stage={stage[:120]} "
+                    f"attempt={attempt + 1} exception={type(exc).__name__} latency_ms={_elapsed_ms()}"
+                )
                 if not _progress_retryable(exc):
-                    if must:
-                        raise
-                    log(f"progress post failed (continuing) job={job_id} base={base}: {exc}")
+                    log(f"progress post failed (continuing) job={job_id} exception={type(exc).__name__}")
+                    if terminal:
+                        _record_terminal_status_fallback(job_id, payload)
                     return
         if attempt < max_attempts - 1:
             log(
                 f"progress post retry job={job_id} attempt={attempt + 1}/{max_attempts} "
-                f"last={last_err!r} sleep={delay:.1f}s"
+                f"exception={type(last_err).__name__} sleep={delay:.1f}s"
             )
             time.sleep(delay)
-            delay = min(delay * 2, 45.0)
+            delay = min(delay * 2, _PROGRESS_BACKOFF_CAP_SEC)
 
-    if must:
-        raise RuntimeError(f"progress post failed after {max_attempts} attempts: {last_err}")
-    log(f"progress post gave up (non-fatal) job={job_id}: {last_err}")
+    log(
+        f"progress post gave up (non-fatal) job={job_id} attempts={max_attempts} "
+        f"exception={type(last_err).__name__} latency_ms={_elapsed_ms()}"
+    )
+    if terminal:
+        _record_terminal_status_fallback(job_id, payload)
 
 
 def post_progress_resilient(job_id: str, payload: dict) -> None:
@@ -460,11 +546,15 @@ def process_job(conn, job: dict) -> None:
                        WHERE id=%s""",
                     (project["id"],),
                 )
+            # Commit project + job terminal state BEFORE the HTTP callback (same
+            # pattern as captions-only above). The web progress handler updates the
+            # same clip_projects row; holding the row lock while waiting on it was
+            # the worker<->web deadlock (job_b10ed571, 2026-11-10).
+            _mark_job_done(conn, job['id'])
             post_progress(job['id'], {
                 'projectStatus': 'FINDING_CLIPS', 'stage': 'finding_clips', 'progress': 50,
                 'transcriptWords': words, 'jobStatus': 'DONE', 'error': None,
             })
-            _mark_job_done(conn, job['id'])
             log(f"finished agent-only job={job['id']} (classic picker skipped; awaiting unified run)")
             return
 
