@@ -5,6 +5,7 @@ import {LiveCanvasLayerOverlay} from './live-canvas-layer-overlay'
 import {PlayerErrorBoundary} from './player-error-boundary'
 import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-timeline-player'
+import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 
 type SessionResponse={sessions:BrowserSceneSession[];mediaUrls?:Record<string,string>}
 const sessionRequests=new Map<string,{promise:Promise<SessionResponse>;expiresAt:number}>()
@@ -63,8 +64,10 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     let alive=true
     const requestedAt=performance.now()
     console.info('[motion-studio:browser-load]',{stage:'session-request',sceneCount:ids.length,elapsedMs:Math.round(requestedAt-loadStart.current)})
+    reportMotionStudioLoad('session-request',requestedAt-loadStart.current)
     sceneSessionRequest(projectId,versionId,ids).then(data=>{
       console.info('[motion-studio:browser-load]',{stage:'session-response',sceneCount:ids.length,requestMs:Math.round(performance.now()-requestedAt),elapsedMs:Math.round(performance.now()-loadStart.current)})
+      reportMotionStudioLoad('session-response',performance.now()-loadStart.current,performance.now()-requestedAt)
       if(!alive)return
       const safe=data.sessions.filter(item=>{
         try{
