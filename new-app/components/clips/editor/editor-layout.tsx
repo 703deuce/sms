@@ -99,6 +99,7 @@ export function EditorLayout(props: {
   unifiedTimelineView?: 'script' | 'timeline'
   unifiedTimelineHidden?: boolean
   unifiedTimelineCollapsed?: boolean
+  unifiedCompactTimelineHeightPx?: number
   onUnifiedTimelineFocusChange?: (focused: boolean) => void
   onUnifiedTimelineViewChange?: (view: 'script' | 'timeline') => void
 }) {
@@ -161,6 +162,7 @@ export function EditorLayout(props: {
         timelineView={props.unifiedTimelineView}
         timelineHidden={props.unifiedTimelineHidden}
         timelineCollapsed={props.unifiedTimelineCollapsed}
+        compactTimelineHeightPx={props.unifiedCompactTimelineHeightPx}
         onFocusChange={props.onUnifiedTimelineFocusChange}
         onTimelineViewChange={props.onUnifiedTimelineViewChange}
         inspectorWidthPx={panelWidthPx ?? 360}
