@@ -63,13 +63,6 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     ? activeId:lastDrawnScene.current
   const timelineRef=useRef(timeline)
   timelineRef.current=timeline
-  const nextScenes=useMemo(()=>{
-    const now=timeMs
-    const scenes=timeline.visuals.filter(item=>item.type==='scene')
-    const previous=scenes.filter(item=>item.startMs<=now).slice(-2)
-    const future=scenes.filter(item=>item.startMs>now).slice(0,1)
-    return [...previous,...future].map(v=>v.sceneId!).filter(Boolean)
-  },[timeline,timeMs])
   const trackIds=useMemo(()=>[...new Set(timeline.audio.map(a=>a.trackId))],[timeline.audio])
 
   const send=useCallback((sceneId:string,method:string,...args:unknown[])=>{
