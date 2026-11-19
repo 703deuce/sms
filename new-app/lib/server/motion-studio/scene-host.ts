@@ -355,6 +355,18 @@ export async function sceneFileResponse(args:{
           maxMs:extra&&extra.maxMs||0},'*')}catch(e){}
       }
       report('runtime-start');
+      var longTasks=[];
+      try{
+        new PerformanceObserver(function(list){
+          list.getEntries().forEach(function(e){longTasks.push(e.duration)});
+        }).observe({type:'longtask',buffered:true});
+      }catch(e){}
+      function cpuSnapshot(label){
+        var max=longTasks.reduce(function(n,t){return Math.max(n,t)},0);
+        report(label,{count:longTasks.length,maxMs:Math.round(max)});
+      }
+      setTimeout(function(){cpuSnapshot('cpu-snapshot-6s')},6000);
+      setTimeout(function(){cpuSnapshot('cpu-snapshot-11s')},11000);
       window.addEventListener('message',function(e){
         if(e.data&&e.data.ms===1&&e.data.method==='init')report('runtime-init-message');
         if(e.data&&e.data.ms===1&&e.data.method==='seek')report('first-render-call');
