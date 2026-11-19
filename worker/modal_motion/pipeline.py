@@ -42,20 +42,31 @@ def ready_url(job_id,filename):
     r=api(job_id,"GET","/render-asset",params={"filename":filename})
     return r.get("url") if r.get("exists") else None
 
-def fetch_file(job_id,filename,target,required=True):
-    url=ready_url(job_id,filename)
-    if not url:
-        if required: raise ValueError("Required registered render artifact missing: "+filename)
-        return False
-    with SESSION.get(url,stream=True,timeout=(30,180),allow_redirects=False) as response:
-        response.raise_for_status()
-        with open(target,"wb") as out:
-            size=0
-            for chunk in response.iter_content(1024*1024):
-                size+=len(chunk)
-                if size>MAX_ZIP: raise ValueError("Artifact over size limit")
-                out.write(chunk)
-    return True
+TRANSIENT_STATUS={429,500,502,503,504}
+
+def fetch_file(job_id,filename,target,required=True,attempts=8):
+    """Storage (B2) can return 503/429 under parallel load: back off and retry."""
+    import random
+    for attempt in range(1,attempts+1):
+        url=ready_url(job_id,filename)
+        if not url:
+            if required: raise ValueError("Required registered render artifact missing: "+filename)
+            return False
+        try:
+            with SESSION.get(url,stream=True,timeout=(30,180),allow_redirects=False) as response:
+                if response.status_code in TRANSIENT_STATUS and attempt<attempts:
+                    raise ConnectionError("transient storage status "+str(response.status_code))
+                response.raise_for_status()
+                with open(target,"wb") as out:
+                    size=0
+                    for chunk in response.iter_content(1024*1024):
+                        size+=len(chunk)
+                        if size>MAX_ZIP: raise ValueError("Artifact over size limit")
+                        out.write(chunk)
+            return True
+        except (requests.ConnectionError,requests.Timeout,requests.exceptions.ChunkedEncodingError,ConnectionError):
+            if attempt==attempts: raise
+            time.sleep(min(60,2**attempt)+random.uniform(0,5))
 
 def extract_bundle(job_id,filename,directory):
     archive=os.path.join(directory,"bundle.zip")

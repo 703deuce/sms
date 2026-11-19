@@ -29,11 +29,11 @@ def bounded_segment(job_id,bundle_name,mode,start,end):
             if attempt==3:raise
             time.sleep(2*attempt)
 
-@app.function(image=image,timeout=5400,cpu=4,memory=8192)
+@app.function(image=image,timeout=5400,cpu=4,memory=8192,max_containers=24)
 def capture_cpu(job_id:str,bundle_name:str,start:int,end:int):
     return bounded_segment(job_id,bundle_name,"cpu",start,end)
 
-@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192)
+@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192,max_containers=24)
 def capture_gpu(job_id:str,bundle_name:str,start:int,end:int):
     return bounded_segment(job_id,bundle_name,"gpu",start,end)
 
