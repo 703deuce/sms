@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ClipperSurfaceErrorBoundary } from '@/components/clips/clipper-surface-error-boundary'
 import { EditorShell } from '@/components/clips/editor/editor-shell'
 import { MotionStudioEditorLanes } from '@/components/motion-studio/motion-studio-editor-lanes'
+import {MotionStudioCompactLiveCanvas} from '@/components/motion-studio/motion-studio-compact-live-canvas'
 import type { EditorPanelId } from './editor-rail'
 import type { EditorMedia } from '@/lib/server/clips/clip-detail'
 import { editorMediaLoadFallbacks, type EditorMediaUrls } from '@/lib/server/clips/editor-clip-media'
@@ -242,6 +243,9 @@ export function EditorClipShell(props: {
             ? (ctx) => <MotionStudioEditorLanes projectId={props.motionStudioProjectId as string} outputMs={ctx.outputMs} onSeek={ctx.seekOutput} />
             : undefined
         }
+        motionStudioCanvasSlot={props.motionStudioProjectId
+          ? (ctx)=><MotionStudioCompactLiveCanvas projectId={props.motionStudioProjectId as string} outputMs={ctx.outputMs}/>
+          :undefined}
       />
     </ClipperSurfaceErrorBoundary>
   )
