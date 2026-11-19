@@ -25,7 +25,7 @@ function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
  */
 export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,theme,overrides,previewVideoUrl,
   scenePatch={},onSceneChange,overlay}:{
-    projectId:string;timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
+    projectId?:string;timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
     assetUrls:Record<string,string>;theme:Record<string,unknown>;
     previewVideoUrl?:string|null;
     overrides:Record<string,unknown>;
@@ -291,14 +291,15 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
   const sessionScenes=[...new Set(allSceneIds)].filter(id=>Boolean(sessions[id])&&
     (firstFrameRendered||id===firstSceneId))
   // Report actual paint readiness, not just the iframe's draw acknowledgement.
+  const hasVisibleScene=Boolean(displayedScene)
   useEffect(()=>{
-    if(!displayedScene||!firstFrameRendered)return
+    if(!hasVisibleScene||!firstFrameRendered)return
     let cancelled=false
     const id=requestAnimationFrame(()=>{
       if(!cancelled)reportMotionStudioLoad('first-frame-visible',performance.now()-loadStart.current,undefined,projectId)
     })
     return()=>{cancelled=true;cancelAnimationFrame(id)}
-  },[firstFrameRendered,Boolean(displayedScene),projectId])
+  },[firstFrameRendered,hasVisibleScene,projectId])
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
     <div className="flex items-center justify-between gap-2 text-xs">
