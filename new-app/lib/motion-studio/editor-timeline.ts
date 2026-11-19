@@ -1,3 +1,5 @@
+import type {MsPortableManifest} from '@/lib/motion-studio/portable-contract'
+import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import { defaultEdits, type ClipEditsV2, type ClipMotionStudioExt } from '@/lib/clips/edits'
 import type { ClipAudioMusic } from '@/lib/clips/audio'
 import type { Marker } from '@/lib/clips/editor/markers'
@@ -106,4 +108,63 @@ export function buildMotionStudioEditorEdits(i: BuildEditorEditsInput): ClipEdit
     audio: { music, sfx: base.audio?.sfx ?? [], ...(base.audio?.studioSound !== undefined ? { studioSound: base.audio.studioSound } : {}) },
     motionStudio: i.patch.motionStudio,
   }
+}
+
+/**
+ * Live producer scenes belong to the existing Compact Editor timeline.
+ * Persist each original scene, footage layer and editable graphic as a
+ * time-aligned Motion Studio lane; never flatten native scene layers into
+ * another MP4 or invent media replacement uploads.
+ *
+ * The scene runtime remains responsible for executing JS-backed graphics.
+ * Native clip renderers must not try to draw those from opaque layer metadata.
+ */
+export function buildLiveMotionStudioEditorEdits(base:ClipEditsV2,manifest:MsPortableManifest,
+  projectId:string,timelineVersion:number):ClipEditsV2{
+  const live=normalizeUniversalTimeline(manifest)
+  const durationMs=Math.max(1,live.durationMs)
+  const grouped=new Map<string,ClipMotionStudioExt['tracks'][number]>()
+  const add=(trackId:string,kind:string,label:string,item:Record<string,unknown>)=>{
+    let track=grouped.get(trackId)
+    if(!track){track={id:trackId,kind,label,items:[]};grouped.set(trackId,track)}
+    track.items.push(item)
+  }
+  for(const v of live.visuals){
+    add(v.sceneId?'ms-scenes':'ms-footage','visual',v.sceneId?'Main Visuals':'Footage',
+      {id:v.id,sceneId:v.sceneId||null,assetId:v.assetId||null,startMs:v.startMs,
+       endMs:v.startMs+v.durationMs,sourceInMs:v.inMs,kind:v.type})
+  }
+  for(const layer of live.sceneLayers){
+    add('ms-layer-'+layer.trackId,layer.kind||'graphic',
+      layer.kind==='text'?'Text and titles':'Motion graphics',
+      {id:layer.id,sceneId:layer.sceneId,elementId:layer.elementId,
+       startMs:layer.startMs,endMs:layer.endMs,label:layer.label,
+       kind:layer.kind,editable:true})
+  }
+  for(const a of live.audio){
+    add('ms-audio-'+a.trackId,'audio','Audio / narration / music',
+      {id:a.id,assetId:a.assetId,startMs:a.startMs,endMs:a.startMs+a.durationMs,
+       sourceInMs:a.inMs,gainDb:a.gainDb,muted:a.muted})
+  }
+  for(const c of live.captions){
+    add('ms-captions','caption','Captions',
+      {id:c.id,startMs:c.startMs,endMs:c.endMs,text:c.text})
+  }
+  const ext:ClipMotionStudioExt={v:1,projectId,timelineVersion,durationMs,
+    fps:live.fps,tracks:[...grouped.values()],
+    segments:live.visuals.filter(v=>v.sceneId).map(v=>({
+      id:v.id,sceneId:v.sceneId,startMs:v.startMs,endMs:v.startMs+v.durationMs,
+    }))}
+  // Preserve Compact's own edits and user-selected music/overlays.
+  const previousSplits=new Set(sceneSplitsMs(base.motionStudio,Number.MAX_SAFE_INTEGER))
+  const ownSplits=(base.videoSplits??[]).filter(ms=>!previousSplits.has(ms)&&ms>0&&ms<durationMs)
+  const changes:ClipEditsV2={...base,motionStudio:ext,
+    videoSplits:[...new Set([...sceneSplitsMs(ext,durationMs),...ownSplits])].sort((a,b)=>a-b)}
+  // Only populate native caption lines when none were authored in Compact.
+  if(!base.captionLines?.length&&live.captions.length){
+    changes.captionLines=live.captions.map(c=>({
+      id:c.id,text:c.text,startMs:c.startMs,endMs:c.endMs,
+    }))
+  }
+  return changes
 }
