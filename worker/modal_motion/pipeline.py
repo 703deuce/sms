@@ -20,12 +20,21 @@ def job_url(job_id):
 def job_headers():
     return {"Authorization":"Bearer "+os.environ["MOTION_JOB_TOKEN"]}
 
-def api(job_id,method,path="",payload=None,params=None,timeout=120):
-    r=SESSION.request(method,job_url(job_id)+path,headers=job_headers(),
-      json=payload,params=params,timeout=timeout,allow_redirects=False)
-    if not r.ok:
-        raise RuntimeError("Job API failed: "+str(r.status_code))
-    return r.json()
+def api(job_id,method,path="",payload=None,params=None,timeout=120,attempts=8):
+    """Ride out web deploys/proxy blips: retry 429/5xx and connection errors."""
+    import random
+    for attempt in range(1,attempts+1):
+        try:
+            r=SESSION.request(method,job_url(job_id)+path,headers=job_headers(),
+              json=payload,params=params,timeout=timeout,allow_redirects=False)
+        except (requests.ConnectionError,requests.Timeout):
+            if attempt==attempts: raise
+            time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
+        if r.status_code in (429,500,502,503,504) and attempt<attempts:
+            time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
+        if not r.ok:
+            raise RuntimeError("Job API failed: "+str(r.status_code))
+        return r.json()
 
 def heartbeat(job_id,stop):
     while not stop.wait(105):
