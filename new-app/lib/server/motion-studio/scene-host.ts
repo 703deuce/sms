@@ -338,6 +338,43 @@ export async function sceneFileResponse(args:{
     `frame-ancestors 'self'`,
     "form-action 'none'","base-uri 'none'","object-src 'none'",
   ].join('; ')
+  // Diagnostic-only scene bootstrap. Runs inside the existing opaque-origin
+  // sandbox and reports milestone timings to its parent without exposing URLs
+  // or project data. Only inject into HTML; leave JS, assets and render output
+  // unchanged. Inline script is already permitted by this sandbox CSP.
+  let responseBytes=bytes
+  if(file==='index.html'&&bytes.length<1_000_000){
+    const html=bytes.toString('utf8')
+    const snippet=`<script>(function(){
+      var started=performance.now(),sent={};
+      function report(stage,extra){
+        if(sent[stage])return;sent[stage]=true;
+        try{parent.postMessage({ms:1,event:'boot-timing',stage:stage,
+          elapsedMs:Math.round(performance.now()-started),
+          count:extra&&extra.count||0,
+          maxMs:extra&&extra.maxMs||0},'*')}catch(e){}
+      }
+      report('runtime-start');
+      window.addEventListener('message',function(e){
+        if(e.data&&e.data.ms===1&&e.data.method==='init')report('runtime-init-message');
+        if(e.data&&e.data.ms===1&&e.data.method==='seek')report('first-render-call');
+      },true);
+      document.addEventListener('DOMContentLoaded',function(){report('dom-ready')},{once:true});
+      window.addEventListener('load',function(){
+        var entries=performance.getEntriesByType('resource');
+        report('window-load',{count:entries.length,maxMs:Math.round(entries.reduce(function(m,e){return Math.max(m,e.duration||0)},0))});
+        if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){report('fonts-ready')});
+        var images=Array.prototype.slice.call(document.images||[]);
+        Promise.all(images.map(function(img){return img.complete?Promise.resolve():new Promise(function(done){
+          img.addEventListener('load',done,{once:true});
+          img.addEventListener('error',done,{once:true});
+        })})).then(function(){report('images-ready',{count:images.length})});
+      },{once:true});
+    })();</script>`
+    const head=/<head(?:\\s[^>]*)?>/i
+    if(head.test(html))responseBytes=Buffer.from(html.replace(head,match=>match+snippet),'utf8')
+    else console.info('[motion-studio:load]',{kind:'index-instrumentation',status:'missing-head',projectId})
+  }
   // index.html is the only route the browser knows initially. Hint its
   // approved JS/CSS siblings immediately, instead of discovering each file
   // sequentially after fetching and evaluating the previous script.
@@ -352,7 +389,7 @@ export async function sceneFileResponse(args:{
     : ''
   if(preload)console.info('[motion-studio:load]',{kind:'index-preload',
     projectId,count:preload.split(', ').length})
-  return new Response(new Uint8Array(bytes),{status:200,headers:{
+  return new Response(new Uint8Array(responseBytes),{status:200,headers:{
     ...(preload?{'Link':preload}:{}),
     'Content-Type':contentType(file),'X-Content-Type-Options':'nosniff',
     'Access-Control-Allow-Origin':'*',
