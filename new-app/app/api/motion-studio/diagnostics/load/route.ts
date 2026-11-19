@@ -5,7 +5,14 @@ import {NextResponse} from 'next/server'
  */
 export async function POST(request:Request){
   const origin=request.headers.get('origin')
-  if(!origin||origin!==new URL(request.url).origin)
+  // Coolify/Traefik may expose an internal request.url to Next.js. Compare
+  // against the trusted reverse-proxy public host, not 0.0.0.0:3000.
+  const host=(request.headers.get('x-forwarded-host')||
+    request.headers.get('host')||'').split(',')[0]?.trim()
+  const proto=(request.headers.get('x-forwarded-proto')||
+    new URL(request.url).protocol.slice(0,-1)).split(',')[0]?.trim()
+  const expected=host&&proto==='https'?'https://'+host:new URL(request.url).origin
+  if(!origin||origin!==expected)
     return NextResponse.json({error:'origin mismatch'},{status:403})
   const length=Number(request.headers.get('content-length')||'0')
   if(length>2048)return NextResponse.json({error:'payload too large'},{status:413})
