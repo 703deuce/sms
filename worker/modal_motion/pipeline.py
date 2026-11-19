@@ -210,7 +210,7 @@ def qa_video(path,expected_frames,fps):
     if "black_start:" in black:raise ValueError("Extended black frames detected")
     _,loud=checked(["ffmpeg","-hide_banner","-i",path,"-vn","-af",
       "ebur128=peak=true","-f","null","-"],timeout=240)
-    matches=re.findall(r"I:\\s*(-?[0-9.]+) LUFS",loud)
+    matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
     if not matches:raise ValueError("Could not inspect integrated loudness")
     integrated=float(matches[-1])
     if not -16.5<=integrated<=-13.5:
@@ -236,7 +236,7 @@ def join_and_qa(job_id,bundle_name,mode,segments):
             if cursor!=project["frameCount"]:raise ValueError("Incomplete film capture")
             listfile=os.path.join(directory,"concat.txt")
             pathlib.Path(listfile).write_text("".join(
-              "file '"+f.replace("'","'\\''")+"'\\n" for f in inputs))
+              "file '"+f.replace("'","'\\''")+"'\n" for f in inputs))
             join=os.path.join(directory,"joined.mp4")
             checked(["ffmpeg","-hide_banner","-loglevel","error","-y","-f","concat",
               "-safe","0","-i",listfile,"-c","copy",join],timeout=300)
@@ -257,7 +257,9 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                   "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=900)
                 if os.path.getsize(share)<24_000_000:break
             else:raise ValueError("Share copy exceeds maximum size")
-            return {"masterUploadId":prepare_upload(job_id,master,"master.mp4","video","video/mp4"),
+            master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
+            share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
+            return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
                 "qa":metrics}
     finally:stop.set()
