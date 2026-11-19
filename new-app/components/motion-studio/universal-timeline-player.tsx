@@ -331,7 +331,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     <div className="flex items-center gap-2">
       <button type="button" onClick={()=>void togglePlay()}
         className="rounded-md border border-input px-3 py-1 text-xs"
-        disabled={Boolean(activeId&&!ready[activeId]) || (sessionScenes.length<=3 && sessionScenes.some(id=>!ready[id]))}>
+        disabled={Boolean(activeId&&!ready[activeId]) || (allSceneIds.length<=3 && allSceneIds.some(id=>!ready[id]))}>
         {playing?'Pause':'Play'}
       </button>
       <input aria-label="Scrub complete timeline" type="range" className="min-w-0 flex-1"
