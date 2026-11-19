@@ -23,9 +23,9 @@ function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
  * This component is intentionally renderer-neutral: ordinary user footage and
  * AI-generated scenes are two kinds of visual item on the SAME timeline.
  */
-export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overrides,previewVideoUrl,
+export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,theme,overrides,previewVideoUrl,
   scenePatch={},onSceneChange,overlay}:{
-    timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
+    projectId:string;timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
     assetUrls:Record<string,string>;theme:Record<string,unknown>;
     previewVideoUrl?:string|null;
     overrides:Record<string,unknown>;
@@ -127,7 +127,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
           fonts:session.fonts,assets:session.assetRecords,mode:'live'})
       }else if(message.event==='ready'){
         console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
-        reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current)
+        reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current,undefined,projectId)
         setReady(old=>({...old,[sceneId]:true}))
         setSeekEpoch(n=>n+1)
       }else if(message.ok===false&&typeof message.error==='string'){
@@ -141,7 +141,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
           firstFrameLogged.current=true
           setFirstFrameRendered(true)
           console.info('[motion-studio:browser-load]',{stage:'first-frame-drawn',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
-          reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current)
+          reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current,undefined,projectId)
         }
         setDrawn(old=>({...old,[sceneId]:Date.now()}))
         // The playhead may have advanced during async draw. Immediately send
@@ -290,6 +290,15 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   const firstSceneId=allSceneIds[0]||''
   const sessionScenes=[...new Set(allSceneIds)].filter(id=>Boolean(sessions[id])&&
     (firstFrameRendered||id===firstSceneId))
+  // Report actual paint readiness, not just the iframe's draw acknowledgement.
+  useEffect(()=>{
+    if(!displayedScene||!firstFrameRendered)return
+    let cancelled=false
+    const id=requestAnimationFrame(()=>{
+      if(!cancelled)reportMotionStudioLoad('first-frame-visible',performance.now()-loadStart.current,undefined,projectId)
+    })
+    return()=>{cancelled=true;cancelAnimationFrame(id)}
+  },[firstFrameRendered,Boolean(displayedScene),projectId])
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
   return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
     <div className="flex items-center justify-between gap-2 text-xs">
