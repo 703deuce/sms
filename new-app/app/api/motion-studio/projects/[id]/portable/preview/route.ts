@@ -65,12 +65,11 @@ export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx){
         select:{exportInfo:true},
       })
       const info=obj(project?.exportInfo)
-      const exportedVersion=info.portableVersionId
       const exportKey=info.masterKey
-      if(typeof exportKey==='string'&&exportKey.length>0&&
-         (exportedVersion===undefined||exportedVersion===null||exportedVersion===version.id)){
-        key=exportKey
-      }
+      // This is explicitly the original MP4, not a flattened preview of
+      // any newer editable revision. Keep it accessible after customers edit
+      // the scene timeline; the live player still renders current changes.
+      if(typeof exportKey==='string'&&exportKey.length>0)key=exportKey
     }
     if(!key)return NextResponse.json({url:null,reason:'no_master'})
     const url=await createReadableSignedUrl(key,900)
