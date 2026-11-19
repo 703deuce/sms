@@ -48,13 +48,19 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
   // 29-asset live project). Bounded parallelism keeps it to a few seconds
   // without flooding the storage API. No DB connection is held meanwhile.
   const urls:Record<string,string>={}
+  // Only host-played media needs raw signed storage URLs. Scene HTML,
+  // scripts, frame packs and bundles use the separate signed scene proxy.
+  // Avoid dozens of unnecessary storage signing operations at startup.
+  const directMediaKinds=new Set(['audio','video','image','font','caption','subtitle'])
   const signable=manifest.assets.flatMap(asset=>{
     const key=keys.get(asset.id)
-    return key?[{id:asset.id,key}]:[]
+    return key&&directMediaKinds.has(asset.kind)?[{id:asset.id,key}]:[]
   })
   const signed=await runWithConcurrency(signable,SIGN_CONCURRENCY,async item=>
     [item.id,await createReadableSignedUrl(item.key,900).catch(()=>null)] as const)
   for(const [id,url] of signed)if(url)urls[id]=url
   return {versionId,expiresInSeconds:900,assetUrls:urls,metadata,
-    unavailableAssetIds:manifest.assets.map(a=>a.id).filter(id=>!urls[id])}
+    availableAssetIds:manifest.assets.map(a=>a.id).filter(id=>keys.has(id)),
+    unavailableAssetIds:manifest.assets.map(a=>a.id).filter(id=>!keys.has(id)||(
+      directMediaKinds.has(a.kind)&&!urls[id]))}
 }
