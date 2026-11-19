@@ -3,9 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {PollHttpError,startPolling} from '@/lib/motion-studio/poll'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableLiveFilmPlayer } from './portable-live-film-player'
+import type {BrowserSceneSession} from './universal-timeline-player'
 import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
 import { PortableLayerTiming } from './portable-layer-timing'
+type PlaybackBootstrap={versionId:string;sessions:BrowserSceneSession[];mediaUrls:Record<string,string>}
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
   theme:Record<string,unknown>; overrides:Record<string,unknown> }
 const asObj=(v:unknown):Record<string,unknown> =>
@@ -16,6 +18,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
 }) {
   const mountedAt=useRef<number>(performance.now())
   const [version,setVersion]=useState<Version|null>(null)
+  const [playback,setPlayback]=useState<PlaybackBootstrap|null>(null)
   const [loading,setLoading]=useState(true)
   const [sceneId,setSceneId]=useState('')
   const [patch,setPatch]=useState<Record<string,Record<string,unknown>>>({})
@@ -43,14 +46,15 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   },[projectId])
   const load=useCallback(async()=>{
     try {
-      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
+      const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable?bootstrap=1',{cache:'no-store'})
       if(!response.ok) throw new Error('Could not load editable project')
-      const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[]}
+      const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[];playback?:PlaybackBootstrap|null}
       reportMotionStudioLoad('project-response',performance.now()-mountedAt.current,undefined,projectId)
       // An older GET may finish after a successful save. Never roll the editor back.
       if(data.version && data.version.revision >= revisionRef.current) {
         revisionRef.current=data.version.revision
         setVersion(data.version)
+        setPlayback(data.playback?.versionId===data.version.id?data.playback:null)
       }
       setHistory(data.history||[])
       setSceneId(s=>s||data.version?.manifest.scenes[0]?.id||'')
@@ -262,6 +266,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
         ? <PortableScenePicker scene={scene} manifest={version.manifest} videoUrl={masterUrl}
             selected={selectedLayer} onSelect={setSelectedLayer} savedElements={savedElements} patch={patch} onChange={setProperty}/>
         : <PortableLiveFilmPlayer projectId={projectId} versionId={version.id} previewVideoUrl={masterUrl}
+            initialPlayback={playback?.versionId===version.id?playback:null}
             manifest={version.manifest} theme={{...version.theme,
               colors:{...asObj(version.theme.colors),...colors}}}
             overrides={version.overrides} scenePatch={patch} onSceneChange={setSceneId}
