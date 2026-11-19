@@ -343,7 +343,7 @@ export async function sceneFileResponse(args:{
   // or project data. Only inject into HTML; leave JS, assets and render output
   // unchanged. Inline script is already permitted by this sandbox CSP.
   let responseBytes=bytes
-  if(file==='index.html'&&bytes.length<1_000_000){
+  if(process.env.MOTION_STUDIO_BOOT_TIMING!=='false'&&file==='index.html'&&bytes.length<1_000_000){
     const html=bytes.toString('utf8')
     const snippet=`<script>(function(){
       var started=performance.now(),sent={};
