@@ -18,6 +18,8 @@ const bundleName=process.env.MOTION_BUNDLE_FILENAME||'render_bundle_v1.zip'
 const segments=Number(process.env.MOTION_SEGMENT_FRAMES||300)
 const estimate=Number(process.env.MOTION_ESTIMATE_USD_MICROS||0)
 const app=process.env.MODAL_MOTION_APP_NAME||'transovo-motion-render'
+const rate=Number(mode==='gpu'?process.env.MOTION_GPU_USD_PER_SECOND:process.env.MOTION_CPU_USD_PER_SECOND)
+if(!Number.isFinite(rate)||rate<=0)throw Error('Approved Modal compute rate must be configured before submission')
 if(!/^[A-Za-z0-9_-]{4,128}$/.test(id)||!url.startsWith('https://')||
    !new URL(url).pathname.endsWith('/jobs/'+id)||!token||
    !['cpu','gpu'].includes(mode)||!Number.isSafeInteger(segments)||segments<1||segments>600||
