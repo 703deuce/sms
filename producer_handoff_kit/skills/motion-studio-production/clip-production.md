@@ -1,4 +1,4 @@
-> Read `craft-standards.md` (podcast / interview / panel clips section) before every clip job and run its checklist. Rick (Nov 16, 2026): no ornamental masks or small windows around moving faces; people big and clearly visible; steady, smoothed crops (stationary unless the person really moves); a polished pro podcast-clip look, not a heavy themed frame; files about 15–20 MB per clip with little or no grain.
+> Read `craft-standards.md` (podcast / interview / panel clips section) and the `craft/` playbook before every clip job and apply them with judgment (SKILL.md section 1). Decide the pack's creative idea from what you're editing before building (SKILL.md section 1, Rick, Nov 19). Rick (Nov 16, 2026): no ornamental masks or small windows around moving faces; people big and clearly visible; steady, smoothed crops (stationary unless the person really moves); a polished pro podcast-clip look, not a heavy themed frame; files about 15–20 MB per clip with little or no grain.
 
 # Clip production (Motion Studio Producer)
 
@@ -40,7 +40,7 @@ If `action` is `clip_and_finish` or `finish_clip`, follow this playbook even if 
 ```bash
 J=/workspace/motion_jobs/$JOB_ID
 mkdir -p $J/{secrets,research,assets/source,clips,deliver,qa,log}
-# token + curl.cfg the same way as SKILL.md Stage 0 (never echo the token)
+# token + curl.cfg the same way as SKILL.md section 3 "Intake" (never echo the token)
 curl -sS --config $J/secrets/curl.cfg "$JOB_URL" -o $J/log/assignment.json
 ```
 
@@ -74,9 +74,9 @@ Quality bar is unchanged: batching removes repeated work and waiting, never craf
 
 1. **Transcribe and analyse the whole source once,** in parallel chunks, never per clip. Use fixed 30 s chunks without VAD (lesson from the first live clip job: whisper `small.en` hallucinates on crowd noise), run concurrently, then join them onto one source timeline. Every clip reads from that one transcript and analysis.
 2. **Pick all moments in one pass,** scored (Stage B), each with clean in/out points on sentence boundaries (never mid-word or mid-sentence).
-3. **Lock ONE clip design system for the source before building:** caption style, graphic components (lower-thirds, callouts, score or stat cards, transitions), framing rules (punch-in for one speaker, boxes for two or more, every face centred in its box), colour and type. Save it as `design/system.md` plus shared component code in `design/components/`. Build each component once and check it by browser still once.
-4. **Split the clips across up to 4 helper subagents** (Task executors) building at the same time from that system. Each helper gets a self-contained brief: the design system path, its clips' cuts and transcript ranges, the full craft rules (key words and numbers readable, faces centred, real speech intact, captions as separate layers never burned in, no silent or lazier fallbacks), browser-still review, and no rendering. Each clip still gets story-specific graphics and custom touches; a clip that is only the shared components on footage fails.
-5. **The lead reviews every clip by browser stills:** first, busiest and last frame, stills along every move, faces centred, caption readability, and the cut points (sentence boundaries, no clipped words). It fixes problems directly or sends them back to the owning helper, then re-checks the exposing stills.
+3. **Lock ONE clip design system for the source before building:** caption style, graphic components (lower-thirds, callouts, score or stat cards, transitions), framing approach (decided per moment: face-led for pure talk, content-led when a board, screen, product or demo matters; never crop a face badly), colour and type, all expressing the pack's creative idea. Save it as `design/system.md` plus shared component code in `design/components/`. Build each component once and check it by browser still once.
+4. **Optionally split the clips across up to 4 helper subagents** (Task executors) when the pack is big enough that it truly saves time, building at the same time from that system. Each helper gets a self-contained brief: the design system path, its clips' cuts and transcript ranges, the full craft rules (key words and numbers readable, people and what they show well framed, real speech intact, captions as separate layers never burned in, no silent or lazier fallbacks), browser-still review, and no rendering. Each clip still gets story-specific graphics and custom touches; a clip that is only the shared components on footage fails.
+5. **The lead reviews every clip by browser stills:** first, busiest and last frame, stills along every move, framing judged as a viewer (faces not badly cropped, what they show readable), caption readability, and the cut points (sentence boundaries, no clipped words). It fixes problems directly or sends them back to the owning helper, then re-checks the exposing stills.
 6. **Targets (planning only, never a reason to cut quality):** 10 premium clips from a 1 h source in about 15–25 min total; basic clips (captions + framing) under 1 min each.
 7. **`finish_clip`** (one clip) uses the same design-system-then-build approach, built by the lead alone.
 
@@ -135,7 +135,7 @@ Count **visible, addressable faces** in the moment (people the viewer should be 
 
 **One speaker (or one face the moment is about).**
 
-- Punch in and face-track. Full-frame or a tight punch-in is allowed: this is a single-person shot.
+- When the moment is pure talk, punch in and face-track (full-frame or a tight punch-in is allowed). When they draw, demo, show a screen or product, frame for that content instead, and switch back to the face when it's just talk again (SKILL.md section 1). Face tracking is a tool, not a requirement.
 - Keep eyes and mouth in the upper-center of the frame. Keep captions and text inside the 9:16 safe box: text, logos and captions inside x 120–888, y 288–1248, and left of x 780 below y 780 at 1080x1920 (x 53–395, y 128–555 at 480x854); see `craft-standards.md`; the bottom caption line sits no lower than y 1248.
 - Track the talking head as they move. Do not snap every frame; ease the crop.
 - If the face is lost for a beat, hold the last good crop briefly, then ease out to a wider fit rather than freezing on empty space.
@@ -192,7 +192,7 @@ An empty graphic list is the correct choice when the cut and the layout already 
 
 **Render at export (live delivery):** see SKILL.md "Render at export". If this clip job's payload or `GET {jobUrl}` carries `delivery.mode:"live"`, render no clip MP4s: the final watch is live browser playback of each whole clip, and delivery follows the live path in `delivery.md` "Live delivery" (publish-live.mjs, `delivery:"live"`). The clipper contract has not been seen sending `delivery.mode` yet, so until a clip job carries it, keep the current steps below: render each approved clip once and upload the MP4s.
 
-Before rendering, review every clip in the browser on full-size still screenshots (first, busiest and last frame plus wherever something changes; SKILL.md Stage 5 steps 8–9) and fix it there. Browser engines are always reviewed with browser stills. Skia/CanvasKit is built inside the browser scene. Only Cinematic Skill, Manim, Natron and any existing Node Skia script run outside the browser; their layers are checked with the exact still recipes in SKILL.md Stage 5 step 9, and before approval nothing beyond the exact frame or few seconds being checked is rendered (Rick, Nov 18). Only once every clip is approved, render each clip once to 9:16 (or the requested aspect), 30 fps CFR, h264, even dimensions, `+faststart`. Sanitize every filename to `[A-Za-z0-9._-]`. Also export, as separate files for the timeline when you will upload them:
+Before rendering, review every clip in the browser on still screenshots (480p by default, full size only for a frame that can't be judged at 480p; first, busiest and last frame plus wherever something changes; SKILL.md section 7) and fix it there. Browser engines are always reviewed with browser stills. Skia/CanvasKit is built inside the browser scene. Only Cinematic Skill, Manim, Natron and any existing Node Skia script run outside the browser; their layers are checked with the exact still recipes in `film-pipeline.md`, and before approval nothing beyond the exact frame or few seconds being checked is rendered (Rick, Nov 18). Only once every clip is approved, render each clip once to 9:16 (or the requested aspect), 30 fps CFR, h264, even dimensions, `+faststart`. Sanitize every filename to `[A-Za-z0-9._-]`. Also export, as separate files for the timeline when you will upload them:
 
 - silent or clean footage tiles / layout plates (`kind: "media"`)
 - title and graphic overlays as separate layers with alpha (`kind: "media"`; baking is a last resort only after real alpha attempts, logged with what was tried; `image/png` or a video with alpha if the mime is allowed — today only `video/mp4` and `video/webm`)
@@ -207,7 +207,7 @@ Look at the browser stills before approval (`qa.md` §2), then watch each final 
 - Original speech is intact and in sync; no invented dialogue.
 - Layout follows the framing rule (punch-in only on one focused speaker; split/stacked/grid boxes for two or more).
 - Graphics do not cover faces, mouths, or the caption band.
-- Faces are centred in every box, split, stack or crop (Rick).
+- Faces are never badly cropped (chin or forehead cut, eyes in the wrong place, jammed against a border); judged by eye. Framing serves what the viewer needs to see (SKILL.md section 1).
 - Key words and numbers stay readable; no object fully hides key text (Rick).
 - Motion is stable (no jittery crops, no 2-frame layout flips).
 - Audio is intelligible; music and SFX sit under speech.

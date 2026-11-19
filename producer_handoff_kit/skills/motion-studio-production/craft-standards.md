@@ -605,7 +605,7 @@ Run on full-size browser stills during building (no render before approval, Rick
 - [ ] Parallel builds (SKILL.md Stage 4b): every scene uses the film's design system (`design/system.md`); both sides of every cut between helper blocks match in type, colour, motion and components; the lead reviewed every scene.
 - [ ] All text, logos and captions inside the universal safe box on every sampled frame.
 - [ ] No letterbox or pillarbox bars or static borders; the full canvas is used.
-- [ ] Faces centred in every box, split, stack or crop (Rick).
+- [ ] Framing serves the content: faces never badly cropped (chin or forehead cut, eyes misplaced, jammed against a border), and what the person shows stays readable (Rick; judged by eye).
 - [ ] Key words and numbers readable on every still; text may sit behind a subject but no object fully hides key text (Rick).
 - [ ] Real clips play with their own audio where it makes sense, then cut back; not voiceover the whole time (Rick).
 - [ ] Text contrast ≥ 4.5:1 (or ≥ 3:1 for large text) against its local background, checked on the 3 worst frames.

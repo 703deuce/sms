@@ -10,6 +10,10 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 
 ---
 
+## Top rule: a creative decision on every job
+
+**Every job starts with a creative decision about what is best for this edit. Look at what you're editing (its content, purpose, audience, material and feel) and decide the creative idea that will make it the best version of itself, then carry that idea through the design, type, motion, transitions, pacing and sound. The look depends on what you're editing; that is the creative part. Do it on every job, consistently. Never mail it in with a generic look.** *(Nov 19)* — In `SKILL.md` section 1 (judgment first) and `craft/design-and-motion.md` section 2.
+
 ## 1. How rules are kept
 
 1. **Rules live in the repo, not in memory.** Every rule Rick gives is written into this skill folder right away, and into the production routine where relevant. Memory falls out of context and other agents can't read it. *(Nov 18; location set Nov 19: `producer_handoff_kit/skills/motion-studio-production/` in this repo.)*
@@ -38,7 +42,7 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 
 1. **Decide the video type first, then frame for what the viewer needs to see.** Face tracking/punch-in is for pure talking-head and podcast footage. For whiteboard, screen, tutorial or demo footage, frame so the content is readable (face-only just for intros and pure talk). *(Nov 18)* — *Supersedes the Nov 18 "tested layout pieces / face detection / scene-checker tools must be used" process (the old Stage 4c mandatory tools): Rick found they saved no time and let graphics cover the subject.*
 2. **Graphics go in empty space.** Never over the person or what they are showing (the board, the screen, the product). There must be enough graphics to actually lift the edit. *(Nov 18)*
-3. **Faces centred in every box** when using split or stacked boxes (one focused person → punch in; two or more → split or stack). Check it on the frames. *(Nov 17)*
+3. **Faces well framed in every box** when using split or stacked boxes (one focused person → punch in; two or more → split or stack): never badly cropped (chin or forehead cut, eyes misplaced, jammed against a border). Check it on the frames. *(Nov 17; softened Nov 19 with the cleaned-up skill: framing is a judgment per rule 1, not a fixed centring requirement or a required tool.)*
 4. **Text behind a subject is fine, but key words and numbers must stay readable.** Never let an object fully hide text; check on the frames. *(Nov 18)*
 5. **Variety without losing identity.** When Rick asks for more variety, keep the film's signature layout as the base and break out of it only at key moments. Replacing the whole layout looked cheap. *(Nov 18)*
 6. **No persistent software-looking chrome** (slate tags, "ROLL 01" labels, permanent sprocket borders). Elements come and go; only a small brand bug may stay the whole time. Vary layouts with real movement, and fill the vertical frame when it's one person talking. *(Nov 18)*
@@ -57,7 +61,7 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 1. **Best voice for every job.** No fixed shortlist of voices. For every film, search the full ElevenLabs voice library for the voice that best fits the subject, tone and audience, preview the free samples before paying, and log which voice was picked and why. *(Nov 19)* — *Supersedes the earlier preferred-voice pair (Cee Well / Brian).*
 2. **ElevenLabs model:** Flash (`eleven_flash_v2_5`); output format `mp3_44100_128` (192 kbps is not allowed on the current tier). *(Nov 17)*
 3. **Narration speed 0.85.** *(Nov 17)*
-4. **Open item:** final loudness target (−14 vs −15 LUFS) is not settled yet; −14 LUFS is what recent deliveries used. Ask Rick before standardising. *(Nov 19)*
+4. **Open item:** final loudness target (−14 vs −15 LUFS) is not settled yet; −14 LUFS is what recent deliveries used. Until Rick decides, the skill follows `qa.md` (−15 ±1.5 LUFS). Ask Rick before standardising. *(Nov 19)*
 
 ## 6. Review
 

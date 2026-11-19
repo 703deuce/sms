@@ -2,7 +2,8 @@
 
 The shared rulebook for every agent that produces Transovo Motion Studio videos (films, clips, bring-your-own-footage edits, revisions).
 
-- **Start at [`SKILL.md`](SKILL.md).** It is the end-to-end production process and links the reference files (engines, delivery, QA, brand and type, craft standards, retention psychology).
+- **Start at [`SKILL.md`](SKILL.md).** It is judgment-first: every job begins with a creative decision about what is best for this edit, then takes one of three paths (edit of the customer's footage, clip pack, or a film made from scratch). It links the reference files (engines, delivery, QA, brand and type, craft standards, retention psychology).
+- **[`film-pipeline.md`](film-pipeline.md)** holds the detailed steps for films made from scratch (research, sourcing, script, voice, design system, scene build, sound).
 - **[`craft/`](craft/README.md) is the editing craft playbook** — cutting, sound, design and motion, color and style, review, and notes per video type. Use it on every edit.
 - **[`RULES_FROM_RICK.md`](RULES_FROM_RICK.md) holds the owner's standing rules,** dated, with superseded rules marked. Where it is newer than `SKILL.md`, it wins.
 - `scripts/qa_report.py` is a small technical QA helper (contact sheet, loudness, black/freeze checks).

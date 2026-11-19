@@ -8,7 +8,7 @@ All graphics are custom for this video. There are no templates, no pre-made pack
 - *Judge:* on each still, ask whether you can see what they're pointing at, writing or clicking. Is the face whole, with the eyes near the upper third, a little headroom, and look room in the direction they face?
 - *Pros:* zoom toward the region being written or the control being used, hold through the action, then return to enough context to stay oriented.
 - *Trap:* face tracking on a whiteboard, so you see the face but only 20% of the board (our whiteboard test).
-- Live rule: when a face sits in a box, split or crop, it is centred with eyes on the upper third, and where the live skill requires `face_frame.py` for that box, use it, then check by eye. Whether the shot should be face-led at all is the content decision above.
+- When a face sits in a box, split or crop, don't crop it badly: eyes near the upper third, chin and forehead intact. `face_frame.py` is an optional helper; your eye decides. Whether the shot should be face-led at all is the content decision above.
 
 **Make room for the graphic in the frame itself.** Offset the subject to one side to create a clean area for a coming graphic, instead of centring the subject and then covering them.
 
@@ -21,6 +21,8 @@ All graphics are custom for this video. There are no templates, no pre-made pack
 **The signature layout is the base.** Keep the film's main layout as its backbone and vary it at key moments with push and pull, punch-ins, full-frame moments, breakouts, and elements that come and go. Never remove it wholesale, and never lock one framed box on screen for the whole video (Willie revision lesson).
 
 ## 2. A design system for this film (write it before building)
+
+**Creative decision first (Rick, Nov 19; top rule, every job).** Every job starts with a creative decision about what is best for this edit. Look at what you're editing (its content, purpose, audience, material and feel) and decide the creative idea that will make it the best version of itself, then carry that idea through the design, type, motion, transitions, pacing and sound. The look depends on what you're editing; that is the creative part. Do it on every job, consistently. Never mail it in with a generic look. The design system below is how that idea becomes concrete.
 
 Put 5–8 lines in `log/job.md`:
 - **Type:** one family with a range of weights, or two at most (display + workhorse), chosen for this film's voice. Give the reason.
