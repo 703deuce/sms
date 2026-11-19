@@ -31,6 +31,7 @@ class BundleTests(unittest.TestCase):
         return copy
     def test_native_480p_bundle(self):
         source=self.build()
+        (self.root/"work").mkdir()
         with patch("pipeline.fetch_file",self.fake_fetch(source)):
             path,doc,entry,audio=extract_bundle("fake_job","bundle.zip",str(self.root/"work"))
         self.assertEqual((doc["width"],doc["height"],doc["frameCount"]),(854,480,150))
@@ -38,11 +39,13 @@ class BundleTests(unittest.TestCase):
         self.assertTrue(audio.is_file())
     def test_reject_missing_composition(self):
         source=self.build(entry="missing.html")
+        (self.root/"work").mkdir()
         with patch("pipeline.fetch_file",self.fake_fetch(source)):
             with self.assertRaisesRegex(ValueError,"Full-composition"):
                 extract_bundle("fake_job","bundle.zip",str(self.root/"work"))
     def test_reject_zip_traversal(self):
         source=self.build(extra={"../outside.txt":b"BAD"})
+        (self.root/"work").mkdir()
         with patch("pipeline.fetch_file",self.fake_fetch(source)):
             with self.assertRaisesRegex(ValueError,"Unsafe bundle"):
                 extract_bundle("fake_job","bundle.zip",str(self.root/"work"))
