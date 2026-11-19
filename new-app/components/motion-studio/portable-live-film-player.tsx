@@ -15,6 +15,9 @@ function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]
   for(const [id,entry] of sessionRequests)if(entry.expiresAt<=now)sessionRequests.delete(id)
   const cached=sessionRequests.get(key)
   if(cached)return cached.promise
+  // Report only actual network fetches, not duplicate React effect subscribers.
+  const networkStarted=performance.now()
+  reportMotionStudioLoad('session-request',networkStarted,undefined,projectId)
   // Share one request across effect cleanup/remount and React Strict Mode.
   // No abort: a completed request can be reused by the next mount.
   const promise=fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/scene-sessions',{
@@ -24,6 +27,10 @@ function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]
   }).then(async response=>{
     if(!response.ok)throw new Error('Could not load editable scene sources ('+response.status+')')
     return response.json() as Promise<SessionResponse>
+  }).then(data=>{
+    reportMotionStudioLoad('session-response',performance.now(),
+      performance.now()-networkStarted,projectId)
+    return data
   })
   sessionRequests.set(key,{promise,expiresAt:now+30_000})
   void promise.catch(()=>{if(sessionRequests.get(key)?.promise===promise)sessionRequests.delete(key)})
@@ -65,12 +72,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     })
     if(!ids.length)return
     let alive=true
-    const requestedAt=performance.now()
-    console.info('[motion-studio:browser-load]',{stage:'session-request',sceneCount:ids.length,elapsedMs:Math.round(requestedAt-loadStart.current)})
-    reportMotionStudioLoad('session-request',requestedAt-loadStart.current,undefined,projectId)
     sceneSessionRequest(projectId,versionId,ids).then(data=>{
-      console.info('[motion-studio:browser-load]',{stage:'session-response',sceneCount:ids.length,requestMs:Math.round(performance.now()-requestedAt),elapsedMs:Math.round(performance.now()-loadStart.current)})
-      reportMotionStudioLoad('session-response',performance.now()-loadStart.current,performance.now()-requestedAt,projectId)
       if(!alive)return
       const safe=data.sessions.filter(item=>{
         try{
