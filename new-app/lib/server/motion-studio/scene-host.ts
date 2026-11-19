@@ -76,12 +76,16 @@ export function issueSceneSessionUrl(args:{
     bundleAssetId,String(expires),signature,'index.html'].map(encodeURIComponent).join('/')
   return {sceneUrl:scene+'/'+path,expiresAt:new Date(expires*1000).toISOString()}
 }
-export async function createSceneSession(workspaceId:string,projectId:string,versionId:string,sceneId:string,requestUrl:string,sharedAssets?:Awaited<ReturnType<typeof portableAssetSession>>){
-  const version=await db().motionStudioPortableVersion.findFirst({
-    where:{id:versionId,projectId,workspaceId,status:'committed'},
-  })
-  if(!version)fail('Original scene version not found',404)
-  const manifest=validatePortableManifest(version!.manifest)
+export async function createSceneSession(workspaceId:string,projectId:string,versionId:string,sceneId:string,requestUrl:string,sharedAssets?:Awaited<ReturnType<typeof portableAssetSession>>,sharedManifest?:ReturnType<typeof validatePortableManifest>){
+  // The authenticated issuance route already read this immutable version.
+  // Never re-query/revalidate it once per scene in the same request.
+  const manifest=sharedManifest??await (async()=>{
+    const version=await db().motionStudioPortableVersion.findFirst({
+      where:{id:versionId,projectId,workspaceId,status:'committed'},
+    })
+    if(!version)fail('Original scene version not found',404)
+    return validatePortableManifest(version.manifest)
+  })()
   const scene=manifest.scenes.find(s=>s.id===sceneId)
   if(!scene)fail('Scene not found',404)
   const refs=sharedAssets??await portableAssetSession(workspaceId,projectId,versionId)
