@@ -64,6 +64,6 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
   for(const [id,url] of signed)if(url)urls[id]=url
   return {versionId,expiresInSeconds:900,assetUrls:urls,metadata,
     availableAssetIds:manifest.assets.map(a=>a.id).filter(id=>keys.has(id)),
-    unavailableAssetIds:manifest.assets.map(a=>a.id).filter(id=>!keys.has(id)||(
-      directMediaKinds.has(a.kind)&&!urls[id]))}
+    unavailableAssetIds:manifest.assets.filter(asset=>!keys.has(asset.id)||(
+      directMediaKinds.has(asset.kind)&&!urls[asset.id])).map(asset=>asset.id)}
 }
