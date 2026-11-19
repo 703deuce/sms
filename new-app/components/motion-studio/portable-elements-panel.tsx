@@ -45,11 +45,16 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
     reportMotionStudioLoad('project-mounted',0,undefined,projectId)
   },[projectId])
   const load=useCallback(async()=>{
+    const started=performance.now()
     try {
+      reportMotionStudioLoad('project-fetch-start',performance.now()-mountedAt.current,undefined,projectId)
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable?bootstrap=1',{cache:'no-store'})
+      reportMotionStudioLoad('project-headers',performance.now()-mountedAt.current,
+        performance.now()-started,projectId)
       if(!response.ok) throw new Error('Could not load editable project')
       const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[];playback?:PlaybackBootstrap|null}
-      reportMotionStudioLoad('project-response',performance.now()-mountedAt.current,undefined,projectId)
+      reportMotionStudioLoad('project-response',performance.now()-mountedAt.current,
+        performance.now()-started,projectId)
       // An older GET may finish after a successful save. Never roll the editor back.
       if(data.version && data.version.revision >= revisionRef.current) {
         revisionRef.current=data.version.revision
