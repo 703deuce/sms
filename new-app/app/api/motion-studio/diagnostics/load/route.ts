@@ -22,15 +22,24 @@ export async function POST(request:Request){
     return NextResponse.json({error:'invalid payload'},{status:400})
   const x=data as Record<string,unknown>
   const stage=typeof x.stage==='string'?x.stage:''
-  const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible'])
+  const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible',
+    'iframe-runtime-start','iframe-dom-ready','iframe-window-load',
+    'iframe-fonts-ready','iframe-images-ready','iframe-runtime-init-message',
+    'iframe-first-render-call','iframe-document-load'])
   if(!allowed.has(stage))return NextResponse.json({error:'invalid milestone'},{status:400})
   const ms=typeof x.elapsedMs==='number'&&Number.isFinite(x.elapsedMs)?
     Math.max(0,Math.min(120000,Math.round(x.elapsedMs))):null
   const requestMs=typeof x.requestMs==='number'&&Number.isFinite(x.requestMs)?
     Math.max(0,Math.min(120000,Math.round(x.requestMs))):null
+  const navMs=typeof x.navigationElapsedMs==='number'&&Number.isFinite(x.navigationElapsedMs)
+    ?Math.max(0,Math.min(600000,Math.round(x.navigationElapsedMs))):null
+  const navStart=typeof x.navigationStartEpochMs==='number'&&Number.isFinite(x.navigationStartEpochMs)
+    ?Math.round(x.navigationStartEpochMs):null
   const projectId=typeof x.projectId==='string'&&/^msp_[A-Za-z0-9]{8,64}$/.test(x.projectId)?x.projectId:'unknown'
   console.info('[motion-studio:load]',{
     kind:'browser-milestone',projectId,stage,elapsedMs:ms,
+    ...(navMs!==null?{navigationElapsedMs:navMs}:{}),
+    ...(navStart!==null?{navigationStartEpochMs:navStart}:{}),
     ...(requestMs!==null?{requestMs}:{}),
   })
   return new NextResponse(null,{status:204})
