@@ -26,6 +26,7 @@ export function UnifiedEditorWorkspace({
   timelineView,
   timelineHidden = false,
   timelineCollapsed = false,
+  compactTimelineHeightPx = 150,
   onTimelineViewChange,
   onFocusChange,
   inspectorWidthPx,
@@ -38,6 +39,7 @@ export function UnifiedEditorWorkspace({
   timelineView: 'script' | 'timeline'
   timelineHidden?: boolean
   timelineCollapsed?: boolean
+  compactTimelineHeightPx?: number
   onTimelineViewChange: (view: 'script' | 'timeline') => void
   onFocusChange?: (focused: boolean) => void
   inspectorWidthPx: number
@@ -133,7 +135,7 @@ export function UnifiedEditorWorkspace({
     : timelineHidden ? 'minmax(0,1fr) 0px 32px'
     : timelineCollapsed && timelineView === 'timeline' ? 'minmax(0,1fr) 9px 112px'
     : timelineView === 'script'
-      ? 'minmax(0,1fr) 9px 150px'
+      ? `minmax(0,1fr) 9px ${Math.max(100,Math.min(420,compactTimelineHeightPx))}px`
       : `minmax(0,${100 - timelinePct}fr) 9px minmax(0,${timelinePct}fr)`
 
   const modeButtons = (
