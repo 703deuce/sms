@@ -8,9 +8,9 @@ HERE=pathlib.Path(__file__).resolve().parent
 app=modal.App(os.environ.get("MODAL_MOTION_APP_NAME","transovo-motion-render"))
 image=(modal.Image.from_registry("docker.io/node:22-bookworm",add_python="3.11")
  .apt_install("chromium","ffmpeg","fonts-dejavu-core","fontconfig")
- .run_commands("mkdir -p /opt/motion_node && cd /opt/motion_node && npm install --no-audit --no-fund puppeteer-core@24.31.0 hyperframes@0.9.52")
+ .run_commands("mkdir -p /root/modal_motion && cd /root/modal_motion && npm install --no-audit --no-fund puppeteer-core@24.31.0 hyperframes@0.9.52")
  .pip_install("requests>=2.31,<3")
- .env({"NODE_PATH":"/opt/motion_node/node_modules","CHROMIUM_BIN":"/usr/bin/chromium",
+ .env({"CHROMIUM_BIN":"/usr/bin/chromium",
        "HYPERFRAMES_TELEMETRY":"0","DO_NOT_TRACK":"1"})
  .add_local_dir(str(HERE),remote_path="/root/modal_motion"))
 
