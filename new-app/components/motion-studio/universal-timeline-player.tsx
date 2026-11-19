@@ -31,6 +31,8 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     onSceneChange?:(sceneId:string)=>void
     overlay?:ReactNode
   }){
+  const loadStart=useRef<number>(performance.now())
+  const firstFrameLogged=useRef(false)
   const [timeMs,setTimeMs]=useState(0)
   const [playing,setPlaying]=useState(false)
   const [rate,setRate]=useState(1)
@@ -121,6 +123,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         if(session)send(sceneId,'init',{theme,overrides,assetUrls:session.assetUrls,
           fonts:session.fonts,assets:session.assetRecords,mode:'live'})
       }else if(message.event==='ready'){
+        console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
         setReady(old=>({...old,[sceneId]:true}))
         setSeekEpoch(n=>n+1)
       }else if(message.ok===false&&typeof message.error==='string'){
@@ -130,6 +133,10 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       }else if(message.ok===true&&typeof message.id==='number'&&
         pending.current[sceneId]===message.id){
         delete pending.current[sceneId]
+        if(!firstFrameLogged.current){
+          firstFrameLogged.current=true
+          console.info('[motion-studio:browser-load]',{stage:'first-frame-drawn',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
+        }
         setDrawn(old=>({...old,[sceneId]:Date.now()}))
         // The playhead may have advanced during async draw. Immediately send
         // the latest frame; never build an unbounded queue of seeks.
