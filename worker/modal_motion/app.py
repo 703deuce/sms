@@ -51,6 +51,9 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         raise ValueError("Invalid capture configuration")
     if estimate_usd_micros<=0:
         raise ValueError("Positive, operator-approved Modal estimate required")
+    rate_key="MOTION_GPU_USD_PER_SECOND" if mode=="gpu" else "MOTION_CPU_USD_PER_SECOND"
+    if float(os.environ.get(rate_key,"0"))<=0:
+        raise ValueError("Approved Modal compute rate must be provided before paid work")
     budget=api(job_id,"GET","/modal-budget",params={"estimateUsdMicros":estimate_usd_micros})
     if not budget["allowed"]:
         raise ValueError("Shared monthly Modal budget guard refused this render")
