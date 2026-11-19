@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { agentCanvasVideoLayout, buildMotionStudioEditorEdits, sceneSplitsMs } from '@/lib/motion-studio/editor-timeline'
+import { agentCanvasVideoLayout, buildMotionStudioEditorEdits, buildLiveMotionStudioEditorEdits, sceneSplitsMs } from '@/lib/motion-studio/editor-timeline'
+import type {MsPortableManifest} from '@/lib/motion-studio/portable-contract'
 import type { ClipMotionStudioExt } from '@/lib/clips/edits'
 
 const ext: ClipMotionStudioExt = {
@@ -89,5 +90,59 @@ describe('Motion Studio -> Compact Editor timeline', () => {
     const e = buildMotionStudioEditorEdits({ base: null, durationMs: 20000, patch: { motionStudio: ext }, musicUploadId: null, lastPlacedMusicUploadId: null })
     expect(e.audio?.music).toBeNull()
     expect(sceneSplitsMs(undefined, 1000)).toEqual([])
+  })
+})
+
+describe('native live scene timeline in Compact',()=>{
+  const manifest={
+    format:'motion-studio-portable/1',projectId:'msp_test',
+    assets:[],scenes:[
+      {id:'S1',bundleAssetId:'bnd_1',bundleSha256:'a'.repeat(64),
+        engine:'browser',runtime:'chrome',manifest:{
+          elements:[{id:'title',kind:'text',properties:{text:{tier:'live_editable',type:'text'}}}],
+          motionTree:{schema:'transovo.motion-scene-graph/1',rootId:'root',durationMs:2400,
+            nodes:[{id:'root',kind:'composition',name:'Root',properties:{}},
+              {id:'title',kind:'text',name:'Title',startMs:200,endMs:1900,properties:{}}]},
+        }},
+      {id:'S2',bundleAssetId:'bnd_2',bundleSha256:'b'.repeat(64),
+        engine:'browser',runtime:'chrome',manifest:{elements:[]}},
+    ],
+    liveProject:{schema:'transovo.live-project/1',projectId:'msp_test',
+      format:{width:1920,height:1080,fps:30,durationMs:5000},
+      tracks:[
+        {id:'visual',kind:'visual',items:[
+          {id:'S1',type:'scene',startMs:0,durationMs:2400},
+          {id:'S2',type:'scene',startMs:2400,durationMs:2600},
+          {id:'scene_plate',type:'sceneLayer',sceneId:'S1',elementId:'footage',
+            startMs:0,durationMs:2400,endMs:2400,label:'Footage',kind:'video'}]},
+        {id:'voice',kind:'audio',items:[{id:'narration',type:'audio',assetId:'voice_asset',
+          startMs:0,durationMs:5000}]},
+        {id:'subtitles',kind:'caption',items:[{id:'subtitle_1',type:'caption',text:'Hello',
+          startMs:400,durationMs:1200}]},
+      ]},
+  } as unknown as MsPortableManifest
+
+  it('places scenes and native editable motion layers on Compact lanes without duplicating baked captions',()=>{
+    const base=buildMotionStudioEditorEdits({base:null,durationMs:5000,patch:{},
+      musicUploadId:null,lastPlacedMusicUploadId:null})
+    const result=buildLiveMotionStudioEditorEdits(base,manifest,'msp_test',3)
+    expect(result.videoSplits).toEqual([2400])
+    expect(result.motionStudio?.segments).toHaveLength(2)
+    const all=result.motionStudio!.tracks.flatMap(track=>track.items) as {elementId?:string;id:string}[]
+    expect(all.some(item=>item.elementId==='title')).toBe(true)
+    expect(all.some(item=>item.elementId==='footage')).toBe(true)
+    expect(all.some(item=>item.id==='narration')).toBe(true)
+    expect(all.some(item=>item.id==='subtitle_1')).toBe(true)
+    expect(result.captionLines).toBeUndefined()
+  })
+  it('preserves manual splits and trim across refreshed native versions',()=>{
+    const base=buildMotionStudioEditorEdits({base:null,durationMs:5000,patch:{},
+      musicUploadId:null,lastPlacedMusicUploadId:null})
+    base.trim={in:300,out:4700}
+    base.videoSplits=[1800]
+    const result=buildLiveMotionStudioEditorEdits(base,manifest,'msp_test',4)
+    expect(result.trim).toEqual({in:300,out:4700})
+    expect(result.videoSplits).toEqual([1800,2400])
+    expect(result.motionStudio?.timelineVersion).toBe(4)
   })
 })
