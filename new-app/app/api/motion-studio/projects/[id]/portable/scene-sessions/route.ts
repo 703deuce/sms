@@ -35,7 +35,7 @@ export async function POST(request:Request,ctx:Ctx){
     const assets=await portableAssetSession(workspaceId,projectId,versionId)
     mark('asset-signing');stage='scene-issuance'
     const sessions=await Promise.all(sceneIds.map(async id=>({
-      sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url,assets)
+      sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url,assets,manifest)
     })))
     mark('scene-issuance');stage='response'
     // The authenticated HOST may stream large original media directly. Do not
