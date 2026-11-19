@@ -25,7 +25,7 @@ function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
  * AI-generated scenes are two kinds of visual item on the SAME timeline.
  */
 export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,theme,overrides,previewVideoUrl,
-  scenePatch={},onSceneChange,overlay}:{
+  scenePatch={},onSceneChange,overlay,embeddedCanvas=false,externalTimeMs}:{
     projectId?:string;timeline:UniversalTimeline;sessions:Record<string,BrowserSceneSession>;
     assetUrls:Record<string,string>;theme:Record<string,unknown>;
     previewVideoUrl?:string|null;
@@ -33,6 +33,8 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
     scenePatch?:Record<string,Record<string,unknown>>;
     onSceneChange?:(sceneId:string)=>void
     overlay?:ReactNode
+    embeddedCanvas?:boolean
+    externalTimeMs?:number
   }){
   const loadStart=useRef<number>(performance.now())
   const firstFrameLogged=useRef(false)
@@ -219,6 +221,16 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
         scenes:{[activeId]:{elements:values}}})
   },[scenePatch,activeId,ready,send])
 
+  // Compact Editor owns the one shared playhead. In embedded mode the scene
+  // runtime follows that clock; it never starts a second independent player.
+  useEffect(()=>{
+    if(externalTimeMs===undefined)return
+    const at=safeMs(externalTimeMs,timeline.durationMs)
+    if(Math.abs(position.current-at)<0.5)return
+    position.current=at
+    setTimeMs(at)
+  },[externalTimeMs,timeline.durationMs])
+
   const pause=useCallback(()=>{
     audio.current?.pause()
     setPlaying(false)
@@ -338,12 +350,15 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
     return()=>{cancelled=true;cancelAnimationFrame(id)}
   },[firstFrameRendered,hasVisibleScene,projectId])
   const bg:CSSProperties={aspectRatio:`${timeline.width}/${timeline.height}`}
-  return <section aria-label="Universal video timeline player" className="flex flex-col gap-2">
-    <div className="flex items-center justify-between gap-2 text-xs">
+  return <section aria-label="Universal video timeline player"
+    className={embeddedCanvas?'absolute inset-0 overflow-hidden':'flex flex-col gap-2'}
+    style={embeddedCanvas&&!firstFrameRendered?{opacity:0,pointerEvents:'none'}:undefined}>
+    {!embeddedCanvas?<div className="flex items-center justify-between gap-2 text-xs">
       <span className="font-medium">Live project playback</span>
       <span className="text-muted-foreground">Scene code + footage + audio + captions</span>
-    </div>
-    <div className="relative w-full overflow-hidden rounded-md border border-border bg-black" style={bg}>
+    </div>:null}
+    <div className={embeddedCanvas?'absolute inset-0 overflow-hidden':'relative w-full overflow-hidden rounded-md border border-border bg-black'}
+      style={embeddedCanvas?undefined:bg}>
       {showing.filter(v=>v.type!=='scene').map(item=>{
         const url=item.assetId?assetUrls[item.assetId]:null
         if(!url)return null
@@ -378,7 +393,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
           Loading editable scene…
         </div>:null}
     </div>
-    <div className="flex items-center gap-2">
+    {!embeddedCanvas?<><div className="flex items-center gap-2">
       <button type="button" onClick={()=>void togglePlay()}
         className="rounded-md border border-input px-3 py-1 text-xs"
         disabled={Boolean(activeId&&!ready[activeId]) || (allSceneIds.length<=3 && allSceneIds.some(id=>!ready[id]||!drawn[id]))}>
@@ -437,5 +452,6 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
       </div>)}
     </div>
     {error?<p className="text-xs text-destructive" role="status">{error}</p>:null}
+    </>:null}
   </section>
 }
