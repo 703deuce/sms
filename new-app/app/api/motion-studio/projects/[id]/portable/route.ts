@@ -6,7 +6,7 @@ import { pollingRoute } from '@/lib/server/db-read-gate'
 import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
-import {createSceneSession} from '@/lib/server/motion-studio/scene-host'
+import {createSceneSession,prewarmSceneIndex} from '@/lib/server/motion-studio/scene-host'
 type Ctx={params:Promise<{id:string}>}
 export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
   const start=Date.now()
@@ -33,6 +33,11 @@ export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
       const sceneIds=[...new Set(normalizeUniversalTimeline(manifest).visuals
         .filter(v=>v.type==='scene').map(v=>v.sceneId).filter((id):id is string=>Boolean(id)))].slice(0,3)
       if(!sceneIds.length)return NextResponse.json({...result,playback:null})
+      // The first scene index can spend seconds on a cold B2 fetch. Start its
+      // backing-object read immediately while we issue signed media URLs;
+      // do not delay the bootstrap response or require a rendering job.
+      const firstScene=manifest.scenes.find(scene=>scene.id===sceneIds[0])
+      if(firstScene)void prewarmSceneIndex(projectId,version.id,firstScene.bundleAssetId)
       const assets=await portableAssetSession(workspaceId,projectId,version.id,manifest)
       console.info('[motion-studio:load]',{kind:'project-request',projectId,stage:'asset-session',elapsedMs:Date.now()-start})
       const sessions=await Promise.all(sceneIds.map(async sceneId=>({
