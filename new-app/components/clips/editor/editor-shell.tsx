@@ -412,7 +412,7 @@ export function EditorShell({
       return next
     })
   }, [compact, fullVideo, clipperStudio, projectId, clipId])
-  const timelineVisible = !compact || timelineOpen
+  const timelineVisible = !compact || timelineOpen || Boolean(motionStudioSlot)
   const { widthPx: panelWidthPx, persist: persistPanelWidth } = useEditorPanelWidth()
   const [layoutView, setLayoutView] = useState<ClipEditorLayoutView>('timeline')
   const [timelineCollapsed, setTimelineCollapsed] = useState(false)
@@ -434,8 +434,11 @@ export function EditorShell({
   /** MENUBAR1: last top-menu command for the Timeline (seq bumps on every click). */
   const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
   useEffect(() => {
-    setLayoutView(clipperStudio ? 'script' : readClipEditorLayoutView())
-  }, [clipperStudio])
+    // Motion Studio uses Compact by default, not the separate Full Timeline.
+    setLayoutView(clipperStudio || motionStudioSlot ? 'script' : readClipEditorLayoutView())
+  // motionStudioSlot is present for the lifetime of this editor route.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clipperStudio,Boolean(motionStudioSlot)])
   useEffect(() => {
     if (unifiedWorkspaceActive || layoutView !== 'timeline' || band === 'mobile') return
     const storage = typeof window === 'undefined' ? null : window.localStorage
@@ -3903,7 +3906,8 @@ export function EditorShell({
         <EditorLayout
           unified={unifiedWorkspaceActive}
           unifiedTimelineView={layoutView}
-          unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused}
+          unifiedTimelineHidden={compact && !timelineOpen && !timelineFocused && !motionStudioSlot}
+          unifiedCompactTimelineHeightPx={motionStudioSlot?360:undefined}
           unifiedTimelineCollapsed={timelineCollapsed && !timelineFocused}
           onUnifiedTimelineFocusChange={setTimelineFocused}
           onUnifiedTimelineViewChange={setLayoutViewPersist}
@@ -4116,6 +4120,13 @@ export function EditorShell({
           }
           timeline={
           layoutView === 'script' ? (
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              {motionStudioSlot ? (
+                <div className="min-h-0 max-h-[220px] shrink-0 overflow-y-auto border-b border-border/70 px-2 py-2"
+                  data-testid="editor-motion-studio-compact-lanes">
+                  {motionStudioSlot({outputMs,seekOutput})}
+                </div>
+              ) : null}
             <ScriptViewWaveStrip
               onShowTimeline={() => setLayoutViewPersist('timeline')}
               timelineSlot={
@@ -4138,6 +4149,7 @@ export function EditorShell({
                 />
               }
             />
+            </div>
           ) : (
           <>
           {motionStudioSlot ? (
