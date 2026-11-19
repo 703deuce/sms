@@ -1,0 +1,135 @@
+# Motion Studio Modal film renderer (separate from clips)
+
+This Modal app is isolated from `worker/modal_app`. It does not use the
+clips worker, a production server shell, a database connection or public B2.
+The backend verifies the job-scoped bearer token and issues **short-lived**
+private asset reads. The monthly guard queries the same `ai_usage` table
+as the clips worker. No customer-facing price is displayed.
+
+## Producer bundle contract (required)
+
+Upload a ZIP as a ready **job-owned** asset via `POST /jobs/:id/assets`
+with `kind: "project"`, `mime: "application/zip"`,
+`filename: "render_bundle_v1.zip"`, SHA-256 and size. The existing asset
+API supplies the private B2 object path and handles resume; no direct bucket
+credentials are required in the Modal container. Use a new versioned
+filename for changed bundles, rather than replacing a committed object.
+
+The ZIP must contain **a complete already-composited browser scene**, not
+only separately rendered plates. `project.json` example:
+
+```json
+{
+  "width": 854,
+  "height": 480,
+  "fps": 30,
+  "frameCount": 150,
+  "durationMs": 5000,
+  "composition": {"entryFile": "composition/index.html"},
+  "mixedAudioFile": "audio/mixed.wav"
+}
+```
+
+The entrypoint must expose `window.__scene.seek(seconds)` and accurately
+compose the plate videos, motion-graphics/layer-scene text, transitions and
+effects at the requested frame. Supply all local files/fonts (including
+Schibsted Grotesk Black and Martian Mono Medium for the 5s test) in the ZIP.
+External fetches are blocked during capture. Captions are **not** burned in.
+
+For final delivery, also supply `portable.json` in the ZIP with exactly
+the already-uploaded/registered native
+`{document,assets,bundles,liveProject}` publication payload. Missing
+composition or editable payload fails safely; the renderer does not invent
+a film-assembly recipe or flatten a missing editable scene.
+
+## Image, modes and encoding
+
+The isolated image pins Node 22, Chromium, FFmpeg, puppeteer-core and
+`hyperframes@0.9.52`. CPU uses SwiftShader; GPU uses a T4 with ANGLE/GL
+and GPU rasterization. Both encode segments with libx264 CRF 16 for
+apples-to-apples benchmarking. Use `MOTION_MODE=cpu` or `gpu`.
+
+Master: preserve native project dimensions, H.264 High@4.2,
+`yuv420p`, CRF 16, `+faststart`. Mixed WAV is normalized to -14 LUFS,
+true peak -1.5 dB, and encoded AAC 192 kbps, 48 kHz stereo.
+Share copy: **never upscale** native media; cap dimensions at 1280×720;
+AAC 128 kbps; CRF 26, then 29/32/35 if needed. If the copy cannot fit
+under 24 MB without violating those quality bounds, QA stops rather than
+silently returning an oversized share file. Revisit size targeting for
+longer films after the 5-second smoke test.
+
+Auto QA checks decoded frame count, expected duration, audio presence,
+black gaps over 0.6 s and EBU R128 integrated loudness (-16.5 to -13.5 LUFS).
+Static scene holds are permitted; a full duplicate/motion analysis is not yet
+implemented. The benchmark reports measured runtime and **estimated**
+usage, not the authoritative Modal invoice.
+
+## Deploy and no-charge smoke
+
+The production operator has `MODAL_TOKEN_ID` and `MODAL_TOKEN_SECRET`
+already configured. Never echo values or enable shell tracing:
+
+```bash
+set +x
+cd worker/modal_motion
+modal deploy -m app
+modal run -m app::ping
+cd ../..
+```
+
+## First *paid* 5s Gold vs Bitcoin benchmark (one CPU, one GPU)
+
+Before either submission the producer must register the real 854×480,
+30 fps, 150-frame full-composition ZIP through its existing authenticated job
+API. Test with `MOTION_SEGMENT_FRAMES=30` (5 segments) or 60 (3 segments).
+A 5-minute lease must be renewed by a job-token call every ~2 minutes
+during rendering/QA/upload. The worker has a background 105s heartbeat.
+Coordinator mode auto-renews; pull-queue renewal is enabled in the backend.
+
+Set these in the trusted producer shell (not in command-line arguments):
+`MOTION_JOB_ID`, `MOTION_JOB_URL` (the full HTTPS jobs/:id API address),
+`MOTION_JOB_TOKEN`, `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`,
+`MOTION_ESTIMATE_USD_MICROS` (positive approved estimate),
+`MOTION_CPU_USD_PER_SECOND` and `MOTION_GPU_USD_PER_SECOND`
+(approved current compute rates, not guessed). Optional:
+`MODAL_MOTION_APP_NAME`, `MOTION_BUNDLE_FILENAME` (default
+`render_bundle_v1.zip`), `MOTION_BUNDLE_PATH` (if the ZIP needs uploading).
+The submitter checks the **95% shared monthly limit before paid work**.
+
+```bash
+set +x
+export MOTION_BUNDLE_FILENAME=render_bundle_v1.zip
+export MOTION_SEGMENT_FRAMES=30
+export MOTION_BENCHMARK_ONLY=1
+
+# CPU: exactly once, no whole-job automatic retry.
+export MOTION_MODE=cpu
+node new-app/scripts/motion-studio/modal_submit.mjs
+
+# After CPU result/QA is inspected, GPU: exactly once.
+export MOTION_MODE=gpu
+node new-app/scripts/motion-studio/modal_submit.mjs
+```
+
+Benchmark mode is **on by default** and must not approveMaster, publish
+the editable payload or complete/fail the customer job. CPU and GPU upload
+different filenames for comparable private outputs. Inspect
+`GET /jobs/:id/render-status` with job bearer authorization; never print
+bearer credentials or the returned presigned URLs. Collect frame count,
+segment count, retries, QA, sizes, wall time and actual billed costs from
+Modal for the final comparison. A new job assignment may be needed if the
+5-minute lease expires between benchmarks.
+
+## Production (after independent benchmark and composition QA)
+
+Set `MOTION_BENCHMARK_ONLY=0` for an approved production assignment. Modal
+then uploads `master_<mode>.mp4` and `share_<mode>.mp4`, approves the
+master while keeping the job open, publishes the exact `portable.json`
+payload and calls `/complete`. **Do not use** production mode until the
+5s bundle faithfully matches the intended plate/layer assembly.
+
+The submitted job token is converted into a per-job Modal Secret; only a
+job ID, call ID and authenticated status endpoint are printed. No queue
+secret, app admin secret, B2 S3 key, DB URL, or SSH credentials go to Modal.
+No whole-run paid retries; at most 3 attempts for each segment. Original
+Producer runners and clips-worker Modal functions are not modified.
