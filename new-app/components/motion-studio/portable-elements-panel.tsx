@@ -257,6 +257,10 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
           disabled={!restoreId||saving||Object.keys(patch).length>0||Object.keys(colors).length>0}
           onClick={()=>void restore()}>Restore as new version</button>
       </div>:null}
+      {masterUrl?<a href={masterUrl} target="_blank" rel="noopener noreferrer"
+        className="w-fit text-xs text-primary underline">
+        Watch original MP4
+      </a>:null}
       <label className="text-xs font-medium">Scene
         <select className={inputCls} value={scene?.id||''} onChange={e=>{setSceneId(e.target.value);setPatch({})}}>
           {scenes.map(s=><option key={s.id} value={s.id}>{s.id} · {s.engine}</option>)}
