@@ -275,6 +275,7 @@ export function EditorShell({
   initialPanel,
   initialProducerOpen = false,
   motionStudioSlot,
+  motionStudioCanvasSlot,
 }: {
   projectId: string
   projectTitle?: string
@@ -323,6 +324,7 @@ export function EditorShell({
    * clip timeline. Undefined everywhere else, so clip editing, captions, save, reload, preview and export are unchanged.
    */
   motionStudioSlot?: (ctx: { outputMs: number; seekOutput: (ms: number) => void }) => React.ReactNode
+  motionStudioCanvasSlot?: (ctx:{outputMs:number})=>React.ReactNode
 }) {
   const [title, setTitle] = useState(initialTitle)
   const [brollMedia, setBrollMedia] = useState<BrollMediaRow[]>(initialBrollMedia)
@@ -2886,6 +2888,7 @@ export function EditorShell({
           captionQuickStyle: compactClipMode ? { onMore: () => selectPanel('captions') } : undefined,
         }}
       />
+      {motionStudioCanvasSlot?motionStudioCanvasSlot({outputMs}):null}
       {studioPreviewLoading ? (
         <div
           className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-xl bg-black/45"
