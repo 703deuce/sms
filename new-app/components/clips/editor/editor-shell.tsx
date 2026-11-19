@@ -380,7 +380,9 @@ export function EditorShell({
   })
   const [safeZoneVisible, setSafeZoneVisible] = useSafeZoneVisible()
   const pendingApplyDone = useRef(false)
-  const compactClipMode = compact && !fullVideo && !clipperStudio
+  // Motion Studio's source canvas may be flagged fullVideo for duration, but
+  // its editing surface is Compact (the full timeline stays opt-in later).
+  const compactClipMode = compact && !clipperStudio && (!fullVideo || Boolean(motionStudioSlot))
   const startPanel: EditorPanelId = initialPanel ?? 'transcript'
   const [panel, setPanel] = useState<EditorPanelId>(startPanel)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
