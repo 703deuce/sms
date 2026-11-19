@@ -126,7 +126,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
   // When editable delivery completes, use the SAME Compact Editor as
   // ordinary footage. The producer workspace remains available with
   // ?view=workspace for status, chat and version history.
-  const liveReady = client.mode === 'live' && agentJob?.status === 'complete' && agentJob.delivery === 'live'
+  const liveReady = client.mode === 'live' && agentJob?.status === 'complete' && agentJob.delivery === 'live' && Boolean(agentJob.videoUrl)
   const compactRedirectStarted=useRef(false)
   useEffect(() => {
     if (!liveReady||compactRedirectStarted.current) return
@@ -217,7 +217,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
   const awaitingReview = project.status === 'awaiting_review' && project.settings.productionMode === 'checkpoint' && !project.story?.approved
   const canExport = project.status === 'review' || project.status === 'complete' || project.status === 'exporting'
   // Contract v1.1: the Compact Editor opens the assembled program MP4, which exists once the first cut is assembled.
-  const canOpenEditor = (canExport || agentJob?.delivery === 'live') && !project.isExample
+  const canOpenEditor = (canExport || (agentJob?.delivery === 'live' && Boolean(agentJob.videoUrl))) && !project.isExample
   const editorHint = project.isExample ? 'The example project is read-only' : agentJob?.delivery==='live' ? 'Open the existing Compact Editor with the original Motion Studio lanes' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
   const canCancel = !project.isExample && (project.status === 'planning' || project.status === 'producing' || project.status === 'exporting')
   const cancel = () =>
