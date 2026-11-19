@@ -32,7 +32,7 @@ export async function POST(request:Request,ctx:Ctx){
     if(sceneIds.some(id=>!known.has(id)))
       return NextResponse.json({error:'Scene not in this project'},{status:400})
     // Signing every asset per scene is expensive on large producer projects.
-    const assets=await portableAssetSession(workspaceId,projectId,versionId)
+    const assets=await portableAssetSession(workspaceId,projectId,versionId,manifest)
     mark('asset-signing');stage='scene-issuance'
     const sessions=await Promise.all(sceneIds.map(async id=>({
       sceneId:id,...await createSceneSession(workspaceId,projectId,versionId,id,request.url,assets,manifest)
