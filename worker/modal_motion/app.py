@@ -103,15 +103,12 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
             "message":"Video ready to watch; preparing editable version"})
         api(job_id,"POST","/render-status",{"stage":"uploaded"})
-        # A producer bundle must provide an exact, registered portable payload.
-        # We do not fake editable media or auto-flatten it into an MP4.
+        # Reuse the existing content-addressed Producer package contract;
+        # upload original bundles/stems and publish their native metadata.
+        from pipeline import publish_editable
         with tempfile.TemporaryDirectory() as tmp:
             root,project,_,_=extract_bundle(job_id,bundle_name,tmp)
-            payload_file=root/"portable.json"
-            if not payload_file.is_file():
-                raise ValueError("Editable portable payload missing from render bundle")
-            payload=json.loads(payload_file.read_text())
-            version=api(job_id,"POST","/portable",payload,timeout=300)
+            version=publish_editable(job_id,root)
         version_id=version["id"]
         api(job_id,"POST","/complete",{"delivery":"live","portableVersionId":version_id,
             "durationMs":project["durationMs"]})
