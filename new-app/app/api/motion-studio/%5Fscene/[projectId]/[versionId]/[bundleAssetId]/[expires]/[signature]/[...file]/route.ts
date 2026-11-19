@@ -5,13 +5,21 @@ type Ctx={params:Promise<{
   signature:string;file:string[]
 }>}
 export async function GET(request:Request,ctx:Ctx){
+  const started=Date.now()
+  let category='unknown'
   try{
     const p=await ctx.params
-    return await sceneFileResponse({
+    category=p.file[0]==='_asset'?'asset':p.file.join('/')==='index.html'?'index':'scene-file'
+    const response=await sceneFileResponse({
       projectId:p.projectId,versionId:p.versionId,bundleAssetId:p.bundleAssetId,
       expires:p.expires,signature:p.signature,filePath:p.file.join('/'),requestUrl:publicRequestUrl(request),
     })
-  }catch(e){return motionStudioJsonError(e)}
+    console.info('[motion-studio:load]',{kind:'scene-file',category,projectId:p.projectId,status:response.status,elapsedMs:Date.now()-started})
+    return response
+  }catch(e){
+    console.warn('[motion-studio:load]',{kind:'scene-file',category,status:'error',elapsedMs:Date.now()-started,error:e instanceof Error?e.message:'unknown'})
+    return motionStudioJsonError(e)
+  }
 }
 
 /**
