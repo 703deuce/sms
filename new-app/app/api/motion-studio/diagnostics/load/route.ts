@@ -22,7 +22,7 @@ export async function POST(request:Request){
     return NextResponse.json({error:'invalid payload'},{status:400})
   const x=data as Record<string,unknown>
   const stage=typeof x.stage==='string'?x.stage:''
-  const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible',
+  const allowed=new Set(['project-mounted','project-fetch-start','project-headers','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible',
     'iframe-runtime-start','iframe-dom-ready','iframe-window-load',
     'iframe-fonts-ready','iframe-images-ready','iframe-runtime-init-message',
     'iframe-first-render-call','iframe-document-load','iframe-hello','iframe-init-sent','iframe-first-seek-sent',
