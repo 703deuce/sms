@@ -1112,43 +1112,58 @@ export async function restoreAgentVersion(workspaceId: string, projectId: string
 
 /** Private operational telemetry; never included in publicJob or customer chat. */
 export async function botRecordUsage(id: string, request: Request, raw: unknown) {
-  const job = await requireBotJob(id, request)
-  const input = toObject(raw)
-  if (!Array.isArray(input.items)) throw new MotionStudioError('INVALID','Usage items required.',400)
-  const items = input.items.slice(0,100).map(v=>{
-    const item = toObject(v)
-    const provider = str(item.provider,80)
-    const units = Number(item.units), usd = Number(item.usd)
-    if (!provider || !Number.isFinite(units) || units < 0 || !Number.isFinite(usd) || usd < 0)
+  const job=await requireBotJob(id,request)
+  const input=toObject(raw)
+  if(!Array.isArray(input.items))throw new MotionStudioError('INVALID','Usage items required.',400)
+  const items=input.items.slice(0,100).map(v=>{
+    const item=toObject(v)
+    const provider=str(item.provider,80)
+    const units=Number(item.units),usd=Number(item.usd)
+    if(!provider||!Number.isFinite(units)||units<0||
+      !Number.isFinite(usd)||usd<0)
       throw new MotionStudioError('INVALID','Invalid usage item.',400)
     return {provider,units,usd}
   })
-  // A callback may be retried after a network timeout. One AiUsage record per
-  // Motion Studio job means retries cannot double-charge the shared Modal cap.
-  const modalItems=items.filter(item=>item.provider==='modal')
-  const modalMicros=Math.round(modalItems.reduce((n,item)=>n+item.usd,0)*1_000_000)
-  if(!Number.isSafeInteger(modalMicros)||modalMicros>2_000_000_000)
-    throw new MotionStudioError('INVALID','Usage exceeds safe bounds.',400)
+  const modalItems=items.filter(x=>x.provider==='modal')
+  const usageId=str(input.usageId,120)||'legacy'
+  if(!/^[A-Za-z0-9_.-]{1,120}$/.test(usageId))
+    throw new MotionStudioError('INVALID','Invalid usage receipt ID.',400)
   const updated=await db().$transaction(async tx=>{
     await tx.$queryRaw`SELECT "id" FROM "MotionStudioAgentJob" WHERE "id"=${id} FOR UPDATE`
     const current=await tx.motionStudioAgentJob.findUniqueOrThrow({where:{id}})
-    // Do not turn a stale runner's usage into another job's bill.
     if(current.tokenHash!==job.tokenHash||current.workspaceId!==job.workspaceId)
       throw new MotionStudioError('CONFLICT','Job assignment changed.',409)
+    const existing=toObject(current.usage)
+    const runs=Array.isArray(existing.modalRuns)?existing.modalRuns
+      .map(v=>toObject(v)).filter(x=>typeof x.id==='string'): []
     if(modalItems.length){
+      const usd=modalItems.reduce((n,x)=>n+x.usd,0)
+      const units=modalItems.reduce((n,x)=>n+x.units,0)
+      if(!Number.isFinite(usd)||usd<0||usd>2000)
+        throw new MotionStudioError('INVALID','Modal usage exceeds safe bounds.',400)
+      const at=runs.findIndex(x=>x.id===usageId)
+      const receipt={id:usageId,usd,units}
+      if(at<0)runs.push(receipt)
+      else runs[at]=receipt
+      if(runs.length>100)
+        throw new MotionStudioError('INVALID','Too many Modal usage receipts.',400)
+      const totalUsd=runs.reduce((n,x)=>n+Number(x.usd||0),0)
+      const totalUnits=runs.reduce((n,x)=>n+Number(x.units||0),0)
+      const costUsdMicros=Math.round(totalUsd*1_000_000)
+      if(!Number.isSafeInteger(costUsdMicros)||costUsdMicros>2_000_000_000)
+        throw new MotionStudioError('INVALID','Modal usage exceeds safe bounds.',400)
       const prior=await tx.aiUsage.findFirst({
         where:{provider:'modal',generationId:id,workspaceId:job.workspaceId},
         orderBy:{createdAt:'desc'},select:{id:true},
       })
       const record={workspaceId:job.workspaceId,projectId:job.projectId,
         generationId:id,provider:'modal',model:'motion-studio-render',
-        units:modalItems.reduce((n,item)=>n+item.units,0),
-        unitType:'render_units',costUsdMicros:modalMicros}
+        units:totalUnits,unitType:'render_units',costUsdMicros}
       if(prior)await tx.aiUsage.update({where:{id:prior.id},data:record})
       else await tx.aiUsage.create({data:record})
     }
     return tx.motionStudioAgentJob.update({where:{id},data:{usage:toPrismaJson({
-      items,recordedAt:new Date().toISOString()
+      items,modalRuns:runs,recordedAt:new Date().toISOString()
     })}})
   })
   return {jobId:updated.id,stored:true}
