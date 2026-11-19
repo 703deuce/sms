@@ -160,11 +160,8 @@ export function buildLiveMotionStudioEditorEdits(base:ClipEditsV2,manifest:MsPor
   const ownSplits=(base.videoSplits??[]).filter(ms=>!previousSplits.has(ms)&&ms>0&&ms<durationMs)
   const changes:ClipEditsV2={...base,motionStudio:ext,
     videoSplits:[...new Set([...sceneSplitsMs(ext,durationMs),...ownSplits])].sort((a,b)=>a-b)}
-  // Only populate native caption lines when none were authored in Compact.
-  if(!base.captionLines?.length&&live.captions.length){
-    changes.captionLines=live.captions.map(c=>({
-      id:c.id,text:c.text,startMs:c.startMs,endMs:c.endMs,
-    }))
-  }
+  // Preserve captions in their original native track. The approved master
+  // might already display them; copying them into Clip captionLines here
+  // would burn a second identical caption over the picture.
   return changes
 }
