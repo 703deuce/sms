@@ -9,12 +9,14 @@ import { MOTION_STUDIO_NAME, MOTION_STUDIO_ROUTE } from '@/lib/motion-studio/con
 import { sceneAt } from '@/lib/motion-studio/timeline'
 import type { MsProject } from '@/lib/motion-studio/types'
 import { MotionStudioTracks } from './motion-studio-tracks'
+import {MotionStudioCompactLayerEditor} from './motion-studio-compact-layer-editor'
 import { AgentChatPanel } from './agent-chat-panel'
 import { startPolling } from '@/lib/motion-studio/poll'
 
 /**
  * Motion Studio lanes mounted inside the existing Compact Editor (EditorShell `motionStudioSlot`).
- * Read-only lanes keyed to the editor playhead; edits still go through the editor's own timeline and save path.
+ * Scene/footage/audio lane summaries plus native scene-object editing. Compact
+ * keeps its own timeline edits; native layer properties save as portable revisions.
  */
 export function MotionStudioEditorLanes({
   projectId,
@@ -125,8 +127,9 @@ export function MotionStudioEditorLanes({
         </Link>
       </div>
       <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
-        Each scene and footage insert is its own clip on the Video track, narration stays with the picture, and the score is on the Music track. Trim, delete, mute or swap them here. To redesign a scene, ask the Director in Motion Studio; only that scene re-renders, and this cut updates the next time you open it.
+        Each scene and footage insert is its own clip on the Video track, narration stays with the picture, and the score is on the Music track. Trim, delete, mute or swap video items in Compact. The original motion-graphics layers above are selectable and saved as native scene properties; these are not flattened into an extra MP4 layer.
       </p>
+      <MotionStudioCompactLayerEditor projectId={projectId} outputMs={outputMs} onSeek={onSeek}/>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 overflow-x-auto">
           {agentTracks?.length ? <div className="min-w-[560px] space-y-2 rounded-lg border border-border p-3"
