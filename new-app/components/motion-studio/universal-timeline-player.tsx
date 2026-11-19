@@ -35,6 +35,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
   }){
   const loadStart=useRef<number>(performance.now())
   const firstFrameLogged=useRef(false)
+  const [firstFrameRendered,setFirstFrameRendered]=useState(false)
   const [timeMs,setTimeMs]=useState(0)
   const [playing,setPlaying]=useState(false)
   const [rate,setRate]=useState(1)
@@ -138,6 +139,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         delete pending.current[sceneId]
         if(!firstFrameLogged.current){
           firstFrameLogged.current=true
+          setFirstFrameRendered(true)
           console.info('[motion-studio:browser-load]',{stage:'first-frame-drawn',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
           reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current)
         }
@@ -309,7 +311,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
           className="absolute inset-0 size-full border-0"
           style={{zIndex:(item?.layer??0)+1,opacity:visible?1:0,pointerEvents:'none'}}/>
       })}
-      {previewVideoUrl&&activeId&&!drawn[activeId]?
+      {previewVideoUrl&&!firstFrameRendered?
         <video key={previewVideoUrl} src={previewVideoUrl} autoPlay muted playsInline loop
           preload="auto" aria-label="Rendered preview while editable scenes load"
           className="pointer-events-none absolute inset-0 size-full object-contain"
