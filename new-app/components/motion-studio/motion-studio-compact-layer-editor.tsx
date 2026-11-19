@@ -112,6 +112,11 @@ export function MotionStudioCompactLayerEditor({projectId,outputMs,onSeek}:{
       if(!response.ok||!data.version)throw new Error(data.error||'Could not save scene layer')
       setVersion(data.version)
       setPatch({})
+      // Refresh the native overlay in the same Compact canvas using this
+      // new immutable version; never mutate a baked MP4 in place.
+      window.dispatchEvent(new CustomEvent('motion-studio:portable-updated',{
+        detail:{projectId,versionId:data.version.id},
+      }))
       setNotice(data.requiresRender?'Saved. This property needs a scene render to update the picture.':
         'Saved to the editable scene project.')
     }catch(e){setError(e instanceof Error?e.message:'Save failed')}
