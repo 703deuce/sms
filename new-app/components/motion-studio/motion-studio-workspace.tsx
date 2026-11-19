@@ -123,15 +123,24 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
     return () => { active = false; stop() }
   }, [client.mode, projectId, pollMs, projectRunning, jobEpoch])
 
-  // A finished live (masterless) production plays in the dedicated browser editor.
-  // The server route redirects on first load; this covers a job finishing while the
-  // page is open. `?view=workspace` opts out (chat / version history).
+  // When editable delivery completes, use the SAME Compact Editor as
+  // ordinary footage. The producer workspace remains available with
+  // ?view=workspace for status, chat and version history.
   const liveReady = client.mode === 'live' && agentJob?.status === 'complete' && agentJob.delivery === 'live'
+  const compactRedirectStarted=useRef(false)
   useEffect(() => {
-    if (!liveReady) return
+    if (!liveReady||compactRedirectStarted.current) return
     if (new URLSearchParams(window.location.search).get('view') === 'workspace') return
-    router.replace('/app/motion-studio/' + encodeURIComponent(projectId) + '/live')
-  }, [liveReady, projectId, router])
+    compactRedirectStarted.current=true
+    void client.openInEditor(projectId).then(h=>{
+      router.replace('/app/video-editor/'+encodeURIComponent(h.clipProjectId)+
+        '/edit/'+encodeURIComponent(h.clipId)+'?motionStudio='+encodeURIComponent(projectId))
+    }).catch(error=>{
+      compactRedirectStarted.current=false
+      console.warn('[motion-studio:ui] compact_handoff_failed',{
+        error:error instanceof Error?error.message:'unknown'})
+    })
+  }, [liveReady, projectId, router, client])
 
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -209,7 +218,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
   const canExport = project.status === 'review' || project.status === 'complete' || project.status === 'exporting'
   // Contract v1.1: the Compact Editor opens the assembled program MP4, which exists once the first cut is assembled.
   const canOpenEditor = (canExport || agentJob?.delivery === 'live') && !project.isExample
-  const editorHint = project.isExample ? 'The example project is read-only' : agentJob?.delivery==='live' ? 'Edit the original scene, timeline, audio and captions in this browser workspace' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
+  const editorHint = project.isExample ? 'The example project is read-only' : agentJob?.delivery==='live' ? 'Open the existing Compact Editor with the original Motion Studio lanes' : !canExport ? 'Opens once the first cut is assembled (program MP4)' : 'Opens the assembled program MP4 in the Compact Editor'
   const canCancel = !project.isExample && (project.status === 'planning' || project.status === 'producing' || project.status === 'exporting')
   const cancel = () =>
     void act('cancel', async () => {
@@ -240,10 +249,6 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
     requestAnimationFrame(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }))
   }
   const openEditor = () => {
-    if(agentJob?.delivery==='live'){
-      router.push('/app/motion-studio/'+encodeURIComponent(project.id)+'/live')
-      return
-    }
     void act('editor', async () => {
       const h = await client.openInEditor(project.id)
       // Compact Editor with the Motion Studio lanes (EditorShell `motionStudioSlot`); existing clip editing is unchanged.
@@ -416,7 +421,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
         {bottom === 'timeline' ? (
           <Button size="sm" variant="outline" onClick={openEditor} disabled={busy != null || !canOpenEditor} title={editorHint} data-testid="ms-open-editor-timeline">
             <Rows3 className="size-3.5" aria-hidden />
-            {agentJob?.delivery==='live'?'Open live editor':MS_LABELS.openAdvanced}
+            {agentJob?.delivery==='live'?'Open Compact Editor':MS_LABELS.openAdvanced}
           </Button>
         ) : null}
       </div>
