@@ -54,10 +54,12 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   const [failure,setFailure]=useState('')
   const [mediaUrls,setMediaUrls]=useState<Record<string,string>>({})
   const index=Math.max(0,sceneIds.indexOf(active))
+  const shortFilm=sceneIds.length<=3
   useEffect(()=>{setSessions({});setMediaUrls({});setActive(sceneIds[0]||'');setFailure('')},
     [versionId,sceneIds])
   useEffect(()=>{
-    const ids=sceneIds.slice(index,index+3).filter(id=>{
+    const windowIds=shortFilm?sceneIds:sceneIds.slice(index,index+3)
+    const ids=windowIds.filter(id=>{
       const item=sessions[id]
       return !item||Date.parse(item.expiresAt)<Date.now()+60_000
     })
@@ -87,7 +89,10 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       setFailure('')
     }).catch(err=>{if(alive)setFailure(err instanceof Error?err.message:'Scene session error')})
     return()=>{alive=false}
-  },[projectId,versionId,index,sceneIds,sessions])
+  // For short films, a session is issued exactly once per project version.
+  // Longer timelines still refresh their active three-scene window.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[projectId,versionId,shortFilm,sceneIds,...(shortFilm?[]:[index,sessions])])
 
   const assetUrls=useMemo(()=>{
     const result:Record<string,string>={}
