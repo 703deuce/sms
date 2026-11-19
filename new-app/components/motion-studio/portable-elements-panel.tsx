@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {PollHttpError,startPolling} from '@/lib/motion-studio/poll'
 import type { MsPortableManifest, MsEditProperty } from '@/lib/motion-studio/portable-contract'
 import { PortableLiveFilmPlayer } from './portable-live-film-player'
+import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 import { PortableLayerList, PortableScenePicker, sceneLayers } from './portable-layer-list'
 import { PortableLayerTiming } from './portable-layer-timing'
 type Version = { id:string; revision:number; manifest:MsPortableManifest;
@@ -13,6 +14,7 @@ const inputCls='h-8 w-full rounded-md border border-input bg-transparent px-2 te
 export function PortableElementsPanel({projectId,preferredSceneId}:{
  projectId:string;preferredSceneId?:string|null
 }) {
+  const mountedAt=useRef<number>(performance.now())
   const [version,setVersion]=useState<Version|null>(null)
   const [loading,setLoading]=useState(true)
   const [sceneId,setSceneId]=useState('')
@@ -38,6 +40,7 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable',{cache:'no-store'})
       if(!response.ok) throw new Error('Could not load editable project')
       const data=await response.json() as {version:Version|null;history?:{id:string;revision:number;createdAt:string}[]}
+      reportMotionStudioLoad('project-response',performance.now()-mountedAt.current)
       // An older GET may finish after a successful save. Never roll the editor back.
       if(data.version && data.version.revision >= revisionRef.current) {
         revisionRef.current=data.version.revision
