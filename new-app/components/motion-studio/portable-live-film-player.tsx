@@ -67,10 +67,10 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     let alive=true
     const requestedAt=performance.now()
     console.info('[motion-studio:browser-load]',{stage:'session-request',sceneCount:ids.length,elapsedMs:Math.round(requestedAt-loadStart.current)})
-    reportMotionStudioLoad('session-request',requestedAt-loadStart.current)
+    reportMotionStudioLoad('session-request',requestedAt-loadStart.current,undefined,projectId)
     sceneSessionRequest(projectId,versionId,ids).then(data=>{
       console.info('[motion-studio:browser-load]',{stage:'session-response',sceneCount:ids.length,requestMs:Math.round(performance.now()-requestedAt),elapsedMs:Math.round(performance.now()-loadStart.current)})
-      reportMotionStudioLoad('session-response',performance.now()-loadStart.current,performance.now()-requestedAt)
+      reportMotionStudioLoad('session-response',performance.now()-loadStart.current,performance.now()-requestedAt,projectId)
       if(!alive)return
       const safe=data.sessions.filter(item=>{
         try{
@@ -126,7 +126,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   },[onSceneChange])
   return <div className="flex flex-col gap-1">
     <PlayerErrorBoundary resetKey={versionId}>
-    <UniversalTimelinePlayer timeline={timeline} sessions={sessions} previewVideoUrl={signedPreviewUrl||previewVideoUrl}
+    <UniversalTimelinePlayer projectId={projectId} timeline={timeline} sessions={sessions} previewVideoUrl={signedPreviewUrl||previewVideoUrl}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
       scenePatch={validLivePatch} onSceneChange={selected}
       overlay={currentScene&&onSelectLayer&&onLayerChange?
