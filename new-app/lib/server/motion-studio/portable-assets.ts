@@ -7,12 +7,15 @@ import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
 const db=()=>getPrisma()
 const SIGN_CONCURRENCY=6
 /** Mint short-lived URLs from registered project assets; never persist URLs or raw storage keys. */
-export async function portableAssetSession(workspaceId:string,projectId:string,versionId:string){
-  const version=await db().motionStudioPortableVersion.findFirst({
-    where:{id:versionId,workspaceId,projectId,status:'committed'},
-  })
-  if(!version)throw new MotionStudioError('NOT_FOUND','Project version not found.',404)
-  const manifest=validatePortableManifest(version.manifest)
+export async function portableAssetSession(workspaceId:string,projectId:string,versionId:string,
+  knownManifest?:ReturnType<typeof validatePortableManifest>){
+  const manifest=knownManifest??await (async()=>{
+    const version=await db().motionStudioPortableVersion.findFirst({
+      where:{id:versionId,workspaceId,projectId,status:'committed'},
+    })
+    if(!version)throw new MotionStudioError('NOT_FOUND','Project version not found.',404)
+    return validatePortableManifest(version.manifest)
+  })()
   const registered=await db().studioAsset.findMany({
     where:{workspaceId,projectId,id:{in:manifest.assets.map(a=>a.id)},status:'ready'},
     select:{id:true,uploadId:true},
