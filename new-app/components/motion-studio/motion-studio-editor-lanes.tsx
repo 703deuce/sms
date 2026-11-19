@@ -89,20 +89,10 @@ export function MotionStudioEditorLanes({
     }
   }, [client, projectId])
 
-  if (error && !agentTracks?.length)
-    return (
-      <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground" role="status" data-testid="ms-editor-lanes-error">
-        Motion Studio lanes unavailable: {error}
-        <Link href={MOTION_STUDIO_ROUTE} className="text-primary hover:underline">Back to Motion Studio</Link>
-      </p>
-    )
-  if (!project && !agentTracks?.length)
-    return (
-      <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground" aria-busy="true">
-        <Loader2 className="size-3 animate-spin motion-reduce:animate-none" aria-hidden />
-        Loading Motion Studio lanes…
-      </p>
-    )
+  // Native editable layers must load independently; do not hide them because
+  // optional legacy Motion Studio summaries have not finished polling.
+  const legacyLoading=!project&&!agentTracks?.length
+
   const groups = new Map<string, NonNullable<typeof agentTracks>>()
   for (const track of agentTracks ?? []) {
     const role = [track.id, track.kind, track.label].join(' ')
@@ -129,6 +119,8 @@ export function MotionStudioEditorLanes({
       <p className="text-xs text-muted-foreground" data-testid="ms-editor-program-note">
         Each scene and footage insert is its own clip on the Video track, narration stays with the picture, and the score is on the Music track. Trim, delete, mute or swap video items in Compact. The original motion-graphics layers above are selectable and saved as native scene properties; these are not flattened into an extra MP4 layer.
       </p>
+      {error&&!agentTracks?.length?<p className="text-xs text-muted-foreground" role="status">Legacy lane summary unavailable: {error}</p>:null}
+      {legacyLoading?<p className="flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin"/>Loading track summary…</p>:null}
       <MotionStudioCompactLayerEditor projectId={projectId} outputMs={outputMs} onSeek={onSeek}/>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_300px]">
         <div className="min-w-0 overflow-x-auto">
