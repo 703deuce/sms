@@ -382,7 +382,8 @@ export function EditorShell({
   const pendingApplyDone = useRef(false)
   // Motion Studio's source canvas may be flagged fullVideo for duration, but
   // its editing surface is Compact (the full timeline stays opt-in later).
-  const compactClipMode = compact && !clipperStudio && (!fullVideo || Boolean(motionStudioSlot))
+  const motionStudioEnabled=Boolean(motionStudioSlot)
+  const compactClipMode = compact && !clipperStudio && (!fullVideo || motionStudioEnabled)
   const startPanel: EditorPanelId = initialPanel ?? 'transcript'
   const [panel, setPanel] = useState<EditorPanelId>(startPanel)
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false)
@@ -435,10 +436,8 @@ export function EditorShell({
   const [timelineMenuCmd, setTimelineMenuCmd] = useState<{ cmd: TimelineMenuCommand; seq: number } | null>(null)
   useEffect(() => {
     // Motion Studio uses Compact by default, not the separate Full Timeline.
-    setLayoutView(clipperStudio || motionStudioSlot ? 'script' : readClipEditorLayoutView())
-  // motionStudioSlot is present for the lifetime of this editor route.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clipperStudio,Boolean(motionStudioSlot)])
+    setLayoutView(clipperStudio || motionStudioEnabled ? 'script' : readClipEditorLayoutView())
+  }, [clipperStudio,motionStudioEnabled])
   useEffect(() => {
     if (unifiedWorkspaceActive || layoutView !== 'timeline' || band === 'mobile') return
     const storage = typeof window === 'undefined' ? null : window.localStorage
