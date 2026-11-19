@@ -14,7 +14,8 @@ export async function GET(request: Request) {
     const workspaceId = await resolveWorkspaceId()
     const parentId = new URL(request.url).searchParams.get('parentId')
     const folders = await listFolders(workspaceId, parentId === 'null' ? null : parentId)
-    return NextResponse.json({ data: { folders } })
+    // Preserve the data envelope while supporting older direct-folder clients.
+    return NextResponse.json({ data: { folders }, folders })
   } catch (err) {
     return jsonError(err, 500)
   }
