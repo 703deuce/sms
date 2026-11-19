@@ -124,7 +124,8 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
       if(!message||message.ms!==1)return
       if(message.event==='boot-timing'){
         const allowed=new Set(['runtime-start','runtime-init-message','first-render-call',
-          'dom-ready','window-load','fonts-ready','images-ready'])
+          'dom-ready','window-load','fonts-ready','images-ready',
+          'cpu-snapshot-6s','cpu-snapshot-11s'])
         if(typeof message.stage==='string'&&allowed.has(message.stage)){
           const local=Number(message.elapsedMs)
           if(Number.isFinite(local)&&local>=0&&local<120000){
@@ -132,7 +133,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
               iframeElapsedMs:Math.round(local),parentElapsedMs:Math.round(performance.now()-loadStart.current),
               resourceCount:message.count,maxResourceMs:message.maxMs})
             reportMotionStudioLoad('iframe-'+message.stage,performance.now()-loadStart.current,
-              local,projectId)
+              local,projectId,sceneId)
           }
         }
         return
@@ -143,7 +144,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
           fonts:session.fonts,assets:session.assetRecords,mode:'live'})
       }else if(message.event==='ready'){
         console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
-        reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current,undefined,projectId)
+        reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current,undefined,projectId,sceneId)
         setReady(old=>({...old,[sceneId]:true}))
         setSeekEpoch(n=>n+1)
       }else if(message.ok===false&&typeof message.error==='string'){
@@ -157,7 +158,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
           firstFrameLogged.current=true
           setFirstFrameRendered(true)
           console.info('[motion-studio:browser-load]',{stage:'first-frame-drawn',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
-          reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current,undefined,projectId)
+          reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current,undefined,projectId,sceneId)
         }
         setDrawn(old=>({...old,[sceneId]:Date.now()}))
         // The playhead may have advanced during async draw. Immediately send
@@ -340,7 +341,7 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
           ref={el=>{frames.current[id]=el}}
           src={sessions[id]!.sceneUrl} loading="eager" sandbox="allow-scripts" referrerPolicy="no-referrer"
           onLoad={()=>reportMotionStudioLoad('iframe-document-load',
-            performance.now()-loadStart.current,undefined,projectId)}
+            performance.now()-loadStart.current,undefined,projectId,id)}
           className="absolute inset-0 size-full border-0"
           style={{zIndex:(item?.layer??0)+1,opacity:visible?1:0,pointerEvents:'none'}}/>
       })}
