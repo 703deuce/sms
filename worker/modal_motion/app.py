@@ -80,11 +80,11 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         joined=join_qa.with_options(secrets=[secret]).remote(job_id,bundle_name,mode,results)
         api(job_id,"POST","/render-status",{"stage":"qa_pass"})
         retry_count=sum(item.get("retries",0) for item in results)
-        work_seconds=sum(float(item.get("seconds",0)) for item in results)
+        work_seconds=sum(float(item.get("seconds",0)) for item in results)+float(joined.get("seconds",0))
         cost_key="MOTION_GPU_USD_PER_SECOND" if mode=="gpu" else "MOTION_CPU_USD_PER_SECOND"
         rate=float(os.environ.get(cost_key,"0"))
         if rate<=0:raise ValueError("An operator-approved Modal rate is required for cost tracking")
-        api(job_id,"POST","/usage",{"usageId":"modal_"+mode+"_"+bundle_name,
+        api(job_id,"POST","/usage",{"usageId":"modal_"+("bench_" if benchmark_only else "prod_")+mode+"_"+bundle_name,
           "items":[{"provider":"modal",
           "units":work_seconds,"usd":round(work_seconds*rate,6)}]})
         summary={"jobId":job_id,"mode":mode,"segments":len(results),
