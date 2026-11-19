@@ -96,6 +96,14 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     }
     return {...result,...mediaUrls}
   },[sessions,mediaUrls])
+  const masterAssetId=useMemo(()=>{
+    const producer=manifest.producerDocument
+    const master=producer?.master
+    const nativeId=master&&typeof master==='object'&&!Array.isArray(master)?
+      (master as Record<string,unknown>).asset:null
+    return typeof nativeId==='string'?(manifest.producerAssetMap?.[nativeId]||nativeId):''
+  },[manifest])
+  const signedPreviewUrl=masterAssetId?mediaUrls[masterAssetId]:undefined
   const currentScene=manifest.scenes.find(scene=>scene.id===active)
   const validLivePatch=useMemo(()=>{
     const result:Record<string,Record<string,unknown>>={}
@@ -114,7 +122,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   },[onSceneChange])
   return <div className="flex flex-col gap-1">
     <PlayerErrorBoundary resetKey={versionId}>
-    <UniversalTimelinePlayer timeline={timeline} sessions={sessions} previewVideoUrl={previewVideoUrl}
+    <UniversalTimelinePlayer timeline={timeline} sessions={sessions} previewVideoUrl={signedPreviewUrl||previewVideoUrl}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
       scenePatch={validLivePatch} onSceneChange={selected}
       overlay={currentScene&&onSelectLayer&&onLayerChange?
