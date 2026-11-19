@@ -54,13 +54,21 @@ export function PortableElementsPanel({projectId,preferredSceneId}:{
   useEffect(()=>{void load()},[load])
   // Still-frame layer picker: the newest committed master (refreshed after every no-AI render).
   useEffect(()=>{
+    // Native live projects may intentionally have no master MP4. Avoid an
+    // unnecessary authenticated DB round trip merely to return no_master.
+    if(!version){setMasterUrl(null);return}
+    const native=asObj(version.manifest.producerDocument)
+    if(typeof asObj(native.master).asset!=='string'){
+      setMasterUrl(null)
+      return
+    }
     let active=true
     fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/preview',{cache:'no-store'})
       .then(r=>r.ok?r.json():null).then((d:{url?:string|null}|null)=>{
         if(active)setMasterUrl(d?.url??null)
       }).catch(()=>undefined)
     return()=>{active=false}
-  },[projectId,version?.id])
+  },[projectId,version])
   // The editor may be open while the producer is still uploading its source.
   // Refresh until the first immutable portable version arrives (ordinary API, no AI).
   useEffect(()=>{
