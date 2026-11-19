@@ -1257,11 +1257,10 @@ export async function getTimeline(workspaceId: string, id: string) {
 
 
 /**
- * Where a project page should open. A finished masterless (delivery.mode=live)
- * production has no MP4 or storyboard scenes for the legacy workspace, so it
- * opens in the dedicated browser editor (/live) that plays the portable version.
+ * Route completed live projects to the existing Compact Editor, never a second
+ * standalone editor. The native editable portable version stays authoritative.
  */
-export async function projectOpenTarget(workspaceId: string, id: string): Promise<'live' | 'workspace'> {
+export async function projectOpenTarget(workspaceId: string, id: string): Promise<'compact' | 'workspace'> {
   const row = await db().motionStudioProject.findFirst({ where: { id, workspaceId }, select: { status: true, exportInfo: true } })
   if (!row) return 'workspace'
   const ex = J(row.exportInfo)
@@ -1269,5 +1268,5 @@ export async function projectOpenTarget(workspaceId: string, id: string): Promis
   const committed = await db().motionStudioPortableVersion.findFirst({
     where: { workspaceId, projectId: id, status: 'committed' }, select: { id: true },
   })
-  return committed ? 'live' : 'workspace'
+  return committed ? 'compact' : 'workspace'
 }
