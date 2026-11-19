@@ -1,18 +1,21 @@
-import Link from 'next/link'
-import {LiveProjectEditorPage} from '@/components/motion-studio/live-project-editor-page'
+import {redirect} from 'next/navigation'
+import {requireMotionStudioCaller} from '@/lib/server/motion-studio/auth'
+import {openInEditor} from '@/lib/server/motion-studio/service'
 
-export const metadata={title:'Transovo Live Video Editor'}
+/** Legacy live-editor link: preserve bookmarks, but enter the one Compact Editor. */
 export default async function LiveVideoPage({params}:{
   params:Promise<{projectId:string}>
 }){
   const {projectId}=await params
-  return <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-4 p-4 md:p-6">
-    <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-      <Link href="/app/motion-studio" className="hover:underline">Back to projects</Link>
-      <Link href={'/app/motion-studio/'+encodeURIComponent(projectId)+'?view=workspace'} className="hover:underline">
-        Assistant and version history
-      </Link>
-    </div>
-    <LiveProjectEditorPage projectId={projectId}/>
-  </main>
+  let editorUrl:string|null=null
+  try{
+    const {workspaceId}=await requireMotionStudioCaller()
+    const handoff=await openInEditor(workspaceId,projectId)
+    editorUrl='/app/video-editor/'+encodeURIComponent(handoff.clipProjectId)+
+      '/edit/'+encodeURIComponent(handoff.clipId)+'?motionStudio='+encodeURIComponent(projectId)
+  }catch(error){
+    console.warn('[motion-studio:ui] legacy_live_handoff_failed',{
+      projectId,error:error instanceof Error?error.message:'unknown'})
+  }
+  redirect(editorUrl||'/app/motion-studio/'+encodeURIComponent(projectId)+'?view=workspace')
 }
