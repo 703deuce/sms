@@ -94,7 +94,9 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
           "retries":retry_count,"masterBytes":joined["masterBytes"],
           "shareBytes":joined["shareBytes"],"qa":joined["qa"],
           "renderSeconds":round(time.monotonic()-started,3),
-          "estimatedUsd":round(work_seconds*rate,6)}
+          "estimatedUsd":round(work_seconds*rate,6),
+          "estimatedUsdPerRenderedMinute":round(
+            work_seconds*rate/(project["durationMs"]/60000),6)}
         if benchmark_only:
             # The first CPU/GPU comparison does NOT approve or complete a
             # customer job. One paid run per mode; preserve the job assignment.
