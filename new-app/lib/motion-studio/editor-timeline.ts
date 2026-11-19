@@ -134,12 +134,34 @@ export function buildLiveMotionStudioEditorEdits(base:ClipEditsV2,manifest:MsPor
       {id:v.id,sceneId:v.sceneId||null,assetId:v.assetId||null,startMs:v.startMs,
        endMs:v.startMs+v.durationMs,sourceInMs:v.inMs,kind:v.type})
   }
+  const represented=new Set<string>()
   for(const layer of live.sceneLayers){
+    represented.add(layer.sceneId+':'+layer.elementId)
     add('ms-layer-'+layer.trackId,layer.kind||'graphic',
       layer.kind==='text'?'Text and titles':'Motion graphics',
       {id:layer.id,sceneId:layer.sceneId,elementId:layer.elementId,
        startMs:layer.startMs,endMs:layer.endMs,label:layer.label,
        kind:layer.kind,editable:true})
+  }
+  // Some producer scenes only publish their native elements/motion tree,
+  // rather than duplicating each element in liveProject.tracks.
+  for(const visual of live.visuals){
+    if(!visual.sceneId)continue
+    const scene=manifest.scenes.find(x=>x.id===visual.sceneId)
+    if(!scene)continue
+    for(const element of scene.manifest.elements){
+      const identity=scene.id+':'+element.id
+      if(represented.has(identity)||element.id===scene.manifest.motionTree?.rootId)continue
+      represented.add(identity)
+      const node=scene.manifest.motionTree?.nodes.find(n=>n.id===element.id)
+      const startMs=visual.startMs+Math.max(0,node?.startMs??Math.round((element.timing?.inSec??0)*1000))
+      const endMs=visual.startMs+Math.min(visual.durationMs,
+        node?.endMs??Math.round((element.timing?.outSec??visual.durationMs/1000)*1000))
+      if(endMs<=startMs)continue
+      add('ms-native-'+scene.id,element.kind,'Motion graphics and titles',
+        {id:identity,sceneId:scene.id,elementId:element.id,
+         startMs,endMs,label:node?.name||element.id,kind:element.kind,editable:true})
+    }
   }
   for(const a of live.audio){
     add('ms-audio-'+a.trackId,'audio','Audio / narration / music',
