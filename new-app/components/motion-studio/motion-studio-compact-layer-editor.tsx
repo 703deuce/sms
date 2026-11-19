@@ -63,7 +63,33 @@ export function MotionStudioCompactLayerEditor({projectId,outputMs,onSeek}:{
     return()=>{active=false}
   },[load])
   const timeline=useMemo(()=>version?normalizeUniversalTimeline(version.manifest):null,[version])
-  const layers=timeline?.sceneLayers||[]
+  const layers=useMemo(()=>{
+    if(!timeline||!version)return []
+    const out=[...timeline.sceneLayers]
+    const seen=new Set(out.map(layer=>layer.sceneId+':'+layer.elementId))
+    // Older native scene manifests may omit sceneLayer timeline items but
+    // still declare individually editable motion-tree objects. Materialize
+    // their visual lanes from the canonical scene placements.
+    for(const v of timeline.visuals){
+      if(!v.sceneId)continue
+      const scene=version.manifest.scenes.find(s=>s.id===v.sceneId)
+      if(!scene)continue
+      for(const element of scene.manifest.elements){
+        const key=scene.id+':'+element.id
+        if(seen.has(key)||element.id===scene.manifest.motionTree?.rootId)continue
+        seen.add(key)
+        const node=scene.manifest.motionTree?.nodes.find(n=>n.id===element.id)
+        const localStart=node?.startMs??Math.round((element.timing?.inSec??0)*1000)
+        const localEnd=node?.endMs??Math.round((element.timing?.outSec??v.durationMs/1000)*1000)
+        const startMs=v.startMs+Math.max(0,localStart)
+        const endMs=v.startMs+Math.min(v.durationMs,Math.max(localStart+1,localEnd))
+        if(endMs<=startMs)continue
+        out.push({id:scene.id+':'+element.id,sceneId:scene.id,elementId:element.id,
+          label:node?.name||element.id,kind:element.kind,startMs,endMs,trackId:'native'})
+      }
+    }
+    return out.sort((a,b)=>a.startMs-b.startMs)
+  },[timeline,version])
   const current=selected??(layers.length?{sceneId:layers[0]!.sceneId,elementId:layers[0]!.elementId}:null)
   const scene=version?.manifest.scenes.find(s=>s.id===current?.sceneId)
   const element=scene?.manifest.elements.find(e=>e.id===current?.elementId)
