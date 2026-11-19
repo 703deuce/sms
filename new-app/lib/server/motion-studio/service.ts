@@ -1265,6 +1265,10 @@ export async function projectOpenTarget(workspaceId: string, id: string): Promis
   if (!row) return 'workspace'
   const ex = J(row.exportInfo)
   if (ex.delivery !== 'live' || !['review', 'complete'].includes(row.status)) return 'workspace'
+  // The existing Clip Editor needs its original MP4 as the source canvas.
+  // Historical masterless live jobs still use their working native scene
+  // player in the workspace, rather than entering a blank Compact canvas.
+  if(typeof ex.masterKey!=='string'||!ex.masterKey)return 'workspace'
   const committed = await db().motionStudioPortableVersion.findFirst({
     where: { workspaceId, projectId: id, status: 'committed' }, select: { id: true },
   })
