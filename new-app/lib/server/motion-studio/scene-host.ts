@@ -114,6 +114,37 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   return {...issued,assetUrls:urls,assetRecords:records,
     fonts,livePreview:scene.manifest.livePreview??null}
 }
+// Immutable producer assets are requested repeatedly by the same scene runtime.
+// Share in-flight downloads and briefly cache small verified source objects so
+// dozens of parallel frame/script requests do not hit Prisma and storage again.
+const assetByteCache=new Map<string,{value:Promise<Buffer>;until:number;bytes:number}>()
+const MAX_CACHED_ASSET=8*1024*1024
+const MAX_CACHE_BYTES=32*1024*1024
+const CACHE_TTL_MS=60_000
+function cachedAssetBytes(workspaceId:string,projectId:string,assetId:string):Promise<Buffer>{
+  const key=JSON.stringify([workspaceId,projectId,assetId])
+  const now=Date.now()
+  for(const [k,v] of assetByteCache)if(v.until<=now)assetByteCache.delete(k)
+  const hit=assetByteCache.get(key)
+  if(hit)return hit.value
+  const value=findAssetBytes(workspaceId,projectId,assetId)
+  const entry={value,until:now+CACHE_TTL_MS,bytes:0}
+  assetByteCache.set(key,entry)
+  void value.then(bytes=>{
+    if(assetByteCache.get(key)!==entry)return
+    if(bytes.length>MAX_CACHED_ASSET){assetByteCache.delete(key);return}
+    entry.bytes=bytes.length
+    let total=[...assetByteCache.values()].reduce((n,e)=>n+e.bytes,0)
+    while(total>MAX_CACHE_BYTES){
+      const oldest=assetByteCache.keys().next().value
+      if(!oldest)break
+      const removed=assetByteCache.get(oldest)!
+      assetByteCache.delete(oldest)
+      total-=removed.bytes
+    }
+  }).catch(()=>{if(assetByteCache.get(key)===entry)assetByteCache.delete(key)})
+  return value
+}
 async function findAssetBytes(workspaceId:string,projectId:string,assetId:string){
   const asset=await db().studioAsset.findFirst({
     where:{id:assetId,projectId,workspaceId,status:'ready'},
@@ -192,7 +223,7 @@ export async function sceneFileResponse(args:{
     const assetId=parts[1]!
     const registered=manifest.assets.find(a=>a.id===assetId)
     if(!registered)fail('Asset not declared in scene project',404)
-    const bytes=await findAssetBytes(workspaceId,projectId,assetId)
+    const bytes=await cachedAssetBytes(workspaceId,projectId,assetId)
     const upload=await db().studioAsset.findFirst({
       where:{id:assetId,workspaceId,projectId,status:'ready'},
       select:{uploadId:true,kind:true},
@@ -237,7 +268,7 @@ export async function sceneFileResponse(args:{
   }
   // The content-addressed bundle is a JSON file listing each permitted
   // relative path and its exact asset digest, not a directory on the server.
-  const raw=await findAssetBytes(workspaceId,projectId,bundleAssetId)
+  const raw=await cachedAssetBytes(workspaceId,projectId,bundleAssetId)
   let bundle:Record<string,unknown>
   try{bundle=asObj(JSON.parse(raw.toString('utf8')))}catch{fail('Invalid scene bundle',422)}
   const files=asObj(bundle.files),info=asObj(files[file])
