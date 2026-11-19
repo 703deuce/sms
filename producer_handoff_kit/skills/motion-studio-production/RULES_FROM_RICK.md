@@ -73,11 +73,12 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 
 ## 7. Rendering and delivery
 
-1. **Live delivery for Transovo jobs.** When the job's live-delivery flag is on, skip the master MP4 and complete with the live project format; render only when the customer presses Export (a separate export step, not the agent's job). *(Nov 18)* — *Supersedes "render the full master once for the final watch" for live jobs; legacy non-live jobs keep the render-once flow.*
-2. **Live browser composition is core architecture:** scene graph, motion graphics, footage and audio on one shared playback clock so edits show immediately; a rendered MP4 may be a media layer but never the preview/editing experience. *(Nov 18)*
+1. **Live delivery for Transovo jobs.** When the job's live-delivery flag is on, skip the master MP4 and complete with the live project format; render only when the customer presses Export (a separate export step, not the agent's job). *(Nov 18)* — *Supersedes "render the full master once for the final watch" for live jobs; legacy non-live jobs keep the render-once flow.* — *Superseded Nov 19 by item 6 (render first): live jobs render the master once after approval again.*
+2. **Live browser composition is core architecture:** scene graph, motion graphics, footage and audio on one shared playback clock so edits show immediately; a rendered MP4 may be a media layer but never the preview/editing experience. *(Nov 18)* — *Nov 19 (item 6): the render-first master is the customer's instant viewing copy while the editable version uploads; editing stays live.*
 3. **Render at exactly the requested resolution,** never upscale; H.264 level 4.2 so iPhones can save files; clips about 15–20 MB. *(Nov 17)*
 4. **Editable timelines are grouped like a song's tracks:** all text on one track, one main voice track, ad-lib tracks, one main visuals track, other audio on one track — not a piece per line. *(Nov 18)*
 5. **Portable projects:** the project is permanent, the bot is temporary. Every job uploads a portable editable package (by Transovo asset IDs) so any bot can continue it. *(Nov 17)*
+6. **Render first, editable in the background (live jobs).** After approval, render the master and make it playable right away. The job stays open. A script (no agent usage) uploads the editable version in the background, and it must land no matter what (retries, resume, restart-safe). Only then does the job complete. This reverses Nov 18's "no automatic MP4 on live jobs". The upload should also use fewer, bigger files so the editable version loads faster. *(Nov 19)*
 6. **Upload delivery files eight at a time** and confirm they appear on the job's file list before marking the job complete. *(Nov 18)*
 7. **Customer editing:** the AI makes the video once; customers edit in Transovo's own editor with no AI. Transovo owns the editor UI; the agent owns export and parameter rendering. Not a template system. *(Nov 17)*
 
