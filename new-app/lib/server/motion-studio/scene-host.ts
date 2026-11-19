@@ -114,21 +114,20 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   return {...issued,assetUrls:urls,assetRecords:records,
     fonts,livePreview:scene.manifest.livePreview??null}
 }
-// Immutable producer assets are requested repeatedly by the same scene runtime.
-// Share in-flight downloads and briefly cache small verified source objects so
-// dozens of parallel frame/script requests do not hit Prisma and storage again.
+// Keep a bounded cache of immutable scene bytes. The key includes the scene
+// version, so a later edit never reuses an earlier source.
 const assetByteCache=new Map<string,{value:Promise<Buffer>;until:number;bytes:number}>()
 const MAX_CACHED_ASSET=8*1024*1024
 const MAX_CACHE_BYTES=32*1024*1024
 const CACHE_TTL_MS=60_000
-function cachedAssetBytes(workspaceId:string,projectId:string,assetId:string):Promise<Buffer>{
-  const key=JSON.stringify([workspaceId,projectId,assetId])
+function cachedAssetBytes(projectId:string,versionId:string,assetId:string):Promise<Buffer>{
+  const key=JSON.stringify([projectId,versionId,assetId])
   const now=Date.now()
   for(const [k,v] of assetByteCache)if(v.until<=now)assetByteCache.delete(k)
   const hit=assetByteCache.get(key)
   if(hit){console.info('[motion-studio:load]',{kind:'asset-cache',hit:true,projectId,assetId});return hit.value}
   console.info('[motion-studio:load]',{kind:'asset-cache',hit:false,projectId,assetId})
-  const value=findAssetBytes(workspaceId,projectId,assetId)
+  const value=readSceneAssetBytes(projectId,versionId,assetId)
   const entry={value,until:now+CACHE_TTL_MS,bytes:0}
   assetByteCache.set(key,entry)
   void value.then(bytes=>{
@@ -146,41 +145,18 @@ function cachedAssetBytes(workspaceId:string,projectId:string,assetId:string):Pr
   }).catch(()=>{if(assetByteCache.get(key)===entry)assetByteCache.delete(key)})
   return value
 }
-async function findAssetBytes(workspaceId:string,projectId:string,assetId:string){
+
+async function readSceneAssetBytes(projectId:string,versionId:string,assetId:string):Promise<Buffer>{
   const started=Date.now()
-  const asset=await db().studioAsset.findFirst({
-    where:{id:assetId,projectId,workspaceId,status:'ready'},
-    select:{uploadId:true},
-  })
-  if(!asset)fail('Source asset unavailable',404)
-  const upload=await db().clipUpload.findFirst({
-    where:{id:asset.uploadId,workspaceId},
-    select:{key:true,bytes:true,status:true},
-  })
-  let key:string|null=null
-  if(upload&&['READY','COMPLETE'].includes(upload.status)){
-    if(upload.bytes>BigInt(25*1024*1024))fail('Source file too large for live scene hosting',413)
-    key=upload.key
-  }else{
-    // Existing AI source assets were registered in StudioAsset without a
-    // ClipUpload row. They remain durable in the job artifact manifest.
-    const jobs=await db().motionStudioAgentJob.findMany({
-      where:{workspaceId,projectId},select:{artifacts:true},
-    })
-    for(const job of jobs){
-      if(!Array.isArray(job.artifacts))continue
-      const matched=job.artifacts.find(value=>{
-        const x=asObj(value)
-        return x.id===assetId&&x.state==='ready'&&typeof x.key==='string'&&
-          typeof x.bytes==='number'&&x.bytes<=25*1024*1024
-      })
-      if(matched){key=String(asObj(matched).key);break}
-    }
-  }
-  if(!key)fail('Source asset has no verified storage location',404)
+  const {sources}=await sceneSourceContext(projectId,versionId)
+  const source=sources.get(assetId)
+  if(!source)fail('Source asset has no verified storage location',404)
+  if(source.bytes>25*1024*1024)fail('Source file too large for live scene hosting',413)
   const resolvedMs=Date.now()-started
-  const bytes=await getClipStorage().getObjectBytes(key)
-  console.info('[motion-studio:load]',{kind:'source-asset',projectId,assetId,resolveMs:resolvedMs,storageMs:Date.now()-started-resolvedMs,totalMs:Date.now()-started,bytes:bytes.length})
+  const bytes=await getClipStorage().getObjectBytes(source.key)
+  console.info('[motion-studio:load]',{kind:'source-asset',projectId,assetId,
+    resolveMs:resolvedMs,storageMs:Date.now()-started-resolvedMs,totalMs:Date.now()-started,
+    bytes:bytes.length})
   return bytes
 }
 const contentType=(file:string)=>{
@@ -199,9 +175,11 @@ const contentType=(file:string)=>{
 // Scene versions are immutable. Coalesce the repeated version/manifest reads
 // made by index.html, scripts, fonts and frame packs in one browser load.
 // Each request still validates its signed path before reaching this cache.
+type SceneAssetSource={key:string;mime:string;kind:string;bytes:number}
 type SceneSourceContext={
   workspaceId:string
   manifest:ReturnType<typeof validatePortableManifest>
+  sources:Map<string,SceneAssetSource>
 }
 const sceneContextCache=new Map<string,{until:number;value:Promise<SceneSourceContext>}>()
 async function sceneSourceContext(projectId:string,versionId:string):Promise<SceneSourceContext>{
@@ -211,12 +189,49 @@ async function sceneSourceContext(projectId:string,versionId:string):Promise<Sce
   const cached=sceneContextCache.get(key)
   if(cached){console.info('[motion-studio:load]',{kind:'manifest-cache',hit:true,projectId});return cached.value}
   console.info('[motion-studio:load]',{kind:'manifest-cache',hit:false,projectId})
-  const value=db().motionStudioPortableVersion.findFirst({
-    where:{id:versionId,projectId,status:'committed'},
-  }).then(version=>{
+  const value=(async()=>{
+    const started=Date.now()
+    const version=await db().motionStudioPortableVersion.findFirst({
+      where:{id:versionId,projectId,status:'committed'},
+    })
     if(!version)fail('Scene version unavailable',404)
-    return {workspaceId:version.workspaceId,manifest:validatePortableManifest(version.manifest)}
-  })
+    const workspaceId=version.workspaceId
+    const manifest=validatePortableManifest(version.manifest)
+    // Resolve every source location once, not per signed HTML/script/font/frame.
+    const [registered,jobs]=await Promise.all([
+      db().studioAsset.findMany({
+        where:{workspaceId,projectId,status:'ready',id:{in:manifest.assets.map(a=>a.id)}},
+        select:{id:true,uploadId:true,kind:true},
+      }),
+      db().motionStudioAgentJob.findMany({
+        where:{workspaceId,projectId},select:{artifacts:true},
+      }),
+    ])
+    const uploads=await db().clipUpload.findMany({
+      where:{workspaceId,id:{in:registered.map(a=>a.uploadId)}},
+      select:{id:true,key:true,bytes:true,mime:true,status:true},
+    })
+    const byUpload=new Map(uploads.map(u=>[u.id,u]))
+    const sources=new Map<string,SceneAssetSource>()
+    for(const asset of registered){
+      const upload=byUpload.get(asset.uploadId)
+      if(upload&&['READY','COMPLETE'].includes(upload.status)){
+        sources.set(asset.id,{key:upload.key,mime:upload.mime,kind:asset.kind,bytes:Number(upload.bytes)})
+      }
+    }
+    const registeredKinds=new Map(registered.map(a=>[a.id,a.kind]))
+    for(const job of jobs)for(const item of Array.isArray(job.artifacts)?job.artifacts:[]){
+      const record=asObj(item)
+      const id=typeof record.id==='string'?record.id:''
+      const kind=registeredKinds.get(id)
+      if(!kind||sources.has(id)||record.state!=='ready'||typeof record.key!=='string')continue
+      sources.set(id,{key:record.key,mime:typeof record.mime==='string'?record.mime:'',
+        kind,bytes:typeof record.bytes==='number'?record.bytes:0})
+    }
+    console.info('[motion-studio:load]',{kind:'source-map',projectId,assets:manifest.assets.length,
+      resolved:sources.size,elapsedMs:Date.now()-started})
+    return {workspaceId,manifest,sources}
+  })()
   if(sceneContextCache.size>=64)sceneContextCache.delete(sceneContextCache.keys().next().value!)
   sceneContextCache.set(key,{until:now+60_000,value})
   void value.catch(()=>{if(sceneContextCache.get(key)?.value===value)sceneContextCache.delete(key)})
@@ -238,7 +253,7 @@ export async function sceneFileResponse(args:{
   if(!same(signature,sign([projectId,versionId,bundleAssetId,expires])))
     fail('Invalid scene preview signature')
   const file=safePath(args.filePath)
-  const {workspaceId,manifest}=await sceneSourceContext(projectId,versionId)
+  const {manifest,sources}=await sceneSourceContext(projectId,versionId)
   const scene=manifest.scenes.find(s=>s.bundleAssetId===bundleAssetId)
   if(!scene)fail('Bundle is not part of this immutable version')
   // Named font/media resources use the SAME signed path as scene code.
@@ -249,29 +264,14 @@ export async function sceneFileResponse(args:{
     const assetId=parts[1]!
     const registered=manifest.assets.find(a=>a.id===assetId)
     if(!registered)fail('Asset not declared in scene project',404)
-    const bytes=await cachedAssetBytes(workspaceId,projectId,assetId)
-    const upload=await db().studioAsset.findFirst({
-      where:{id:assetId,workspaceId,projectId,status:'ready'},
-      select:{uploadId:true,kind:true},
-    })
-    const media=upload?await db().clipUpload.findFirst({
-      where:{id:upload.uploadId,workspaceId},select:{mime:true},
-    }):null
-    let mime=media?.mime||''
-    if(!mime){
-      const jobs=await db().motionStudioAgentJob.findMany({
-        where:{workspaceId,projectId},select:{artifacts:true},take:20,
-      })
-      for(const job of jobs){
-        if(!Array.isArray(job.artifacts))continue
-        const found=job.artifacts.find(a=>asObj(a).id===assetId)
-        if(found){mime=String(asObj(found).mime||'');break}
-      }
-    }
+    const bytes=await cachedAssetBytes(projectId,versionId,assetId)
+    const source=sources.get(assetId)
+    if(!source)fail('Source asset has no verified storage location',404)
+    let mime=source.mime
     // Producer uploads may include a charset or use text/plain for VTT/JSON.
     // Accept these only for declared caption/text assets; never permit arbitrary
     // HTML or JS uploads to run inside the signed scene.
-    const declaredKind=registered.kind
+    const declaredKind=source.kind
     const baseMime=mime.split(';',1)[0]!.trim().toLowerCase()
     const standard=/^(?:audio\/(?:wav|mpeg|mp4|ogg|x-wav|aac|x-m4a)|video\/(?:mp4|webm)|image\/(?:jpeg|png|webp|svg\+xml|avif)|font\/(?:ttf|otf|woff|woff2)|text\/vtt|application\/(?:x-subrip|json|font-woff|octet-stream|wasm))$/
     const textAsset=['caption','subtitle'].includes(declaredKind) &&
@@ -294,7 +294,7 @@ export async function sceneFileResponse(args:{
   }
   // The content-addressed bundle is a JSON file listing each permitted
   // relative path and its exact asset digest, not a directory on the server.
-  const raw=await cachedAssetBytes(workspaceId,projectId,bundleAssetId)
+  const raw=await cachedAssetBytes(projectId,versionId,bundleAssetId)
   let bundle:Record<string,unknown>
   try{bundle=asObj(JSON.parse(raw.toString('utf8')))}catch{fail('Invalid scene bundle',422)}
   const files=asObj(bundle.files),info=asObj(files[file])
@@ -306,7 +306,7 @@ export async function sceneFileResponse(args:{
   if(!safeId(nativeId)||!safeId(storedId)||
      !manifest.assets.some(a=>a.id===storedId&&a.sha256.toLowerCase()===assetSha))
     fail('Scene file not registered in its project',404)
-  let bytes=await findAssetBytes(workspaceId,projectId,storedId)
+  let bytes=await cachedAssetBytes(projectId,versionId,storedId)
   if (info.packSha256 !== undefined) {
     const offset=Number(info.offset), length=Number(info.bytes)
     if (!Number.isSafeInteger(offset) || offset<0 || !Number.isSafeInteger(length) ||
