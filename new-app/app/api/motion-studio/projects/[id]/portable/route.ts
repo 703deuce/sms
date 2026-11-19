@@ -9,12 +9,18 @@ import {portableAssetSession} from '@/lib/server/motion-studio/portable-assets'
 import {createSceneSession} from '@/lib/server/motion-studio/scene-host'
 type Ctx={params:Promise<{id:string}>}
 export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
+  const start=Date.now()
+  let stage='auth'
   try {
     const {id:projectId}=await ctx.params
     const {workspaceId}=await requireMotionStudioCaller(request)
+    console.info('[motion-studio:load]',{kind:'project-request',projectId,stage:'auth',elapsedMs:Date.now()-start})
+    stage='project-read'
     const query=new URL(request.url).searchParams
     const versionId=query.get('versionId')||undefined
     const result=await getPortableProject(workspaceId,projectId,versionId)
+    console.info('[motion-studio:load]',{kind:'project-request',projectId,stage:'project-read',elapsedMs:Date.now()-start})
+    stage='bootstrap'
     // Opt-in editor bootstrap: the project and its short-lived scene sessions
     // share one authorization, project lookup and HTTP response. Other users
     // of this endpoint retain the existing response.
@@ -28,6 +34,7 @@ export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
         .filter(v=>v.type==='scene').map(v=>v.sceneId).filter((id):id is string=>Boolean(id)))].slice(0,3)
       if(!sceneIds.length)return NextResponse.json({...result,playback:null})
       const assets=await portableAssetSession(workspaceId,projectId,version.id,manifest)
+      console.info('[motion-studio:load]',{kind:'project-request',projectId,stage:'asset-session',elapsedMs:Date.now()-start})
       const sessions=await Promise.all(sceneIds.map(async sceneId=>({
         sceneId,...await createSceneSession(workspaceId,projectId,version.id,sceneId,request.url,assets,manifest)
       })))
@@ -37,6 +44,7 @@ export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
         .map(asset=>[asset.id,assets.assetUrls[asset.id]]))
       console.info('[motion-studio:load]',{kind:'project-bootstrap',projectId,
         stage:'complete',elapsedMs:Date.now()-started,sceneCount:sessions.length})
+      console.info('[motion-studio:load]',{kind:'project-request',projectId,stage:'response-ready',elapsedMs:Date.now()-start})
       return NextResponse.json({...result,playback:{versionId:version.id,sessions,mediaUrls}},{
         headers:{'Cache-Control':'private, no-store'}})
     }catch(error){
@@ -47,7 +55,10 @@ export const GET = pollingRoute(async function GET(request:Request,ctx:Ctx) {
         error:error instanceof Error?error.message:'unknown'})
       return NextResponse.json({...result,playback:null})
     }
-  } catch(e) { return motionStudioJsonError(e) }
+  } catch(e) {
+    console.warn('[motion-studio:load]',{kind:'project-request',stage,status:'error',elapsedMs:Date.now()-start,error:e instanceof Error?e.message:'unknown'})
+    return motionStudioJsonError(e)
+  }
 })
 export async function PATCH(request:Request,ctx:Ctx) {
   const started=Date.now()
