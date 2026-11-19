@@ -15,7 +15,7 @@ export async function POST(request:Request){
     return NextResponse.json({error:'invalid payload'},{status:400})
   const x=data as Record<string,unknown>
   const stage=typeof x.stage==='string'?x.stage:''
-  const allowed=new Set(['project-mounted','session-request','session-response','scene-ready','first-frame-drawn'])
+  const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn'])
   if(!allowed.has(stage))return NextResponse.json({error:'invalid milestone'},{status:400})
   const ms=typeof x.elapsedMs==='number'&&Number.isFinite(x.elapsedMs)?
     Math.max(0,Math.min(120000,Math.round(x.elapsedMs))):null
