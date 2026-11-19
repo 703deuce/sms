@@ -191,6 +191,31 @@ const contentType=(file:string)=>{
   }
   return mime[ext||'']||'application/octet-stream'
 }
+// Scene versions are immutable. Coalesce the repeated version/manifest reads
+// made by index.html, scripts, fonts and frame packs in one browser load.
+// Each request still validates its signed path before reaching this cache.
+type SceneSourceContext={
+  workspaceId:string
+  manifest:ReturnType<typeof validatePortableManifest>
+}
+const sceneContextCache=new Map<string,{until:number;value:Promise<SceneSourceContext>}>()
+async function sceneSourceContext(projectId:string,versionId:string):Promise<SceneSourceContext>{
+  const now=Date.now()
+  for(const [k,v] of sceneContextCache)if(v.until<now)sceneContextCache.delete(k)
+  const key=projectId+':'+versionId
+  const cached=sceneContextCache.get(key)
+  if(cached)return cached.value
+  const value=db().motionStudioPortableVersion.findFirst({
+    where:{id:versionId,projectId,status:'committed'},
+  }).then(version=>{
+    if(!version)fail('Scene version unavailable',404)
+    return {workspaceId:version.workspaceId,manifest:validatePortableManifest(version.manifest)}
+  })
+  if(sceneContextCache.size>=64)sceneContextCache.delete(sceneContextCache.keys().next().value!)
+  sceneContextCache.set(key,{until:now+60_000,value})
+  void value.catch(()=>{if(sceneContextCache.get(key)?.value===value)sceneContextCache.delete(key)})
+  return value
+}
 export async function sceneFileResponse(args:{
   projectId:string;versionId:string;bundleAssetId:string;expires:string;signature:string;
   filePath:string;requestUrl:string
@@ -207,12 +232,7 @@ export async function sceneFileResponse(args:{
   if(!same(signature,sign([projectId,versionId,bundleAssetId,expires])))
     fail('Invalid scene preview signature')
   const file=safePath(args.filePath)
-  const version=await db().motionStudioPortableVersion.findFirst({
-    where:{id:versionId,projectId,status:'committed'},
-  })
-  if(!version)fail('Scene version unavailable',404)
-  const workspaceId=version.workspaceId
-  const manifest=validatePortableManifest(version.manifest)
+  const {workspaceId,manifest}=await sceneSourceContext(projectId,versionId)
   const scene=manifest.scenes.find(s=>s.bundleAssetId===bundleAssetId)
   if(!scene)fail('Bundle is not part of this immutable version')
   // Named font/media resources use the SAME signed path as scene code.
