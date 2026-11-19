@@ -1,5 +1,5 @@
 'use client'
-import {useCallback,useEffect,useMemo,useState} from 'react'
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react'
 import type {MsPortableManifest} from '@/lib/motion-studio/portable-contract'
 import {LiveCanvasLayerOverlay} from './live-canvas-layer-overlay'
 import {PlayerErrorBoundary} from './player-error-boundary'
@@ -43,6 +43,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     onSelectLayer?:(id:string)=>void
     onLayerChange?:(elementId:string,key:string,value:number)=>void
   }){
+  const loadStart=useRef<number>(performance.now())
   const timeline=useMemo(()=>normalizeUniversalTimeline(manifest),[manifest])
   const sceneIds=useMemo(()=>[...new Set(timeline.visuals.filter(v=>v.type==='scene')
     .map(v=>v.sceneId).filter((x):x is string=>Boolean(x)))],[timeline])
@@ -60,7 +61,10 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
     })
     if(!ids.length)return
     let alive=true
+    const requestedAt=performance.now()
+    console.info('[motion-studio:browser-load]',{stage:'session-request',sceneCount:ids.length,elapsedMs:Math.round(requestedAt-loadStart.current)})
     sceneSessionRequest(projectId,versionId,ids).then(data=>{
+      console.info('[motion-studio:browser-load]',{stage:'session-response',sceneCount:ids.length,requestMs:Math.round(performance.now()-requestedAt),elapsedMs:Math.round(performance.now()-loadStart.current)})
       if(!alive)return
       const safe=data.sessions.filter(item=>{
         try{
