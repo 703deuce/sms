@@ -163,10 +163,11 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         if(id!==null){pending.current[visual.sceneId]=id;requested.current[visual.sceneId]=localMs}
       }
     }
-    // Prepare the next cut without affecting the displayed scene.
-    const next=timeline.visuals.find(v=>v.type==='scene'&&v.startMs>now)
-    if(next?.sceneId&&ready[next.sceneId]&&!pending.current[next.sceneId]&&
-      requested.current[next.sceneId]===undefined){
+    // Prepare each future scene's first frame, not just the next cut.
+    // Otherwise S3 can be initialized but still black when playback reaches it.
+    for(const next of timeline.visuals.filter(v=>v.type==='scene'&&v.startMs>now)){
+      if(!next.sceneId||!ready[next.sceneId]||pending.current[next.sceneId]||
+        requested.current[next.sceneId]!==undefined)continue
       const id=send(next.sceneId,'seek',next.inMs/1000)
       if(id!==null){pending.current[next.sceneId]=id;requested.current[next.sceneId]=next.inMs}
     }
@@ -199,7 +200,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     if(!engine)return
     const allScenes=timeline.visuals.filter(v=>v.type==='scene').map(v=>v.sceneId!).filter(Boolean)
     // Starting before the upcoming scene initializes made playback freeze at a cut.
-    if(allScenes.length<=3&&allScenes.some(id=>!ready[id])){
+    if(allScenes.length<=3&&allScenes.some(id=>!ready[id]||!drawn[id])){
       setError('Preparing all scenes for uninterrupted playback…')
       return
     }
@@ -222,7 +223,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
       setError(e instanceof Error?e.message:'Could not start soundtrack')
       engine.pause()
     }
-  },[playing,pause,activeId,ready,rate,timeline])
+  },[playing,pause,activeId,ready,drawn,rate,timeline])
 
   useEffect(()=>{
     if(!playing)return
@@ -331,7 +332,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
     <div className="flex items-center gap-2">
       <button type="button" onClick={()=>void togglePlay()}
         className="rounded-md border border-input px-3 py-1 text-xs"
-        disabled={Boolean(activeId&&!ready[activeId]) || (allSceneIds.length<=3 && allSceneIds.some(id=>!ready[id]))}>
+        disabled={Boolean(activeId&&!ready[activeId]) || (allSceneIds.length<=3 && allSceneIds.some(id=>!ready[id]||!drawn[id]))}>
         {playing?'Pause':'Play'}
       </button>
       <input aria-label="Scrub complete timeline" type="range" className="min-w-0 flex-1"
