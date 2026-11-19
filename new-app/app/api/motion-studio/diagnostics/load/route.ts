@@ -25,7 +25,8 @@ export async function POST(request:Request){
   const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible',
     'iframe-runtime-start','iframe-dom-ready','iframe-window-load',
     'iframe-fonts-ready','iframe-images-ready','iframe-runtime-init-message',
-    'iframe-first-render-call','iframe-document-load'])
+    'iframe-first-render-call','iframe-document-load',
+    'iframe-cpu-snapshot-6s','iframe-cpu-snapshot-11s'])
   if(!allowed.has(stage))return NextResponse.json({error:'invalid milestone'},{status:400})
   const ms=typeof x.elapsedMs==='number'&&Number.isFinite(x.elapsedMs)?
     Math.max(0,Math.min(120000,Math.round(x.elapsedMs))):null
@@ -36,8 +37,9 @@ export async function POST(request:Request){
   const navStart=typeof x.navigationStartEpochMs==='number'&&Number.isFinite(x.navigationStartEpochMs)
     ?Math.round(x.navigationStartEpochMs):null
   const projectId=typeof x.projectId==='string'&&/^msp_[A-Za-z0-9]{8,64}$/.test(x.projectId)?x.projectId:'unknown'
+  const sceneId=typeof x.sceneId==='string'&&/^[A-Za-z0-9_.:-]{1,128}$/.test(x.sceneId)?x.sceneId:undefined
   console.info('[motion-studio:load]',{
-    kind:'browser-milestone',projectId,stage,elapsedMs:ms,
+    kind:'browser-milestone',projectId,...(sceneId?{sceneId}:{}),stage,elapsedMs:ms,
     ...(navMs!==null?{navigationElapsedMs:navMs}:{}),
     ...(navStart!==null?{navigationStartEpochMs:navStart}:{}),
     ...(requestMs!==null?{requestMs}:{}),
