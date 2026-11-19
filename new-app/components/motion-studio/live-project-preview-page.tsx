@@ -43,7 +43,7 @@ export function LiveProjectPreviewPage({projectId}:{projectId:string}){
   },[projectId])
   useEffect(()=>{void load()},[load])
   const openCompact=async()=>{
-    if(opening)return
+    if(opening||!mp4)return
     setOpening(true);setError('')
     try{
       const response=await fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/open-in-editor',{
@@ -66,13 +66,17 @@ export function LiveProjectPreviewPage({projectId}:{projectId:string}){
           open the Compact Editor.
         </p>
       </div>
-      <button type="button" onClick={()=>void openCompact()}
-        disabled={opening||!version}
+      <button type="button" title={!mp4?'The original MP4 must be ready before opening Compact Editor':undefined}
+        onClick={()=>void openCompact()}
+        disabled={opening||!version||!mp4}
         data-testid="ms-preview-open-compact"
         className="rounded-md bg-primary px-4 py-2 font-semibold text-primary-foreground disabled:opacity-50">
         {opening?'Opening Compact Editor…':'Open Compact Editor'}
       </button>
     </div>
+    {!loading&&version&&!mp4?<p className="text-sm text-muted-foreground" role="status">
+      Native scene playback is available. Compact editing becomes available when this project has an approved MP4 canvas.
+    </p>:null}
     {error?<div role="alert" className="text-sm text-destructive">{error}
       <button type="button" className="ml-2 underline" onClick={()=>void load()}>Retry</button>
     </div>:null}
