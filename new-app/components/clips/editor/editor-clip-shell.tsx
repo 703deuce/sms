@@ -81,6 +81,29 @@ export function EditorClipShell(props: {
     return () => { window.clearTimeout(timer);ctrl.abort() }
   }, [props.motionStudioProjectId, props.clipId, router])
 
+  // A native motion-graphic edit creates a new immutable portable version.
+  // Keep Compact's saved timeline lane metadata in sync with that version,
+  // while retaining the existing clip IDs and the user's ClipEditsV2 edits.
+  useEffect(()=>{
+    if(!props.motionStudioProjectId)return
+    let pending=false
+    const updated=(event:Event)=>{
+      const detail=(event as CustomEvent<{projectId?:string}>).detail
+      if(detail?.projectId!==props.motionStudioProjectId||pending)return
+      pending=true
+      void fetch('/api/motion-studio/projects/'+encodeURIComponent(props.motionStudioProjectId)+
+        '/sync-editor',{method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({clipId:props.clipId})})
+        .then(async response=>{
+          if(!response.ok)return
+          const result=await response.json() as {updated?:boolean}
+          if(result.updated)router.refresh()
+        }).catch(()=>undefined).finally(()=>{pending=false})
+    }
+    window.addEventListener('motion-studio:portable-updated',updated)
+    return()=>window.removeEventListener('motion-studio:portable-updated',updated)
+  },[props.motionStudioProjectId,props.clipId,router])
+
   const fallbacks = useMemo(
     () =>
       editorMediaLoadFallbacks(props.primaryMedia, props.mediaUrls, {
