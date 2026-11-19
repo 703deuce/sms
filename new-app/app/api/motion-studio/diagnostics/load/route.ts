@@ -25,7 +25,7 @@ export async function POST(request:Request){
   const allowed=new Set(['project-mounted','project-response','session-request','session-response','scene-ready','first-frame-drawn','first-frame-visible',
     'iframe-runtime-start','iframe-dom-ready','iframe-window-load',
     'iframe-fonts-ready','iframe-images-ready','iframe-runtime-init-message',
-    'iframe-first-render-call','iframe-document-load',
+    'iframe-first-render-call','iframe-document-load','iframe-hello','iframe-init-sent','iframe-first-seek-sent',
     'iframe-cpu-snapshot-6s','iframe-cpu-snapshot-11s'])
   if(!allowed.has(stage))return NextResponse.json({error:'invalid milestone'},{status:400})
   const ms=typeof x.elapsedMs==='number'&&Number.isFinite(x.elapsedMs)?
