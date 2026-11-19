@@ -1,6 +1,6 @@
 import 'server-only'
 import { getPrisma } from '@/lib/server/db'
-import { createReadableSignedUrl } from '@/lib/storage'
+import { createReadableSignedUrl, getClipStorage, storageDriverName } from '@/lib/storage'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import { runWithConcurrency } from '@/lib/utils/run-with-concurrency'
@@ -59,8 +59,19 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
     const key=keys.get(asset.id)
     return key&&directMediaKinds.has(asset.kind)?[{id:asset.id,key}]:[]
   })
+  // B2/S3 presigning is local; the old readable-storage helper does an
+  // expensive HEAD probe for *each* key before signing it. Motion Studio
+  // publishes these assets to its configured primary storage.
+  // Set MOTION_STUDIO_FAST_B2_SIGNING=false for legacy mixed-storage projects.
+  const directS3=storageDriverName()==='s3'&&
+    process.env.MOTION_STUDIO_FAST_B2_SIGNING!=='false'
+  const signer=directS3?getClipStorage():null
   const signed=await runWithConcurrency(signable,SIGN_CONCURRENCY,async item=>
-    [item.id,await createReadableSignedUrl(item.key,900).catch(()=>null)] as const)
+    [item.id,await (signer?
+      signer.createSignedDownloadUrl(item.key,900):
+      createReadableSignedUrl(item.key,900)).catch(()=>null)] as const)
+  console.info('[motion-studio:load]',{kind:'asset-signing-method',
+    method:directS3?'local-s3':'readable-storage-probe',count:signable.length})
   for(const [id,url] of signed)if(url)urls[id]=url
   return {versionId,expiresInSeconds:900,assetUrls:urls,metadata,
     availableAssetIds:manifest.assets.map(a=>a.id).filter(id=>keys.has(id)),
