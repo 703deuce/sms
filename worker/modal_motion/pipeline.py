@@ -205,6 +205,9 @@ def qa_video(path,expected_frames,fps):
     duration=float(result["format"]["duration"])
     if abs(duration-expected)>max(0.08,2/fps):
         raise ValueError("Master duration mismatch")
+    a_duration=float(audio.get("duration") or duration)
+    if abs(a_duration-expected)>0.20:
+        raise ValueError("Audio/video duration mismatch")
     _,black=checked(["ffmpeg","-hide_banner","-i",path,"-vf",
       "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=240)
     if "black_start:" in black:raise ValueError("Extended black frames detected")
@@ -220,6 +223,7 @@ def qa_video(path,expected_frames,fps):
     return {"frames":frames,"duration":duration,"integratedLufs":integrated}
 
 def join_and_qa(job_id,bundle_name,mode,segments):
+    start=time.monotonic()
     stop=heartbeat_scope(job_id)
     try:
         with tempfile.TemporaryDirectory() as directory:
@@ -256,10 +260,27 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                   "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
                   "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=900)
                 if os.path.getsize(share)<24_000_000:break
-            else:raise ValueError("Share copy exceeds maximum size")
+            else:
+                # For long films the 24 MB share cap may demand a far lower
+                # average bitrate than even CRF 35 produces. Use a bounded
+                # average-bitrate fallback; never upscale the source.
+                duration=project["frameCount"]/project["fps"]
+                video_rate=max(100000,int(23_000_000*8/duration-128000))
+                for factor in (0.95,0.80,0.65):
+                    target=max(90000,int(video_rate*factor))
+                    checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                      "-i",master,"-vf",
+                      "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+                      "-c:v","libx264","-preset","medium","-b:v",str(target),
+                      "-maxrate",str(target),"-bufsize",str(target*2),
+                      "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                      "-c:a","aac","-b:a","128k","-movflags","+faststart",share],
+                      timeout=900)
+                    if os.path.getsize(share)<24_000_000:break
+                else:raise ValueError("Share copy exceeds maximum size")
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
-                "qa":metrics}
+                "qa":metrics,"seconds":round(time.monotonic()-start,3)}
     finally:stop.set()
