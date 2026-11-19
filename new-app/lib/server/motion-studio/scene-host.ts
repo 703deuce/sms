@@ -97,7 +97,7 @@ export async function createSceneSession(workspaceId:string,projectId:string,ver
   const urls:Record<string,string>={}
   const records:Record<string,unknown>={}
   for(const asset of manifest.assets){
-    if(refs.assetUrls[asset.id])urls[asset.id]=signedPrefix+'_asset/'+encodeURIComponent(asset.id)
+    if(refs.availableAssetIds.includes(asset.id)&&!refs.unavailableAssetIds.includes(asset.id))urls[asset.id]=signedPrefix+'_asset/'+encodeURIComponent(asset.id)
   }
   for(const [nativeId,storageId] of Object.entries(aliases)){
     if(urls[storageId])urls[nativeId]=urls[storageId]
