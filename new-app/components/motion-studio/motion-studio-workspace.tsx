@@ -123,24 +123,15 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
     return () => { active = false; stop() }
   }, [client.mode, projectId, pollMs, projectRunning, jobEpoch])
 
-  // When editable delivery completes, use the SAME Compact Editor as
-  // ordinary footage. The producer workspace remains available with
-  // ?view=workspace for status, chat and version history.
-  const liveReady = client.mode === 'live' && agentJob?.status === 'complete' && agentJob.delivery === 'live' && Boolean(agentJob.videoUrl)
-  const compactRedirectStarted=useRef(false)
+  // Finished productions can be watched first; entering Compact is always
+  // an explicit customer action on the preview screen.
+  const liveReady = client.mode === 'live' && agentJob?.status === 'complete' &&
+    agentJob.delivery === 'live'
   useEffect(() => {
-    if (!liveReady||compactRedirectStarted.current) return
-    if (new URLSearchParams(window.location.search).get('view') === 'workspace') return
-    compactRedirectStarted.current=true
-    void client.openInEditor(projectId).then(h=>{
-      router.replace('/app/video-editor/'+encodeURIComponent(h.clipProjectId)+
-        '/edit/'+encodeURIComponent(h.clipId)+'?motionStudio='+encodeURIComponent(projectId))
-    }).catch(error=>{
-      compactRedirectStarted.current=false
-      console.warn('[motion-studio:ui] compact_handoff_failed',{
-        error:error instanceof Error?error.message:'unknown'})
-    })
-  }, [liveReady, projectId, router, client])
+    if(!liveReady)return
+    if(new URLSearchParams(window.location.search).get('view')==='workspace')return
+    router.replace('/app/motion-studio/'+encodeURIComponent(projectId)+'/live')
+  },[liveReady,projectId,router])
 
   const keys = useRef({ plan: newIdempotencyKey('ms_plan'), run: newIdempotencyKey('ms_run'), export: newIdempotencyKey('ms_export') })
   const bottomRef = useRef<HTMLDivElement>(null)
