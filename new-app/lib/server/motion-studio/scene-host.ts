@@ -126,7 +126,8 @@ function cachedAssetBytes(workspaceId:string,projectId:string,assetId:string):Pr
   const now=Date.now()
   for(const [k,v] of assetByteCache)if(v.until<=now)assetByteCache.delete(k)
   const hit=assetByteCache.get(key)
-  if(hit)return hit.value
+  if(hit){console.info('[motion-studio:load]',{kind:'asset-cache',hit:true,projectId,assetId});return hit.value}
+  console.info('[motion-studio:load]',{kind:'asset-cache',hit:false,projectId,assetId})
   const value=findAssetBytes(workspaceId,projectId,assetId)
   const entry={value,until:now+CACHE_TTL_MS,bytes:0}
   assetByteCache.set(key,entry)
@@ -146,6 +147,7 @@ function cachedAssetBytes(workspaceId:string,projectId:string,assetId:string):Pr
   return value
 }
 async function findAssetBytes(workspaceId:string,projectId:string,assetId:string){
+  const started=Date.now()
   const asset=await db().studioAsset.findFirst({
     where:{id:assetId,projectId,workspaceId,status:'ready'},
     select:{uploadId:true},
@@ -176,7 +178,10 @@ async function findAssetBytes(workspaceId:string,projectId:string,assetId:string
     }
   }
   if(!key)fail('Source asset has no verified storage location',404)
-  return getClipStorage().getObjectBytes(key)
+  const resolvedMs=Date.now()-started
+  const bytes=await getClipStorage().getObjectBytes(key)
+  console.info('[motion-studio:load]',{kind:'source-asset',projectId,assetId,resolveMs:resolvedMs,storageMs:Date.now()-started-resolvedMs,totalMs:Date.now()-started,bytes:bytes.length})
+  return bytes
 }
 const contentType=(file:string)=>{
   const ext=file.split('.').pop()?.toLowerCase()
@@ -204,7 +209,8 @@ async function sceneSourceContext(projectId:string,versionId:string):Promise<Sce
   for(const [k,v] of sceneContextCache)if(v.until<now)sceneContextCache.delete(k)
   const key=projectId+':'+versionId
   const cached=sceneContextCache.get(key)
-  if(cached)return cached.value
+  if(cached){console.info('[motion-studio:load]',{kind:'manifest-cache',hit:true,projectId});return cached.value}
+  console.info('[motion-studio:load]',{kind:'manifest-cache',hit:false,projectId})
   const value=db().motionStudioPortableVersion.findFirst({
     where:{id:versionId,projectId,status:'committed'},
   }).then(version=>{
