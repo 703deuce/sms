@@ -1,6 +1,7 @@
 """Isolated Motion Studio Modal app. No clips-worker classes are imported."""
 from __future__ import annotations
-import json, os, pathlib, tempfile, time
+import json, os, pathlib, tempfile, time, sys
+sys.path.insert(0, '/root/modal_motion')
 import modal
 
 HERE=pathlib.Path(__file__).resolve().parent
@@ -17,12 +18,12 @@ image=(modal.Image.from_registry("docker.io/node:22-bookworm",add_python="3.11")
 def ping():
     return {"ok":True,"app":"motion-render"}
 
-@app.function(image=image,timeout=5400,cpu=4,memory=8192)
+@app.function(image=image,timeout=5400,cpu=4,memory=8192,retries=2)
 def capture_cpu(job_id:str,bundle_name:str,start:int,end:int):
     from pipeline import capture_segment
     return capture_segment(job_id,bundle_name,"cpu",start,end)
 
-@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192)
+@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192,retries=2)
 def capture_gpu(job_id:str,bundle_name:str,start:int,end:int):
     from pipeline import capture_segment
     return capture_segment(job_id,bundle_name,"gpu",start,end)
