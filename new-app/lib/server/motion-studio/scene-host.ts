@@ -343,8 +343,8 @@ export async function sceneFileResponse(args:{
   // sequentially after fetching and evaluating the previous script.
   const preload=file==='index.html'
     ? Object.keys(files).filter(name=>name!=='index.html'&&
-        /\\.(?:js|mjs|css)$/.test(name)&&name.length<256&&
-        name.split('/').every(part=>/^[A-Za-z0-9_.@+\\-\\[\\]]+$/.test(part)))
+        /\.(?:js|mjs|css)$/.test(name)&&name.length<256&&
+        name.split('/').every(part=>/^[A-Za-z0-9_.@+\-\[\]]+$/.test(part)))
         .slice(0,12).map(name=>
           '<'+prefix+name.split('/').map(encodeURIComponent).join('/')+
           '>; rel=preload; as='+(name.endsWith('.css')?'style':'script'))
