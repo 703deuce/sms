@@ -125,15 +125,19 @@ export async function publishPortableVersion(workspaceId: string, projectId: str
 
 export async function getPortableProject(workspaceId: string, projectId: string, versionId?: string) {
   await requireProject(workspaceId, projectId)
-  const version = await db().motionStudioPortableVersion.findFirst({
-    where: { workspaceId, projectId, status: 'committed', ...(versionId ? { id: versionId } : {}) },
-    orderBy: { revision: 'desc' },
-  })
-  const history = await db().motionStudioPortableVersion.findMany({
-    where: { workspaceId, projectId, status: 'committed' },
-    select: { id:true,revision:true,parentId:true,createdAt:true,sourceJobId:true },
-    orderBy: { revision: 'desc' }, take:100,
-  })
+  // Version and history are independent reads. Issuing them together avoids
+  // another DB round trip on the critical editor-open path.
+  const [version, history] = await Promise.all([
+    db().motionStudioPortableVersion.findFirst({
+      where: { workspaceId, projectId, status: 'committed', ...(versionId ? { id: versionId } : {}) },
+      orderBy: { revision: 'desc' },
+    }),
+    db().motionStudioPortableVersion.findMany({
+      where: { workspaceId, projectId, status: 'committed' },
+      select: { id:true,revision:true,parentId:true,createdAt:true,sourceJobId:true },
+      orderBy: { revision: 'desc' }, take:100,
+    }),
+  ])
   if (!version) return { version: null, history }
   return { version: { ...version, manifest: version.manifest, theme: version.theme, overrides: version.overrides }, history }
 }
