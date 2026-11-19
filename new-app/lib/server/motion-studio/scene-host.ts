@@ -151,9 +151,10 @@ async function readSceneAssetBytes(projectId:string,versionId:string,assetId:str
   const {sources}=await sceneSourceContext(projectId,versionId)
   const source=sources.get(assetId)
   if(!source)fail('Source asset has no verified storage location',404)
-  if(source.bytes>25*1024*1024)fail('Source file too large for live scene hosting',413)
+  if(!Number.isFinite(source.bytes)||source.bytes>25*1024*1024)fail('Source file too large for live scene hosting',413)
   const resolvedMs=Date.now()-started
   const bytes=await getClipStorage().getObjectBytes(source.key)
+  if(bytes.length>25*1024*1024)fail('Source file too large for live scene hosting',413)
   console.info('[motion-studio:load]',{kind:'source-asset',projectId,assetId,
     resolveMs:resolvedMs,storageMs:Date.now()-started-resolvedMs,totalMs:Date.now()-started,
     bytes:bytes.length})
@@ -224,9 +225,11 @@ async function sceneSourceContext(projectId:string,versionId:string):Promise<Sce
       const record=asObj(item)
       const id=typeof record.id==='string'?record.id:''
       const kind=registeredKinds.get(id)
-      if(!kind||sources.has(id)||record.state!=='ready'||typeof record.key!=='string')continue
+      if(!kind||sources.has(id)||record.state!=='ready'||typeof record.key!=='string'||
+        typeof record.bytes!=='number'||!Number.isFinite(record.bytes)||
+        record.bytes<0||record.bytes>25*1024*1024)continue
       sources.set(id,{key:record.key,mime:typeof record.mime==='string'?record.mime:'',
-        kind,bytes:typeof record.bytes==='number'?record.bytes:0})
+        kind,bytes:record.bytes})
     }
     console.info('[motion-studio:load]',{kind:'source-map',projectId,assets:manifest.assets.length,
       resolved:sources.size,elapsedMs:Date.now()-started})
