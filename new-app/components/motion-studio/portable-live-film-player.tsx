@@ -35,12 +35,13 @@ function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]
  * loaded in windows of three, not one network call per source frame.
  */
 export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overrides,
-  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange}:{
+  scenePatch={},onSceneChange,selectedLayer='',onSelectLayer,onLayerChange,previewVideoUrl=null}:{
     projectId:string;versionId:string;manifest:MsPortableManifest;
     theme:Record<string,unknown>;overrides:Record<string,unknown>;
     scenePatch?:Record<string,Record<string,unknown>>;
     onSceneChange?:(sceneId:string)=>void
     selectedLayer?:string
+    previewVideoUrl?:string|null
     onSelectLayer?:(id:string)=>void
     onLayerChange?:(elementId:string,key:string,value:number)=>void
   }){
@@ -113,7 +114,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
   },[onSceneChange])
   return <div className="flex flex-col gap-1">
     <PlayerErrorBoundary resetKey={versionId}>
-    <UniversalTimelinePlayer timeline={timeline} sessions={sessions}
+    <UniversalTimelinePlayer timeline={timeline} sessions={sessions} previewVideoUrl={previewVideoUrl}
       assetUrls={assetUrls} theme={theme} overrides={overrides}
       scenePatch={validLivePatch} onSceneChange={selected}
       overlay={currentScene&&onSelectLayer&&onLayerChange?
