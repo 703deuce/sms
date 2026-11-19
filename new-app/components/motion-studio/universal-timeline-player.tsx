@@ -139,9 +139,13 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
         return
       }
       if(message.event==='hello'){
+        reportMotionStudioLoad('iframe-hello',performance.now()-loadStart.current,undefined,projectId,sceneId)
         const session=sessions[sceneId]
-        if(session)send(sceneId,'init',{theme,overrides,assetUrls:session.assetUrls,
-          fonts:session.fonts,assets:session.assetRecords,mode:'live'})
+        if(session){
+          send(sceneId,'init',{theme,overrides,assetUrls:session.assetUrls,
+            fonts:session.fonts,assets:session.assetRecords,mode:'live'})
+          reportMotionStudioLoad('iframe-init-sent',performance.now()-loadStart.current,undefined,projectId,sceneId)
+        }
       }else if(message.event==='ready'){
         console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
         reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current,undefined,projectId,sceneId)
@@ -157,6 +161,8 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
           if(id!==null){
             pending.current[sceneId]=id
             requested.current[sceneId]=localMs
+            reportMotionStudioLoad('iframe-first-seek-sent',performance.now()-loadStart.current,
+              undefined,projectId,sceneId)
           }
         }
         setReady(old=>({...old,[sceneId]:true}))
