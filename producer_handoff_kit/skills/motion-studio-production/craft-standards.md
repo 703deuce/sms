@@ -13,6 +13,8 @@ Researched 16 Nov 2026 from platform creator and ad guides, broadcaster subtitle
 
 # PART 1. Universal fundamentals (every job)
 
+> **Scope of every face rule in this file (Rick, Nov 19):** face framing, face punch-ins, eye lines and "face on screen" rules apply only to the clip or moment where a person is just talking (podcast, interview, talking head). They do not carry over to a whiteboard, screen, tutorial, demo, product or any moment where something else is what the viewer needs to see. There, frame for that content. Decide clip by clip.
+
 ## 1.1 What a cut has to do, in priority order (Murch's Rule of Six)
 Murch ranks what a cut must satisfy: **1) emotion (51%), 2) story (23%), 3) rhythm (10%), 4) eye-trace (7%), 5) the two-dimensional plane of the screen (5%), 6) three-dimensional space of action (4%)**. When you can't satisfy all six, give them up from the bottom: "don't ever give up emotion before story", and so on [MURCH].
 - In our pipeline this means a deliberate continuity break (a jump cut, a crossed line) is allowed when it serves emotion or story. QA should flag it, not auto-fail it.

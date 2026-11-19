@@ -87,7 +87,7 @@ When the customer supplies the footage and it is the picture, the job is an **ed
 1. **Transcribe** the footage once (faster-whisper; parallel 30 s chunks for long sources, no VAD). Detect silences.
 2. **Select.** Pick the strongest through-line for the requested length on sentence boundaries. Never cut mid-word.
 3. **Cut.** Remove dead air, filler, false starts and repeats; keep the speaker's rhythm. Use J/L cuts where they help; short audio fades so cuts don't click.
-4. **Frame** per section, following the judgment step: face-led for pure talk, content-led when they draw, show or demo. Use detection or tracking when it helps; check the result by eye.
+4. **Frame** per clip and per section, following the judgment step: face-led only for the clips or moments that are just someone talking, content-led when they draw, show or demo. Face framing never becomes the default for a whole video type. Use detection or tracking when it helps; check the result by eye.
 5. **Custom motion graphics.** Built from the creative idea (section 1). Enough to lift the edit (section 1), designed for this video, placed in empty space or planned breakouts, never over the person or what they're showing.
 6. **Sound.** Keep the real voice as the spine. Add a score or SFX only where they serve it, ducked under speech. Loudness target: follow `qa.md` (currently −15 ±1.5 LUFS; −14 vs −15 is still open for Rick).
 7. **Review** by stills as a viewer (section 7), then a single final render or live package (section 8), a full watch, and delivery.

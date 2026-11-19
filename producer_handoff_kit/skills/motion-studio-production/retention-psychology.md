@@ -20,6 +20,8 @@ Researched 16 Nov 2026 from veteran YouTube editors and retention strategists, f
 
 Each principle opens with a one-line **Why** (the psychology or the observed audience behaviour). The techniques under it are tagged to the person or paper they came from.
 
+> **Scope of every face rule in this file (Rick, Nov 19):** face framing, face punch-ins, eye lines and "face on screen" rules apply only to the clip or moment where a person is just talking (podcast, interview, talking head). They do not carry over to a whiteboard, screen, tutorial, demo, product or any moment where something else is what the viewer needs to see. There, frame for that content. Decide clip by clip.
+
 ## 1.1 The edit is judged by how long people stay
 
 **Why.** Platforms promote videos that hold attention and leave people satisfied, not videos that merely look expensive. YouTube's own recommendation framing is appeal (did they choose it?), engagement (did they stick around?) and satisfaction (did they enjoy it?) [YT-REC]. MrBeast's production memo is blunt about the same point: the job is not to make the best-produced, funniest or best-looking video, it is to make the best *YouTube* video, and the contents are good if people watch longer [MB-MEMO].
