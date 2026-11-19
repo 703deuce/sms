@@ -6,6 +6,29 @@ import {PlayerErrorBoundary} from './player-error-boundary'
 import {normalizeUniversalTimeline} from '@/lib/motion-studio/universal-timeline'
 import {UniversalTimelinePlayer,type BrowserSceneSession} from './universal-timeline-player'
 
+type SessionResponse={sessions:BrowserSceneSession[];mediaUrls?:Record<string,string>}
+const sessionRequests=new Map<string,{promise:Promise<SessionResponse>;expiresAt:number}>()
+function sceneSessionRequest(projectId:string,versionId:string,sceneIds:string[]):Promise<SessionResponse>{
+  const key=JSON.stringify([projectId,versionId,sceneIds])
+  const now=Date.now()
+  for(const [id,entry] of sessionRequests)if(entry.expiresAt<=now)sessionRequests.delete(id)
+  const cached=sessionRequests.get(key)
+  if(cached)return cached.promise
+  // Share one request across effect cleanup/remount and React Strict Mode.
+  // No abort: a completed request can be reused by the next mount.
+  const promise=fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/scene-sessions',{
+    method:'POST',cache:'no-store',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({versionId,sceneIds}),
+  }).then(async response=>{
+    if(!response.ok)throw new Error('Could not load editable scene sources ('+response.status+')')
+    return response.json() as Promise<SessionResponse>
+  })
+  sessionRequests.set(key,{promise,expiresAt:now+30_000})
+  void promise.catch(()=>{if(sessionRequests.get(key)?.promise===promise)sessionRequests.delete(key)})
+  return promise
+}
+
 /** Adapter from persisted Motion Studio scenes into the same browser player
  * used for native footage, audio and caption tracks. Signed sessions are
  * loaded in windows of three, not one network call per source frame.
@@ -36,16 +59,8 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       return !item||Date.parse(item.expiresAt)<Date.now()+60_000
     })
     if(!ids.length)return
-    const controller=new AbortController()
     let alive=true
-    fetch('/api/motion-studio/projects/'+encodeURIComponent(projectId)+'/portable/scene-sessions',{
-      method:'POST',cache:'no-store',signal:controller.signal,
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({versionId,sceneIds:ids}),
-    }).then(async response=>{
-      if(!response.ok)throw new Error('Could not load editable scene sources')
-      return response.json() as Promise<{sessions:BrowserSceneSession[];mediaUrls?:Record<string,string>}>
-    }).then(data=>{
+    sceneSessionRequest(projectId,versionId,ids).then(data=>{
       if(!alive)return
       const safe=data.sessions.filter(item=>{
         try{
@@ -63,7 +78,7 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       if(data.mediaUrls)setMediaUrls(previous=>({...previous,...data.mediaUrls}))
       setFailure('')
     }).catch(err=>{if(alive)setFailure(err instanceof Error?err.message:'Scene session error')})
-    return()=>{alive=false;controller.abort()}
+    return()=>{alive=false}
   },[projectId,versionId,index,sceneIds,sessions])
 
   const assetUrls=useMemo(()=>{
