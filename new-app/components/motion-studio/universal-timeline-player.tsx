@@ -9,7 +9,8 @@ import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 export type BrowserSceneSession={sceneId:string;sceneUrl:string;expiresAt:string;
   assetUrls:Record<string,string>;assetRecords:Record<string,unknown>;
   fonts:Record<string,unknown>}
-type Wire={ms?:number;event?:string;id?:number;ok?:boolean;error?:string}
+type Wire={ms?:number;event?:string;id?:number;ok?:boolean;error?:string;
+  stage?:string;elapsedMs?:number;count?:number;maxMs?:number}
 const safeMs=(ms:number,max:number)=>Math.max(0,Math.min(max,Number.isFinite(ms)?ms:0))
 function sceneAt(timeline:UniversalTimeline,t:number):UniversalVisual|null{
   const candidate=visualsAt(timeline,t).filter(v=>v.type==='scene')
@@ -121,6 +122,21 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
       if(!sceneId)return
       const message=event.data as Wire|null
       if(!message||message.ms!==1)return
+      if(message.event==='boot-timing'){
+        const allowed=new Set(['runtime-start','runtime-init-message','first-render-call',
+          'dom-ready','window-load','fonts-ready','images-ready'])
+        if(typeof message.stage==='string'&&allowed.has(message.stage)){
+          const local=Number(message.elapsedMs)
+          if(Number.isFinite(local)&&local>=0&&local<120000){
+            console.info('[motion-studio:browser-load]',{stage:message.stage,sceneId,
+              iframeElapsedMs:Math.round(local),parentElapsedMs:Math.round(performance.now()-loadStart.current),
+              resourceCount:message.count,maxResourceMs:message.maxMs})
+            reportMotionStudioLoad('iframe-'+message.stage,performance.now()-loadStart.current,
+              local,projectId)
+          }
+        }
+        return
+      }
       if(message.event==='hello'){
         const session=sessions[sceneId]
         if(session)send(sceneId,'init',{theme,overrides,assetUrls:session.assetUrls,
@@ -323,6 +339,8 @@ export function UniversalTimelinePlayer({projectId,timeline,sessions,assetUrls,t
         return <iframe key={sessions[id]!.sceneUrl} title={'Editable scene '+id}
           ref={el=>{frames.current[id]=el}}
           src={sessions[id]!.sceneUrl} loading="eager" sandbox="allow-scripts" referrerPolicy="no-referrer"
+          onLoad={()=>reportMotionStudioLoad('iframe-document-load',
+            performance.now()-loadStart.current,undefined,projectId)}
           className="absolute inset-0 size-full border-0"
           style={{zIndex:(item?.layer??0)+1,opacity:visible?1:0,pointerEvents:'none'}}/>
       })}
