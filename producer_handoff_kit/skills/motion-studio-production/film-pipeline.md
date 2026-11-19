@@ -80,7 +80,7 @@ Render at the real output size, then view a 480p downscale (`ffmpeg -i t.png -vf
 | accepted | 2 | Production started. |
 | research | 10–25 | Researching the story and checking facts. / Designing the visual world. |
 | building | 25–70 | Sourcing photos and footage. / Recording narration. / Building scene 3 of 7. |
-| rendering | 75–88 | Rendering the approved film. (not on live jobs) |
+| rendering | 75–88 | Rendering the approved film. (every job, live included: render first) |
 | qa | 88–95 | Watching the final cut and checking the sound mix. |
 | uploading | 95–99 | Uploading the video and project files. |
 
