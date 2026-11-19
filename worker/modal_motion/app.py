@@ -18,15 +18,24 @@ image=(modal.Image.from_registry("docker.io/node:22-bookworm",add_python="3.11")
 def ping():
     return {"ok":True,"app":"motion-render"}
 
-@app.function(image=image,timeout=5400,cpu=4,memory=8192,retries=2)
-def capture_cpu(job_id:str,bundle_name:str,start:int,end:int):
+def bounded_segment(job_id,bundle_name,mode,start,end):
     from pipeline import capture_segment
-    return capture_segment(job_id,bundle_name,"cpu",start,end)
+    for attempt in range(1,4):
+        try:
+            result=capture_segment(job_id,bundle_name,mode,start,end)
+            result["retries"]=attempt-1
+            return result
+        except Exception:
+            if attempt==3:raise
+            time.sleep(2*attempt)
 
-@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192,retries=2)
+@app.function(image=image,timeout=5400,cpu=4,memory=8192)
+def capture_cpu(job_id:str,bundle_name:str,start:int,end:int):
+    return bounded_segment(job_id,bundle_name,"cpu",start,end)
+
+@app.function(image=image,gpu="T4",timeout=5400,cpu=4,memory=8192)
 def capture_gpu(job_id:str,bundle_name:str,start:int,end:int):
-    from pipeline import capture_segment
-    return capture_segment(job_id,bundle_name,"gpu",start,end)
+    return bounded_segment(job_id,bundle_name,"gpu",start,end)
 
 @app.function(image=image,timeout=5400,cpu=4,memory=8192)
 def join_qa(job_id:str,bundle_name:str,mode:str,segments:list):
@@ -35,7 +44,7 @@ def join_qa(job_id:str,bundle_name:str,mode:str,segments:list):
 
 @app.function(image=image,timeout=12*3600,cpu=2,memory=4096)
 def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300,
-                estimate_usd_micros:int=0):
+                estimate_usd_micros:int=0,benchmark_only:bool=True):
     """Fan out once, then mux/QA and publish. Whole-run paid retries disabled."""
     from pipeline import api,extract_bundle,heartbeat_scope
     if mode not in ("cpu","gpu") or not 1<=segment_frames<=600:
@@ -70,6 +79,22 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
               "completed":len(results),"total":len(segments)})
         joined=join_qa.with_options(secrets=[secret]).remote(job_id,bundle_name,mode,results)
         api(job_id,"POST","/render-status",{"stage":"qa_pass"})
+        retry_count=sum(item.get("retries",0) for item in results)
+        work_seconds=sum(float(item.get("seconds",0)) for item in results)
+        cost_key="MOTION_GPU_USD_PER_SECOND" if mode=="gpu" else "MOTION_CPU_USD_PER_SECOND"
+        rate=float(os.environ.get(cost_key,"0"))
+        if rate<=0:raise ValueError("An operator-approved Modal rate is required for cost tracking")
+        api(job_id,"POST","/usage",{"items":[{"provider":"modal",
+          "units":work_seconds,"usd":round(work_seconds*rate,6)}]})
+        summary={"jobId":job_id,"mode":mode,"segments":len(results),
+          "retries":retry_count,"masterBytes":joined["masterBytes"],
+          "shareBytes":joined["shareBytes"],"qa":joined["qa"],
+          "renderSeconds":round(time.monotonic()-started,3),
+          "estimatedUsd":round(work_seconds*rate,6)}
+        if benchmark_only:
+            # The first CPU/GPU comparison does NOT approve or complete a
+            # customer job. One paid run per mode; preserve the job assignment.
+            return summary
         api(job_id,"POST","/assets",{"action":"approveMaster","uploadId":joined["masterUploadId"]})
         api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
             "message":"Video ready to watch; preparing editable version"})
@@ -87,17 +112,7 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         api(job_id,"POST","/complete",{"delivery":"live","portableVersionId":version_id,
             "durationMs":project["durationMs"]})
         api(job_id,"POST","/render-status",{"stage":"completed"})
-        seconds=sum(float(x.get("seconds",0)) for x in results)
-        # Internal estimate only; the platform invoice is authoritative.
-        rate_key="MOTION_GPU_USD_PER_SECOND" if mode=="gpu" else "MOTION_CPU_USD_PER_SECOND"
-        rate=float(os.environ.get(rate_key,"0"))
-        if rate>0:
-            api(job_id,"POST","/usage",{"items":[{"provider":"modal",
-                "units":seconds,"usd":round(seconds*rate,6)}]})
-        return {"jobId":job_id,"mode":mode,"segments":len(results),
-            "retries":0,"masterBytes":joined["masterBytes"],
-            "shareBytes":joined["shareBytes"],"qa":joined["qa"],
-            "renderSeconds":round(time.monotonic()-started,3)}
+        return summary
     except Exception as error:
         # Persist internal reason before the customer-facing generic failure.
         reason=str(error)[:800]
