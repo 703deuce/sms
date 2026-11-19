@@ -36,11 +36,17 @@ effects at the requested frame. Supply all local files/fonts (including
 Schibsted Grotesk Black and Martian Mono Medium for the 5s test) in the ZIP.
 External fetches are blocked during capture. Captions are **not** burned in.
 
-For final delivery, also supply `portable.json` in the ZIP with exactly
-the already-uploaded/registered native
-`{document,assets,bundles,liveProject}` publication payload. Missing
-composition or editable payload fails safely; the renderer does not invent
-a film-assembly recipe or flatten a missing editable scene.
+For final delivery, supply the **existing producer package**:
+`package.json` with `schema: transovo.motion-package/1`, the native
+`document` and content-addressed `assets` map; `blobs/<sha256>` files
+for each referenced source; and `bundles.json` containing the original
+scene-bundle metadata. Include `live-project.json` when the Producer
+authored the shared timeline. Modal verifies hashes, uploads source files
+through the authenticated job asset API, then publishes those same native
+IDs. Optionally, `portable.json` may instead contain an already-registered
+`{document,assets,bundles,liveProject}` payload. Missing composition,
+hashed source, or editable metadata fails safely: the renderer never invents
+a film-assembly recipe or flattens a missing editable scene.
 
 ## Image, modes and encoding
 
@@ -63,6 +69,9 @@ black gaps over 0.6 s and EBU R128 integrated loudness (-16.5 to -13.5 LUFS).
 Static scene holds are permitted; a full duplicate/motion analysis is not yet
 implemented. The benchmark reports measured runtime and **estimated**
 usage, not the authoritative Modal invoice.
+
+Offline contract checks (no paid calls): `python3 -m unittest test_pipeline`
+from `worker/modal_motion` with `requests` installed.
 
 ## Deploy and no-charge smoke
 
