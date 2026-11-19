@@ -2,6 +2,8 @@
 export function reportMotionStudioLoad(stage:string,elapsedMs:number,requestMs?:number,projectId?:string){
   if(typeof window==='undefined')return
   const payload={stage,elapsedMs:Math.round(elapsedMs),
+    navigationElapsedMs:Math.round(performance.now()),
+    navigationStartEpochMs:Math.round(performance.timeOrigin),
     ...(projectId?{projectId}:{}),
     ...(requestMs===undefined?{}:{requestMs:Math.round(requestMs)})}
   void fetch('/api/motion-studio/diagnostics/load',{
