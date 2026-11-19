@@ -4,6 +4,7 @@ import type {UniversalTimeline,UniversalVisual,UniversalCaption} from '@/lib/mot
 import {captionsAt,visualsAt} from '@/lib/motion-studio/universal-timeline'
 import {readTimelineCaptions} from '@/lib/motion-studio/universal-captions'
 import {UniversalBrowserAudio} from '@/lib/motion-studio/universal-browser-audio'
+import {reportMotionStudioLoad} from '@/lib/motion-studio/report-load'
 
 export type BrowserSceneSession={sceneId:string;sceneUrl:string;expiresAt:string;
   assetUrls:Record<string,string>;assetRecords:Record<string,unknown>;
@@ -124,6 +125,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
           fonts:session.fonts,assets:session.assetRecords,mode:'live'})
       }else if(message.event==='ready'){
         console.info('[motion-studio:browser-load]',{stage:'scene-ready',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
+        reportMotionStudioLoad('scene-ready',performance.now()-loadStart.current)
         setReady(old=>({...old,[sceneId]:true}))
         setSeekEpoch(n=>n+1)
       }else if(message.ok===false&&typeof message.error==='string'){
@@ -136,6 +138,7 @@ export function UniversalTimelinePlayer({timeline,sessions,assetUrls,theme,overr
         if(!firstFrameLogged.current){
           firstFrameLogged.current=true
           console.info('[motion-studio:browser-load]',{stage:'first-frame-drawn',sceneId,elapsedMs:Math.round(performance.now()-loadStart.current)})
+          reportMotionStudioLoad('first-frame-drawn',performance.now()-loadStart.current)
         }
         setDrawn(old=>({...old,[sceneId]:Date.now()}))
         // The playhead may have advanced during async draw. Immediately send
