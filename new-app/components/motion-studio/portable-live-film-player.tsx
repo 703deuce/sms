@@ -89,10 +89,9 @@ export function PortableLiveFilmPlayer({projectId,versionId,manifest,theme,overr
       setFailure('')
     }).catch(err=>{if(alive)setFailure(err instanceof Error?err.message:'Scene session error')})
     return()=>{alive=false}
-  // For short films, a session is issued exactly once per project version.
-  // Longer timelines still refresh their active three-scene window.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[projectId,versionId,shortFilm,sceneIds,...(shortFilm?[]:[index,sessions])])
+  // On short films the requested scene IDs stay fixed; sessions state is
+  // retained so a completed request cannot trigger a second signing call.
+  },[projectId,versionId,shortFilm,sceneIds,index,sessions])
 
   const assetUrls=useMemo(()=>{
     const result:Record<string,string>={}
