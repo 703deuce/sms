@@ -16,14 +16,17 @@ export async function portableAssetSession(workspaceId:string,projectId:string,v
     if(!version)throw new MotionStudioError('NOT_FOUND','Project version not found.',404)
     return validatePortableManifest(version.manifest)
   })()
-  const registered=await db().studioAsset.findMany({
-    where:{workspaceId,projectId,id:{in:manifest.assets.map(a=>a.id)},status:'ready'},
-    select:{id:true,uploadId:true},
-  })
+  // Independent lookups must not serialize the first picture.
+  const [registered,artifactJobs]=await Promise.all([
+    db().studioAsset.findMany({
+      where:{workspaceId,projectId,id:{in:manifest.assets.map(a=>a.id)},status:'ready'},
+      select:{id:true,uploadId:true},
+    }),
+    db().motionStudioAgentJob.findMany({
+      where:{workspaceId,projectId},select:{artifacts:true},
+    }),
+  ])
   const registeredIds=new Set(registered.map(a=>a.id))
-  const artifactJobs=await db().motionStudioAgentJob.findMany({
-    where:{workspaceId,projectId},select:{artifacts:true},
-  })
   const keys=new Map<string,string>()
   const metadata:Record<string,{bytes:number;mime:string}> = {}
   for(const job of artifactJobs)for(const item of Array.isArray(job.artifacts)?job.artifacts:[]){
