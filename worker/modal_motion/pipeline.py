@@ -284,3 +284,55 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
                 "qa":metrics,"seconds":round(time.monotonic()-start,3)}
     finally:stop.set()
+
+def publish_editable(job_id,root):
+    """Upload the immutable Producer package, preserving native hash IDs.
+
+    Mirrors the existing publish-editable.mjs contract. No rendering here,
+    no rewriter for arbitrary scene code, no additional master approval.
+    """
+    fast=root/"portable.json"
+    if fast.is_file():
+        payload=json.loads(fast.read_text())
+        return api(job_id,"POST","/portable",payload,timeout=300)
+    manifest_file=root/"package.json"
+    bundles_file=root/"bundles.json"
+    if not manifest_file.is_file() or not bundles_file.is_file():
+        raise ValueError("Producer package.json and bundles.json missing")
+    pkg=json.loads(manifest_file.read_text())
+    bundles=json.loads(bundles_file.read_text())
+    if pkg.get("schema")!="transovo.motion-package/1" or not isinstance(bundles,list):
+        raise ValueError("Unsupported Producer package")
+    assets=pkg.get("assets")
+    if not isinstance(assets,dict):raise ValueError("Invalid Producer asset map")
+    if len(assets)>10000:raise ValueError("Too many editable assets")
+    records=[]
+    for native_id,asset in assets.items():
+        if not isinstance(native_id,str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}",native_id):
+            raise ValueError("Invalid native asset ID")
+        digest=asset.get("sha256","")
+        if not re.fullmatch(r"[a-f0-9]{64}",digest):
+            raise ValueError("Native source digest missing")
+        blob=root/"blobs"/digest
+        if not blob.is_file() or blob.is_symlink():
+            raise ValueError("Immutable source blob missing")
+        filename=asset.get("filename") or native_id
+        filename=re.sub(r"[^A-Za-z0-9._-]","_",filename)[:120]
+        kind=("bundle" if native_id.startswith("bnd_") else
+              "font" if native_id.startswith("fnt_") else asset.get("kind","source"))
+        mime=asset.get("mime") or "application/json"
+        if mime in ("text/html","text/x-python","text/x-shellscript","text/markdown","text/vtt"):
+            mime="text/plain"
+        if os.path.getsize(blob)!=asset.get("bytes"):
+            raise ValueError("Native source length mismatch")
+        with open(blob,"rb") as src:
+            if hashlib.file_digest(src,"sha256").hexdigest()!=digest:
+                raise ValueError("Native source digest mismatch")
+        receipt=prepare_upload(job_id,str(blob),filename,kind,mime)
+        records.append({"id":native_id,"storageId":receipt,
+                        "kind":kind,"sha256":digest})
+    records.sort(key=lambda a:a["id"])
+    payload={"document":pkg["document"],"assets":records,"bundles":bundles}
+    live=root/"live-project.json"
+    if live.is_file():payload["liveProject"]=json.loads(live.read_text())
+    return api(job_id,"POST","/portable",payload,timeout=300)
