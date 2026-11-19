@@ -8,9 +8,10 @@ import { createReadableSignedUrl, storageDriverName, uploadSourceKey } from '@/l
 import { defaultClipSettings } from '@/lib/clips/settings'
 import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
 import type { Marker } from '@/lib/clips/editor/markers'
-import { buildMotionStudioEditorEdits, MS_MUSIC_ID_PREFIX, type MsEditorStems } from '@/lib/motion-studio/editor-timeline'
+import { buildMotionStudioEditorEdits, buildLiveMotionStudioEditorEdits, MS_MUSIC_ID_PREFIX, type MsEditorStems } from '@/lib/motion-studio/editor-timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
+import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 import type {
@@ -1154,8 +1155,14 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
   const existing = await db().clip.findUnique({ where: { id: row.clipId }, select: { edits: true, aiMeta: true } })
   const meta = J(existing?.aiMeta)
   const agentSource = ex.source === 'transovo_agent' || ex.source === 'grokbot_agent'
+  const liveProject=ex.delivery==='live'
+  const portable=liveProject?await db().motionStudioPortableVersion.findFirst({
+    where:{workspaceId,projectId:id,status:'committed'},orderBy:{revision:'desc'},
+    select:{id:true,manifest:true,revision:true},
+  }):null
   if (existing && meta.motionStudioTimelineVersion === row.timelineVersion &&
-    (!agentSource || (meta.motionStudioImportedManifest === true && meta.motionStudioImportVersion === 2)))
+    (liveProject? Boolean(portable&&meta.motionStudioPortableVersionId===portable.id):
+      (!agentSource || (meta.motionStudioImportedManifest === true && meta.motionStudioImportVersion === 2))))
     return { clipProjectId: row.clipProjectId, clipId: row.clipId, edits: existing.edits as unknown as ClipEditsV2 }
   let musicUploadId: string | null = null
   try {
@@ -1171,7 +1178,14 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
     lastPlacedMusicUploadId: typeof meta.motionStudioMusicUploadId === 'string' ? meta.motionStudioMusicUploadId : null,
   })
   let manifestImported = false
-  if (agentSource) {
+  if(liveProject&&portable){
+    // The live producer's immutable, independently timed scene/graphic/audio
+    // tracks are the actual source for Compact's Motion Studio lanes.
+    // No project.json fallback and no flattening of editable scene layers.
+    edits=buildLiveMotionStudioEditorEdits(edits,validatePortableManifest(portable.manifest),
+      id,row.timelineVersion)
+    manifestImported=true
+  }else if (agentSource) {
     const selectedAgentJobId = typeof ex.agentJobId === 'string' ? ex.agentJobId : null
     const job = await db().motionStudioAgentJob.findFirst({ where: {
       projectId: id, workspaceId, status: 'complete',
@@ -1185,7 +1199,9 @@ async function ensureEditorClip(workspaceId: string, id: string): Promise<{ clip
   }
   const placedMusic = edits.audio?.music?.uploadId?.startsWith(MS_MUSIC_ID_PREFIX) ? edits.audio.music.uploadId : (meta.motionStudioMusicUploadId ?? null)
   const aiMeta = { ...meta, motionStudioProjectId: id, motionStudioTimelineVersion: row.timelineVersion,
-    motionStudioMusicUploadId: placedMusic, ...(agentSource ? {motionStudioImportedManifest:manifestImported, motionStudioImportVersion:manifestImported ? 2 : 0} : {}) }
+    motionStudioMusicUploadId: placedMusic,
+    ...(liveProject?{motionStudioPortableVersionId:portable?.id??null}:{}),
+    ...(agentSource ? {motionStudioImportedManifest:manifestImported, motionStudioImportVersion:manifestImported ? 2 : 0} : {}) }
   await db().clip.upsert({
     where: { id: row.clipId },
     create: { id: row.clipId, workspaceId, projectId: row.clipProjectId, title: (row.title || 'Documentary').slice(0, 120), reason: 'motion_studio',
@@ -1204,8 +1220,16 @@ export async function syncEditorClipIfStale(workspaceId: string, motionStudioPro
   if (!row || row.clipId !== clipId || !row.exportInfo) return false
   const clip = await db().clip.findUnique({ where: { id: clipId }, select: { aiMeta: true } })
   const meta = J(clip?.aiMeta)
-  const source = J(row.exportInfo).source
-  if (meta.motionStudioTimelineVersion === row.timelineVersion &&
+  const ex=J(row.exportInfo)
+  const source = ex.source
+  if(ex.delivery==='live'){
+    const portable=await db().motionStudioPortableVersion.findFirst({
+      where:{workspaceId,projectId:motionStudioProjectId,status:'committed'},
+      orderBy:{revision:'desc'},select:{id:true},
+    })
+    if(portable&&meta.motionStudioTimelineVersion===row.timelineVersion&&
+      meta.motionStudioPortableVersionId===portable.id)return false
+  }else if (meta.motionStudioTimelineVersion === row.timelineVersion &&
     (!['transovo_agent','grokbot_agent'].includes(String(source)) || (meta.motionStudioImportedManifest === true && meta.motionStudioImportVersion === 2))) return false
   await ensureEditorClip(workspaceId, motionStudioProjectId)
   return true
