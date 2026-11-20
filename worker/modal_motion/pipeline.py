@@ -36,7 +36,7 @@ def api(job_id,method,path="",payload=None,params=None,timeout=120,attempts=8):
             # Preserve the server's validation reason, excluding URLs and query strings.
             try: detail=str((r.json() or {}).get("error") or "")
             except Exception: detail=""
-            detail=re.sub(r"https?://\\S+","[url]",detail)[:300]
+            detail=re.sub(r"https?://\S+","[url]",detail)[:300]
             raise RuntimeError("Job API failed: "+str(r.status_code)+
                 " "+method+" "+(path or "/")+(": "+detail if detail else ""))
         return r.json()
