@@ -209,8 +209,10 @@ def capture_segment(job_id,bundle_name,mode,start,end):
     finally:stop.set()
 
 def ffprobe(path):
-    out,_=checked(["ffprobe","-v","error","-count_frames","-show_streams",
-      "-show_format","-of","json",path],timeout=90)
+    # -count_packets reads the container index (no full decode); long films
+    # made -count_frames exceed its timeout.
+    out,_=checked(["ffprobe","-v","error","-count_packets","-show_streams",
+      "-show_format","-of","json",path],timeout=1800)
     return json.loads(out)
 
 def qa_video(path,expected_frames,fps):
@@ -219,7 +221,7 @@ def qa_video(path,expected_frames,fps):
     video=next((x for x in streams if x.get("codec_type")=="video"),None)
     audio=next((x for x in streams if x.get("codec_type")=="audio"),None)
     if not video or not audio:raise ValueError("Missing master video or audio")
-    frames=int(video.get("nb_read_frames") or 0)
+    frames=int(video.get("nb_read_packets") or video.get("nb_read_frames") or 0)
     if frames!=expected_frames:raise ValueError("Frame count mismatch")
     expected=expected_frames/fps
     duration=float(result["format"]["duration"])
@@ -229,10 +231,10 @@ def qa_video(path,expected_frames,fps):
     if abs(a_duration-expected)>0.20:
         raise ValueError("Audio/video duration mismatch")
     _,black=checked(["ffmpeg","-hide_banner","-i",path,"-vf",
-      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=240)
+      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=3600)
     if "black_start:" in black:raise ValueError("Extended black frames detected")
     _,loud=checked(["ffmpeg","-hide_banner","-i",path,"-vn","-af",
-      "ebur128=peak=true","-f","null","-"],timeout=240)
+      "ebur128=peak=true","-f","null","-"],timeout=1800)
     matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
     if not matches:raise ValueError("Could not inspect integrated loudness")
     integrated=float(matches[-1])
@@ -263,14 +265,14 @@ def join_and_qa(job_id,bundle_name,mode,segments):
               "file '"+f.replace("'","'\\''")+"'\n" for f in inputs))
             join=os.path.join(directory,"joined.mp4")
             checked(["ffmpeg","-hide_banner","-loglevel","error","-y","-f","concat",
-              "-safe","0","-i",listfile,"-c","copy",join],timeout=300)
+              "-safe","0","-i",listfile,"-c","copy",join],timeout=1800)
             master=os.path.join(directory,"master.mp4")
             checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
               "-i",join,"-i",str(audio),"-map","0:v:0","-map","1:a:0",
               "-c:v","libx264","-preset","medium","-crf","16","-profile:v","high",
               "-level:v","4.2","-pix_fmt","yuv420p","-movflags","+faststart",
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
-              "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=900)
+              "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
             metrics=qa_video(master,project["frameCount"],project["fps"])
             share=os.path.join(directory,"share.mp4")
             for crf in (26,29,32,35):
@@ -278,7 +280,7 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                   "-i",master,"-vf","scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
                   "-c:v","libx264","-preset","medium","-crf",str(crf),
                   "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
-                  "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=900)
+                  "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=3600)
                 if os.path.getsize(share)<24_000_000:break
             else:
                 # For long films the 24 MB share cap may demand a far lower
@@ -295,7 +297,7 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                       "-maxrate",str(target),"-bufsize",str(target*2),
                       "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
                       "-c:a","aac","-b:a","128k","-movflags","+faststart",share],
-                      timeout=900)
+                      timeout=3600)
                     if os.path.getsize(share)<24_000_000:break
                 else:raise ValueError("Share copy exceeds maximum size")
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
