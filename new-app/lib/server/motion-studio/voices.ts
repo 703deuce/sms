@@ -32,10 +32,7 @@ export async function listVoices(workspaceId:string,userId:string){
   where:{workspaceId,userId},orderBy:[{isDefault:'desc'},{createdAt:'desc'}]})
  const stock=await db().motionStudioStockVoice.findMany({
   where:{enabled:true},orderBy:{sortOrder:'asc'},take:20})
- const fallback=stock.length?stock:MOTION_STOCK_VOICES.map((x,i)=>({
-  id:'seed_'+x.id,voiceId:x.id,name:x.name,description:x.description,
-  gender:x.gender,accent:x.accent,previewUrl:'',sortOrder:i,enabled:true
- }))
+ const fallback=stock
  const stockVoices=await Promise.all(fallback.map(async row=>({
    voiceId:row.voiceId,name:row.name,description:row.description,gender:row.gender,
    accent:row.accent,previewUrl:row.previewUrl||await officialPreview(row.voiceId),source:'stock' as const,
@@ -59,7 +56,7 @@ export async function validateChosenVoice(workspaceId:string,userId:string,voice
   if(!row)throw error('Choose one of your saved voices')
  }else{
   const row=await db().motionStudioStockVoice.findFirst({where:{voiceId,enabled:true}})
-  if(!row&&!MOTION_STOCK_VOICES.some(v=>v.id===voiceId))throw error('Choose a listed stock voice')
+  if(!row)throw error('Choose an enabled stock voice')
  }
 }
 export async function defaultVoice(workspaceId:string,userId:string){
