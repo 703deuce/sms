@@ -58,7 +58,7 @@ def stage_log(job_id,stage,**values):
     output=LOGS/("job_"+job_id+".jsonl")
     fd=os.open(str(output),os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
     try:
-        os.write(fd,(json.dumps(event,separators=(",",":"))+"\\n").encode())
+        os.write(fd,(json.dumps(event,separators=(",",":"))+"\n").encode())
     finally:os.close(fd)
     print(json.dumps(event,separators=(",",":")),flush=True)
 TERMINAL=(401,403,409)
