@@ -2,6 +2,7 @@
 // Uses local files only. No video render and no external media requests.
 import {createServer} from 'node:http'
 import {readFile} from 'node:fs/promises'
+import {existsSync} from 'node:fs'
 import path from 'node:path'
 import {createRequire} from 'node:module'
 import {fileURLToPath} from 'node:url'
@@ -42,9 +43,13 @@ try{
     catch{}
   }
   if(!puppeteer)throw Error('puppeteer-core missing; set PUPPETEER_DIR')
+  const chromeCandidates=[process.env.CHROMIUM_BIN,'/usr/bin/google-chrome','/usr/bin/chromium']
+    .filter(Boolean)
+  const chromium=chromeCandidates.find(candidate=>existsSync(candidate))
+  if(!chromium)throw Error('browser not found')
   const port=http.address().port
   browser=await puppeteer.launch({headless:true,
-    executablePath:process.env.CHROMIUM_BIN||'/usr/bin/chromium',
+    executablePath:chromium,
     args:['--no-sandbox','--disable-dev-shm-usage','--use-angle=swiftshader']})
   const page=await browser.newPage()
   await page.setViewport({width:Number(w),height:Number(h)})
