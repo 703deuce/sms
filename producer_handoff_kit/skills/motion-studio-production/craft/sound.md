@@ -50,6 +50,8 @@ Sound comes first. The eye takes each cut as a new picture, but the ear hears on
 - **Against the moment, or no music at all,** is often stronger than sad piano under a sad line.
 - **Ducking.** Music is already down when the first word lands. Typical depths are 10–18 dB, ≥20 dB for music with vocals (or avoid it under speech), ramps in 200–500 ms and out 600–1500 ms (`../craft-standards.md` §1.12). The live mix step's sidechain duck stays (`mix_soundtrack.py`). Listen for pumping, and if you hear it, ride the level around those lines instead.
 
+For a scored film, the Producer composes a cue list (up to four story/mood sections) with ElevenLabs Music; do not use one track per arbitrary minute. Loop long passages seamlessly on bar boundaries and place short crossfades at musical turns. Use the existing mixer's sidechain to duck music 10–18 dB beneath narration; do not reproduce the old one-off synth's roughly 8 dB duck. Land the final musical resolution on the final frame rather than cutting mid-phrase. BYOF footage may need no score at all.
+
 ## 6. Mix and finishing
 
 - **Dialogue is the anchor.** Mix around the voice, then normalize.
