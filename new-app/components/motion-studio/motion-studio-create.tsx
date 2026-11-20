@@ -279,7 +279,7 @@ export function MotionStudioCreate({
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
   const ready = attachments.filter((a) => a.uploadId)
   const hasInput =
-    workflow === 'idea' ? prompt.trim().length > 0 || script.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && (!a.role || a.role === 'talking_head' || a.role === 'footage'))
+    workflow === 'idea' ? prompt.trim().length > 0 || script.trim().length > 0 || ready.some(a=>a.role==='talking_head') || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && (!a.role || a.role === 'talking_head' || a.role === 'footage'))
   const canStart = hasInput && !uploading && !starting && (brandMode !== 'saved' || !!brandKitId)
 
   const start = async () => {
@@ -293,7 +293,7 @@ export function MotionStudioCreate({
           (a.kind==='script'?'text/plain':'application/octet-stream'),
         role:a.role || (a.kind==='video'?'footage':a.kind==='photo'?'photo':a.kind==='audio'?'music':'script')
       }))
-      const narrationUpload=inputs.find(a=>a.role===customize.narrationMode)
+      const narrationUpload=inputs.find(a=>a.role===(customize.narrationMode==='uploaded_narration'?'narration':customize.narrationMode))
       const musicUpload=inputs.find(a=>a.role==='music')
       const scriptUpload=inputs.find(a=>a.role==='script')
       const requestedNarration=customize.narrationMode
