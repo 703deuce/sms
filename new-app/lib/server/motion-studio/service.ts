@@ -321,7 +321,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
   if(productionBrief.narration.voiceId){
     const origin=productionBrief.narration.mode==='cloned_voice'?'cloned':'stock'
     await validateChosenVoice(workspaceId,userId,productionBrief.narration.voiceId,origin)
-  }else if(productionBrief.narration.mode==='ai_voice'){
+  }else if(productionBrief.narration.mode==='ai_voice'&&productionBrief.narration.voiceSource!=='auto'){
     const preferred=await defaultVoice(workspaceId,userId)
     if(preferred){
       productionBrief.narration.voiceId=preferred.voiceId
