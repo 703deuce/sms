@@ -1,0 +1,70 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/assembly-recipe.schema.json",
+ "title": "Declarative master assembly recipe (transovo.assembly/1). No shell; the worker compiles it to ffmpeg args.",
+ "type": "object",
+ "required": [
+  "schema",
+  "format",
+  "segments",
+  "audio",
+  "encode"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.assembly/1"
+  },
+  "format": {
+   "type": "object"
+  },
+  "segments": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "source"
+    ],
+    "properties": {
+     "id": {
+      "type": "string"
+     },
+     "source": {
+      "type": "object",
+      "description": "{scene: S01} or {asset: ast_...}"
+     },
+     "frames": {
+      "type": "integer"
+     },
+     "filters": {
+      "type": "array"
+     },
+     "padFrames": {
+      "type": "integer"
+     },
+     "grade": {
+      "type": "string"
+     },
+     "xfadeOutSec": {
+      "type": "number"
+     }
+    }
+   }
+  },
+  "overlays": {
+   "type": "array"
+  },
+  "audio": {
+   "type": "object"
+  },
+  "post": {
+   "type": "array"
+  },
+  "encode": {
+   "type": "object"
+  },
+  "themeBindings": {
+   "type": "object"
+  }
+ }
+}

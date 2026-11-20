@@ -1,0 +1,378 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/editable-elements.schema.json",
+ "title": "Per-scene editable-elements manifest (transovo.editable-elements/1). Describes THIS custom scene; not a template.",
+ "type": "object",
+ "required": [
+  "schema",
+  "sceneId",
+  "format",
+  "engines",
+  "entry",
+  "livePreview",
+  "elements",
+  "protected"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.editable-elements/1"
+  },
+  "sceneId": {
+   "$ref": "common.schema.json#/$defs/sceneId"
+  },
+  "sceneRevision": {
+   "type": "integer"
+  },
+  "origin": {
+   "type": "object"
+  },
+  "format": {
+   "type": "object",
+   "required": [
+    "width",
+    "height",
+    "fps",
+    "frames"
+   ],
+   "properties": {
+    "width": {
+     "type": "integer"
+    },
+    "height": {
+     "type": "integer"
+    },
+    "fps": {
+     "type": "number"
+    },
+    "frames": {
+     "type": "integer"
+    },
+    "holdFrame": {
+     "type": "integer"
+    }
+   }
+  },
+  "engines": {
+   "type": "array",
+   "minItems": 1,
+   "items": {
+    "type": "object",
+    "required": [
+     "engine"
+    ],
+    "properties": {
+     "engine": {
+      "enum": [
+       "three.js",
+       "gsap",
+       "pixi.js",
+       "dom",
+       "svg",
+       "canvas2d",
+       "ms-props",
+       "skia-python",
+       "pil",
+       "opencv",
+       "ffmpeg",
+       "canvaskit",
+       "d3"
+      ]
+     },
+     "version": {
+      "type": "string"
+     },
+     "role": {
+      "type": "string"
+     }
+    }
+   }
+  },
+  "fontEngine": {
+   "enum": [
+    "browser",
+    "skia-python",
+    "pil",
+    "ffmpeg-drawtext",
+    "canvaskit"
+   ]
+  },
+  "entry": {
+   "type": "object",
+   "properties": {
+    "html": {
+     "type": "string"
+    },
+    "python": {
+     "type": "string"
+    },
+    "api": {
+     "type": "string"
+    }
+   }
+  },
+  "livePreview": {
+   "type": "object",
+   "required": [
+    "capability"
+   ],
+   "properties": {
+    "capability": {
+     "enum": [
+      "live",
+      "live_degraded",
+      "render_only"
+     ]
+    },
+    "requirements": {
+     "type": "object"
+    },
+    "fallback": {
+     "type": "object",
+     "required": [
+      "mode"
+     ],
+     "properties": {
+      "mode": {
+       "enum": [
+        "poster_then_render",
+        "still_then_render",
+        "rendered_clip"
+       ]
+      }
+     }
+    }
+   }
+  },
+  "colorTokensUsed": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "fontTokensUsed": {
+   "type": "array",
+   "items": {
+    "type": "string"
+   }
+  },
+  "derivedTokens": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "from",
+     "designFrom",
+     "designValue",
+     "method"
+    ],
+    "properties": {
+     "from": {
+      "type": "string"
+     },
+     "designFrom": {
+      "$ref": "common.schema.json#/$defs/hex"
+     },
+     "designValue": {
+      "$ref": "common.schema.json#/$defs/hex"
+     },
+     "method": {
+      "const": "oklch-delta"
+     }
+    }
+   }
+  },
+  "contrast": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "element",
+     "fg",
+     "bg",
+     "min"
+    ]
+   }
+  },
+  "elements": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "id",
+     "kind",
+     "properties"
+    ],
+    "properties": {
+     "id": {
+      "type": "string",
+      "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+     },
+     "kind": {
+      "enum": [
+       "text",
+       "image",
+       "shape",
+       "group",
+       "video",
+       "color"
+      ]
+     },
+     "layer": {
+      "enum": [
+       "dom",
+       "svg",
+       "webgl-texture",
+       "webgl-mesh",
+       "pixi",
+       "canvas2d",
+       "skia",
+       "opencv",
+       "ffmpeg"
+      ]
+     },
+     "timing": {
+      "type": "object"
+     },
+     "layout": {
+      "type": "object"
+     },
+     "properties": {
+      "type": "object",
+      "additionalProperties": {
+       "type": "object",
+       "required": [
+        "tier",
+        "type"
+       ],
+       "properties": {
+        "tier": {
+         "enum": [
+          "live_editable",
+          "render_editable",
+          "ai_editable"
+         ]
+        },
+        "type": {
+         "enum": [
+          "text",
+          "number",
+          "color",
+          "enum",
+          "boolean",
+          "point",
+          "font",
+          "image"
+         ]
+        },
+        "bind": {
+         "type": "string",
+         "pattern": "^(colors|fonts|derived)\\.[A-Za-z0-9]+$"
+        },
+        "fallbackBind": {
+         "type": "string"
+        },
+        "default": {},
+        "min": {
+         "type": "number"
+        },
+        "max": {
+         "type": "number"
+        },
+        "enum": {
+         "type": "array"
+        },
+        "maxChars": {
+         "type": "integer"
+        },
+        "maxLines": {
+         "type": "integer"
+        },
+        "maxCharsPerLine": {
+         "type": "integer"
+        },
+        "transform": {
+         "enum": [
+          "uppercase",
+          "none"
+         ]
+        },
+        "overflow": {
+         "enum": [
+          "auto_fit",
+          "reject"
+         ]
+        },
+        "spokenInNarration": {
+         "type": "boolean"
+        },
+        "formats": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        },
+        "minWidth": {
+         "type": "integer"
+        },
+        "minHeight": {
+         "type": "integer"
+        },
+        "aspect": {
+         "type": "number"
+        },
+        "worker": {
+         "type": "string"
+        },
+        "why": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "aiEditable": {
+      "type": "array"
+     }
+    }
+   }
+  },
+  "renderSettings": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "type",
+     "default"
+    ]
+   }
+  },
+  "protected": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "what"
+    ],
+    "properties": {
+     "what": {
+      "type": "string"
+     },
+     "props": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "aiEditable": {
+   "type": "array"
+  },
+  "allowedOverlaps": {
+   "type": "array"
+  },
+  "safeArea": {
+   "type": "object"
+  }
+ }
+}

@@ -38,6 +38,9 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 12. **No licensing work.** No licensing, copyright or font-licence checks or caveats unless Rick asks on a specific job. *(Nov 17)*
 13. **Series rule — Indie Black Film spotlights:** include the Indie Black Film logo or wordmark at the bottom; use real photos and clips, the subject's own voice when available, and a strong narrator voiceover. *(Nov 18)*
 
+14. **"Allegedly" for anything unconfirmed.** In films, anything not fully confirmed, or that people are only saying, is voiced with "allegedly" and attributed to who said it ("allegedly, according to …"). Only confirmed facts are stated plainly. *(Nov 19)*
+15. **Indie Black Film videos use an African-American narrator voice** (picked from the full ElevenLabs library per film), not one that sounds white. *(Nov 19)*
+16. **Pronunciation: NAACP is spoken "N double-A C P".** Spell it that way in TTS scripts (the on-screen text stays "NAACP"). *(Nov 19)*
 ## 3. Layout, framing and graphics
 
 1. **Decide the video type first, then frame for what the viewer needs to see.** Face tracking/punch-in is for pure talking-head and podcast footage. For whiteboard, screen, tutorial or demo footage, frame so the content is readable (face-only just for intros and pure talk). *(Nov 18)* Face framing is decided clip by clip: only the clip or moment that is just a person talking gets framed into the face. It does not transfer to anything else. *(Nov 19)* — *Supersedes the Nov 18 "tested layout pieces / face detection / scene-checker tools must be used" process (the old Stage 4c mandatory tools): Rick found they saved no time and let graphics cover the subject.*
@@ -81,6 +84,8 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 6. **Render first, editable in the background (live jobs).** After approval, render the master and make it playable right away. The job stays open. A script (no agent usage) uploads the editable version in the background, and it must land no matter what (retries, resume, restart-safe). Only then does the job complete. This reverses Nov 18's "no automatic MP4 on live jobs". The upload should also use fewer, bigger files so the editable version loads faster. *(Nov 19)*
 6. **Upload delivery files eight at a time** and confirm they appear on the job's file list before marking the job complete. *(Nov 18)*
 7. **Customer editing:** the AI makes the video once; customers edit in Transovo's own editor with no AI. Transovo owns the editor UI; the agent owns export and parameter rendering. Not a template system. *(Nov 17)*
+8. **Renders go to Modal CPU with fan-out (live jobs).** Production rendering moves off this box: the bot builds one composed page for the whole film (all scenes, text, transitions, fonts, mixed audio), packs `render_bundle_v1.zip` plus the editable package, submits it to Modal once and stops (no local master render, no polling, no watch-through). Modal renders the segments in parallel on CPU, runs QA, uploads, approves the master and completes. GPU only for real 3D/WebGL scenes where it measurably helps (on 2D canvas it was slower and 3.7x pricier). **Modal's automatic QA on its output is the final check.** The old box render stays only as a documented fallback when Modal submit fails twice. *(Nov 19)* — *Refines item 6 (the render now happens on Modal; the master is still playable first) and "Don't change the render path until Rick approves a new one": this is that approval.*
+9. **Live-playback decisions that still stand:** no separate scene subdomain (main domain, sandboxed iframes), CPU export, captions always a separate track and never burned in, HyperFrames pinned to `0.9.52` (`npx hyperframes@0.9.52`). *(Nov 18)*
 
 ## 8. Customer-facing communication
 
@@ -104,6 +109,8 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 5. **Rough usage guide** (share of a weekly plan, with / without research): 30 s–2 min 2–2.5% / 1–1.5% (clean short jobs 0.7–1%); 5 min 3.5–5% / 2.5–3.5%; 10 min 5.5–9% / 4–7%; 20 min 9–15%; 30 min 14–23%. Rendering costs almost nothing. *(Nov 17)*
 6. **Stopped jobs are stopped on purpose.** Never assume a stopped job stalled; never restart or resume without asking Rick. Don't poll job status or duplicate another agent's work. *(Nov 17)*
 7. **No unrequested tests.** Don't run tests unless Rick asks. *(Nov 17)*
+8. **Effort goes into the edit, not gathering.** Gather lean media: only what the script needs (not hundreds of clips and photos; roughly half to two-thirds of over-gathered media went unused). Do ONE main review pass (480p stills), fix what it found, and don't go back into extra QA rounds; Modal QA is the final check. Be economical with usage. *(Nov 19)*
+9. **Usage scales mostly as a fixed cost per film** (research, creative idea, look, type, voice setup) plus a small amount per extra minute: roughly 2 points to start plus about a quarter point per minute, excluding render. *(Nov 19)*
 
 ## 11. Safety and scope
 

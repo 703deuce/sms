@@ -1,0 +1,115 @@
+{
+ "title": "Love Sosa: how drill took over",
+ "takes": [
+  {
+   "take": "T01_house_arrest",
+   "lines": [
+    {
+     "id": 1,
+     "text": "2011. Chicago's South Side.",
+     "spoken": "Twenty eleven. Chicago's South Side.",
+     "hero": "the year, set big; a glowing red pin on Chicago",
+     "typed": "2011 · SOUTH SIDE, CHICAGO"
+    },
+    {
+     "id": 2,
+     "text": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+     "spoken": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+     "hero": "his portrait drops in, name bar; stamp on 'arrest'",
+     "typed": "KEITH COZART, 16 · stamp HOUSE ARREST"
+    },
+    {
+     "id": 3,
+     "text": "So he films music videos. Right there.",
+     "spoken": "So he films music videos. Right there.",
+     "hero": "the 'I Don't Like' video still in film bands; red circle on 'there'",
+     "typed": ""
+    }
+   ]
+  },
+  {
+   "take": "T02_blowup",
+   "lines": [
+    {
+     "id": 4,
+     "text": "2012. 'I Don't Like' hits YouTube.",
+     "spoken": "Twenty twelve. I Don't Like hits YouTube.",
+     "hero": "the song title types on under the still",
+     "typed": "“I DON'T LIKE”"
+    },
+    {
+     "id": 5,
+     "text": "Kanye hears it, and remixes it.",
+     "spoken": "Kanye hears it, and remixes it.",
+     "hero": "red string from the still to Kanye's portrait",
+     "typed": "KANYE WEST"
+    },
+    {
+     "id": 6,
+     "text": "Interscope signs him. A reported six-million-dollar deal.",
+     "spoken": "Interscope signs him. A reported six million dollar deal.",
+     "hero": "counter rolls to $6,000,000 under the Finally Rich cover",
+     "typed": "$6,000,000"
+    },
+    {
+     "id": 7,
+     "text": "'Love Sosa' goes everywhere.",
+     "spoken": "Love Sosa goes everywhere.",
+     "hero": "the Love Sosa cover; circle on 'everywhere'",
+     "typed": "",
+     "gap_after": 0.8
+    }
+   ]
+  },
+  {
+   "take": "T03_drill",
+   "lines": [
+    {
+     "id": 8,
+     "text": "And the world learns its name. Drill.",
+     "spoken": "And the world learns its name. Drill.",
+     "hero": "DRILL in huge serif type; red circle on the word",
+     "typed": "DRILL"
+    },
+    {
+     "id": 9,
+     "text": "Dark. Slow. Raw.",
+     "spoken": "Dark. Slow. Raw.",
+     "hero": "three words land one by one under DRILL",
+     "typed": "DARK. SLOW. RAW."
+    },
+    {
+     "id": 10,
+     "text": "Built on the streets of Chicago.",
+     "spoken": "Built on the streets of Chicago.",
+     "hero": "Parkway Garden Homes print, tied to the Chicago pin",
+     "typed": ""
+    },
+    {
+     "id": 11,
+     "text": "And it spreads. London. Brooklyn. Around the world.",
+     "spoken": "And it spreads. London. Brooklyn. Around the world.",
+     "hero": "pull back: routes and glowing pins to London, Brooklyn, then everywhere",
+     "typed": "LONDON · BROOKLYN"
+    },
+    {
+     "id": 12,
+     "text": "All from a kid with a camera, at his grandma's house.",
+     "spoken": "All from a kid with a camera, at his grandma's house.",
+     "hero": "dive back into the 'I Don't Like' still; final circle",
+     "typed": ""
+    }
+   ]
+  }
+ ],
+ "fact_notes": [
+  "Keith Farrelle Cozart, born Aug 15, 1995, Chicago; raised by grandmother Margaret Carter; lived at Parkway Garden Homes, Washington Park, South Side (Wikipedia).",
+  "Dec 2011: arrested (gun charge), placed under house arrest at his grandmother's residence; aged 16. Posted videos to YouTube while confined (Wikipedia).",
+  "'I Don't Like' (feat. Lil Reese, prod. Young Chop) video by DGainz, released March 2012, filmed at his grandmother's house during house arrest.",
+  "Kanye West remixed it ('Don't Like.1' with Pusha T, Jadakiss, Big Sean) for GOOD Music's Cruel Summer, 2012.",
+  "Interscope deal 2012: reported $6,000,000 over three albums plus $440,000 for GBE imprint (Wikipedia, citing press).",
+  "'Love Sosa' (prod. Young Chop) released 2012; on Finally Rich (Dec 18, 2012).",
+  "Drill: the term predates Keef (credited to Pac Man / King Louie), but Keef's 2012 breakout made it known nationally; hence 'the world learns its name' rather than 'the sound gets a name'.",
+  "UK drill emerged in Brixton, London ~2012-2014; Brooklyn drill rose ~2019 (Pop Smoke, Sheff G)."
+ ]
+}

@@ -1,0 +1,6 @@
+PLAN.md
+_tests
+claude-remotion-skill
+dolly
+hyperframes
+open-3d-skills

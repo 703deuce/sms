@@ -1,0 +1,85 @@
+{
+ "grade": "bw",
+ "photos": [
+  {
+   "id": "P01",
+   "what": "Chief Keef, 16-17, in the 'Love Sosa' video (2012), used as the house-arrest-era portrait",
+   "kind": "photo",
+   "file": "yt_YWyHZNBz6FE.jpg",
+   "crop": [
+    0.2,
+    0.0,
+    0.8,
+    1.0
+   ],
+   "source": "https://www.youtube.com/watch?v=YWyHZNBz6FE (thumbnail)",
+   "credit": "Still from 'Love Sosa' official video, dir. DGainz / Glory Boyz Ent.",
+   "license": "Copyrighted - internal test only"
+  },
+  {
+   "id": "P02",
+   "what": "'I Don't Like' video, filmed at his grandmother's house (2012)",
+   "kind": "photo",
+   "file": "yt_2WcRXJ4piHg.jpg",
+   "source": "https://www.youtube.com/watch?v=2WcRXJ4piHg (thumbnail)",
+   "credit": "Still from 'I Don't Like' official video, dir. DGainz",
+   "license": "Copyrighted - internal test only"
+  },
+  {
+   "id": "P03",
+   "what": "Kanye West, 2011",
+   "kind": "photo",
+   "commons": "File:Kanye West Coke Live Music Festival 2011 (6314648600) (cropped).jpg",
+   "file": "P03_Kanye_West_Coke_Live_Music_Festival_2011_6314648.jpg",
+   "source": "https://commons.wikimedia.org/wiki/File:Kanye_West_Coke_Live_Music_Festival_2011_(6314648600)_(cropped).jpg",
+   "credit": "Piotr Drabik from Poland",
+   "license": "CC BY 2.0",
+   "license_url": "https://creativecommons.org/licenses/by/2.0",
+   "date": "2011-08-20 22:48",
+   "license_ok": true,
+   "crop": [
+    0.18,
+    0.0,
+    0.82,
+    0.62
+   ]
+  },
+  {
+   "id": "P04",
+   "what": "Finally Rich cover (Interscope, 2012)",
+   "kind": "photo",
+   "file": "itunes_finally_rich.jpg",
+   "source": "https://music.apple.com (Finally Rich album artwork, 1500px)",
+   "credit": "Finally Rich cover art, Glory Boyz / Interscope Records",
+   "license": "Copyrighted (non-free cover art) - internal test only"
+  },
+  {
+   "id": "P05",
+   "what": "Love Sosa single cover (2012)",
+   "kind": "photo",
+   "file": "wp_Lovesosa.jpg",
+   "source": "https://en.wikipedia.org/wiki/File:Lovesosa.jpg",
+   "credit": "'Love Sosa' single cover, Glory Boyz / Interscope Records",
+   "license": "Copyrighted (non-free cover art) - internal test only"
+  },
+  {
+   "id": "P06",
+   "what": "Parkway Garden Homes, Washington Park, Chicago South Side",
+   "kind": "photo",
+   "commons": "File:Image Parkway Gardens.jpg",
+   "crop": [
+    0.1,
+    0.0,
+    0.9,
+    1.0
+   ],
+   "file": "P06_Image_Parkway_Gardens.jpg",
+   "source": "https://commons.wikimedia.org/wiki/File:Image_Parkway_Gardens.jpg",
+   "credit": "Boscophotos",
+   "license": "CC BY-SA 3.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "date": "2015-09-03",
+   "license_ok": true
+  }
+ ]
+}

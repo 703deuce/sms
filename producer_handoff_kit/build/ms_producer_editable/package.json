@@ -1,0 +1,14 @@
+{
+  "name": "ms-producer-editable",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Grokbot Motion Studio producer side: portable project packages, editable-elements runtime, deterministic no-AI renderer, worker interface",
+  "dependencies": {
+    "ajv": "8.17.1",
+    "ajv-formats": "3.0.1",
+    "canvaskit-wasm": "0.42.0",
+    "puppeteer-core": "25.17.0",
+    "serve-handler": "6.1.6"
+  }
+}

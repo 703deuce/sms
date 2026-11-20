@@ -1,0 +1,79 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/theme.schema.json",
+ "title": "Project theme (transovo.motion-theme/1)",
+ "type": "object",
+ "required": [
+  "schema",
+  "colors",
+  "fonts"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.motion-theme/1"
+  },
+  "themeId": {
+   "type": "string"
+  },
+  "origin": {
+   "type": "object"
+  },
+  "colors": {
+   "type": "object",
+   "minProperties": 1,
+   "additionalProperties": {
+    "oneOf": [
+     {
+      "$ref": "common.schema.json#/$defs/hex"
+     },
+     {
+      "type": "object",
+      "required": [
+       "value"
+      ],
+      "properties": {
+       "value": {
+        "$ref": "common.schema.json#/$defs/hex"
+       },
+       "label": {
+        "type": "string"
+       },
+       "designName": {
+        "type": "string"
+       }
+      }
+     }
+    ]
+   }
+  },
+  "fonts": {
+   "type": "object",
+   "additionalProperties": {
+    "$ref": "common.schema.json#/$defs/fontSel"
+   }
+  },
+  "brand": {
+   "type": "object",
+   "properties": {
+    "logo": {
+     "oneOf": [
+      {
+       "type": "null"
+      },
+      {
+       "type": "object",
+       "required": [
+        "asset"
+       ],
+       "properties": {
+        "asset": {
+         "$ref": "common.schema.json#/$defs/assetId"
+        }
+       }
+      }
+     ]
+    }
+   }
+  }
+ }
+}

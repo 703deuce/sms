@@ -1,0 +1,14 @@
+{
+ "maps": [{
+  "name": "world",
+  "source": "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json",
+  "object": "countries",
+  "projection": {"type": "mercator", "lon0": -40},
+  "clip": [-140, 8, 45, 72],
+  "frame": [-135, 12, 40, 68],
+  "places": {"Chicago": [41.88, -87.63], "London": [51.51, -0.13], "Brooklyn": [40.68, -73.94],
+             "Toronto": [43.65, -79.38], "Atlanta": [33.75, -84.39], "Paris": [48.86, 2.35], "Amsterdam": [52.37, 4.90],
+             "Dublin": [53.35, -6.26], "Berlin": [52.52, 13.40], "Los Angeles": [34.05, -118.24], "Houston": [29.76, -95.37],
+             "Stockholm": [59.33, 18.06], "Madrid": [40.42, -3.70], "Lagos": [6.52, 3.38], "Accra": [5.6, -0.19], "Montreal": [45.5, -73.57]}
+ }]
+}
