@@ -563,10 +563,52 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       throw new MotionStudioError('INVALID', 'Invalid artifact details.', 400)
     }
     if (input.resume === true && checksum) {
-      const ready = all.find(a => a.state === 'ready' && a.sha256 === checksum &&
-        a.bytes === bytes && a.kind === kind && a.mime === mime && a.filename === filename &&
-        (a.elementId || '') === elementId && (a.trackId || '') === trackId)
-      if (ready) return {uploadId:ready.id, status:'ready', exists:true}
+      // Identity is verified content, not the filename inside the render ZIP.
+      // ZIP membership alone is never a proof of separately stored blobs.
+      const ready = all.find(a => a.state==='ready' && a.sha256===checksum &&
+        a.bytes===bytes && a.kind===kind && a.mime===mime)
+      if (ready) return {uploadId:ready.id,status:'ready',exists:true,reused:true}
+      // A previous commit can have timed out after the object reached B2.
+      // Adopt a pending sibling only after independently checking its bytes
+      // and SHA-256; never trust an uncommitted upload on metadata alone.
+      const pending = all.find(a=>a.state==='pending' && a.sha256===checksum &&
+        a.bytes===bytes && a.kind===kind && a.mime===mime && !a.s3UploadId)
+      if(pending){
+        try{
+          const storage=getClipStorage()
+          const observed=await storage.getObjectSizeBytes(pending.key)
+          if(observed===bytes){
+            const hash=createHash('sha256')
+            if(bytes<=25*1024*1024)hash.update(await storage.getObjectBytes(pending.key))
+            else{
+              const signed=await storage.createSignedDownloadUrl(pending.key,900)
+              const response=await fetch(signed,{redirect:'error',cache:'no-store'})
+              if(!response.ok||!response.body)throw new Error('Unverified pending object')
+              const reader=response.body.getReader()
+              let count=0
+              try{
+                for(;;){
+                  const part=await reader.read()
+                  if(part.done)break
+                  count+=part.value.length
+                  if(count>bytes)throw new Error('Oversized pending object')
+                  hash.update(part.value)
+                }
+              }finally{await reader.cancel()}
+              if(count!==bytes)throw new Error('Incomplete pending object')
+            }
+            if(hash.digest('hex')===checksum){
+              await db().studioAsset.upsert({where:{id:pending.id},
+                create:{id:pending.id,projectId:job.projectId,workspaceId:job.workspaceId,
+                  uploadId:pending.id,kind:pending.kind,filename:pending.filename,status:'ready',
+                  provenanceLog:toPrismaJson({source:'producer',sha256:checksum,verifiedSha256:true})},
+                update:{status:'ready'}})
+              await storeArtifact(job,{...pending,state:'ready'})
+              return {uploadId:pending.id,status:'ready',exists:true,reused:true}
+            }
+          }
+        }catch{ /* Missing or incomplete object: require a fresh verified PUT. */ }
+      }
     }
     const uploadId = randomUUID()
     const objectKey = 'ws/' + job.workspaceId + '/motion-studio/agent/' + job.id + '/' + uploadId + '/' + filename
@@ -592,9 +634,17 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     }
     const storage = getClipStorage()
     await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
-    const size = await storage.getObjectSizeBytes(item.key)
+    // B2 may expose the completed object slightly after completeUpload.
+    // Stay on this upload ID; never force Chromium to re-encode a valid
+    // segment just because the first size read races storage consistency.
+    let size=0
+    for(let attempt=0;attempt<4;attempt++){
+      size=Number(await storage.getObjectSizeBytes(item.key)||0)
+      if(size===item.bytes)break
+      if(attempt<3)await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))
+    }
     if (!size || size !== item.bytes || size > MAX_FILE)
-      throw new MotionStudioError('INVALID', 'Uploaded size does not match the prepared object.', 400)
+      throw new MotionStudioError('CONFLICT', 'Uploaded size does not match the prepared object.', 409)
     if (item.sha256) {
       const hash=createHash('sha256')
       if (size<=25*1024*1024) hash.update(await storage.getObjectBytes(item.key))
