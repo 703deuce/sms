@@ -280,6 +280,7 @@ def do_render(entry):
         if not entry["benchmark"]:
             api(job_id,"POST","/assets",{"action":"approveMaster",
                 "uploadId":joined["masterUploadId"]})
+            api(job_id,"POST","/render-status",{"stage":"master_ready"})
             api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
                 "message":"Video ready to watch; preparing editable version"})
             api(job_id,"POST","/render-status",{"stage":"uploaded"})
