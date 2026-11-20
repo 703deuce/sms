@@ -130,6 +130,8 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
  const [recording,setRecording]=useState(false)
  const [duration,setDuration]=useState(0)
  const [busy,setBusy]=useState(false)
+ const [finalizing,setFinalizing]=useState(false)
+ const [dialogError,setDialogError]=useState('')
  const recorder=useRef<MediaRecorder|null>(null)
  const tracks=useRef<MediaStream|null>(null)
  const chunks=useRef<BlobPart[]>([])
@@ -137,8 +139,12 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
  const clock=useRef<ReturnType<typeof setInterval>|null>(null)
  const stop=()=>{
   if(clock.current)clearInterval(clock.current)
-  if(recorder.current?.state==='recording')recorder.current.stop()
-  tracks.current?.getTracks().forEach(t=>t.stop())
+  clock.current=null
+  if(recorder.current?.state==='recording'){
+   setFinalizing(true)
+   recorder.current.requestData()
+   recorder.current.stop()
+  }
   setRecording(false)
  }
  useEffect(()=>()=>{if(clock.current)clearInterval(clock.current);recorder.current?.state==='recording'&&recorder.current.stop();tracks.current?.getTracks().forEach(t=>t.stop())},[])
@@ -150,27 +156,32 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
    tracks.current=stream;recorder.current=media;chunks.current=[]
    media.ondataavailable=e=>{if(e.data.size)chunks.current.push(e.data)}
    media.onstop=()=>{
+    stream.getTracks().forEach(t=>t.stop())
     const blob=new Blob(chunks.current,{type:media.mimeType||'audio/webm'})
-    setFile(new File([blob],'my-voice.'+(media.mimeType.includes('mp4')?'m4a':'webm'),{type:blob.type}))
+    console.info('[motion-studio:voice] recording finalized', {bytes:blob.size,durationSeconds:Math.round((Date.now()-started.current)/1000)})
+    if(!blob.size){setDialogError('Recording is empty. Check microphone permission and record again.');setFile(null)}
+    else setFile(new File([blob],'my-voice.'+(media.mimeType.includes('mp4')?'m4a':'webm'),{type:blob.type}))
+    setFinalizing(false)
    }
-   setFile(null);setDuration(0);started.current=Date.now()
+   setFile(null);setDialogError('');setFinalizing(false);setDuration(0);started.current=Date.now()
    media.start(1000);setRecording(true)
    clock.current=setInterval(()=>{
     const sec=Math.floor((Date.now()-started.current)/1000)
     setDuration(sec)
-    if(sec>=120)stop()
+    if(sec>=300)stop()
    },250)
-  }catch{onError('Microphone blocked. Use the Upload tab to add your recording.');setTab('upload')}
+  }catch{setDialogError('Microphone blocked. Use the Upload tab to add your recording.');setTab('upload')}
  }
  const submit=async()=>{
-  if(name.trim().length<2||!file||recording)return
-  if(tab==='record'&&duration<10)return onError('Record at least 10 seconds of clear speech.')
+  if(name.trim().length<2||!file||recording||finalizing)return
+  if(tab==='record'&&duration<10){setDialogError('Record at least 10 seconds of clear speech.');return}
+  setDialogError('')
   setBusy(true)
   try{
    const sample=await client.uploadFile(file,()=>{})
    const response=await call(base,'POST',{name:name.trim(),sampleUploadId:sample.uploadId}) as {voice:{voiceId:string;name:string}}
    onCreated(response.voice)
-  }catch(e){onError(e instanceof Error?e.message:'Could not clone your voice')}
+  }catch(e){setDialogError(e instanceof Error?e.message:'Could not clone your voice')}
   finally{setBusy(false)}
  }
  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Create a voice">
@@ -179,7 +190,7 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
     <button onClick={()=>{stop();onClose()}} aria-label="Close"><X className="size-5"/></button></div>
    <label className="block space-y-2 text-sm font-medium">Voice name<input value={name} onChange={e=>setName(e.target.value)} maxLength={80} placeholder="e.g. My documentary voice" className="h-11 w-full rounded-lg border border-input bg-background px-3"/></label>
    <div className="grid grid-cols-2 rounded-lg bg-muted p-1">
-    {(['record','upload'] as const).map(t=><button key={t} className={`rounded-md px-4 py-2 text-sm font-medium ${tab===t?'bg-card shadow-sm':''}`} onClick={()=>{stop();setTab(t);setFile(null)}}>{t==='record'?'Record microphone':'Upload a sample'}</button>)}
+    {(['record','upload'] as const).map(t=><button key={t} className={`rounded-md px-4 py-2 text-sm font-medium ${tab===t?'bg-card shadow-sm':''}`} onClick={()=>{stop();setTab(t);setFile(null);setDialogError('')}}>{t==='record'?'Record microphone':'Upload a sample'}</button>)}
    </div>
    {tab==='record'?<div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5">
      <span className="grid size-14 place-items-center rounded-full bg-primary/15 text-primary"><Mic className="size-7"/></span>
@@ -189,9 +200,11 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
     </div>:<label className="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-sm">
      <UploadCloud className="size-8 text-primary"/><strong>Choose an audio recording</strong>
      <span className="text-xs text-muted-foreground">MP3, WAV, M4A, WEBM or OGG</span>
-     <input className="sr-only" type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*" onChange={e=>setFile(e.target.files?.[0]||null)}/></label>}
+     <input className="sr-only" type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*" onChange={e=>{setFile(e.target.files?.[0]||null);setDialogError('')}}/></label>}
    {file?<div className="rounded-lg border border-border p-3"><p className="truncate text-xs text-muted-foreground">{file.name}</p><audio controls className="mt-2 w-full" src={URL.createObjectURL(file)}/></div>:null}
-   <div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>{stop();onClose()}}>Cancel</Button><Button disabled={busy||recording||name.trim().length<2||!file} onClick={()=>void submit()}>{busy?'Creating your voice…':'Create voice'}</Button></div>
+   {finalizing?<p role="status" className="text-sm text-muted-foreground">Finishing recording…</p>:null}
+   {dialogError?<p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{dialogError}</p>:null}
+   <div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>{stop();onClose()}}>Cancel</Button><Button disabled={busy||recording||finalizing||name.trim().length<2||!file} onClick={()=>void submit()}>{busy?'Creating your voice…':'Create voice'}</Button></div>
   </div>
  </div>
 }
