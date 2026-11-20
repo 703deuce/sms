@@ -2,7 +2,7 @@
 import hashlib, io, json, tempfile, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
-from pipeline import extract_bundle,segment_name,capture_segment
+from pipeline import extract_bundle,segment_name,capture_segment,qa_video
 
 class BundleTests(unittest.TestCase):
     def setUp(self):
@@ -44,6 +44,42 @@ class BundleTests(unittest.TestCase):
                                        bundle_root=self.root)
         self.assertTrue(result["skipped"])
         self.assertEqual(result["name"],"modal_seg_v1_cpu_00000000_00000150.mp4")
+    def test_dark_films_pass_technical_qa(self):
+        # A near-black film is an approved creative choice, not corruption.
+        probe={"streams":[{"codec_type":"video","nb_read_packets":"150",
+                "width":854,"height":480,"avg_frame_rate":"30/1"},
+                {"codec_type":"audio","duration":"5.0"}],
+                "format":{"duration":"5.0"}}
+        commands=[]
+        def ffmpeg(cmd,timeout=1800,cancel_event=None):
+            commands.append(cmd)
+            if "ebur128=peak=true,volumedetect" in cmd:
+                return "", "I: -14.3 LUFS\\nmax_volume: -2.1 dB"
+            return "",""
+        with patch("pipeline.ffprobe",return_value=probe),patch("pipeline.checked",side_effect=ffmpeg):
+            result=qa_video("dark_with_one_line.mp4",150,30,854,480)
+        self.assertEqual(result["frames"],150)
+        self.assertFalse(any("blackdetect" in " ".join(c) for c in commands))
+        self.assertTrue(any("-xerror" in c for c in commands))
+    def test_wrong_resolution_is_rejected(self):
+        probe={"streams":[{"codec_type":"video","nb_read_packets":"150",
+                "width":640,"height":480,"avg_frame_rate":"30/1"},
+                {"codec_type":"audio","duration":"5.0"}],
+                "format":{"duration":"5.0"}}
+        with patch("pipeline.ffprobe",return_value=probe):
+            with self.assertRaisesRegex(ValueError,"resolution"):
+                qa_video("film.mp4",150,30,854,480)
+    def test_silent_track_is_rejected(self):
+        probe={"streams":[{"codec_type":"video","nb_read_packets":"150",
+                "width":854,"height":480,"avg_frame_rate":"30/1"},
+                {"codec_type":"audio","duration":"5.0"}],
+                "format":{"duration":"5.0"}}
+        def ffmpeg(cmd,timeout=1800,cancel_event=None):
+            return "", ("I: -70.0 LUFS\\nmax_volume: -90.0 dB"
+                        if "ebur128=peak=true,volumedetect" in cmd else "")
+        with patch("pipeline.ffprobe",return_value=probe),patch("pipeline.checked",side_effect=ffmpeg):
+            with self.assertRaisesRegex(ValueError,"silent"):
+                qa_video("film.mp4",150,30,854,480)
     def test_reject_missing_composition(self):
         source=self.build(entry="missing.html")
         (self.root/"work").mkdir()
