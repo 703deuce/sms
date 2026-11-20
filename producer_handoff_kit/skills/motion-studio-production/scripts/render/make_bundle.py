@@ -2,6 +2,7 @@
 """Validate or construct a single fully-composited render bundle; no rendering."""
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,6 +38,23 @@ def validate(folder):
         target=(root/path).resolve()
         if not str(target).startswith(str(root)+os.sep) or not target.is_file():
             raise ValueError("Missing "+label)
+    for asset in project.get("assets",[]):
+        filename=asset.get("path","")
+        if not isinstance(filename,str) or not re.fullmatch(r"[A-Za-z0-9_./-]{1,200}",filename):
+            raise ValueError("Invalid project source path")
+        source=(root/filename).resolve()
+        if not str(source).startswith(str(root)+os.sep) or not source.is_file():
+            raise ValueError("Project source missing")
+        digest=hashlib.sha256(source.read_bytes()).hexdigest()
+        if digest!=asset.get("sha256") or source.stat().st_size!=asset.get("bytes"):
+            raise ValueError("Film source checksum mismatch")
+    scripts=[p for p in root.rglob("*") if p.suffix in (".js",".mjs") and p.is_file()
+             and p.stat().st_size<4_000_000]
+    texts=[(root/entry).read_text(errors="ignore")]
+    for script in scripts[:100]:texts.append(script.read_text(errors="ignore"))
+    combined="\n".join(texts)
+    if not all(name in combined for name in ("__scene","seek","__ready")):
+        raise ValueError("Composition seek/readiness contract is incomplete")
     if not (root/"portable.json").exists():
         if not (root/"package.json").exists() or not (root/"bundles.json").exists():
             raise ValueError("Editable document/package is missing")
@@ -92,6 +110,7 @@ def main():
                         raise ValueError("Invalid archive path")
                     if (item.external_attr>>16)&0o170000==0o120000:
                         raise ValueError("Symlink not allowed")
+                if z.testzip():raise ValueError("Corrupt ZIP member")
                 z.extractall(root)
             project,entry=validate(root)
             if not args.no_editable and not (root/"portable.json").is_file() and not (
