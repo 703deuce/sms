@@ -300,8 +300,9 @@ export async function createProject(workspaceId: string, userId: string, body: u
     throw new MotionStudioError('INVALID','Music upload is missing.',400)
   if(productionBrief.script?.uploadId&&!readyIds.has(productionBrief.script.uploadId))
     throw new MotionStudioError('INVALID','Script upload is missing.',400)
+  productionBrief.brand=creative
   if(productionBrief.narration.voiceId){
-    const origin=productionBrief.narration.voiceSource==='cloned'?'cloned':'stock'
+    const origin=productionBrief.narration.mode==='cloned_voice'?'cloned':'stock'
     await validateChosenVoice(workspaceId,userId,productionBrief.narration.voiceId,origin)
   }else if(productionBrief.narration.mode==='ai_voice'){
     const preferred=await defaultVoice(workspaceId,userId)
