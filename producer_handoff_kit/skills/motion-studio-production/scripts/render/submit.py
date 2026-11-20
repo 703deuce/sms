@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import datetime
+from zoneinfo import ZoneInfo
 import math
 from urllib.parse import urljoin, urlparse
 import requests
@@ -140,7 +141,7 @@ def main():
     metadata={"backend":backend,"jobId":jobid,"mode":os.environ.get("MOTION_MODE","cpu"),
               "segmentFrames":segment_frames,"segments":(count+segment_frames-1)//segment_frames,
               "filmMinutes":film_minutes,
-              "submittedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "submittedAt":datetime.datetime.now(ZoneInfo("America/New_York")).isoformat(),
               "bundle":archive.name,"benchmarkOnly":benchmark}
     if dry:
         print(json.dumps({"dryRun":True,**metadata}))
