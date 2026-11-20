@@ -279,7 +279,7 @@ export function MotionStudioCreate({
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
   const ready = attachments.filter((a) => a.uploadId)
   const hasInput =
-    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && (!a.role || a.role === 'talking_head' || a.role === 'footage'))
+    workflow === 'idea' ? prompt.trim().length > 0 || script.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && (!a.role || a.role === 'talking_head' || a.role === 'footage'))
   const canStart = hasInput && !uploading && !starting && (brandMode !== 'saved' || !!brandKitId)
 
   const start = async () => {
@@ -296,8 +296,7 @@ export function MotionStudioCreate({
       const narrationUpload=inputs.find(a=>a.role===customize.narrationMode)
       const musicUpload=inputs.find(a=>a.role==='music')
       const scriptUpload=inputs.find(a=>a.role==='script')
-      const requestedNarration=(creationTab==='customize'?customize.narrationMode:
-        customize.voice?.voiceSource==='cloned'?'cloned_voice':'ai_voice')
+      const requestedNarration=customize.narrationMode
       const productionBrief=sanitizeProductionBrief({
         prompt:prompt.trim(),workflow,videoType,durationSeconds,aspectRatio:format,resolution,
         style:{id:style,custom:customStyle},
