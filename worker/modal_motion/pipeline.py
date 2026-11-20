@@ -1,6 +1,6 @@
 """Private-bundle rendering helpers. No database or B2 credentials in Modal."""
 from __future__ import annotations
-import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile, threading, time, zipfile
+import hashlib, json, os, pathlib, re, shutil, signal, subprocess, tempfile, threading, time, zipfile
 from urllib.parse import quote, urlparse
 import requests
 
@@ -126,12 +126,34 @@ def extract_bundle(job_id,filename,directory):
         raise ValueError("Mixed audio source missing")
     return root,project,entry,audio_file
 
-def checked(cmd,timeout=1800):
-    # Never print argv: some command lines can contain temporary paths.
-    p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
-    if p.returncode:
-        raise RuntimeError("Media processing failed: "+p.stderr[-350:])
-    return p.stdout,p.stderr
+def checked(cmd,timeout=1800,cancel_event=None):
+    # Never print argv: command lines can include media paths or signed URLs.
+    if cancel_event is None:
+        p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
+        if p.returncode:
+            raise RuntimeError("Media processing failed: "+p.stderr[-350:])
+        return p.stdout,p.stderr
+    proc=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                         text=True,start_new_session=True)
+    deadline=time.monotonic()+timeout
+    try:
+        while True:
+            if cancel_event.is_set():
+                raise RuntimeError("Render cancelled")
+            if time.monotonic()>deadline:
+                raise TimeoutError("Render segment timed out")
+            try:
+                stdout,stderr=proc.communicate(timeout=0.5)
+                if proc.returncode:
+                    raise RuntimeError("Media processing failed: "+stderr[-350:])
+                return stdout,stderr
+            except subprocess.TimeoutExpired:
+                continue
+    finally:
+        if proc.poll() is None:
+            try:os.killpg(proc.pid,signal.SIGKILL)
+            except ProcessLookupError:pass
+            proc.communicate()
 
 def prepare_upload(job_id,path,filename,kind,mime):
     size=os.path.getsize(path)
@@ -194,8 +216,10 @@ def prepare_upload(job_id,path,filename,kind,mime):
 def segment_name(mode,start,end):
     return f"modal_seg_v1_{mode}_{start:08d}_{end:08d}.mp4"
 
-def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None):
+def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None,cancel_event=None):
     name=segment_name(mode,start,end)
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("Render cancelled")
     if ready_url(job_id,name):
         return {"name":name,"start":start,"end":end,"skipped":True,"seconds":0}
     stop=heartbeat_scope(job_id)
@@ -212,7 +236,9 @@ def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None):
             output=os.path.join(directory,name)
             checked(["node","/root/modal_motion/capture.mjs",str(root),entry,output,
                 str(project["width"]),str(project["height"]),str(project["fps"]),
-                str(start),str(end),mode],timeout=3600)
+                str(start),str(end),mode],timeout=3600,cancel_event=cancel_event)
+            if cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError("Render cancelled")
             prepare_upload(job_id,output,name,"video","video/mp4")
         return {"name":name,"start":start,"end":end,"skipped":False,
           "seconds":round(time.monotonic()-beginning,3)}
