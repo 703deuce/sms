@@ -50,6 +50,18 @@ describe('native producer project -> editable portable project',()=>{
     expect((m as unknown as {producerAssetMap:Record<string,string>}).producerAssetMap.fnt_display).toBe('upload_5')
     expect((m as unknown as {producerDocument:ReturnType<typeof document>}).producerDocument.assetRefs).toContain('fnt_display')
   })
+  it('accepts a render-first live document with an unrendered master recipe',()=>{
+    const live={...document(),delivery:{mode:'live'},
+      master:{recipe:'ast_recipe',renderedInVersion:0,origin:'live_delivery'}}
+    const m=adaptProducerProject({document:live,assets,bundles})
+    expect((m as unknown as {producerDocument:unknown}).producerDocument).toEqual(live)
+  })
+  it('still refuses a rendered master without its asset',()=>{
+    expect(()=>validateNativeProducerEnvelope({...document(),
+      master:{recipe:'ast_recipe',renderedInVersion:1}})).toThrow(/envelope/)
+    expect(()=>validateNativeProducerEnvelope({...document(),
+      master:{asset:'ast_master'}})).toThrow(/envelope/)
+  })
   it('refuses missing referenced media rather than silently omitting',()=>{
     expect(()=>adaptProducerProject({document:document(),assets:assets.slice(1),bundles})).toThrow()
   })
