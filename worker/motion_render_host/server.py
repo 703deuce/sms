@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import requests
 
 sys.path.insert(0, "/root/modal_motion")
+sys.path.insert(1, str(Path(__file__).resolve().parents[1]/"modal_motion"))
 import pipeline
 
 WORK=Path(os.getenv("RENDER_WORK_DIR","/work")).resolve()
@@ -98,13 +99,18 @@ def verify_job(entry):
         timeout=(15,45),allow_redirects=False)
     if safe_status(r.status_code):return False
     if not r.ok:raise RuntimeError("Job auth check failed (HTTP "+str(r.status_code)+")")
-    return True
+    state=(r.json().get("job") or {}).get("status")
+    return state not in ("complete","failed","cancelled","dispatch_failed")
 
 def isolated_ping(entry):
     try:
         r=SESSION.get(entry["url"],headers={"Authorization":"Bearer "+entry["token"]},
             timeout=(15,30),allow_redirects=False)
-        return not safe_status(r.status_code)
+        if safe_status(r.status_code):return False
+        if r.ok:
+            return (r.json().get("job") or {}).get("status") not in (
+                "complete","failed","cancelled","dispatch_failed")
+        return True
     except requests.RequestException:return True
 
 def tick_heartbeats():
