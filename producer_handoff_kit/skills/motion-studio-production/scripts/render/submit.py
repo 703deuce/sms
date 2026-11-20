@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 import time
+import datetime
+import math
 from urllib.parse import urljoin, urlparse
 import requests
 
@@ -103,11 +105,6 @@ def main():
     reuse=jobdir/"deliver_modal"/"reuse.json"
     original=json.loads(reuse.read_text()) if reuse.is_file() else {}
     original_frames=original.get("segmentFrames")
-    segment_frames=int(os.environ.get("MOTION_SEGMENT_FRAMES",
-                         str(original_frames if original_frames is not None else 150)))
-    if not 1<=segment_frames<=600:fail("Invalid segment length")
-    if original_frames is not None and segment_frames!=int(original_frames):
-        fail("Retry job must reuse the original segment frame size")
     archive=jobdir/"deliver_modal"/os.environ.get("MOTION_BUNDLE_FILENAME","render_bundle_v1.zip")
     if not archive.is_file():fail("Verified render bundle does not exist")
     if output.is_file() and os.environ.get("FORCE_RESUBMIT")!="1":
@@ -117,10 +114,34 @@ def main():
         project=json.loads(f.read("project.json"))
         count=int(project["frameCount"])
         if count<=0:fail("Bundle frame count invalid")
+    receipts=jobdir/"state"/"receipts.json"
+    if original_frames is None and receipts.exists():
+        try:
+            records=json.loads(receipts.read_text()).get("receipts",[])
+            spans=[]
+            import re as regex
+            for record in records:
+                matched=regex.fullmatch(r"modal_seg_v1_cpu_(\\d{8})_(\\d{8})\\.mp4",
+                                       str(record.get("filename","")))
+                if matched:
+                    spans.append(int(matched.group(2))-int(matched.group(1)))
+            if spans:original_frames=max(spans)
+        except (ValueError,KeyError):pass
+    default_frames=min(450,max(150,math.ceil(math.ceil(count/96)/30)*30))
+    segment_frames=int(os.environ.get("MOTION_SEGMENT_FRAMES",
+                         str(original_frames if original_frames else default_frames)))
+    if not 1<=segment_frames<=600:fail("Invalid segment length")
+    if original_frames is not None and segment_frames!=int(original_frames):
+        fail("Retry must reuse original segment length")
     dry=os.environ.get("DRY_RUN")=="1"
-    metadata={"backend":backend,"jobId":jobid,"segmentFrames":segment_frames,
-              "segments":(count+segment_frames-1)//segment_frames,
-              "bundle":archive.name,"benchmarkOnly":os.environ.get("RENDER_BENCHMARK_ONLY")=="1"}
+    benchmark=(os.environ.get("MOTION_BENCHMARK_ONLY")=="1" or
+               os.environ.get("RENDER_BENCHMARK_ONLY")=="1")
+    film_minutes=round(count/float(project["fps"])/60,2)
+    metadata={"backend":backend,"jobId":jobid,"mode":os.environ.get("MOTION_MODE","cpu"),
+              "segmentFrames":segment_frames,"segments":(count+segment_frames-1)//segment_frames,
+              "filmMinutes":film_minutes,
+              "submittedAt":datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "bundle":archive.name,"benchmarkOnly":benchmark}
     if dry:
         print(json.dumps({"dryRun":True,**metadata}))
         return
@@ -163,29 +184,46 @@ def main():
                 fail("Private render already failed or was cancelled; do not resubmit")
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(metadata,indent=2)+"\n")
+    os.chmod(output,0o600)
+    (output.parent/"submit_failed.json").unlink(missing_ok=True)
     print(json.dumps({"jobId":jobid,"backend":metadata["backend"],
        "segments":metadata["segments"],"status":"submitted"}))
 
 def modal_submit(jobdir,metadata):
-    if os.environ.get("MODAL_DISABLED")=="1" or (jobdir/".modal_disabled").is_file():
-        fail("Modal is disabled")
-    # Existing isolated Modal submitter is reused, never duplicated.
-    repo=Path(__file__).resolve().parents[5]
-    script=repo/"new-app/scripts/motion-studio/modal_submit.mjs"
-    if not script.exists():fail("Modal fallback requires a checked-out Transovo repository")
-    env={**os.environ,"MOTION_MODE":os.environ.get("MOTION_MODE","cpu"),
-         "MOTION_BENCHMARK_ONLY":"1" if metadata["benchmarkOnly"] else "0",
-         "MOTION_BUNDLE_PATH":"","MOTION_BUNDLE_FILENAME":metadata["bundle"],
-         "MOTION_SEGMENT_FRAMES":str(metadata["segmentFrames"])}
-    result=subprocess.run(["node",str(script)],env=env,cwd=repo,
+    kit=Path(__file__).resolve().parent
+    if (os.environ.get("MODAL_DISABLED")=="1" or
+        (kit/".modal_disabled").is_file() or
+        (jobdir/".modal_disabled").is_file()):
+        fail("Modal is explicitly disabled")
+    # Use the original Modal submission setup, credentials and budget checks.
+    original=kit/"modal_submit.sh"
+    if not original.is_file():fail("Original Modal submission script unavailable")
+    env={**os.environ,"MOTION_SEGMENT_FRAMES":str(metadata["segmentFrames"]),
+         "MOTION_BENCHMARK_ONLY":"1" if metadata["benchmarkOnly"] else "0"}
+    result=subprocess.run(["bash",str(original),str(jobdir),
+                           metadata.get("mode","cpu")],env=env,
                           stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-    if result.returncode:fail("Explicit Modal fallback submission failed")
-    metadata["backend"]="modal";metadata["renderId"]=metadata["jobId"]
+    if result.returncode:fail("Explicit Modal submission failed")
+    receipt=jobdir/"deliver_modal"/"modal_receipt.json"
+    if not receipt.is_file():fail("Modal submission did not produce a call receipt")
+    value=json.loads(receipt.read_text())
+    if not isinstance(value.get("callId"),str):fail("Missing Modal call ID")
+    metadata["backend"]="modal"
+    metadata["callId"]=value["callId"]
+    metadata["renderId"]=value["callId"]
 
 if __name__=="__main__":
     try:main()
     except (RuntimeError,ValueError,KeyError,FileNotFoundError,requests.RequestException) as exc:
         # Never emit a traceback containing job tokens or signed storage URLs.
+        if len(sys.argv)==2:
+            try:
+                failure=Path(sys.argv[1]).resolve()/"deliver_modal"/"submit_failed.json"
+                failure.parent.mkdir(parents=True,exist_ok=True)
+                failure.write_text(json.dumps({"failedAt":datetime.datetime.now(
+                    datetime.timezone.utc).isoformat(),"type":type(exc).__name__})+"\n")
+                os.chmod(failure,0o600)
+            except OSError:pass
         print("Render handoff could not finish; check server status and the local job configuration.",
               file=sys.stderr)
         sys.exit(2)
