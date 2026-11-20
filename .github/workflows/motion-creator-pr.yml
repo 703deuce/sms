@@ -29,6 +29,9 @@ jobs:
       - name: Generate Prisma models
         run: npx prisma generate --schema prisma/schema.prisma
       - name: Validate Prisma schema
+        env:
+          DATABASE_URL: postgresql://tester:tester@localhost:5432/transovo
+          DIRECT_URL: postgresql://tester:tester@localhost:5432/transovo
         run: npx prisma validate --schema prisma/schema.prisma
       - name: Creator tests
         run: npx vitest run tests/motion-studio/motion-studio-create.test.tsx tests/motion-studio/production-brief.test.ts
