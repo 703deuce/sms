@@ -26,6 +26,7 @@ import { askDirector } from '@/lib/server/motion-studio/director-llm'
 import { sanitizeCreativeBrief } from '@/lib/motion-studio/creative-options'
 import { sanitizeProductionBrief, roleHandling, type InputRole } from '@/lib/motion-studio/production-brief'
 import { loadBrandKit } from '@/lib/server/motion-studio/brand-kits'
+import { defaultVoice, validateChosenVoice } from '@/lib/server/motion-studio/voices'
 
 /**
  * Motion Studio service — matches the frontend client (lib/motion-studio/client.ts, PR #1260) exactly.
@@ -282,8 +283,14 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const readyIds=new Set(allUploads.map(u=>u.uploadId))
   for(const input of productionBrief.inputs){
     const row=rows.get(input.uploadId)
-    if(!row||!readyIds.has(input.uploadId)||row.mime!==input.mime)
-      throw new MotionStudioError('INVALID','Input must refer to a ready upload of the same type.',400)
+    if(!row||!readyIds.has(input.uploadId))
+      throw new MotionStudioError('INVALID','Input must refer to a ready upload.',400)
+    input.mime=row.mime
+    input.filename=row.filename
+    if((input.role==='talking_head'||input.role==='footage')&&!row.mime.startsWith('video/')
+       || (input.role==='narration'||input.role==='music')&&!row.mime.startsWith('audio/')
+       || (input.role==='photo'||input.role==='logo')&&!row.mime.startsWith('image/'))
+      throw new MotionStudioError('INVALID','Upload role does not match file type.',400)
     const present=allUploads.find(u=>u.uploadId===input.uploadId)
     if(present)present.role=input.role
   }
@@ -293,6 +300,19 @@ export async function createProject(workspaceId: string, userId: string, body: u
     throw new MotionStudioError('INVALID','Music upload is missing.',400)
   if(productionBrief.script?.uploadId&&!readyIds.has(productionBrief.script.uploadId))
     throw new MotionStudioError('INVALID','Script upload is missing.',400)
+  if(productionBrief.narration.voiceId){
+    const origin=productionBrief.narration.voiceSource==='cloned'?'cloned':'stock'
+    await validateChosenVoice(workspaceId,userId,productionBrief.narration.voiceId,origin)
+  }else if(productionBrief.narration.mode==='ai_voice'){
+    const preferred=await defaultVoice(workspaceId,userId)
+    if(preferred){
+      productionBrief.narration.voiceId=preferred.voiceId
+      productionBrief.narration.voiceName=preferred.voiceName
+      productionBrief.narration.voiceSource=preferred.voiceSource
+      productionBrief.narration.mode=preferred.voiceSource==='cloned'?'cloned_voice':'ai_voice'
+      productionBrief.narration.handling='tts_with_voice_id'
+    }
+  }
   const reqMusic = J(o.settings).music ?? o.music
   if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
   const requested = o.lengthMin ?? J(o.settings).lengthMin
