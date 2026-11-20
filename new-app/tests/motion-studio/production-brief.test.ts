@@ -41,6 +41,12 @@ describe('Motion Studio typed producer brief',()=>{
    inputs:[{uploadId:'upl_a',filename:'original.wav',mime:'audio/wav',role:'narration'}]})
   expect(brief.narration).toMatchObject({uploadId:'upl_a',handling:'voiceover_drives_timing'})
  })
+ it('retains explicit Auto-select even when no voice ID is attached',()=>{
+  const brief=sanitizeProductionBrief({...base,narration:{mode:'ai_voice',voiceSource:'auto'}})
+  expect(brief.narration.voiceSource).toBe('auto')
+  expect(brief.narration.voiceId).toBeUndefined()
+  expect(brief.narration.handling).toBe('tts_auto_voice')
+ })
  it('requires chosen cloned voice and never silently substitutes a stock voice',()=>{
   expect(()=>sanitizeProductionBrief({...base,narration:{mode:'cloned_voice'}}))
     .toThrow(/saved voice/)
