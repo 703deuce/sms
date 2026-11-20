@@ -166,7 +166,8 @@ def technical_failure(entry,reason):
         atomic_state()
     details={"stage":stage,"reason":category,"attempt":count,
              "masterFilename":"master_cpu.mp4","shareFilename":"share_cpu.mp4",
-             "diagnosticPath":"recovery/master.mp4"}
+             "diagnosticPath":"recovery/master.mp4",
+             "frameGrabFilename":"qa_frame_cpu.png","timestampSeconds":0}
     try:
         pipeline.api(job_id,"POST","/render-status",details)
         pipeline.api(job_id,"POST","/progress",{
