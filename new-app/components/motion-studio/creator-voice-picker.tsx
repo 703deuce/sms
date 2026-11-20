@@ -178,7 +178,10 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
   setDialogError('')
   setBusy(true)
   try{
-   const sample=await client.uploadFile(file,()=>{})
+   const sample=client.mode==='live'
+    ? await (await import('@/lib/clips/upload')).uploadClipFile(file,()=>{},
+       {kind:'media',...(tab==='record'&&duration>=10?{durationMs:duration*1000}:{})})
+    : await client.uploadFile(file,()=>{})
    const response=await call(base,'POST',{name:name.trim(),sampleUploadId:sample.uploadId}) as {voice:{voiceId:string;name:string}}
    onCreated(response.voice)
   }catch(e){setDialogError(e instanceof Error?e.message:'Could not clone your voice')}
