@@ -296,7 +296,7 @@ def repair_loudness_if_needed(master):
     try:
         _,log=checked(["ffmpeg","-nostdin","-hide_banner","-i",master,"-vn",
           "-af","ebur128=peak=true","-f","null","-"],timeout=1800)
-        readings=re.findall(r"I:\\s*(-?[0-9.]+) LUFS",log)
+        readings=re.findall(r"I:\s*(-?[0-9.]+) LUFS",log)
         measured=float(readings[-1]) if readings else None
         if measured is None or -16.5<=measured<=-13.5:return False
         corrected=os.path.join(os.path.dirname(master),"renormalized.mp4")
