@@ -368,8 +368,22 @@ def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None,recovery_dir=N
             if recovery_dir:
                 shutil.copy2(share,os.path.join(recovery_dir,"share.mp4"))
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
-            metrics=qa_video(master,project["frameCount"],project["fps"],
-                             project["width"],project["height"])
+            try:
+                metrics=qa_video(master,project["frameCount"],project["fps"],
+                                 project["width"],project["height"])
+            except Exception:
+                # Diagnostic still is saved and registered under the same job,
+                # with no visual-design verdict. Never mask the actual QA error.
+                diagnostic=os.path.join(
+                    recovery_dir if recovery_dir else directory,"qa_frame.png")
+                try:
+                    checked(["ffmpeg","-nostdin","-hide_banner","-loglevel","error",
+                        "-y","-ss","0","-i",master,"-frames:v","1",diagnostic],
+                        timeout=120)
+                    prepare_upload(job_id,diagnostic,f"qa_frame_{mode}.png",
+                                   "media","image/png")
+                except Exception:pass
+                raise
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
                 "qa":metrics,"seconds":round(time.monotonic()-start,3)}
