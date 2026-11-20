@@ -6,6 +6,32 @@ import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 type Ctx={params:Promise<{id:string}>}
 type Artifact={filename?:string;kind?:string;state?:string;key?:string}
 const invalid=(message:string)=>new MotionStudioError('INVALID',message,400)
+async function boundedJson(request:Request):Promise<Record<string,unknown>>{
+  const max=8192
+  const declared=Number(request.headers.get('content-length')||0)
+  if(!Number.isFinite(declared)||declared>max)throw invalid('Render request too large')
+  const reader=request.body?.getReader()
+  if(!reader)throw invalid('Missing render request')
+  const chunks:Uint8Array[]=[]
+  let total=0
+  while(true){
+    const part=await reader.read()
+    if(part.done)break
+    total+=part.value.byteLength
+    if(total>max){
+      await reader.cancel()
+      throw invalid('Render request too large')
+    }
+    chunks.push(part.value)
+  }
+  try{
+    const buffer=Buffer.concat(chunks.map(x=>Buffer.from(x)))
+    const body=JSON.parse(buffer.toString('utf8')) as unknown
+    if(!body||typeof body!=='object'||Array.isArray(body))
+      throw invalid('Invalid render request')
+    return body as Record<string,unknown>
+  }catch{throw invalid('Invalid render JSON')}
+}
 const privateWorkerAddress=(address:URL):boolean=>{
   const host=address.hostname.toLowerCase()
   const service=/^[a-z][a-z0-9-]{1,62}$/.test(host)&&host!=='localhost'
@@ -28,7 +54,7 @@ export async function POST(request:Request,ctx:Ctx){
     const job=await requireBotJob(id,request)
     if(['complete','failed','cancelled','dispatch_failed'].includes(job.status))
       throw new MotionStudioError('CONFLICT','Render assignment is already closed.',409)
-    const body=await request.json() as Record<string,unknown>
+    const body=await boundedJson(request)
     const bundle=body.bundle
     const frames=body.segmentFrames??150
     if(typeof bundle!=='string'||!/^[A-Za-z0-9_.-]{1,120}\.zip$/.test(bundle)||
@@ -52,8 +78,9 @@ export async function POST(request:Request,ctx:Ctx){
     if(!token)throw new MotionStudioError('UNAUTHENTICATED','Producer token missing.',401)
     const origin=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||'https://transovo.ai'
     const trusted=new URL(origin)
-    if(trusted.hostname!=='transovo.ai'&&trusted.hostname.endsWith('.transovo.ai')===false)
-      throw new MotionStudioError('INTERNAL','Invalid public job API origin.',503)
+    if(trusted.protocol!=='https:'||trusted.hostname!=='transovo.ai'||
+       trusted.username||trusted.password)
+      throw new MotionStudioError('INTERNAL','Public job API must use https://transovo.ai.',503)
     const endpoint=new URL('/api/motion-studio/agent/jobs/'+encodeURIComponent(id),trusted.origin)
     const timeout=AbortSignal.timeout(25000)
     let response:Response
