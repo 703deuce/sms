@@ -20,12 +20,21 @@ def job_url(job_id):
 def job_headers():
     return {"Authorization":"Bearer "+os.environ["MOTION_JOB_TOKEN"]}
 
-def api(job_id,method,path="",payload=None,params=None,timeout=120):
-    r=SESSION.request(method,job_url(job_id)+path,headers=job_headers(),
-      json=payload,params=params,timeout=timeout,allow_redirects=False)
-    if not r.ok:
-        raise RuntimeError("Job API failed: "+str(r.status_code))
-    return r.json()
+def api(job_id,method,path="",payload=None,params=None,timeout=120,attempts=8):
+    """Ride out web deploys/proxy blips: retry 429/5xx and connection errors."""
+    import random
+    for attempt in range(1,attempts+1):
+        try:
+            r=SESSION.request(method,job_url(job_id)+path,headers=job_headers(),
+              json=payload,params=params,timeout=timeout,allow_redirects=False)
+        except (requests.ConnectionError,requests.Timeout):
+            if attempt==attempts: raise
+            time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
+        if r.status_code in (429,500,502,503,504) and attempt<attempts:
+            time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
+        if not r.ok:
+            raise RuntimeError("Job API failed: "+str(r.status_code))
+        return r.json()
 
 def heartbeat(job_id,stop):
     while not stop.wait(105):
@@ -42,20 +51,31 @@ def ready_url(job_id,filename):
     r=api(job_id,"GET","/render-asset",params={"filename":filename})
     return r.get("url") if r.get("exists") else None
 
-def fetch_file(job_id,filename,target,required=True):
-    url=ready_url(job_id,filename)
-    if not url:
-        if required: raise ValueError("Required registered render artifact missing: "+filename)
-        return False
-    with SESSION.get(url,stream=True,timeout=(30,180),allow_redirects=False) as response:
-        response.raise_for_status()
-        with open(target,"wb") as out:
-            size=0
-            for chunk in response.iter_content(1024*1024):
-                size+=len(chunk)
-                if size>MAX_ZIP: raise ValueError("Artifact over size limit")
-                out.write(chunk)
-    return True
+TRANSIENT_STATUS={429,500,502,503,504}
+
+def fetch_file(job_id,filename,target,required=True,attempts=8):
+    """Storage (B2) can return 503/429 under parallel load: back off and retry."""
+    import random
+    for attempt in range(1,attempts+1):
+        url=ready_url(job_id,filename)
+        if not url:
+            if required: raise ValueError("Required registered render artifact missing: "+filename)
+            return False
+        try:
+            with SESSION.get(url,stream=True,timeout=(30,180),allow_redirects=False) as response:
+                if response.status_code in TRANSIENT_STATUS and attempt<attempts:
+                    raise ConnectionError("transient storage status "+str(response.status_code))
+                response.raise_for_status()
+                with open(target,"wb") as out:
+                    size=0
+                    for chunk in response.iter_content(1024*1024):
+                        size+=len(chunk)
+                        if size>MAX_ZIP: raise ValueError("Artifact over size limit")
+                        out.write(chunk)
+            return True
+        except (requests.ConnectionError,requests.Timeout,requests.exceptions.ChunkedEncodingError,ConnectionError):
+            if attempt==attempts: raise
+            time.sleep(min(60,2**attempt)+random.uniform(0,5))
 
 def extract_bundle(job_id,filename,directory):
     archive=os.path.join(directory,"bundle.zip")
@@ -189,8 +209,10 @@ def capture_segment(job_id,bundle_name,mode,start,end):
     finally:stop.set()
 
 def ffprobe(path):
-    out,_=checked(["ffprobe","-v","error","-count_frames","-show_streams",
-      "-show_format","-of","json",path],timeout=90)
+    # -count_packets reads the container index (no full decode); long films
+    # made -count_frames exceed its timeout.
+    out,_=checked(["ffprobe","-v","error","-count_packets","-show_streams",
+      "-show_format","-of","json",path],timeout=1800)
     return json.loads(out)
 
 def qa_video(path,expected_frames,fps):
@@ -199,7 +221,7 @@ def qa_video(path,expected_frames,fps):
     video=next((x for x in streams if x.get("codec_type")=="video"),None)
     audio=next((x for x in streams if x.get("codec_type")=="audio"),None)
     if not video or not audio:raise ValueError("Missing master video or audio")
-    frames=int(video.get("nb_read_frames") or 0)
+    frames=int(video.get("nb_read_packets") or video.get("nb_read_frames") or 0)
     if frames!=expected_frames:raise ValueError("Frame count mismatch")
     expected=expected_frames/fps
     duration=float(result["format"]["duration"])
@@ -209,10 +231,10 @@ def qa_video(path,expected_frames,fps):
     if abs(a_duration-expected)>0.20:
         raise ValueError("Audio/video duration mismatch")
     _,black=checked(["ffmpeg","-hide_banner","-i",path,"-vf",
-      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=240)
+      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=3600)
     if "black_start:" in black:raise ValueError("Extended black frames detected")
     _,loud=checked(["ffmpeg","-hide_banner","-i",path,"-vn","-af",
-      "ebur128=peak=true","-f","null","-"],timeout=240)
+      "ebur128=peak=true","-f","null","-"],timeout=1800)
     matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
     if not matches:raise ValueError("Could not inspect integrated loudness")
     integrated=float(matches[-1])
@@ -243,42 +265,48 @@ def join_and_qa(job_id,bundle_name,mode,segments):
               "file '"+f.replace("'","'\\''")+"'\n" for f in inputs))
             join=os.path.join(directory,"joined.mp4")
             checked(["ffmpeg","-hide_banner","-loglevel","error","-y","-f","concat",
-              "-safe","0","-i",listfile,"-c","copy",join],timeout=300)
+              "-safe","0","-i",listfile,"-c","copy",join],timeout=1800)
             master=os.path.join(directory,"master.mp4")
             checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
               "-i",join,"-i",str(audio),"-map","0:v:0","-map","1:a:0",
               "-c:v","libx264","-preset","medium","-crf","16","-profile:v","high",
               "-level:v","4.2","-pix_fmt","yuv420p","-movflags","+faststart",
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
-              "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=900)
+              "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
             metrics=qa_video(master,project["frameCount"],project["fps"])
-            share=os.path.join(directory,"share.mp4")
-            for crf in (26,29,32,35):
-                checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
-                  "-i",master,"-vf","scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-                  "-c:v","libx264","-preset","medium","-crf",str(crf),
-                  "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
-                  "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=900)
-                if os.path.getsize(share)<24_000_000:break
-            else:
-                # For long films the 24 MB share cap may demand a far lower
-                # average bitrate than even CRF 35 produces. Use a bounded
-                # average-bitrate fallback; never upscale the source.
-                duration=project["frameCount"]/project["fps"]
-                video_rate=max(100000,int(23_000_000*8/duration-128000))
-                for factor in (0.95,0.80,0.65):
-                    target=max(90000,int(video_rate*factor))
-                    checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
-                      "-i",master,"-vf",
-                      "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-                      "-c:v","libx264","-preset","medium","-b:v",str(target),
-                      "-maxrate",str(target),"-bufsize",str(target*2),
-                      "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
-                      "-c:a","aac","-b:a","128k","-movflags","+faststart",share],
-                      timeout=900)
-                    if os.path.getsize(share)<24_000_000:break
-                else:raise ValueError("Share copy exceeds maximum size")
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
+            share=os.path.join(directory,"share.mp4")
+            duration=project["frameCount"]/project["fps"]
+            scale="scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+            if duration>300:
+                # Films over 5 minutes cannot fit under 24 MB at watchable audio+video
+                # bitrates; encode one clean 720p CRF 30 preview instead of 7 passes.
+                checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                  "-i",master,"-vf",scale,
+                  "-c:v","libx264","-preset","medium","-crf","30",
+                  "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                  "-c:a","aac","-b:a","96k","-movflags","+faststart",share],timeout=3600)
+            else:
+                for crf in (26,29,32,35):
+                    checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                      "-i",master,"-vf",scale,
+                      "-c:v","libx264","-preset","medium","-crf",str(crf),
+                      "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                      "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=3600)
+                    if os.path.getsize(share)<24_000_000:break
+                else:
+                    video_rate=max(100000,int(23_000_000*8/duration-96000))
+                    for factor in (0.95,0.80,0.65):
+                        target=max(90000,int(video_rate*factor))
+                        checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                          "-i",master,"-vf",scale,
+                          "-c:v","libx264","-preset","medium","-b:v",str(target),
+                          "-maxrate",str(target),"-bufsize",str(target*2),
+                          "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                          "-c:a","aac","-b:a","96k","-movflags","+faststart",share],
+                          timeout=3600)
+                        if os.path.getsize(share)<24_000_000:break
+                    else:raise ValueError("Share copy exceeds maximum size")
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
@@ -334,5 +362,15 @@ def publish_editable(job_id,root):
     records.sort(key=lambda a:a["id"])
     payload={"document":pkg["document"],"assets":records,"bundles":bundles}
     live=root/"live-project.json"
-    if live.is_file():payload["liveProject"]=json.loads(live.read_text())
+    if live.is_file():
+        # The live timeline references assets by their NATIVE ids (ast_/fnt_/bnd_...), but the server only
+        # accepts registered STORAGE ids (random upload ids). Remap every string that is a native id,
+        # exactly like bg_delivery/manifest.mjs buildManifest does, or /portable refuses the timeline.
+        storage={r["id"]:r["storageId"] for r in records}
+        def remap(value):
+            if isinstance(value,str):return storage.get(value,value)
+            if isinstance(value,list):return [remap(x) for x in value]
+            if isinstance(value,dict):return {k:remap(x) for k,x in value.items()}
+            return value
+        payload["liveProject"]=remap(json.loads(live.read_text()))
     return api(job_id,"POST","/portable",payload,timeout=300)

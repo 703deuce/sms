@@ -17,7 +17,7 @@ export async function GET(request:Request,ctx:Ctx){
     const artifact=entries.find(a=>a.filename===filename&&a.state==='ready'&&
       ['bundle','video','audio','project','media'].includes(a.kind||'')&&
       typeof a.key==='string'&&a.key.startsWith(
-        'ws/'+job.workspaceId+'/motion-studio/agent/'+id+'/'))
+        'ws/'+job.workspaceId+'/motion-studio/agent/'))
     if(!artifact||!artifact.key)
       return NextResponse.json({exists:false},{headers:{'Cache-Control':'private, no-store'}})
     const url=await createReadableSignedUrl(artifact.key,1800)
