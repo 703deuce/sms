@@ -10,6 +10,9 @@ const db=()=>getPrisma()
 const error=(message:string,status=400)=>new MotionStudioError('INVALID',message,status)
 const name=(value:unknown)=>typeof value==='string'?value.trim().slice(0,80):''
 const voiceIdPattern=/^[A-Za-z0-9_-]{10,80}$/
+const MIN_CLONE_DURATION_MS=10_000
+const MAX_CLONE_DURATION_MS=5*60_000
+const CLONE_PROVIDER_TIMEOUT_MS=240_000
 type VoiceRow={id:string;workspaceId:string;userId:string;voiceId:string;name:string;kind:string;sampleUploadId:string|null;previewUrl:string|null;isDefault:boolean}
 type StockRow={id:string;voiceId:string;name:string;description:string;gender:string|null;accent:string|null;previewUrl:string;sortOrder:number;enabled:boolean}
 let previews=new Map<string,{url:string;expires:number}>()
@@ -33,9 +36,14 @@ export async function listVoices(workspaceId:string,userId:string){
  const stock=await db().motionStudioStockVoice.findMany({
   where:{enabled:true},orderBy:{sortOrder:'asc'},take:20})
  const fallback=stock
- const stockVoices=await Promise.all(fallback.map(async row=>({
-   voiceId:row.voiceId,name:row.name,description:row.description,gender:row.gender,
-   accent:row.accent,previewUrl:row.previewUrl||await officialPreview(row.voiceId),source:'stock' as const,
+ const stockVoices=await Promise.all(fallback.map(async row=>{
+   const previewUrl=row.previewUrl||await officialPreview(row.voiceId)
+   // Cache the official URL in the seeded catalog so future requests do not rely on a live provider lookup.
+   if(previewUrl&&!row.previewUrl)await db().motionStudioStockVoice.updateMany({
+     where:{id:row.id,previewUrl:''},data:{previewUrl}
+   }).catch(()=>{})
+   return {voiceId:row.voiceId,name:row.name,description:row.description,gender:row.gender,
+     accent:row.accent,previewUrl,source:'stock' as const}
  })))
  const myVoices=await Promise.all(my.map(async row=>{
    let previewUrl=row.previewUrl||await officialPreview(row.voiceId)
@@ -95,7 +103,10 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime.split(';')[0].trim()))
   throw error('Upload a supported audio recording first.')
  if(Number(sample.bytes)>25*1024*1024)throw error('Voice sample exceeds 25 MB.')
- if(sample.durationMs!=null&&sample.durationMs<10000)throw error('Voice sample needs at least 10 seconds.')
+ if(sample.durationMs==null||!Number.isFinite(Number(sample.durationMs)))
+  throw error('Voice sample duration could not be verified. Upload a recording with valid duration metadata.')
+ if(sample.durationMs<MIN_CLONE_DURATION_MS)throw error('Voice sample needs at least 10 seconds.')
+ if(sample.durationMs>MAX_CLONE_DURATION_MS)throw error('Voice sample exceeds the 5-minute maximum.')
  const content=await getClipStorage().getObjectBytes(sample.key)
  const form=new FormData()
  form.set('name',label)
@@ -106,7 +117,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  try{
   response=await fetch('https://api.elevenlabs.io/v1/voices/add',{
    method:'POST',headers:{'xi-api-key':getElevenLabsApiKey()},body:form,
-   signal:AbortSignal.timeout(180000),cache:'no-store'})
+   signal:AbortSignal.timeout(CLONE_PROVIDER_TIMEOUT_MS),cache:'no-store'})
  }catch{throw new MotionStudioError('INTERNAL','Could not connect to the voice service.',502)}
  if(!response.ok)throw new MotionStudioError('INTERNAL','Could not create voice. Check the sample and try again.',502)
  const created=await response.json() as {voice_id?:string}
