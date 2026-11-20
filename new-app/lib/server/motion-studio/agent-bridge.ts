@@ -633,7 +633,16 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       throw new MotionStudioError('INVALID', 'Multipart ETags required.', 400)
     }
     const storage = getClipStorage()
-    await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
+    // A previous commit request can time out after B2 has finished writing.
+    // On explicit retry, inspect the existing object first and skip a
+    // second multipart completion if the bytes are already present.
+    let preexisting=0
+    if(input.retryCommit===true){
+      try{preexisting=Number(await storage.getObjectSizeBytes(item.key)||0)}
+      catch{preexisting=0}
+    }
+    if(preexisting!==item.bytes)
+      await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
     // B2 may expose the completed object slightly after completeUpload.
     // Stay on this upload ID; never force Chromium to re-encode a valid
     // segment just because the first size read races storage consistency.
