@@ -128,16 +128,15 @@ class WorkerTests(unittest.TestCase):
         stored=json.loads(server.STATE.read_text())
         self.assertEqual(stored["running"]["id"],first["id"])
         self.assertEqual([i["id"] for i in stored["queue"]],[second["id"]])
-    def test_failed_and_cancelled_scratch_deleted(self):
-        for stage in ("failed","cancelled"):
+    def test_failed_recovery_is_retained_and_cancelled_scratch_removed(self):
+        for stage in ("attention_required","cancelled"):
             root=server.WORK/("job_msaj_"+stage)
             root.mkdir()
-            (root/"unused.mp4").write_bytes(b"unsafe")
-            # On startup, orphan temporary files must be removed regardless of state.
+            (root/"master.mp4").write_bytes(b"finished render")
             server.STAGES["msaj_"+stage]=stage
             server.atomic_state()
             server.load()
-            self.assertFalse(root.exists())
+            self.assertEqual(root.exists(),stage=="attention_required")
     def test_no_token_or_signed_url_in_public_liveness_or_queue_response(self):
         with mock.patch.object(server,"verify_job",return_value=True):
             http=server.ThreadingHTTPServer(("127.0.0.1",0),server.Handler)
@@ -168,6 +167,8 @@ class WorkerTests(unittest.TestCase):
         root=server.WORK/"job_msaj_7777"
         root.mkdir()
         (root/"partial.tmp").write_text("temporary")
+        server.STAGES["msaj_7777"]="completed"
+        server.atomic_state()
         server.load()
         self.assertFalse(root.exists())
 
