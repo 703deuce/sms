@@ -1,0 +1,94 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/worker-registration.schema.json",
+ "title": "Worker self-description (PUT /workers/{workerId})",
+ "type": "object",
+ "required": [
+  "schema",
+  "workerId",
+  "machineId",
+  "planId",
+  "capabilities",
+  "wakeup"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.worker/1"
+  },
+  "workerId": {
+   "type": "string"
+  },
+  "machineId": {
+   "type": "string"
+  },
+  "planId": {
+   "type": "string"
+  },
+  "account": {
+   "type": "object",
+   "description": "opaque account handle; several workers may share one account or machine"
+  },
+  "modes": {
+   "type": "array",
+   "items": {
+    "enum": [
+     "deterministic_render",
+     "creative_production"
+    ]
+   }
+  },
+  "capabilities": {
+   "type": "object"
+  },
+  "wakeup": {
+   "type": "object",
+   "required": [
+    "type"
+   ],
+   "properties": {
+    "type": {
+     "const": "webhook_routine"
+    },
+    "routineId": {
+     "type": "string"
+    }
+   }
+  },
+  "softwareVersion": {
+   "type": "string"
+  },
+  "machine": {
+   "type": "object",
+   "description": "rendering capacity of the machine this worker runs on (shared by every worker on it)",
+   "required": [
+    "cpus",
+    "memTotalMb"
+   ],
+   "properties": {
+    "cpus": {
+     "type": "integer"
+    },
+    "cpuModel": {
+     "type": "string"
+    },
+    "memTotalMb": {
+     "type": "integer"
+    },
+    "gpu": {
+     "type": "string"
+    },
+    "renderSlots": {
+     "type": "integer",
+     "description": "concurrent heavy renders this worker can take on this machine (Transovo enforces machine-wide limits across workers)"
+    }
+   }
+  },
+  "activeJob": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "description": "job currently running on this worker, if any"
+  }
+ }
+}

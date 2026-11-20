@@ -369,7 +369,7 @@ Every element in a scene is a stack of layers, bottom to top, for example: `back
 
 ### 17. Generated motion: the Replicate gateway (note only)
 
-`REPLICATE_API_TOKEN` is in `<production env file from the bot's secret store>` (load it with the SKILL.md "API keys" line; never print it, and pass it to curl through a header file, never on the command line). Use it only for a shot that **genuinely needs generated motion** that no real media or code engine can supply: an abstract transition plate, a stylised background loop, or an establishing atmosphere. It is a paid call, so plan it in `log/job.md` with an estimated cost first, and make at most 2 attempts (SKILL.md "Money"). Never present a generated shot as real footage of a real event or person. No Replicate client is installed; the HTTP API with curl is enough.
+`REPLICATE_API_TOKEN` is in `/workspace/secrets/motion_production.env` (load it with the SKILL.md "API keys" line; never print it, and pass it to curl through a header file, never on the command line). Use it only for a shot that **genuinely needs generated motion** that no real media or code engine can supply: an abstract transition plate, a stylised background loop, or an establishing atmosphere. It is a paid call, so plan it in `log/job.md` with an estimated cost first, and make at most 2 attempts (SKILL.md "Money"). Never present a generated shot as real footage of a real event or person. No Replicate client is installed; the HTTP API with curl is enough.
 
 ---
 

@@ -4,7 +4,8 @@ The producer bot builds one composed film page + the editable package, packs `re
 Modal renderer ONCE and stops. Modal fans the capture out over CPU containers, joins, runs QA (frame count, duration,
 audio, black gaps, loudness), uploads master + share copy, approves the master (the job stays open), publishes the
 editable version and calls `/complete {delivery:"live"}` by itself. Renderer code: public repo `703deuce/sms`
-(`worker/modal_motion/`, `new-app/scripts/motion-studio/modal_submit.mjs`, master 53733e84).
+(`worker/modal_motion/`, `new-app/scripts/motion-studio/modal_submit.mjs`; `setup.sh` sparse-clones current `master`).
+Installed on a producer box at `/workspace/motion_kit/modal/` by `producer_handoff_kit/setup/bootstrap_producer_box.sh`.
 
 | Script | Use |
 |---|---|
@@ -13,9 +14,10 @@ editable version and calls `/complete {delivery:"live"}` by itself. Renderer cod
 | `status.sh J` | prints the redacted `/render-status` once (no polling) |
 | `setup.sh` | idempotent: Modal venv + sparse checkout of the public renderer code (submit.sh calls it) |
 | `check_page.mjs` | the headless page check used by `--check-page` |
-| `patches/publish_editable_remap_live_project.patch` | one fix the Modal app needs (see Known blocker) |
+| `reuse.sh J SOURCE_JOB_ID` | retry only: borrow the earlier job's ready bundle zip + rendered segments (`POST /assets` receipts + reuse) before `submit.sh` |
+| `patches/publish_editable_remap_live_project.patch` | historical: the publish remap fix, now merged on master as 877867c |
 
-Credentials: Modal keys from `MODAL_ENV_FILE` (default `/workspace/secrets/modal.env`, mode 600, exports
+Credentials: Modal keys from `MODAL_ENV_FILE` (default `/workspace/render_bench/.modal_env`, mode 600, exports
 `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET`); job creds from `J/secrets/{job_url,token}` (fallback `J/state/job_token`).
 They only live in the environment of the submit process. Nothing prints them.
 
@@ -53,12 +55,28 @@ budget guard = `0.10 + 0.285 x minutes` USD (measured CPU cost ~$0.19 per render
 under the ~$5 job cap (films over ~17 min hit the cap; the real cost is ~$0.19/min). GPU (T4) measured slower and ~3.7x pricier on 2D
 canvas: use it only for real 3D/WebGL scenes after it measurably helps. The join/encode/QA step is one container, so it is the serial tail on long films.
 
-## Known blocker (needs a Modal app redeploy, not a skill change)
-`pipeline.publish_editable` sends `live-project.json` to `/portable` with NATIVE asset ids (`ast_`, `fnt_`...), but the server only accepts
-registered STORAGE ids (random upload ids; `portable-contract.ts` "Timeline media must reference a registered asset ID"). Modal would
-approve the master, then fail the publish and mark the job failed. `patches/publish_editable_remap_live_project.patch` remaps them the same
-way `bg_delivery/manifest.mjs` does (verified offline against a real live package: 12 native refs -> 0). After the patched app is deployed,
-create `motion_kit/modal/.publish_remap_deployed`; until then `submit.sh` refuses production submits (exit 4) and the box fallback applies.
+## Server-side fixes already on `703deuce/sms` master and deployed (Nov 19, 2026)
+Nothing to patch on a new box. These live in `worker/modal_motion/` (Modal app `transovo-motion-render`, deployed by Chief of Staff):
+- `877867c` publish remaps live-project asset refs to registered storage ids before `/portable` (the old "known blocker").
+- `aee25c1a` bundle downloads retry 503/429/5xx with backoff; segment containers capped at 24 (a 20-min film runs in ~4 waves).
+- `c6f11a31` every job-API call from Modal retries 429/5xx and connection errors (rides out website redeploys).
+- `ca749125` QA uses `ffprobe -count_packets` with long timeouts (1800-5400 s); `join_qa` has 8 vCPU / 16 GB; `/render-asset` serves reused artifacts.
+- `8dbc8e9f` `master_cpu.mp4` uploads right after QA passes; films over 5 min get one 720p CRF 30 share copy (no 24 MB cap).
+
+`submit.sh` therefore submits by default. Kill switch: `touch /workspace/motion_kit/modal/.modal_disabled` (or `MODAL_DISABLED=1`)
+makes it exit 4 so the box fallback applies. (The old `.publish_remap_deployed` marker is no longer used.)
+
+**Open issue (Nov 19, 8:16 PM ET):** the 20-minute reuse job got through join, QA and the master upload, then Modal's
+`publish_editable` got HTTP 400 from `POST /portable`. Chief of Staff owns the server side. If a job ends `qa_fail` with
+`Job API failed: 400`, report it to Rick and Chief of Staff; do not resubmit on your own.
+
+## Retrying a failed Modal job (only with Rick's explicit OK)
+The server decides retries; Chief of Staff creates a fresh job for the same project and it arrives by webhook like any job.
+Never rebuild the film for a pure infrastructure retry:
+1. New job folder `J2` (the routine creates it). Link the finished bundle: `mkdir -p J2/deliver_modal && ln -s J1/deliver_modal/render_bundle_v1.zip J2/deliver_modal/`.
+2. `bash /workspace/motion_kit/modal/reuse.sh J2 <J1 jobId>` (receipts + reuse of the zip and every ready `modal_seg_v1_cpu_*.mp4`; prints counts only).
+3. `MOTION_SEGMENT_FRAMES=<J1's segmentFrames from J1/deliver_modal/submit.json> bash /workspace/motion_kit/modal/submit.sh J2 cpu`. Same segment size, so Modal finds the reused segments ready and goes straight to join, QA, upload, publish, complete.
+4. `status.sh J2` once; report. Without reusable segments (`reuse.sh ... --no-segments`) Modal re-renders but still skips the bundle upload.
 
 ## Fallback
 If Modal submit fails twice, render on the box (rcap.mjs-style resumable segments, SKILL.md section 8 fallback) and deliver with

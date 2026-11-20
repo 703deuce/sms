@@ -1,0 +1,294 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/usage-report.schema.json",
+ "title": "Usage report around one job (POST /workers/{workerId}/usage)",
+ "type": "object",
+ "required": [
+  "schema",
+  "workerId",
+  "machineId",
+  "planId",
+  "jobId",
+  "mode",
+  "before",
+  "after",
+  "renderDurationMs",
+  "status"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.usage/1"
+  },
+  "workerId": {
+   "type": "string"
+  },
+  "machineId": {
+   "type": "string"
+  },
+  "planId": {
+   "type": "string"
+  },
+  "jobId": {
+   "type": "string"
+  },
+  "mode": {
+   "type": "string"
+  },
+  "projectId": {
+   "type": "string"
+  },
+  "startedAt": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "finishedAt": {
+   "type": "string",
+   "format": "date-time"
+  },
+  "before": {
+   "type": "object",
+   "required": [
+    "at"
+   ],
+   "properties": {
+    "at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "cpu": {
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "maxRssKb": {
+     "type": "number"
+    },
+    "loadavg": {
+     "type": "array"
+    },
+    "memFreeMb": {
+     "type": "number"
+    },
+    "diskFreeMb": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "cacheMb": {
+     "type": "number"
+    },
+    "aiCallsTotal": {
+     "type": "integer"
+    },
+    "planUsage": {
+     "type": "object",
+     "description": "Grok plan usage observed by the waking routine (the worker process cannot read it). Shared by every worker on the same plan.",
+     "required": [
+      "available"
+     ],
+     "properties": {
+      "available": {
+       "type": "boolean"
+      },
+      "usedPercent": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 100
+      },
+      "window": {
+       "enum": [
+        "weekly",
+        "daily",
+        "monthly",
+        "unknown"
+       ]
+      },
+      "observedAt": {
+       "type": "string",
+       "format": "date-time"
+      },
+      "resetsAt": {
+       "oneOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "source": {
+       "type": "string",
+       "description": "e.g. CheckSubscriptionUsage"
+      },
+      "planId": {
+       "type": "string"
+      },
+      "ageSec": {
+       "type": "number",
+       "description": "observation age when the worker attached it"
+      },
+      "stale": {
+       "type": "boolean",
+       "description": "true when older than 15 min at attach time"
+      },
+      "note": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "after": {
+   "type": "object",
+   "required": [
+    "at"
+   ],
+   "properties": {
+    "at": {
+     "type": "string",
+     "format": "date-time"
+    },
+    "cpu": {
+     "type": [
+      "object",
+      "null"
+     ]
+    },
+    "maxRssKb": {
+     "type": "number"
+    },
+    "loadavg": {
+     "type": "array"
+    },
+    "memFreeMb": {
+     "type": "number"
+    },
+    "diskFreeMb": {
+     "type": [
+      "number",
+      "null"
+     ]
+    },
+    "cacheMb": {
+     "type": "number"
+    },
+    "aiCallsTotal": {
+     "type": "integer"
+    },
+    "planUsage": {
+     "type": "object",
+     "description": "Grok plan usage observed by the waking routine (the worker process cannot read it). Shared by every worker on the same plan.",
+     "required": [
+      "available"
+     ],
+     "properties": {
+      "available": {
+       "type": "boolean"
+      },
+      "usedPercent": {
+       "type": "number",
+       "minimum": 0,
+       "maximum": 100
+      },
+      "window": {
+       "enum": [
+        "weekly",
+        "daily",
+        "monthly",
+        "unknown"
+       ]
+      },
+      "observedAt": {
+       "type": "string",
+       "format": "date-time"
+      },
+      "resetsAt": {
+       "oneOf": [
+        {
+         "type": "string",
+         "format": "date-time"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "source": {
+       "type": "string",
+       "description": "e.g. CheckSubscriptionUsage"
+      },
+      "planId": {
+       "type": "string"
+      },
+      "ageSec": {
+       "type": "number",
+       "description": "observation age when the worker attached it"
+      },
+      "stale": {
+       "type": "boolean",
+       "description": "true when older than 15 min at attach time"
+      },
+      "note": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  "planUsageDelta": {
+   "type": [
+    "object",
+    "null"
+   ],
+   "description": "after.usedPercent - before.usedPercent when both observations exist and no reset happened between them",
+   "properties": {
+    "percent": {
+     "type": "number"
+    },
+    "resetBetween": {
+     "type": "boolean"
+    }
+   }
+  },
+  "renderDurationMs": {
+   "type": "integer"
+  },
+  "wallMs": {
+   "type": "integer"
+  },
+  "aiCalls": {
+   "type": "integer"
+  },
+  "status": {
+   "enum": [
+    "completed",
+    "failed",
+    "rejected"
+   ]
+  },
+  "failures": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "stage"
+    ],
+    "properties": {
+     "stage": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "issues": {
+      "type": "array"
+     }
+    }
+   }
+  }
+ }
+}

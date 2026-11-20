@@ -7,7 +7,7 @@ After every scene is approved: **live jobs on Modal (Rick, Nov 19): Modal's auto
 ## 1. Automated technical report (once, on the final master; box-rendered masters only, Modal films use Modal's QA)
 
 ```bash
-Q=scripts/qa_report.py
+Q=/home/box/agent-data/workflows/motion-studio-production/scripts/qa_report.py
 python3 $Q $J/deliver/video.mp4 --out $J/qa/master --every 1 --expect-seconds $DURATION --expect-aspect $ASPECT --lufs -15
 ```
 

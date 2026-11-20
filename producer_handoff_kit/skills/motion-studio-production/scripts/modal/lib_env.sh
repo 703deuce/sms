@@ -16,8 +16,10 @@ load_job_env() {
   export MOTION_JOB_ID="$id" MOTION_JOB_URL="$url" MOTION_JOB_TOKEN="$tok"
 }
 load_modal_env() {
-  local f="${MODAL_ENV_FILE:-/workspace/secrets/modal.env}"
-  [ -f "$f" ] || { echo "Modal credentials file missing ($f); set MODAL_ENV_FILE" >&2; return 2; }
+  # first existing of: $MODAL_ENV_FILE, /workspace/render_bench/.modal_env, /workspace/secrets/modal.env (mode 600)
+  local f="${MODAL_ENV_FILE:-}"
+  if [ -z "$f" ]; then for c in /workspace/render_bench/.modal_env /workspace/secrets/modal.env; do [ -f "$c" ] && { f="$c"; break; }; done; fi
+  [ -n "$f" ] && [ -f "$f" ] || { echo "Modal credentials file missing (/workspace/render_bench/.modal_env); set MODAL_ENV_FILE" >&2; return 2; }
   set +x; set -a; . "$f"; set +a
   [ -n "${MODAL_TOKEN_ID:-}" ] && [ -n "${MODAL_TOKEN_SECRET:-}" ] || { echo "Modal credentials file must export MODAL_TOKEN_ID and MODAL_TOKEN_SECRET" >&2; return 2; }
 }

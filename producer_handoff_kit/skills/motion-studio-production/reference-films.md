@@ -10,7 +10,7 @@ Two Cinematic Skill films are Rick's reference for what "good" means. Study them
 | Evidence record of the whole process | `/workspace/motion_kit/transovo_team/HANDOVER-motion-studio.md` §7 (stages S1–S16 and §3 "Cinematic Media Handoff") | — |
 
 Make a contact sheet of each reference once per bot copy, and look at it:
-`python3 scripts/qa_report.py /workspace/motion_kit/films/film1.mp4 --out /tmp/ref_gme --every 2`.
+`python3 /home/box/agent-data/workflows/motion-studio-production/scripts/qa_report.py /workspace/motion_kit/films/film1.mp4 --out /tmp/ref_gme --every 2`.
 
 **Path note:** the kit scripts refer to `/workspace/code_motion_cinematic/…` and `/workspace/round2_cinematic/…`, the paths before the move. Both now live under `/workspace/motion_kit/`.
 

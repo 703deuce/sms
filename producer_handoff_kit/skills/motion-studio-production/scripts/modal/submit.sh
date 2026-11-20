@@ -11,10 +11,12 @@ D="$J/deliver_modal"; mkdir -p "$D"; chmod 700 "$D"
 BUNDLE="${BUNDLE:-$D/render_bundle_v1.zip}"; [ -f "$BUNDLE" ] || { echo "missing $BUNDLE (run make_bundle.py --job-dir $J)" >&2; exit 2; }
 if [ -f "$D/submit.json" ] && grep -q '"callId"' "$D/submit.json" && [ "${FORCE_RESUBMIT:-0}" != 1 ]; then
   echo "already submitted (see $D/submit.json). Use status.sh. A resubmission needs FORCE_RESUBMIT=1 and a new bundle filename (BUNDLE=.../render_bundle_v2.zip)." >&2; exit 3; fi
-# Production gate: Modal's publish step must carry the live-timeline id remap (patches/publish_editable_remap_live_project.patch),
-# otherwise it fails AFTER approving the master and fails the customer job. Whoever deploys the fixed app creates the marker.
-if [ "${MOTION_BENCHMARK_ONLY:-0}" = 0 ] && [ ! -f "$HERE/.publish_remap_deployed" ] && [ "${ALLOW_UNPATCHED_PUBLISH:-0}" != 1 ]; then
-  echo "BLOCKED (exit 4): the deployed Modal app is not confirmed to remap live-project asset ids at publish (see README.md 'Known blocker'). Use the box fallback path, and tell Rick. Marker: $HERE/.publish_remap_deployed" >&2; exit 4; fi
+# Kill switch: the Modal publish-remap fix (877867c) and the retry/timeout/share-copy fixes (aee25c1a, c6f11a31, ca749125,
+# 8dbc8e9f) are on 703deuce/sms master and deployed, so production submits are allowed by default. If Rick or Chief of Staff
+# says Modal is down or must not be used, create "$HERE/.modal_disabled" (or set MODAL_DISABLED=1): submit.sh then exits 4
+# and the box fallback (bg_delivery/launch.sh) applies.
+if [ "${MOTION_BENCHMARK_ONLY:-0}" = 0 ] && { [ -f "$HERE/.modal_disabled" ] || [ "${MODAL_DISABLED:-0}" = 1 ]; }; then
+  echo "BLOCKED (exit 4): Modal is disabled on this box ($HERE/.modal_disabled or MODAL_DISABLED=1). Use the box fallback path and tell Rick." >&2; exit 4; fi
 eval "$(bash "$HERE/setup.sh" | sed -n 's/^\(VENV\|SMS\)=\(.*\)$/\1="\2"/p')"
 load_job_env "$J"; load_modal_env
 # re-validate the exact file being sent (local, no network)

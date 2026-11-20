@@ -1,0 +1,4 @@
+claude-remotion-skill https://github.com/haidrrrry/claude-remotion-skill.git 1dcbe5e
+dolly https://github.com/pvhuwung/dolly.git a78a821
+hyperframes https://github.com/heygen-com/hyperframes.git e426ce4
+open-3d-skills https://github.com/Moh4696/open-3d-skills.git 53beb89

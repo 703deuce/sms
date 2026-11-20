@@ -1,0 +1,197 @@
+{
+ "duration": 39.789,
+ "cues": [
+  {
+   "type": "impact",
+   "t": 0.75,
+   "gain": 0.5
+  },
+  {
+   "type": "pop",
+   "t": 1.934,
+   "gain": 0.5
+  },
+  {
+   "type": "pop",
+   "t": 3.633,
+   "gain": 0.8
+  },
+  {
+   "type": "whoosh",
+   "t": 3.833,
+   "gain": 0.75
+  },
+  {
+   "type": "stamp",
+   "t": 6.576,
+   "gain": 1.0
+  },
+  {
+   "type": "whoosh",
+   "t": 8.8,
+   "gain": 0.6
+  },
+  {
+   "type": "pop",
+   "t": 9.131,
+   "gain": 0.8
+  },
+  {
+   "type": "click",
+   "t": 9.874,
+   "gain": 0.6
+  },
+  {
+   "type": "pencil",
+   "t": 11.06,
+   "gain": 0.6,
+   "dur": 0.5
+  },
+  {
+   "type": "whoosh",
+   "t": 14.767,
+   "gain": 0.65
+  },
+  {
+   "type": "pop",
+   "t": 14.913,
+   "gain": 0.8
+  },
+  {
+   "type": "slide",
+   "t": 16.24,
+   "gain": 0.5
+  },
+  {
+   "type": "whoosh",
+   "t": 17.1,
+   "gain": 0.74
+  },
+  {
+   "type": "pop",
+   "t": 17.32,
+   "gain": 0.8
+  },
+  {
+   "type": "ticks",
+   "t": 19.453,
+   "gain": 0.6
+  },
+  {
+   "type": "whoosh",
+   "t": 21.067,
+   "gain": 0.76
+  },
+  {
+   "type": "pop",
+   "t": 21.218,
+   "gain": 0.8
+  },
+  {
+   "type": "pencil",
+   "t": 22.047,
+   "gain": 0.6,
+   "dur": 0.5
+  },
+  {
+   "type": "riser",
+   "t": 24.206,
+   "gain": 0.45,
+   "dur": 1.3
+  },
+  {
+   "type": "whoosh",
+   "t": 24.3,
+   "gain": 0.54
+  },
+  {
+   "type": "impact",
+   "t": 25.306,
+   "gain": 0.9
+  },
+  {
+   "type": "boom",
+   "t": 25.456,
+   "gain": 0.6
+  },
+  {
+   "type": "pencil",
+   "t": 25.656,
+   "gain": 0.6,
+   "dur": 0.55
+  },
+  {
+   "type": "impact",
+   "t": 26.181,
+   "gain": 0.35
+  },
+  {
+   "type": "impact",
+   "t": 26.956,
+   "gain": 0.35
+  },
+  {
+   "type": "impact",
+   "t": 27.758,
+   "gain": 0.35
+  },
+  {
+   "type": "whoosh",
+   "t": 28.233,
+   "gain": 0.8
+  },
+  {
+   "type": "pop",
+   "t": 28.428,
+   "gain": 0.8
+  },
+  {
+   "type": "slide",
+   "t": 28.863,
+   "gain": 0.5
+  },
+  {
+   "type": "riser",
+   "t": 30.119,
+   "gain": 0.3,
+   "dur": 1.0
+  },
+  {
+   "type": "whoosh",
+   "t": 30.6,
+   "gain": 0.4
+  },
+  {
+   "type": "pop",
+   "t": 31.714,
+   "gain": 0.5
+  },
+  {
+   "type": "whoosh",
+   "t": 31.864,
+   "gain": 0.4
+  },
+  {
+   "type": "pop",
+   "t": 32.529,
+   "gain": 0.5
+  },
+  {
+   "type": "shimmer",
+   "t": 33.344,
+   "gain": 0.5
+  },
+  {
+   "type": "whoosh",
+   "t": 34.3,
+   "gain": 0.8
+  },
+  {
+   "type": "pencil",
+   "t": 35.414,
+   "gain": 0.6,
+   "dur": 0.55
+  }
+ ],
+ "room_tone": []
+}
