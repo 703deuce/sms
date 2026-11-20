@@ -1,0 +1,102 @@
+"""Offline checks for the private render host (no production server or paid calls)."""
+from __future__ import annotations
+import json
+import os
+from pathlib import Path
+import tempfile
+import threading
+import unittest
+from unittest import mock
+import urllib.error
+import urllib.request
+
+import server
+
+class WorkerTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.patchers=[
+          mock.patch.object(server,"WORK",Path(self.tmp.name)),
+          mock.patch.object(server,"STATE",Path(self.tmp.name)/"queue.json"),
+          mock.patch.object(server,"SECRET","X"*40),
+          mock.patch.object(server,"HOST","transovo.ai"),
+        ]
+        for p in self.patchers:
+            p.start();self.addCleanup(p.stop)
+        server.QUEUE.clear()
+        server.STAGES.clear()
+        server.CURRENT=None
+        server.load()
+    def test_missing_and_wrong_secret(self):
+        self.assertFalse(server.auth_ok(""))
+        self.assertFalse(server.auth_ok("Y"*40))
+        self.assertTrue(server.auth_ok("X"*40))
+    def test_unsafe_job_url_refused(self):
+        job="msaj_1234-1234"
+        valid=server.job_endpoint(job)
+        self.assertTrue(server.valid_url(valid,job))
+        self.assertFalse(server.valid_url("https://other.example"+urllib.request.urlparse(valid).path,job)
+                         if hasattr(urllib.request,"urlparse") else
+                         server.valid_url(valid.replace("transovo.ai","other.example"),job))
+        self.assertFalse(server.valid_url(valid+"?token=secret",job))
+        self.assertFalse(server.valid_url(valid.replace("https:","http:"),job))
+    def test_restart_restores_queue(self):
+        entry={"id":"msaj_1111","token":"x"*64,"url":server.job_endpoint("msaj_1111"),
+               "bundle":"render_bundle_v1.zip","segmentFrames":150,"benchmark":False}
+        server.QUEUE.append(entry)
+        server.atomic_state()
+        self.assertEqual(os.stat(server.STATE).st_mode&0o777,0o600)
+        server.QUEUE.clear()
+        server.load()
+        self.assertEqual(len(server.QUEUE),1)
+        self.assertEqual(server.QUEUE[0]["id"],entry["id"])
+    def test_disk_guard(self):
+        with mock.patch.object(server,"disk_metrics",return_value=(91,1000000)):
+            self.assertEqual(server.disk_ready()[0],False)
+        with mock.patch.object(server,"disk_metrics",return_value=(50,1000000)):
+            self.assertEqual(server.disk_ready(2000000)[0],False)
+    def test_private_duplicate_enqueue(self):
+        with mock.patch.object(server,"verify_job",return_value=True):
+            http=server.ThreadingHTTPServer(("127.0.0.1",0),server.Handler)
+            self.addCleanup(http.server_close)
+            thread=threading.Thread(target=http.serve_forever,daemon=True)
+            thread.start()
+            self.addCleanup(http.shutdown)
+            url=f"http://127.0.0.1:{http.server_address[1]}/enqueue"
+            data={"jobId":"msaj_5555-aaaa","token":"z"*64,
+                  "jobUrl":server.job_endpoint("msaj_5555-aaaa"),
+                  "segmentFrames":150,"bundle":"render_bundle_v1.zip"}
+            headers={"X-Render-Host-Secret":"X"*40,"Content-Type":"application/json"}
+            def post(key="X"*40):
+                req=urllib.request.Request(url,method="POST",
+                     headers={**headers,"X-Render-Host-Secret":key},
+                     data=json.dumps(data).encode())
+                try:
+                    with urllib.request.urlopen(req,timeout=10) as response:
+                        return response.status,json.loads(response.read())
+                except urllib.error.HTTPError as exc:
+                    return exc.code,json.loads(exc.read())
+            status,one=post()
+            again,duplicate=post()
+            self.assertEqual((status,again),(202,200))
+            self.assertFalse(one["alreadyExists"])
+            self.assertTrue(duplicate["alreadyExists"])
+            self.assertEqual(len(server.QUEUE),1)
+            wrong,_=post("invalid")
+            self.assertEqual(wrong,401)
+    def test_cancelled_queued_heartbeat_does_not_log_secret(self):
+        entry={"id":"msaj_9999","token":"private-long-token",
+               "url":server.job_endpoint("msaj_9999")}
+        with mock.patch.object(server.SESSION,"get") as get:
+            get.return_value.status_code=409
+            self.assertFalse(server.isolated_ping(entry))
+    def test_finished_job_temp_cleanup(self):
+        root=server.WORK/"job_msaj_7777"
+        root.mkdir()
+        (root/"partial.tmp").write_text("temporary")
+        server.load()
+        self.assertFalse(root.exists())
+
+if __name__=="__main__":
+    unittest.main()
