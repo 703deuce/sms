@@ -10,6 +10,7 @@ import re
 import shutil
 import signal
 import sys
+import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,6 +23,7 @@ import pipeline
 
 WORK=Path(os.getenv("RENDER_WORK_DIR","/work")).resolve()
 STATE=WORK/"queue.json"
+SCRATCH=WORK/"tmp"
 SECRET=os.getenv("RENDER_HOST_SECRET","")
 HOST=os.getenv("RENDER_ALLOWED_JOB_HOST","transovo.ai")
 WORKERS=max(1,min(32,int(os.getenv("RENDER_SEGMENT_WORKERS","2"))))
@@ -77,6 +79,10 @@ def load():
     global CURRENT
     WORK.mkdir(parents=True,exist_ok=True)
     os.chmod(WORK,0o700)
+    # No jobs run at startup. Old segment/QA temp dirs are expendable;
+    # completed ranges remain registered by the job asset API.
+    if SCRATCH.exists():shutil.rmtree(SCRATCH)
+    SCRATCH.mkdir(mode=0o700)
     if STATE.is_file():
         try:
             data=json.loads(STATE.read_text())
@@ -152,7 +158,6 @@ def do_render(entry):
             return
         os.environ["MOTION_JOB_URL"]=entry["url"]
         os.environ["MOTION_JOB_TOKEN"]=entry["token"]
-        os.nice(NICE)
         stop=pipeline.heartbeat_scope(job_id)
         api=pipeline.api
         api(job_id,"POST","/render-status",{"stage":"queued","completed":0,"total":1})
@@ -179,26 +184,51 @@ def do_render(entry):
             for attempt in range(1,4):
                 if time.monotonic()>=deadline:raise TimeoutError("Render job deadline exceeded")
                 try:
+                    if cancelled.is_set():raise RuntimeError("Render cancelled")
                     result=pipeline.capture_segment(job_id,entry["bundle"],"cpu",
-                                                    first,last,bundle_root=bundle)
+                              first,last,bundle_root=bundle,cancel_event=cancelled)
                     result["retries"]=attempt-1
                     return result
                 except Exception:
                     if attempt>=3:raise
                     time.sleep(attempt*2)
         results=[]
+        cancelled=threading.Event()
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
-            futures=[pool.submit(segment,span) for span in ranges]
-            for f in concurrent.futures.as_completed(futures,timeout=max(1,deadline-time.monotonic())):
-                if not verify_job(entry):
-                    with LOCK:
-                        STAGES[job_id]="cancelled";atomic_state()
-                    return
-                results.append(f.result())
-                api(job_id,"POST","/render-status",{"stage":"rendering",
-                    "completed":len(results),"total":len(ranges)})
+            futures=[]
+            spans=iter(ranges)
+            def schedule():
+                if cancelled.is_set():return
+                try:span=next(spans)
+                except StopIteration:return
+                futures.append(pool.submit(segment,span))
+            for _ in range(WORKERS):schedule()
+            try:
+                while futures:
+                    if time.monotonic()>=deadline:
+                        raise TimeoutError("Render job deadline exceeded")
+                    done,still=concurrent.futures.wait(futures,timeout=2,
+                        return_when=concurrent.futures.FIRST_COMPLETED)
+                    futures=list(still)
+                    if not verify_job(entry):
+                        with LOCK:
+                            STAGES[job_id]="cancelled";atomic_state()
+                        cancelled.set()
+                        return
+                    for finished in done:
+                        results.append(finished.result())
+                        api(job_id,"POST","/render-status",{"stage":"rendering",
+                            "completed":len(results),"total":len(ranges)})
+                        schedule()
+            finally:
+                cancelled.set()
+                for future in futures:future.cancel()
         if time.monotonic()>deadline:raise TimeoutError("Render job deadline exceeded")
         joined=pipeline.join_and_qa(job_id,entry["bundle"],"cpu",results,bundle_root=bundle)
+        if not verify_job(entry):
+            with LOCK:
+                STAGES[job_id]="cancelled";atomic_state()
+            return
         api(job_id,"POST","/render-status",{"stage":"qa_pass"})
         if not entry["benchmark"]:
             api(job_id,"POST","/assets",{"action":"approveMaster",
@@ -218,6 +248,10 @@ def do_render(entry):
     finally:
         if stop:stop.set()
         shutil.rmtree(root,ignore_errors=True)
+        # Normal pipeline TemporaryDirectory() calls live under /work/tmp.
+        for item in SCRATCH.iterdir():
+            if item.is_dir():shutil.rmtree(item,ignore_errors=True)
+            else:item.unlink(missing_ok=True)
         os.environ.pop("MOTION_JOB_TOKEN",None)
         os.environ.pop("MOTION_JOB_URL",None)
 
@@ -278,6 +312,9 @@ class Handler(BaseHTTPRequestHandler):
         if auth_ok(self.headers.get("x-render-host-secret","")):return True
         self.respond(401,{"error":"Unauthorized"});return False
     def do_GET(self):
+        if self.path=="/livez":
+            # Only a liveness bit; no queue/status/credentials exposed.
+            return self.respond(200,{"ok":True})
         if not self.authorized():return
         if self.path=="/health":
             ready,used=disk_ready()
@@ -339,6 +376,11 @@ def main():
     if len(SECRET)<32:raise RuntimeError("RENDER_HOST_SECRET must be configured")
     if not re.fullmatch(r"[a-zA-Z0-9.-]+",HOST):raise RuntimeError("Invalid allowed host")
     load()
+    # Set CPU priority once; os.nice() applies process-wide and must not
+    # accumulate across successive customer jobs.
+    if NICE:os.nice(NICE)
+    os.environ["TMPDIR"]=str(SCRATCH)
+    tempfile.tempdir=str(SCRATCH)
     threading.Thread(target=tick_heartbeats,daemon=True).start()
     threading.Thread(target=consume,daemon=True).start()
     server=ThreadingHTTPServer(("0.0.0.0",int(os.getenv("PORT","8098"))),Handler)
