@@ -6,7 +6,7 @@ import {toPrismaJson} from '@/lib/server/clips/prisma-json'
 
 const db=()=>getPrisma()
 const safe=(v:unknown,max:number)=>typeof v==='string'?v.replace(/[?&](?:X-Amz|token|Signature|access_token)[^\s]*/gi,'[redacted]').slice(0,max):''
-const stages=['queued','rendering','qa_pass','qa_fail','uploaded','completed'] as const
+const stages=['queued','rendering','qa_pass','qa_fail','retrying','needs_fix','attention_required','uploaded','completed'] as const
 type Stage=typeof stages[number]
 const asRecord=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)
   ?x as Record<string,unknown>:{}
@@ -26,16 +26,34 @@ export async function reportModalRenderStatus(id:string,request:Request,raw:unkn
     (!Number.isSafeInteger(completed)||completed<0||!Number.isSafeInteger(total)||
      total<1||completed>total||total>1000000))throw errorResponse('Invalid segment counts')
   const reason=safe(input.reason,1000)
-  if(stage==='qa_fail'&&!reason)throw errorResponse('QA failure reason required')
-  const message=stage==='qa_fail'?'Internal render QA failed':
+  if(['qa_fail','retrying','needs_fix','attention_required'].includes(stage)&&!reason)
+    throw errorResponse('Technical render failure category required')
+  const attempt=input.attempt===undefined?undefined:Number(input.attempt)
+  if(attempt!==undefined&&(!Number.isSafeInteger(attempt)||attempt<0||attempt>3))
+    throw errorResponse('Invalid render attempt count')
+  const masterFilename=safe(input.masterFilename,120)
+  const shareFilename=safe(input.shareFilename,120)
+  const filename=(value:string)=>!value||/^[A-Za-z0-9_.-]{1,120}$/.test(value)
+  if(!filename(masterFilename)||!filename(shareFilename))
+    throw errorResponse('Invalid recovery artifact name')
+  const message=stage==='qa_fail'?'Technical render verification requires repair':
+    stage==='retrying'?'Finishing touches, retrying the final render':
+    stage==='needs_fix'||stage==='attention_required'?'Final render needs team review':
     stage==='rendering'?'Video segments are rendering':
     stage==='completed'?'Render delivery completed':stage
   await db().studioActivityEvent.create({data:{
     projectId:job.projectId,stage:'render',kind:'modal_render',
     message,data:toPrismaJson({jobId:id,stage,
       ...(input.total===undefined?{}:{completed,total}),
-      ...(stage==='qa_fail'?{reason}:{})}),
+      ...(reason?{reason}:{}),
+      ...(attempt!==undefined?{attempt}:{}),
+      ...(masterFilename?{masterFilename}:{}),
+      ...(shareFilename?{shareFilename}:{})}),
   }})
+  if(stage==='attention_required'){
+    console.error('[motion-studio:render] owner attention required',
+      {jobId:id,reason,attempt,masterFilename,shareFilename})
+  }
   return {jobId:id,stage,...(input.total===undefined?{}:{completed,total})}
 }
 export async function readModalRenderStatus(id:string,request:Request){
@@ -48,6 +66,9 @@ export async function readModalRenderStatus(id:string,request:Request){
   const status=asRecord(event?.data)
   return {jobId:id,stage:status.stage??'queued',completed:status.completed??0,
     total:status.total??0,reason:status.reason??null,
+    attempt:status.attempt??null,
+    masterFilename:status.masterFilename??null,
+    shareFilename:status.shareFilename??null,
     updatedAt:event?.createdAt?.toISOString()??null}
 }
 /** Share the existing clips Modal 95%-of-monthly-spend guard, fail closed. */
