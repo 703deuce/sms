@@ -7,12 +7,14 @@ database credentials, B2 credentials, or separate public API.
 
 ## Coolify deployment (operator only)
 
-- Create a **new separate application**, Dockerfile path `Dockerfile.motion-render`.
+- **Before building on sms**, check free disk on the host (already near the 90% safety threshold). A new Node/Chromium image and build cache may need several GB. If storage is tight, remove **only unused images/build cache** while nothing is rendering; never prune volumes or running containers, the live web app, app3, or SMS worker. Check again before build.
+- Create a **new separate application**, Dockerfile path `Dockerfile.motion-render`. Its dedicated `Dockerfile.motion-render.dockerignore` limits the image build context without changing the shared web-app `.dockerignore`.
   Don't edit the existing web app, clips worker or app3. Disable automatic
   deployments; redeploy only while its internal health reports idle.
-- Expose **no public domain**, ingress or subdomain. Bind the HTTP service
+- Expose **no public domain, mapped host port, ingress or subdomain**. Bind the HTTP service
   only to a trusted internal Docker network; do not map port 8098 publicly.
-  The web app's `RENDER_WORKER_URL` is the Docker-internal service address
+  For a Coolify liveness check use `GET /livez` without a secret. The detailed `/health` endpoint **still requires** the shared secret.
+  The web app's `RENDER_WORKER_URL` is the **stable Coolify network service name**, not the transient container name (and it must not start with a digit).
   (for example `http://<internal-service-name>:8098`).
 - Add one **persistent** volume at `/work` (queue JSON contains short-lived
   job credentials and must be private). Store and rotate logs without tokens.
@@ -77,7 +79,7 @@ pressure; operator cleanup is manual and limited to unused images/cache.
 ## Moving to a dedicated render server
 
 Start the same image and volume on that machine. Connect it by private
-network/Tailscale and change **only** the existing web app's
+Tailscale network (preferred, encrypted cross-host) and change **only** the existing web app's
 `RENDER_WORKER_URL` to the new private address. Configure segment workers
 to fit its core count, warm the image, verify a test render and shut down
 the old worker cleanly. No new app URL or DNS needed.
