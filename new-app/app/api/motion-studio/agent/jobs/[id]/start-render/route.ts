@@ -6,6 +6,13 @@ import { MotionStudioError } from '@/lib/server/motion-studio/errors'
 type Ctx={params:Promise<{id:string}>}
 type Artifact={filename?:string;kind?:string;state?:string;key?:string}
 const invalid=(message:string)=>new MotionStudioError('INVALID',message,400)
+const privateWorkerAddress=(address:URL):boolean=>{
+  const host=address.hostname.toLowerCase()
+  const service=/^[a-z][a-z0-9-]{1,62}$/.test(host)&&host!=='localhost'
+  const ip=/^(10|192\\.168|172\\.(1[6-9]|2\\d|3[01])|100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7]))\\.\d{1,3}\\.\d{1,3}$/.test(host)
+  return address.protocol==='http:'&&!address.username&&!address.password&&
+    address.pathname==='/'&&!address.search&&!address.hash&&(service||ip)
+}
 
 /** Job-scoped authenticated producer submission; never exposes the private worker address. */
 export async function POST(request:Request,ctx:Ctx){
@@ -31,9 +38,7 @@ export async function POST(request:Request,ctx:Ctx){
       throw new MotionStudioError('INTERNAL','Private render worker is not configured.',503)
     const upstream=new URL(configured)
     // Only an internal HTTP address is accepted. Never route to a public domain.
-    if(upstream.protocol!=='http:'||upstream.username||upstream.password||
-       upstream.pathname!=='/'||upstream.search||upstream.hash||
-       /^(localhost|127\.|0\.0\.0\.0|transovo\.ai)$/i.test(upstream.hostname))
+    if(!privateWorkerAddress(upstream))
       throw new MotionStudioError('INTERNAL','Private render worker address is invalid.',503)
     const auth=request.headers.get('authorization')||''
     const token=auth.startsWith('Bearer ')?auth.slice(7):''
@@ -80,9 +85,7 @@ export async function GET(request:Request,ctx:Ctx){
     if(!configured||!secret||secret.length<32)
       throw new MotionStudioError('INTERNAL','Private render worker is not configured.',503)
     const worker=new URL(configured)
-    if(worker.protocol!=='http:'||worker.username||worker.password||
-       worker.pathname!=='/'||worker.search||worker.hash||
-       /^(localhost|127\\.|0\\.0\\.0|transovo\\.ai)$/i.test(worker.hostname))
+    if(!privateWorkerAddress(worker))
       throw new MotionStudioError('INTERNAL','Private render worker address is invalid.',503)
     let response:Response
     try{
