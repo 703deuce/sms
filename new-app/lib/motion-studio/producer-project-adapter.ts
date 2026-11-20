@@ -50,7 +50,8 @@ export function validateNativeProducerEnvelope(value:unknown):NativeProducerDocu
        (Number.isSafeInteger(value.parentVersion)&&Number(value.parentVersion)>=1&&Number(value.parentVersion)<Number(value.version)))||
      !object(value.format)||!Array.isArray(value.scenes)||value.scenes.length<1||
      value.scenes.length>1000||!object(value.theme)||!object(value.overrides)||
-     (value.master!=null&&(!object(value.master)||!id(value.master.asset)||!id(value.master.recipe)))||
+     (value.master!=null&&(!object(value.master)||!id(value.master.recipe)||
+       !(id(value.master.asset)||(value.master.asset==null&&value.master.renderedInVersion===0))))||
      !Array.isArray(value.assetRefs)||value.assetRefs.length>10000||
      value.assetRefs.some(v=>!id(v)))
     reject('invalid producer document envelope')
@@ -77,7 +78,8 @@ export function adaptProducerProject(input:ProducerImport):MsPortableManifest{
   }
   // Do not lose the native project's stems/assembly/font/source references.
   for(const ref of native.assetRefs)if(!assetMap.has(ref))reject('native asset missing: '+ref)
-  const critical=native.master?[native.master.asset,native.master.recipe]:[]
+  const critical=native.master?[native.master.recipe,
+    ...(native.master.asset!=null?[native.master.asset]:[])]:[]
   for(const ref of critical)if(!id(ref)||!assetMap.has(ref))reject('master asset missing: '+ref)
   const bundleMap=new Map<string,ProducerSceneBundle>()
   for(const b of input.bundles){
