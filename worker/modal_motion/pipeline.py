@@ -223,7 +223,8 @@ def prepare_upload(job_id,path,filename,kind,mime):
     for attempt in range(1,5):
         try:
             api(job_id,"POST","/assets",
-                {"action":"commit","uploadId":uid,"parts":parts},timeout=60,attempts=2)
+                {"action":"commit","uploadId":uid,"parts":parts,
+                 "retryCommit":attempt>1},timeout=45,attempts=2)
             return uid
         except Exception as exc:
             mismatch="Uploaded size does not match the prepared object" in str(exc)
