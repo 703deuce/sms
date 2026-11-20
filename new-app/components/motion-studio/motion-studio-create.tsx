@@ -32,6 +32,8 @@ import type { MsAssetKind, MsMediaPolicy, MsProjectSummary, MsWorkflow } from '@
 import type { UploadProgress } from '@/lib/clips/upload'
 import { InlineError, MockDataNotice } from './motion-studio-shared'
 import { MotionPoster } from './motion-poster'
+import { CreatorCustomize, DEFAULT_CUSTOMIZE, attachmentRoleChoices, type CustomizeValues } from './creator-customize'
+import { sanitizeProductionBrief, type InputRole } from '@/lib/motion-studio/production-brief'
 
 const MODE_ICON: Record<MsWorkflow, typeof Lightbulb> = { idea: Lightbulb, script: FileText, footage: Film }
 
@@ -41,7 +43,7 @@ type Attachment = {
   kind: MsAssetKind
   progress: UploadProgress
   uploadId: string | null
-  role?: 'logo' | 'reference'
+  role?: InputRole
 }
 
 export const STATUS_TONE: Record<MsProjectSummary['status'], Tone> = {
@@ -83,6 +85,8 @@ export function MotionStudioCreate({
   const router = useRouter()
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
+  const [creationTab,setCreationTab]=useState<'quick'|'customize'>('quick')
+  const [customize,setCustomize]=useState<CustomizeValues>(DEFAULT_CUSTOMIZE)
   const [durationSeconds, setDurationSeconds] = useState<number>(30)
   const [customDuration, setCustomDuration] = useState(false)
   const [durationTouched, setDurationTouched] = useState(false)
@@ -177,7 +181,7 @@ export function MotionStudioCreate({
   )
 
   const addFiles = useCallback(
-    (files: FileList | File[] | null, role?: 'logo' | 'reference') => {
+    (files: FileList | File[] | null, role?: InputRole) => {
       if (!files) return
       const list = [...files].filter((f) => !f.name.startsWith('.'))
       if (!list.length) return
@@ -275,7 +279,7 @@ export function MotionStudioCreate({
   const uploading = attachments.some((a) => a.progress.state === 'uploading' || a.progress.state === 'finalizing')
   const ready = attachments.filter((a) => a.uploadId)
   const hasInput =
-    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && !a.role)
+    workflow === 'idea' ? prompt.trim().length > 0 || (videoType !== 'anything' && ready.length > 0) : workflow === 'script' ? script.trim().length > 0 || ready.some((a) => a.kind === 'script' || a.kind === 'audio') || prompt.trim().length > 0 : ready.some((a) => a.kind === 'video' && (!a.role || a.role === 'talking_head' || a.role === 'footage'))
   const canStart = hasInput && !uploading && !starting && (brandMode !== 'saved' || !!brandKitId)
 
   const start = async () => {
@@ -284,11 +288,47 @@ export function MotionStudioCreate({
     setError(null)
     console.info('[motion-studio:ui] start', { workflow, uploads: ready.length, promptChars: prompt.length })
     try {
+      const inputs=ready.map(a=>({
+        uploadId:a.uploadId as string,filename:a.file.name,mime:a.file.type||
+          (a.kind==='script'?'text/plain':'application/octet-stream'),
+        role:a.role || (a.kind==='video'?'footage':a.kind==='photo'?'photo':a.kind==='audio'?'music':'script')
+      }))
+      const narrationUpload=inputs.find(a=>a.role===customize.narrationMode)
+      const musicUpload=inputs.find(a=>a.role==='music')
+      const scriptUpload=inputs.find(a=>a.role==='script')
+      const requestedNarration=(creationTab==='customize'?customize.narrationMode:
+        customize.voice?.voiceSource==='cloned'?'cloned_voice':'ai_voice')
+      const productionBrief=sanitizeProductionBrief({
+        prompt:prompt.trim(),workflow,videoType,durationSeconds,aspectRatio:format,resolution,
+        style:{id:style,custom:customStyle},
+        brand:{videoType,style,customStyle,instructions:creativeInstructions,brandMode,brandKitId,
+          brand:brandMode==='project'?brandProfile:undefined,
+          referenceUploadIds:ready.filter(a=>a.role==='reference').map(a=>a.uploadId)},
+        ...(script.trim()||scriptUpload?{script:{text:script.trim(),uploadId:scriptUpload?.uploadId,
+          handling:customize.scriptHandling}}:{}),
+        ...(customize.commentary.trim()?{commentary:{text:customize.commentary}}:{}),
+        referenceLinks:customize.links.filter(l=>l.url.trim()),
+        audience:customize.audience,
+        tone:{preset:customize.tonePreset,text:customize.toneText},
+        sourcePreferences:{text:customize.sourceText,
+          preferPrimaryFootage:customize.preferPrimaryFootage,
+          preferOriginalInterviews:customize.preferOriginalInterviews,
+          preferDocuments:customize.preferDocuments,
+          domains:customize.domains.split(',').map(d=>d.trim()).filter(Boolean)},
+        narration:{mode:requestedNarration,
+          ...(customize.voice?{voiceId:customize.voice.voiceId,
+            voiceName:customize.voice.voiceName,voiceSource:customize.voice.voiceSource}:{}),
+          uploadId:narrationUpload?.uploadId},
+        music:{mode:customize.musicMode,uploadId:musicUpload?.uploadId,
+          placement:customize.musicPlacement},inputs,
+      })
       const project = await client.createProject({
         workflow,
         prompt: prompt.trim(),
-        script: workflow === 'idea' ? null : script.trim() || null,
-        uploads: ready.filter(a => a.role !== 'logo' || brandMode === 'project').map((a) => ({ uploadId: a.uploadId as string, kind: a.kind, label: a.file.name })),
+        script: (creationTab==='customize'||workflow!=='idea')?script.trim()||null:null,
+        uploads: ready.filter(a => a.role !== 'logo' || brandMode === 'project').map((a) => ({
+          uploadId: a.uploadId as string, kind: a.kind, label: a.file.name,
+          role:a.role||undefined })),
         mediaPolicy: 'auto_plus_uploads',
         durationSeconds,
         format: `${format}_${resolution}`,
@@ -297,6 +337,7 @@ export function MotionStudioCreate({
           brandKitId: brandMode === 'saved' ? brandKitId : undefined,
           brand: brandMode === 'project' ? brandProfile : undefined,
           referenceUploadIds: ready.filter(a => a.role === 'reference').map(a => a.uploadId as string) },
+        productionBrief,
         idempotencyKey: idemKey.current,
       })
       if (client.mode === 'live') {
@@ -350,6 +391,16 @@ export function MotionStudioCreate({
                 {MS_LABELS.headline}
               </h2>
               <p className="text-sm text-muted-foreground">{MS_LABELS.subhead}</p>
+            </div>
+            <div className="mx-auto flex w-full max-w-md rounded-xl border border-border bg-muted/50 p-1.5 shadow-inner" role="tablist" aria-label="Creation mode">
+              <button role="tab" aria-selected={creationTab==='quick'} type="button" data-testid="ms-tab-quick"
+                className={cn('flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-all',
+                  creationTab==='quick'?'bg-card text-foreground shadow-sm ring-1 ring-border':'text-muted-foreground hover:text-foreground')}
+                onClick={()=>setCreationTab('quick')}>Quick Create</button>
+              <button role="tab" aria-selected={creationTab==='customize'} type="button" data-testid="ms-tab-customize"
+                className={cn('flex-1 rounded-lg px-4 py-3 text-sm font-semibold transition-all',
+                  creationTab==='customize'?'bg-card text-foreground shadow-sm ring-1 ring-border':'text-muted-foreground hover:text-foreground')}
+                onClick={()=>setCreationTab('customize')}>Customize</button>
             </div>
             <section className="rounded-xl border border-border bg-card p-4" aria-label="Video type">
               <label htmlFor="ms-video-type" className="mb-2 block text-sm font-medium">What kind of video are you creating?</label>
@@ -550,6 +601,10 @@ export function MotionStudioCreate({
                 </div>
               </div>
             </div>
+
+            {creationTab==='customize'?<CreatorCustomize client={client} value={customize}
+              onChange={setCustomize} script={script} onScript={setScript}
+              onFiles={(files,role)=>addFiles(files,role)} onError={setError}/>:null}
 
             <div role="radiogroup" aria-label="How do you want to start?" className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               {MS_WORKFLOWS.map((w) => {
