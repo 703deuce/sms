@@ -146,8 +146,21 @@ def main():
             except (requests.RequestException,RuntimeError):
                 if attempt==0:time.sleep(2)
         if not launched:
-            if not fallback:fail("Private render worker unavailable; Modal fallback is disabled")
-            modal_submit(jobdir,metadata)
+            # A POST can time out after the worker already accepted it.
+            # Query the authoritative internal queue before considering Modal.
+            try: probe=request("GET",start,token)
+            except (requests.RequestException,RuntimeError):
+                fail("Renderer status uncertain; do not risk a second backend")
+            stage=probe.get("stage")
+            if stage in ("queued","running","rendering","qa_pass","uploaded","completed"):
+                metadata["renderId"]=jobid
+                metadata["alreadyExists"]=True
+                launched=True
+            elif stage=="unknown":
+                if not fallback:fail("Private render worker unavailable; Modal fallback is disabled")
+                modal_submit(jobdir,metadata)
+            else:
+                fail("Private render already failed or was cancelled; do not resubmit")
     output.parent.mkdir(parents=True,exist_ok=True)
     output.write_text(json.dumps(metadata,indent=2)+"\n")
     print(json.dumps({"jobId":jobid,"backend":metadata["backend"],
