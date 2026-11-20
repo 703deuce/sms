@@ -9,7 +9,14 @@ const invalid=(message:string)=>new MotionStudioError('INVALID',message,400)
 const privateWorkerAddress=(address:URL):boolean=>{
   const host=address.hostname.toLowerCase()
   const service=/^[a-z][a-z0-9-]{1,62}$/.test(host)&&host!=='localhost'
-  const ip=/^(10|192\\.168|172\\.(1[6-9]|2\\d|3[01])|100\\.(6[4-9]|[7-9]\\d|1[01]\\d|12[0-7]))\\.\d{1,3}\\.\d{1,3}$/.test(host)
+  const parts=host.split('.')
+  const ipv4=parts.length===4&&parts.every(p=>p.length>0&&p.length<=3&&
+    [...p].every(ch=>ch>='0'&&ch<='9')&&Number(p)<=255)
+  const nums=parts.map(Number)
+  const ip=ipv4&&(nums[0]===10||
+    (nums[0]===192&&nums[1]===168)||
+    (nums[0]===172&&nums[1]>=16&&nums[1]<=31)||
+    (nums[0]===100&&nums[1]>=64&&nums[1]<=127))
   return address.protocol==='http:'&&!address.username&&!address.password&&
     address.pathname==='/'&&!address.search&&!address.hash&&(service||ip)
 }
