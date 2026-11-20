@@ -296,13 +296,23 @@ export async function createProject(workspaceId: string, userId: string, body: u
     input.filename=row.filename
     if((input.role==='talking_head'||input.role==='footage')&&!row.mime.startsWith('video/')
        || (input.role==='narration'||input.role==='music')&&!row.mime.startsWith('audio/')
-       || (input.role==='photo'||input.role==='logo')&&!row.mime.startsWith('image/'))
+       || (input.role==='photo'||input.role==='logo')&&!row.mime.startsWith('image/')
+       || input.role==='reference'&&!row.mime.startsWith('video/')&&!row.mime.startsWith('image/')
+       || input.role==='script'&&(row.mime.startsWith('video/')||row.mime.startsWith('image/')||row.mime.startsWith('audio/')))
       throw new MotionStudioError('INVALID','Upload role does not match file type.',400)
     const present=allUploads.find(u=>u.uploadId===input.uploadId)
     if(present)present.role=input.role
   }
   if(productionBrief.narration.uploadId&&!readyIds.has(productionBrief.narration.uploadId))
     throw new MotionStudioError('INVALID','Narration upload is missing.',400)
+  if(['uploaded_narration','talking_head'].includes(productionBrief.narration.mode)){
+    const role=productionBrief.narration.mode==='uploaded_narration'?'narration':'talking_head'
+    if(!productionBrief.inputs.some(i=>i.uploadId===productionBrief.narration.uploadId&&i.role===role))
+      throw new MotionStudioError('INVALID','Select a matching recorded narration or camera file.',400)
+  }
+  if(productionBrief.music.mode==='upload'&&
+    !productionBrief.inputs.some(i=>i.uploadId===productionBrief.music.uploadId&&i.role==='music'))
+    throw new MotionStudioError('INVALID','Select your uploaded music track.',400)
   if(productionBrief.music.uploadId&&!readyIds.has(productionBrief.music.uploadId))
     throw new MotionStudioError('INVALID','Music upload is missing.',400)
   if(productionBrief.script?.uploadId&&!readyIds.has(productionBrief.script.uploadId))
