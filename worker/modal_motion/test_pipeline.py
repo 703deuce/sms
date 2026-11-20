@@ -117,6 +117,32 @@ class BundleTests(unittest.TestCase):
         with patch("pipeline.ffprobe",return_value=probe),patch("pipeline.checked",side_effect=ffmpeg):
             with self.assertRaisesRegex(ValueError,"silent"):
                 qa_video("film.mp4",150,30,854,480)
+    def test_segment_upload_retry_does_not_relaunch_chromium(self):
+        root=self.root/"ready_bundle"
+        root.mkdir()
+        (root/"project.json").write_text(json.dumps({"width":854,"height":480,
+            "fps":30,"frameCount":150,"composition":{"entryFile":"index.html"}}))
+        (root/"index.html").write_text("window.__scene={seek:()=>{}}")
+        rendered=[]
+        saved=[]
+        def render(cmd,timeout=1800,cancel_event=None):
+            rendered.append(cmd)
+            Path(cmd[4]).write_bytes(b"already rendered")
+            return "",""
+        def save(job,source,name,kind,mime):
+            saved.append(name)
+            if len(saved)==1:raise RuntimeError("Uploaded size does not match the prepared object")
+            return "existing_upload_id"
+        with patch("pipeline.ready_url",return_value=None),\
+             patch("pipeline.heartbeat_scope",return_value=threading.Event()),\
+             patch("pipeline.checked",side_effect=render),\
+             patch("pipeline.prepare_upload",side_effect=save),\
+             patch("pipeline.time.sleep",return_value=None):
+            result=capture_segment("msaj_fake","render_bundle_v1.zip","cpu",0,150,
+                                   bundle_root=root)
+        self.assertEqual(len(rendered),1)
+        self.assertEqual(len(saved),2)
+        self.assertFalse(result["skipped"])
     def test_reject_missing_composition(self):
         source=self.build(entry="missing.html")
         (self.root/"work").mkdir()
