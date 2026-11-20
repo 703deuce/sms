@@ -158,6 +158,9 @@ def do_render(entry):
         size=int(meta.get("bytes") or 0)
         required=max(0,size)*4+2_000_000_000
         if disk_metrics()[1]<required:raise RuntimeError("render host disk full")
+        # Restarts reuse committed segments; stale local ZIP extraction must not
+        # collide with extract_bundle's freshly created bundle directory.
+        if root.exists():shutil.rmtree(root)
         root.mkdir(parents=True,exist_ok=True)
         bundle,project,_,_=pipeline.extract_bundle(job_id,entry["bundle"],str(root))
         frames=int(project["frameCount"])
