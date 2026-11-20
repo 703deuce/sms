@@ -91,6 +91,51 @@ class WorkerTests(unittest.TestCase):
         with mock.patch.object(server.SESSION,"get") as get:
             get.return_value.status_code=409
             self.assertFalse(server.isolated_ping(entry))
+    def test_one_current_job_and_fifo_queue_only(self):
+        first={"id":"msaj_first","token":"x"*64,"url":server.job_endpoint("msaj_first")}
+        second={"id":"msaj_second","token":"x"*64,"url":server.job_endpoint("msaj_second")}
+        server.CURRENT=first
+        server.QUEUE.append(second)
+        server.atomic_state()
+        stored=json.loads(server.STATE.read_text())
+        self.assertEqual(stored["running"]["id"],first["id"])
+        self.assertEqual([i["id"] for i in stored["queue"]],[second["id"]])
+    def test_failed_and_cancelled_scratch_deleted(self):
+        for stage in ("failed","cancelled"):
+            root=server.WORK/("job_msaj_"+stage)
+            root.mkdir()
+            (root/"unused.mp4").write_bytes(b"unsafe")
+            # On startup, orphan temporary files must be removed regardless of state.
+            server.STAGES["msaj_"+stage]=stage
+            server.atomic_state()
+            server.load()
+            self.assertFalse(root.exists())
+    def test_no_token_or_signed_url_in_public_liveness_or_queue_response(self):
+        with mock.patch.object(server,"verify_job",return_value=True):
+            http=server.ThreadingHTTPServer(("127.0.0.1",0),server.Handler)
+            self.addCleanup(http.server_close)
+            thread=threading.Thread(target=http.serve_forever,daemon=True)
+            thread.start()
+            self.addCleanup(http.shutdown)
+            origin=f"http://127.0.0.1:{http.server_address[1]}"
+            entry={"jobId":"msaj_secret-test","token":"super_private_test_token_987654",
+                "jobUrl":server.job_endpoint("msaj_secret-test"),
+                "segmentFrames":150,"bundle":"render_bundle_v1.zip"}
+            body=json.dumps(entry).encode()
+            req=urllib.request.Request(origin+"/enqueue",data=body,method="POST",
+                headers={"X-Render-Host-Secret":"X"*40,"Content-Type":"application/json"})
+            with urllib.request.urlopen(req,timeout=5) as r:
+                submitted=r.read().decode()
+            with urllib.request.urlopen(origin+"/livez",timeout=5) as r:
+                live=r.read().decode()
+            status_req=urllib.request.Request(origin+"/jobs/msaj_secret-test",
+                headers={"X-Render-Host-Secret":"X"*40})
+            with urllib.request.urlopen(status_req,timeout=5) as r:
+                status=r.read().decode()
+            for answer in (submitted,live,status):
+                self.assertNotIn("super_private_test_token",answer)
+                self.assertNotIn("https://",answer)
+            self.assertEqual(json.loads(live),{"ok":True})
     def test_finished_job_temp_cleanup(self):
         root=server.WORK/"job_msaj_7777"
         root.mkdir()
