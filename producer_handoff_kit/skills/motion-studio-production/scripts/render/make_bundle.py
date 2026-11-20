@@ -67,7 +67,19 @@ def check_page(root,entry,project):
           str(project["fps"]),str(project["frameCount"])],
           stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,timeout=180)
     if result.returncode:
-        raise ValueError("Composed browser page did not pass seek checks")
+        # Only report fixed categories; never echo browser stderr containing
+        # job media paths, signed asset URLs or private page content.
+        diagnostic=(result.stderr or "").lower()
+        if "puppeteer-core missing" in diagnostic:
+            reason="puppeteer-core not found"
+        elif ("browser not found" in diagnostic or
+              "failed to launch the browser" in diagnostic or
+              "could not find chrome" in diagnostic or
+              "enoent" in diagnostic):
+            reason="browser not found"
+        else:
+            reason="seek check failed"
+        raise ValueError(reason)
 
 def main():
     parser=argparse.ArgumentParser()
@@ -141,7 +153,12 @@ def main():
 if __name__=="__main__":
     try:main()
     except (ValueError,OSError,KeyError,json.JSONDecodeError,subprocess.TimeoutExpired,
-            zipfile.BadZipFile):
-        print("Render bundle validation failed; inspect composition and project metadata.",
-              file=sys.stderr)
+            zipfile.BadZipFile) as exc:
+        # Safe, intentionally bounded error classes only. Raw exceptions may
+        # contain absolute paths or signed asset URLs and must never be printed.
+        message=str(exc).lower()
+        allowed=("browser not found","puppeteer-core not found","seek check failed")
+        reason=next((label for label in allowed if label in message),
+                    "invalid composition or project metadata")
+        print("Render bundle validation failed: "+reason,file=sys.stderr)
         raise SystemExit(2)
