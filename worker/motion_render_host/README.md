@@ -83,3 +83,37 @@ Tailscale network (preferred, encrypted cross-host) and change **only** the exis
 `RENDER_WORKER_URL` to the new private address. Configure segment workers
 to fit its core count, warm the image, verify a test render and shut down
 the old worker cleanly. No new app URL or DNS needed.
+
+## Technical QA and recovery (Nov 20)
+
+The film's appearance is approved by the Producer before render. **The renderer
+does not run blackdetect, mpdecimate, brightness, contrast, layout, or
+creative-design checks.** Its QA validates full decode, exact frame count,
+frame rate, resolution, durations, non-silent audio and container integrity.
+Loudness is reported, not a customer-visible design warning.
+
+The join stage uploads `master_cpu.mp4` and `share_cpu.mp4` before a
+technical QA pass is required, and preserves the same files under
+`/work/job_<jobId>/recovery/` until the job is delivered or explicitly
+resolved. Existing registered frame ranges remain reusable; a technical
+failure does **not** call `/complete {status:"failed"}`. The worker makes
+one automatic whole-job retry using those frame receipts, reports
+`retrying` through the authenticated render-status API, then records
+`attention_required` (including category, attempt count and asset names)
+and writes a safe owner-attention log. The customer receives a truthful
+`fixing` progress update while the assignment stays open.
+
+The authenticated `GET .../render-status` endpoint exposes repair details to
+the Producer/owner; `GET .../render-asset?filename=master_cpu.mp4` (or
+`share_cpu.mp4` / `qa_frame_cpu.png`) provides short-lived links if those
+assets have been registered. When file creation fails before there is a
+master/share, only completed segments can be preserved. Do not present a
+partial file as a finished movie. An actual outbound owner push notification
+has **not** been wired to an external notification destination; the durable
+activity event and operator log are the alert surfaces for now.
+
+Before a producer resubmits a **changed composition** on the same job, verify
+that prior segment receipts match that composition. Segment filenames encode
+frame ranges but not bundle hashes; reusing old segments after changing their
+content is unsafe and must not be done without invalidation. Technical
+retries of the **same** bundle reuse the same registered segments.
