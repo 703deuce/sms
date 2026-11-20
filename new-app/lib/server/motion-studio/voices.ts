@@ -44,7 +44,7 @@ export async function listVoices(workspaceId:string,userId:string){
    }).catch(()=>{})
    return {voiceId:row.voiceId,name:row.name,description:row.description,gender:row.gender,
      accent:row.accent,previewUrl,source:'stock' as const}
- })))
+ }))
  const myVoices=await Promise.all(my.map(async row=>{
    let previewUrl=row.previewUrl||await officialPreview(row.voiceId)
    if(!previewUrl&&row.sampleUploadId){
