@@ -102,6 +102,10 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   out.webResearch = out.webResearch === true
   if (typeof o.preflightOnly === 'boolean') out.preflightOnly = o.preflightOnly
   if (o.creative) out.creative = sanitizeCreativeBrief(o.creative)
+  if (o.productionBrief) {
+    try {out.productionBrief=sanitizeProductionBrief(o.productionBrief)}
+    catch {/* Older/invalid project settings must not block opening the project. */}
+  }
   const FORMAT_RE = /^(16:9|9:16|1:1)_(480p|720p|1080p|2160p)$/
   if (typeof o.format === 'string' && FORMAT_RE.test(o.format)) out.format = o.format as MsSettings['format']
   const rs = typeof o.renderSize === 'string' ? o.renderSize.trim().toLowerCase()
@@ -258,7 +262,10 @@ export async function createProject(workspaceId: string, userId: string, body: u
   // Validate every referenced brand asset independently of user-upload metadata.
   const extraIds = [creative.brandMode !== 'none' ? creative.brand?.logoUploadId : undefined, ...(creative.referenceUploadIds || [])].filter((x): x is string => Boolean(x))
   const allUploads = [...uploads]
-  for (const uploadId of extraIds) if (!allUploads.some(x => x.uploadId === uploadId)) allUploads.push({ uploadId, kind: 'photo' })
+  for (const uploadId of extraIds) if (!allUploads.some(x => x.uploadId === uploadId)) {
+    allUploads.push({ uploadId, kind: 'photo',
+      role:creative.brand?.logoUploadId===uploadId?'logo':'reference' })
+  }
   const rows = await loadUploads(workspaceId, allUploads.map(u => u.uploadId))
   if (creative.brand?.logoUploadId && !['image/png','image/jpeg','image/webp'].includes(rows.get(creative.brand.logoUploadId)?.mime || '')) throw new MotionStudioError('INVALID', 'Brand logo must be an image.', 400)
   if (creative.referenceUploadIds?.some(id => !rows.get(id)?.mime.startsWith('image/') && !rows.get(id)?.mime.startsWith('video/'))) throw new MotionStudioError('INVALID', 'References must be images or video.', 400)
