@@ -291,6 +291,27 @@ def qa_video(path,expected_frames,fps,expected_width=None,expected_height=None):
             "audioPeakDb":peak,"width":video["width"],"height":video["height"],
             "fps":fps}
 
+def repair_loudness_if_needed(master):
+    """Normalize again without re-encoding video when final LUFS drifted."""
+    try:
+        _,log=checked(["ffmpeg","-nostdin","-hide_banner","-i",master,"-vn",
+          "-af","ebur128=peak=true","-f","null","-"],timeout=1800)
+        readings=re.findall(r"I:\\s*(-?[0-9.]+) LUFS",log)
+        measured=float(readings[-1]) if readings else None
+        if measured is None or -16.5<=measured<=-13.5:return False
+        corrected=os.path.join(os.path.dirname(master),"renormalized.mp4")
+        checked(["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-y",
+          "-i",master,"-map","0:v:0","-map","0:a:0","-c:v","copy",
+          "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
+          "-c:a","aac","-b:a","192k","-movflags","+faststart",corrected],
+          timeout=3600)
+        os.replace(corrected,master)
+        return True
+    except Exception:
+        # Integrity/decode checks still run in qa_video. A loudness-only
+        # mismatch never destroys an otherwise usable film.
+        return False
+
 def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None,recovery_dir=None):
     start=time.monotonic()
     stop=heartbeat_scope(job_id)
@@ -327,6 +348,9 @@ def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None,recovery_dir=N
               "-level:v","4.2","-pix_fmt","yuv420p","-movflags","+faststart",
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
               "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
+            # The first mux already normalizes audio. Only if its integrated
+            # level drifted, repair that audio stream without re-encoding video.
+            repair_loudness_if_needed(master)
             # Register a diagnostic master BEFORE QA; a technical QA failure
             # must not destroy the only finished film.
             if recovery_dir:
