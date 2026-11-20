@@ -108,6 +108,23 @@ export function CreatorCustomize({client,value,onChange,script,onScript,onFiles,
     <input value={value.domains} onChange={e=>patch({domains:e.target.value})} className={`mt-3 ${control}`} aria-label="Preferred domains" placeholder="Preferred domains, separated by commas"/>
    </div>
   </Block>
+  <Block icon={Video} title="Your footage and photos" detail="Supply the moments and imagery that make this film yours. Every file can be given a purpose.">
+   <div className="grid gap-3 sm:grid-cols-2">
+    <label className="group flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-center transition-colors hover:bg-primary/10">
+     <Video className="size-7 text-primary"/><span className="text-sm font-semibold">Add video footage</span>
+     <span className="text-xs text-muted-foreground">Clips, B-roll and source video</span>
+     <input type="file" multiple accept="video/*" className="sr-only"
+      onChange={e=>{onFiles(e.target.files,'footage');e.target.value=''}}/>
+    </label>
+    <label className="group flex min-h-28 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-center transition-colors hover:bg-primary/10">
+     <Upload className="size-7 text-primary"/><span className="text-sm font-semibold">Add photos and stills</span>
+     <span className="text-xs text-muted-foreground">People, documents and other images</span>
+     <input type="file" multiple accept="image/*" className="sr-only"
+      onChange={e=>{onFiles(e.target.files,'photo');e.target.value=''}}/>
+    </label>
+   </div>
+   <p className="mt-3 text-xs text-muted-foreground">After upload, use the role selector beside each attachment to tell Transovo how it should be used.</p>
+  </Block>
   <Block icon={Mic2} title="Narration and voice" detail="Choose a narrator, use your own voiceover, or put yourself on camera.">
    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
     {([{id:'ai_voice',name:'AI narrator',description:'Studio voices'},
