@@ -99,7 +99,9 @@ def load():
             raise RuntimeError("Invalid persistent render queue; manual recovery required")
     # Only delete orphaned per-job temporary folders; never touch other volumes.
     for folder in WORK.glob("job_*"):
-        if folder.is_dir() and not any(folder.name=="job_"+x["id"] for x in QUEUE):
+        job_id=folder.name[4:]
+        if (folder.is_dir() and not any(folder.name=="job_"+x["id"] for x in QUEUE)
+            and STAGES.get(job_id) in ("completed","qa_pass","cancelled")):
             shutil.rmtree(folder)
     CURRENT=None
     atomic_state()
@@ -135,18 +137,52 @@ def tick_heartbeats():
                     atomic_state()
         time.sleep(100)
 
-def fail(entry,reason,report=True):
+def technical_failure(entry,reason):
+    """Keep job open, retry once with already-registered segments, then escalate."""
+    job_id=entry["id"]
+    count=int(entry.get("attempt",0))+1
+    entry["attempt"]=count
+    retry=count<2
+    stage="retrying" if retry else "attention_required"
+    # Only a small, known technical category leaves this worker; arbitrary
+    # ffmpeg stderr can expose paths or signed source URLs.
+    low=str(reason).lower()
+    categories=(
+        ("missing video segment","missing_segment"),
+        ("frame count","frame_count"),
+        ("duration","duration"),
+        ("audio","audio"),
+        ("resolution","resolution"),
+        ("frame rate","frame_rate"),
+        ("decode","decode"),
+        ("disk full","disk_full"),
+        ("deadline","timeout"),
+    )
+    category=next((label for key,label in categories if key in low),"technical_render_failure")
     with LOCK:
-        STAGES[entry["id"]]="failed"
+        STAGES[job_id]=stage
+        if retry and not any(x["id"]==job_id for x in QUEUE):
+            QUEUE.insert(0,entry)
         atomic_state()
-    if report:
-        try:
-            pipeline.api(entry["id"],"POST","/render-status",
-                {"stage":"qa_fail","reason":re.sub(r"https?://\S+","[url]",reason)[:800]})
-        except Exception:pass
-        if not entry["benchmark"]:
-            try:pipeline.api(entry["id"],"POST","/complete",{"status":"failed"})
-            except Exception:pass
+    details={"stage":stage,"reason":category,"attempt":count,
+             "masterFilename":"master_cpu.mp4","shareFilename":"share_cpu.mp4",
+             "diagnosticPath":"recovery/master.mp4"}
+    try:
+        pipeline.api(job_id,"POST","/render-status",details)
+        pipeline.api(job_id,"POST","/progress",{
+            "stage":"fixing","percent":89 if retry else 90,
+            "message":("Finishing touches, retrying the final render" if retry else
+                       "Our team is reviewing the final render")})
+    except Exception:
+        pass
+    # Durable operator-visible event via /render-status, plus safe server log.
+    if not retry:
+        print("render needs owner attention: job="+job_id+" check="+category,flush=True)
+    return retry
+
+def fail(entry,reason,report=True):
+    # Kept for timeout and disk-pressure callsites.
+    return technical_failure(entry,reason) if report else False
 
 def do_render(entry):
     global LAST_DISK_ERROR
@@ -170,10 +206,11 @@ def do_render(entry):
         size=int(meta.get("bytes") or 0)
         required=max(0,size)*4+2_000_000_000
         if disk_metrics()[1]<required:raise RuntimeError("render host disk full")
-        # Restarts reuse committed segments; stale local ZIP extraction must not
-        # collide with extract_bundle's freshly created bundle directory.
-        if root.exists():shutil.rmtree(root)
+        # Preserve recovery/master.mp4 and recovery/share.mp4 across retries.
+        # Only the extracted ZIP is rebuilt; segment receipts are reusable.
         root.mkdir(parents=True,exist_ok=True)
+        (root/"bundle.zip").unlink(missing_ok=True)
+        if (root/"bundle").exists():shutil.rmtree(root/"bundle")
         bundle,project,_,_=pipeline.extract_bundle(job_id,entry["bundle"],str(root))
         frames=int(project["frameCount"])
         ranges=[(x,min(frames,x+entry["segmentFrames"]))
@@ -232,7 +269,8 @@ def do_render(entry):
                 cancelled.set()
                 for future in futures:future.cancel()
         if time.monotonic()>deadline:raise TimeoutError("Render job deadline exceeded")
-        joined=pipeline.join_and_qa(job_id,entry["bundle"],"cpu",results,bundle_root=bundle)
+        joined=pipeline.join_and_qa(job_id,entry["bundle"],"cpu",results,
+                                   bundle_root=bundle,recovery_dir=str(root/"recovery"))
         if not verify_job(entry):
             with LOCK:
                 STAGES[job_id]="cancelled";atomic_state()
@@ -261,10 +299,13 @@ def do_render(entry):
             with LOCK:
                 STAGES[job_id]="cancelled";atomic_state()
         else:
-            fail(entry,message)
+            technical_failure(entry,message)
     finally:
         if stop:stop.set()
-        shutil.rmtree(root,ignore_errors=True)
+        # Only clean the local job after confirmed successful delivery.
+        # Attention-required jobs retain the master/share and source bundle.
+        if STAGES.get(job_id) in ("completed","qa_pass"):
+            shutil.rmtree(root,ignore_errors=True)
         # Normal pipeline TemporaryDirectory() calls live under /work/tmp.
         for item in SCRATCH.iterdir():
             if item.is_dir():shutil.rmtree(item,ignore_errors=True)
@@ -295,7 +336,7 @@ def consume():
                         atomic_state()
                 os.environ["MOTION_JOB_URL"]=entry["url"]
                 os.environ["MOTION_JOB_TOKEN"]=entry["token"]
-                fail(entry,"render host disk full")
+                technical_failure(entry,"render host disk full")
                 os.environ.pop("MOTION_JOB_URL",None)
                 os.environ.pop("MOTION_JOB_TOKEN",None)
                 with LOCK:CURRENT=None;atomic_state()
