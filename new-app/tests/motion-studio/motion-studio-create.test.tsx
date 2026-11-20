@@ -33,6 +33,48 @@ describe('Motion Studio create screen (FE-1)', () => {
     expect(container.textContent).not.toMatch(/\$/)
   })
 
+  it('starts in Quick Create and hides optional Customize sections without changing Start',()=>{
+    render(<MotionStudioCreate client={createMockMotionStudioClient({storage:null,seedExample:false})} initialView="create"/>)
+    expect(screen.getByTestId('ms-tab-quick').getAttribute('aria-selected')).toBe('true')
+    expect(screen.queryByTestId('ms-customize-sections')).toBeNull()
+    expect(screen.getByTestId('ms-start').textContent).toContain('Start')
+    expect(screen.getByTestId('ms-creative-style')).toBeTruthy()
+    expect(screen.getByTestId('ms-brand-mode')).toBeTruthy()
+  })
+
+  it('keeps Customize content when toggling back to Quick, and Start sends an annotated brief',async()=>{
+    const client=createMockMotionStudioClient({storage:null,seedExample:false})
+    const spy=vi.spyOn(client,'createProject')
+    render(<MotionStudioCreate client={client} initialView="create"/>)
+    fireEvent.change(screen.getByTestId('ms-prompt'),{target:{value:'Create a music documentary'}})
+    fireEvent.click(screen.getByTestId('ms-tab-customize'))
+    fireEvent.change(screen.getByLabelText('Personal commentary'),
+      {target:{value:'I believe this artist was ahead of the culture.'}})
+    fireEvent.change(screen.getByLabelText('Custom script'),
+      {target:{value:'This is a draft about the artist.'}})
+    fireEvent.click(screen.getByText('Improve my draft'))
+    fireEvent.click(screen.getByText('Add source link'))
+    fireEvent.change(screen.getByLabelText('Reference URL 1'),
+      {target:{value:'https://example.com/interview'}})
+    fireEvent.click(screen.getByText('No music'))
+    fireEvent.change(screen.getByPlaceholderText('e.g. YouTube documentary viewers, new customers, longtime fans'),
+      {target:{value:'YouTube documentary viewers'}})
+    fireEvent.click(screen.getByTestId('ms-tab-quick'))
+    expect(screen.queryByTestId('ms-customize-sections')).toBeNull()
+    fireEvent.click(screen.getByTestId('ms-tab-customize'))
+    expect((screen.getByLabelText('Personal commentary') as HTMLTextAreaElement).value)
+      .toBe('I believe this artist was ahead of the culture.')
+    fireEvent.click(screen.getByTestId('ms-start'))
+    await waitFor(()=>expect(spy).toHaveBeenCalled())
+    const payload=spy.mock.calls[0]![0].productionBrief!
+    expect(payload.prompt).toBe('Create a music documentary')
+    expect(payload.script?.handling).toBe('improve')
+    expect(payload.commentary?.handling).toBe('creator_opinion')
+    expect(payload.referenceLinks?.[0].handling).toBe('include_in_research')
+    expect(payload.music.handling).toBe('no_music')
+    expect(payload.audience).toBe('YouTube documentary viewers')
+  })
+
   it('shows the later media picker with its three labels only behind the flag', () => {
     render(<MotionStudioCreate client={createMockMotionStudioClient({ storage: null })} initialView="create" mediaPickerEnabled />)
     expect(screen.getByText('Where should we get the media?')).toBeTruthy()
