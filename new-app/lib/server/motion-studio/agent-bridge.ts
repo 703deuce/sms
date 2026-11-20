@@ -10,6 +10,7 @@ import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assist
 import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
+import { sanitizeProductionBrief, roleHandling } from '@/lib/motion-studio/production-brief'
 import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 import { pullProducerQueueEnabled, pullProducerQueueConfigured, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
@@ -205,6 +206,13 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
   const settings = toObject(project.settings)
   const creative = sanitizeCreativeBrief(settings.creative)
+  const brief = sanitizeProductionBrief(settings.productionBrief ?? {
+    prompt:project.brief,videoType:creative.videoType,
+    durationSeconds:Number(settings.durationSeconds)||Number(settings.lengthMin)*60||180,
+    aspectRatio:str(settings.format).split('_')[0],
+    resolution:str(settings.finalRenderSize||settings.renderSize)||'480p',
+    style:{id:creative.style,custom:creative.customStyle}
+  })
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, workspaceId, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
@@ -222,6 +230,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       })).reverse().map(m=>({role:m.role==='answer'?'customer':m.role,text:m.text})),
     } : {}),
     title: project.title, prompt: project.brief,
+    brief,workflow:brief.workflow,inputs:brief.inputs,
     videoType: creative.videoType,
     categoryGuidance: directorCategoryGuidance(creative.videoType),
     creative: { ...creative, brand: creative.brandMode === 'none' ? undefined : creative.brand },
@@ -238,9 +247,9 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       return { width, height, fps: 30, resolution: size }
     })(),
     quality: str(settings.quality || settings.tier, 40) || 'premium',
-    style: creative.style === 'automatic' ? (str(settings.visualDirection, 80) || 'cinematic') : (creative.style === 'custom' ? creative.customStyle || 'custom' : creative.style),
-    webResearch: true,
-    mediaPolicy: 'auto_plus_uploads',
+    style: creative.style === 'automatic' ? 'automatic' : (creative.style === 'custom' ? creative.customStyle || 'custom' : creative.style),
+    webResearch: settings.webResearch!==false,
+    mediaPolicy: str(settings.mediaPolicy,40)||'auto_plus_uploads',
     jobUrl: endpoint, callbackUrl: endpoint, setupMode: !agentBridgeLive(),
     // During setup do not disclose a callback token in the bot's diagnostic chat.
     ...(agentBridgeLive() ? { jobToken: token } : {}),
@@ -340,10 +349,16 @@ export async function botGetAssignment(id: string, request: Request) {
   ])
   const uploads = projectAssets.length ? await db().clipUpload.findMany({ where: {
     id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } }) : []
+  const productionBrief=sanitizeProductionBrief(toObject(project.settings).productionBrief ?? {
+    prompt:project.brief,workflow:project.workflow,videoType:'anything',
+    durationSeconds:Number(toObject(project.settings).durationSeconds)||180
+  })
   const roleByUpload = new Map(projectAssets.map(a => [a.uploadId, toObject(a.provenanceLog).role]))
   const inputs = await Promise.all(uploads.map(async upload => ({
     uploadId: upload.id, filename: upload.filename, mime: upload.mime,
-    role: roleByUpload.get(upload.id) || 'source', durableAssetId: upload.id,
+    role: roleByUpload.get(upload.id) || 'source',
+    handling:roleHandling[String(roleByUpload.get(upload.id)) as keyof typeof roleHandling]||'source_material',
+    durableAssetId: upload.id,
     url: await createReadableSignedUrl(upload.key, 1800).catch(() => null),
   })))
   const versions = await Promise.all(priorVersions.map(async previous => ({
@@ -377,7 +392,8 @@ export async function botGetAssignment(id: string, request: Request) {
       heartbeat: 'The detached editable-delivery worker sends /checkpoint while uploading and retrying. Resume unfinished uploads before starting the next job. The job-token lease must remain valid; after an expired producer lease, obtain a new assignment rather than reusing an expired token.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
-    title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
+    title: project.title, prompt: project.brief, brief:productionBrief,
+    settings: project.settings, workflow: project.workflow,
     projectContext: {
       projectId: project.id, workspaceId: project.workspaceId,
       timelineVersion: project.timelineVersion, story: project.story, plan: project.plan,

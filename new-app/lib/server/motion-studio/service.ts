@@ -24,7 +24,9 @@ import {
 } from '@/lib/motion-studio/director-ops'
 import { askDirector } from '@/lib/server/motion-studio/director-llm'
 import { sanitizeCreativeBrief } from '@/lib/motion-studio/creative-options'
+import { sanitizeProductionBrief, roleHandling, type InputRole } from '@/lib/motion-studio/production-brief'
 import { loadBrandKit } from '@/lib/server/motion-studio/brand-kits'
+import { defaultVoice, validateChosenVoice } from '@/lib/server/motion-studio/voices'
 
 /**
  * Motion Studio service — matches the frontend client (lib/motion-studio/client.ts, PR #1260) exactly.
@@ -45,7 +47,7 @@ const LENGTHS = [1, 3, 5, 10, 15] as const
 const MAX_LENGTH_MIN = Math.floor(2_147_483_647 / 60_000)
 const validMinutes = (v: unknown): v is number => Number.isSafeInteger(v) && typeof v === 'number' && v >= 1 && v <= MAX_LENGTH_MIN
 const DIRECTIONS = ['cinematic', 'explainer', 'investigative', 'technical_3d'] as const
-const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_480p', renderSize: '480p', finalRenderSize: '480p', productionMode: 'checkpoint', music: 'generated', webResearch: false }
+const DEFAULT_SETTINGS: MsSettings = { lengthMin: 3, visualDirection: 'cinematic', voiceover: 'ai', format: '16:9_480p', renderSize: '480p', finalRenderSize: '480p', productionMode: 'checkpoint', music: 'elevenlabs', webResearch: true }
 const MUSIC_CHOICES: readonly MsMusicChoice[] = ['generated', 'upload', 'elevenlabs', 'none']
 const ENTER_MS = 1400
 const EXIT_MS = 1200
@@ -95,11 +97,15 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
   if (o.voiceover === 'ai' || o.voiceover === 'upload') out.voiceover = o.voiceover
   if (o.productionMode === 'checkpoint' || o.productionMode === 'auto') out.productionMode = o.productionMode
   if (MUSIC_CHOICES.includes(o.music)) out.music = o.music
-  out.music = out.music ?? 'generated'          // always explicit in the API (incl. 'none')
+  out.music = out.music ?? 'elevenlabs'          // always explicit in the API (incl. 'none')
   if (typeof o.webResearch === 'boolean') out.webResearch = o.webResearch
   out.webResearch = out.webResearch === true
   if (typeof o.preflightOnly === 'boolean') out.preflightOnly = o.preflightOnly
   if (o.creative) out.creative = sanitizeCreativeBrief(o.creative)
+  if (o.productionBrief) {
+    try {out.productionBrief=sanitizeProductionBrief(o.productionBrief)}
+    catch {/* Older/invalid project settings must not block opening the project. */}
+  }
   const FORMAT_RE = /^(16:9|9:16|1:1)_(480p|720p|1080p|2160p)$/
   if (typeof o.format === 'string' && FORMAT_RE.test(o.format)) out.format = o.format as MsSettings['format']
   const rs = typeof o.renderSize === 'string' ? o.renderSize.trim().toLowerCase()
@@ -154,7 +160,7 @@ const shouldProduce = (s: Json) => Boolean(s.runRequested) && ((s.productionMode
 
 // ------------------------------------------------------------------ uploads
 type UploadRow = { id: string; key: string; mime: string; filename: string; durationMs: number | null; width: number | null; height: number | null }
-type UploadIn = { uploadId: string; kind?: MsAssetKind; label?: string }
+type UploadIn = { uploadId: string; kind?: MsAssetKind; label?: string; role?: InputRole }
 
 function parseUploads(v: unknown): UploadIn[] {
   if (!Array.isArray(v)) return []
@@ -165,7 +171,8 @@ function parseUploads(v: unknown): UploadIn[] {
     const uploadId = str(u.uploadId, 64)
     if (!uploadId || seen.has(uploadId)) continue
     seen.add(uploadId)
-    out.push({ uploadId, kind: ['photo', 'video', 'audio', 'script'].includes(u.kind) ? u.kind : undefined, label: str(u.label, 200) || undefined })
+    out.push({ uploadId, kind: ['photo', 'video', 'audio', 'script'].includes(u.kind) ? u.kind : undefined, label: str(u.label, 200) || undefined,
+      role: typeof u.role === 'string' && Object.hasOwn(roleHandling,u.role) ? u.role as InputRole : undefined })
   }
   return out
 }
@@ -202,13 +209,18 @@ async function attachUploads(workspaceId: string, projectId: string, clipProject
     const r = rows.get(u.uploadId)!
     const kind = assetKind(r.mime, r.filename, u.kind)
     const label = u.label || r.filename
-    const role = kind === 'video' ? 'footage' : kind === 'image' ? 'photo' : kind === 'audio' ? (isNarrationLabel(label) ? 'narration' : 'music') : 'script'
+    const role = u.role ?? (kind === 'video' ? 'footage' : kind === 'image' ? 'photo' : kind === 'audio' ? (isNarrationLabel(label) ? 'narration' : 'music') : 'script')
+    if((role==='talking_head'||role==='footage')&&kind!=='video'
+      || (role==='narration'||role==='music')&&kind!=='audio'
+      || (role==='photo'||role==='logo')&&kind!=='image'
+      || role==='reference'&&kind!=='image'&&kind!=='video'
+      || role==='script'&&kind!=='script') throw new MotionStudioError('INVALID','Upload role does not match the file type.',400)
     if (role === 'narration' && !narration) narration = r
     if (role === 'music' && !music) music = r
     await db().studioAsset.upsert({
       where: { projectId_uploadId: { projectId, uploadId: r.id } }, update: {},
       create: { id: createId('msa'), projectId, workspaceId, uploadId: r.id, kind, filename: label, status: 'pending', width: r.width,
-        height: r.height, durationMs: r.durationMs, provenanceLog: toPrismaJson({ role, source: 'user_upload' }) },
+        height: r.height, durationMs: r.durationMs, provenanceLog: toPrismaJson({ role, handling:roleHandling[role as InputRole], source: 'user_upload' }) },
     })
     if (clipProjectId && (kind === 'video' || kind === 'image' || kind === 'audio')) {
       try {
@@ -250,13 +262,75 @@ export async function createProject(workspaceId: string, userId: string, body: u
   // Validate every referenced brand asset independently of user-upload metadata.
   const extraIds = [creative.brandMode !== 'none' ? creative.brand?.logoUploadId : undefined, ...(creative.referenceUploadIds || [])].filter((x): x is string => Boolean(x))
   const allUploads = [...uploads]
-  for (const uploadId of extraIds) if (!allUploads.some(x => x.uploadId === uploadId)) allUploads.push({ uploadId, kind: 'photo' })
+  for (const uploadId of extraIds) if (!allUploads.some(x => x.uploadId === uploadId)) {
+    allUploads.push({ uploadId, kind: 'photo',
+      role:creative.brand?.logoUploadId===uploadId?'logo':'reference' })
+  }
   const rows = await loadUploads(workspaceId, allUploads.map(u => u.uploadId))
   if (creative.brand?.logoUploadId && !['image/png','image/jpeg','image/webp'].includes(rows.get(creative.brand.logoUploadId)?.mime || '')) throw new MotionStudioError('INVALID', 'Brand logo must be an image.', 400)
   if (creative.referenceUploadIds?.some(id => !rows.get(id)?.mime.startsWith('image/') && !rows.get(id)?.mime.startsWith('video/'))) throw new MotionStudioError('INVALID', 'References must be images or video.', 400)
   const requestedFormat = String(o.format || J(o.settings).format || DEFAULT_SETTINGS.format)
   const requestedSize = requestedFormat.split('_')[1]
   const settings: MsSettings = parseSettings({ format: requestedFormat, renderSize: requestedSize, finalRenderSize: requestedSize }, DEFAULT_SETTINGS)
+  let productionBrief
+  try {
+    productionBrief=sanitizeProductionBrief(o.productionBrief ?? {
+      prompt,workflow,videoType:creative.videoType,durationSeconds:Number(o.durationSeconds)||30,
+      aspectRatio:requestedFormat.split('_')[0],resolution:requestedSize,
+      style:{id:creative.style,custom:creative.customStyle},brand:creative,
+      script:script?{text:script,handling:'exact'}:undefined,
+      inputs:uploads.map(u=>{const file=rows.get(u.uploadId)!
+        return {uploadId:u.uploadId,filename:file.filename,mime:file.mime,
+          role:u.role ?? (file.mime.startsWith('video/')?'footage':file.mime.startsWith('image/')?'photo':file.mime.startsWith('audio/')?'music':'script')}
+      })
+    })
+  } catch (error) {
+    throw new MotionStudioError('INVALID',error instanceof Error?error.message:'Invalid creator brief',400)
+  }
+  const readyIds=new Set(allUploads.map(u=>u.uploadId))
+  for(const input of productionBrief.inputs){
+    const row=rows.get(input.uploadId)
+    if(!row||!readyIds.has(input.uploadId))
+      throw new MotionStudioError('INVALID','Input must refer to a ready upload.',400)
+    input.mime=row.mime
+    input.filename=row.filename
+    if((input.role==='talking_head'||input.role==='footage')&&!row.mime.startsWith('video/')
+       || (input.role==='narration'||input.role==='music')&&!row.mime.startsWith('audio/')
+       || (input.role==='photo'||input.role==='logo')&&!row.mime.startsWith('image/')
+       || input.role==='reference'&&!row.mime.startsWith('video/')&&!row.mime.startsWith('image/')
+       || input.role==='script'&&(row.mime.startsWith('video/')||row.mime.startsWith('image/')||row.mime.startsWith('audio/')))
+      throw new MotionStudioError('INVALID','Upload role does not match file type.',400)
+    const present=allUploads.find(u=>u.uploadId===input.uploadId)
+    if(present)present.role=input.role
+  }
+  if(productionBrief.narration.uploadId&&!readyIds.has(productionBrief.narration.uploadId))
+    throw new MotionStudioError('INVALID','Narration upload is missing.',400)
+  if(['uploaded_narration','talking_head'].includes(productionBrief.narration.mode)){
+    const role=productionBrief.narration.mode==='uploaded_narration'?'narration':'talking_head'
+    if(!productionBrief.inputs.some(i=>i.uploadId===productionBrief.narration.uploadId&&i.role===role))
+      throw new MotionStudioError('INVALID','Select a matching recorded narration or camera file.',400)
+  }
+  if(productionBrief.music.mode==='upload'&&
+    !productionBrief.inputs.some(i=>i.uploadId===productionBrief.music.uploadId&&i.role==='music'))
+    throw new MotionStudioError('INVALID','Select your uploaded music track.',400)
+  if(productionBrief.music.uploadId&&!readyIds.has(productionBrief.music.uploadId))
+    throw new MotionStudioError('INVALID','Music upload is missing.',400)
+  if(productionBrief.script?.uploadId&&!readyIds.has(productionBrief.script.uploadId))
+    throw new MotionStudioError('INVALID','Script upload is missing.',400)
+  productionBrief.brand=creative
+  if(productionBrief.narration.voiceId){
+    const origin=productionBrief.narration.mode==='cloned_voice'?'cloned':'stock'
+    await validateChosenVoice(workspaceId,userId,productionBrief.narration.voiceId,origin)
+  }else if(productionBrief.narration.mode==='ai_voice'&&productionBrief.narration.voiceSource!=='auto'){
+    const preferred=await defaultVoice(workspaceId,userId)
+    if(preferred){
+      productionBrief.narration.voiceId=preferred.voiceId
+      productionBrief.narration.voiceName=preferred.voiceName
+      productionBrief.narration.voiceSource=preferred.voiceSource
+      productionBrief.narration.mode=preferred.voiceSource==='cloned'?'cloned_voice':'ai_voice'
+      productionBrief.narration.handling='tts_with_voice_id'
+    }
+  }
   const reqMusic = J(o.settings).music ?? o.music
   if (MUSIC_CHOICES.includes(reqMusic) && reqMusic !== 'upload') settings.music = reqMusic
   const requested = o.lengthMin ?? J(o.settings).lengthMin
@@ -274,6 +348,10 @@ export async function createProject(workspaceId: string, userId: string, body: u
   }
   // A 30s pick must not round up to a one-minute canvas (it showed 01:00).
   const plannedMs = settings.durationSeconds ? settings.durationSeconds * 1000 : settings.lengthMin * 60_000
+  productionBrief.durationSeconds=Math.round(plannedMs/1000)
+  settings.productionBrief=productionBrief
+  settings.music=productionBrief.music.mode
+  settings.voiceover=productionBrief.narration.mode==='uploaded_narration'?'upload':'ai'
   const id = createId('msp')
   const clipProjectId = createId('proj')
   const canvasUploadId = createId('upl')
@@ -290,7 +368,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
         rangeStartMs: 0, rangeEndMs: plannedMs, status: 'QUEUED', stage: 'motion_studio', progress: 0 } })
       await tx.motionStudioProject.create({ data: { id, workspaceId, userId, director: 'creative', clipProjectId, clipId, title,
         brief: prompt || script, workflow,
-        settings: toPrismaJson({ ...settings, aspect: settings.format.split('_')[0], automation: settings.productionMode, music: settings.music ?? 'generated', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads', creative }),
+        settings: toPrismaJson({ ...settings, aspect: settings.format.split('_')[0], automation: settings.productionMode, music: settings.music ?? 'elevenlabs', script, mediaPolicy: o.mediaPolicy || 'auto_plus_uploads', creative }),
         status: 'setup', stage: 'story', stages: toPrismaJson({}), idempotencyKey: key } })
       await tx.studioActivityEvent.create({ data: { projectId: id, stage: 'story', kind: 'stage', message: 'Project created. Nothing renders until you create the plan.' } })
     })
@@ -306,7 +384,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
     await updateSettingsLocked(id, s => ({
       ...s,
       ...(roles.narration ? { voiceover: 'upload', voiceoverUploadKey: roles.narration.key } : {}),
-      ...(roles.music ? { music: 'upload', musicUploadKey: roles.music.key } : {}),
+      ...(roles.music && productionBrief.music.mode==='upload' ? { music: 'upload', musicUploadKey: roles.music.key } : {}),
     }))
   }
   console.info('[motion-studio:create] created', { projectId: id, clipProjectId, workflow, uploads: uploads.length })
