@@ -2,7 +2,7 @@
 
 Use this only when the job needs a film built from research (no customer footage as the picture). Edits of customer footage and clip jobs skip all of it (SKILL.md sections 4–5). The judgment step and hard rules in SKILL.md apply throughout.
 
-## 1. Research and story (progress `research`, 5→20)
+**Creator brief first:** The Producer must read `brief` from the job before research. Use explicit script exact/improve, attributed commentary, source links, preferred primary material, narration mode and music placement when making the story/treatment. A talking-head input is a research-backed presenter-led film, not merely a BYOF cleanup. A recorded voiceover drives timing instead of generated TTS. Default score remains paid ElevenLabs. See SKILL.md §3 typed creator brief.\n\n## 1. Research and story (progress `research`, 5→20)
 
 Read first: `/workspace/motion_kit/code_motion_cinematic/repo/skills/cinematic-film/references/story.md` and the "Research" and "Script" parts of `reference-films.md`.
 
