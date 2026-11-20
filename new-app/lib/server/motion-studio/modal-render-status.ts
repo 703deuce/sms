@@ -33,8 +33,12 @@ export async function reportModalRenderStatus(id:string,request:Request,raw:unkn
     throw errorResponse('Invalid render attempt count')
   const masterFilename=safe(input.masterFilename,120)
   const shareFilename=safe(input.shareFilename,120)
+  const frameGrabFilename=safe(input.frameGrabFilename,120)
+  const timestampSeconds=input.timestampSeconds===undefined?undefined:Number(input.timestampSeconds)
+  if(timestampSeconds!==undefined&&(!Number.isFinite(timestampSeconds)||
+    timestampSeconds<0||timestampSeconds>72000))throw errorResponse('Invalid diagnostic timestamp')
   const filename=(value:string)=>!value||/^[A-Za-z0-9_.-]{1,120}$/.test(value)
-  if(!filename(masterFilename)||!filename(shareFilename))
+  if(!filename(masterFilename)||!filename(shareFilename)||!filename(frameGrabFilename))
     throw errorResponse('Invalid recovery artifact name')
   const message=stage==='qa_fail'?'Technical render verification requires repair':
     stage==='retrying'?'Finishing touches, retrying the final render':
@@ -48,7 +52,9 @@ export async function reportModalRenderStatus(id:string,request:Request,raw:unkn
       ...(reason?{reason}:{}),
       ...(attempt!==undefined?{attempt}:{}),
       ...(masterFilename?{masterFilename}:{}),
-      ...(shareFilename?{shareFilename}:{})}),
+      ...(shareFilename?{shareFilename}:{}),
+      ...(frameGrabFilename?{frameGrabFilename}:{}),
+      ...(timestampSeconds!==undefined?{timestampSeconds}:{})}),
   }})
   if(stage==='attention_required'){
     console.error('[motion-studio:render] owner attention required',
@@ -69,6 +75,8 @@ export async function readModalRenderStatus(id:string,request:Request){
     attempt:status.attempt??null,
     masterFilename:status.masterFilename??null,
     shareFilename:status.shareFilename??null,
+    frameGrabFilename:status.frameGrabFilename??null,
+    timestampSeconds:status.timestampSeconds??null,
     updatedAt:event?.createdAt?.toISOString()??null}
 }
 /** Share the existing clips Modal 95%-of-monthly-spend guard, fail closed. */
