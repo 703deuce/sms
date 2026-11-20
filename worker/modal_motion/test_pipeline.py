@@ -1,8 +1,8 @@
 """No paid Modal calls, B2 access or production job needed."""
-import hashlib, io, json, tempfile, unittest, zipfile
+import hashlib, io, json, tempfile, unittest, zipfile, threading
 from pathlib import Path
 from unittest.mock import patch
-from pipeline import extract_bundle,segment_name,capture_segment,qa_video
+from pipeline import extract_bundle,segment_name,capture_segment,qa_video,join_and_qa
 
 class BundleTests(unittest.TestCase):
     def setUp(self):
@@ -61,6 +61,43 @@ class BundleTests(unittest.TestCase):
         self.assertEqual(result["frames"],150)
         self.assertFalse(any("blackdetect" in " ".join(c) for c in commands))
         self.assertTrue(any("-xerror" in c for c in commands))
+    def test_failed_technical_qa_keeps_uploaded_master_share_and_frame(self):
+        root=self.root/"bundle"
+        root.mkdir()
+        (root/"audio.wav").write_bytes(b"FAKE_AUDIO")
+        (root/"project.json").write_text(json.dumps({
+            "width":854,"height":480,"fps":30,"frameCount":150,"durationMs":5000,
+            "composition":{"entryFile":"index.html"},"mixedAudioFile":"audio.wav"}))
+        recovery=self.root/"recovery"
+        uploaded=[]
+        def fake_upload(job,source,filename,kind,mime):
+            uploaded.append(filename)
+            self.assertTrue(Path(source).is_file())
+            return "upload_"+filename
+        def fake_checked(cmd,timeout=1800,cancel_event=None):
+            target=Path(cmd[-1])
+            if target.name in ("joined.mp4","master.mp4","share.mp4","qa_frame.png"):
+                target.write_bytes(b"FAKE_OUTPUT")
+            return "",""
+        segments=[{"name":"modal_seg_v1_cpu_00000000_00000150.mp4",
+                   "start":0,"end":150}]
+        def fake_fetch(job,filename,target,required=True,attempts=8):
+            Path(target).write_bytes(b"FAKE_SEGMENT")
+            return True
+        with patch("pipeline.heartbeat_scope",return_value=threading.Event()),\
+             patch("pipeline.fetch_file",side_effect=fake_fetch),\
+             patch("pipeline.checked",side_effect=fake_checked),\
+             patch("pipeline.prepare_upload",side_effect=fake_upload),\
+             patch("pipeline.qa_video",side_effect=ValueError("Frame count mismatch")):
+            with self.assertRaisesRegex(ValueError,"Frame count mismatch"):
+                join_and_qa("msaj_test","render_bundle_v1.zip","cpu",segments,
+                            bundle_root=root,recovery_dir=recovery)
+        self.assertTrue((recovery/"master.mp4").is_file())
+        self.assertTrue((recovery/"share.mp4").is_file())
+        self.assertTrue((recovery/"qa_frame.png").is_file())
+        self.assertIn("master_cpu.mp4",uploaded)
+        self.assertIn("share_cpu.mp4",uploaded)
+        self.assertIn("qa_frame_cpu.png",uploaded)
     def test_wrong_resolution_is_rejected(self):
         probe={"streams":[{"codec_type":"video","nb_read_packets":"150",
                 "width":640,"height":480,"avg_frame_rate":"30/1"},
