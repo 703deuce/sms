@@ -56,6 +56,29 @@ class WorkerTests(unittest.TestCase):
         self.assertFalse(server.should_check_assignment(159,100))
         self.assertTrue(server.should_check_assignment(160,100))
         self.assertTrue(server.should_check_assignment(101,100,completed=True))
+    def test_technical_failure_retries_then_asks_for_owner_attention(self):
+        entry={"id":"msaj_1357","token":"x"*64,
+               "url":server.job_endpoint("msaj_1357"),
+               "bundle":"render_bundle_v1.zip","segmentFrames":150,
+               "benchmark":False}
+        with mock.patch.object(server.pipeline,"api") as api:
+            self.assertTrue(server.technical_failure(entry,"Frame count mismatch"))
+            self.assertEqual(server.STAGES[entry["id"]],"retrying")
+            self.assertEqual(len(server.QUEUE),1)
+            self.assertFalse(server.technical_failure(entry,"Frame count mismatch"))
+            self.assertEqual(server.STAGES[entry["id"]],"attention_required")
+            self.assertEqual(len(server.QUEUE),1)
+            self.assertFalse(any("/complete" in str(call) for call in api.call_args_list))
+            self.assertTrue(any("attention_required" in str(call)
+                                for call in api.call_args_list))
+    def test_attention_required_job_preserves_recovery_after_restart(self):
+        root=server.WORK/"job_msaj_1357"
+        (root/"recovery").mkdir(parents=True)
+        (root/"recovery"/"master.mp4").write_bytes(b"finished video")
+        server.STAGES["msaj_1357"]="attention_required"
+        server.atomic_state()
+        server.load()
+        self.assertEqual((root/"recovery"/"master.mp4").read_bytes(),b"finished video")
     def test_disk_guard(self):
         with mock.patch.object(server,"disk_metrics",return_value=(91,1000000)):
             self.assertEqual(server.disk_ready()[0],False)
