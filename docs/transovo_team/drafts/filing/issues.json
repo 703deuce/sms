@@ -1,0 +1,875 @@
+[
+ {
+  "draft": "RE-1",
+  "title": "[Motion Studio RE-1] Vendor Cinematic Skill as the pinned engine (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (Backend New)\n\n### Phase\nP1\n\n- **Owner:** Render engine (Backend New)\n- **Phase:** P1\n- **Depends on:** SEC-2 (font/Piper licence part)\n- **Scope:** vendor `Moh4696/cinematic-skill` at the pinned commit (box copy `bf435561`) with its MIT licence; Python env (skia-python \u2265 87.6, numpy, pillow, ffmpeg); `check_setup.py` in CI; replace disallowed fonts and voices.\n- **Requirements:** ST-ENG-001, ST-ENG-002\n- **AC:** pinned and licence vendored; `check_setup.py` passes on render boxes; licence outcome recorded per font and voice.\n- **Tests:** setup smoke test; licence manifest test.\n- **Protected:** B0.5 `motion_render.py` unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-2",
+  "title": "[Motion Studio RE-2] Render service + `MGD_RENDER_SEGMENT` + segment cache (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine\n\n### Phase\nP1\n\n- **Owner:** Render engine\n- **Phase:** P1\n- **Depends on:** RE-1, DO-1\n- **Scope:** a render service on render boxes; an additive job type; content-hash segment cache; partial-render resume.\n- **Requirements:** ST-ENG-003, ST-RR-001, ST-RR-003, ST-FAIL-002, ST-API-002 (render jobs)\n- **Also covers (reference workflow, CoS 12:27 AM):** ST-BLK-20 `render.parallel_chunks` (workers = cpu\u22121 with a RAM cap, crf 16); the join and mux must pass frame-count parity (ST-RW-013, with BE-14).\n- **AC:**\n  - editing one scene re-renders only its segments (other hashes unchanged);\n  - a killed render resumes;\n  - never deployed to the SMS worker or app3.\n- **Tests:** hash-stability test; resume test; deploy-target check.\n- **Protected:** `RENDER_CLIP` and existing job types unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-3",
+  "title": "[Motion Studio RE-3] Shared-engine boundary + director interface hooks (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (with BE-1)\n\n### Phase\nP1\n\n- **Owner:** Render engine (with BE-1)\n- **Phase:** P1\n- **Depends on:** RE-2\n- **Scope:** split shared modules (`render-engine/*`, `blocks/*`, `handoff/*`, `timeline/*`, `qa/*`) from `directors/documentary/*`; capability declaration check; **no other-format features**.\n- **Requirements:** **ST-ENG-005, ST-ENG-006**\n- **Two-part build (John 12:38 AM):** Also enforce the **Part 1 `core/*` vs Part 2 `generated/<projectId>/*`** split: generated code is never imported across projects, and `core/*` holds no styling constants (ST-PART-001/003).\n- **AC:**\n  - a CI import rule fails when shared modules import documentary code;\n  - the engine rejects undeclared capabilities.\n- **Tests:** lint rule test; capability-rejection test.\n- **Protected:** none affected.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-4",
+  "title": "[Motion Studio RE-4] Three-layer composition + procedural background systems (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-4.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine\n\n### Phase\nP1\n\n- **Owner:** Render engine\n- **Phase:** P1\n- **Depends on:** RE-2\n- **Scope:** scene spec with foreground hero, midground context and procedural background (\u2265 3 subject families for the proof set); lighting coherence; `deliberateMinimal` with a reason; no per-scene image generation.\n- **Requirements:** ST-COMP-001, ST-COMP-002, ST-COMP-003, ST-COMP-006\n- **AC:** the renderer refuses scenes missing a layer without a reason; the 3 proof segments pass A14.\n- **Tests:** a missing-layer fixture; an empty-background fixture flagged.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-5",
+  "title": "[Motion Studio RE-5] First-release blocks: maps, animated text, diagrams, charts, document treatments (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-5.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine\n\n### Phase\nP1\n\n- **Owner:** Render engine\n- **Phase:** P1\n- **Depends on:** RE-4\n- **Scope:** L2 blocks bound to word ids; text source binding for A9.\n- **Requirements:** ST-UX-124, ST-ENG-004, ST-UX-082 (technique tags), ST-QA-A4, ST-QA-A5, ST-QA-A9\n- **Two-part build (John 12:38 AM):** These are Part 1 shared blocks. Their per-video look (palette, fonts, decoration) comes from the style spec and Part 2, not hard-coded.\n- **Also covers (reference workflow, CoS 12:27 AM):** The named blocks ST-BLK-07 `type.hero_slam`, ST-BLK-08 `data.rolling_number` (lands on the spoken word, bound to data provenance), ST-BLK-10 `label.callout`, ST-BLK-11 `emphasis.mark`, ST-BLK-12 `connector` and ST-BLK-13 `field.spread`, with the parameters in spec \u00a72.14 and each block's AC.\n- **AC:** each of the 5 kinds renders in a proof scene, word-synced to \u00b11 frame and phone-legible.\n- **Tests:** per-block golden frames; A4/A5 fixtures.\n- **Protected:** B0.5 text templates untouched.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-6",
+  "title": "[Motion Studio RE-6] Cinematic Media Handoff module (core engine capability) (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-6.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine\n\n### Phase\n**P1**\n\n- **Owner:** Render engine\n- **Phase:** **P1**\n- **Depends on:** RE-4; BE-13 (handoff segment records); BE-9 (minimal timeline)\n- **Scope:**\n  - **One shared module** (`handoff/*`, no documentary logic, ST-ENG-005) implementing the four phases: ENTER (animate into the exact first frame on a surface), PLAYBACK (footage plays normally; world hidden, state preserved), EXIT (freeze the exact last frame, animate away), CONTINUITY (camera, world and timing).\n  - **Surface interface:** `placement`, `geometryMapping` (homography or mesh for curved/moving surfaces), `applyTexture` that is pixel-aligned 1:1 at seams, and `surfaceEffects` that reach zero at seams.\n  - **Surface kinds:** P1 builds printed photo, TV/monitor and moving newspaper page. Phone, cinema screen, billboard and floating 3D panel follow in P2 on the same interface.\n  - **Deterministic seams:** one shared `transformId` (crop \u2192 reframe \u2192 grade) for the grabs and playback, and frame-accurate decode to the exact PTS (not the nearest keyframe; VFR by timestamp).\n  - Asymmetric exits (logged).\n  - Video-handle overlap with and without handles: eased freeze, audio trail or fade, no abrupt stops.\n  - Hard cuts as zero-length handoffs with a required justification (interim D11 rule).\n  - **No paid video model**: changes re-render only the handoff segment.\n  - Exposed as capabilities `handoff.enter/playback/exit/continuity` (ST-ENG-006).\n  - Implements the policy rows ST-TR-001\u2026008, which the Director decides.\n- **Requirements:** ST-CMH-001\u2026013, ST-COMP-005, ST-TR-001\u2026008, ST-TL-003, ST-UX-090/091/092, ST-ENG-005, ST-ENG-006\n- **Also covers (reference workflow, CoS 12:27 AM):** ST-BLK-09 `surface.photo_frame` (skins: print / filmstrip / glass window / TV), ST-BLK-21 `handoff.return`, ST-BLK-22 `handoff.hardcut`; **segment renders turn off film fades** (ST-RW-015); **handheld wobble settles at footage seams** (ST-RW-016, ~15% damping, \u2264 1 px jitter at seams). The reference tests used dissolves; ST-CMH frame-exact seams supersede them.\n- **AC:**\n  - **Seams:**\n    - the pixel-diff seam check (ST-CMH-014: MAD \u2264 1.0, \u2265 99.9% of pixels within \u00b14, PSNR \u2265 45 dB; VQ tunes) passes on the P1 proof return segment;\n    - the decode-accuracy matrix passes 100% (ST-CMH-015);\n    - re-renders give identical seam hashes.\n  - **Surfaces and phases:**\n    - a conformance test passes for each of the 3 P1 surface kinds;\n    - the world-state snapshot is identical at ENTER end and EXIT start;\n    - an asymmetric exit fixture passes the seam check on both sides.\n  - **Audio:** the audio-tail checks (ST-CMH-016) pass for the with-handles and no-handles fixtures.\n  - **Edits and integrity:**\n    - an edit changes only the handoff segment's hash, and no paid video API call is made;\n    - code search finds no second handoff implementation.\n- **Tests:**\n  - surface conformance;\n  - seam pixel-diff fixtures (1-frame-off grab, crop mismatch, grade mismatch, resampled seam);\n  - codec/GOP/B-frame/VFR decode matrix;\n  - handle and no-handle audio fixtures;\n  - determinism hash;\n  - an import-boundary lint.\n- **Protected:** B0.5 motion graphics and `RENDER_CLIP` unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-7",
+  "title": "[Motion Studio RE-7] Sandboxed custom-animation code runner (Render engine)",
+  "phase": "P2",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-7.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (with SEC-1)\n\n### Phase\nP2\n\n- **Owner:** Render engine (with SEC-1)\n- **Phase:** P2\n- **Depends on:** RE-2, SEC-1\n- **Scope:**\n  - hybrid model: JSON API first, then sandboxed Python against engine primitives;\n  - isolation; no network or secrets;\n  - CPU, memory, disk and time limits;\n  - deterministic seeds;\n  - framework fallback;\n  - execution log.\n- **Requirements:** ST-SBX-001\u2026007, ST-UX-067, ST-UX-068\n- **AC:**\n  - \u2265 1 custom-code proof scene passes QA;\n  - escape, network and env tests fail closed;\n  - identical inputs give identical frame hashes;\n  - a crash falls back to framework blocks with no paid retry.\n- **Tests:** a sandbox escape suite; determinism; fault injection.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-8",
+  "title": "[Motion Studio RE-8] Foundation blocks: word clock, script model, world canvas, camera, finish (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-8.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine\n\n### Phase\n**P1** (step 2\u20133 of the P1 order)\n\n- **Owner:** Render engine\n- **Phase:** **P1** (step 2\u20133 of the P1 order)\n- **Depends on:** RE-1, RE-3\n- **Scope:**\n  - ST-BLK-01 `narration.tts_with_word_times` interface: consumes the existing R2 VO / an uploaded narration in P1; live ElevenLabs TTS comes via BE-8 (D6 approved, John 12:57 AM).\n  - ST-BLK-02 `timing.word_clock` (a missing word raises).\n  - ST-BLK-03 `script.lines` + `beats.lint` (`text`/`spoken`/`hero`/`typed`; typed-and-spoken lint).\n  - ST-BLK-04 `world.canvas` with `map` / `chart` / `board` adapters.\n  - ST-BLK-05 `camera.path` (Catmull-Rom, drift, breathing, wobble with a damping hook).\n  - ST-BLK-06 `camera.spotlight` (one hero per beat).\n  - ST-BLK-14 `look.finish` (per-frame grain).\n  - Shared modules only (ST-ENG-005), exposed as capabilities (ST-ENG-006).\n- **Requirements:** ST-BLK-01\u202606, ST-BLK-14, ST-RW-006, ST-RW-001 (lint part), ST-ENG-004, ST-ENG-005, ST-ENG-006\n- **Two-part build (John 12:38 AM):** `world.canvas` is **Part 1 infrastructure only** (coordinate space, projection math, axes, tiling). There are no prebuilt `map`/`chart`/`board` world modules: world looks and content are generated fresh per video in Part 2 (RE-11). The AC \"a new topic swaps only the world adapter\" is replaced by \"Part 2 worlds render on the canvas; the canvas holds no styling\".\n- **AC:**\n  - each block's AC in spec \u00a72.14;\n  - camera keys hit word times \u00b11 frame;\n  - a new topic swaps only the world adapter;\n  - no duplicate consecutive frames (per-frame grain);\n  - deterministic hashes.\n- **Tests:** golden renders per block; missing-word test; lint test; dup-frame test.\n- **Protected:** B0.5 motion graphics unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-9",
+  "title": "[Motion Studio RE-9] Bounded automated fix loop + measurement precedence (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-9.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (with QA)\n\n### Phase\n**P1** (step 6)\n\n- **Owner:** Render engine (with QA)\n- **Phase:** **P1** (step 6)\n- **Depends on:** RE-2, QA-5\n- **Scope:**\n  - audit \u2192 fix \u2192 **re-render only the changed segments**, capped at \u2264 2 rounds per scene and \u2264 2 export-level passes, then `needs_review`;\n  - **local / code re-render only**: no TTS regeneration, paid media or paid video model unless inside an explicit user-confirmed budget line; never a duplicate paid run (TEAM.md);\n  - measurements override the AI watch review, and disagreements are logged.\n- **Requirements:** ST-RW-010, ST-RW-009, ST-UX-068, ST-RR-001, ST-RULE-003\n- **AC:**\n  - fault fixtures (small text, edge clip, SFX mask, black frame) are fixed within the cap;\n  - exceeding the cap gives `needs_review`;\n  - zero paid calls inside the loop without a confirmed budget (test);\n  - the verdict equals the measurement where one exists.\n- **Tests:** loop fault-injection suite; paid-call assertion; precedence unit test.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-10",
+  "title": "[Motion Studio RE-10] Audio blocks + beat-keyed music bed + uploaded-music cut and duck (Render engine)",
+  "phase": "P1",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-10.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D27: resolved by John (12:44 AM ET, via the CoS). See build spec \u00a70.1.\n\n### Owner (one accountable)\nRender engine (Mixer)\n\n### Phase\n**P1** (step 7)\n\n- **Owner:** Render engine (Mixer)\n- **Phase:** **P1** (step 7)\n- **Depends on:** RE-8\n- **Scope:**\n  - ST-BLK-16 `sfx.auto_cues` (synthesized, no samples; risers before big moments);\n  - ST-BLK-17 `audio.mix` (sidechain duck thr 0.025 / ratio 4 / attack 35 ms / release 550 ms; two-pass loudnorm I \u221215, TP \u22121.5, LRA 11, pending D34);\n  - **the default score (D27 resolved, John 12:44 AM):** a code-generated bed in the style of the GameStop reference production's `music.py` (numpy synthesis, nothing to license). A 96 bpm hat pulse enters on a story beat, a kick builds into the peak, everything cuts at the crash word, and a sparse pad swells to a resolve under the final hold. Anchors come from the word clock; \"no music\" is allowed. The per-video generator with variety is RE-12;\n  - **user-uploaded music:** beat-aligned cuts plus ducking under narration, reusing `new-app/lib/clips/editor/beats.ts`, `beat-autocut.ts`, `worker/clips_worker/audio_render.py` (`duck_indices`, `prepare_looped_music_bed`) and `t2v/audio_duck.py`. **No licensing gate** (ToS, John 12:44 AM);\n  - auto-fix hook for SFX over speech (\u22126 dB or shift ~150 ms).\n- **Requirements:** ST-BLK-16, ST-BLK-17, ST-RW-012, ST-RW-008 (fix action), ST-AUD-002\u2026004, ST-MUS-001 (structure), ST-MUS-003\n- **AC:**\n  - music events land within \u00b11 frame of their anchors;\n  - the GME beat table reproduces the reference structure;\n  - uploaded-music edits land on beats within \u00b11 frame and are ducked;\n  - loudness within \u00b11 LU of the target, TP \u2264 \u22121.5 dBTP;\n  - the R1 stamp-masking fixture is fixed;\n  - the music source is recorded in the credits.\n- **Tests:** onset-detection fixtures; ebur128 tests; masking fixture; uploaded-music beat-cut fixture.\n- **Protected:** `audio_render.py` behavior for existing products is unchanged; existing editor beat-cut tests pass.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-11",
+  "title": "[Motion Studio RE-11] Part 2 generator: fresh worlds and scene code per customer/video (Render engine)",
+  "phase": "P2",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-11.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (with BE-5)\n\n### Phase\nP2\n\n- **Owner:** Render engine (with BE-5)\n- **Phase:** P2\n- **Depends on:** RE-3, RE-8, RE-7 (sandbox), BE-20 (routing)\n- **Scope:**\n  - generate worlds (map, price chart, timeline, etc.), scene code, per-topic components, procedural backgrounds and the music-bed plan **fresh for each video**, from the style spec (ST-STY-005), on Part 1 blocks and infrastructure;\n  - reference examples (e.g. the Keef map world and GME chart world) guide the agent only; **no reusable world templates and no library promotion** (D36 superseded);\n  - artifacts stored under `generated/<projectId>/*`;\n  - Luna by default; a custom step switches to Sol only if needed, via per-step config (BE-20; John 12:58 AM).\n- **Requirements:** ST-PART-001, ST-PART-002, ST-COMP-001, ST-UX-067, ST-UX-085, ST-SBX-001, ST-RW-012, ST-STY-005\n- **AC:**\n  - no Part 2 artifact is copied from another project (hash + AST-similarity check);\n  - references never reach the render path;\n  - the sameness check (QA-6) passes on the benchmark;\n  - generated worlds pass A14 whole-frame.\n- **Tests:** copy-detection fixture; reference-isolation test; benchmark runs.\n- **Protected:** Part 1 blocks unchanged by generation.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "RE-12",
+  "title": "[Motion Studio RE-12] Per-video score generator + musical variety (Part 2) (Render engine)",
+  "phase": "P2",
+  "owner": "Render engine",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft RE-12.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nRender engine (Mixer)\n\n### Phase\nP2\n\n- **Owner:** Render engine (Mixer)\n- **Phase:** P2\n- **Depends on:** RE-10, RE-11, BE-16 (beat table)\n- **Scope:**\n  - generate the score per video from the script's beat table and tone. **Tempo, key/mode, instrumentation, mood and beat placement** are all derived, so no two scores sound the same (John 12:45 AM);\n  - seeded but script-derived (seed = hash of project + script);\n  - parameters logged per video; local render, no paid call.\n- **Requirements:** ST-MUS-001, ST-MUS-002, ST-VAR-002 (fail action), ST-PART-002\n- **AC:**\n  - parameters `{bpm, key, mode, instruments, mood, anchors, seed}` are logged;\n  - the same script + seed is bit-identical;\n  - two different scripts yield different parameters;\n  - the music sameness check (QA-6) passes.\n- **Tests:** determinism test; variety fixtures; anchor-placement fixtures.\n- **Protected:** Part 1 mix blocks unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-1",
+  "title": "[Motion Studio BE-1] Additive data model + director registry (Backend)",
+  "phase": "P1",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP1 (minimal) \u2192 P2 (full)\n\n- **Owner:** Backend (New)\n- **Phase:** P1 (minimal) \u2192 P2 (full)\n- **Depends on:** none\n- **Scope:** additive Prisma tables (ST-DM-001) incl. `StudioAsset`; a `directorRegistry` with exactly one entry (`documentary`) implementing the `Director` interface (inputs, outputs, capabilitiesUsed). Documentary-specific code lives only under `directors/documentary/*`.\n- **Requirements:** ST-DM-001, ST-MR-011, **ST-ENG-005, ST-ENG-006**\n- **AC:** the migration is additive only (no changes to existing tables); a contract test drives the Documentary Director through the interface only.\n- **Tests:** migration test on a schema copy; registry/interface contract test.\n- **Protected:** existing tables and models unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-2",
+  "title": "[Motion Studio BE-2] `/api/motion-studio/*` routes, run state machine, idempotency (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D3: superseded by John (15 Nov 2026, 12:53 AM ET, via the CoS): the product is Motion Studio at `/app/motion-studio`, API `/api/motion-studio/*`. See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1, D3\n- **Scope:** project CRUD, plan (Start = planning request), idempotent run, activity stream, assets, scene regenerate, proposals, export, open-in-editor; checkpoint vs fully automatic.\n- **Requirements:** ST-API-001, ST-API-002, ST-UX-008, ST-UX-071, ST-WF-003, ST-RULE-003, ST-FAIL-001, ST-VIS-002\n- **AC:**\n  - Start queues no paid render;\n  - a duplicate start returns the same run;\n  - fully automatic runs with no pauses;\n  - the checkpoint pauses after story + plan;\n  - workspace authz.\n- **Tests:** API contract tests; idempotency; job-queue assertion.\n- **Protected:** `/api/studio/*` and `/api/ad-studio/*` untouched.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-3",
+  "title": "[Motion Studio BE-3] Story agent (idea \u2192 sourced script; script \u2192 organized narration) + grounded research (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D5: resolved by John (12:42 AM ET, via the CoS): Gemini grounded search. See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1\n- **Scope:**\n  - research with source links per claim; chapters; title; WF-B preserves the user's words; Motion Studio-only editorial exception (ST-WF-004);\n  - **research via Gemini grounded search (D5 resolved, John 12:42 AM)**, called only when model knowledge isn't enough or the information is new or recent; a trigger decision `{query, grounded, reason}` is logged per query;\n  - citations are captured into the provenance ledger;\n  - frugal use: caps, cache and de-dup, with **no automatic paid retries**;\n  - a thin grounding wrapper on the existing Gemini client (`new-app/lib/server/ai/gemini.ts`); none exists today.\n- **Requirements:** ST-WF-001, ST-WF-002, ST-WF-004, ST-UX-022, ST-UX-061, ST-UX-062, ST-UX-110, ST-UX-121, ST-UX-123, ST-RES-001\u2026003\n- **Decision resolved:** D5 (John 12:42 AM: Gemini grounded search). No longer blocked.\n- **AC:**\n  - every factual claim from research has \u2265 1 source URL;\n  - 100% of research queries have a logged trigger decision;\n  - the recent-event fixture grounds and the stable-knowledge fixture doesn't;\n  - a failed grounded call triggers no automatic re-request;\n  - a script diff = 0 by default;\n  - existing Story / Clean Take prompts unchanged (test).\n- **Tests:** claim-source test; trigger fixtures; cache and cap tests; prompt-isolation test.\n- **Protected:** `multi-source-story.ts`, `clean-take.ts` prompts unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-4",
+  "title": "[Motion Studio BE-4] AI Media Researcher agent + automatic media finding (LATER) (Backend)",
+  "phase": "Later",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P3",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-4.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Phase: later** (John, 15 Nov 2026, 12:33 AM ET: v1 media = user uploads only). Fully specced; not in the v1 build. Labelled `status:backlog`.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\n**Later (John 12:33 AM)**. Fully specced, not in v1.\n\n- **Owner:** Backend (New)\n- **Phase:** **Later (John 12:33 AM)**. Fully specced, not in v1.\n- **Depends on:** BE-1, D4, D5, SEC-2\n- **Scope:**\n  - entity research;\n  - multi-provider search (Pixabay via `BrollSearchCache`, Pexels if a key exists, Commons, the provider chosen under D5);\n  - visual-analysis previews;\n  - licence enum and export gate;\n  - permitted downloads only;\n  - alternatives for flagged media;\n  - organization by chapter, person, event and use;\n  - budgets with no auto paid retries;\n  - failure tolerance;\n  - honors `mediaPolicy`.\n- **Requirements:** ST-MR-001\u2026015, ST-UX-063, ST-UX-064, ST-UX-111, ST-UI-101 (policy), ST-UI-106\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** The whole Media Researcher, automatic finding (Commons incl. the ST-BLK-24 fetch, Pixabay, Pexels, YouTube, yt-dlp), licensing automation and the media-source choice are later. It is no longer a v1 blocker. When revived it still needs D5 (provider), D4/SEC-5 (terms) and the D29 rules.\n- **AC:**\n  - `uploads_only` \u21d2 zero external calls;\n  - no export with a non-cleared status;\n  - the cap is enforced;\n  - a provider 500 still completes with a gap list.\n- **Tests:** licence-enum matrix; budget cap; fault injection; cache-hit test.\n- **Protected:** existing `/api/clips/broll/search` behavior unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-5",
+  "title": "[Motion Studio BE-5] Documentary Director (plan, style spec, transitions, footage modes) (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-5.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D7, D8, D9, D11: approved per the PM recommendation (John via CoS relay, 15 Nov 2026, 12:16 AM ET: \"Most of that is right\"). See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1, BE-3, BE-4, RE-3\n- **Scope:**\n  - **derive the world type, scene list, style spec (Table B) and emphasis words from the story's subject and structure (ST-DIR-001, John 12:49 AM)**, with reasons logged to Production Activity;\n  - visualType per scene with a reason;\n  - master visual plan incl. transitions;\n  - style spec and distance check;\n  - footage mode (a)/(b) per D7;\n  - insert proposals per D8;\n  - implements the `Director` interface;\n  - declares capabilities.\n- **Requirements:** ST-DIR-001, ST-UX-065, ST-UX-066, ST-UX-112, ST-STY-001\u2026004, ST-AG-001\u2026004, ST-BND-002, ST-TR-001, ST-TR-006, ST-TR-007, ST-TR-008, ST-AUD-001, ST-AUD-002, ST-UX-025, ST-ENG-006\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** BE-4 is later. In v1 the Director works from the **uploads catalog** (ST-MR-011) produced by BE-7 analysis; the dependency on BE-4 becomes \"uploads catalog\".\n- **AC:**\n  - 100% of plan entries have reasons;\n  - 6 similar prompts pass distance;\n  - found \u2260 used test passes.\n- **Tests:** plan schema; distance; found \u2260 used.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-6",
+  "title": "[Motion Studio BE-6] Footage Editor adapter (WHAT) (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-6.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-5\n- **Scope:** call Story / multi-source Story / Clean Take to select moments (in/out word ids + frame indices); clip trim and sound go through this adapter.\n- **Requirements:** ST-BND-001, ST-BND-003, ST-UX-011, ST-UX-054 (clip trim), ST-AG-003\n- **AC:** the Motion Designer can't write cut ranges; existing footage-logic tests unchanged.\n- **Tests:** boundary test; regression run of existing suites.\n- **Protected:** Story, multi-source Story, Clean Take.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-7",
+  "title": "[Motion Studio BE-7] Upload understanding by reusing the clipper analysis + face grouping (named gaps only) (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-7.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1, SEC-3 (parallel, not blocking)\n- **Scope (John 12:42 AM: \"that's not anything new\"): reuse existing modules and extend only the named gaps.**\n  - **Reuse:**\n    - transcription: `MEDIA_TRANSCRIBE` (`worker/clips_worker/media_transcribe_job.py`, `transcribe_provider.py`, `deepgram_transcribe.py` with speakers; `new-app/lib/server/clips/media-transcripts.ts`);\n    - audio: `audio_extract.py`, `scan.py`, `ai_producer_agent/audio_energy.py`, `silence_trim.py`, `MEDIA_SYNC`;\n    - vision and scenes: the Gemini video watch `ai_producer_agent/finder/watch.py` via `AI_PRODUCER_AGENT_ANALYZE`, plus `new-app/lib/ai-producer-agent/visual-evidence.ts` (as used by `run-multi-source-story.ts` / `run-clean-take.ts`), `clip_classify.py`, `t6_scenes.py`, `vision_layout.py`, `screen_share_detect.py`, `reframe_core.detect_shots`;\n    - faces: `reframe_core.py` (`track_faces`, re-ID `assign_people`), `t6_cv.py`;\n    - storage: `new-app/lib/server/clips/project-media.ts`.\n  - **Gaps (the only new code):**\n    - G1 still-image analysis (extend `gemini-flash-lite.ts` / `gemini-inline-image.ts`);\n    - G2 face grouping across uploads and stills, project-scoped;\n    - G3 on-screen text/OCR (extend the watch schema);\n    - G4 persist to the Motion Studio catalog;\n    - G5 a Motion Studio-owned flag; never flip `AI_PRODUCER_AGENT_ENABLED`;\n    - G6 transcription cost inside the Motion Studio allowance (credits only).\n  - Don't reuse the placeholder `ai_producer_agent/visual.py`.\n  - Optional identity labels; identity suggestions with verification; deletion with the project.\n- **Requirements:** ST-UPA-001, ST-UPA-002, ST-FACE-001\u2026006, ST-UX-063, ST-MR-011 (catalog of uploads), ST-MR-015 (later, with BE-4)\n- **AC:**\n  - code review confirms every analysis step calls an existing job or function; new code is G1\u2013G6 only;\n  - an uploaded interview yields transcript, speakers, shots, tags, faces and on-screen text in the catalog; a still yields a description, people and text;\n  - grouping precision \u2265 0.9 / recall \u2265 0.8 (VQ tune);\n  - an unverified name never renders;\n  - no embeddings remain after project delete;\n  - **regression:** existing clipper suites pass unchanged (`worker/tests/test_e5b_transcribe.py`, `test_deepgram_transcribe.py`, `test_scan.py`, `test_reframe_*.py`, `test_detect_facecam_sampling.py`, `test_stream_*.py`, `new-app/tests/ai-producer-agent/*`), and golden outputs for upload clipping, stream clipping, Story, multi-source Story and Clean Take are unchanged (QA-2).\n- **Tests:** reuse-only review checklist; catalog fixtures; grouping eval; unverified-name test; deletion test; clipper regression.\n- **Protected:** upload clipping, stream clipping, Story, multi-source Story, Clean Take, reframe/facecam detection.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-8",
+  "title": "[Motion Studio BE-8] Narration (documentary preset, upload own, alignment): ElevenLabs only (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-8.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D28: resolved by John (12:44 AM ET, via the CoS): ElevenLabs only; D6: ElevenLabs narration spend approved by John (12:57 AM ET). See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** none (D6 approved, John 12:57 AM)\n- **Scope:**\n  - a configurable preset (voice resolved by name \"Brian\", speed ~0.85, pauseMs), behind flag `studioNarrationPreset` (D6 approved, John 12:57 AM; it may be turned on);\n  - \"Upload own\" audio \u2192 transcription (`MEDIA_TRANSCRIBE`) \u2192 A1;\n  - TTS word alignment.\n  - **ElevenLabs only (D28 resolved, John 12:44 AM):** no Edge or free TTS voices, no edge-tts path, and Piper is never used for product narration.\n- **Requirements:** ST-AUD-005\u2026008, ST-UX-026, ST-RW-002, ST-BLK-01\n- **Also covers (reference workflow, CoS 12:27 AM):** ST-RW-002 TTS output-format / plan fallback that stays **within ElevenLabs** and is **not a paid retry**: probe first; one re-request at the next ElevenLabs format, only after a rejection that generated and billed nothing; never after a billed generation; never another provider. ST-BLK-01 parameters. D31 confirmation.\n- **AC:**\n  - TTS calls use speed 0.85 when the preset is on;\n  - no voice id is hard-coded;\n  - no non-ElevenLabs TTS call path exists (test);\n  - uploaded narration aligns (A4).\n- **Tests:** preset config test; provider-allowlist test; fallback fixtures; alignment test.\n- **Protected:** the T2V George default unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-9",
+  "title": "[Motion Studio BE-9] Master timeline model + assembly + mix + editor round trip (Backend)",
+  "phase": "P1",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-9.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP1 (minimal) \u2192 P2\n\n- **Owner:** Backend (New)\n- **Phase:** P1 (minimal) \u2192 P2\n- **Depends on:** BE-1, RE-2\n- **Scope:** the timeline schema (parametric graphics segments); track mapping; assembly job `DOC_ASSEMBLE`; mix (reuse `audio_render.py`); `ClipEditsV2` conversion for \"open in advanced editor\"; MP4 export.\n- **Requirements:** ST-TL-001\u2026004, ST-AUD-003, ST-AUD-004, ST-UX-069, ST-UX-070, ST-UX-125, ST-QA-A7, ST-QA-A13\n- **AC:** the export renders from the timeline alone; the round trip keeps segments; loudness \u00b11 LU and TP \u2264 \u22121 dBTP.\n- **Tests:** round trip; loudness; mode levels.\n- **Protected:** existing editor projects open unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-10",
+  "title": "[Motion Studio BE-10] AI Director chat: proposed changes, accept/reject, per-scene regenerate (Backend)",
+  "phase": "P3",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-10.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP3\n\n- **Owner:** Backend (New)\n- **Phase:** P3\n- **Depends on:** BE-5, RE-2\n- **Scope:** intent \u2192 proposed change list (nothing applied until accepted); diff apply with undo (registry pattern); scene-only regenerate.\n- **Requirements:** ST-UX-043, ST-UX-085, ST-UX-100, ST-UX-101, ST-RR-002, ST-VIS-003\n- **AC:**\n  - the project is unchanged until Accept;\n  - a regenerate touches one scene;\n  - undo works.\n- **Tests:** proposal lifecycle; one-job regenerate.\n- **Protected:** the editor command registry contract unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-11",
+  "title": "[Motion Studio BE-11] Allowance estimator (credits/minutes, no `$`) (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-11.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D1: approved per the PM recommendation (John via CoS relay, 15 Nov 2026, 12:16 AM ET: \"Most of that is right\"). See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** D1, D2\n- **Scope:** estimate before full render; itemized included vs third-party; confirm paid items.\n- **Requirements:** ST-CRD-001, ST-CRD-002, ST-UX-128, ST-RULE-001\n- **AC:** estimate within \u00b115% of actual on the benchmark; no `$`.\n- **Tests:** estimator test; `$` scan.\n- **Protected:** existing credit ledger unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-12",
+  "title": "[Motion Studio BE-12] Production activity events + observability (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-12.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-2\n- **Scope:** `StudioActivityEvent`; structured logs (no secrets); metrics.\n- **Requirements:** ST-OBS-001\u2026003, ST-UI-104 (data), ST-RULE-005\n- **AC:** an event fires per step transition; the log scrub test passes.\n- **Tests:** event-stream test; scrub test.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-13",
+  "title": "[Motion Studio BE-13] Handoff segment records in the master timeline model (Backend)",
+  "phase": "P1",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-13.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\n**P1**\n\n- **Owner:** Backend (New)\n- **Phase:** **P1**\n- **Depends on:** BE-1, BE-9\n- **Scope:**\n  - An additive handoff segment record (ST-CMH-017): clip asset; in/out frame index + PTS; `transformId`; surface kind and params; enter/playback/exit ranges; world-state refs in/out; exit style + presentation reason; cut type/purpose/justification; handles; audio-tail mode and ms; seam scores; `decodeVerified`; render hash.\n  - The timeline validator enforces:\n    - a justification is required on every hard cut;\n    - a continuation cut must pass alignment;\n    - an export is refused if any handoff lacks seam scores or `decodeVerified`.\n  - Timeline API round trip; mapping to `ClipEditsV2` for \"open in advanced editor\" (handoffs export as rendered segments with a back-reference).\n  - For Motion Studio, supersedes the MGD Appendix B transitionIn/Out frame-grab fields.\n- **Requirements:** ST-CMH-012, ST-CMH-017, ST-TL-001, ST-TL-003, ST-TL-004, ST-TR-006, ST-DM-001\n- **AC:**\n  - the schema validates;\n  - a migration test confirms the change is additive only;\n  - the validator rejects an unjustified hard cut and a misaligned continuation cut;\n  - an export is blocked when `decodeVerified=false`;\n  - the round trip preserves all fields.\n- **Tests:** schema and validator unit tests; migration test; API round trip; ClipEditsV2 mapping test.\n- **Protected:** existing editor projects and tables unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-14",
+  "title": "[Motion Studio BE-14] Export integrity: frame-count parity, atomic writes, small export (Backend)",
+  "phase": "P1",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-14.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\n**P1** (step 4)\n\n- **Owner:** Backend (New)\n- **Phase:** **P1** (step 4)\n- **Depends on:** RE-2\n- **Scope:**\n  - every segment, join, mux and export checks rendered == muxed == expected frames (audio padded or trimmed to the video, **never `-shortest`**);\n  - temp file then atomic rename for every write; temp cleanup on failure; readers never see partial files;\n  - small export (6 Mb/s) and master (crf 16) as in ST-BLK-20.\n- **Requirements:** ST-RW-013, ST-RW-014, ST-BLK-20, ST-FAIL-002\n- **AC:**\n  - the 1194 \u2192 1193 fixture is caught and fixed;\n  - a concurrent reader never sees a partial or 0-byte file;\n  - a killed export leaves nothing under the final name.\n- **Tests:** parity fixture; concurrent-reader test; kill test.\n- **Protected:** the existing `RENDER_CLIP` export path unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-15",
+  "title": "[Motion Studio BE-15] Data adapters (user-provided or grounded research only) + data provenance + asset manifest / credits ledger (Backend)",
+  "phase": "P1",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-15.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D26: dropped by John (12:42 AM ET, via the CoS). See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\n**P1** (steps 8\u20139)\n\n- **Owner:** Backend (New)\n- **Phase:** **P1** (steps 8\u20139)\n- **Depends on:** BE-1\n- **Scope (D26 dropped, John 12:42 AM: the product doesn't fetch market data):**\n  - data adapters accept **user-provided data** (pasted table, CSV or sheet) or **grounded research results with citations** (BE-3) only;\n  - no market-price adapter and no Yahoo dependency;\n  - corporate-action (split) adjustment only when the source says the series is unadjusted;\n  - place coordinates from user input or research;\n  - provenance record `{origin: user or research, citation URLs, retrievedAt, range, adjustments, approximate}`;\n  - narrated numbers verified against the data;\n  - ST-BLK-24 manifest of uploads (crop, grade), with **no licence fields required** (John 12:44 AM);\n  - ST-BLK-23 credits ledger generated per export.\n  - P1 proofs use hand-entered internal test data, labelled internal.\n- **Requirements:** ST-RW-003, ST-BLK-23, ST-BLK-24, ST-QA-A10, ST-RES-002\n- **AC:**\n  - the split-adjustment fixture passes on a user-provided series;\n  - narrated values match the data or are flagged;\n  - every data-bound block references provenance;\n  - no outbound market-data request exists (test);\n  - uploads save with no licence fields;\n  - the credits ledger lists data and citations, generated music and SFX, fonts, and re-rendered vs reused.\n- **Tests:** adapter fixtures; verification test; no-fetch test; ledger snapshot.\n- **Protected:** existing `StockAsset` / B-roll paths unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-16",
+  "title": "[Motion Studio BE-16] Narration-writing rules in the Story agent (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-16.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-3 (idea flow), RE-8 (script model)\n- **Scope:**\n  - spoken-form numerals in `spoken`;\n  - `text` / `spoken` split;\n  - typed-vs-spoken lint resolution;\n  - one beat per sentence, ellipsis suspensions, fragments for rhythm;\n  - target 120\u2013125 wpm with longer section pauses;\n  - WF-B keeps the user's `text` verbatim and normalizes only `spoken`.\n- **Requirements:** ST-RW-001, ST-WF-002\n- **AC:**\n  - number/date round-trip tests;\n  - measured pace 115\u2013130 wpm (VQ tunes);\n  - the user-script diff of `text` = 0.\n- **Tests:** normalization unit tests; pace measurement on fixtures.\n- **Protected:** Story / Clean Take prompts unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-17",
+  "title": "[Motion Studio BE-17] Uploaded-clip quote location + beat-aligned in/out (reuse) (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-17.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-6, BE-7\n- **Scope:**\n  - locate a quoted line in **uploaded** clips by reusing the existing `MEDIA_TRANSCRIBE` output (word-timed `ClipWord`s via `new-app/lib/server/clips/media-transcripts.ts`); no new transcription path;\n  - musical-beat detection by reusing `new-app/lib/clips/editor/beats.ts` / `strong-beats.ts`, with in/out snapped to beats or phrases for music clips;\n  - combined with first-frame match and packaging avoidance.\n  - **Gap (the only new code):** quote-text \u2192 word-span matching over the existing words.\n  - Found-clip transcription moved to BE-19 (later, John 12:33 AM).\n- **Requirements:** ST-RW-004 (uploaded-clip part), ST-RW-005, ST-TR-005, ST-AUD-007, ST-UPA-001, ST-UPA-002\n- **AC:**\n  - the quote is located within \u00b11 word on an uploaded-clip fixture;\n  - in/out within \u00b11 frame of the beat grid;\n  - `test_e5b_transcribe.py` and the editor beat tests pass unchanged.\n- **Tests:** quote-match fixture; BPM fixture; regression.\n- **Protected:** `MEDIA_TRANSCRIBE` and upload clipping unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-18",
+  "title": "[Motion Studio BE-18] Agent brief content standard (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-18.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1\n- **Scope:** a typed brief schema for Director \u2192 Motion Designer / Media Researcher / Footage Editor, with fields from reference workflow \u00a74.2: topic + angle + length, engine version, script rules, voice, asset rules, look rules, QA expectations, deliverables, hard rules. The Appendix A wording is illustrative; the real brief texts come from the CoS (D33).\n- **Requirements:** ST-RW-017, ST-AG-003\n- **AC:** briefs validate; a missing required field is rejected.\n- **Tests:** schema tests.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-19",
+  "title": "[Motion Studio BE-19] Found-clip transcription to locate quotes (LATER) (Backend)",
+  "phase": "Later",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P3",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-19.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Phase: later** (John, 15 Nov 2026, 12:33 AM ET: v1 media = user uploads only). Fully specced; not in the v1 build. Labelled `status:backlog`.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\n**Later (John 12:33 AM)**. Fully specced, not in v1.\n\n- **Owner:** Backend (New)\n- **Phase:** **Later (John 12:33 AM)**. Fully specced, not in v1.\n- **Depends on:** BE-4 (later), SEC-5\n- **Scope:** ASR or provider captions for **permitted found** clips (non-upload) to locate a quoted line (the GME pattern: captions located the quote at 5:00.32\u20135:08.80); only for clips whose licence permits processing.\n- **Requirements:** ST-RW-004 (found-clip part), ST-MR-005\n- **AC:** the quote is located within \u00b11 word on a found-clip fixture; no processing of restricted media.\n- **Tests:** caption/ASR fixture; licence-gate test.\n- **Protected:** `MEDIA_TRANSCRIBE` unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-20",
+  "title": "[Motion Studio BE-20] Model routing (Luna / Sol) + per-step failure logging dashboard (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-20.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D35: Luna is the default for both parts; the bake-off is cancelled (John, 12:58 AM ET). See build spec \u00a70.1.\n\n### Owner (one accountable)\nBackend (New)\n\n### Phase\nP2\n\n- **Owner:** Backend (New)\n- **Phase:** P2\n- **Depends on:** BE-1, BE-12\n- **Scope:**\n  - a per-step model router: **Luna is the default for Part 1 and Part 2** (John 12:58 AM: \"Just put Luna for both right now\"); a custom step switches to Sol only if needed, by per-step config or a **configurable escalation trigger** per step (QA/VQ fail count, fix-loop iterations, sandbox failures, manual override) that escalates **that step only** to GPT-6.1 Sol;\n  - escalation stays inside the run's confirmed model budget and is never an automatic paid retry outside it;\n  - switching a step's default model is a config change;\n  - per-step metrics and dashboard: QA/VQ fail rate, fix-loop count, sandbox failures, escalations and whether they passed, tokens/time (no prompts, secrets or customer content).\n  - Model prices are CoS-reported, unverified and internal only; none appear in the product.\n- **Requirements:** ST-MOD-001, ST-MOD-002, ST-MOD-003, ST-RULE-003, ST-OBS-003\n- **AC:**\n  - the router config covers every step;\n  - an escalation fixture escalates only the failing step and logs the reason;\n  - the budget cap is enforced;\n  - the dashboard shows per-step Luna pass and escalation rates;\n  - metrics cover 100% of model calls.\n- **Tests:** router unit tests; escalation fixture; budget test; metrics scrub test.\n- **Protected:** existing LLM clients (`new-app/lib/server/ai/*`) used, not forked.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "BE-22",
+  "title": "[Motion Studio BE-22] Optional ElevenLabs-generated music tier (Backend)",
+  "phase": "P2",
+  "owner": "Backend",
+  "labels": [
+   "type:task",
+   "owner:backend",
+   "P2",
+   "blocked:john-decision"
+  ],
+  "blocked": [
+   "D37 (open: ElevenLabs music tier spend, not authorized)",
+   "D2 (credit price for the tier, set by John)"
+  ],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft BE-22.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Blocked on: D37 (open: ElevenLabs music tier spend, not authorized); D2 (credit price for the tier, set by John)** (see build spec \u00a70.1). Work that doesn't depend on these may be prepared; do not ship the dependent behavior until resolved.\n\n### Owner (one accountable)\nBackend (New) (audio)\n\n### Phase\nP2\n\n- **Owner:** Backend (New) (audio)\n- **Phase:** P2\n- **Depends on:** D37 spend OK (John), D2 credit price (John), RE-10 (cut and duck path)\n- **Scope:**\n  - an optional, higher-priced music option, reusing the `MUSIC` job (`worker/clips_worker/music_job.py`, ElevenLabs compose + upload);\n  - output cut and ducked to the story beats like the default (RE-10 path);\n  - credits only in the UI, priced by John under D2;\n  - flag off until D37; one paid generation per explicit user action, with an idempotency key;\n  - **no automatic paid regeneration** (a sameness fail goes to review).\n- **Requirements:** ST-MUS-004, ST-VAR-002, ST-RULE-001, ST-RULE-003\n- **AC:**\n  - flag off by default; no paid call while off;\n  - credits shown, never `$`;\n  - a duplicate start does not create a second paid call;\n  - output beat-cut and ducked.\n- **Tests:** flag test; idempotency test; `$` scan; beat-cut fixture.\n- **Protected:** existing `MUSIC` job behavior unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-1",
+  "title": "[Motion Studio FE-1] Create screen (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D3: superseded by John (15 Nov 2026, 12:53 AM ET, via the CoS): the product is Motion Studio at `/app/motion-studio`, API `/api/motion-studio/*`. See build spec \u00a70.1.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-2, D3\n- **Scope:** all exact labels:\n  - title, \"My projects\", headline, subhead, prompt placeholder;\n  - \"Add photos, footage, script or audio\" (files + folders);\n  - \"Start\";\n  - the three mode tiles;\n  - \"Where should we get the media?\" with its 3 options;\n  - optional uploads;\n  - the \"Selected workflow\" line;\n  - documentary-only (no format picker).\n- **Requirements:** ST-UX-001\u2026015, ST-UI-101, ST-UI-102, ST-UI-103, ST-WF-005, ST-VIS-001\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** \"Where should we get the media?\" is **hidden** in v1. `mediaPolicy` is fixed to `uploads_only` (ST-UI-107). The three picker labels stay specced behind a flag (later, ST-UI-101). The \"Selected workflow\" line covers 3 modes \u00d7 uploads.\n- **AC:** label snapshot; 3\u00d73 workflow-line snapshots; Start \u2192 planning request.\n- **Tests:** snapshot + E2E.\n- **Protected:** `/app` launcher cards keep working.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-2",
+  "title": "[Motion Studio FE-2] Project setup (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D13: approved per the PM recommendation (John via CoS relay, 15 Nov 2026, 12:16 AM ET: \"Most of that is right\"). See build spec \u00a70.1.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** FE-1, D13\n- **Scope:**\n  - Documentary length 3/5/10/15 (10/15 per D13);\n  - Visual direction (4);\n  - Voiceover;\n  - Format;\n  - Media (reconciled with the picker);\n  - \"Next: Create production plan\" + helper;\n  - title edit;\n  - \"Example project\" badge (D15).\n- **Requirements:** ST-UX-020\u2026030\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** The Media row is shown read-only as \"Use only my uploaded media\". The concept label \"Use uploads + licensed assets\" (ST-UX-028) is later.\n- **AC:** exactly the five settings; exact labels.\n- **Tests:** snapshot; policy-sync test.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-3",
+  "title": "[Motion Studio FE-3] Workspace shell (four areas, stage-aware) (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-2\n- **Scope:**\n  - left: PROJECT nav (Story/Media/Scenes/Graphics/Audio) + AI Director;\n  - center: preview (largest), time display, \"Current scene\";\n  - right: INSPECTOR;\n  - bottom: Storyboard/Timeline.\n- **Requirements:** ST-UX-040\u2026045, ST-UX-057, ST-UX-130, ST-UX-132, ST-UX-013\n- **AC:** the preview is the largest at \u2265 1280 px; create \u2192 export without opening the timeline.\n- **Tests:** layout tests; E2E.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-4",
+  "title": "[Motion Studio FE-4] Visual storyboard (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-4.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** FE-3, BE-5\n- **Scope:** \"Visual Storyboard\", \"Chapter N of M\"; cards (timestamp + title, treatment, description, technique tags, thumbnail); \"Select a scene to edit or regenerate.\"\n- **Requirements:** ST-UX-080\u2026084, ST-UX-123\n- **AC:** card count = scenes; fields from the record.\n- **Tests:** snapshot; select \u2192 seek + inspector.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-5",
+  "title": "[Motion Studio FE-5] Contextual inspector (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-5.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** FE-3, RE-2\n- **Scope:**\n  - \"Scene graphics\", \"Timing\", \"Style\", \"Camera movement\", \"Text\";\n  - \"Regenerate graphic\", \"Edit timeline\";\n  - per-type controls (chart; photo crop/depth/animation; clip trim/sound);\n  - transition toggle (RETURN / cut).\n- **Requirements:** ST-UX-046\u2026054, ST-TR-002\n- **AC:** each change re-renders only its segment.\n- **Tests:** per-type control tests.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-6",
+  "title": "[Motion Studio FE-6] Timeline view + advanced-editor handoff (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-6.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-9\n- **Scope:** tracks VIDEO/GRAPHICS/VOICE/MUSIC; expand; \"open in advanced editor\".\n- **Requirements:** ST-UX-055, ST-UX-056, ST-UX-070, ST-UX-102\n- **AC:** exact track labels; the handoff opens the full editor.\n- **Tests:** E2E handoff.\n- **Protected:** the full editor unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-7",
+  "title": "[Motion Studio FE-7] AI Director chat + \"Proposed changes\" (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-7.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-10\n- **Scope:** chat panel; proposed-change list with Accept/Reject (each/all); undo.\n- **Requirements:** ST-UX-043, ST-UX-100, ST-UX-101, ST-UX-085\n- **AC:** nothing applies before Accept.\n- **Tests:** lifecycle E2E.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-8",
+  "title": "[Motion Studio FE-8] Production Activity view (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-8.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-12\n- **Scope:** the six stages + the six activity steps with counts; no spinner-only states.\n- **Requirements:** ST-UI-104, ST-UX-060\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** The \"media candidates discovered and cataloged\" step is hidden in v1; \"uploads analyzed\" covers media.\n- **AC:** no spinner-only state > 3 s.\n- **Tests:** event-driven UI test.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-9",
+  "title": "[Motion Studio FE-9] Media Library (mid-production inspect/replace) (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-9.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-4\n- **Scope:** catalog view (source URL, attribution, licence status, use, chapter, person groups, flags, alternatives); replace; optional labels.\n- **Requirements:** ST-UI-105, ST-UI-106, ST-UX-042 (Media), ST-UX-064, ST-FACE-002\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** v1 shows uploads and their analysis, and Replace swaps in another upload. Found-media source URL, licence flags and alternatives are later.\n- **AC:** opens during an active run; replace re-renders affected scenes only.\n- **Tests:** E2E.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-10",
+  "title": "[Motion Studio FE-10] Checkpoint vs fully automatic + review/export + allowance panel (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-10.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D1: approved per the PM recommendation (John via CoS relay, 15 Nov 2026, 12:16 AM ET: \"Most of that is right\"). See build spec \u00a70.1.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** BE-2, BE-11\n- **Scope:** mode choice; checkpoint approval after story + plan (approve / request changes, with source links shown); review; MP4 export; allowance panel (credits/minutes, no `$`).\n- **Requirements:** ST-UX-062, ST-UX-070, ST-UX-071, ST-UX-126, ST-UX-128, ST-WF-003, ST-RULE-001\n- **AC:** `$` scan passes; export works.\n- **Tests:** E2E both modes.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-11",
+  "title": "[Motion Studio FE-11] Mobile tabs (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-11.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** FE-3\u2026FE-7\n- **Scope:** at < 768 px: Chat / Storyboard / Preview / Timeline tabs, shared state.\n- **Requirements:** ST-UX-058, ST-UX-131\n- **AC:** tabs switch without reload.\n- **Tests:** viewport E2E.\n- **Protected:** none.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "FE-12",
+  "title": "[Motion Studio FE-12] Route, nav, outcome card, landing (Frontend)",
+  "phase": "P3",
+  "owner": "Frontend",
+  "labels": [
+   "type:task",
+   "owner:frontend",
+   "P3",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft FE-12.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Decision(s) resolved:** D3: superseded by John (15 Nov 2026, 12:53 AM ET, via the CoS): the product is Motion Studio at `/app/motion-studio`, API `/api/motion-studio/*`. See build spec \u00a70.1.\n\n### Owner (one accountable)\nFrontend\n\n### Phase\nP3\n\n- **Owner:** Frontend\n- **Phase:** P3\n- **Depends on:** D3 (superseded and resolved by John 12:53 AM: Motion Studio)\n- **Scope:** `/app/motion-studio` (v1 entry `/app/motion-studio/new?type=documentary`; John 12:53 AM, supersedes D3 `/app/documentary`; distinct from AI Studio `/app/studio`), an outcome card on `/app`, a nav entry (`new-app/lib/routes.ts`, `components/shell/sidebar-nav.tsx`), a landing page with the vision statement.\n- **Requirements:** ST-VIS-001, ST-PROT-002, ST-UX-003\n- **AC:** existing routes snapshot unchanged.\n- **Tests:** route tests.\n- **Protected:** `/app/studio`, `/app/ad-studio`.\n- **Also covers (John 12:53 AM):** ST-UI-108, a premium front end consistent with the rest of the app. All Motion Studio screens use `new-app/components/ui/*` (shadcn, `components.json`) and the theme tokens in `new-app/app/globals.css`; no parallel component library and no hard-coded colors (grep test). Frontend owns it.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "DO-1",
+  "title": "[Motion Studio DO-1] Render pool capacity + sandbox runtime infra (DevOps)",
+  "phase": "P1",
+  "owner": "DevOps",
+  "labels": [
+   "type:task",
+   "owner:devops",
+   "P1",
+   "status:ready"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft DO-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: ready.** Required for the build to deploy: render pool + sandbox runtime that Motion Studio render jobs run on.\n\n### Owner (one accountable)\nDevOps\n\n### Phase\nP1\n\n- **Owner:** DevOps\n- **Phase:** P1\n- **Depends on:** none\n- **Scope:** render boxes with skia-python, ffmpeg and fonts; container runtime for the sandbox (no network); render seconds per output minute measured on the proof set. **Never the SMS worker or Coolify app3.**\n- **Requirements:** ST-ENG-003, ST-SBX-002\u2026004, ST-OBS-003, ST-RULE-004\n- **AC:** the proof set renders on the pool; deploy-target CI check.\n- **Tests:** infra smoke.\n- **Protected:** SMS worker and app3 untouched.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "DO-2",
+  "title": "[Motion Studio DO-2] Storage/retention for catalog + segment cache; render CI smoke (DevOps)",
+  "phase": "P2",
+  "owner": "DevOps",
+  "labels": [
+   "type:task",
+   "owner:devops",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft DO-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog.** Not required for the build to deploy; the build uses the existing storage paths until then (John, 12:54 AM ET).\n\n### Owner (one accountable)\nDevOps\n\n### Phase\nP2\n\n- **Owner:** DevOps\n- **Phase:** P2\n- **Depends on:** BE-1, RE-2\n- **Scope:** buckets/prefixes, retention, deletion with the project (incl. face data); a CI render smoke test.\n- **Requirements:** ST-FACE-005, ST-RR-001, ST-RULE-005\n- **AC:** delete removes the assets; signed URLs never logged.\n- **Tests:** deletion test; log scrub.\n- **Protected:** existing storage paths.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-1",
+  "title": "[Motion Studio QA-1] Concept acceptance suite (every ST-UX) (QA)",
+  "phase": "P3",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P3",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA\n\n### Phase\nP3\n\n- **Owner:** QA\n- **Phase:** P3\n- **Depends on:** FE-*\n- **Scope:** one test per ST-UX-001\u2026133 and ST-UI-101\u2026106, incl. exact-label snapshots.\n- **Requirements:** all ST-UX, ST-UI\n- **Scope change (John 12:33 AM, v1 media = user uploads only):** The ST-UI-101 (picker) and ST-UI-106 tests run flag-on only (later). v1 tests ST-UI-107.\n- **AC:** 100% of IDs have a passing test before release.\n- **Tests:** this suite.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-2",
+  "title": "[Motion Studio QA-2] Protected-mode regression + hard-rule checks (QA)",
+  "phase": "P1",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P1",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA\n\n### Phase\nP1\u2013P3 (every merge)\n\n- **Owner:** QA\n- **Phase:** P1\u2013P3 (every merge)\n- **Depends on:** none\n- **Scope:** upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, B0.5 live graphics, AI Studio, Ad Studio; `$` scan; additive-migration check; secret scrub.\n- **Also covers (John 12:42 AM reuse):** golden-output and suite checks for upload clipping, stream clipping, Story, multi-source Story and Clean Take whenever Motion Studio integrates the clipper analysis (ST-UPA-002); the \"no licence gate on uploads\" check (ST-RULE-007).\n- **Requirements:** ST-PROT-001/002, ST-RULE-001\u2026007, ST-UPA-002\n- **AC:** suites pass unchanged.\n- **Tests:** regression suite.\n- **Protected:** all listed.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-3",
+  "title": "[Motion Studio QA-3] End-to-end idea\u2192MP4 and script\u2192MP4 (checkpoint + fully automatic) (QA)",
+  "phase": "P2",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P2",
+   "blocked:john-decision"
+  ],
+  "blocked": [
+   "D17 (open action: benchmark footage + reviewer from John)"
+  ],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Blocked on: D17 (open action: benchmark footage + reviewer from John)** (see build spec \u00a70.1). Work that doesn't depend on these may be prepared; do not ship the dependent behavior until resolved.\n\n### Owner (one accountable)\nQA\n\n### Phase\nP2\u2013P3\n\n- **Owner:** QA\n- **Phase:** P2\u2013P3\n- **Depends on:** BE-2\u2026BE-9\n- **Scope:** 5-minute E2E per workflow and mode (idea runs use grounded research per BE-3); fault injection per stage; idempotency.\n- **Requirements:** ST-UX-012, ST-UX-110, ST-UX-127, ST-WF-001\u2026003, ST-FAIL-001/002, ST-VIS-002, ST-RES-001\n- **Decision resolved:** D5 (John 12:42 AM). Release-gate runs still wait for the D17 action (benchmark footage + reviewer).\n- **AC:** all pass on the benchmark.\n- **Tests:** E2E suite.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-4",
+  "title": "[Motion Studio QA-4] Handoff automated test suite (seam, decode accuracy, audio tail) (QA)",
+  "phase": "P1",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P1",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-4.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA\n\n### Phase\n**P1**\n\n- **Owner:** QA\n- **Phase:** **P1**\n- **Depends on:** RE-6, BE-13\n- **Scope:** a CI suite for the handoff module.\n  - **Pixel-diff seam checks** at ENTER\u2192PLAYBACK, PLAYBACK\u2192EXIT and continuation cuts (proposed MAD \u2264 1.0, \u2265 99.9% of pixels within \u00b14, PSNR \u2265 45 dB; VQ tunes).\n  - **Decode-accuracy matrix** on compressed sources: long-GOP H.264 and HEVC, B-frames, open GOP, VFR phone footage. The extracted frame must equal the frame displayed at the boundary.\n  - **Audio-tail checks:** no clicks (no transient > 6 dB above the local 10 ms RMS within \u00b120 ms of an edit), no abrupt stops (\u2264 \u221240 dBFS via a fade or tail \u2265 150 ms), trail or fade present with handles.\n- **Requirements:** ST-CMH-014, ST-CMH-015, ST-CMH-016, ST-QA-A13, ST-QA-A15\n- **AC:** every seeded fixture is caught; the matrix passes 100%; the suite runs on every handoff-module change.\n- **Tests:** this suite.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-5",
+  "title": "[Motion Studio QA-5] Reference-workflow QA kit: edge clipping, SFX vs speech, frame parity, text safety, render checks (QA)",
+  "phase": "P1",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P1",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-5.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA\n\n### Phase\n**P1** (step 6)\n\n- **Owner:** QA\n- **Phase:** **P1** (step 6)\n- **Depends on:** RE-8, RE-10, BE-14\n- **Scope:**\n  - **A18** text edge clipping (30 px ramp; audit lists CUT strings);\n  - **A19** SFX vs speech (EBU momentary 400 ms per 0.6 s cue window vs the speech median; \u2264 0 dB proposed);\n  - **A20** frame-count parity;\n  - ST-BLK-15 text safety (\u2265 40 px cap at 1080p, fade instead of render);\n  - ST-BLK-19 render checks (contact sheet, strips \u2212400/+800 ms around hit words, black/YAVG, freeze, duplicate frames, CFR, LUFS/TP);\n  - measurement precedence over the watch model.\n- **Requirements:** ST-RW-007, ST-RW-008, ST-RW-009, ST-RW-013, ST-BLK-15, ST-BLK-18, ST-BLK-19, ST-QA-A5\n- **AC:** the \"LONDON clipped\", R1 stamp-masking and 1194\u21921193 fixtures are all caught; A18 and A20 are hard gates; reports store the measurement alongside the watch-model claim.\n- **Tests:** this suite.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-6",
+  "title": "[Motion Studio QA-6] Cross-customer sameness check, visuals + music (custom output varies) (QA)",
+  "phase": "P2",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-6.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA (with Video Quality)\n\n### Phase\nP2\n\n- **Owner:** QA (with Video Quality)\n- **Phase:** P2\n- **Depends on:** RE-11, BE-1\n- **Scope:**\n  - compare each new video's worlds and scenes against recent outputs (other customers' anonymized fingerprints and house references) using **perceptual/structural similarity on keyframes** (perceptual hash + SSIM on sampled frames per scene, plus a layout/structure descriptor) and **style-spec distance** (ST-STY-003);\n  - proposed threshold: fail at \u2265 0.85 SSIM-equivalent (VQ tunes);\n  - fail action: regenerate only that Part 2 element and re-render locally, \u2264 2 times, model calls only within the confirmed budget, otherwise `needs_review`;\n  - reconciled with ST-STY-003/004 (both must pass).\n  - **Music (John 12:45 AM):**\n    - generated scores (the default bed and the ElevenLabs tier) are compared using audio feature distance (chroma, tempo and MFCC statistics) plus an audio fingerprint match; threshold for VQ to tune;\n    - fail action: regenerate the bed locally with varied parameters, \u2264 2 times, else `needs_review`;\n    - the ElevenLabs tier is never auto-regenerated with spend;\n    - user-uploaded music is excluded.\n- **Requirements:** ST-VAR-001, ST-VAR-002, ST-MUS-002, ST-STY-003, ST-STY-004, ST-PART-002\n- **AC:**\n  - re-using the GME chart world for a new finance video fails, and a fresh world passes;\n  - only the failing element regenerates;\n  - a copy of the GME bed in a new project fails and a fresh bed passes;\n  - fingerprints only, never another customer's media (privacy test).\n- **Tests:** sameness fixtures; regeneration-scope test; privacy test.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "QA-7",
+  "title": "[Motion Studio QA-7] Director derivation fixture test (different stories \u2192 different worlds) (QA)",
+  "phase": "P2",
+  "owner": "QA",
+  "labels": [
+   "type:task",
+   "owner:qa",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft QA-7.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nQA (with Video Quality)\n\n### Phase\nP2\n\n- **Owner:** QA (with Video Quality)\n- **Phase:** P2\n- **Depends on:** BE-5, BE-12\n- **Scope:**\n  - fixture-based test of ST-DIR-001 (John 12:49 AM: \"it needs to decide... and change it, so it's not all the same\");\n  - two **internal-only** fixture scripts with different subjects: a Keef-like place-journey story and a GameStop-like price story;\n  - the Director must derive different **world types** (map vs chart/ticker), scene lists, style specs (Table B) and emphasis words;\n  - each choice must carry a logged reason that is shown in Production Activity;\n  - model-agnostic (the harness doesn't depend on the model config).\n- **Requirements:** ST-DIR-001, ST-STY-001, ST-STY-003, ST-STY-005, ST-UX-065, ST-AG-004\n- **AC:**\n  - the world types differ;\n  - the style specs pass the ST-STY-003 distance check;\n  - 100% of world, scene, style-field and emphasis choices have a non-empty reason citing a subject or structure signal;\n  - the reasons render in Production Activity;\n  - the fixtures are never shipped.\n- **Tests:** fixture suite; Production Activity snapshot.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "VQ-1",
+  "title": "[Motion Studio VQ-1] QA gates A1\u2013A17 thresholds + rubric + benchmark (Video Quality)",
+  "phase": "P1",
+  "owner": "Video Quality",
+  "labels": [
+   "type:task",
+   "owner:video-quality",
+   "P1",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft VQ-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nVideo Quality\n\n### Phase\nP1 (A2/A4/A5/A14/A15) \u2192 P2 (all)\n\n- **Owner:** Video Quality\n- **Phase:** P1 (A2/A4/A5/A14/A15) \u2192 P2 (all)\n- **Depends on:** D17\n- **Scope:** implement and tune A1\u2013A17; seeded-defect fixtures; rubric B1\u2013B9; whole-frame reviews; P1 proof sign-off with John.\n- **Requirements:** ST-QA-A1\u2026A17, ST-QA-RUB, ST-COMP-002, ST-COMP-004, ST-UX-133, **ST-CMH-014 (seam threshold tuning), ST-CMH-016 (audio-tail thresholds), ST-CMH-018 (VQ handoff review: score each handoff \u2265 4/5 against John's \"part of the actual documentary\" bar; review every asymmetric exit and hard cut)**\n- **Also covers (reference workflow, CoS 12:27 AM):** Tune the reference-workflow thresholds: A19 SFX vs speech (\u2264 0 dB over the speech median, proposed), A18 edge ramp (30 px), the 40 px cap (ST-BLK-15), pace 120\u2013125 wpm (ST-RW-001), and loudness defaults \u221215 LUFS / TP \u22121.5 (D34).\n- **AC:** each check catches its fixture; rubric \u2265 4.0 on the proof set (P1 exit) and benchmark (release).\n- **Tests:** fixture suite.\n- **Protected:** VQ benchmark v1 unchanged.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "VQ-2",
+  "title": "[Motion Studio VQ-2] Decision-quality loop on exceptions (Video Quality)",
+  "phase": "P2",
+  "owner": "Video Quality",
+  "labels": [
+   "type:task",
+   "owner:video-quality",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft VQ-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nVideo Quality\n\n### Phase\nP2\n\n- **Owner:** Video Quality\n- **Phase:** P2\n- **Depends on:** BE-5\n- **Scope:** review the Director's transition/insert/hard-cut exceptions; agreement metric; \u2265 80% target (D12).\n- **Requirements:** ST-QA-DQ, ST-AG-004, ST-TR-006\n- **AC:** report per benchmark run.\n- **Tests:** n/a (review process).\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "VQ-3",
+  "title": "[Motion Studio VQ-3] VQ findings \u2192 house defaults learning loop (Video Quality)",
+  "phase": "P2",
+  "owner": "Video Quality",
+  "labels": [
+   "type:task",
+   "owner:video-quality",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft VQ-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nVideo Quality\n\n### Phase\nP2\n\n- **Owner:** Video Quality\n- **Phase:** P2\n- **Depends on:** VQ-1, BE-1\n- **Scope:** record each VQ finding as a lesson; automatically propose house-constant or director-rule changes; VQ approves; versioned with rollback (D32).\n- **Requirements:** ST-RW-011, ST-STY-001, ST-STY-005\n- **AC:** an approved lesson changes the house-constant version used by later projects; rollback works; unapproved lessons never change output.\n- **Tests:** version/rollback tests.\n- **Protected:** n/a.\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "SEC-1",
+  "title": "[Motion Studio SEC-1] Custom-code sandbox review (Security)",
+  "phase": "P2",
+  "owner": "Security",
+  "labels": [
+   "type:task",
+   "owner:security",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft SEC-1.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n**Decision(s) resolved:** D23: approved in principle; this issue is the required review. See build spec \u00a70.1.\n\n### Owner (one accountable)\nsecurity\n\n### Purpose\nindependent security review of the sandbox that runs AI-written animation code for documentary motion graphics, before that capability is used in production.\n\n### Scope (summary)\nReview the sandbox design and implementation against the requirements in the build spec, record sign-off, and track any required changes as follow-up issues.\n\n### Spec reference\nMotion Studio build spec (`transovo-studio-build.md`) \u00a72.7 (ST-SBX-001\u2026007)\n\n### Phase\nP2 (before production)\n\n### Acceptance criteria\nReview completed and sign-off recorded; required changes filed as follow-up issues.\n\n_Details are kept in internal docs; this public issue is intentionally high-level._\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "SEC-2",
+  "title": "[Motion Studio SEC-2] Licences for what we ship (engine fonts and voices) (Security)",
+  "phase": "P1",
+  "owner": "Security",
+  "labels": [
+   "type:task",
+   "owner:security",
+   "P1",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft SEC-2.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nsecurity\n\n### Purpose\nlicence review for the assets Transovo itself ships with the documentary engine (bundled fonts and voices).\n\n### Scope (summary)\nConfirm what each shipped asset permits and record a sign-off per asset. User uploads are covered by the standard Terms of Service and are out of scope. Found-media licensing is a later issue.\n\n### Spec reference\nBuild spec \u00a72.7 (ST-ENG-002), \u00a72.10 (ST-AUD-004)\n\n### Phase\nP1\n\n### Acceptance criteria\nReview completed and sign-off recorded; required changes filed as follow-up issues.\n\n_Details are kept in internal docs; this public issue is intentionally high-level._\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "SEC-3",
+  "title": "[Motion Studio SEC-3] Biometric/face data review (BIPA/GDPR): flagged, not blocking (Security)",
+  "phase": "P2",
+  "owner": "Security",
+  "labels": [
+   "type:task",
+   "owner:security",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft SEC-3.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nsecurity\n\n### Purpose\nprivacy review of face detection/grouping in Motion Studio (consent, notice, retention, deletion, regional rules such as BIPA/GDPR). Flagged by John as a parallel review \u2014 it does not block the first release.\n\n### Scope (summary)\nReview the feature and its interim defaults, record findings, and file follow-ups for any required changes.\n\n### Spec reference\nBuild spec \u00a72.6 (ST-FACE-004\u2026006); decision D22\n\n### Phase\nP2 (parallel)\n\n### Acceptance criteria\nReview completed and sign-off recorded; required changes filed as follow-up issues.\n\n_Details are kept in internal docs; this public issue is intentionally high-level._\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "SEC-4",
+  "title": "[Motion Studio SEC-4] Authz + secret hygiene for new routes, jobs and logs (Security)",
+  "phase": "P2",
+  "owner": "Security",
+  "labels": [
+   "type:task",
+   "owner:security",
+   "P2",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft SEC-4.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Status: backlog, after the build** (John, 15 Nov 2026, 12:54 AM ET: only Backend and Frontend build in this phase, with no QA/VQ/Security handoffs during the build).\n\n### Owner (one accountable)\nsecurity\n\n### Purpose\nauthorization and data-hygiene review for the new Motion Studio routes, jobs and logs.\n\n### Scope (summary)\nReview access control on the new documentary routes and confirm sensitive data is kept out of responses and logs; record sign-off.\n\n### Spec reference\nBuild spec \u00a72.12 (ST-RULE-005, ST-API-001)\n\n### Phase\nP2\n\n### Acceptance criteria\nReview completed and sign-off recorded; required changes filed as follow-up issues.\n\n_Details are kept in internal docs; this public issue is intentionally high-level._\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ },
+ {
+  "draft": "SEC-5",
+  "title": "[Motion Studio SEC-5] Found-media licensing, provider terms and download tooling (LATER) (Security)",
+  "phase": "Later",
+  "owner": "Security",
+  "labels": [
+   "type:task",
+   "owner:security",
+   "P3",
+   "status:backlog"
+  ],
+  "blocked": [],
+  "body": "[Agent: Product Manager]\n\n**Motion Studio (v1: documentaries) \u2014 draft SEC-5.** Spec: Motion Studio build spec (`transovo-studio-build.md`, PM, 15 Nov 2026) + draft list `transovo-studio-issues.md`. Repo baseline `05ac1600`. Prepared by the PM.\n\n**Phase: later** (John, 15 Nov 2026, 12:33 AM ET: v1 media = user uploads only). Fully specced; not in the v1 build. Labelled `status:backlog`.\n\n### Owner (one accountable)\nsecurity\n\n### Purpose\nlicensing and terms review for automatically found media and the tools used to obtain it (later feature).\n\n### Scope (summary)\nConfirm what each provider and tool permits, and record a sign-off. Automatic import stays off until it is signed off.\n\n### Spec reference\nBuild spec \u00a72.4 (ST-MR-004\u2026007, ST-MR-014); decision D4\n\n### Phase\n**Later (John 12:33 AM)**. Fully specced, not in v1.\n\n### Acceptance criteria\nReview completed and sign-off recorded; required changes filed as follow-up issues.\n\n_Details are kept in internal docs; this public issue is intentionally high-level._\n\n### Build workflow (John, 15 Nov 2026, 12:53 AM + 12:54 AM ET; reconciled with TEAM.md)\n- Build fast, push early. Use build/deploy plus worker logs as the test loop; don't spend 20\u201340 minutes self-testing locally.\n- During the build phase, testing is from the **live front end plus build/deploy and worker logs**. There are **no QA / Video Quality / Security handoffs in this phase**.\n- Still binding (TEAM.md): branch \u2192 PR \u2192 CI \u2192 normal merge; **no force-push**; additive migrations only; don't break working modes (upload clipping, stream clipping, the editor, Story, multi-source Story, Clean Take, live B0.5 motion graphics); never deploy or modify the SMS worker or Coolify app3; never show `$` in the UI; no automatic paid retries; no secrets, tokens or signed URLs in logs or responses.\n- Report **code written / tests passed / deployed / verified** separately.\n"
+ }
+]

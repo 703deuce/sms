@@ -1,53 +1,38 @@
-# Transovo AI limits and escalation
+# Transovo AI limits and escalation (Updated Nov 19, 2026)
 
 These limits exist so agents do not loop, wait out broken deploys, or spend money without approval.
 
 ## Retry limits
 
-- **Failing check or issue:** at most **2** automated fix attempts for the same failing check or the same issue. After the second failed attempt, set `status:blocked`, post a handoff with evidence, and escalate to the Chief of Staff. Do not open a third automated repair loop.
-- **Paid AI or render runs:** at most **1** attempt per paid AI or render run. No automatic paid retries and no duplicate paid runs. If the run fails, record the failure and escalate; do not re-run it automatically.
-- **Deploys:** a deploy that takes **more than 15 minutes** must be investigated, not waited out. Check logs, deploy status, and health. Escalate to DevOps and the Chief of Staff if the cause is unclear. Do not assume a long deploy will finish if left alone.
+- **Failing check or issue:** at most **2** automated fix attempts for the same failing check or issue. After the second failed attempt, set `status:blocked`, post a handoff with evidence, and escalate to the Chief of Staff.
+- **Paid AI or render runs:** at most **1** attempt per paid AI or render run. **No automatic paid retries and no duplicate paid runs.** Never launch a paid Modal or production render without John's explicit approval.
+- **Deploys:** a deploy taking **more than 15 minutes** must be investigated (logs, `coolify-db`, `/api/health`), never waited out.
 
 ## Escalation path
 
-1. The accountable owner records the failure, evidence, and attempts already used on the issue.
-2. Escalate to the Chief of Staff (`owner:chief-of-staff`) with `status:blocked`.
-3. The Chief of Staff coordinates the next specialist (QA, Video Quality, Security, DevOps, or Engineering) or, when required, escalates to John.
-4. Escalate to John (via the Chief of Staff, except that Security may escalate critical issues straight to John) for:
-   - security risks
+1. Accountable owner records failure, evidence, and attempts used.
+2. Escalate to Chief of Staff (`status:blocked`).
+3. Chief of Staff coordinates specialist or escalates to John (Security may escalate critical issues straight to John) for:
+   - security risks or exposed credentials
    - real spending or new paid services
-   - destructive operations (including destructive database changes)
-   - pricing or strategy decisions
-   - anything that would modify the SMS worker or Coolify app3 (forbidden)
-5. Do not claim that another agent or John was notified unless a real message or GitHub handoff was sent.
+   - destructive DB operations
+   - pricing or strategy changes
+   - anything touching the SMS worker or Coolify `app3` (**forbidden**)
 
-## Spend policy
+## Spend policy & approved rendering
 
-- No new paid services, advertising spend, or other spending commitments without John.
-- Keep usage frugal. Do not burn credits on failed or duplicate paid runs.
-- Never show `$` amounts in the product UI; the product uses credits only. This document may discuss cost policy for operators, not product copy.
-- Specific dollar budget caps for AI APIs, infrastructure, rendering, and experiments: **PENDING JOHN APPROVAL**. No approved numeric caps were provided. Do not treat any dollar figure as an approved limit until John sets one.
+- **Modal film rendering (`transovo-motion-render`, `worker/modal_motion/`):** Approved by John on **Nov 19, 2026** on **CPU mode** (`~$0.19/rendered min` benchmarked; `MODAL_MONTHLY_BUDGET_USD` default `30` checked against `ai_usage`). Still requires explicit approval before running paid production/test jobs.
+- **All other new paid services, ad spend, or commitments:** No spend without John.
+- **Never show `$` amounts in the product UI** — credits only.
 
-| Category | Cap | Status |
-| --- | --- | --- |
-| AI API spend | not set | PENDING JOHN APPROVAL |
-| Render / paid media processing | not set | PENDING JOHN APPROVAL |
-| New infrastructure or paid services | no new commitments without John | PENDING JOHN APPROVAL |
-| Advertising / growth experiments with spend | no spend without John | PENDING JOHN APPROVAL |
+## Usage & Coordinator Gate (`MotionStudioWorkerPlan`)
 
-## Usage discipline
-
-Grok Bot usage is a finite weekly limit shared by all 12 bots. Treat it as a scarce team resource, not a per-bot allowance.
-
-- Work only on an assigned GitHub issue. No self-started, continuous, or speculative work, and no back-and-forth chatter.
-- Research runs in bounded rounds with a defined deliverable. Do not leave open-ended research loops running.
-- Testing stays frugal: reuse fixtures and existing evidence, and do not duplicate runs (including paid AI/render runs covered above).
-- When a bot's assigned queue is empty, it goes idle. It does not invent the next task.
-- The Chief of Staff checks weekly usage in the daily owner report and escalates to John at **50%**, **75%**, and **90%** of the weekly limit.
-- Above **75%** of the weekly limit, only **P0** and **P1** work continues. P2/P3 work waits until usage is back under that threshold or John says otherwise.
-
-The numeric weekly limit itself is whatever the current Grok Bot plan provides; do not invent a substitute cap.
+- Grok Bot weekly usage is finite and enforced in production by `MotionStudioWorkerPlan` (`grokbot-plan-john` in `new-app/lib/server/motion-studio/coordinator.ts`), which pauses new AI job dispatches once `observedPercent >= weeklyLimitPercent`.
+- As of Nov 19, 2026 (`grokbot-plan-john`): `weeklyLimitPercent = 100.0`, `observedPercent = 96.7`, resets `2026-11-24 20:41 UTC` (Tue Nov 24 3:41 PM ET).
+- Work only on assigned tasks; stay frugal and reuse existing rendered segments (`reuse` + `/render-asset`) instead of re-rendering.
 
 ## Related rules
 
-See `team/RELEASE_POLICY.md` for merge and deploy policy, and `team/WORKFLOW.md` for status and handoff rules.
+- [`docs/handoffs/2026-11-19-chief-of-staff/STANDING_RULES_2026-11-19.md`](../docs/handoffs/2026-11-19-chief-of-staff/STANDING_RULES_2026-11-19.md)
+- [`team/RELEASE_POLICY.md`](./RELEASE_POLICY.md)
+- [`team/WORKFLOW.md`](./WORKFLOW.md)

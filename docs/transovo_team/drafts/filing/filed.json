@@ -1,0 +1,312 @@
+{
+ "RE-1": {
+  "number": 1198,
+  "url": "https://github.com/703deuce/sms/issues/1198",
+  "title": "[Motion Studio RE-1] Vendor Cinematic Skill as the pinned engine (Render engine)"
+ },
+ "RE-2": {
+  "number": 1199,
+  "url": "https://github.com/703deuce/sms/issues/1199",
+  "title": "[Motion Studio RE-2] Render service + `MGD_RENDER_SEGMENT` + segment cache (Render engine)"
+ },
+ "RE-3": {
+  "number": 1200,
+  "url": "https://github.com/703deuce/sms/issues/1200",
+  "title": "[Motion Studio RE-3] Shared-engine boundary + director interface hooks (Render engine)"
+ },
+ "RE-4": {
+  "number": 1201,
+  "url": "https://github.com/703deuce/sms/issues/1201",
+  "title": "[Motion Studio RE-4] Three-layer composition + procedural background systems (Render engine)"
+ },
+ "RE-5": {
+  "number": 1202,
+  "url": "https://github.com/703deuce/sms/issues/1202",
+  "title": "[Motion Studio RE-5] First-release blocks: maps, animated text, diagrams, charts, document treatments (Render engine)"
+ },
+ "RE-6": {
+  "number": 1203,
+  "url": "https://github.com/703deuce/sms/issues/1203",
+  "title": "[Motion Studio RE-6] Cinematic Media Handoff module (core engine capability) (Render engine)"
+ },
+ "RE-7": {
+  "number": 1204,
+  "url": "https://github.com/703deuce/sms/issues/1204",
+  "title": "[Motion Studio RE-7] Sandboxed custom-animation code runner (Render engine)"
+ },
+ "RE-8": {
+  "number": 1205,
+  "url": "https://github.com/703deuce/sms/issues/1205",
+  "title": "[Motion Studio RE-8] Foundation blocks: word clock, script model, world canvas, camera, finish (Render engine)"
+ },
+ "RE-9": {
+  "number": 1206,
+  "url": "https://github.com/703deuce/sms/issues/1206",
+  "title": "[Motion Studio RE-9] Bounded automated fix loop + measurement precedence (Render engine)"
+ },
+ "RE-10": {
+  "number": 1207,
+  "url": "https://github.com/703deuce/sms/issues/1207",
+  "title": "[Motion Studio RE-10] Audio blocks + beat-keyed music bed + uploaded-music cut and duck (Render engine)"
+ },
+ "RE-11": {
+  "number": 1208,
+  "url": "https://github.com/703deuce/sms/issues/1208",
+  "title": "[Motion Studio RE-11] Part 2 generator: fresh worlds and scene code per customer/video (Render engine)"
+ },
+ "RE-12": {
+  "number": 1209,
+  "url": "https://github.com/703deuce/sms/issues/1209",
+  "title": "[Motion Studio RE-12] Per-video score generator + musical variety (Part 2) (Render engine)"
+ },
+ "BE-1": {
+  "number": 1210,
+  "url": "https://github.com/703deuce/sms/issues/1210",
+  "title": "[Motion Studio BE-1] Additive data model + director registry (Backend)"
+ },
+ "BE-2": {
+  "number": 1211,
+  "url": "https://github.com/703deuce/sms/issues/1211",
+  "title": "[Motion Studio BE-2] `/api/motion-studio/*` routes, run state machine, idempotency (Backend)"
+ },
+ "BE-3": {
+  "number": 1212,
+  "url": "https://github.com/703deuce/sms/issues/1212",
+  "title": "[Motion Studio BE-3] Story agent (idea \u2192 sourced script; script \u2192 organized narration) + grounded research (Backend)"
+ },
+ "BE-4": {
+  "number": 1213,
+  "url": "https://github.com/703deuce/sms/issues/1213",
+  "title": "[Motion Studio BE-4] AI Media Researcher agent + automatic media finding (LATER) (Backend)"
+ },
+ "BE-5": {
+  "number": 1214,
+  "url": "https://github.com/703deuce/sms/issues/1214",
+  "title": "[Motion Studio BE-5] Documentary Director (plan, style spec, transitions, footage modes) (Backend)"
+ },
+ "BE-6": {
+  "number": 1215,
+  "url": "https://github.com/703deuce/sms/issues/1215",
+  "title": "[Motion Studio BE-6] Footage Editor adapter (WHAT) (Backend)"
+ },
+ "BE-7": {
+  "number": 1216,
+  "url": "https://github.com/703deuce/sms/issues/1216",
+  "title": "[Motion Studio BE-7] Upload understanding by reusing the clipper analysis + face grouping (named gaps only) (Backend)"
+ },
+ "BE-8": {
+  "number": 1217,
+  "url": "https://github.com/703deuce/sms/issues/1217",
+  "title": "[Motion Studio BE-8] Narration (documentary preset, upload own, alignment): ElevenLabs only (Backend)"
+ },
+ "BE-9": {
+  "number": 1218,
+  "url": "https://github.com/703deuce/sms/issues/1218",
+  "title": "[Motion Studio BE-9] Master timeline model + assembly + mix + editor round trip (Backend)"
+ },
+ "BE-10": {
+  "number": 1219,
+  "url": "https://github.com/703deuce/sms/issues/1219",
+  "title": "[Motion Studio BE-10] AI Director chat: proposed changes, accept/reject, per-scene regenerate (Backend)"
+ },
+ "BE-11": {
+  "number": 1220,
+  "url": "https://github.com/703deuce/sms/issues/1220",
+  "title": "[Motion Studio BE-11] Allowance estimator (credits/minutes, no `$`) (Backend)"
+ },
+ "BE-12": {
+  "number": 1221,
+  "url": "https://github.com/703deuce/sms/issues/1221",
+  "title": "[Motion Studio BE-12] Production activity events + observability (Backend)"
+ },
+ "BE-13": {
+  "number": 1222,
+  "url": "https://github.com/703deuce/sms/issues/1222",
+  "title": "[Motion Studio BE-13] Handoff segment records in the master timeline model (Backend)"
+ },
+ "BE-14": {
+  "number": 1223,
+  "url": "https://github.com/703deuce/sms/issues/1223",
+  "title": "[Motion Studio BE-14] Export integrity: frame-count parity, atomic writes, small export (Backend)"
+ },
+ "BE-15": {
+  "number": 1224,
+  "url": "https://github.com/703deuce/sms/issues/1224",
+  "title": "[Motion Studio BE-15] Data adapters (user-provided or grounded research only) + data provenance + asset manifest / credits ledger (Backend)"
+ },
+ "BE-16": {
+  "number": 1225,
+  "url": "https://github.com/703deuce/sms/issues/1225",
+  "title": "[Motion Studio BE-16] Narration-writing rules in the Story agent (Backend)"
+ },
+ "BE-17": {
+  "number": 1226,
+  "url": "https://github.com/703deuce/sms/issues/1226",
+  "title": "[Motion Studio BE-17] Uploaded-clip quote location + beat-aligned in/out (reuse) (Backend)"
+ },
+ "BE-18": {
+  "number": 1227,
+  "url": "https://github.com/703deuce/sms/issues/1227",
+  "title": "[Motion Studio BE-18] Agent brief content standard (Backend)"
+ },
+ "BE-19": {
+  "number": 1228,
+  "url": "https://github.com/703deuce/sms/issues/1228",
+  "title": "[Motion Studio BE-19] Found-clip transcription to locate quotes (LATER) (Backend)"
+ },
+ "BE-20": {
+  "number": 1229,
+  "url": "https://github.com/703deuce/sms/issues/1229",
+  "title": "[Motion Studio BE-20] Model routing (Luna / Sol) + per-step failure logging dashboard (Backend)"
+ },
+ "BE-22": {
+  "number": 1230,
+  "url": "https://github.com/703deuce/sms/issues/1230",
+  "title": "[Motion Studio BE-22] Optional ElevenLabs-generated music tier (Backend)"
+ },
+ "FE-1": {
+  "number": 1231,
+  "url": "https://github.com/703deuce/sms/issues/1231",
+  "title": "[Motion Studio FE-1] Create screen (Frontend)"
+ },
+ "FE-2": {
+  "number": 1232,
+  "url": "https://github.com/703deuce/sms/issues/1232",
+  "title": "[Motion Studio FE-2] Project setup (Frontend)"
+ },
+ "FE-3": {
+  "number": 1233,
+  "url": "https://github.com/703deuce/sms/issues/1233",
+  "title": "[Motion Studio FE-3] Workspace shell (four areas, stage-aware) (Frontend)"
+ },
+ "FE-4": {
+  "number": 1234,
+  "url": "https://github.com/703deuce/sms/issues/1234",
+  "title": "[Motion Studio FE-4] Visual storyboard (Frontend)"
+ },
+ "FE-5": {
+  "number": 1235,
+  "url": "https://github.com/703deuce/sms/issues/1235",
+  "title": "[Motion Studio FE-5] Contextual inspector (Frontend)"
+ },
+ "FE-6": {
+  "number": 1236,
+  "url": "https://github.com/703deuce/sms/issues/1236",
+  "title": "[Motion Studio FE-6] Timeline view + advanced-editor handoff (Frontend)"
+ },
+ "FE-7": {
+  "number": 1237,
+  "url": "https://github.com/703deuce/sms/issues/1237",
+  "title": "[Motion Studio FE-7] AI Director chat + \"Proposed changes\" (Frontend)"
+ },
+ "FE-8": {
+  "number": 1238,
+  "url": "https://github.com/703deuce/sms/issues/1238",
+  "title": "[Motion Studio FE-8] Production Activity view (Frontend)"
+ },
+ "FE-9": {
+  "number": 1239,
+  "url": "https://github.com/703deuce/sms/issues/1239",
+  "title": "[Motion Studio FE-9] Media Library (mid-production inspect/replace) (Frontend)"
+ },
+ "FE-10": {
+  "number": 1240,
+  "url": "https://github.com/703deuce/sms/issues/1240",
+  "title": "[Motion Studio FE-10] Checkpoint vs fully automatic + review/export + allowance panel (Frontend)"
+ },
+ "FE-11": {
+  "number": 1241,
+  "url": "https://github.com/703deuce/sms/issues/1241",
+  "title": "[Motion Studio FE-11] Mobile tabs (Frontend)"
+ },
+ "FE-12": {
+  "number": 1242,
+  "url": "https://github.com/703deuce/sms/issues/1242",
+  "title": "[Motion Studio FE-12] Route, nav, outcome card, landing (Frontend)"
+ },
+ "DO-1": {
+  "number": 1243,
+  "url": "https://github.com/703deuce/sms/issues/1243",
+  "title": "[Motion Studio DO-1] Render pool capacity + sandbox runtime infra (DevOps)"
+ },
+ "DO-2": {
+  "number": 1244,
+  "url": "https://github.com/703deuce/sms/issues/1244",
+  "title": "[Motion Studio DO-2] Storage/retention for catalog + segment cache; render CI smoke (DevOps)"
+ },
+ "QA-1": {
+  "number": 1245,
+  "url": "https://github.com/703deuce/sms/issues/1245",
+  "title": "[Motion Studio QA-1] Concept acceptance suite (every ST-UX) (QA)"
+ },
+ "QA-2": {
+  "number": 1246,
+  "url": "https://github.com/703deuce/sms/issues/1246",
+  "title": "[Motion Studio QA-2] Protected-mode regression + hard-rule checks (QA)"
+ },
+ "QA-3": {
+  "number": 1247,
+  "url": "https://github.com/703deuce/sms/issues/1247",
+  "title": "[Motion Studio QA-3] End-to-end idea\u2192MP4 and script\u2192MP4 (checkpoint + fully automatic) (QA)"
+ },
+ "QA-4": {
+  "number": 1248,
+  "url": "https://github.com/703deuce/sms/issues/1248",
+  "title": "[Motion Studio QA-4] Handoff automated test suite (seam, decode accuracy, audio tail) (QA)"
+ },
+ "QA-5": {
+  "number": 1249,
+  "url": "https://github.com/703deuce/sms/issues/1249",
+  "title": "[Motion Studio QA-5] Reference-workflow QA kit: edge clipping, SFX vs speech, frame parity, text safety, render checks (QA)"
+ },
+ "QA-6": {
+  "number": 1250,
+  "url": "https://github.com/703deuce/sms/issues/1250",
+  "title": "[Motion Studio QA-6] Cross-customer sameness check, visuals + music (custom output varies) (QA)"
+ },
+ "QA-7": {
+  "number": 1251,
+  "url": "https://github.com/703deuce/sms/issues/1251",
+  "title": "[Motion Studio QA-7] Director derivation fixture test (different stories \u2192 different worlds) (QA)"
+ },
+ "VQ-1": {
+  "number": 1252,
+  "url": "https://github.com/703deuce/sms/issues/1252",
+  "title": "[Motion Studio VQ-1] QA gates A1\u2013A17 thresholds + rubric + benchmark (Video Quality)"
+ },
+ "VQ-2": {
+  "number": 1253,
+  "url": "https://github.com/703deuce/sms/issues/1253",
+  "title": "[Motion Studio VQ-2] Decision-quality loop on exceptions (Video Quality)"
+ },
+ "VQ-3": {
+  "number": 1254,
+  "url": "https://github.com/703deuce/sms/issues/1254",
+  "title": "[Motion Studio VQ-3] VQ findings \u2192 house defaults learning loop (Video Quality)"
+ },
+ "SEC-1": {
+  "number": 1255,
+  "url": "https://github.com/703deuce/sms/issues/1255",
+  "title": "[Motion Studio SEC-1] Custom-code sandbox review (Security)"
+ },
+ "SEC-2": {
+  "number": 1256,
+  "url": "https://github.com/703deuce/sms/issues/1256",
+  "title": "[Motion Studio SEC-2] Licences for what we ship (engine fonts and voices) (Security)"
+ },
+ "SEC-3": {
+  "number": 1257,
+  "url": "https://github.com/703deuce/sms/issues/1257",
+  "title": "[Motion Studio SEC-3] Biometric/face data review (BIPA/GDPR): flagged, not blocking (Security)"
+ },
+ "SEC-4": {
+  "number": 1258,
+  "url": "https://github.com/703deuce/sms/issues/1258",
+  "title": "[Motion Studio SEC-4] Authz + secret hygiene for new routes, jobs and logs (Security)"
+ },
+ "SEC-5": {
+  "number": 1259,
+  "url": "https://github.com/703deuce/sms/issues/1259",
+  "title": "[Motion Studio SEC-5] Found-media licensing, provider terms and download tooling (LATER) (Security)"
+ }
+}
