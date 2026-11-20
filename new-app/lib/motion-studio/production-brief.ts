@@ -79,6 +79,7 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
   ...(commentary?{commentary:{text:commentary,role:'commentary',handling:'creator_opinion'}}:{}),
   ...(ref.length?{referenceLinks:ref}:{}),
   narration:{mode,...(voiceId&&(mode==='ai_voice'||mode==='cloned_voice')?{voiceId,voiceName:str(n.voiceName,120),voiceSource}:{}),
+    ...(mode==='ai_voice'&&voiceSource==='auto'?{voiceSource:'auto' as const}:{}),
     ...(narrationUpload?{uploadId:narrationUpload}:{}),
     handling:mode==='talking_head'?'preserve_talking_head':mode==='uploaded_narration'?'voiceover_drives_timing':voiceId?'tts_with_voice_id':'tts_auto_voice'},
   music:{mode:musicMode,...(musicUpload?{uploadId:musicUpload}:{}),
