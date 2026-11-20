@@ -11,7 +11,7 @@
 2. **`STANDING_RULES_2026-11-19.md`** (in this folder) — every active rule from John (Nov 9–19, 2026). Newer rules override older ones.
 3. **`MODAL_AND_SERVER_RUNBOOK.md`** (in this folder) — how to deploy/run `worker/modal_motion/`, inspect Coolify & DB safely, kick the coordinator, manage `MotionStudioWorkerPlan`, and use the parameterized scripts in `scripts/`.
 4. **`team/AGENTS.md` & `team/LIMITS.md`** (repo root) — updated roster, retry limits, and approved spend rules.
-5. **Motion Studio Producer kit:** `producer_handoff_kit/` on `master` (and check open **PR #1270** on `docs/motion-studio-modal-render-20261119` for the Producer's Modal skill updates — **for John to merge; do not merge PR #1270 yourself**).
+5. **Motion Studio Producer kit:** `producer_handoff_kit/` on `master`, plus the updated Modal catch-up kit in open **PR #1270** (`docs/motion-studio-modal-render-20261119`, start at `producer_handoff_kit/README.md` and `producer_handoff_kit/HANDOFF_UPDATE_2026_11_19.md` — **for John to merge; do not merge PR #1270 yourself**).
 6. **Historical docs archive:** `docs/transovo_team/` — contains `HANDOVER-motion-studio.md` (Nov 15 baseline), `TEAM.md`, `PRODUCT_V1.md`, `roles/*.md`, `specs/*.md` (including `specs/modal-render-brief.md`), `runbooks/*.md`, and `backend/motion-studio-api-contract.md`.
 
 ---
