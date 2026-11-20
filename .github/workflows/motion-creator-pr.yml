@@ -34,13 +34,13 @@ jobs:
           DIRECT_URL: postgresql://tester:tester@localhost:5432/transovo
         run: npx prisma validate --schema prisma/schema.prisma
       - name: Creator tests
-        run: npx vitest run tests/motion-studio/motion-studio-create.test.tsx tests/motion-studio/production-brief.test.ts
+        run: npx vitest run tests/motion-studio/motion-studio-create.test.tsx tests/motion-studio/production-brief.test.ts tests/motion-studio/creator-voice-picker.test.tsx
       - name: TypeScript creator-specific regression gate
         shell: bash
         run: |
           npx tsc --noEmit --pretty false > /tmp/creator-tsc.log 2>&1 || true
           echo "Whole-app errors (pre-existing baseline not gated): $(grep -c 'error TS' /tmp/creator-tsc.log || true)"
-          if grep -E '^(components/motion-studio/|lib/motion-studio/production-brief|lib/motion-studio/types|lib/server/motion-studio/(service|agent-bridge|voices)|app/api/motion-studio/voices/|tests/motion-studio/(motion-studio-create|production-brief))' /tmp/creator-tsc.log | grep 'error TS'; then
+          if grep -E '^(components/motion-studio/|lib/motion-studio/production-brief|lib/motion-studio/types|lib/server/motion-studio/(service|agent-bridge|voices)|app/api/motion-studio/voices/|tests/motion-studio/(motion-studio-create|production-brief|creator-voice-picker))' /tmp/creator-tsc.log | grep 'error TS'; then
             echo "Creator-specific TypeScript regression detected"
             exit 1
           fi
