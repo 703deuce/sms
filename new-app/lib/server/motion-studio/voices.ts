@@ -1,7 +1,7 @@
 import 'server-only'
 import {randomUUID} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
-import {getClipStorage} from '@/lib/storage'
+import {getClipStorage,createReadableSignedUrl} from '@/lib/storage'
 import {getElevenLabsApiKey} from '@/lib/server/ai/elevenlabs'
 import {MotionStudioError} from './errors'
 import {MOTION_STOCK_VOICES} from '@/lib/motion-studio/stock-voices'
@@ -40,11 +40,16 @@ export async function listVoices(workspaceId:string,userId:string){
    voiceId:row.voiceId,name:row.name,description:row.description,gender:row.gender,
    accent:row.accent,previewUrl:row.previewUrl||await officialPreview(row.voiceId),source:'stock' as const,
  })))
- const myVoices=await Promise.all(my.map(async row=>({
-   id:row.id,voiceId:row.voiceId,name:row.name,kind:row.kind,
-   isDefault:row.isDefault,previewUrl:row.previewUrl||await officialPreview(row.voiceId),
-   source:row.kind==='cloned'?'cloned' as const:'stock' as const,
- })))
+ const myVoices=await Promise.all(my.map(async row=>{
+   let previewUrl=row.previewUrl||await officialPreview(row.voiceId)
+   if(!previewUrl&&row.sampleUploadId){
+     const source=await db().clipUpload.findFirst({
+       where:{id:row.sampleUploadId,workspaceId,status:'COMPLETE'},select:{key:true}})
+     if(source)previewUrl=await createReadableSignedUrl(source.key,1800).catch(()=>'')
+   }
+   return {id:row.id,voiceId:row.voiceId,name:row.name,kind:row.kind,
+     isDefault:row.isDefault,previewUrl,source:row.kind==='cloned'?'cloned' as const:'stock' as const}
+ }))
  return {myVoices,stockVoices,defaultVoiceId:my.find(r=>r.isDefault)?.voiceId||null}
 }
 export async function validateChosenVoice(workspaceId:string,userId:string,voiceId:string,source:'cloned'|'stock'){
@@ -89,10 +94,11 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  const label=name(body.name),sampleUploadId=typeof body.sampleUploadId==='string'?body.sampleUploadId.trim():''
  if(label.length<2||!sampleUploadId)throw error('Enter a voice name and upload a sample.')
  const sample=await db().clipUpload.findFirst({
-  where:{id:sampleUploadId,workspaceId,status:'COMPLETE'},select:{id:true,key:true,mime:true,bytes:true}})
+  where:{id:sampleUploadId,workspaceId,status:'COMPLETE'},select:{id:true,key:true,mime:true,bytes:true,durationMs:true}})
  if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime))
   throw error('Upload a supported audio recording first.')
  if(Number(sample.bytes)>25*1024*1024)throw error('Voice sample exceeds 25 MB.')
+ if(sample.durationMs!=null&&sample.durationMs<10000)throw error('Voice sample needs at least 10 seconds.')
  const content=await getClipStorage().getObjectBytes(sample.key)
  const form=new FormData()
  form.set('name',label)
