@@ -6,7 +6,7 @@ These settings guide the production. They are **never a fixed scene template**. 
 
 Full field shapes: `/workspace/motion_jobs/BRAND_KIT_CONTRACT.md`.
 
-## Fields
+**Creator brief:** Use `brief.style` as the single style field; `automatic` means invent the creative look. Honor `brief.brand`, `audience`, `tone`, `sourcePreferences` and labeled `inputs[]` as complementary direction. The original prompt and uploaded references remain distinct. Do not reinterpret supplied commentary as verified fact.\n\n## Fields
 
 The webhook (and the creative snapshot on `GET {jobUrl}` → `settings.creative`) may include:
 
