@@ -33,7 +33,12 @@ def api(job_id,method,path="",payload=None,params=None,timeout=120,attempts=8):
         if r.status_code in (429,500,502,503,504) and attempt<attempts:
             time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
         if not r.ok:
-            raise RuntimeError("Job API failed: "+str(r.status_code))
+            # Preserve the server's validation reason, excluding URLs and query strings.
+            try: detail=str((r.json() or {}).get("error") or "")
+            except Exception: detail=""
+            detail=re.sub(r"https?://\\S+","[url]",detail)[:300]
+            raise RuntimeError("Job API failed: "+str(r.status_code)+
+                " "+method+" "+(path or "/")+(": "+detail if detail else ""))
         return r.json()
 
 def heartbeat(job_id,stop):
