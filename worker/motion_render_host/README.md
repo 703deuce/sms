@@ -117,3 +117,37 @@ that prior segment receipts match that composition. Segment filenames encode
 frame ranges but not bundle hashes; reusing old segments after changing their
 content is unsafe and must not be done without invalidation. Technical
 retries of the **same** bundle reuse the same registered segments.
+
+## Keith Murray delivery-speed improvements (Nov 20)
+
+The master is independently watchable after the job API confirms
+`approveMaster`, **before** the editable scene package is published. The
+customer-facing job exposes a signed `videoUrl` and `masterReadyAt` while
+`editableReady=false`. The worker records a separate `master_ready`
+render-status event, continues preparing the editor package, and only sets
+`completedAt` after full native publication. A temporary editable-publish
+failure must not hide or roll back the approved master.
+
+The shared `publish_editable` path still accepts `portable.json` as a
+single-POST fast path. Without one, it SHA-verifies each original blob,
+deduplicates identical content, reuses any separately registered, ready
+receipt with matching sha256, bytes, kind and MIME, and uploads remaining
+blobs in a bounded four-thread pool. **A blob merely inside the uploaded ZIP
+is not separately registered** and cannot be marked ready by implication.
+
+After a segment encode, B2 upload/commit retries use the **same encoded
+segment file**, not a second Chromium capture. B2 size-read consistency
+gets short bounded retries; retryCommit can safely confirm an already
+committed object. The worker now uses `tini -g --` as PID 1 so orphaned
+Chromium descendants are reaped without raising the process limit.
+
+Operational stage logs contain only job ID, stage and allowlisted numbers
+(duration, bytes, segment index, retry count); no URLs, credentials, paths
+or headers. A private `/work/logs/job_<id>.jsonl` survives scratch cleanup.
+No runtime restart or existing zombie cleanup is performed by these source
+changes; the improved reaping takes effect only with a future approved deploy.
+
+**Still to validate:** 60-second user-visible master-first test, customer
+notification behavior, full native Compact Editor reopen, and timings on an
+actual 84-asset package. Upload speed is an optimization, not a guaranteed
+one-minute completion SLA.
