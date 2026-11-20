@@ -69,3 +69,39 @@ export async function POST(request:Request,ctx:Ctx){
       {headers:{'Cache-Control':'private, no-store'}})
   }catch(error){return motionStudioJsonError(error)}
 }
+
+/** Operator/producer job-scoped status probe to make uncertain submissions safe. */
+export async function GET(request:Request,ctx:Ctx){
+  try{
+    const {id}=await ctx.params
+    await requireBotJob(id,request)
+    const configured=process.env.RENDER_WORKER_URL
+    const secret=process.env.RENDER_HOST_SECRET
+    if(!configured||!secret||secret.length<32)
+      throw new MotionStudioError('INTERNAL','Private render worker is not configured.',503)
+    const worker=new URL(configured)
+    if(worker.protocol!=='http:'||worker.username||worker.password||
+       worker.pathname!=='/'||worker.search||worker.hash||
+       /^(localhost|127\\.|0\\.0\\.0|transovo\\.ai)$/i.test(worker.hostname))
+      throw new MotionStudioError('INTERNAL','Private render worker address is invalid.',503)
+    let response:Response
+    try{
+      response=await fetch(new URL('/jobs/'+encodeURIComponent(id),worker),{
+        headers:{'X-Render-Host-Secret':secret},cache:'no-store',redirect:'error',
+        signal:AbortSignal.timeout(25000),
+      })
+    }catch{
+      throw new MotionStudioError('INTERNAL','Private render worker unavailable.',503)
+    }
+    if(!response.ok)throw new MotionStudioError('INTERNAL','Private worker status unavailable.',503)
+    const raw=await response.json() as Record<string,unknown>
+    const stage=typeof raw.stage==='string'?raw.stage:'unknown'
+    const allowed=['unknown','queued','running','rendering','qa_pass','qa_fail',
+                   'uploaded','completed','failed','cancelled']
+    if(raw.jobId!==id||!allowed.includes(stage))
+      throw new MotionStudioError('INTERNAL','Invalid private render status.',503)
+    return NextResponse.json({jobId:id,backend:'self_hosted',stage,
+       queuePosition:typeof raw.position==='number'?raw.position:null},
+      {headers:{'Cache-Control':'private, no-store'}})
+  }catch(error){return motionStudioJsonError(error)}
+}
