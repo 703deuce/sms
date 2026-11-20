@@ -281,9 +281,9 @@ def qa_video(path,expected_frames,fps,expected_width=None,expected_height=None):
     # loudness deviations must never reject an otherwise valid film.
     _,loud=checked(["ffmpeg","-nostdin","-hide_banner","-i",path,"-vn","-af",
       "ebur128=peak=true,volumedetect","-f","null","-"],timeout=1800)
-    matches=re.findall(r"I:\\s*(-?[0-9.]+) LUFS",loud)
+    matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
     integrated=float(matches[-1]) if matches else None
-    volumes=re.findall(r"max_volume:\\s*(-?[0-9.]+) dB",loud)
+    volumes=re.findall(r"max_volume:\s*(-?[0-9.]+) dB",loud)
     peak=float(volumes[-1]) if volumes else None
     if peak is None or peak<=-55:
         raise ValueError("Audio track is silent")
