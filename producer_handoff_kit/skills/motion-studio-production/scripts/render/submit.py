@@ -121,7 +121,7 @@ def main():
             spans=[]
             import re as regex
             for record in records:
-                matched=regex.fullmatch(r"modal_seg_v1_cpu_(\\d{8})_(\\d{8})\\.mp4",
+                matched=regex.fullmatch(r"modal_seg_v1_cpu_(\d{8})_(\d{8})\.mp4",
                                        str(record.get("filename","")))
                 if matched:
                     spans.append(int(matched.group(2))-int(matched.group(1)))
