@@ -1,6 +1,6 @@
 """Private-bundle rendering helpers. No database or B2 credentials in Modal."""
 from __future__ import annotations
-import hashlib, json, os, pathlib, re, shutil, signal, subprocess, tempfile, threading, time, zipfile
+import concurrent.futures, hashlib, json, os, pathlib, re, shutil, signal, subprocess, tempfile, threading, time, zipfile
 from urllib.parse import quote, urlparse
 import requests
 
@@ -9,6 +9,14 @@ MAX_ZIP=2_000_000_000
 MAX_UNPACKED=3_000_000_000
 MAX_FILES=10000
 SESSION=requests.Session()
+
+def safe_stage_log(stage,**fields):
+    """Allowlisted operational numbers only; never log URLs, paths or tokens."""
+    if not os.environ.get("MOTION_RENDER_STAGE_LOGS"):return
+    permitted={k:round(float(v),3) if isinstance(v,(int,float)) else bool(v)
+               for k,v in fields.items() if k in (
+                   "index","bytes","seconds","attempt","skipped","count","retries")}
+    print(json.dumps({"stage":stage,**permitted},separators=(",",":")),flush=True)
 
 def job_url(job_id):
     base=os.environ["MOTION_JOB_URL"].rstrip("/")
@@ -435,6 +443,8 @@ def publish_editable(job_id,root):
     if not isinstance(assets,dict):raise ValueError("Invalid Producer asset map")
     if len(assets)>10000:raise ValueError("Too many editable assets")
     records=[]
+    work=[]
+    dedupe={}
     for native_id,asset in assets.items():
         if not isinstance(native_id,str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}",native_id):
             raise ValueError("Invalid native asset ID")
@@ -456,9 +466,32 @@ def publish_editable(job_id,root):
         with open(blob,"rb") as src:
             if hashlib.file_digest(src,"sha256").hexdigest()!=digest:
                 raise ValueError("Native source digest mismatch")
-        receipt=prepare_upload(job_id,str(blob),filename,kind,mime)
-        records.append({"id":native_id,"storageId":receipt,
+        # Identical native content may appear in multiple scenes; upload
+        # each verified distinct blob once, regardless of its source name.
+        key=(digest,asset["bytes"],kind,mime)
+        if key not in dedupe:
+            dedupe[key]=len(work)
+            work.append((str(blob),filename,kind,mime))
+        records.append({"id":native_id,"workIndex":dedupe[key],
                         "kind":kind,"sha256":digest})
+    # Small bounded pool: network latency dominates tiny asset transfers.
+    # Output order remains deterministic and manifests retain native IDs.
+    def publish_one(item):
+        path,filename,kind,mime=item
+        started=time.monotonic()
+        receipt=prepare_upload(job_id,path,filename,kind,mime)
+        return receipt,time.monotonic()-started
+    results=[None]*len(work)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        future_map={pool.submit(publish_one,item):index for index,item in enumerate(work)}
+        for future in concurrent.futures.as_completed(future_map):
+            index=future_map[future]
+            receipt,seconds=future.result()
+            results[index]=receipt
+            safe_stage_log("editable_asset",index=index+1,seconds=round(seconds,3),
+                           bytes=os.path.getsize(work[index][0]))
+    for record in records:
+        record["storageId"]=results[record.pop("workIndex")]
     records.sort(key=lambda a:a["id"])
     payload={"document":pkg["document"],"assets":records,"bundles":bundles}
     live=root/"live-project.json"
