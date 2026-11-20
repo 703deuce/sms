@@ -112,7 +112,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const editable = await db().motionStudioPortableVersion.findFirst({
     where:{workspaceId,projectId,sourceJobId:job.id,status:'committed'}, select:{id:true},
   })
-  return { ...publicJob(job), delivery:toObject(project.exportInfo).delivery||'legacy', editableReady:Boolean(editable), masterReady:Boolean(job.resultKey)||
+  return { ...publicJob(job), delivery:toObject(project.exportInfo).delivery||'legacy', editableReady:Boolean(editable),
+    masterReadyAt:toObject(project.exportInfo).masterReadyAt||null, masterReady:Boolean(job.resultKey)||
       (toObject(project.exportInfo).delivery==='live'&&Boolean(editable)), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
@@ -490,7 +491,34 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
     const updated=await db().motionStudioAgentJob.updateMany({where:{id,tokenHash:job.tokenHash,
       status:{in:['dispatched','dispatching','running']}},data:{resultKey:master.key}})
     if (!updated.count) throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
-    return {videoReady:true}
+    // The approved MP4 is independently viewable before portable scene
+    // publication. Do not close the active job or mark editor ready here.
+    await db().$transaction(async tx=>{
+      const project=await tx.motionStudioProject.findUniqueOrThrow({
+        where:{id:job.projectId},select:{exportInfo:true,clipProjectId:true},
+      })
+      await tx.motionStudioProject.update({where:{id:job.projectId},data:{
+        exportInfo:toPrismaJson({...toObject(project.exportInfo),
+          masterKey:master.key,smallKey:master.key,storageDriver:storageDriverName(),
+          source:'transovo_agent',agentJobId:id,delivery:'live',
+          masterReadyAt:new Date().toISOString(),editableReady:false}),
+      }})
+      if(project.clipProjectId){
+        const clip=await tx.clipProject.findFirst({
+          where:{id:project.clipProjectId,workspaceId:job.workspaceId},
+          select:{uploadId:true},
+        })
+        if(clip?.uploadId)await tx.clipUpload.updateMany({
+          where:{id:clip.uploadId,workspaceId:job.workspaceId},
+          data:{key:master.key,bytes:BigInt(master.bytes),mime:'video/mp4',
+            filename:master.filename,status:'READY',storageDriver:storageDriverName()},
+        })
+      }
+    })
+    await db().studioActivityEvent.create({data:{projectId:job.projectId,
+      stage:'render',kind:'master_ready',message:'Video ready to watch',
+      data:toPrismaJson({jobId:id,filename:master.filename,bytes:master.bytes})}})
+    return {videoReady:true,editableReady:false}
   }
   if (action === 'reuse') {
     if (typeof input.sourceJobId!=='string' || !Array.isArray(input.ids) || input.ids.length>10000)
