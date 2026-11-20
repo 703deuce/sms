@@ -67,11 +67,12 @@ async function sleep(ms: number) {
 }
 
 async function recordS3Part(uploadId: string, partNumber: number, etag: string, sizeBytes: number) {
-  await fetch(`/api/clips/uploads/${uploadId}/parts`, {
+  const response = await fetch(`/api/clips/uploads/${uploadId}/parts`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ partNumber, etag, sizeBytes }),
   })
+  if(!response.ok) throw new Error(`Could not record uploaded part (${response.status})`)
 }
 
 /** E6: per-part PUT deadline: min 2 min, else bytes at 64 KB/s. */
@@ -195,7 +196,7 @@ async function uploadTus(
 export async function uploadClipFile(
   file: File,
   onProgress: (p: UploadProgress) => void,
-  opts?: { resumeUploadId?: string; kind?: 'media' },
+  opts?: { resumeUploadId?: string; kind?: 'media'; durationMs?: number },
 ): Promise<{ uploadId: string }> {
   const limits = await fetchUploadLimits()
   const effectiveMax = limits.effectiveMaxBytes ?? limits.maxBytes
@@ -271,7 +272,9 @@ export async function uploadClipFile(
       storage = started.storage
     }
 
-    const durationMs = await probeDurationMs(file)
+    const probedDuration = await probeDurationMs(file)
+    const durationMs = Number.isFinite(probedDuration) && probedDuration! > 0 ? probedDuration :
+      Number.isFinite(opts?.durationMs) && opts!.durationMs! > 0 ? Math.round(opts!.durationMs!) : undefined
     if (!uploadId) throw new Error('Upload session missing')
     if (durationMs) {
       onProgress({ ...base, uploadId, loaded: base.loaded, percent: base.percent, state: 'uploading', durationMs })
