@@ -6,7 +6,7 @@ import {toPrismaJson} from '@/lib/server/clips/prisma-json'
 
 const db=()=>getPrisma()
 const safe=(v:unknown,max:number)=>typeof v==='string'?v.replace(/[?&](?:X-Amz|token|Signature|access_token)[^\s]*/gi,'[redacted]').slice(0,max):''
-const stages=['queued','rendering','qa_pass','qa_fail','retrying','needs_fix','attention_required','uploaded','completed'] as const
+const stages=['queued','rendering','qa_pass','qa_fail','retrying','needs_fix','attention_required','master_ready','uploaded','completed'] as const
 type Stage=typeof stages[number]
 const asRecord=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)
   ?x as Record<string,unknown>:{}
@@ -43,6 +43,7 @@ export async function reportModalRenderStatus(id:string,request:Request,raw:unkn
   const message=stage==='qa_fail'?'Technical render verification requires repair':
     stage==='retrying'?'Finishing touches, retrying the final render':
     stage==='needs_fix'||stage==='attention_required'?'Final render needs team review':
+    stage==='master_ready'?'Video ready to watch; editable version preparing':
     stage==='rendering'?'Video segments are rendering':
     stage==='completed'?'Render delivery completed':stage
   await db().studioActivityEvent.create({data:{
