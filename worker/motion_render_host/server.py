@@ -4,6 +4,7 @@ import concurrent.futures
 import contextlib
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -37,6 +38,29 @@ STAGES={}
 ACTIVE=True
 LAST_DISK_ERROR=""
 SESSION=requests.Session()
+LOGS=WORK/"logs"
+
+def stage_log(job_id,stage,**values):
+    """Numeric diagnostics only. Never serialize tokens, paths or HTTP errors."""
+    allowed={"seconds","bytes","index","total","attempt","retries","skipped","count"}
+    numbers={}
+    for key,value in values.items():
+        if key not in allowed or isinstance(value,bool) and key!="skipped":continue
+        if key=="skipped":
+            numbers[key]=bool(value)
+        elif isinstance(value,(int,float)) and math.isfinite(float(value)):
+            numbers[key]=round(float(value),3)
+    if not re.fullmatch(r"msaj_[A-Za-z0-9-]{4,100}",job_id):return
+    if not re.fullmatch(r"[a-z_]{1,48}",stage):return
+    event={"jobId":job_id,"stage":stage,"at":time.time(),**numbers}
+    LOGS.mkdir(parents=True,exist_ok=True)
+    os.chmod(LOGS,0o700)
+    output=LOGS/("job_"+job_id+".jsonl")
+    fd=os.open(str(output),os.O_CREAT|os.O_APPEND|os.O_WRONLY,0o600)
+    try:
+        os.write(fd,(json.dumps(event,separators=(",",":"))+"\\n").encode())
+    finally:os.close(fd)
+    print(json.dumps(event,separators=(",",":")),flush=True)
 TERMINAL=(401,403,409)
 
 def job_endpoint(job_id):
@@ -201,6 +225,7 @@ def do_render(entry):
         os.environ["MOTION_JOB_TOKEN"]=entry["token"]
         stop=pipeline.heartbeat_scope(job_id)
         api=pipeline.api
+        stage_log(job_id,"render_start",attempt=entry.get("attempt",0))
         api(job_id,"POST","/render-status",{"stage":"queued","completed":0,"total":1})
         meta=api(job_id,"GET","/render-asset",params={"filename":entry["bundle"]})
         if not meta.get("exists"):raise RuntimeError("Render bundle not registered")
@@ -212,7 +237,10 @@ def do_render(entry):
         root.mkdir(parents=True,exist_ok=True)
         (root/"bundle.zip").unlink(missing_ok=True)
         if (root/"bundle").exists():shutil.rmtree(root/"bundle")
+        bundle_started=time.monotonic()
         bundle,project,_,_=pipeline.extract_bundle(job_id,entry["bundle"],str(root))
+        stage_log(job_id,"bundle_ready",bytes=size,
+                  seconds=time.monotonic()-bundle_started)
         frames=int(project["frameCount"])
         ranges=[(x,min(frames,x+entry["segmentFrames"]))
                 for x in range(0,frames,entry["segmentFrames"])]
@@ -262,7 +290,12 @@ def do_render(entry):
                             return
                         last_check=now
                     for finished in done:
-                        results.append(finished.result())
+                        part=finished.result()
+                        results.append(part)
+                        stage_log(job_id,"segment_complete",index=part["start"],
+                                  seconds=part.get("seconds",0),
+                                  retries=part.get("retries",0),
+                                  skipped=part.get("skipped",False))
                         api(job_id,"POST","/render-status",{"stage":"rendering",
                             "completed":len(results),"total":len(ranges)})
                         schedule()
@@ -270,8 +303,10 @@ def do_render(entry):
                 cancelled.set()
                 for future in futures:future.cancel()
         if time.monotonic()>deadline:raise TimeoutError("Render job deadline exceeded")
+        join_started=time.monotonic()
         joined=pipeline.join_and_qa(job_id,entry["bundle"],"cpu",results,
                                    bundle_root=bundle,recovery_dir=str(root/"recovery"))
+        stage_log(job_id,"join_qa_complete",seconds=time.monotonic()-join_started)
         if not verify_job(entry):
             with LOCK:
                 STAGES[job_id]="cancelled";atomic_state()
@@ -281,13 +316,18 @@ def do_render(entry):
             api(job_id,"POST","/assets",{"action":"approveMaster",
                 "uploadId":joined["masterUploadId"]})
             api(job_id,"POST","/render-status",{"stage":"master_ready"})
+            stage_log(job_id,"master_ready",seconds=time.monotonic()-start)
             api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
                 "message":"Video ready to watch; preparing editable version"})
             api(job_id,"POST","/render-status",{"stage":"uploaded"})
+            editable_start=time.monotonic()
+            stage_log(job_id,"editable_start")
             version=pipeline.publish_editable(job_id,bundle)
+            stage_log(job_id,"editable_published",seconds=time.monotonic()-editable_start)
             api(job_id,"POST","/complete",{"delivery":"live",
                 "portableVersionId":version["id"],"durationMs":project["durationMs"]})
             api(job_id,"POST","/render-status",{"stage":"completed"})
+            stage_log(job_id,"job_complete",seconds=time.monotonic()-start)
         with LOCK:
             STAGES[job_id]="completed" if not entry["benchmark"] else "qa_pass"
             atomic_state()
@@ -301,6 +341,7 @@ def do_render(entry):
             with LOCK:
                 STAGES[job_id]="cancelled";atomic_state()
         else:
+            stage_log(job_id,"technical_failure",attempt=entry.get("attempt",0))
             technical_failure(entry,message)
     finally:
         if stop:stop.set()
@@ -436,6 +477,7 @@ def main():
     if len(SECRET)<32:raise RuntimeError("RENDER_HOST_SECRET must be configured")
     if not re.fullmatch(r"[a-zA-Z0-9.-]+",HOST):raise RuntimeError("Invalid allowed host")
     load()
+    os.environ["MOTION_RENDER_STAGE_LOGS"]="1"
     # Set CPU priority once; os.nice() applies process-wide and must not
     # accumulate across successive customer jobs.
     if NICE:os.nice(NICE)
