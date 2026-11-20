@@ -37,3 +37,9 @@ jobs:
         run: |
           for f in producer_handoff_kit/skills/motion-studio-production/scripts/render/*.sh; do bash -n "$f"; done
           node --check producer_handoff_kit/skills/motion-studio-production/scripts/render/check_page.mjs
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build private render worker image (do not deploy)
+        run: docker build -f Dockerfile.motion-render -t transovo-motion-render:pr-check .
