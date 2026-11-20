@@ -15,6 +15,8 @@ ENV COOLIFY_RESOURCE_UUID=1
 RUN bash scripts/coolify-build.sh
 
 FROM node:22-bookworm-slim AS runner
+# Voice cloning verifies MediaRecorder WebM duration by decoding audio with ffprobe/ffmpeg.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/new-app
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
