@@ -274,33 +274,39 @@ def join_and_qa(job_id,bundle_name,mode,segments):
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
               "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
             metrics=qa_video(master,project["frameCount"],project["fps"])
-            share=os.path.join(directory,"share.mp4")
-            for crf in (26,29,32,35):
-                checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
-                  "-i",master,"-vf","scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-                  "-c:v","libx264","-preset","medium","-crf",str(crf),
-                  "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
-                  "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=3600)
-                if os.path.getsize(share)<24_000_000:break
-            else:
-                # For long films the 24 MB share cap may demand a far lower
-                # average bitrate than even CRF 35 produces. Use a bounded
-                # average-bitrate fallback; never upscale the source.
-                duration=project["frameCount"]/project["fps"]
-                video_rate=max(100000,int(23_000_000*8/duration-128000))
-                for factor in (0.95,0.80,0.65):
-                    target=max(90000,int(video_rate*factor))
-                    checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
-                      "-i",master,"-vf",
-                      "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
-                      "-c:v","libx264","-preset","medium","-b:v",str(target),
-                      "-maxrate",str(target),"-bufsize",str(target*2),
-                      "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
-                      "-c:a","aac","-b:a","128k","-movflags","+faststart",share],
-                      timeout=3600)
-                    if os.path.getsize(share)<24_000_000:break
-                else:raise ValueError("Share copy exceeds maximum size")
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
+            share=os.path.join(directory,"share.mp4")
+            duration=project["frameCount"]/project["fps"]
+            scale="scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2"
+            if duration>300:
+                # Films over 5 minutes cannot fit under 24 MB at watchable audio+video
+                # bitrates; encode one clean 720p CRF 30 preview instead of 7 passes.
+                checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                  "-i",master,"-vf",scale,
+                  "-c:v","libx264","-preset","medium","-crf","30",
+                  "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                  "-c:a","aac","-b:a","96k","-movflags","+faststart",share],timeout=3600)
+            else:
+                for crf in (26,29,32,35):
+                    checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                      "-i",master,"-vf",scale,
+                      "-c:v","libx264","-preset","medium","-crf",str(crf),
+                      "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                      "-c:a","aac","-b:a","128k","-movflags","+faststart",share],timeout=3600)
+                    if os.path.getsize(share)<24_000_000:break
+                else:
+                    video_rate=max(100000,int(23_000_000*8/duration-96000))
+                    for factor in (0.95,0.80,0.65):
+                        target=max(90000,int(video_rate*factor))
+                        checked(["ffmpeg","-hide_banner","-loglevel","error","-y",
+                          "-i",master,"-vf",scale,
+                          "-c:v","libx264","-preset","medium","-b:v",str(target),
+                          "-maxrate",str(target),"-bufsize",str(target*2),
+                          "-profile:v","high","-level:v","4.2","-pix_fmt","yuv420p",
+                          "-c:a","aac","-b:a","96k","-movflags","+faststart",share],
+                          timeout=3600)
+                        if os.path.getsize(share)<24_000_000:break
+                    else:raise ValueError("Share copy exceeds maximum size")
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
