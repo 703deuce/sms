@@ -19,6 +19,7 @@ class WorkerTests(unittest.TestCase):
         self.patchers=[
           mock.patch.object(server,"WORK",Path(self.tmp.name)),
           mock.patch.object(server,"SCRATCH",Path(self.tmp.name)/"tmp"),
+          mock.patch.object(server,"LOGS",Path(self.tmp.name)/"logs"),
           mock.patch.object(server,"STATE",Path(self.tmp.name)/"queue.json"),
           mock.patch.object(server,"SECRET","X"*40),
           mock.patch.object(server,"HOST","transovo.ai"),
@@ -79,6 +80,22 @@ class WorkerTests(unittest.TestCase):
         server.atomic_state()
         server.load()
         self.assertEqual((root/"recovery"/"master.mp4").read_bytes(),b"finished video")
+    def test_stage_logs_include_only_safe_operational_metrics(self):
+        with mock.patch("builtins.print") as printed:
+            server.stage_log("msaj_logs1234","segment_complete",seconds=12.5,
+                bytes=9876,retries=1,token="BAD_SECRET",
+                url="https://example.com/private?token=secret")
+        logfile=server.LOGS/"job_msaj_logs1234.jsonl"
+        content=logfile.read_text()
+        event=json.loads(content.strip())
+        self.assertEqual(event["stage"],"segment_complete")
+        self.assertEqual(event["seconds"],12.5)
+        self.assertEqual(event["bytes"],9876)
+        self.assertNotIn("BAD_SECRET",content)
+        self.assertNotIn("https",content)
+        self.assertNotIn("Bearer",content)
+        self.assertNotIn("token",content)
+        self.assertTrue(printed.called)
     def test_disk_guard(self):
         with mock.patch.object(server,"disk_metrics",return_value=(91,1000000)):
             self.assertEqual(server.disk_ready()[0],False)
