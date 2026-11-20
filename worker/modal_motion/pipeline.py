@@ -194,7 +194,7 @@ def prepare_upload(job_id,path,filename,kind,mime):
 def segment_name(mode,start,end):
     return f"modal_seg_v1_{mode}_{start:08d}_{end:08d}.mp4"
 
-def capture_segment(job_id,bundle_name,mode,start,end):
+def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None):
     name=segment_name(mode,start,end)
     if ready_url(job_id,name):
         return {"name":name,"start":start,"end":end,"skipped":True,"seconds":0}
@@ -202,7 +202,12 @@ def capture_segment(job_id,bundle_name,mode,start,end):
     beginning=time.monotonic()
     try:
         with tempfile.TemporaryDirectory() as directory:
-            root,project,entry,_=extract_bundle(job_id,bundle_name,directory)
+            if bundle_root is None:
+                root,project,entry,_=extract_bundle(job_id,bundle_name,directory)
+            else:
+                root=pathlib.Path(bundle_root)
+                project=json.loads((root/"project.json").read_text())
+                entry=project["composition"]["entryFile"]
             if end>project["frameCount"]:raise ValueError("Segment past film end")
             output=os.path.join(directory,name)
             checked(["node","/root/modal_motion/capture.mjs",str(root),entry,output,
@@ -249,12 +254,19 @@ def qa_video(path,expected_frames,fps):
     # automatically reject duplicate still frames.
     return {"frames":frames,"duration":duration,"integratedLufs":integrated}
 
-def join_and_qa(job_id,bundle_name,mode,segments):
+def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None):
     start=time.monotonic()
     stop=heartbeat_scope(job_id)
     try:
         with tempfile.TemporaryDirectory() as directory:
-            root,project,_,audio=extract_bundle(job_id,bundle_name,directory)
+            if bundle_root is None:
+                root,project,_,audio=extract_bundle(job_id,bundle_name,directory)
+            else:
+                root=pathlib.Path(bundle_root)
+                project=json.loads((root/"project.json").read_text())
+                audio=(root/project["mixedAudioFile"]).resolve()
+                if not str(audio).startswith(str(root.resolve())+os.sep) or not audio.is_file():
+                    raise ValueError("Mixed audio missing from verified bundle")
             segments=sorted(segments,key=lambda s:s["start"])
             cursor=0
             inputs=[]
