@@ -6,7 +6,7 @@ import type {MotionStudioClient} from '@/lib/motion-studio/client'
 
 type Voice={id?:string;voiceId:string;name:string;description?:string;gender?:string|null;accent?:string|null;previewUrl?:string;isDefault?:boolean;source:'cloned'|'stock'}
 type Data={myVoices:Voice[];stockVoices:Voice[];defaultVoiceId:string|null}
-export type VoiceSelection={voiceId:string;voiceName:string;voiceSource:'cloned'|'stock'}
+export type VoiceSelection={voiceId:string;voiceName:string;voiceSource:'cloned'|'stock'|'auto'}
 const call=async(url:string,method='GET',body?:unknown)=>{
  const response=await fetch(url,{method,headers:{'Content-Type':'application/json'},...(body!==undefined?{body:JSON.stringify(body)}:{}),cache:'no-store'})
  const data=await response.json().catch(()=>({})) as Record<string,unknown>
@@ -82,11 +82,11 @@ export function CreatorVoicePicker({client,value,onChange,onError,refreshKey=0}:
    <Button type="button" variant="outline" size="sm" onClick={()=>setDialog(true)}><Plus className="mr-1 size-4"/>Create a voice</Button>
   </div>
   <div className="rounded-xl border border-border/80 bg-background/50 p-3">
-   <button type="button" onClick={()=>onChange(null)}
-    className={`flex w-full items-center gap-3 rounded-lg p-3 text-left text-sm ${!value?'bg-primary/10 ring-1 ring-primary/30':'hover:bg-muted/40'}`}>
+   <button type="button" onClick={()=>onChange({voiceId:'',voiceName:'Auto-select narrator',voiceSource:'auto'})}
+    className={`flex w-full items-center gap-3 rounded-lg p-3 text-left text-sm ${(!value||value.voiceSource==='auto')?'bg-primary/10 ring-1 ring-primary/30':'hover:bg-muted/40'}`}>
     <span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><AudioLines className="size-4"/></span>
     <span className="flex-1"><b>Auto-select narrator</b><span className="block text-xs text-muted-foreground">Best voice for the finished story</span></span>
-    {!value?<Check className="size-4 text-primary"/>:null}
+    {(!value||value.voiceSource==='auto')?<Check className="size-4 text-primary"/>:null}
    </button>
   </div>
   <div className="space-y-3">
