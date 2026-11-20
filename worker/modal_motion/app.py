@@ -118,6 +118,7 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
             # customer job. One paid run per mode; preserve the job assignment.
             return summary
         api(job_id,"POST","/assets",{"action":"approveMaster","uploadId":joined["masterUploadId"]})
+        api(job_id,"POST","/render-status",{"stage":"master_ready"})
         api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
             "message":"Video ready to watch; preparing editable version"})
         api(job_id,"POST","/render-status",{"stage":"uploaded"})
