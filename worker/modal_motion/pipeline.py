@@ -168,7 +168,8 @@ def prepare_upload(job_id,path,filename,kind,mime):
     with open(path,"rb") as f:
         sha=hashlib.file_digest(f,"sha256").hexdigest()
     prepared=api(job_id,"POST","/assets",{"action":"prepare","filename":filename,
-      "kind":kind,"mime":mime,"bytes":size,"sha256":sha,"resume":True})
+      "kind":kind,"mime":mime,"bytes":size,"sha256":sha,"resume":True},
+      timeout=30,attempts=2)
     if prepared.get("exists"):
         return prepared.get("uploadId")
     uid=prepared["uploadId"]
@@ -224,7 +225,7 @@ def prepare_upload(job_id,path,filename,kind,mime):
         try:
             api(job_id,"POST","/assets",
                 {"action":"commit","uploadId":uid,"parts":parts,
-                 "retryCommit":attempt>1},timeout=45,attempts=2)
+                 "retryCommit":attempt>1},timeout=30,attempts=1)
             return uid
         except Exception as exc:
             mismatch="Uploaded size does not match the prepared object" in str(exc)
