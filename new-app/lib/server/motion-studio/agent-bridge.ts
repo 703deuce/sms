@@ -644,7 +644,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       if(attempt<3)await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))
     }
     if (!size || size !== item.bytes || size > MAX_FILE)
-      throw new MotionStudioError('CONFLICT', 'Uploaded size does not match the prepared object.', 409)
+      throw new MotionStudioError('INVALID', 'Uploaded size does not match the prepared object.', 400)
     if (item.sha256) {
       const hash=createHash('sha256')
       if (size<=25*1024*1024) hash.update(await storage.getObjectBytes(item.key))
