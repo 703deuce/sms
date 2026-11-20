@@ -2,7 +2,7 @@
 import hashlib, io, json, tempfile, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
-from pipeline import extract_bundle,segment_name
+from pipeline import extract_bundle,segment_name,capture_segment
 
 class BundleTests(unittest.TestCase):
     def setUp(self):
@@ -37,6 +37,13 @@ class BundleTests(unittest.TestCase):
         self.assertEqual((doc["width"],doc["height"],doc["frameCount"]),(854,480,150))
         self.assertEqual(entry,"composition/index.html")
         self.assertTrue(audio.is_file())
+    def test_host_reuses_ready_segment_without_capture_or_download(self):
+        with patch("pipeline.ready_url",return_value="present"):
+            with patch("pipeline.extract_bundle",side_effect=AssertionError("should skip bundle")):
+                result=capture_segment("fake_job","bundle.zip","cpu",0,150,
+                                       bundle_root=self.root)
+        self.assertTrue(result["skipped"])
+        self.assertEqual(result["name"],"modal_seg_v1_cpu_00000000_00000150.mp4")
     def test_reject_missing_composition(self):
         source=self.build(entry="missing.html")
         (self.root/"work").mkdir()
