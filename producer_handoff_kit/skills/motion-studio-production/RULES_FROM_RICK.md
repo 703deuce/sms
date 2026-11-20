@@ -84,6 +84,8 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 6. **Upload delivery files eight at a time** and confirm they appear on the job's file list before marking the job complete. *(Nov 18)*
 7. **Customer editing:** the AI makes the video once; customers edit in Transovo's own editor with no AI. Transovo owns the editor UI; the agent owns export and parameter rendering. Not a template system. *(Nov 17)*
 
+8. **Own render server first (Nov 20).** Finished films render on our own private CPU server, not Modal by default. The Producer hands the verified bundle to transovo.ai once and stops. Our renderer runs the same segments, QA, playable master and editable delivery; Modal remains an optional backup, **off** unless we turn it on. Don't give the renderer a public hostname and don't make the Producer watch its progress. A new host must be a config change, not a rebuild. *(Nov 20)*
+
 ## 8. Customer-facing communication
 
 1. **Customers talk to the Transovo AI Assistant, not the bot.** Creative revisions come through the job bridge (`revise_video`); questions use the needs-input flow in `delivery-contract.md`. *(Nov 17)*
