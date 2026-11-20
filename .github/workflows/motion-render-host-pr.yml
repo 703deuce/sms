@@ -1,0 +1,37 @@
+name: Motion render host checks
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile.motion-render*'
+      - 'worker/modal_motion/**'
+      - 'worker/motion_render_host/**'
+      - 'producer_handoff_kit/skills/motion-studio-production/scripts/render/**'
+      - 'new-app/app/api/motion-studio/agent/jobs/*/start-render/**'
+      - '.github/workflows/motion-render-host-pr.yml'
+  workflow_dispatch:
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Python runtime
+        run: python -m pip install 'requests>=2.31,<3'
+      - name: Python syntax
+        run: |
+          python -m compileall -q worker/modal_motion worker/motion_render_host producer_handoff_kit/skills/motion-studio-production/scripts/render
+      - name: Modal pipeline offline tests
+        run: cd worker/modal_motion && python -m unittest -v test_pipeline
+      - name: Render host offline tests
+        run: cd worker/motion_render_host && python -m unittest -v test_server
+      - name: Producer dry-run tests
+        run: cd producer_handoff_kit/skills/motion-studio-production/scripts/render && python -m unittest -v test_submit
+      - name: Wrapper syntax
+        run: |
+          for f in producer_handoff_kit/skills/motion-studio-production/scripts/render/*.sh; do bash -n "$f"; done
+          node --check producer_handoff_kit/skills/motion-studio-production/scripts/render/check_page.mjs
