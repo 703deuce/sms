@@ -5,6 +5,7 @@ import {readFile} from 'node:fs/promises'
 import path from 'node:path'
 import {createRequire} from 'node:module'
 import {fileURLToPath} from 'node:url'
+import {createHash} from 'node:crypto'
 
 const [root,entry,w,h,duration] = process.argv.slice(2)
 if(!root||!entry||![w,h,duration].every(x=>Number.isFinite(Number(x))))
@@ -33,13 +34,14 @@ let browser
 try{
   // The producer's engine install can expose puppeteer-core through NODE_PATH;
   // this validator never downloads a browser or calls a paid service.
-  const require=createRequire(import.meta.url)
   let puppeteer
-  try{puppeteer=require('puppeteer-core')}
-  catch{
-    if(!process.env.MOTION_PUPPETEER_MODULE)throw Error('puppeteer-core missing')
-    puppeteer=require(process.env.MOTION_PUPPETEER_MODULE)
+  const candidates=[process.env.PUPPETEER_DIR,'/workspace/motion_engines/_capture',
+                    process.env.MOTION_PUPPETEER_MODULE,process.cwd()].filter(Boolean)
+  for(const candidate of candidates){
+    try{puppeteer=createRequire(path.join(candidate,'x.js'))('puppeteer-core');break}
+    catch{}
   }
+  if(!puppeteer)throw Error('puppeteer-core missing; set PUPPETEER_DIR')
   const port=http.address().port
   browser=await puppeteer.launch({headless:true,
     executablePath:process.env.CHROMIUM_BIN||'/usr/bin/chromium',
@@ -56,13 +58,28 @@ try{
   })
   await page.goto('http://127.0.0.1:'+port+'/'+entry.split('/').map(encodeURIComponent).join('/'),
     {waitUntil:'networkidle0',timeout:60000})
-  const valid=await page.evaluate(()=>Boolean(window.__scene&&typeof window.__scene.seek==='function'))
-  if(!valid)throw Error('Composition does not expose seek(t)')
-  for(const t of [0,Math.max(0,Number(duration)/2),Math.max(0,Number(duration)-1/30)]){
-    await page.evaluate(async x=>await window.__scene.seek(x),t)
+  const valid=await page.evaluate(()=>({
+    seek:Boolean(window.__scene&&typeof window.__scene.seek==='function'),
+    ready:window.__ready===true
+  }))
+  if(!valid.seek||!valid.ready)throw Error('Composition seek or readiness contract missing')
+  const fps=Number(process.argv[6]),frames=Number(process.argv[7])
+  const hashes=[]
+  for(const frame of [0,Math.floor(frames/2),frames-1]){
+    await page.evaluate(async x=>{
+      await window.__scene.seek(x)
+      await new Promise(resolve=>requestAnimationFrame(resolve))
+    },frame/fps)
     const png=await page.screenshot({type:'png'})
     if(png.length<1000)throw Error('Incomplete composed frame')
+    hashes.push(createHash('sha256').update(png).digest('hex'))
   }
+  await page.evaluate(async()=>{
+    await window.__scene.seek(0)
+    await new Promise(resolve=>requestAnimationFrame(resolve))
+  })
+  const firstAgain=createHash('sha256').update(await page.screenshot({type:'png'})).digest('hex')
+  if(firstAgain!==hashes[0])throw Error('Composition seek is not deterministic')
   process.stdout.write('PASS composition seeks 3 frames\n')
 }finally{
   await browser?.close()
