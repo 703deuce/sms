@@ -108,6 +108,14 @@ logs) and the media of the worked examples are NOT in GitHub on purpose (no job 
 | Per job | `jobUrl` + `jobToken` arrive in each webhook payload (saved under `<J>/secrets/` and `<J>/state/`, mode 600) | Transovo, automatically |
 | GitHub | Read access to public `703deuce/sms` is enough to set up. To add new rules as PRs, `gh` signed in with push access to `703deuce/sms` (Rick merges; never merge or deploy yourself) | Rick |
 
+
+**`motion_runner/` (installed to `/workspace/motion_runner/`, mode 700)** holds two scripts that both read ONLY `/workspace/secrets/motion_runner.env`
+and require `MOTION_STUDIO_WORKER_ID`, `MOTION_STUDIO_WORKER_TOKEN` and `MOTION_STUDIO_AGENT_PUBLIC_URL=https://transovo.ai` (they refuse any other origin):
+- `coord-report.mjs`: reports a coordinator lease status and weekly usage for `action:"motion_studio_job"` / `coordinator:true` jobs
+  (`node /workspace/motion_runner/coord-report.mjs --job <jobId> --lease-file <J>/state/lease_id --status running|complete|failed --usage <pct> --moment before|after --resets-at <ISO>`).
+  The routine runs it before starting (`running`, `before`) and at the end (`complete` or `failed`, `after`).
+- `launch-leased-render.sh`: runs `motion_studio_deterministic_render` assignments with a clean environment (also needs `MOTION_STUDIO_PRODUCER_KIT`).
+
 **Ask Chief of Staff / Rick for:** (1) a registered `workerId` + `MOTION_STUDIO_WORKER_TOKEN` for this bot; (2) the Modal token
 for the Transovo Modal workspace; (3) the API keys above; (4) to point Transovo's worker registry / webhook at this bot's routine URL
 and key; (5) GitHub push access if this bot should open rule PRs. Never use production SSH, Coolify credentials or direct database access.
