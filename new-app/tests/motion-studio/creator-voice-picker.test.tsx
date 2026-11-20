@@ -44,7 +44,7 @@ describe('Motion Studio cloned narrator recording',()=>{
   fireEvent.click(screen.getByText('Create a voice'))
   fireEvent.change(screen.getByPlaceholderText('e.g. My documentary voice'),{target:{value:'Test narrator'}})
   fireEvent.click(screen.getByText('Upload a sample'))
-  fireEvent.change(screen.getByLabelText('Choose an audio recording'),{target:{files:[new File(['sample'],'sample.mp3',{type:'audio/mpeg'})]}})
+  fireEvent.change(screen.getByRole('dialog').querySelector('input[type="file"]') as HTMLInputElement,{target:{files:[new File(['sample'],'sample.mp3',{type:'audio/mpeg'})]}})
   fireEvent.click(screen.getByRole('button',{name:'Create voice'}))
   await waitFor(()=>expect(screen.getByRole('alert').textContent).toContain('Upload did not complete'))
   expect(screen.getByRole('dialog')).toBeTruthy()
