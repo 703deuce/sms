@@ -80,6 +80,20 @@ Before building, write 6–12 lines in `log/job.md` answering:
 8. Revision of a parent job (`parentJobId`, `revisionOf`)? → section 9.
 9. Do the judgment step (section 1), then take the path it chose. If the brief is ambiguous in a way that changes the video, choose the most plausible reading, log the assumption, and mention it in the final message.
 
+### Typed creator brief (every create and revision, Nov 20)
+
+Read the top-level `brief` (same object as `settings.productionBrief`) from both the webhook and authenticated `GET {jobUrl}`. The original `prompt` remains untouched. Download `inputs[]` promptly; honor each explicit `role` and `handling` instead of guessing from filenames. Priority: hard skill rules > the brief's handling instructions > original prompt > video-type guidance > optional style.
+
+- `script.handling=exact`: use every supplied word verbatim. Add pauses for timing but never rewrite. `improve`: refine structure and wording while preserving meaning, names, claims, and essential lines.
+- `commentary.handling=creator_opinion`: weave the creator's take into the story as *their interpretation*, never a verified factual assertion. Do not drop it just because it is personal.
+- `referenceLinks[].handling=include_in_research`: read and use those sources early. If a link fails, log its failure safely and continue with other evidence. `sourcePreferences`: favor requested primary media, interviews, documents, and domains.
+- `inputs.role=footage/photo`: use the user's material where relevant, before unrelated stock on the same beat. `reference`: use only as creative direction. `script`/`logo`: apply their respective specific handling.
+- `narration.handling=tts_with_voice_id`: use the exact `voiceId` in the existing ElevenLabs Flash with-timestamps call. Do **not** search or substitute a voice. `tts_auto_voice`: existing professionally directed voice search.
+- `voiceover_drives_timing`: transcribe the uploaded performance, align scenes and graphics to it, keep its actual recorded audio, and never replace it with TTS. `preserve_talking_head`: keep the on-camera picture, sound, sync, and continuity as the storytelling spine; research the topic and layer sourced cutaways, charts and graphics at the matching spoken moments. This is not the old Path A edit-only restriction. Other uploaded footage remains supporting B-roll.
+- `music.handling=paid_generate`: paid ElevenLabs original score under existing budget is **the default**. `use_uploaded_track`: use that audio and its `placement` notes; do not generate replacement music. `no_music`: no score.
+- `audience`, `tone`, `style` and the brand snapshot guide the director and presentation; missing fields are not a reason to degrade production quality. No pre-production customer approval is required.
+- On `revise_video`, reread the **same persisted brief**. Apply only the requested local narration, graphics, footage or script change; preserve exact script, cloned voice, opinion attribution, and uploaded performances from the original.
+
 ## 4. Path A: edit of the customer's own footage (BYOF)
 
 When the customer supplies the footage and it is the picture, the job is an **edit**, not a production. There is **nothing to research**: no fact work, no web media sourcing, no script, no voiceover or TTS, no design-system document, no helper subagents. Use their footage and follow their direction on the type of edit. Add B-roll or narration only if the customer explicitly asks for it.
