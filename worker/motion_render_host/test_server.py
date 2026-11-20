@@ -52,6 +52,10 @@ class WorkerTests(unittest.TestCase):
         server.load()
         self.assertEqual(len(server.QUEUE),1)
         self.assertEqual(server.QUEUE[0]["id"],entry["id"])
+    def test_assignment_polling_is_completion_or_minute_based(self):
+        self.assertFalse(server.should_check_assignment(159,100))
+        self.assertTrue(server.should_check_assignment(160,100))
+        self.assertTrue(server.should_check_assignment(101,100,completed=True))
     def test_disk_guard(self):
         with mock.patch.object(server,"disk_metrics",return_value=(91,1000000)):
             self.assertEqual(server.disk_ready()[0],False)
