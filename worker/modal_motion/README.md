@@ -1,4 +1,13 @@
-# Motion Studio Modal film renderer (separate from clips)
+# Motion Studio Modal film renderer (optional backup, off by default)
+
+**Nov 20:** New production jobs use the dedicated private CPU render-host service
+(`Dockerfile.motion-render`, `worker/motion_render_host/`).
+This Modal application remains intact as an operator-enabled fallback only,
+selected with `RENDER_BACKEND=modal` or `MOTION_MODAL_FALLBACK=1`
+in the Producer environment. Neither is enabled by default. Do not
+delete this app; it can resume registered CPU segment artifacts when needed.
+Never submit the same active job simultaneously to Modal and the host.
+
 
 This Modal app is isolated from `worker/modal_app`. It does not use the
 clips worker, a production server shell, a database connection or public B2.
