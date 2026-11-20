@@ -488,8 +488,9 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       if (master) await storeArtifact(job,master)
     }
     if (!master) throw new MotionStudioError('INVALID','A committed MP4 master is required.',400)
+    const approvedMaster=master
     const updated=await db().motionStudioAgentJob.updateMany({where:{id,tokenHash:job.tokenHash,
-      status:{in:['dispatched','dispatching','running']}},data:{resultKey:master.key}})
+      status:{in:['dispatched','dispatching','running']}},data:{resultKey:approvedMaster.key}})
     if (!updated.count) throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
     // The approved MP4 is independently viewable before portable scene
     // publication. Do not close the active job or mark editor ready here.
@@ -499,7 +500,7 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       })
       await tx.motionStudioProject.update({where:{id:job.projectId},data:{
         exportInfo:toPrismaJson({...toObject(project.exportInfo),
-          masterKey:master.key,smallKey:master.key,storageDriver:storageDriverName(),
+          masterKey:approvedMaster.key,smallKey:approvedMaster.key,storageDriver:storageDriverName(),
           source:'transovo_agent',agentJobId:id,delivery:'live',
           masterReadyAt:new Date().toISOString(),editableReady:false}),
       }})
@@ -510,14 +511,14 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
         })
         if(clip?.uploadId)await tx.clipUpload.updateMany({
           where:{id:clip.uploadId,workspaceId:job.workspaceId},
-          data:{key:master.key,bytes:BigInt(master.bytes),mime:'video/mp4',
-            filename:master.filename,status:'READY',storageDriver:storageDriverName()},
+          data:{key:approvedMaster.key,bytes:BigInt(approvedMaster.bytes),mime:'video/mp4',
+            filename:approvedMaster.filename,status:'READY',storageDriver:storageDriverName()},
         })
       }
     })
     await db().studioActivityEvent.create({data:{projectId:job.projectId,
       stage:'render',kind:'master_ready',message:'Video ready to watch',
-      data:toPrismaJson({jobId:id,filename:master.filename,bytes:master.bytes})}})
+      data:toPrismaJson({jobId:id,filename:approvedMaster.filename,bytes:approvedMaster.bytes})}})
     return {videoReady:true,editableReady:false}
   }
   if (action === 'reuse') {
