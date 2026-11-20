@@ -134,7 +134,7 @@ export async function GET(request:Request,ctx:Ctx){
     const raw=await response.json() as Record<string,unknown>
     const stage=typeof raw.stage==='string'?raw.stage:'unknown'
     const allowed=['unknown','queued','running','rendering','qa_pass','qa_fail',
-                   'uploaded','completed','failed','cancelled','retrying','needs_fix','attention_required']
+                   'uploaded','completed','master_ready','failed','cancelled','retrying','needs_fix','attention_required']
     if(raw.jobId!==id||!allowed.includes(stage))
       throw new MotionStudioError('INTERNAL','Invalid private render status.',503)
     return NextResponse.json({jobId:id,backend:'self_hosted',stage,
