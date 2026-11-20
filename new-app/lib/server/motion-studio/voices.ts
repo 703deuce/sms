@@ -95,7 +95,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  if(label.length<2||!sampleUploadId)throw error('Enter a voice name and upload a sample.')
  const sample=await db().clipUpload.findFirst({
   where:{id:sampleUploadId,workspaceId,status:'COMPLETE'},select:{id:true,key:true,mime:true,bytes:true,durationMs:true}})
- if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime))
+ if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime.split(';')[0].trim()))
   throw error('Upload a supported audio recording first.')
  if(Number(sample.bytes)>25*1024*1024)throw error('Voice sample exceeds 25 MB.')
  if(sample.durationMs!=null&&sample.durationMs<10000)throw error('Voice sample needs at least 10 seconds.')
