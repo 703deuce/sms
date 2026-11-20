@@ -8,7 +8,7 @@ database credentials, B2 credentials, or separate public API.
 ## Coolify deployment (operator only)
 
 - **Before building on sms**, check free disk on the host (already near the 90% safety threshold). A new Node/Chromium image and build cache may need several GB. If storage is tight, remove **only unused images/build cache** while nothing is rendering; never prune volumes or running containers, the live web app, app3, or SMS worker. Check again before build.
-- Create a **new separate application**, Dockerfile path `Dockerfile.motion-render`. Its dedicated `Dockerfile.motion-render.dockerignore` limits the image build context without changing the shared web-app `.dockerignore`.
+- Create a **new separate application**, Dockerfile path `Dockerfile.motion-render`. Its dedicated `Dockerfile.motion-render.dockerignore` limits the image build context without changing the shared web-app `.dockerignore`. This per-Dockerfile ignore behavior requires Docker BuildKit (enabled by default in Coolify); an older builder may fail the render image build without affecting the web application.
   Don't edit the existing web app, clips worker or app3. Disable automatic
   deployments; redeploy only while its internal health reports idle.
 - Expose **no public domain, mapped host port, ingress or subdomain**. Bind the HTTP service
