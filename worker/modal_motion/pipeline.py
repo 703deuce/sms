@@ -218,7 +218,19 @@ def prepare_upload(job_id,path,filename,kind,mime):
                 if response.headers.get("upload-offset")!=str(offset):
                     raise RuntimeError("TUS offset mismatch")
     else:raise RuntimeError("Unsupported job upload mode")
-    api(job_id,"POST","/assets",{"action":"commit","uploadId":uid,"parts":parts},timeout=180)
+    # Commit-only retry keeps the same storage object and upload ID.
+    # Re-preparing or re-encoding can create duplicate pending artifacts.
+    for attempt in range(1,5):
+        try:
+            api(job_id,"POST","/assets",
+                {"action":"commit","uploadId":uid,"parts":parts},timeout=60,attempts=2)
+            return uid
+        except Exception as exc:
+            mismatch="Uploaded size does not match the prepared object" in str(exc)
+            retryable=mismatch or isinstance(exc,(requests.Timeout,requests.ConnectionError))
+            if not retryable or attempt==4:raise
+            safe_stage_log("commit_retry",attempt=attempt,bytes=size)
+            time.sleep(min(attempt*2,6))
     return uid
 
 def segment_name(mode,start,end):
@@ -247,7 +259,17 @@ def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None,cancel_ev
                 str(start),str(end),mode],timeout=3600,cancel_event=cancel_event)
             if cancel_event is not None and cancel_event.is_set():
                 raise RuntimeError("Render cancelled")
-            prepare_upload(job_id,output,name,"video","video/mp4")
+            # The completed capture stays on disk while upload/commit is
+            # retried. Never reopen Chromium for a storage-only failure.
+            for upload_attempt in range(1,4):
+                try:
+                    prepare_upload(job_id,output,name,"video","video/mp4")
+                    break
+                except Exception:
+                    if upload_attempt==3:raise
+                    safe_stage_log("segment_upload_retry",attempt=upload_attempt,
+                                   bytes=os.path.getsize(output))
+                    time.sleep(upload_attempt*2)
         return {"name":name,"start":start,"end":end,"skipped":False,
           "seconds":round(time.monotonic()-beginning,3)}
     finally:stop.set()
