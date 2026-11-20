@@ -11259,3 +11259,34 @@ model MotionStudioWorkerAssignment {
   @@index([machineId, status])
   @@index([planId, status])
 }
+
+model MotionStudioVoice {
+  id             String   @id
+  workspaceId    String
+  userId         String
+  provider       String   @default("elevenlabs")
+  voiceId        String
+  name           String
+  kind           String
+  sampleUploadId String?
+  previewUrl     String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  @@unique([workspaceId, userId, provider, voiceId])
+  @@index([workspaceId, userId, isDefault])
+}
+
+model MotionStudioStockVoice {
+  id          String @id
+  voiceId     String @unique
+  name        String
+  description String @default("")
+  gender      String?
+  accent      String?
+  previewUrl  String
+  sortOrder   Int @default(0)
+  enabled     Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
