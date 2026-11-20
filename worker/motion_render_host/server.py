@@ -244,7 +244,16 @@ def do_render(entry):
             STAGES[job_id]="completed" if not entry["benchmark"] else "qa_pass"
             atomic_state()
     except Exception as exc:
-        fail(entry,str(exc))
+        # Expired token / completed or reassigned job is not a render failure:
+        # never publish a second completion or mark a terminal job failed.
+        message=str(exc)
+        terminal=any(code in message for code in (
+            "Job API failed: 401","Job API failed: 403","Job API failed: 409"))
+        if terminal:
+            with LOCK:
+                STAGES[job_id]="cancelled";atomic_state()
+        else:
+            fail(entry,message)
     finally:
         if stop:stop.set()
         shutil.rmtree(root,ignore_errors=True)
