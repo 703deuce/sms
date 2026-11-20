@@ -15,13 +15,18 @@ import requests
 
 SESSION=requests.Session()
 
+class TerminalJobError(RuntimeError):pass
+
 def fail(message):
     raise RuntimeError(message)
 
 def request(method,url,token,data=None):
     response=SESSION.request(method,url,headers={"Authorization":"Bearer "+token},
                              json=data,timeout=(20,180),allow_redirects=False)
-    if not response.ok:fail("Job API rejected request (HTTP "+str(response.status_code)+")")
+    if not response.ok:
+        if response.status_code in (401,403,409):
+            raise TerminalJobError("Job assignment ended or authorization expired")
+        fail("Job API rejected request (HTTP "+str(response.status_code)+")")
     return response.json()
 
 def upload(joburl,token,filename,src):
@@ -94,9 +99,15 @@ def main():
         parsed.path!="/api/motion-studio/agent/jobs/"+jobid):fail("Invalid job URL")
     if not token:fail("Missing job credential")
     if backend not in ("self_hosted","modal"):fail("Unknown render backend")
-    segment_frames=int(os.environ.get("MOTION_SEGMENT_FRAMES","150"))
-    if not 1<=segment_frames<=600:fail("Invalid segment length")
     output=jobdir/"deliver_modal"/"submit.json"
+    reuse=jobdir/"deliver_modal"/"reuse.json"
+    original=json.loads(reuse.read_text()) if reuse.is_file() else {}
+    original_frames=original.get("segmentFrames")
+    segment_frames=int(os.environ.get("MOTION_SEGMENT_FRAMES",
+                         str(original_frames if original_frames is not None else 150)))
+    if not 1<=segment_frames<=600:fail("Invalid segment length")
+    if original_frames is not None and segment_frames!=int(original_frames):
+        fail("Retry job must reuse the original segment frame size")
     archive=jobdir/"deliver_modal"/os.environ.get("MOTION_BUNDLE_FILENAME","render_bundle_v1.zip")
     if not archive.is_file():fail("Verified render bundle does not exist")
     if output.is_file() and os.environ.get("FORCE_RESUBMIT")!="1":
@@ -130,6 +141,8 @@ def main():
                 metadata["renderId"]=response["jobId"]
                 metadata["alreadyExists"]=response.get("alreadyExists",False)
                 launched=True;break
+            except TerminalJobError:
+                raise
             except (requests.RequestException,RuntimeError):
                 if attempt==0:time.sleep(2)
         if not launched:
