@@ -1,4 +1,4 @@
-import type { MsCreativeBrief, MsCreativeStyle, MsVideoType } from './creative-options'
+import {MS_VIDEO_TYPES,MS_CREATIVE_STYLES, type MsCreativeBrief, type MsCreativeStyle, type MsVideoType} from './creative-options'
 import type { MsWorkflow } from './types'
 
 export type InputRole = 'footage'|'photo'|'talking_head'|'narration'|'music'|'reference'|'logo'|'script'
@@ -40,8 +40,10 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
   return {uploadId:str(inp.uploadId,120),filename:str(inp.filename,180),mime,role,handling:roleHandling[role]}
  })
  const musicUpload=str(m.uploadId,120)||inputs.find(i=>i.role==='music')?.uploadId
- const narrationUpload=uploadId||inputs.find(i=>i.role===mode)?.uploadId
+ const narrationRole=mode==='uploaded_narration'?'narration':mode==='talking_head'?'talking_head':undefined
+ const narrationUpload=uploadId||(narrationRole?inputs.find(i=>i.role===narrationRole)?.uploadId:undefined)
  if(mode==='cloned_voice'&&!voiceId)throw Error('Select a saved voice')
+ if(mode==='cloned_voice'&&voiceSource!=='cloned')throw Error('Select a saved cloned voice')
  if((mode==='uploaded_narration'||mode==='talking_head')&&!narrationUpload)throw Error('Upload or record narration')
  const musicMode=m.mode==='none'?'none':m.mode==='upload'||musicUpload?'upload':'elevenlabs'
  if(musicMode==='upload'&&!musicUpload)throw Error('Select a music track')
@@ -59,11 +61,11 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
  const hasSource=Boolean(sourceText||domains.length||src.preferPrimaryFootage||src.preferOriginalInterviews||src.preferDocuments)
  return {
   prompt,workflow:['idea','script','footage'].includes(String(x.workflow))?x.workflow as MsWorkflow:'idea',
-  videoType:str(x.videoType,70) as MsVideoType||'anything',
+  videoType:MS_VIDEO_TYPES.some(t=>t.id===x.videoType)?x.videoType as MsVideoType:'anything',
   durationSeconds:Number.isFinite(Number(x.durationSeconds))?Math.max(5,Math.min(2147483,Math.floor(Number(x.durationSeconds)))):30,
   aspectRatio:['16:9','9:16','1:1'].includes(String(x.aspectRatio))?x.aspectRatio as ProductionBrief['aspectRatio']:'16:9',
   resolution:['480p','720p','1080p'].includes(String(x.resolution))?x.resolution as ProductionBrief['resolution']:'480p',
-  style:{id:str(sty.id,70) as MsCreativeStyle||'automatic',...(str(sty.custom,1000)?{custom:str(sty.custom,1000)}:{})},
+  style:{id:MS_CREATIVE_STYLES.includes(sty.id as MsCreativeStyle)?sty.id as MsCreativeStyle:'automatic',...(str(sty.custom,1000)?{custom:str(sty.custom,1000)}:{})},
   ...(x.brand?{brand:x.brand as MsCreativeBrief}:{}),
   ...(str(x.audience,1000)?{audience:str(x.audience,1000)}:{}),
   ...(str(object(x.tone).preset,50)||str(object(x.tone).text,1000)?{tone:{
