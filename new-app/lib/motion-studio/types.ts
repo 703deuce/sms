@@ -259,7 +259,7 @@ export type MsCreateInput = {
   script?: string | null
   uploads: MsUploadInput[]
   mediaPolicy: MsMediaPolicy
-  durationSeconds?: 10 | 15 | 30 | 60 | 120 | 180 | 300
+  durationSeconds?: number
   idempotencyKey: string
   creative?: MsCreativeBrief
   productionBrief?: ProductionBrief
