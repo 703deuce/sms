@@ -53,6 +53,10 @@ def valid_url(url,job_id):
 def safe_status(status):
     return status in TERMINAL
 
+def should_check_assignment(now,last_check,completed=False):
+    """Check promptly on completion, otherwise at most once per minute."""
+    return completed or now-last_check>=60
+
 def auth_ok(value):
     return len(SECRET)>=32 and isinstance(value,str) and hmac.compare_digest(SECRET,value)
 
@@ -203,6 +207,7 @@ def do_render(entry):
                 except StopIteration:return
                 futures.append(pool.submit(segment,span))
             for _ in range(WORKERS):schedule()
+            last_check=time.monotonic()
             try:
                 while futures:
                     if time.monotonic()>=deadline:
@@ -210,11 +215,14 @@ def do_render(entry):
                     done,still=concurrent.futures.wait(futures,timeout=2,
                         return_when=concurrent.futures.FIRST_COMPLETED)
                     futures=list(still)
-                    if not verify_job(entry):
-                        with LOCK:
-                            STAGES[job_id]="cancelled";atomic_state()
-                        cancelled.set()
-                        return
+                    now=time.monotonic()
+                    if should_check_assignment(now,last_check,bool(done)):
+                        if not verify_job(entry):
+                            with LOCK:
+                                STAGES[job_id]="cancelled";atomic_state()
+                            cancelled.set()
+                            return
+                        last_check=now
                     for finished in done:
                         results.append(finished.result())
                         api(job_id,"POST","/render-status",{"stage":"rendering",
