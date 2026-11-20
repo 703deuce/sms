@@ -18,6 +18,7 @@ class WorkerTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.patchers=[
           mock.patch.object(server,"WORK",Path(self.tmp.name)),
+          mock.patch.object(server,"SCRATCH",Path(self.tmp.name)/"tmp"),
           mock.patch.object(server,"STATE",Path(self.tmp.name)/"queue.json"),
           mock.patch.object(server,"SECRET","X"*40),
           mock.patch.object(server,"HOST","transovo.ai"),
