@@ -1,11 +1,36 @@
 import 'server-only'
 import {randomUUID} from 'node:crypto'
+import {mkdtemp,writeFile,rm} from 'node:fs/promises'
+import {tmpdir} from 'node:os'
+import {join} from 'node:path'
+import {promisify} from 'node:util'
+import {execFile} from 'node:child_process'
 import {getPrisma} from '@/lib/server/db'
 import {getClipStorage,createReadableSignedUrl} from '@/lib/storage'
 import {getElevenLabsApiKey} from '@/lib/server/ai/elevenlabs'
 import {MotionStudioError} from './errors'
 import {MOTION_STOCK_VOICES} from '@/lib/motion-studio/stock-voices'
 
+const execFileAsync=promisify(execFile)
+/** Decode fallback: MediaRecorder WebM often has no duration header. Never trust the upload timer alone. */
+async function probeVoiceDurationMs(content:Uint8Array,mime:string):Promise<number>{
+ const dir=await mkdtemp(join(tmpdir(),'ms-voice-'))
+ const extension=mime.includes('webm')?'webm':mime.includes('wav')?'wav':mime.includes('ogg')?'ogg':mime.includes('mp4')||mime.includes('m4a')?'m4a':'mp3'
+ const filename=join(dir,'sample.'+extension)
+ try{
+  await writeFile(filename,content)
+  try{
+   const {stdout}=await execFileAsync('ffprobe',['-v','error','-show_entries','format=duration','-of','default=noprint_wrappers=1:nokey=1',filename],{timeout:15000})
+   const seconds=Number(stdout.trim())
+   if(Number.isFinite(seconds)&&seconds>0)return Math.round(seconds*1000)
+  }catch{/* Duration may be absent or ffprobe unavailable. Try decoding below. */}
+  const {stdout}=await execFileAsync('ffmpeg',['-hide_banner','-nostdin','-v','error','-i',filename,'-f','null','-','-progress','pipe:1'],{timeout:60000,maxBuffer:1024*1024})
+  const micros=[...stdout.matchAll(/^out_time_us=(\\d+)$/gm)].map(match=>Number(match[1])).filter(Number.isFinite)
+  const result=micros.length?Math.round(micros[micros.length-1]/1000):0
+  if(result>0)return result
+  throw new Error('Could not decode recording duration')
+ }finally{await rm(dir,{recursive:true,force:true}).catch(()=>{})}
+}
 const db=()=>getPrisma()
 const error=(message:string,status=400)=>new MotionStudioError('INVALID',message,status)
 const name=(value:unknown)=>typeof value==='string'?value.trim().slice(0,80):''
@@ -103,11 +128,16 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime.split(';')[0].trim()))
   throw error('Upload a supported audio recording first.')
  if(Number(sample.bytes)>25*1024*1024)throw error('Voice sample exceeds 25 MB.')
- if(sample.durationMs==null||!Number.isFinite(Number(sample.durationMs)))
-  throw error('Voice sample duration could not be verified. Upload a recording with valid duration metadata.')
- if(sample.durationMs<MIN_CLONE_DURATION_MS)throw error('Voice sample needs at least 10 seconds.')
- if(sample.durationMs>MAX_CLONE_DURATION_MS)throw error('Voice sample exceeds the 5-minute maximum.')
  const content=await getClipStorage().getObjectBytes(sample.key)
+ let verifiedDurationMs:number
+ try{verifiedDurationMs=await probeVoiceDurationMs(new Uint8Array(content),sample.mime)}
+ catch{throw error('Cannot verify the audio recording duration. Check the recording and retry.')}
+ if(verifiedDurationMs<MIN_CLONE_DURATION_MS)throw error('Voice sample needs at least 10 seconds.')
+ if(verifiedDurationMs>MAX_CLONE_DURATION_MS)throw error('Voice sample exceeds the 5-minute maximum.')
+ // Client-reported timer is advisory only; decoded media is authoritative.
+ if(sample.durationMs!=null&&Math.abs(Number(sample.durationMs)-verifiedDurationMs)>verifiedDurationMs*0.2)
+  throw error('Recording duration does not match the uploaded audio. Please record again.')
+ if(sample.durationMs!==verifiedDurationMs)await db().clipUpload.update({where:{id:sample.id},data:{durationMs:verifiedDurationMs}})
  const form=new FormData()
  form.set('name',label)
  form.set('remove_background_noise','true')
