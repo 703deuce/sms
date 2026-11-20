@@ -1,5 +1,6 @@
 'use client'
-import {AudioLines,BookOpenText,Clapperboard,Globe2,Link2,Mic2,Music2,Plus,SlidersHorizontal,Target,Trash2,Upload,Video} from 'lucide-react'
+import {useEffect,useRef,useState} from 'react'
+import {AudioLines,BookOpenText,Clapperboard,Globe2,Link2,Mic2,Music2,Plus,SlidersHorizontal,Target,Trash2,Upload,Video,StopCircle} from 'lucide-react'
 import {Button} from '@/components/ui/button'
 import {Textarea} from '@/components/ui/textarea'
 import {CreatorVoicePicker,type VoiceSelection} from './creator-voice-picker'
@@ -52,7 +53,7 @@ function Block({icon:Icon,title:heading,detail,children}:{icon:typeof Music2;tit
 export function CreatorCustomize({client,value,onChange,script,onScript,onFiles,onError}:{
  client:MotionStudioClient;value:CustomizeValues;onChange:(next:CustomizeValues)=>void
  script:string;onScript:(s:string)=>void
- onFiles:(files:FileList|null,role?:InputRole)=>void
+ onFiles:(files:FileList|File[]|null,role?:InputRole)=>void
  onError:(s:string)=>void
 }){
  const patch=(p:Partial<CustomizeValues>)=>onChange({...value,...p})
@@ -146,6 +147,7 @@ export function CreatorCustomize({client,value,onChange,script,onScript,onFiles,
      <span className="max-w-md text-xs text-muted-foreground">{value.narrationMode==='talking_head'?'We preserve your original picture and sound and add researched cutaways.':'Your recording becomes the timing and performance of the film.'}</span>
      <input type="file" className="sr-only" accept={value.narrationMode==='talking_head'?'video/*':'audio/*'} onChange={e=>{onFiles(e.target.files,narrationFile);e.target.value=''}}/>
     </label>}
+   {value.narrationMode==='uploaded_narration'?<CreatorRecordNarration onFile={file=>onFiles([file],'narration')} onError={onError}/>:null}
   </Block>
   <Block icon={Music2} title="Music and soundtrack" detail="Give the story its own score, use your track, or go without music.">
    <div className="grid gap-2 sm:grid-cols-3">
@@ -174,5 +176,49 @@ export function CreatorCustomize({client,value,onChange,script,onScript,onFiles,
      placeholder="e.g. confident, warm, thoughtful"/></label>
    </div>
   </Block>
+ </div>
+}
+
+function CreatorRecordNarration({onFile,onError}:{onFile:(file:File)=>void;onError:(message:string)=>void}){
+ const [recording,setRecording]=useState(false)
+ const [elapsed,setElapsed]=useState(0)
+ const recorder=useRef<MediaRecorder|null>(null)
+ const stream=useRef<MediaStream|null>(null)
+ const chunks=useRef<BlobPart[]>([])
+ const tick=useRef<ReturnType<typeof setInterval>|null>(null)
+ const stop=()=>{
+   if(tick.current)clearInterval(tick.current)
+   tick.current=null
+   if(recorder.current?.state==='recording')recorder.current.stop()
+   stream.current?.getTracks().forEach(t=>t.stop())
+   setRecording(false)
+ }
+ useEffect(()=>()=>{if(tick.current)clearInterval(tick.current)
+   if(recorder.current?.state==='recording')recorder.current.stop()
+   stream.current?.getTracks().forEach(t=>t.stop())},[])
+ const start=async()=>{
+  try{
+    const tracks=await navigator.mediaDevices.getUserMedia({audio:true})
+    const mime=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(m=>MediaRecorder.isTypeSupported(m))
+    const rec=new MediaRecorder(tracks,mime?{mimeType:mime}:undefined)
+    recorder.current=rec;stream.current=tracks;chunks.current=[]
+    const begin=Date.now()
+    rec.ondataavailable=e=>{if(e.data.size)chunks.current.push(e.data)}
+    rec.onstop=()=>{
+      const blob=new Blob(chunks.current,{type:rec.mimeType||'audio/webm'})
+      if(blob.size>0)onFile(new File([blob],'my-narration.'+(blob.type.includes('mp4')?'m4a':'webm'),{type:blob.type}))
+    }
+    rec.start(1000);setElapsed(0);setRecording(true)
+    tick.current=setInterval(()=>setElapsed(Math.floor((Date.now()-begin)/1000)),500)
+  }catch{onError('Microphone access is unavailable. Upload an audio recording instead.')}
+ }
+ return <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
+   <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-lg bg-primary/10 text-primary"><Mic2 className="size-4"/></span>
+     <div><p className="text-sm font-medium">Record your voiceover</p>
+       <p className="text-xs text-muted-foreground">{recording?Math.floor(elapsed/60)+':'+String(elapsed%60).padStart(2,'0')+' recorded':'Capture narration directly in your browser'}</p>
+     </div></div>
+   <Button type="button" size="sm" variant={recording?'default':'outline'} onClick={()=>recording?stop():void start()}>
+    {recording?<StopCircle className="mr-1 size-4"/>:<Mic2 className="mr-1 size-4"/>}{recording?'Stop & use recording':'Record narration'}
+   </Button>
  </div>
 }
