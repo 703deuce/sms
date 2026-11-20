@@ -26,21 +26,23 @@ export function CreatorVoicePicker({client,value,onChange,onError,refreshKey=0}:
  const [preview,setPreview]=useState<string|null>(null)
  const audioRef=useRef<HTMLAudioElement|null>(null)
  const initializedDefault=useRef(false)
+ const callbacks=useRef({onChange,onError,value})
+ callbacks.current={onChange,onError,value}
  const refresh=useCallback(async()=>{
   if(client.mode!=='live')return
   setLoading(true)
   try{
    const data=await call(base) as unknown as Data
    setLibrary(data)
-   if(!initializedDefault.current&&data.defaultVoiceId&&!value){
+   if(!initializedDefault.current&&data.defaultVoiceId&&!callbacks.current.value){
     const match=[...data.myVoices,...data.stockVoices].find(v=>v.voiceId===data.defaultVoiceId)
-    if(match)onChange({voiceId:match.voiceId,voiceName:match.name,voiceSource:match.source})
+    if(match)callbacks.current.onChange({voiceId:match.voiceId,voiceName:match.name,voiceSource:match.source})
    }
    initializedDefault.current=true
   }
-  catch(e){onError(e instanceof Error?e.message:'Cannot load voices')}
+  catch(e){callbacks.current.onError(e instanceof Error?e.message:'Cannot load voices')}
   finally{setLoading(false)}
- },[client.mode,onError,onChange,value])
+ },[client.mode])
  useEffect(()=>{void refresh()},[refresh,refreshKey])
  const choose=(v:Voice)=>onChange({voiceId:v.voiceId,voiceName:v.name,voiceSource:v.source})
  const play=(v:Voice)=>{
