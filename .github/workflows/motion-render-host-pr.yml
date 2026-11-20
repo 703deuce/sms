@@ -31,6 +31,8 @@ jobs:
         run: cd worker/motion_render_host && python -m unittest -v test_server
       - name: Producer dry-run tests
         run: cd producer_handoff_kit/skills/motion-studio-production/scripts/render && python -m unittest -v test_submit
+      - name: Producer real-layout bundle tests
+        run: cd producer_handoff_kit/skills/motion-studio-production/scripts/render && python -m unittest -v test_bundle
       - name: Wrapper syntax
         run: |
           for f in producer_handoff_kit/skills/motion-studio-production/scripts/render/*.sh; do bash -n "$f"; done
