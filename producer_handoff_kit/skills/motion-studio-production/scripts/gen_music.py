@@ -219,6 +219,10 @@ def main(argv=None):
             continue
         if args.reuse_only:raise MusicError("Required cached music missing")
         if not key:raise MusicError("ELEVENLABS_API_KEY is not set")
+        # Publishing customer videos requires verified payg commercial rights;
+        # do not initiate a paid call just because a key works.
+        if os.environ.get("MOTION_STUDIO_ELEVENLABS_MUSIC_COMMERCIAL_OK")!="1":
+            raise MusicError("Customer-video music rights not confirmed")
         current="mp3_48000_192" if chosen=="auto" else chosen
         try:audio,song,status=generation(key,cue,current,args.model_id)
         except MusicError as error:
