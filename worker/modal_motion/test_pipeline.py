@@ -2,7 +2,7 @@
 import hashlib, io, json, tempfile, unittest, zipfile, threading
 from pathlib import Path
 from unittest.mock import patch
-from pipeline import extract_bundle,segment_name,capture_segment,qa_video,join_and_qa
+from pipeline import extract_bundle,segment_name,capture_segment,qa_video,join_and_qa,publish_editable
 
 class BundleTests(unittest.TestCase):
     def setUp(self):
@@ -117,6 +117,36 @@ class BundleTests(unittest.TestCase):
         with patch("pipeline.ffprobe",return_value=probe),patch("pipeline.checked",side_effect=ffmpeg):
             with self.assertRaisesRegex(ValueError,"silent"):
                 qa_video("film.mp4",150,30,854,480)
+    def test_editable_publish_deduplicates_identical_native_content(self):
+        root=self.root/"editable"
+        (root/"blobs").mkdir(parents=True)
+        body=b"verified film source content"
+        digest=hashlib.sha256(body).hexdigest()
+        (root/"blobs"/digest).write_bytes(body)
+        assets={
+          "ast_a":{"sha256":digest,"bytes":len(body),"mime":"text/plain",
+                   "kind":"source","filename":"scene_a.txt"},
+          "ast_b":{"sha256":digest,"bytes":len(body),"mime":"text/plain",
+                   "kind":"source","filename":"scene_b.txt"}}
+        (root/"package.json").write_text(json.dumps({
+            "schema":"transovo.motion-package/1","document":{"projectId":"proj"},
+            "assets":assets}))
+        (root/"bundles.json").write_text("[]")
+        calls=[]
+        def put(job,path,filename,kind,mime):
+            calls.append(filename)
+            return "storage_one"
+        payloads=[]
+        with patch("pipeline.prepare_upload",side_effect=put),\
+             patch("pipeline.api",side_effect=lambda job,method,path,payload,**kwargs:
+                   payloads.append(payload) or {"id":"ver_one"}):
+            result=publish_editable("msaj_fake",root)
+        self.assertEqual(result["id"],"ver_one")
+        self.assertEqual(len(calls),1)
+        registered=payloads[0]["assets"]
+        self.assertEqual(len(registered),2)
+        self.assertEqual(registered[0]["storageId"],"storage_one")
+        self.assertEqual(registered[1]["storageId"],"storage_one")
     def test_segment_upload_retry_does_not_relaunch_chromium(self):
         root=self.root/"ready_bundle"
         root.mkdir()
