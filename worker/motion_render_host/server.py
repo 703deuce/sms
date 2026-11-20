@@ -146,7 +146,10 @@ def do_render(entry):
     start=time.monotonic()
     stop=None
     try:
-        if not verify_job(entry):return
+        if not verify_job(entry):
+            with LOCK:
+                STAGES[job_id]="cancelled";atomic_state()
+            return
         os.environ["MOTION_JOB_URL"]=entry["url"]
         os.environ["MOTION_JOB_TOKEN"]=entry["token"]
         os.nice(NICE)
@@ -187,7 +190,10 @@ def do_render(entry):
         with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
             futures=[pool.submit(segment,span) for span in ranges]
             for f in concurrent.futures.as_completed(futures,timeout=max(1,deadline-time.monotonic())):
-                if not verify_job(entry):return
+                if not verify_job(entry):
+                    with LOCK:
+                        STAGES[job_id]="cancelled";atomic_state()
+                    return
                 results.append(f.result())
                 api(job_id,"POST","/render-status",{"stage":"rendering",
                     "completed":len(results),"total":len(ranges)})
@@ -323,8 +329,10 @@ class Handler(BaseHTTPRequestHandler):
         except RuntimeError:
             return self.respond(401,{"error":"Job not authenticated"})
         with LOCK:
-            if not any(x["id"]==job_id for x in QUEUE) and not(CURRENT and CURRENT["id"]==job_id):
-                QUEUE.append(entry);STAGES[job_id]="queued";atomic_state()
+            if any(x["id"]==job_id for x in QUEUE) or (CURRENT and CURRENT["id"]==job_id):
+                return self.respond(200,{"jobId":job_id,"queued":True,
+                    "alreadyExists":True,"stage":STAGES.get(job_id,"queued")})
+            QUEUE.append(entry);STAGES[job_id]="queued";atomic_state()
         return self.respond(202,{"jobId":job_id,"queued":True,"alreadyExists":False,"stage":"queued"})
 
 def main():
