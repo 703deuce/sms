@@ -573,9 +573,19 @@ export function MotionStudioCreate({
                   {attachments.map((a) => (
                     <li key={a.key} className="relative">
                       <UploadProgressItem progress={a.progress} onCancel={() => removeAttachment(a.key)} onRetry={a.progress.state === 'error' ? () => void uploadOne(a) : undefined} />
-                      <span className="pointer-events-none absolute top-3 right-12">
+                      {creationTab==='customize' ? <div className="mt-2 flex items-center gap-2 pl-2">
+                        <label htmlFor={'ms-upload-role-'+a.key} className="text-xs text-muted-foreground">Use as</label>
+                        <select id={'ms-upload-role-'+a.key} aria-label={'Role for '+a.file.name}
+                          value={a.role||(a.kind==='video'?'footage':a.kind==='photo'?'photo':a.kind==='audio'?'music':'script')}
+                          onChange={e=>setAttachments(previous=>previous.map(item=>
+                            item.key===a.key?{...item,role:e.target.value as InputRole}:item))}
+                          className="h-9 min-w-36 rounded-lg border border-input bg-background px-3 text-xs">
+                          {attachmentRoleChoices(a.file.type||(a.kind==='script'?'text/plain':'application/octet-stream'))
+                            .map(role=><option key={role.id} value={role.id}>{role.label}</option>)}
+                        </select>
+                      </div> : <span className="pointer-events-none absolute top-3 right-12">
                         <Badge variant="outline" className="capitalize">{a.kind === 'audio' ? 'music / audio' : a.kind}</Badge>
-                      </span>
+                      </span>}
                     </li>
                   ))}
                 </ul>
