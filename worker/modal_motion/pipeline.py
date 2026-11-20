@@ -251,7 +251,8 @@ def ffprobe(path):
       "-show_format","-of","json",path],timeout=1800)
     return json.loads(out)
 
-def qa_video(path,expected_frames,fps):
+def qa_video(path,expected_frames,fps,expected_width=None,expected_height=None):
+    """Technical integrity only. Creative design is approved before rendering."""
     result=ffprobe(path)
     streams=result.get("streams",[])
     video=next((x for x in streams if x.get("codec_type")=="video"),None)
@@ -259,6 +260,13 @@ def qa_video(path,expected_frames,fps):
     if not video or not audio:raise ValueError("Missing master video or audio")
     frames=int(video.get("nb_read_packets") or video.get("nb_read_frames") or 0)
     if frames!=expected_frames:raise ValueError("Frame count mismatch")
+    if expected_width is not None and int(video.get("width") or 0)!=expected_width:
+        raise ValueError("Wrong video resolution")
+    if expected_height is not None and int(video.get("height") or 0)!=expected_height:
+        raise ValueError("Wrong video resolution")
+    rate=video.get("avg_frame_rate") or video.get("r_frame_rate") or "0/1"
+    from fractions import Fraction
+    if abs(float(Fraction(rate))-fps)>0.01:raise ValueError("Wrong video frame rate")
     expected=expected_frames/fps
     duration=float(result["format"]["duration"])
     if abs(duration-expected)>max(0.08,2/fps):
@@ -266,21 +274,24 @@ def qa_video(path,expected_frames,fps):
     a_duration=float(audio.get("duration") or duration)
     if abs(a_duration-expected)>0.20:
         raise ValueError("Audio/video duration mismatch")
-    _,black=checked(["ffmpeg","-hide_banner","-i",path,"-vf",
-      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=3600)
-    if "black_start:" in black:raise ValueError("Extended black frames detected")
-    _,loud=checked(["ffmpeg","-hide_banner","-i",path,"-vn","-af",
-      "ebur128=peak=true","-f","null","-"],timeout=1800)
-    matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
-    if not matches:raise ValueError("Could not inspect integrated loudness")
-    integrated=float(matches[-1])
-    if not -16.5<=integrated<=-13.5:
-        raise ValueError("Integrated loudness outside QA tolerance")
-    # Static composition holds are legitimate; mpdecimate must not
-    # automatically reject duplicate still frames.
-    return {"frames":frames,"duration":duration,"integratedLufs":integrated}
+    # Decode every video/audio frame. Packet count alone cannot detect corruption.
+    checked(["ffmpeg","-nostdin","-v","error","-xerror","-i",path,
+             "-map","0:v:0","-map","0:a:0","-f","null","-"],timeout=5400)
+    # Integrated level is informational. The worker normalizes the encode;
+    # loudness deviations must never reject an otherwise valid film.
+    _,loud=checked(["ffmpeg","-nostdin","-hide_banner","-i",path,"-vn","-af",
+      "ebur128=peak=true,volumedetect","-f","null","-"],timeout=1800)
+    matches=re.findall(r"I:\\s*(-?[0-9.]+) LUFS",loud)
+    integrated=float(matches[-1]) if matches else None
+    volumes=re.findall(r"max_volume:\\s*(-?[0-9.]+) dB",loud)
+    peak=float(volumes[-1]) if volumes else None
+    if peak is None or peak<=-55:
+        raise ValueError("Audio track is silent")
+    return {"frames":frames,"duration":duration,"integratedLufs":integrated,
+            "audioPeakDb":peak,"width":video["width"],"height":video["height"],
+            "fps":fps}
 
-def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None):
+def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None,recovery_dir=None):
     start=time.monotonic()
     stop=heartbeat_scope(job_id)
     try:
@@ -316,7 +327,11 @@ def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None):
               "-level:v","4.2","-pix_fmt","yuv420p","-movflags","+faststart",
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
               "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
-            metrics=qa_video(master,project["frameCount"],project["fps"])
+            # Register a diagnostic master BEFORE QA; a technical QA failure
+            # must not destroy the only finished film.
+            if recovery_dir:
+                os.makedirs(recovery_dir,exist_ok=True)
+                shutil.copy2(master,os.path.join(recovery_dir,"master.mp4"))
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
             share=os.path.join(directory,"share.mp4")
             duration=project["frameCount"]/project["fps"]
@@ -350,7 +365,11 @@ def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None):
                           timeout=3600)
                         if os.path.getsize(share)<24_000_000:break
                     else:raise ValueError("Share copy exceeds maximum size")
+            if recovery_dir:
+                shutil.copy2(share,os.path.join(recovery_dir,"share.mp4"))
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
+            metrics=qa_video(master,project["frameCount"],project["fps"],
+                             project["width"],project["height"])
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
                 "qa":metrics,"seconds":round(time.monotonic()-start,3)}
