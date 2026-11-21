@@ -9,6 +9,7 @@ import {getPrisma} from '@/lib/server/db'
 import {getClipStorage,createReadableSignedUrl} from '@/lib/storage'
 import {getElevenLabsApiKey} from '@/lib/server/ai/elevenlabs'
 import {MotionStudioError} from './errors'
+import {parseFfmpegProgressDurationMs} from '@/lib/motion-studio/ffmpeg-progress'
 import {MOTION_STOCK_VOICES} from '@/lib/motion-studio/stock-voices'
 
 const execFileAsync=promisify(execFile)
@@ -25,8 +26,7 @@ async function probeVoiceDurationMs(content:Uint8Array,mime:string):Promise<numb
    if(Number.isFinite(seconds)&&seconds>0)return Math.round(seconds*1000)
   }catch{/* Duration may be absent or ffprobe unavailable. Try decoding below. */}
   const {stdout}=await execFileAsync('ffmpeg',['-hide_banner','-nostdin','-v','error','-i',filename,'-f','null','-','-progress','pipe:1'],{timeout:60000,maxBuffer:1024*1024})
-  const micros=[...stdout.matchAll(/^out_time_us=(\\d+)$/gm)].map(match=>Number(match[1])).filter(Number.isFinite)
-  const result=micros.length?Math.round(micros[micros.length-1]/1000):0
+  const result=parseFfmpegProgressDurationMs(stdout)
   if(result>0)return result
   throw new Error('Could not decode recording duration')
  }finally{await rm(dir,{recursive:true,force:true}).catch(()=>{})}
