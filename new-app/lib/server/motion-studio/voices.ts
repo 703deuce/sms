@@ -23,11 +23,17 @@ async function probeVoiceDurationMs(content:Uint8Array,mime:string):Promise<numb
   try{
    const {stdout}=await execFileAsync('ffprobe',['-v','error','-show_entries','format=duration','-of','default=noprint_wrappers=1:nokey=1',filename],{timeout:15000})
    const seconds=Number(stdout.trim())
-   if(Number.isFinite(seconds)&&seconds>0)return Math.round(seconds*1000)
+   if(Number.isFinite(seconds)&&seconds>0){
+    console.info('[motion-studio:clone] duration verified',{method:'ffprobe',durationMs:Math.round(seconds*1000)})
+    return Math.round(seconds*1000)
+   }
   }catch{/* Duration may be absent or ffprobe unavailable. Try decoding below. */}
   const {stdout}=await execFileAsync('ffmpeg',['-hide_banner','-nostdin','-v','error','-i',filename,'-f','null','-','-progress','pipe:1'],{timeout:60000,maxBuffer:1024*1024})
   const result=parseFfmpegProgressDurationMs(stdout)
-  if(result>0)return result
+  if(result>0){
+   console.info('[motion-studio:clone] duration verified',{method:'ffmpeg-decode',durationMs:result})
+   return result
+  }
   throw new Error('Could not decode recording duration')
  }finally{await rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }
@@ -127,6 +133,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
   where:{id:sampleUploadId,workspaceId,status:'COMPLETE'},select:{id:true,key:true,mime:true,bytes:true,durationMs:true}})
  if(!sample||!['audio/mpeg','audio/wav','audio/x-wav','audio/mp4','audio/m4a','audio/webm','audio/ogg'].includes(sample.mime.split(';')[0].trim()))
   throw error('Upload a supported audio recording first.')
+ console.info('[motion-studio:clone] sample received',{bytes:Number(sample.bytes),mime:sample.mime.split(';')[0],uploadStatus:'COMPLETE',reportedDurationMs:sample.durationMs??null})
  if(Number(sample.bytes)>25*1024*1024)throw error('Voice sample exceeds 25 MB.')
  const content=await getClipStorage().getObjectBytes(sample.key)
  let verifiedDurationMs:number
@@ -138,6 +145,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  if(sample.durationMs!=null&&Math.abs(Number(sample.durationMs)-verifiedDurationMs)>verifiedDurationMs*0.2)
   throw error('Recording duration does not match the uploaded audio. Please record again.')
  if(sample.durationMs!==verifiedDurationMs)await db().clipUpload.update({where:{id:sample.id},data:{durationMs:verifiedDurationMs}})
+ console.info('[motion-studio:clone] validated sample',{bytes:Number(sample.bytes),verifiedDurationMs})
  const form=new FormData()
  form.set('name',label)
  form.set('remove_background_noise','true')
@@ -149,6 +157,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
    method:'POST',headers:{'xi-api-key':getElevenLabsApiKey()},body:form,
    signal:AbortSignal.timeout(CLONE_PROVIDER_TIMEOUT_MS),cache:'no-store'})
  }catch{throw new MotionStudioError('INTERNAL','Could not connect to the voice service.',502)}
+ console.info('[motion-studio:clone] provider response',{httpStatus:response.status,ok:response.ok})
  if(!response.ok)throw new MotionStudioError('INTERNAL','Could not create voice. Check the sample and try again.',502)
  const created=await response.json() as {voice_id?:string}
  if(!created.voice_id||!voiceIdPattern.test(created.voice_id))throw new MotionStudioError('INTERNAL','Voice service returned an invalid ID.',502)
@@ -164,6 +173,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
   await deleteProviderVoice(created.voice_id).catch(()=>{})
   throw new MotionStudioError('INTERNAL','Could not save your voice.',500)
  }
+ console.info('[motion-studio:clone] saved clone',{saved:true,previewAvailable:!!previewUrl})
  return {id:record.id,voiceId:record.voiceId,name:record.name,kind:'cloned',isDefault:record.isDefault,previewUrl}
 }
 async function deleteProviderVoice(id:string){
