@@ -1,5 +1,7 @@
 # Motion Studio style ledger
 
+**This GitHub file is the ONE shared ledger for every production bot (Rick, Nov 21).** Any of the production bots can get the next job, so the last 5 films means the last 5 made by *any* bot. Before planning, run `bash <skill-root>/scripts/ledger/ledger_pull.sh` (refreshes `/workspace/motion_jobs/STYLE_LEDGER.md` from master). After delivery, append your entry with `bash <skill-root>/scripts/ledger/ledger_append.sh <entry.md> <botName>` (pushes straight to master, retries on conflicts). Never keep entries only on a box.
+
 Read the last 5–8 entries and every entry for the same customer before planning a production (SKILL.md, Director rules 5 and 5a). Search by customer with `rg -n "customer: <id>" STYLE_LEDGER.md`. Append one entry per delivered job. Newest at the bottom. Keep each entry short.
 
 Format: `## <date> · <jobId or test folder> · <title>` then `- Customer: <customerId or projectId>` · style direction (if any) · concept · type · colour · layout/framing · transitions/texture · engine and layer mix.
@@ -181,10 +183,11 @@ Format: `## <date> · <jobId or test folder> · <title>` then `- Customer: <cust
 - Engines: Canvas 2D single-page film (fog mask field, defocus, etch masks, drops), atlas frame packs (ffmpeg), numpy SFX + ElevenLabs Music (2 cues, score, no drums), ElevenLabs flash v2.5 (Declan - Serious & Straightforward), faster-whisper clip-audio check; self-hosted CPU fan-out render
 > Steer away next time: fogged-glass/rain-on-window world, fog-dissolve + defocus transitions, etched-in-condensation text, Gloock + Familjen Grotesk, dusk slate + fog grey + bone + rose, vertical phone clip in glass panel over blurred backdrop, analog clock/street-sign cards.
 
-## Diddy v. Ray J (msaj_6d1ab72d, 30 s, 854x480)
+## 2026-11-21 · msaj_6d1ab72d-bcc8-4de7-9e37-2118a7f3506e · THE RECEIPTS: Diddy v. Ray J (30 s, 16:9, 854x480)
 - Concept: THE RECEIPTS. Thermal-receipt world: oxblood room, cream paper slips that print line by line, red stamps that thud (REPORTEDLY/CLAIMED/ALLEGEDLY), taped prints holding real clips and duotone photos, perforated tear-band wipes, ghost outlined dates.
 - Type: Dela Gothic One (hero lines, stamps) + Courier Prime Bold/Regular (receipt print).
 - Colour: oxblood #1A0709, cream #F0E6CF, stamp red #C4281E, brass #D9A441, ink #22120F.
 - Layout: slip top-hung on one side, taped print on the other; end card = two prints flanking a final-statement slip.
 - Engines: Canvas-2D page (deterministic seek), JPEG atlas footage packs, ffmpeg conform.
 - Steer away next time: paper/receipt slips, stamps, cream-on-oxblood, tear-band wipes.
+- Variety: concept family paper/document/stamp · claim device REPORTEDLY/CLAIMED/ALLEGEDLY stamps · ground dark (oxblood) · type formula display + mono (Dela Gothic + Courier Prime) · edit mix mostly designed (footage in taped prints) · 3D/2.5D none · cut-outs no · engines Canvas 2D only
