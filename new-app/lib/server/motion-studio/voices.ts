@@ -1,6 +1,6 @@
 import 'server-only'
 import {randomUUID} from 'node:crypto'
-import {mkdtemp,writeFile,rm} from 'node:fs/promises'
+import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {promisify} from 'node:util'
@@ -37,6 +37,43 @@ async function probeVoiceDurationMs(content:Uint8Array,mime:string):Promise<numb
   throw new Error('Could not decode recording duration')
  }finally{await rm(dir,{recursive:true,force:true}).catch(()=>{})}
 }
+/** Send standardized PCM WAV to ElevenLabs instead of browser WebM/Opus containers. */
+async function prepareCloneWav(content:Uint8Array,mime:string):Promise<Uint8Array>{
+ const dir=await mkdtemp(join(tmpdir(),'ms-voice-convert-'))
+ const extension=mime.includes('webm')?'webm':mime.includes('wav')?'wav':mime.includes('ogg')?'ogg':mime.includes('mp4')||mime.includes('m4a')?'m4a':'mp3'
+ const source=join(dir,'input.'+extension)
+ const output=join(dir,'voice.wav')
+ try{
+  await writeFile(source,content)
+  await execFileAsync(process.env.FFMPEG_PATH||'ffmpeg',[
+   '-hide_banner','-nostdin','-v','error','-y','-i',source,
+   '-vn','-ac','1','-ar','16000','-c:a','pcm_s16le',output,
+  ],{timeout:60000,maxBuffer:1024*1024})
+  return new Uint8Array(await readFile(output))
+ }finally{await rm(dir,{recursive:true,force:true}).catch(()=>{})}
+}
+
+/** Return safe actionable errors without leaking provider credentials or raw API responses. */
+function cloneProviderError(status:number,detail:unknown):string{
+ const data=detail&&typeof detail==='object'?detail as Record<string,unknown>:{}
+ const nested=data.detail&&typeof data.detail==='object'?data.detail as Record<string,unknown>:{}
+ const code=typeof nested.status==='string'?nested.status:''
+ console.warn('[motion-studio:clone] provider rejected sample',{httpStatus:status,reason:code||'unknown'})
+ if(status===401||status===403)return 'Voice cloning is unavailable for this ElevenLabs account or API key. Check cloning permissions and subscription.'
+ if(status===429)return 'ElevenLabs is temporarily limiting requests. Please retry shortly.'
+ if(status===413)return 'The voice recording is too large for ElevenLabs. Try a shorter recording.'
+ if(code==='voice_limit_reached'||code==='voice_limit_exceeded'||code==='max_voices_reached')return 'Your ElevenLabs voice library is full. Delete an unused clone before creating another.'
+ if(code==='library_voice_match')return 'ElevenLabs matched this recording to a protected library voice and did not create a clone.'
+ if(status===400||status===422){
+  const message=typeof nested.message==='string'?nested.message:''
+  // Only expose a short validation message, never the raw provider JSON.
+  if(message&&!/[\\r\\n]/.test(message)&&message.length<=240&&!/key|token|secret|authorization|Bearer/i.test(message))
+   return 'ElevenLabs rejected the voice sample: '+message
+  return 'ElevenLabs rejected the audio sample. Try a clear 30–60 second recording without background sound.'
+ }
+ return 'ElevenLabs could not create the voice (HTTP '+status+'). Please try again.'
+}
+
 const db=()=>getPrisma()
 const error=(message:string,status=400)=>new MotionStudioError('INVALID',message,status)
 const name=(value:unknown)=>typeof value==='string'?value.trim().slice(0,80):''
@@ -146,11 +183,17 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
   throw error('Recording duration does not match the uploaded audio. Please record again.')
  if(sample.durationMs!==verifiedDurationMs)await db().clipUpload.update({where:{id:sample.id},data:{durationMs:verifiedDurationMs}})
  console.info('[motion-studio:clone] validated sample',{bytes:Number(sample.bytes),verifiedDurationMs})
+ let normalizedAudio:Uint8Array
+ try{normalizedAudio=await prepareCloneWav(new Uint8Array(content),sample.mime)}
+ catch(error){
+  console.error('[motion-studio:clone] audio preparation failed',{reason:error instanceof Error?error.name:'unknown'})
+  throw new MotionStudioError('INVALID','Could not prepare this recording for voice cloning. Please try another audio file.',400)
+ }
+ console.info('[motion-studio:clone] audio prepared',{originalBytes:Number(sample.bytes),wavBytes:normalizedAudio.byteLength,format:'wav_pcm16_mono_16khz'})
  const form=new FormData()
  form.set('name',label)
  form.set('remove_background_noise','true')
- form.set('files',new Blob([new Uint8Array(content)],{type:sample.mime}),'sample.'+
-   (sample.mime.includes('webm')?'webm':sample.mime.includes('wav')?'wav':'mp3'))
+ form.set('files',new Blob([normalizedAudio],{type:'audio/wav'}),'sample.wav')
  let response:Response
  try{
   response=await fetch('https://api.elevenlabs.io/v1/voices/add',{
@@ -158,7 +201,10 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
    signal:AbortSignal.timeout(CLONE_PROVIDER_TIMEOUT_MS),cache:'no-store'})
  }catch{throw new MotionStudioError('INTERNAL','Could not connect to the voice service.',502)}
  console.info('[motion-studio:clone] provider response',{httpStatus:response.status,ok:response.ok})
- if(!response.ok)throw new MotionStudioError('INTERNAL','Could not create voice. Check the sample and try again.',502)
+ if(!response.ok){
+  const detail=await response.json().catch(()=>null) as unknown
+  throw new MotionStudioError('INVALID',cloneProviderError(response.status,detail),response.status>=500?502:400)
+ }
  const created=await response.json() as {voice_id?:string}
  if(!created.voice_id||!voiceIdPattern.test(created.voice_id))throw new MotionStudioError('INTERNAL','Voice service returned an invalid ID.',502)
  const previewUrl=await officialPreview(created.voice_id)
