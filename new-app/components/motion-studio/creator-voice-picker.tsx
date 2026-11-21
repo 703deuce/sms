@@ -222,7 +222,7 @@ function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudi
    const media=new MediaRecorder(stream,mime?{mimeType:mime}:undefined)
    tracks.current=stream;recorder.current=media
    const fail=()=>{
-    if(id!==recordingId.current||!mounted.current)return
+    if(id!==recordingId.current||!mounted.current||stopRequested.current)return
     interrupted.current=true;clearClock();setRecording(false)
     setFile(null);setCapturedDuration(null);setFinalizing(false)
     setDialogError(INTERRUPTED_RECORDING)
