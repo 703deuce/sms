@@ -10,6 +10,7 @@ import { interpretCustomerMessage } from '@/lib/server/motion-studio/chat-assist
 import { isStatusQuestion, statusReply, publicAssistantText } from '@/lib/motion-studio/chat-intent'
 import { customerQuestion, progressMayChangeWaiting, waitingExpired, CUSTOMER_WAIT_MS } from '@/lib/motion-studio/waiting-contract'
 import { sanitizeCreativeBrief, directorCategoryGuidance } from '@/lib/motion-studio/creative-options'
+import { sanitizeProductionBrief, roleHandling } from '@/lib/motion-studio/production-brief'
 import { validateProducerCheckpoint } from '@/lib/motion-studio/checkpoint-contract'
 import { validatePortableManifest } from '@/lib/motion-studio/portable-contract'
 import { pullProducerQueueEnabled, pullProducerQueueConfigured, releaseProducerLease } from '@/lib/server/motion-studio/producer-queue'
@@ -112,7 +113,8 @@ export async function userAgentJob(workspaceId: string, projectId: string, _user
   const editable = await db().motionStudioPortableVersion.findFirst({
     where:{workspaceId,projectId,sourceJobId:job.id,status:'committed'}, select:{id:true},
   })
-  return { ...publicJob(job), delivery:toObject(project.exportInfo).delivery||'legacy', editableReady:Boolean(editable), masterReady:Boolean(job.resultKey)||
+  return { ...publicJob(job), delivery:toObject(project.exportInfo).delivery||'legacy', editableReady:Boolean(editable),
+    masterReadyAt:toObject(project.exportInfo).masterReadyAt||null, masterReady:Boolean(job.resultKey)||
       (toObject(project.exportInfo).delivery==='live'&&Boolean(editable)), phase: CUSTOMER_STAGES.includes(job.phase as typeof CUSTOMER_STAGES[number]) ? job.phase : 'research', message: friendlyMessage(job.message, job.phase), videoUrl,
     stages: CUSTOMER_STAGES, events: events.filter(e => toObject(e.data).jobId === job.id).map(e => ({ id: e.id, stage: e.stage, message: e.message, timestamp: e.createdAt.toISOString(), sceneId: str(toObject(e.data).sceneId, 80) || undefined, percent: toObject(e.data).percent })) }
 }
@@ -204,6 +206,13 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
   if (webhook.protocol !== 'https:') throw new MotionStudioError('INTERNAL', 'Grokbot webhook requires HTTPS.', 503)
   const settings = toObject(project.settings)
   const creative = sanitizeCreativeBrief(settings.creative)
+  const brief = sanitizeProductionBrief(settings.productionBrief ?? {
+    prompt:project.brief,videoType:creative.videoType,
+    durationSeconds:Number(settings.durationSeconds)||Number(settings.lengthMin)*60||180,
+    aspectRatio:str(settings.format).split('_')[0],
+    resolution:str(settings.finalRenderSize||settings.renderSize)||'480p',
+    style:{id:creative.style,custom:creative.customStyle}
+  })
   const endpoint = baseUrl(request) + '/api/motion-studio/agent/jobs/' + encodeURIComponent(id)
   const payload = {
     version: 1, jobId: id, workspaceId, projectId, action: revisionRequest ? 'revise_video' : 'create_video',
@@ -221,6 +230,7 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       })).reverse().map(m=>({role:m.role==='answer'?'customer':m.role,text:m.text})),
     } : {}),
     title: project.title, prompt: project.brief,
+    brief,workflow:brief.workflow,inputs:brief.inputs,
     videoType: creative.videoType,
     categoryGuidance: directorCategoryGuidance(creative.videoType),
     creative: { ...creative, brand: creative.brandMode === 'none' ? undefined : creative.brand },
@@ -237,9 +247,9 @@ export async function dispatchAgentJob(workspaceId: string, userId: string, proj
       return { width, height, fps: 30, resolution: size }
     })(),
     quality: str(settings.quality || settings.tier, 40) || 'premium',
-    style: creative.style === 'automatic' ? (str(settings.visualDirection, 80) || 'cinematic') : (creative.style === 'custom' ? creative.customStyle || 'custom' : creative.style),
-    webResearch: true,
-    mediaPolicy: 'auto_plus_uploads',
+    style: creative.style === 'automatic' ? 'automatic' : (creative.style === 'custom' ? creative.customStyle || 'custom' : creative.style),
+    webResearch: settings.webResearch!==false,
+    mediaPolicy: str(settings.mediaPolicy,40)||'auto_plus_uploads',
     jobUrl: endpoint, callbackUrl: endpoint, setupMode: !agentBridgeLive(),
     // During setup do not disclose a callback token in the bot's diagnostic chat.
     ...(agentBridgeLive() ? { jobToken: token } : {}),
@@ -339,10 +349,16 @@ export async function botGetAssignment(id: string, request: Request) {
   ])
   const uploads = projectAssets.length ? await db().clipUpload.findMany({ where: {
     id: { in: projectAssets.map(a => a.uploadId) }, workspaceId: job.workspaceId } }) : []
+  const productionBrief=sanitizeProductionBrief(toObject(project.settings).productionBrief ?? {
+    prompt:project.brief,workflow:project.workflow,videoType:'anything',
+    durationSeconds:Number(toObject(project.settings).durationSeconds)||180
+  })
   const roleByUpload = new Map(projectAssets.map(a => [a.uploadId, toObject(a.provenanceLog).role]))
   const inputs = await Promise.all(uploads.map(async upload => ({
     uploadId: upload.id, filename: upload.filename, mime: upload.mime,
-    role: roleByUpload.get(upload.id) || 'source', durableAssetId: upload.id,
+    role: roleByUpload.get(upload.id) || 'source',
+    handling:roleHandling[String(roleByUpload.get(upload.id)) as keyof typeof roleHandling]||'source_material',
+    durableAssetId: upload.id,
     url: await createReadableSignedUrl(upload.key, 1800).catch(() => null),
   })))
   const versions = await Promise.all(priorVersions.map(async previous => ({
@@ -376,7 +392,8 @@ export async function botGetAssignment(id: string, request: Request) {
       heartbeat: 'The detached editable-delivery worker sends /checkpoint while uploading and retrying. Resume unfinished uploads before starting the next job. The job-token lease must remain valid; after an expired producer lease, obtain a new assignment rather than reusing an expired token.',
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
-    title: project.title, prompt: project.brief, settings: project.settings, workflow: project.workflow,
+    title: project.title, prompt: project.brief, brief:productionBrief,
+    settings: project.settings, workflow: project.workflow,
     projectContext: {
       projectId: project.id, workspaceId: project.workspaceId,
       timelineVersion: project.timelineVersion, story: project.story, plan: project.plan,
@@ -487,10 +504,38 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       if (master) await storeArtifact(job,master)
     }
     if (!master) throw new MotionStudioError('INVALID','A committed MP4 master is required.',400)
+    const approvedMaster=master
     const updated=await db().motionStudioAgentJob.updateMany({where:{id,tokenHash:job.tokenHash,
-      status:{in:['dispatched','dispatching','running']}},data:{resultKey:master.key}})
+      status:{in:['dispatched','dispatching','running']}},data:{resultKey:approvedMaster.key}})
     if (!updated.count) throw new MotionStudioError('CONFLICT','Upload assignment changed.',409)
-    return {videoReady:true}
+    // The approved MP4 is independently viewable before portable scene
+    // publication. Do not close the active job or mark editor ready here.
+    await db().$transaction(async tx=>{
+      const project=await tx.motionStudioProject.findUniqueOrThrow({
+        where:{id:job.projectId},select:{exportInfo:true,clipProjectId:true},
+      })
+      await tx.motionStudioProject.update({where:{id:job.projectId},data:{
+        exportInfo:toPrismaJson({...toObject(project.exportInfo),
+          masterKey:approvedMaster.key,smallKey:approvedMaster.key,storageDriver:storageDriverName(),
+          source:'transovo_agent',agentJobId:id,delivery:'live',
+          masterReadyAt:new Date().toISOString(),editableReady:false}),
+      }})
+      if(project.clipProjectId){
+        const clip=await tx.clipProject.findFirst({
+          where:{id:project.clipProjectId,workspaceId:job.workspaceId},
+          select:{uploadId:true},
+        })
+        if(clip?.uploadId)await tx.clipUpload.updateMany({
+          where:{id:clip.uploadId,workspaceId:job.workspaceId},
+          data:{key:approvedMaster.key,bytes:BigInt(approvedMaster.bytes),mime:'video/mp4',
+            filename:approvedMaster.filename,status:'READY',storageDriver:storageDriverName()},
+        })
+      }
+    })
+    await db().studioActivityEvent.create({data:{projectId:job.projectId,
+      stage:'render',kind:'master_ready',message:'Video ready to watch',
+      data:toPrismaJson({jobId:id,filename:approvedMaster.filename,bytes:approvedMaster.bytes})}})
+    return {videoReady:true,editableReady:false}
   }
   if (action === 'reuse') {
     if (typeof input.sourceJobId!=='string' || !Array.isArray(input.ids) || input.ids.length>10000)
@@ -535,10 +580,52 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       throw new MotionStudioError('INVALID', 'Invalid artifact details.', 400)
     }
     if (input.resume === true && checksum) {
-      const ready = all.find(a => a.state === 'ready' && a.sha256 === checksum &&
-        a.bytes === bytes && a.kind === kind && a.mime === mime && a.filename === filename &&
-        (a.elementId || '') === elementId && (a.trackId || '') === trackId)
-      if (ready) return {uploadId:ready.id, status:'ready', exists:true}
+      // Identity is verified content, not the filename inside the render ZIP.
+      // ZIP membership alone is never a proof of separately stored blobs.
+      const ready = all.find(a => a.state==='ready' && a.sha256===checksum &&
+        a.bytes===bytes && a.kind===kind && a.mime===mime)
+      if (ready) return {uploadId:ready.id,status:'ready',exists:true,reused:true}
+      // A previous commit can have timed out after the object reached B2.
+      // Adopt a pending sibling only after independently checking its bytes
+      // and SHA-256; never trust an uncommitted upload on metadata alone.
+      const pending = all.find(a=>a.state==='pending' && a.sha256===checksum &&
+        a.bytes===bytes && a.kind===kind && a.mime===mime && !a.s3UploadId)
+      if(pending){
+        try{
+          const storage=getClipStorage()
+          const observed=await storage.getObjectSizeBytes(pending.key)
+          if(observed===bytes){
+            const hash=createHash('sha256')
+            if(bytes<=25*1024*1024)hash.update(await storage.getObjectBytes(pending.key))
+            else{
+              const signed=await storage.createSignedDownloadUrl(pending.key,900)
+              const response=await fetch(signed,{redirect:'error',cache:'no-store'})
+              if(!response.ok||!response.body)throw new Error('Unverified pending object')
+              const reader=response.body.getReader()
+              let count=0
+              try{
+                for(;;){
+                  const part=await reader.read()
+                  if(part.done)break
+                  count+=part.value.length
+                  if(count>bytes)throw new Error('Oversized pending object')
+                  hash.update(part.value)
+                }
+              }finally{await reader.cancel()}
+              if(count!==bytes)throw new Error('Incomplete pending object')
+            }
+            if(hash.digest('hex')===checksum){
+              await db().studioAsset.upsert({where:{id:pending.id},
+                create:{id:pending.id,projectId:job.projectId,workspaceId:job.workspaceId,
+                  uploadId:pending.id,kind:pending.kind,filename:pending.filename,status:'ready',
+                  provenanceLog:toPrismaJson({source:'producer',sha256:checksum,verifiedSha256:true})},
+                update:{status:'ready'}})
+              await storeArtifact(job,{...pending,state:'ready'})
+              return {uploadId:pending.id,status:'ready',exists:true,reused:true}
+            }
+          }
+        }catch{ /* Missing or incomplete object: require a fresh verified PUT. */ }
+      }
     }
     const uploadId = randomUUID()
     const objectKey = 'ws/' + job.workspaceId + '/motion-studio/agent/' + job.id + '/' + uploadId + '/' + filename
@@ -563,8 +650,25 @@ export async function botAssets(id: string, request: Request, raw: unknown) {
       throw new MotionStudioError('INVALID', 'Multipart ETags required.', 400)
     }
     const storage = getClipStorage()
-    await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
-    const size = await storage.getObjectSizeBytes(item.key)
+    // A previous commit request can time out after B2 has finished writing.
+    // On explicit retry, inspect the existing object first and skip a
+    // second multipart completion if the bytes are already present.
+    let preexisting=0
+    if(input.retryCommit===true){
+      try{preexisting=Number(await storage.getObjectSizeBytes(item.key)||0)}
+      catch{preexisting=0}
+    }
+    if(preexisting!==item.bytes)
+      await storage.completeUpload({ objectKey: item.key, s3UploadId: item.s3UploadId, parts })
+    // B2 may expose the completed object slightly after completeUpload.
+    // Stay on this upload ID; never force Chromium to re-encode a valid
+    // segment just because the first size read races storage consistency.
+    let size=0
+    for(let attempt=0;attempt<4;attempt++){
+      size=Number(await storage.getObjectSizeBytes(item.key)||0)
+      if(size===item.bytes)break
+      if(attempt<3)await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)))
+    }
     if (!size || size !== item.bytes || size > MAX_FILE)
       throw new MotionStudioError('INVALID', 'Uploaded size does not match the prepared object.', 400)
     if (item.sha256) {

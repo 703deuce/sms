@@ -8,7 +8,7 @@ PORT = "3000"
 PRISMA_GENERATE_SKIP_AUTOINSTALL = "true"
 
 [phases.setup]
-nixPkgs = ["nodejs_22"]
+nixPkgs = ["nodejs_22", "ffmpeg"]
 # Override Nixpacks Node provider defaults (curl, wget). Those apt packages
 # forced `apt-get update && apt-get install` on every image build; deploy 5071
 # spent ~15m15s on Ubuntu archive.ubuntu.com. curl is already in the

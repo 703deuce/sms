@@ -1,4 +1,5 @@
 import type { MsCreativeBrief } from './creative-options'
+import type { ProductionBrief, InputRole } from './production-brief'
 /**
  * Motion Studio (documentary-first) client types.
  * Mirrors the planned `/api/motion-studio/*` contract (spec ST-API-001, ST-DM-001).
@@ -38,6 +39,7 @@ export type MsSettings = {
   preflightOnly?: boolean
   /** Immutable creative snapshot for this production (not a scene template). */
   creative?: MsCreativeBrief
+  productionBrief?: ProductionBrief
 }
 
 export type MsProjectStatus =
@@ -249,7 +251,7 @@ export type MsProjectSummary = Pick<MsProject, 'id' | 'title' | 'isExample' | 'c
   posterKind?: MsVisualType | null
 }
 
-export type MsUploadInput = { uploadId: string; kind: MsAssetKind; label: string; durationMs?: number | null }
+export type MsUploadInput = { uploadId: string; kind: MsAssetKind; label: string; durationMs?: number | null; role?: InputRole }
 
 export type MsCreateInput = {
   workflow: MsWorkflow
@@ -257,9 +259,10 @@ export type MsCreateInput = {
   script?: string | null
   uploads: MsUploadInput[]
   mediaPolicy: MsMediaPolicy
-  durationSeconds?: 10 | 15 | 30 | 60 | 120 | 180 | 300
+  durationSeconds?: number
   idempotencyKey: string
   creative?: MsCreativeBrief
+  productionBrief?: ProductionBrief
   format?: MsFormat
 }
 

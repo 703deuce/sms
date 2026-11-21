@@ -52,6 +52,7 @@ import { MotionStudioTracks } from './motion-studio-tracks'
 import { MotionExportDialog } from './export-dialog'
 import { LiveExportDialog } from './live-export-dialog'
 import { AgentJobPanel, type MotionAgentJob } from './agent-job-panel'
+import { CreatorPlanSummary } from './creator-plan-summary'
 import { AgentChatPanel } from './agent-chat-panel'
 import { PortableElementsPanel } from './portable-elements-panel'
 
@@ -495,6 +496,7 @@ export function MotionStudioWorkspace({ projectId, client: injected, pollMs = 50
       ) : agentJob ? (
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-4 py-4 md:grid-cols-[minmax(0,1fr)_360px] md:px-6" data-testid="ms-agent-workspace">
           <main className="min-w-0">
+            {agentJob.status!=='complete'?<CreatorPlanSummary brief={project.settings.productionBrief}/>:null}
             {agentJob.status==='complete'&&agentJob.delivery==='live'
               ? <PortableElementsPanel projectId={project.id} preferredSceneId={selectedSceneId}/>
               : <AgentJobPanel job={agentJob} showChat={false}

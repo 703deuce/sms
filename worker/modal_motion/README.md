@@ -1,4 +1,13 @@
-# Motion Studio Modal film renderer (separate from clips)
+# Motion Studio Modal film renderer (optional backup, off by default)
+
+**Nov 20:** New production jobs use the dedicated private CPU render-host service
+(`Dockerfile.motion-render`, `worker/motion_render_host/`).
+This Modal application remains intact as an operator-enabled fallback only,
+selected with `RENDER_BACKEND=modal` or `MOTION_MODAL_FALLBACK=1`
+in the Producer environment. Neither is enabled by default. Do not
+delete this app; it can resume registered CPU segment artifacts when needed.
+Never submit the same active job simultaneously to Modal and the host.
+
 
 This Modal app is isolated from `worker/modal_app`. It does not use the
 clips worker, a production server shell, a database connection or public B2.
@@ -142,3 +151,14 @@ job ID, call ID and authenticated status endpoint are printed. No queue
 secret, app admin secret, B2 S3 key, DB URL, or SSH credentials go to Modal.
 No whole-run paid retries; at most 3 attempts for each segment. Original
 Producer runners and clips-worker Modal functions are not modified.
+
+## Technical-only post-render validation
+
+The shared `pipeline.py` does not run black-frame/design detection; a
+deliberately dark title treatment is valid. It checks container/decode,
+frame count, FPS, resolution, durations and audio presence. The join
+uploads master/share before technical QA and keeps registered segments.
+On a technical join failure Modal retries QA once using those segments,
+then reports `attention_required`, never `complete failed`. Normal
+render and budget guards remain unchanged. The host-specific persistent
+recovery directory is configured by `worker/motion_render_host/server.py`.

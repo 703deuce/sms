@@ -1,6 +1,6 @@
 """Private-bundle rendering helpers. No database or B2 credentials in Modal."""
 from __future__ import annotations
-import hashlib, json, os, pathlib, re, shutil, subprocess, tempfile, threading, time, zipfile
+import concurrent.futures, hashlib, json, os, pathlib, re, shutil, signal, subprocess, tempfile, threading, time, zipfile
 from urllib.parse import quote, urlparse
 import requests
 
@@ -9,6 +9,14 @@ MAX_ZIP=2_000_000_000
 MAX_UNPACKED=3_000_000_000
 MAX_FILES=10000
 SESSION=requests.Session()
+
+def safe_stage_log(stage,**fields):
+    """Allowlisted operational numbers only; never log URLs, paths or tokens."""
+    if not os.environ.get("MOTION_RENDER_STAGE_LOGS"):return
+    permitted={k:round(float(v),3) if isinstance(v,(int,float)) else bool(v)
+               for k,v in fields.items() if k in (
+                   "index","bytes","seconds","attempt","skipped","count","retries")}
+    print(json.dumps({"stage":stage,**permitted},separators=(",",":")),flush=True)
 
 def job_url(job_id):
     base=os.environ["MOTION_JOB_URL"].rstrip("/")
@@ -126,19 +134,42 @@ def extract_bundle(job_id,filename,directory):
         raise ValueError("Mixed audio source missing")
     return root,project,entry,audio_file
 
-def checked(cmd,timeout=1800):
-    # Never print argv: some command lines can contain temporary paths.
-    p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
-    if p.returncode:
-        raise RuntimeError("Media processing failed: "+p.stderr[-350:])
-    return p.stdout,p.stderr
+def checked(cmd,timeout=1800,cancel_event=None):
+    # Never print argv: command lines can include media paths or signed URLs.
+    if cancel_event is None:
+        p=subprocess.run(cmd,capture_output=True,text=True,timeout=timeout)
+        if p.returncode:
+            raise RuntimeError("Media processing failed: "+p.stderr[-350:])
+        return p.stdout,p.stderr
+    proc=subprocess.Popen(cmd,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                         text=True,start_new_session=True)
+    deadline=time.monotonic()+timeout
+    try:
+        while True:
+            if cancel_event.is_set():
+                raise RuntimeError("Render cancelled")
+            if time.monotonic()>deadline:
+                raise TimeoutError("Render segment timed out")
+            try:
+                stdout,stderr=proc.communicate(timeout=0.5)
+                if proc.returncode:
+                    raise RuntimeError("Media processing failed: "+stderr[-350:])
+                return stdout,stderr
+            except subprocess.TimeoutExpired:
+                continue
+    finally:
+        if proc.poll() is None:
+            try:os.killpg(proc.pid,signal.SIGKILL)
+            except ProcessLookupError:pass
+            proc.communicate()
 
 def prepare_upload(job_id,path,filename,kind,mime):
     size=os.path.getsize(path)
     with open(path,"rb") as f:
         sha=hashlib.file_digest(f,"sha256").hexdigest()
     prepared=api(job_id,"POST","/assets",{"action":"prepare","filename":filename,
-      "kind":kind,"mime":mime,"bytes":size,"sha256":sha,"resume":True})
+      "kind":kind,"mime":mime,"bytes":size,"sha256":sha,"resume":True},
+      timeout=30,attempts=2)
     if prepared.get("exists"):
         return prepared.get("uploadId")
     uid=prepared["uploadId"]
@@ -188,27 +219,59 @@ def prepare_upload(job_id,path,filename,kind,mime):
                 if response.headers.get("upload-offset")!=str(offset):
                     raise RuntimeError("TUS offset mismatch")
     else:raise RuntimeError("Unsupported job upload mode")
-    api(job_id,"POST","/assets",{"action":"commit","uploadId":uid,"parts":parts},timeout=180)
+    # Commit-only retry keeps the same storage object and upload ID.
+    # Re-preparing or re-encoding can create duplicate pending artifacts.
+    for attempt in range(1,5):
+        try:
+            api(job_id,"POST","/assets",
+                {"action":"commit","uploadId":uid,"parts":parts,
+                 "retryCommit":attempt>1},timeout=30,attempts=1)
+            return uid
+        except Exception as exc:
+            mismatch="Uploaded size does not match the prepared object" in str(exc)
+            retryable=mismatch or isinstance(exc,(requests.Timeout,requests.ConnectionError))
+            if not retryable or attempt==4:raise
+            safe_stage_log("commit_retry",attempt=attempt,bytes=size)
+            time.sleep(min(attempt*2,6))
     return uid
 
 def segment_name(mode,start,end):
     return f"modal_seg_v1_{mode}_{start:08d}_{end:08d}.mp4"
 
-def capture_segment(job_id,bundle_name,mode,start,end):
+def capture_segment(job_id,bundle_name,mode,start,end,bundle_root=None,cancel_event=None):
     name=segment_name(mode,start,end)
+    if cancel_event is not None and cancel_event.is_set():
+        raise RuntimeError("Render cancelled")
     if ready_url(job_id,name):
         return {"name":name,"start":start,"end":end,"skipped":True,"seconds":0}
     stop=heartbeat_scope(job_id)
     beginning=time.monotonic()
     try:
         with tempfile.TemporaryDirectory() as directory:
-            root,project,entry,_=extract_bundle(job_id,bundle_name,directory)
+            if bundle_root is None:
+                root,project,entry,_=extract_bundle(job_id,bundle_name,directory)
+            else:
+                root=pathlib.Path(bundle_root)
+                project=json.loads((root/"project.json").read_text())
+                entry=project["composition"]["entryFile"]
             if end>project["frameCount"]:raise ValueError("Segment past film end")
             output=os.path.join(directory,name)
             checked(["node","/root/modal_motion/capture.mjs",str(root),entry,output,
                 str(project["width"]),str(project["height"]),str(project["fps"]),
-                str(start),str(end),mode],timeout=3600)
-            prepare_upload(job_id,output,name,"video","video/mp4")
+                str(start),str(end),mode],timeout=3600,cancel_event=cancel_event)
+            if cancel_event is not None and cancel_event.is_set():
+                raise RuntimeError("Render cancelled")
+            # The completed capture stays on disk while upload/commit is
+            # retried. Never reopen Chromium for a storage-only failure.
+            for upload_attempt in range(1,4):
+                try:
+                    prepare_upload(job_id,output,name,"video","video/mp4")
+                    break
+                except Exception:
+                    if upload_attempt==3:raise
+                    safe_stage_log("segment_upload_retry",attempt=upload_attempt,
+                                   bytes=os.path.getsize(output))
+                    time.sleep(upload_attempt*2)
         return {"name":name,"start":start,"end":end,"skipped":False,
           "seconds":round(time.monotonic()-beginning,3)}
     finally:stop.set()
@@ -220,7 +283,8 @@ def ffprobe(path):
       "-show_format","-of","json",path],timeout=1800)
     return json.loads(out)
 
-def qa_video(path,expected_frames,fps):
+def qa_video(path,expected_frames,fps,expected_width=None,expected_height=None):
+    """Technical integrity only. Creative design is approved before rendering."""
     result=ffprobe(path)
     streams=result.get("streams",[])
     video=next((x for x in streams if x.get("codec_type")=="video"),None)
@@ -228,6 +292,13 @@ def qa_video(path,expected_frames,fps):
     if not video or not audio:raise ValueError("Missing master video or audio")
     frames=int(video.get("nb_read_packets") or video.get("nb_read_frames") or 0)
     if frames!=expected_frames:raise ValueError("Frame count mismatch")
+    if expected_width is not None and int(video.get("width") or 0)!=expected_width:
+        raise ValueError("Wrong video resolution")
+    if expected_height is not None and int(video.get("height") or 0)!=expected_height:
+        raise ValueError("Wrong video resolution")
+    rate=video.get("avg_frame_rate") or video.get("r_frame_rate") or "0/1"
+    from fractions import Fraction
+    if abs(float(Fraction(rate))-fps)>0.01:raise ValueError("Wrong video frame rate")
     expected=expected_frames/fps
     duration=float(result["format"]["duration"])
     if abs(duration-expected)>max(0.08,2/fps):
@@ -235,26 +306,57 @@ def qa_video(path,expected_frames,fps):
     a_duration=float(audio.get("duration") or duration)
     if abs(a_duration-expected)>0.20:
         raise ValueError("Audio/video duration mismatch")
-    _,black=checked(["ffmpeg","-hide_banner","-i",path,"-vf",
-      "blackdetect=d=0.6:pix_th=0.10","-an","-f","null","-"],timeout=3600)
-    if "black_start:" in black:raise ValueError("Extended black frames detected")
-    _,loud=checked(["ffmpeg","-hide_banner","-i",path,"-vn","-af",
-      "ebur128=peak=true","-f","null","-"],timeout=1800)
+    # Decode every video/audio frame. Packet count alone cannot detect corruption.
+    checked(["ffmpeg","-nostdin","-v","error","-xerror","-i",path,
+             "-map","0:v:0","-map","0:a:0","-f","null","-"],timeout=5400)
+    # Integrated level is informational. The worker normalizes the encode;
+    # loudness deviations must never reject an otherwise valid film.
+    _,loud=checked(["ffmpeg","-nostdin","-hide_banner","-i",path,"-vn","-af",
+      "ebur128=peak=true,volumedetect","-f","null","-"],timeout=1800)
     matches=re.findall(r"I:\s*(-?[0-9.]+) LUFS",loud)
-    if not matches:raise ValueError("Could not inspect integrated loudness")
-    integrated=float(matches[-1])
-    if not -16.5<=integrated<=-13.5:
-        raise ValueError("Integrated loudness outside QA tolerance")
-    # Static composition holds are legitimate; mpdecimate must not
-    # automatically reject duplicate still frames.
-    return {"frames":frames,"duration":duration,"integratedLufs":integrated}
+    integrated=float(matches[-1]) if matches else None
+    volumes=re.findall(r"max_volume:\s*(-?[0-9.]+) dB",loud)
+    peak=float(volumes[-1]) if volumes else None
+    if peak is None or peak<=-55:
+        raise ValueError("Audio track is silent")
+    return {"frames":frames,"duration":duration,"integratedLufs":integrated,
+            "audioPeakDb":peak,"width":video["width"],"height":video["height"],
+            "fps":fps}
 
-def join_and_qa(job_id,bundle_name,mode,segments):
+def repair_loudness_if_needed(master):
+    """Normalize again without re-encoding video when final LUFS drifted."""
+    try:
+        _,log=checked(["ffmpeg","-nostdin","-hide_banner","-i",master,"-vn",
+          "-af","ebur128=peak=true","-f","null","-"],timeout=1800)
+        readings=re.findall(r"I:\s*(-?[0-9.]+) LUFS",log)
+        measured=float(readings[-1]) if readings else None
+        if measured is None or -16.5<=measured<=-13.5:return False
+        corrected=os.path.join(os.path.dirname(master),"renormalized.mp4")
+        checked(["ffmpeg","-nostdin","-hide_banner","-loglevel","error","-y",
+          "-i",master,"-map","0:v:0","-map","0:a:0","-c:v","copy",
+          "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
+          "-c:a","aac","-b:a","192k","-movflags","+faststart",corrected],
+          timeout=3600)
+        os.replace(corrected,master)
+        return True
+    except Exception:
+        # Integrity/decode checks still run in qa_video. A loudness-only
+        # mismatch never destroys an otherwise usable film.
+        return False
+
+def join_and_qa(job_id,bundle_name,mode,segments,bundle_root=None,recovery_dir=None):
     start=time.monotonic()
     stop=heartbeat_scope(job_id)
     try:
         with tempfile.TemporaryDirectory() as directory:
-            root,project,_,audio=extract_bundle(job_id,bundle_name,directory)
+            if bundle_root is None:
+                root,project,_,audio=extract_bundle(job_id,bundle_name,directory)
+            else:
+                root=pathlib.Path(bundle_root)
+                project=json.loads((root/"project.json").read_text())
+                audio=(root/project["mixedAudioFile"]).resolve()
+                if not str(audio).startswith(str(root.resolve())+os.sep) or not audio.is_file():
+                    raise ValueError("Mixed audio missing from verified bundle")
             segments=sorted(segments,key=lambda s:s["start"])
             cursor=0
             inputs=[]
@@ -278,7 +380,14 @@ def join_and_qa(job_id,bundle_name,mode,segments):
               "-level:v","4.2","-pix_fmt","yuv420p","-movflags","+faststart",
               "-af","loudnorm=I=-14:TP=-1.5:LRA=11","-ar","48000","-ac","2",
               "-c:a","aac","-b:a","192k","-frames:v",str(project["frameCount"]),master],timeout=5400)
-            metrics=qa_video(master,project["frameCount"],project["fps"])
+            # The first mux already normalizes audio. Only if its integrated
+            # level drifted, repair that audio stream without re-encoding video.
+            repair_loudness_if_needed(master)
+            # Register a diagnostic master BEFORE QA; a technical QA failure
+            # must not destroy the only finished film.
+            if recovery_dir:
+                os.makedirs(recovery_dir,exist_ok=True)
+                shutil.copy2(master,os.path.join(recovery_dir,"master.mp4"))
             master_id=prepare_upload(job_id,master,f"master_{mode}.mp4","video","video/mp4")
             share=os.path.join(directory,"share.mp4")
             duration=project["frameCount"]/project["fps"]
@@ -312,7 +421,25 @@ def join_and_qa(job_id,bundle_name,mode,segments):
                           timeout=3600)
                         if os.path.getsize(share)<24_000_000:break
                     else:raise ValueError("Share copy exceeds maximum size")
+            if recovery_dir:
+                shutil.copy2(share,os.path.join(recovery_dir,"share.mp4"))
             share_id=prepare_upload(job_id,share,f"share_{mode}.mp4","video","video/mp4")
+            try:
+                metrics=qa_video(master,project["frameCount"],project["fps"],
+                                 project["width"],project["height"])
+            except Exception:
+                # Diagnostic still is saved and registered under the same job,
+                # with no visual-design verdict. Never mask the actual QA error.
+                diagnostic=os.path.join(
+                    recovery_dir if recovery_dir else directory,"qa_frame.png")
+                try:
+                    checked(["ffmpeg","-nostdin","-hide_banner","-loglevel","error",
+                        "-y","-ss","0","-i",master,"-frames:v","1",diagnostic],
+                        timeout=120)
+                    prepare_upload(job_id,diagnostic,f"qa_frame_{mode}.png",
+                                   "media","image/png")
+                except Exception:pass
+                raise
             return {"masterUploadId":master_id,"shareUploadId":share_id,
                 "masterBytes":os.path.getsize(master),"shareBytes":os.path.getsize(share),
                 "qa":metrics,"seconds":round(time.monotonic()-start,3)}
@@ -340,6 +467,8 @@ def publish_editable(job_id,root):
     if not isinstance(assets,dict):raise ValueError("Invalid Producer asset map")
     if len(assets)>10000:raise ValueError("Too many editable assets")
     records=[]
+    work=[]
+    dedupe={}
     for native_id,asset in assets.items():
         if not isinstance(native_id,str) or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}",native_id):
             raise ValueError("Invalid native asset ID")
@@ -361,9 +490,32 @@ def publish_editable(job_id,root):
         with open(blob,"rb") as src:
             if hashlib.file_digest(src,"sha256").hexdigest()!=digest:
                 raise ValueError("Native source digest mismatch")
-        receipt=prepare_upload(job_id,str(blob),filename,kind,mime)
-        records.append({"id":native_id,"storageId":receipt,
+        # Identical native content may appear in multiple scenes; upload
+        # each verified distinct blob once, regardless of its source name.
+        key=(digest,asset["bytes"],kind,mime)
+        if key not in dedupe:
+            dedupe[key]=len(work)
+            work.append((str(blob),filename,kind,mime))
+        records.append({"id":native_id,"workIndex":dedupe[key],
                         "kind":kind,"sha256":digest})
+    # Small bounded pool: network latency dominates tiny asset transfers.
+    # Output order remains deterministic and manifests retain native IDs.
+    def publish_one(item):
+        path,filename,kind,mime=item
+        started=time.monotonic()
+        receipt=prepare_upload(job_id,path,filename,kind,mime)
+        return receipt,time.monotonic()-started
+    results=[None]*len(work)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        future_map={pool.submit(publish_one,item):index for index,item in enumerate(work)}
+        for future in concurrent.futures.as_completed(future_map):
+            index=future_map[future]
+            receipt,seconds=future.result()
+            results[index]=receipt
+            safe_stage_log("editable_asset",index=index+1,seconds=round(seconds,3),
+                           bytes=os.path.getsize(work[index][0]))
+    for record in records:
+        record["storageId"]=results[record.pop("workIndex")]
     records.sort(key=lambda a:a["id"])
     payload={"document":pkg["document"],"assets":records,"bundles":bundles}
     live=root/"live-project.json"

@@ -1,0 +1,8 @@
+# Dedicated render image build context only. Do not expand the shared .dockerignore.
+**
+!worker/
+!worker/modal_motion/
+!worker/modal_motion/capture.mjs
+!worker/modal_motion/pipeline.py
+!worker/motion_render_host/
+!worker/motion_render_host/server.py

@@ -80,7 +80,23 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
             results.append(r)
             api(job_id,"POST","/render-status",{"stage":"rendering",
               "completed":len(results),"total":len(segments)})
-        joined=join_qa.with_options(secrets=[secret]).remote(job_id,bundle_name,mode,results)
+        # Reuse uploaded segments on a technical join/QA retry; never
+        # re-capture an approved picture just because a mux check failed.
+        joined=None
+        for attempt in range(1,3):
+            try:
+                joined=join_qa.with_options(secrets=[secret]).remote(
+                    job_id,bundle_name,mode,results)
+                break
+            except Exception:
+                if attempt==2:raise
+                api(job_id,"POST","/render-status",{
+                    "stage":"retrying","reason":"technical_render_failure",
+                    "attempt":attempt,"masterFilename":f"master_{mode}.mp4",
+                    "shareFilename":f"share_{mode}.mp4"})
+                api(job_id,"POST","/progress",{
+                    "stage":"fixing","percent":89,
+                    "message":"Finishing touches, retrying the final render"})
         api(job_id,"POST","/render-status",{"stage":"qa_pass"})
         retry_count=sum(item.get("retries",0) for item in results)
         work_seconds=sum(float(item.get("seconds",0)) for item in results)+float(joined.get("seconds",0))
@@ -102,6 +118,7 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
             # customer job. One paid run per mode; preserve the job assignment.
             return summary
         api(job_id,"POST","/assets",{"action":"approveMaster","uploadId":joined["masterUploadId"]})
+        api(job_id,"POST","/render-status",{"stage":"master_ready"})
         api(job_id,"POST","/progress",{"stage":"delivering","percent":90,
             "message":"Video ready to watch; preparing editable version"})
         api(job_id,"POST","/render-status",{"stage":"uploaded"})
@@ -117,13 +134,26 @@ def render_film(job_id:str,bundle_name:str,mode:str="cpu",segment_frames:int=300
         api(job_id,"POST","/render-status",{"stage":"completed"})
         return summary
     except Exception as error:
-        # Persist internal reason before the customer-facing generic failure.
-        reason=str(error)[:800]
-        try:api(job_id,"POST","/render-status",{"stage":"qa_fail","reason":reason})
+        # Keep the assignment open and the registered segments/master/share.
+        # Never close the job on a worker QA failure; owner controls closure.
+        reason="technical_render_failure"
+        low=str(error).lower()
+        if "job api failed: 401" in low or "job api failed: 409" in low:
+            raise RuntimeError("Modal render assignment ended; no further publish")
+        if "segment" in low:reason="missing_segment"
+        elif "audio" in low:reason="audio"
+        elif "duration" in low:reason="duration"
+        elif "frame count" in low:reason="frame_count"
+        try:api(job_id,"POST","/render-status",{
+            "stage":"attention_required","reason":reason,"attempt":2,
+            "masterFilename":f"master_{mode}.mp4",
+            "shareFilename":f"share_{mode}.mp4"})
         except Exception:pass
-        if not benchmark_only:
-            try:api(job_id,"POST","/complete",{"status":"failed"})
-            except Exception:pass
-        raise RuntimeError("Motion Studio Modal render failed; see authenticated render status")
+        try:api(job_id,"POST","/progress",{
+            "stage":"fixing","percent":90,
+            "message":"Our team is reviewing the final render"})
+        except Exception:pass
+        raise RuntimeError("Motion Studio Modal needs owner render review")
+
     finally:
         stop.set()
