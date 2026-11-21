@@ -67,7 +67,7 @@ function cloneProviderError(status:number,detail:unknown):string{
  if(status===400||status===422){
   const message=typeof nested.message==='string'?nested.message:''
   // Only expose a short validation message, never the raw provider JSON.
-  if(message&&!/[\\r\\n]/.test(message)&&message.length<=240&&!/key|token|secret|authorization|Bearer/i.test(message))
+  if(message&&!/[\r\n]/.test(message)&&message.length<=240&&!/key|token|secret|authorization|Bearer/i.test(message))
    return 'ElevenLabs rejected the voice sample: '+message
   return 'ElevenLabs rejected the audio sample. Try a clear 30–60 second recording without background sound.'
  }
@@ -193,7 +193,7 @@ export async function createClone(workspaceId:string,userId:string,raw:unknown){
  const form=new FormData()
  form.set('name',label)
  form.set('remove_background_noise','true')
- form.set('files',new Blob([normalizedAudio],{type:'audio/wav'}),'sample.wav')
+ form.set('files',new Blob([new Uint8Array(normalizedAudio)],{type:'audio/wav'}),'sample.wav')
  let response:Response
  try{
   response=await fetch('https://api.elevenlabs.io/v1/voices/add',{
