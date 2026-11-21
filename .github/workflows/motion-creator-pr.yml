@@ -34,7 +34,7 @@ jobs:
           DIRECT_URL: postgresql://tester:tester@localhost:5432/transovo
         run: npx prisma validate --schema prisma/schema.prisma
       - name: Creator tests
-        run: npx vitest run tests/motion-studio/motion-studio-create.test.tsx tests/motion-studio/production-brief.test.ts tests/motion-studio/creator-voice-picker.test.tsx
+        run: npx vitest run tests/motion-studio/motion-studio-create.test.tsx tests/motion-studio/production-brief.test.ts tests/motion-studio/creator-voice-picker.test.tsx tests/motion-studio/ffmpeg-progress.test.ts
       - name: TypeScript creator-specific regression gate
         shell: bash
         run: |
