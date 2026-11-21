@@ -123,91 +123,204 @@ export function CreatorVoicePicker({client,value,onChange,onError,refreshKey=0}:
    }} onError={onError}/>:null}
  </div>
 }
+const INTERRUPTED_RECORDING='The recording didn’t capture your voice. Close other apps using the mic or audio and record again.'
+const formatRecordingTime=(seconds:number)=>Math.floor(seconds/60)+':'+String(Math.floor(seconds%60)).padStart(2,'0')
+
+/** Browser playback metadata may omit WebM duration; decodeAudioData is the primary check. */
+async function recordedAudioDuration(file:File):Promise<number>{
+ try{
+  const AudioContextClass=window.AudioContext
+  if(AudioContextClass){
+   const context=new AudioContextClass()
+   try{
+    const decoded=await context.decodeAudioData(await file.arrayBuffer())
+    if(Number.isFinite(decoded.duration)&&decoded.duration>0)return decoded.duration
+   }finally{await context.close().catch(()=>{})}
+  }
+ }catch{/* Safari may not decode the recorded container this way. */}
+ return new Promise<number>((resolve)=>{
+  const audio=document.createElement('audio')
+  const url=URL.createObjectURL(file)
+  let finished=false
+  const complete=(seconds:number)=>{
+   if(finished)return
+   finished=true
+   audio.removeAttribute('src');audio.load()
+   URL.revokeObjectURL(url)
+   resolve(Number.isFinite(seconds)&&seconds>0?seconds:0)
+  }
+  const timeout=setTimeout(()=>complete(0),8000)
+  const done=(seconds:number)=>{clearTimeout(timeout);complete(seconds)}
+  audio.preload='metadata'
+  audio.onloadedmetadata=()=>{
+   if(Number.isFinite(audio.duration)&&audio.duration>0)done(audio.duration)
+   else {try{audio.currentTime=1e9}catch{done(0)}}
+  }
+  audio.onseeked=()=>done(audio.currentTime)
+  audio.onerror=()=>done(0)
+  audio.src=url
+ })
+}
+
 function CloneVoiceDialog({client,onClose,onCreated,onError}:{client:MotionStudioClient;onClose:()=>void;onCreated:(voice:{voiceId:string;name:string})=>void;onError:(message:string)=>void}){
  const [name,setName]=useState('')
  const [tab,setTab]=useState<'record'|'upload'>('record')
  const [file,setFile]=useState<File|null>(null)
  const [recording,setRecording]=useState(false)
  const [duration,setDuration]=useState(0)
+ const [capturedDuration,setCapturedDuration]=useState<number|null>(null)
  const [busy,setBusy]=useState(false)
  const [finalizing,setFinalizing]=useState(false)
  const [dialogError,setDialogError]=useState('')
+ const [previewUrl,setPreviewUrl]=useState<string|null>(null)
  const recorder=useRef<MediaRecorder|null>(null)
  const tracks=useRef<MediaStream|null>(null)
  const chunks=useRef<BlobPart[]>([])
  const started=useRef(0)
  const clock=useRef<ReturnType<typeof setInterval>|null>(null)
+ const stopRequested=useRef(false)
+ const interrupted=useRef(false)
+ const recordingId=useRef(0)
+ const mounted=useRef(true)
+ useEffect(()=>{if(!file){setPreviewUrl(null);return}
+  const url=URL.createObjectURL(file);setPreviewUrl(url)
+  return ()=>URL.revokeObjectURL(url)
+ },[file])
+ const clearClock=()=>{if(clock.current)clearInterval(clock.current);clock.current=null}
  const stop=()=>{
-  if(clock.current)clearInterval(clock.current)
-  clock.current=null
-  if(recorder.current?.state==='recording'){
+  clearClock()
+  const active=recorder.current
+  if(active?.state==='recording'){
+   stopRequested.current=true
    setFinalizing(true)
-   recorder.current.requestData()
-   recorder.current.stop()
+   try{active.requestData()}catch{/* Some Safari versions do not support requestData. */}
+   try{active.stop()}catch{setFinalizing(false);setDialogError(INTERRUPTED_RECORDING)}
   }
   setRecording(false)
  }
- useEffect(()=>()=>{if(clock.current)clearInterval(clock.current);recorder.current?.state==='recording'&&recorder.current.stop();tracks.current?.getTracks().forEach(t=>t.stop())},[])
+ useEffect(()=>()=>{mounted.current=false;recordingId.current++
+  clearClock()
+  if(recorder.current?.state==='recording'){try{recorder.current.stop()}catch{}}
+  tracks.current?.getTracks().forEach(t=>t.stop())
+ },[])
  const record=async()=>{
+  if(recording||finalizing||busy)return
+  const id=++recordingId.current
+  setFile(null);setPreviewUrl(null);setCapturedDuration(null)
+  setDuration(0);setDialogError('');setFinalizing(false)
+  clearClock()
+  chunks.current=[];stopRequested.current=false;interrupted.current=false
   try{
    const stream=await navigator.mediaDevices.getUserMedia({audio:true})
-   const mime=['audio/webm;codecs=opus','audio/mp4','audio/webm'].find(t=>MediaRecorder.isTypeSupported(t))||''
+   if(!mounted.current||id!==recordingId.current){stream.getTracks().forEach(t=>t.stop());return}
+   // iOS Safari has intermittent truncated timesliced WebM/Opus output.
+   const isiOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||
+    (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1)
+   const candidates=isiOS?['audio/mp4','audio/webm;codecs=opus','audio/webm']:
+    ['audio/webm;codecs=opus','audio/webm','audio/mp4']
+   const mime=candidates.find(t=>MediaRecorder.isTypeSupported(t))||''
    const media=new MediaRecorder(stream,mime?{mimeType:mime}:undefined)
-   tracks.current=stream;recorder.current=media;chunks.current=[]
+   tracks.current=stream;recorder.current=media
+   const fail=()=>{
+    if(id!==recordingId.current||!mounted.current)return
+    interrupted.current=true;clearClock();setRecording(false)
+    setFile(null);setCapturedDuration(null);setFinalizing(false)
+    setDialogError(INTERRUPTED_RECORDING)
+    if(media.state==='recording'){try{media.stop()}catch{}}
+   }
+   stream.getAudioTracks().forEach(track=>{
+    track.addEventListener('ended',fail,{once:true})
+    track.addEventListener('mute',fail)
+   })
+   media.onerror=fail
    media.ondataavailable=e=>{if(e.data.size)chunks.current.push(e.data)}
-   media.onstop=()=>{
+   media.onstop=async()=>{
+    clearClock()
     stream.getTracks().forEach(t=>t.stop())
-    const blob=new Blob(chunks.current,{type:media.mimeType||'audio/webm'})
-    console.info('[motion-studio:voice] recording finalized', {bytes:blob.size,durationSeconds:Math.round((Date.now()-started.current)/1000)})
-    if(!blob.size){setDialogError('Recording is empty. Check microphone permission and record again.');setFile(null)}
-    else setFile(new File([blob],'my-voice.'+(media.mimeType.includes('mp4')?'m4a':'webm'),{type:blob.type}))
+    if(id!==recordingId.current||!mounted.current)return
+    setRecording(false)
+    if(interrupted.current||!stopRequested.current){
+     setFinalizing(false);setFile(null);setDialogError(INTERRUPTED_RECORDING);return
+    }
+    const elapsed=(Date.now()-started.current)/1000
+    const blob=new Blob(chunks.current,{type:media.mimeType||mime||'audio/webm'})
+    const ext=blob.type.includes('mp4')?'m4a':'webm'
+    const nextFile=new File([blob],'my-voice.'+ext,{type:blob.type})
+    let decodedSeconds=0
+    if(blob.size>0)decodedSeconds=await recordedAudioDuration(nextFile)
+    if(id!==recordingId.current||!mounted.current)return
+    console.info('[motion-studio:voice] recording verified',{
+     bytes:blob.size,elapsedSeconds:Math.round(elapsed),
+     decodedSeconds:Math.round(decodedSeconds),format:blob.type
+    })
+    // Compare decoded audio to elapsed time; never upload a truncated recording.
+    if(decodedSeconds<10||decodedSeconds<elapsed*0.8||decodedSeconds>300){
+     setFile(null);setCapturedDuration(null);setDialogError(INTERRUPTED_RECORDING)
+    }else{
+     setFile(nextFile);setCapturedDuration(decodedSeconds);setDialogError('')
+    }
     setFinalizing(false)
    }
-   setFile(null);setDialogError('');setFinalizing(false);setDuration(0);started.current=Date.now()
-   media.start(1000);setRecording(true)
+   started.current=Date.now()
+   if(isiOS)media.start()
+   else media.start(1000)
+   setRecording(true)
    clock.current=setInterval(()=>{
     const sec=Math.floor((Date.now()-started.current)/1000)
     setDuration(sec)
     if(sec>=300)stop()
    },250)
-  }catch{setDialogError('Microphone blocked. Use the Upload tab to add your recording.');setTab('upload')}
+  }catch{
+   setFinalizing(false);setRecording(false)
+   setDialogError('Microphone blocked or unavailable. Close other apps using audio, or upload your recording.')
+  }
  }
  const submit=async()=>{
-  if(name.trim().length<2||!file||recording||finalizing)return
-  if(tab==='record'&&duration<10){setDialogError('Record at least 10 seconds of clear speech.');return}
-  setDialogError('')
-  setBusy(true)
+  if(name.trim().length<2||!file||recording||finalizing||busy)return
+  if(tab==='record'&&(!capturedDuration||capturedDuration<10)){
+   setDialogError(INTERRUPTED_RECORDING);return
+  }
+  setDialogError('');setBusy(true)
   try{
    const sample=client.mode==='live'
     ? await (await import('@/lib/clips/upload')).uploadClipFile(file,()=>{},
-       {kind:'media',...(tab==='record'&&duration>=10?{durationMs:duration*1000}:{})})
+       {kind:'media',...(tab==='record'&&capturedDuration?{durationMs:Math.round(capturedDuration*1000)}:{})})
     : await client.uploadFile(file,()=>{})
    const response=await call(base,'POST',{name:name.trim(),sampleUploadId:sample.uploadId}) as {voice:{voiceId:string;name:string}}
    onCreated(response.voice)
   }catch(e){setDialogError(e instanceof Error?e.message:'Could not clone your voice')}
   finally{setBusy(false)}
  }
+ const changeTab=(next:'record'|'upload')=>{
+  recordingId.current++;stop()
+  tracks.current?.getTracks().forEach(t=>t.stop())
+  setTab(next);setFile(null);setCapturedDuration(null);setDialogError('');setFinalizing(false)
+ }
+ const close=()=>{recordingId.current++;stop();tracks.current?.getTracks().forEach(t=>t.stop());onClose()}
  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="dialog" aria-modal="true" aria-label="Create a voice">
   <div className="w-full max-w-xl space-y-5 rounded-2xl border border-border bg-card p-6 shadow-2xl">
    <div className="flex items-start justify-between gap-3"><div><h3 className="text-xl font-semibold">Create your voice</h3><p className="mt-1 text-sm text-muted-foreground">Record or upload a clear sample. Save it to use across your videos.</p></div>
-    <button onClick={()=>{stop();onClose()}} aria-label="Close"><X className="size-5"/></button></div>
+    <button onClick={close} aria-label="Close"><X className="size-5"/></button></div>
    <label className="block space-y-2 text-sm font-medium">Voice name<input value={name} onChange={e=>setName(e.target.value)} maxLength={80} placeholder="e.g. My documentary voice" className="h-11 w-full rounded-lg border border-input bg-background px-3"/></label>
    <div className="grid grid-cols-2 rounded-lg bg-muted p-1">
-    {(['record','upload'] as const).map(t=><button key={t} className={`rounded-md px-4 py-2 text-sm font-medium ${tab===t?'bg-card shadow-sm':''}`} onClick={()=>{stop();setTab(t);setFile(null);setDialogError('')}}>{t==='record'?'Record microphone':'Upload a sample'}</button>)}
+    {(['record','upload'] as const).map(t=><button key={t} type="button" disabled={busy} className={'rounded-md px-4 py-2 text-sm font-medium '+(tab===t?'bg-card shadow-sm':'')} onClick={()=>changeTab(t)}>{t==='record'?'Record microphone':'Upload a sample'}</button>)}
    </div>
    {tab==='record'?<div className="flex min-h-40 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-primary/30 bg-primary/5">
      <span className="grid size-14 place-items-center rounded-full bg-primary/15 text-primary"><Mic className="size-7"/></span>
      <p className="font-mono text-xl tabular-nums">{String(Math.floor(duration/60)).padStart(2,'0')}:{String(duration%60).padStart(2,'0')}</p>
      <p className="text-xs text-muted-foreground">Aim for 30 seconds of clear, natural speech</p>
-     <Button type="button" onClick={()=>recording?stop():void record()}>{recording?'Stop recording':'Start recording'}</Button>
+     <Button type="button" disabled={finalizing||busy} onClick={()=>recording?stop():void record()}>{recording?'Stop recording':'Start recording'}</Button>
     </div>:<label className="flex min-h-40 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-primary/30 bg-primary/5 text-sm">
      <UploadCloud className="size-8 text-primary"/><strong>Choose an audio recording</strong>
      <span className="text-xs text-muted-foreground">MP3, WAV, M4A, WEBM or OGG</span>
-     <input className="sr-only" type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*" onChange={e=>{setFile(e.target.files?.[0]||null);setDialogError('')}}/></label>}
-   {file?<div className="rounded-lg border border-border p-3"><p className="truncate text-xs text-muted-foreground">{file.name}</p><audio controls className="mt-2 w-full" src={URL.createObjectURL(file)}/></div>:null}
-   {finalizing?<p role="status" className="text-sm text-muted-foreground">Finishing recording…</p>:null}
+     <input className="sr-only" type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*" onChange={e=>{setFile(e.target.files?.[0]||null);setCapturedDuration(null);setDialogError('')}}/></label>}
+   {file?<div className="rounded-lg border border-border p-3">
+     <p className="truncate text-xs text-muted-foreground">{file.name}{capturedDuration!=null?' · '+formatRecordingTime(capturedDuration):''}</p>
+     {previewUrl?<audio controls className="mt-2 w-full" src={previewUrl}/>:null}
+   </div>:null}
+   {finalizing?<p role="status" className="text-sm text-muted-foreground">Verifying recorded audio…</p>:null}
    {dialogError?<p role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{dialogError}</p>:null}
-   <div className="flex justify-end gap-2"><Button variant="outline" onClick={()=>{stop();onClose()}}>Cancel</Button><Button disabled={busy||recording||finalizing||name.trim().length<2||!file} onClick={()=>void submit()}>{busy?'Creating your voice…':'Create voice'}</Button></div>
+   <div className="flex justify-end gap-2"><Button variant="outline" onClick={close}>Cancel</Button><Button disabled={busy||recording||finalizing||name.trim().length<2||!file} onClick={()=>void submit()}>{busy?'Creating your voice…':'Create voice'}</Button></div>
   </div>
  </div>
 }
