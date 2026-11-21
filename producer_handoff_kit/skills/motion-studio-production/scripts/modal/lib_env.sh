@@ -1,4 +1,5 @@
-# Read job-scoped credentials without printing them.
+# sourced by submit.sh / status.sh. Never prints secrets. Loads the job's credentials into the environment only.
+#   job creds: <J>/secrets/{job_url,token}  (fallback: <J>/state/job_token + job id from <J>/job_id or the directory name)
 KIT_MODAL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 load_job_env() {
   local J="$1" url="" tok="" id=""
@@ -10,17 +11,15 @@ load_job_env() {
     if [ -f "$J/job_id" ]; then id="$(tr -d '[:space:]' < "$J/job_id")"; else id="$(basename "$J")"; fi
     url="https://transovo.ai/api/motion-studio/agent/jobs/$id"
   fi
-  [ -n "$tok" ] && [ -n "$url" ] && [ -n "$id" ] || { echo "job credentials not found" >&2; return 2; }
-  case "$url" in https://transovo.ai/api/motion-studio/agent/jobs/*) ;; *) echo "job URL host invalid" >&2; return 2;; esac
+  [ -n "$tok" ] && [ -n "$url" ] && [ -n "$id" ] || { echo "job credentials not found under $J/secrets (job_url, token)" >&2; return 2; }
+  case "$url" in https://transovo.ai/api/motion-studio/agent/jobs/*) ;; *) echo "job URL must be https://transovo.ai/api/motion-studio/agent/jobs/<id>" >&2; return 2;; esac
   export MOTION_JOB_ID="$id" MOTION_JOB_URL="$url" MOTION_JOB_TOKEN="$tok"
 }
 load_modal_env() {
+  # first existing of: $MODAL_ENV_FILE, /workspace/render_bench/.modal_env, /workspace/secrets/modal.env (mode 600)
   local f="${MODAL_ENV_FILE:-}"
   if [ -z "$f" ]; then for c in /workspace/render_bench/.modal_env /workspace/secrets/modal.env; do [ -f "$c" ] && { f="$c"; break; }; done; fi
-  [ -n "$f" ] && [ -f "$f" ] || { echo "Modal credentials unavailable" >&2; return 2; }
+  [ -n "$f" ] && [ -f "$f" ] || { echo "Modal credentials file missing (/workspace/render_bench/.modal_env); set MODAL_ENV_FILE" >&2; return 2; }
   set +x; set -a; . "$f"; set +a
-  [ -n "${MODAL_TOKEN_ID:-}" ] && [ -n "${MODAL_TOKEN_SECRET:-}" ] || return 2
+  [ -n "${MODAL_TOKEN_ID:-}" ] && [ -n "${MODAL_TOKEN_SECRET:-}" ] || { echo "Modal credentials file must export MODAL_TOKEN_ID and MODAL_TOKEN_SECRET" >&2; return 2; }
 }
-
-# Producer box Chrome (round-2 item A)
-export CHROMIUM_BIN="${CHROMIUM_BIN:-/usr/bin/google-chrome}"
