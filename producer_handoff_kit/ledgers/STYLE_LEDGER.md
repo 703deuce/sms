@@ -4,6 +4,10 @@ Read the last 5–8 entries and every entry for the same customer before plannin
 
 Format: `## <date> · <jobId or test folder> · <title>` then `- Customer: <customerId or projectId>` · style direction (if any) · concept · type · colour · layout/framing · transitions/texture · engine and layer mix.
 
+**Variety fields (Rick, Nov 21, RULES_FROM_RICK §12).** Every new entry also adds one line: `- Variety: concept family <…> · claim device <… or none> · ground <dark/light/colour> · type formula <…> · edit mix <~% full-frame footage / ~% designed> · 3D/2.5D <what moments> · cut-outs <yes/no, where> · engines <list>`. Before planning, check the last 5 entries (plus same customer/subject) against these fields per §12.
+
+**Families already used (Nov 16–21), don't repeat within 5 films:** paper/document/stamp/receipt/typewriter (Gunna Paper Trail, Midterms Riso Ballot, Keith Murray Lexicon, One Skill board-card, JD Lawrence script page, Diddy Receipts); broadcast/control-room (Kai Cenat ON AIR, Streamer Awards switcher); physical-object metaphor (vinyl, film slate, marquee, fogged glass, padlock); dot/counter data lattice (Headcount); claim devices: red allegation tags, strike-through, ALLEGEDLY stamps, tally lights.
+
 ## 2026-11-16 · motion_tests/gunna_social_30s_mixed · Did Gunna snitch? (30 s, 9:16)
 - Concept: vertical news explainer
 - Type: Anton display + Inter body; Instrument Serif on the HyperFrames card; bold kinetic captions
