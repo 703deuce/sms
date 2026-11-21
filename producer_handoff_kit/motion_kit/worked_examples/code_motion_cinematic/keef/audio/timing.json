@@ -1,0 +1,116 @@
+{
+  "total_duration": 39.789,
+  "lead_in": 0.9,
+  "tail_out": 2.2,
+  "tempo": 1.0,
+  "segments": [
+    {
+      "id": 1,
+      "scene": "T01_house_arrest",
+      "caption": "2011. Chicago's South Side.",
+      "vo": "Twenty eleven. Chicago's South Side.",
+      "start": 0.9,
+      "end": 3.218,
+      "duration": 2.318
+    },
+    {
+      "id": 2,
+      "scene": "T01_house_arrest",
+      "caption": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+      "vo": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+      "start": 3.618,
+      "end": 8.688,
+      "duration": 5.07
+    },
+    {
+      "id": 3,
+      "scene": "T01_house_arrest",
+      "caption": "So he films music videos. Right there.",
+      "vo": "So he films music videos. Right there.",
+      "start": 9.088,
+      "end": 11.509,
+      "duration": 2.422
+    },
+    {
+      "id": 4,
+      "scene": "T02_blowup",
+      "caption": "2012. 'I Don't Like' hits YouTube.",
+      "vo": "Twenty twelve. I Don't Like hits YouTube.",
+      "start": 12.509,
+      "end": 14.718,
+      "duration": 2.209
+    },
+    {
+      "id": 5,
+      "scene": "T02_blowup",
+      "caption": "Kanye hears it, and remixes it.",
+      "vo": "Kanye hears it, and remixes it.",
+      "start": 15.118,
+      "end": 17.073,
+      "duration": 1.955
+    },
+    {
+      "id": 6,
+      "scene": "T02_blowup",
+      "caption": "Interscope signs him. A reported six-million-dollar deal.",
+      "vo": "Interscope signs him. A reported six million dollar deal.",
+      "start": 17.473,
+      "end": 21.029,
+      "duration": 3.555
+    },
+    {
+      "id": 7,
+      "scene": "T02_blowup",
+      "caption": "'Love Sosa' goes everywhere.",
+      "vo": "Love Sosa goes everywhere.",
+      "start": 21.429,
+      "end": 22.788,
+      "duration": 1.359
+    },
+    {
+      "id": 8,
+      "scene": "T03_drill",
+      "caption": "And the world learns its name. Drill.",
+      "vo": "And the world learns its name. Drill.",
+      "start": 23.588,
+      "end": 25.881,
+      "duration": 2.294
+    },
+    {
+      "id": 9,
+      "scene": "T03_drill",
+      "caption": "Dark. Slow. Raw.",
+      "vo": "Dark. Slow. Raw.",
+      "start": 26.281,
+      "end": 28.177,
+      "duration": 1.896
+    },
+    {
+      "id": 10,
+      "scene": "T03_drill",
+      "caption": "Built on the streets of Chicago.",
+      "vo": "Built on the streets of Chicago.",
+      "start": 28.577,
+      "end": 30.119,
+      "duration": 1.542
+    },
+    {
+      "id": 11,
+      "scene": "T03_drill",
+      "caption": "And it spreads. London. Brooklyn. Around the world.",
+      "vo": "And it spreads. London. Brooklyn. Around the world.",
+      "start": 30.519,
+      "end": 34.178,
+      "duration": 3.659
+    },
+    {
+      "id": 12,
+      "scene": "T03_drill",
+      "caption": "All from a kid with a camera, at his grandma's house.",
+      "vo": "All from a kid with a camera, at his grandma's house.",
+      "start": 34.578,
+      "end": 37.589,
+      "duration": 3.011
+    }
+  ]
+}

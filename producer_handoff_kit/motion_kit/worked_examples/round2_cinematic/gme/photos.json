@@ -1,0 +1,67 @@
+{
+ "grade": "natural",
+ "photos": [
+  {
+   "id": "STORE",
+   "what": "GameStop store, Vallejo CA, Feb 2021",
+   "kind": "photo",
+   "commons": "File:GameStop Retail Store - Vallejo - California (50906730711).jpg",
+   "crop": [
+    0.0,
+    0.08,
+    1.0,
+    0.92
+   ],
+   "file": "STORE_GameStop_Retail_Store_Vallejo_California_5090673.jpg",
+   "source": "https://commons.wikimedia.org/wiki/File:GameStop_Retail_Store_-_Vallejo_-_California_(50906730711).jpg",
+   "credit": "Will Buckner",
+   "license": "CC BY 2.0",
+   "license_url": "https://creativecommons.org/licenses/by/2.0",
+   "date": "2021-02-03 13:37",
+   "license_ok": true
+  },
+  {
+   "id": "KITTY",
+   "what": "Roaring Kitty YouTube thumbnail (Keith Gill's channel, 2020)",
+   "kind": "photo",
+   "file": "yt_DugYajvaJ_g.jpg",
+   "source": "https://www.youtube.com/watch?v=DugYajvaJ_g (thumbnail)",
+   "credit": "Roaring Kitty (Keith Gill), YouTube",
+   "license": "Copyrighted - internal test only"
+  },
+  {
+   "id": "GILL",
+   "what": "Keith Gill testifying remotely, House Financial Services hearing, Feb 18 2021",
+   "kind": "photo",
+   "file": "yt_OARREl39syQ.jpg",
+   "crop": [
+    0.5,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "source": "https://www.youtube.com/watch?v=OARREl39syQ (thumbnail, Global News)",
+   "credit": "House Financial Services Committee feed via Global News",
+   "license": "Hearing feed public; thumbnail copyrighted - internal test only"
+  },
+  {
+   "id": "CAPITOL",
+   "what": "US Capitol at dusk",
+   "kind": "photo",
+   "commons": "File:Capitol at Dusk 2.jpg",
+   "crop": [
+    0.12,
+    0.0,
+    0.88,
+    1.0
+   ],
+   "file": "CAPITOL_Capitol_at_Dusk_2.jpg",
+   "source": "https://commons.wikimedia.org/wiki/File:Capitol_at_Dusk_2.jpg",
+   "credit": "Martin Falbisoner",
+   "license": "CC BY-SA 3.0",
+   "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
+   "date": "2013-09-03 20:06:45",
+   "license_ok": true
+  }
+ ]
+}

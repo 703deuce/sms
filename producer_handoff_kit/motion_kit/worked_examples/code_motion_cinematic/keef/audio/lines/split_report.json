@@ -1,0 +1,134 @@
+[
+ {
+  "id": 1,
+  "take": "T01_house_arrest",
+  "start": 0.117,
+  "end": 2.683,
+  "speech_s": 1.87,
+  "letters": 29,
+  "lps": 15.49,
+  "text": "2011. Chicago's South Side.",
+  "flag": false
+ },
+ {
+  "id": 2,
+  "take": "T01_house_arrest",
+  "start": 2.683,
+  "end": 8.254,
+  "speech_s": 4.85,
+  "letters": 68,
+  "lps": 14.02,
+  "text": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+  "flag": false
+ },
+ {
+  "id": 3,
+  "take": "T01_house_arrest",
+  "start": 8.254,
+  "end": 11.022,
+  "speech_s": 1.95,
+  "letters": 30,
+  "lps": 15.37,
+  "text": "So he films music videos. Right there.",
+  "flag": false
+ },
+ {
+  "id": 4,
+  "take": "T02_blowup",
+  "start": 0.117,
+  "end": 2.554,
+  "speech_s": 1.75,
+  "letters": 32,
+  "lps": 18.31,
+  "text": "2012. 'I Don't Like' hits YouTube.",
+  "flag": false
+ },
+ {
+  "id": 5,
+  "take": "T02_blowup",
+  "start": 2.554,
+  "end": 4.993,
+  "speech_s": 1.65,
+  "letters": 24,
+  "lps": 14.54,
+  "text": "Kanye hears it, and remixes it.",
+  "flag": false
+ },
+ {
+  "id": 6,
+  "take": "T02_blowup",
+  "start": 4.993,
+  "end": 9.008,
+  "speech_s": 3.1,
+  "letters": 47,
+  "lps": 15.14,
+  "text": "Interscope signs him. A reported six-million-dollar deal.",
+  "flag": false
+ },
+ {
+  "id": 7,
+  "take": "T02_blowup",
+  "start": 9.008,
+  "end": 10.701,
+  "speech_s": 1.36,
+  "letters": 22,
+  "lps": 16.13,
+  "text": "'Love Sosa' goes everywhere.",
+  "flag": false
+ },
+ {
+  "id": 8,
+  "take": "T03_drill",
+  "start": 0.113,
+  "end": 2.656,
+  "speech_s": 1.87,
+  "letters": 29,
+  "lps": 15.53,
+  "text": "And the world learns its name. Drill.",
+  "flag": false
+ },
+ {
+  "id": 9,
+  "take": "T03_drill",
+  "start": 2.656,
+  "end": 4.986,
+  "speech_s": 0.99,
+  "letters": 11,
+  "lps": 11.14,
+  "text": "Dark. Slow. Raw.",
+  "flag": false
+ },
+ {
+  "id": 10,
+  "take": "T03_drill",
+  "start": 4.986,
+  "end": 6.99,
+  "speech_s": 1.55,
+  "letters": 26,
+  "lps": 16.77,
+  "text": "Built on the streets of Chicago.",
+  "flag": false
+ },
+ {
+  "id": 11,
+  "take": "T03_drill",
+  "start": 6.99,
+  "end": 11.135,
+  "speech_s": 2.3,
+  "letters": 40,
+  "lps": 17.4,
+  "text": "And it spreads. London. Brooklyn. Around the world.",
+  "flag": false
+ },
+ {
+  "id": 12,
+  "take": "T03_drill",
+  "start": 11.135,
+  "end": 14.488,
+  "speech_s": 2.77,
+  "letters": 40,
+  "lps": 14.44,
+  "text": "All from a kid with a camera, at his grandma's house.",
+  "flag": false
+ }
+]

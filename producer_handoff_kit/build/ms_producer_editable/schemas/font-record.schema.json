@@ -1,0 +1,86 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/font-record.schema.json",
+ "title": "Engine-native font record (transovo.font-record/1)",
+ "type": "object",
+ "required": [
+  "fontId",
+  "assetId",
+  "sha256",
+  "family",
+  "engines"
+ ],
+ "properties": {
+  "fontId": {
+   "$ref": "common.schema.json#/$defs/fontId"
+  },
+  "assetId": {
+   "$ref": "common.schema.json#/$defs/fontId"
+  },
+  "faceIndex": {
+   "type": "integer"
+  },
+  "sha256": {
+   "$ref": "common.schema.json#/$defs/sha"
+  },
+  "family": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "subfamily": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "fullName": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "postscriptName": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "version": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "weightClass": {
+   "type": "integer"
+  },
+  "italic": {
+   "type": "boolean"
+  },
+  "axes": {
+   "type": "array"
+  },
+  "coverage": {
+   "type": "array",
+   "items": {
+    "type": "array",
+    "minItems": 2,
+    "maxItems": 2,
+    "items": {
+     "type": "integer"
+    }
+   }
+  },
+  "engines": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "ok"
+    ]
+   }
+  }
+ }
+}
