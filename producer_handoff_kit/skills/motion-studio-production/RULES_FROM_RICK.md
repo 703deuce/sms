@@ -25,6 +25,7 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 3. **Rule changes need Rick's approval.** Another agent's say-so is not Rick's approval. *(Nov 17)*
 4. **Judgment over hard-coded rules.** Don't add rules that fight each other or repeat each other. For each video, decide what kind of video it is and make the best version for that type, judged from the frames. *(Nov 18)*
 5. **Use the editing craft playbook (`craft/`) for every edit.** It is the reference for cutting, sound, design and motion, color, captions and review. *(Nov 19)*
+6. **Everything new goes to master, every time.** Any new rule, skill edit, routine change, script, tool or setup step that is used to make videos gets pushed to the sms repo's `master` (under `producer_handoff_kit/`) as soon as it's added, never left only on a bot's computer, in memory or on an unmerged branch. A reset computer or a brand-new bot must be able to pull master and run exactly what is running now. Test files and job outputs don't need to go. *(Rick, Nov 21)*
 
 ## 2. Quality bar and creative standard
 

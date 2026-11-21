@@ -2,9 +2,11 @@
 # bootstrap_producer_box.sh: set up (or catch up) a Motion Studio Producer box from 703deuce/sms producer_handoff_kit/ ONLY.
 # Idempotent and safe to re-run. It never prints, overwrites or uploads secrets, and never touches production servers.
 #
-#   bash producer_handoff_kit/setup/bootstrap_producer_box.sh            # files, skill, kits, env templates, optional Modal venv, checks
+#   bash producer_handoff_kit/setup/bootstrap_producer_box.sh            # files, skill, self-hosted render kit, env templates, checks
+#   bash .../bootstrap_producer_box.sh --with-modal                      # also install optional Modal CLI/venv (fallback only)
 #   INSTALL_ENGINES=1 bash .../bootstrap_producer_box.sh                 # also install the engine library (long, ~8 GB)
 #   KIT=/path/to/producer_handoff_kit bash .../bootstrap_producer_box.sh # use an existing checkout of the kit
+#   WITH_MODAL=1 is the same as --with-modal
 #
 # Lays out the standard paths the skill and routine expect:
 #   /home/box/agent-data/workflows/motion-studio-production/   the production skill (SKILL.md first)
@@ -15,6 +17,15 @@
 #   /workspace/motion_jobs/{STYLE_LEDGER.md,ENGINE_STATUS.md,_pending/}  (prefers kit/ledgers/ over kit/templates/)
 #   /workspace/secrets/{motion_production.env,motion_runner.env}, /workspace/render_bench/.modal_env  (templates, mode 600)
 set -euo pipefail; set +x
+WITH_MODAL="${WITH_MODAL:-0}"
+for arg in "$@"; do
+  case "$arg" in
+    --with-modal) WITH_MODAL=1 ;;
+    --help|-h)
+      sed -n '2,12p' "$0"; exit 0 ;;
+    *) echo "unknown argument: $arg (expected --with-modal)" >&2; exit 2 ;;
+  esac
+done
 STAMP="$(date +%Y%m%d-%H%M%S)"; BACKUP=/workspace/backups/producer_bootstrap_$STAMP
 SMS_BRANCH="${SMS_BRANCH:-master}"
 say(){ printf '\n== %s\n' "$*"; }
@@ -41,13 +52,19 @@ say "skill -> $SK"
 backup "$SK"; mkdir -p "$SK"
 ( cd "$KIT/skills/motion-studio-production" && tar cf - . ) | ( cd "$SK" && tar xf - )
 
-# 2. motion_kit
-say "motion_kit -> /workspace/motion_kit"
+# 2. motion_kit (self-hosted render scripts by default)
+say "motion_kit -> /workspace/motion_kit (self-hosted render path)"
 mkdir -p /workspace/motion_kit
-for d in modal bg_delivery; do
-  backup /workspace/motion_kit/$d; mkdir -p /workspace/motion_kit/$d
-  ( cd "$KIT/skills/motion-studio-production/scripts/$d" && tar cf - . ) | ( cd /workspace/motion_kit/$d && tar xf - )
-done
+backup /workspace/motion_kit/modal; mkdir -p /workspace/motion_kit/modal
+RENDER_SRC="$KIT/skills/motion-studio-production/scripts/render"
+if [ ! -d "$RENDER_SRC" ]; then
+  echo "WARN: scripts/render/ missing; falling back to scripts/modal/" >&2
+  RENDER_SRC="$KIT/skills/motion-studio-production/scripts/modal"
+fi
+( cd "$RENDER_SRC" && tar cf - . ) | ( cd /workspace/motion_kit/modal && tar xf - )
+touch /workspace/motion_kit/modal/.modal_disabled
+backup /workspace/motion_kit/bg_delivery; mkdir -p /workspace/motion_kit/bg_delivery
+( cd "$KIT/skills/motion-studio-production/scripts/bg_delivery" && tar cf - . ) | ( cd /workspace/motion_kit/bg_delivery && tar xf - )
 rm -f /workspace/motion_kit/modal/.publish_remap_deployed   # old gate, no longer used (fixes are on master)
 backup /workspace/motion_kit/first_right; mkdir -p /workspace/motion_kit/first_right
 ( cd "$KIT/motion_kit/first_right" && tar cf - . ) | ( cd /workspace/motion_kit/first_right && tar xf - )
@@ -117,7 +134,6 @@ mkdir -p -m 700 /workspace/secrets /workspace/render_bench
 inst(){ [ -f "$2" ] || { cp "$1" "$2"; echo "created template $2 (fill it in)"; }; chmod 600 "$2"; }
 inst "$KIT/setup/env/motion_production.env.example" /workspace/secrets/motion_production.env
 inst "$KIT/setup/env/motion_runner.env.example" /workspace/secrets/motion_runner.env
-inst "$KIT/setup/env/modal_env.example" /workspace/render_bench/.modal_env
 # Optional infra templates (created only if missing; never overwritten or printed)
 [ -f "$KIT/setup/env/producer_webhook.env.example" ] && inst "$KIT/setup/env/producer_webhook.env.example" /workspace/secrets/producer_webhook.env
 [ -f "$KIT/setup/env/render_worker.env.example" ] && inst "$KIT/setup/env/render_worker.env.example" /workspace/secrets/render_worker.env
@@ -125,16 +141,21 @@ inst "$KIT/setup/env/modal_env.example" /workspace/render_bench/.modal_env
 [ -f "$KIT/setup/env/b2.env.example" ] && inst "$KIT/setup/env/b2.env.example" /workspace/secrets/b2.env
 [ -f "$KIT/setup/env/b2.full.env.example" ] && inst "$KIT/setup/env/b2.full.env.example" /workspace/secrets/b2.full.env
 
-# 9. Optional Modal venv (fallback only; default render path is self-hosted and .modal_disabled should exist)
-say "Modal setup (fallback only)"
-bash /workspace/motion_kit/modal/setup.sh >/dev/null && echo "Modal venv + renderer checkout ready (fallback only; leave .modal_disabled in place)" || echo "WARN: modal/setup.sh failed (ok if staying self-hosted)"
+# 9. Optional Modal fallback (off by default; requires --with-modal or WITH_MODAL=1)
+if [ "$WITH_MODAL" = 1 ]; then
+  say "Modal setup (--with-modal; fallback only — leave .modal_disabled in place)"
+  inst "$KIT/setup/env/modal_env.example" /workspace/render_bench/.modal_env
+  bash /workspace/motion_kit/modal/setup.sh >/dev/null && echo "Modal venv + renderer checkout ready (fallback only)" || echo "WARN: modal/setup.sh failed"
+else
+  say "Modal fallback skipped (default is self-hosted). Re-run with --with-modal to install the Modal CLI/venv."
+fi
 
-# 10. checks (names only, never values)
+# 10. checks (names only, never values). Modal tokens are checked only with --with-modal.
 say "credential check (names only)"
 need(){ local f="$1"; shift; for k in "$@"; do if grep -Eq "^(export )?$k=.+" "$f" 2>/dev/null; then echo "OK      $k ($f)"; else echo "MISSING $k ($f)"; fi; done; }
 need /workspace/secrets/motion_production.env ELEVENLABS_API_KEY OPENAI_API_KEY GEMINI_API_KEY PIXABAY_API_KEY KIE_API_KEY REPLICATE_API_TOKEN
 need /workspace/secrets/motion_runner.env MOTION_STUDIO_WORKER_ID MOTION_STUDIO_WORKER_TOKEN MOTION_STUDIO_AGENT_PUBLIC_URL MOTION_STUDIO_PRODUCER_KIT
-need /workspace/render_bench/.modal_env MODAL_TOKEN_ID MODAL_TOKEN_SECRET
+[ "$WITH_MODAL" = 1 ] && need /workspace/render_bench/.modal_env MODAL_TOKEN_ID MODAL_TOKEN_SECRET
 command -v gh >/dev/null && (gh auth status >/dev/null 2>&1 && echo "OK      gh auth (GitHub)" || echo "MISSING gh auth (GitHub access to 703deuce/sms)")
 say "engine check"
 bash /workspace/motion_engines/_install/check_engines.sh || echo "(missing items above: run check_engines.sh --fix, or INSTALL_ENGINES=1 on a fresh box)"
