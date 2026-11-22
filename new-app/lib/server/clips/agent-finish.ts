@@ -5,7 +5,7 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, createReadableSignedUrl, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
-import type { ClipEditsV2 } from '@/lib/clips/edits'
+import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 
 const prisma = () => getPrisma()
 const object = (v: unknown): Record<string, unknown> =>
@@ -340,6 +340,135 @@ export async function authorizeClipAgentCallback(id: string,request: Request) {
   const got=digest(id+':'+token),expected=Buffer.from(job.tokenHash,'hex')
   if (got.length!==expected.length||!timingSafeEqual(got,expected)) throw problem('Invalid job token.',401)
   return job
+}
+
+
+/** Re-sign media on demand: never store temporary URLs or API keys in job input. */
+export async function getClipAgentInputs(id: string, request: Request) {
+  const job = await authorizeClipAgentCallback(id, request)
+  if (finished(job.status)) throw problem('Job is no longer active.', 409)
+  const project = await prisma().clipProject.findFirst({
+    where: {id: job.projectId, workspaceId: job.workspaceId, deletedAt: null},
+    select: {
+      title: true, settings: true, transcriptKey: true,
+      upload: {select: {key: true, filename: true, mime: true, durationMs: true}},
+    },
+  })
+  if (!project?.upload?.key) throw problem('Source video not found.', 404)
+  const settings = object(project.settings)
+  const root = 'ws/' + job.workspaceId + '/projects/' + job.projectId + '/'
+  const sign = async (key: string | null) =>
+    key ? createReadableSignedUrl(key, 900).catch(() => null) : null
+  const [sourceUrl, deepgramUrl, compactTranscriptUrl, wordsUrl] = await Promise.all([
+    sign(project.upload.key),
+    sign(root + 'deepgram.json'),
+    sign(root + 'transcript.compact.jsonl'),
+    sign(project.transcriptKey),
+  ])
+  if (!sourceUrl) throw problem('Source video unavailable.', 409)
+  return {
+    jobId: id, projectId: job.projectId, clipId: job.clipId,
+    action: job.clipId.startsWith('project:') ? 'clip_and_finish' : 'finish_clip',
+    delivery: {mode: 'mp4', editable: 'transovo.clip-edits/2'},
+    source: {url: sourceUrl, filename: project.upload.filename,
+      mime: project.upload.mime, durationMs: project.upload.durationMs},
+    transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl},
+    clipCount: Math.max(1, Math.min(15, Number(settings.autoGrokMaxClips) || 5)),
+    targetSeconds: {min: 20, max: 60},
+    aspectRatio: settings.aspectRatio || '9:16',
+    resolution: '1080x1920',
+    captionStyle: object(settings.captions),
+    brand: object(settings.brand),
+    notes: word(settings.prompt, 2000),
+  }
+}
+
+/** Keep producer errors visible without echoing unsafe details into customer UI. */
+export async function failClipAgentJob(id: string, request: Request, raw: unknown) {
+  const job = await authorizeClipAgentCallback(id, request)
+  if (job.status === 'failed') return publicJob(job)
+  if (finished(job.status)) throw problem('Job already completed.', 409)
+  const reason = friendly(object(raw).reason, 'failed')
+  const row = await prisma().clipAgentFinishJob.update({
+    where: {id}, data: {status: 'failed', phase: 'failed', error: reason,
+      message: reason, completedAt: new Date()},
+  })
+  console.error('[clip-agent] producer_failed', {jobId: id, reason: 'reported'})
+  return publicJob(row)
+}
+
+/** Publish one committed MP4 result immediately; repeated callbacks are idempotent. */
+export async function publishClipAgentResult(id: string, request: Request, raw: unknown) {
+  const job = await authorizeClipAgentCallback(id, request)
+  if (finished(job.status)) throw problem('Job no longer accepts clips.', 409)
+  if (!job.clipId.startsWith('project:')) throw problem('Per-clip publish requires discovery.', 409)
+  const input = object(raw)
+  const manifestName = word(input.clipJson, 150)
+  const editsName = word(input.editsJson, 150)
+  const videoName = word(input.video, 150)
+  const previewName = word(input.preview, 150)
+  const posterName = word(input.thumbnail, 150)
+  const artifacts = items(job.artifacts)
+  const artifact = (name: string, mime: string) => artifacts.find(a =>
+    a.filename === name && a.mime === mime && a.state === 'ready')
+  const manifest = artifact(manifestName, 'application/json')
+  const video = artifact(videoName, 'video/mp4')
+  const preview = artifact(previewName, 'video/mp4')
+  const poster = artifacts.find(a => a.filename === posterName && a.state === 'ready' &&
+    ['image/jpeg','image/png','image/webp'].includes(a.mime))
+  if (!manifest || !video || !preview || !poster) throw problem('Commit clip metadata, full MP4, 480p preview and thumbnail first.', 409)
+  if (manifest.bytes > 2_000_000) throw problem('Clip metadata is too large.', 400)
+  let detail: Record<string, unknown>
+  try {
+    detail = object(JSON.parse((await getClipStorage().getObjectBytes(manifest.key)).toString('utf8')))
+  } catch {throw problem('Invalid clip.json.', 400)}
+  const startMs = Number(detail.sourceStartMs), endMs = Number(detail.sourceEndMs)
+  const virality = Number(detail.virality), durationMs = Number(detail.durationMs)
+  if (!Number.isSafeInteger(startMs) || startMs < 0 || !Number.isSafeInteger(endMs) ||
+      endMs <= startMs || !Number.isInteger(virality) || virality < 1 || virality > 10 ||
+      !Number.isSafeInteger(durationMs) || durationMs < 1000 || durationMs > 600_000)
+    throw problem('Invalid source range, virality or rendered duration.', 400)
+  const source = await prisma().clipProject.findFirst({where:{
+    id: job.projectId, workspaceId: job.workspaceId, deletedAt: null,
+  },select:{upload:{select:{durationMs:true}}}})
+  if (!source || (source.upload?.durationMs && endMs > source.upload.durationMs + 1000))
+    throw problem('Clip exceeds original media.', 400)
+  let editable = false
+  let edits: ClipEditsV2 = normalizeEdits(null, {clipStartMs: startMs, clipEndMs: endMs})
+  const editArtifact = artifact(editsName, 'application/json')
+  if (editArtifact && editArtifact.bytes <= 2_000_000) {
+    try {
+      const doc = object(JSON.parse((await getClipStorage().getObjectBytes(editArtifact.key)).toString('utf8')))
+      if (doc.schema !== 'transovo.clip-edits/2') throw new Error('Invalid edit schema')
+      edits = normalizeEdits(doc.edits, {clipStartMs: startMs, clipEndMs: endMs})
+      editable = true
+    } catch {console.warn('[clip-agent] invalid_edits_fallback', {jobId: id})}
+  } else console.warn('[clip-agent] missing_edits_fallback', {jobId: id})
+  const score = virality * 10
+  const result = await prisma().$transaction(async tx => {
+    await tx.$queryRaw`SELECT "id" FROM "clip_agent_finish_jobs" WHERE "id" = ${id} FOR UPDATE`
+    const existing = await tx.clip.findFirst({where:{workspaceId: job.workspaceId,
+      projectId:job.projectId, deletedAt:null,
+      },select:{id:true,aiMeta:true},orderBy:{createdAt:'desc'},take:1})
+    // An explicit producer manifest filename is a stable idempotency key.
+    if (existing && object(existing.aiMeta).agentClipManifest === manifestName &&
+        object(existing.aiMeta).agentClipperRunId === id) return existing.id
+    const clipId = 'clip_' + randomUUID()
+    await tx.clip.create({data:{
+      id:clipId, workspaceId:job.workspaceId,projectId:job.projectId,
+      title:word(detail.title, 120) || 'Highlight',reason:word(detail.why, 300) || 'Selected by Transovo Agent',
+      startMs,endMs,score,scores:toPrismaJson({overall:score}),
+      previewKey:preview.key,posterKey:poster.key,storageDriver:storageDriverName(),
+      edits:toPrismaJson(edits), editsSaveVersion:1,
+      aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:id,agentClipManifest:manifestName,
+        virality,hook:word(detail.hook, 500),speakers:detail.speakers,
+        fullResKey:video.key,deliveredDurationMs:durationMs,
+        agentFinishEditableLayersImported:editable,
+        agentFinishedVersions:[{jobId:id,key:video.key,durationMs,completedAt:new Date().toISOString()}]}),
+    }})
+    return clipId
+  })
+  return {clipId: result, published: true, editable, score}
 }
 
 export async function getClipAgentAssignment(id: string,request: Request) {
