@@ -408,9 +408,10 @@ export async function failClipAgentJob(id: string, request: Request, raw: unknow
   if (finished(job.status)) throw problem('Job already completed.', 409)
   const reason = friendly(object(raw).reason, 'failed')
   const row = await prisma().clipAgentFinishJob.update({
-    where: {id}, data: {status: 'failed', phase: 'failed', error: reason,
+    where: {id}, data: {status: 'failed', phase: 'failed', error: reason, failReason: reason,
       message: reason, completedAt: new Date()},
   })
+  await closeClipLease(id,false)
   console.error('[clip-agent] producer_failed', {jobId: id, reason: 'reported'})
   return publicJob(row)
 }
@@ -465,12 +466,12 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
   const score = virality * 10
   const result = await prisma().$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "clip_agent_finish_jobs" WHERE "id" = ${id} FOR UPDATE`
-    const existing = await tx.clip.findFirst({where:{workspaceId: job.workspaceId,
-      projectId:job.projectId, deletedAt:null,
-      },select:{id:true,aiMeta:true},orderBy:{createdAt:'desc'},take:1})
+    const existing = await tx.clip.findMany({where:{workspaceId: job.workspaceId,
+      projectId:job.projectId, deletedAt:null},select:{id:true,aiMeta:true}})
     // An explicit producer manifest filename is a stable idempotency key.
-    if (existing && object(existing.aiMeta).agentClipManifest === manifestName &&
-        object(existing.aiMeta).agentClipperRunId === id) return existing.id
+    const duplicate = existing.find(c=>object(c.aiMeta).agentClipManifest === manifestName &&
+      object(c.aiMeta).agentClipperRunId === id)
+    if (duplicate) return duplicate.id
     const clipId = 'clip_' + randomUUID()
     await tx.clip.create({data:{
       id:clipId, workspaceId:job.workspaceId,projectId:job.projectId,
@@ -640,13 +641,6 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   if (finished(job.status)) throw problem('Job already finished.',409)
   const body=object(raw)
   if (body.status==='failed') return failClipAgentJob(id,request,{reason:body.reason})
-  if (false) {
-    const j=await prisma().clipAgentFinishJob.update({where:{id},data:{
-      status:'failed',phase:'failed',message:'Your clip could not be finished. Try again.',
-      completedAt:new Date(),error:'Producer reported failure.',
-    }})
-    return publicJob(j)
-  }
   if (body.delivery==='live'){
     const versionId=word(body.portableVersionId,128)
     const durationMs=Number(body.durationMs)
@@ -690,6 +684,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   if (job.clipId==='project:'+job.projectId) {
     const reportName=word(body.jobJson,150)
     const report=items(job.artifacts).find(a=>a.filename===reportName && a.mime==='application/json' && a.state==='ready' && a.bytes<=2_000_000)
+    if (clipProducerEnabled() && !report) throw problem('Upload and commit job.json before completing.',409)
     if (clipProducerEnabled() && report) {
       let costReport:Record<string,unknown>
       try {costReport=object(JSON.parse((await getClipStorage().getObjectBytes(report.key)).toString('utf8')))}
