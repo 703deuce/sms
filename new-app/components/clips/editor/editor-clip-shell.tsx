@@ -54,6 +54,7 @@ export function EditorClipShell(props: {
   clipperStudio?: boolean
   initialPanel?: EditorPanelId
   initialProducerOpen?: boolean
+  simpleMode?: boolean
   /** Motion Studio project id (?motionStudio=) — opens the Compact Editor with the Motion Studio lanes. */
   motionStudioProjectId?: string | null
 }) {
@@ -257,7 +258,7 @@ export function EditorClipShell(props: {
         fullVideo={props.fullVideo}
         editorAssets={liveAssets}
         onEditorMediaError={onPrimaryMediaError}
-        compact={!props.fullVideo || props.initialPanel === 'captions' || Boolean(props.motionStudioProjectId)}
+        compact={props.simpleMode === true || !props.fullVideo || props.initialPanel === 'captions' || Boolean(props.motionStudioProjectId)}
         clipperStudio={props.clipperStudio === true}
         initialPanel={props.initialPanel}
         initialProducerOpen={props.initialProducerOpen}
