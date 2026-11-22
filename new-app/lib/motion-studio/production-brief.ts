@@ -31,8 +31,10 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
  const prompt=str(x.prompt,15000)
  const declaredMode=['none','ai_voice','cloned_voice','uploaded_narration','talking_head'].includes(String(n.mode))?String(n.mode) as ProductionBrief['narration']['mode']:'ai_voice'
  const uploadedRoles=(Array.isArray(x.inputs)?x.inputs:[]).map(v=>object(v).role)
- const mode=declaredMode==='ai_voice'
-   ? (uploadedRoles.includes('talking_head')?'talking_head':uploadedRoles.includes('narration')?'uploaded_narration':'ai_voice')
+ // Explicit narration choice takes precedence over camera roles. A second camera
+ // is picture material, not an instruction to replace the selected voice.
+ const mode = n.mode == null && declaredMode === 'ai_voice'
+   ? (uploadedRoles.includes('talking_head') ? 'talking_head' : uploadedRoles.includes('narration') ? 'uploaded_narration' : 'ai_voice')
    : declaredMode
  const voiceId=str(n.voiceId,120),uploadId=str(n.uploadId,120)
  const voiceSource=['stock','cloned','auto'].includes(String(n.voiceSource))?n.voiceSource as 'stock'|'cloned'|'auto':undefined
