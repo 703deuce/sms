@@ -161,7 +161,17 @@ export function ClipCard({
     }
     setDownloadBusy(true)
     try {
-      await exportClipDownload(clip.id, { aspect: CLIP_PREVIEW_EXPORT_ASPECT })
+      if (clip.fullResUrl) {
+        const a = document.createElement('a')
+        a.href = clip.fullResUrl
+        a.download = (clip.title || 'finished-clip').replace(/[^a-zA-Z0-9._-]+/g, '_') + '.mp4'
+        a.rel = 'noopener noreferrer'
+        document.body.appendChild(a)
+        a.click()
+        a.remove()
+      } else {
+        await exportClipDownload(clip.id, { aspect: CLIP_PREVIEW_EXPORT_ASPECT })
+      }
       if (onDownload) await onDownload(clip.id)
     } catch {
       /* exportClipDownload surfaces toast */
