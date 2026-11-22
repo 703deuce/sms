@@ -53,7 +53,7 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
         with TemporaryDirectory() as tmp:
             local = Path(tmp) / "transcript.compact.jsonl"
             local.write_text(
-                "".join(json.dumps(u, ensure_ascii=False) + "\\n" for u in compact),
+                "".join(json.dumps(u, ensure_ascii=False) + "\n" for u in compact),
                 encoding="utf-8",
             )
             upload_file(root + "transcript.compact.jsonl", local, "application/x-ndjson")
