@@ -35,7 +35,7 @@ import { cn } from '@/lib/utils'
 import { UNIFIED_AUTO_AGENT_CLIP_MODE } from '../../lib/clips/unified-clip-results'
 import { UnifiedClipRunNote } from './unified-clip-run-note'
 
-export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: { reframeV2Enabled?: boolean; forcedIntent?: 'full' }) {
+export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipelineEnabled = false, forcedIntent }: { reframeV2Enabled?: boolean; producerPipelineEnabled?: boolean; forcedIntent?: 'full' }) {
   const router = useRouter()
   const params = useSearchParams()
   const preset = params.get('preset')
@@ -276,7 +276,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
           ))}
         </fieldset>
       ) : null}
-      {projectIntent==='find'&&tab==='upload'?(
+      {projectIntent==='find'&&tab==='upload'&&!producerPipelineEnabled?(
         <div className="mb-4 rounded-xl border border-border bg-card p-4" data-testid="grok-clipper-choice">
           <label className="flex items-start gap-3 text-sm">
             <input type="checkbox" className="mt-1 size-4 accent-primary"
@@ -302,7 +302,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
           ):null}
         </div>
       ):null}
-      {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()?(
+      {tab==='upload'&&projectIntent==='find'&&aiProducerAgentPublicEnabled()&&!producerPipelineEnabled?(
         <UnifiedClipRunNote testId="upload-agent-mode" className="mb-4">
           <select aria-label="Agent target length" value={agentClipSeconds}
             onChange={e=>setAgentClipSeconds(Number(e.target.value) as 30|60|90)}
