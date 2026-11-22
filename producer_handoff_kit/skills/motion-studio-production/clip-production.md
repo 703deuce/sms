@@ -79,7 +79,7 @@ Use the clipper stages, not the film stages. Short, first-person-plural, Transov
 6. `delivering` — "We're adding it to your clips…"
 7. `complete` — set by `/complete`, not by a progress post past 99%
 
-Post `{stage, percent?, message}` to `{jobUrl}/progress`. Percent is monotonic and stays ≤99 until `/complete`. Invalid stages are stored as `editing`. For a `finish_clip` job you may start at `editing` (moments were already chosen). For `clip_and_finish`, start at `selecting`. Keep posting at least every 60 s (the lease heartbeat), with the current stage and an honest percent.
+Post `{stage, percent?, message}` to `{jobUrl}/progress`. Percent is monotonic and stays ≤99 until `/complete`. Invalid stages are stored as `editing`. For a `finish_clip` job you may start at `editing` (moments were already chosen). For `clip_and_finish`, start at `selecting`. Post progress when the stage or percent really changes; the lease heartbeat is `POST {jobUrl}/heartbeat` (Intake), not `/progress`.
 
 ---
 
@@ -218,6 +218,19 @@ Before rendering, review every clip in the browser on still screenshots (480p by
 
 Look at the browser stills before approval (`qa.md` §2), then watch each final clip once before you claim it is done. Fix the scene code, not a post-process cover-up. No draft or smoke renders.
 
+### Native render entry point (preferred)
+
+Write the clip's canonical `clip_NN.edits.json` first, then render the finished MP4 **from that same document** with the shared renderer the editor export uses, run from the repo's `worker/` directory (master):
+
+```bash
+cd <repo>/worker && python -m clips_worker.producer_edits_export \
+  --source $J/assets/source/source.mp4 --words $J/research/words.json \
+  --edits $J/clips/NN/clip_NN.edits.json --output $J/deliver/clip_NN.mp4 \
+  --workdir $J/clips/NN/render [--broll-specs <json>]
+```
+
+It writes the MP4 plus an SRT and prints a JSON summary (`renderEngine`, …). This is the supported route to card/editor parity. Font ids must come from `/inputs` `availableTextFonts`. Layers it cannot express (custom engine graphics) go in as committed PNG/alpha-WebM `broll` overlays. Visual QA on stills and the final watch stay mandatory; a separately rendered MP4 alone does not prove parity. Make the 480p preview from the finished MP4 (target ≤8 MB per minute).
+
 ### Clip QA checklist
 
 - The cut is a complete thought; hook and payoff are both there.
@@ -253,7 +266,8 @@ For clip `NN` (`01`, `02`, …), commit:
 | `clip_NN.thumbnail.png` | `image` (sha256 required) | `image/png` |
 | `clip_NN.json` — clip metadata | `project` | `application/json` |
 | `clip_NN.edits.json` — native editable edit | `project` | `application/json` |
-| optional `clip_NN.srt` | `caption` | `application/x-subrip` |
+| `clip_NN.analysis.json` — structured shots, faceTracks, speakers, speaker-to-face map, design choices (≤2 MB) | `project` | `application/json` |
+| `clip_NN.srt` / `clip_NN.vtt` (the native render gives the SRT) | `caption` | `application/x-subrip` / `text/vtt` |
 | optional overlays referenced by the edits (`clip_NN_title.png`, …) | `image` or `media` | `image/png` / `video/webm` |
 
 `clip_NN.json`:
@@ -270,10 +284,11 @@ Then publish the card:
 ```
 POST {jobUrl}/clips
 {"clipJson":"clip_NN.json","editsJson":"clip_NN.edits.json","video":"clip_NN.mp4",
- "preview":"clip_NN.preview.mp4","thumbnail":"clip_NN.thumbnail.png"}
+ "preview":"clip_NN.preview.mp4","thumbnail":"clip_NN.thumbnail.png",
+ "analysisJson":"clip_NN.analysis.json","srt":"clip_NN.srt","vtt":"clip_NN.vtt"}
 ```
 
-The clip appears in the customer's project immediately (card plays the 480p preview, download gives the full MP4, Edit opens the native edits). Publishing is idempotent per job + `clipJson` filename, so a retry of the same call is safe. A broken or missing edits document does not block the MP4, but the customer then loses editability, so validate it before publishing.
+The clip appears in the customer's project immediately (card plays the 480p preview, download gives the full MP4, Edit opens the native edits). A repeated `clipJson` filename is **rejected with 409**: never re-publish the same name; to correct a clip, upload under a new filename or use a revision. On any 401 or 409 from the job API, stop work and do not upload or publish further. A broken or missing edits document does not block the MP4, but the customer then loses editability, so validate it before publishing.
 
 ### `clip_NN.edits.json` (native editable timeline)
 
@@ -298,7 +313,7 @@ The clip appears in the customer's project immediately (card plays the 480p prev
 
 Rules:
 
-- `trim.in`/`trim.out` **must equal** `sourceStartMs`/`sourceEndMs` in `clip_NN.json`. `trim`, `cutRanges` and `sectionOrder` are **absolute source milliseconds**.
+- `trim.in`/`trim.out` **must equal** `sourceStartMs`/`sourceEndMs` in `clip_NN.json` (on a revision, the new range you chose). `trim`, `cutRanges` and `sectionOrder` are **absolute source milliseconds**.
 - `textItems`, `keyframes`, `captionLines` and `broll` times are **output milliseconds** (0 = first frame of the finished clip).
 - `layout.layoutSegments` uses absolute source ms and explicit `focusSpeaker`, normalized `cropBox`, `people` boxes, `order`, `splitRatio`, `divider`, optional `zoomAnchor`. Use fill/split/fit_blur, not speaker_follow or legacy shotOverride ids.
 - Headlines and name tags go in native animated `textItems`, with `style.box` for backgrounds; dividers use shape items. Zoom punches have `zoom.anchor` or layout `zoomAnchor`; caption keyframe `capY` uses output ms.
@@ -322,9 +337,9 @@ After delivery, append one **pack** entry to `STYLE_LEDGER.md` (date, jobId, cus
 ## Revisions (`finish_clip`, `kind:"clip_revision"`)
 
 1. `GET {jobUrl}/inputs`; read `revision.note`, `revision.sourceStartMs`, `revision.sourceEndMs`, `revision.title`.
-2. Re-finish that exact range with the same craft stages (C–E). Start progress at `editing`.
-3. Commit the full MP4 (`kind:video`), the 480p preview (`kind:video`), a thumbnail (`kind:image`, sha256), and an edits document (`kind:project`) whose `trim.in`/`trim.out` equal the revision bounds exactly, plus any overlays it references.
-4. `POST {jobUrl}/complete` with `{"status":"complete","video":"clip.mp4","preview":"clip.preview.mp4","thumbnail":"clip.thumbnail.png","editsJson":"clip.edits.json","durationMs":<finished length>}`. `/clips` is discovery-only and returns 409 on a revision.
+2. Fetch `previousClipJsonUrl` and `previousAnalysisUrl` (signed, 15 min) and start from `revision.currentEdits`. Re-finish with the same craft stages (C–E), extending or shrinking the range only when the note asks, within the original media. Start progress at `editing`.
+3. Commit the full MP4 (`kind:video`), the 480p preview (`kind:video`), a thumbnail (`kind:image`, sha256), and an edits document (`kind:project`) whose `trim.in`/`trim.out` are the final absolute source range, plus a new `clip.json` and `analysis.json` (fresh filenames), SRT/VTT, and any overlays it references.
+4. `POST {jobUrl}/complete` with `{"status":"complete","video":"clip.mp4","preview":"clip.preview.mp4","thumbnail":"clip.thumbnail.png","editsJson":"clip.edits.json","clipJson":"clip.r1.json","analysisJson":"clip.r1.analysis.json","srt":"clip.r1.srt","vtt":"clip.r1.vtt","durationMs":<finished length>}` (use fresh filenames on every revision). `/clips` is discovery-only and returns 409 on a revision.
 5. Failure: `POST {jobUrl}/fail` with `{reason}`.
 
 If you receive `{action: "cancel", jobId}`, stop paid work. The server status is authoritative.
