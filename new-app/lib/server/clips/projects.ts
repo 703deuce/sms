@@ -148,6 +148,8 @@ export async function createClipProject(
       rangeEndMs: upload.durationMs || 0,
     }
   }
+  const producerPipeline = process.env.CLIPS_PRODUCER_PIPELINE === '1' && !settings.byo && !settings.fullVideo && !settings.blank
+  if (producerPipeline) settings = {...settings, autoGrokClipper: true, autoAgentClipMode: undefined}
   if (settings.autoAgentClipMode && !settings.autoGrokClipper && !settings.byo && !settings.fullVideo) {
     const { aiProducerAgentServerEnabled } = await import('@/lib/ai-producer-agent/flags')
     if (!aiProducerAgentServerEnabled()) throw new Error('ai_producer_agent_disabled')
@@ -170,21 +172,21 @@ export async function createClipProject(
       settings: JSON.parse(JSON.stringify(settings)),
       rangeStartMs: settings.rangeStartMs,
       rangeEndMs: rangeEnd,
-      status: grokOnly ? 'READY' : 'QUEUED',
-      stage: grokOnly ? 'agent_ready' : 'queued',
-      progress: grokOnly ? 100 : 0,
+      status: grokOnly && !producerPipeline ? 'READY' : 'QUEUED',
+      stage: producerPipeline ? 'transcribing' : grokOnly ? 'agent_ready' : 'queued',
+      progress: grokOnly && !producerPipeline ? 100 : 0,
       transcriptKey: grokOnly ? null : projectWordsKey(workspaceId, projectId),
     },
   })
-  if (!grokOnly) {
+  if (!grokOnly || producerPipeline) {
     const jobId = createId('job')
     await prisma.clipJob.create({
       data: {
         id: jobId,
         projectId: project.id,
-        type: 'PROCESS_PROJECT',
+        type: producerPipeline ? 'PRODUCER_TRANSCRIBE' : 'PROCESS_PROJECT',
         status: 'QUEUED',
-        payload: buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
+        payload: producerPipeline ? {provider: 'deepgram', pipeline: 'clips-producer'} : buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
       },
     })
   }
