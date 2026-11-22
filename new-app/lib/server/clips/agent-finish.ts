@@ -29,7 +29,7 @@ const messages: Record<string,string> = {
 const friendly = (raw: unknown, stage: string) => {
   const m = word(raw)
   return !m || /grok|bot\b|model|engine|\/workspace|\/tmp\/|https?:\/\/|token|traceback|ffmpeg|python|stack trace|api[_ -]?key/i.test(m)
-    ? messages[stage] ?? "We're finishing your clip…" : m
+    ? (stage==='failed'?'Clip production failed. Please try again.':messages[stage] ?? "We're finishing your clip…") : m
 }
 type Artifact = {
   id: string; key: string; filename: string; kind: string; mime: string; bytes: number;
@@ -97,6 +97,8 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     throw problem('Transovo Agent is not connected yet.',503)
   }
   if (process.env.GROKBOT_LIVE_MODE !== '1') throw problem('Transovo Agent production is not enabled.',503)
+  if (clipProducerEnabled() && process.env.MOTION_STUDIO_COORDINATOR !== '1')
+    throw problem('Clip producer coordinator is not enabled.',503)
   const clip = await prisma().clip.findFirst({
     where:{id:clipId,projectId,workspaceId,deletedAt:null},
     select:{
@@ -202,6 +204,8 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
   request:Request,idempotencyKey:string,maximumClips:number) {
   if ((!clipProducerEnabled() && (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY)) ||
       process.env.GROKBOT_LIVE_MODE!=='1') throw problem('Transovo Agent is not connected.',503)
+  if (clipProducerEnabled() && process.env.MOTION_STUDIO_COORDINATOR !== '1')
+    throw problem('Clip producer coordinator is not enabled.',503)
   const project=await prisma().clipProject.findFirst({
     where:{id:projectId,workspaceId,deletedAt:null},
     select:{id:true,title:true,status:true,rangeEndMs:true,
@@ -411,7 +415,10 @@ export async function getClipAgentInputs(id: string, request: Request) {
     clipCount: Math.max(1, Math.min(15, Number(settings.autoGrokMaxClips) || 5)),
     targetSeconds: {min: 20, max: 60},
     aspectRatio: settings.aspectRatio || '9:16',
-    resolution: '1080x1920',
+    resolution: settings.aspectRatio==='16:9'?'1920x1080':
+      settings.aspectRatio==='1:1'?'1080x1080':
+      settings.aspectRatio==='4:5'?'1080x1350':
+      settings.aspectRatio==='3:4'?'1080x1440':'1080x1920',
     captionStyle: object(settings.captions),
     brand: object(settings.brand),
     notes: word(settings.prompt, 2000),
