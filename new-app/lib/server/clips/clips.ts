@@ -39,6 +39,7 @@ const listClipSelect = {
   favorite: true,
   aiMeta: true,
   edits: true,
+  editsSaveVersion: true,
   previewKey: true,
   posterKey: true,
   sourceSegKey: true,
@@ -161,9 +162,12 @@ export async function listProjectClips(
           return null
         }
       }
-      const [previewUrl, posterUrl] = await Promise.all([
+      const meta = c.aiMeta && typeof c.aiMeta === 'object' && !Array.isArray(c.aiMeta) ? c.aiMeta as Record<string, unknown> : {}
+      const fullResKey = typeof meta.fullResKey === 'string' && c.editsSaveVersion <= 1 ? meta.fullResKey : null
+      const [previewUrl, posterUrl, fullResUrl] = await Promise.all([
         c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
         c.posterKey ? signMedia(c.posterKey, 'poster') : Promise.resolve(null),
+        fullResKey ? createCachedSignedDownloadUrl(storage, fullResKey, signOpts).catch(()=>null) : Promise.resolve(null),
       ])
       let fallbackSourceUrl: string | null = null
       let fallbackStartMs = c.startMs
@@ -201,7 +205,8 @@ export async function listProjectClips(
         score: c.score,
         scores: c.scores,
         favorite: c.favorite,
-        durationMs: c.endMs - c.startMs,
+        durationMs: Number(meta.deliveredDurationMs) > 0 ? Number(meta.deliveredDurationMs) : c.endMs - c.startMs,
+        fullResUrl,
         previewUrl,
         posterUrl,
         fallbackSourceUrl,
