@@ -94,3 +94,55 @@ To retain fully editable layers, also upload project.json using the existing tra
 7. Verify webhook retries, parallel asset uploads, auth, rate limits, and failure recovery.
 
 This code has not been live-tested against the producer. Do not describe the feature as certified or completely production-ready until those tests pass.
+
+## v2: Deepgram-first producer clipper (flagged)
+
+When `CLIPS_PRODUCER_PIPELINE=1`, ordinary find-clips uploads are transcribed with prerecorded Deepgram Nova-3 (diarize, punctuate, smart_format, utterances, paragraphs), retaining `deepgram.json`, `transcript.compact.jsonl`, `words.json` and a cost record. The clipper coordinator reserves a worker in the **existing Motion Studio registry** under the same advisory lock/physical machine/AI plan budget used by film jobs. Register `clips-produce` (or the existing `motion-studio-produce`) capability. No new secrets are needed.
+
+### Producer assignment
+
+A registered worker receives `{action:"clip_and_finish",kind:"clips",jobId,jobUrl,jobToken,leaseId,workerId,workspaceId,projectId,coordinator:true,delivery:{mode:"mp4"}}` (or `finish_clip` and `kind:"clip_revision"`). The coordinator authenticates the HTTPS webhook with its existing `MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY`. **Do not publish a live-only timeline; output rendered MP4s.** The producer must fetch fresh signed URLs from `GET {jobUrl}/inputs` using `Authorization: Bearer {jobToken}`, which returns the full source URL, Deepgram/utterance/words URLs, clipCount (default 5, maximum 15), targetSeconds (20–60), aspectRatio (9:16 default), requested resolution, caption preset/brand/notes, and source bounds if a one-clip revision. Signed URLs expire: refresh from `/inputs` if necessary. No provider API key belongs in job input.
+
+### Upload protocol and callbacks
+
+Keep the existing `POST {jobUrl}/assets` prepare/commit handshake. Supported kinds and MIME restrictions are enforced by the API; upload images with SHA-256 checksums when kind `image`. For each completed clip, commit:
+
+- `clip_01.mp4`: full-resolution finished edited MP4 (`kind:video`).
+- `clip_01.preview.mp4`: completed 480p MP4 (`kind:video`).
+- `clip_01.thumbnail.png`: thumbnail (`kind:image`, SHA-256 required).
+- `clip_01.json`: `{title,hook,why,sourceStartMs,sourceEndMs,durationMs,speakers,virality:1..10}` (`kind:project`).
+- `clip_01.edits.json`: a native editable document (`kind:project`); custom graphic media referenced here must be individually committed.
+- Optionally an SRT and separate transparent PNG or WebM overlay artwork, all committed before the clip is published.
+
+After committing, call `POST {jobUrl}/clips` with `{clipJson:"clip_01.json",editsJson:"clip_01.edits.json",video:"clip_01.mp4",preview:"clip_01.preview.mp4",thumbnail:"clip_01.thumbnail.png"}`. This *immediately publishes* one card. Repeat for up to 15 clips. The raw virality (1–10) becomes `clip.score = virality * 10`; both preview and original source ranges are saved. Clip publication is idempotent by job ID + clip metadata filename.
+
+For the final callback, upload/commit `job.json` (with timing and cost report) and send `POST {jobUrl}/complete` with `{status:"complete",jobJson:"job.json"}`. Uploading `highlights.json` and legacy completion remains supported with the flag off. Use `POST {jobUrl}/progress` with `{stage,percent,message}`, or `POST {jobUrl}/fail` with `{reason}` for a terminal error. A run is retried once for lost leases or a 45-minute timeout and then failed with a user-visible reason. Report progress regularly to maintain the lease.
+
+### Native editable timeline
+
+`clip_01.edits.json` must use:
+
+```json
+{
+  "schema": "transovo.clip-edits/2",
+  "edits": {
+    "v": 2,
+    "trim": {"in":142000, "out":195000},
+    "cutRanges": [[160000, 162000]],
+    "aspectRatio": "9:16",
+    "layout": {"mode":"speaker_follow","shotOverrides":[]},
+    "captions": {"enabled":true,"presetId":"bold_pop","animation":"pop","position":"bottom","wordsPerLine":2},
+    "textItems": [],
+    "keyframes": [],
+    "broll": []
+  }
+}
+```
+
+`trim.in/out` and `cutRanges` are **absolute source milliseconds**, with trim matching `clip.json` sourceStartMs/sourceEndMs. `sectionOrder` also refers to source ranges. `textItems`, `keyframes`, `captionLines`, and `broll` time positions are **output milliseconds**. `layout` can carry mode, cropBox, layoutSegments, template boxes, and shotOverrides. `captions` carries style while timestamped per-word input is taken from saved Deepgram clip words; `wordFixes` may correct individual words. Use `hookOverlay` and `textItems` for headlines, names, shapes, and callouts; `zoom` and `keyframes` for punch-ins; `transitions` for cuts; optionally `audio`, `color`, `tracks`, `layerProps`. Custom graphics can be represented as `broll` items `{id,source:"upload",artifactFilename:"artwork.png",startMs,endMs,still:true}`; the app registers them as project media and swaps in an uploadId. For predictable export parity, prefer transparent PNG stills; alpha WebM behavior needs production verification. Never bake captions into the same artwork as native text if you want text-editability.
+
+An invalid/missing edits document must not prevent publishing the finished MP4. The card plays the 480p master, full resolution downloads directly until editor changes; the editor loads normalized native edits with an original version preserved for revert. Note: not every advanced motion/alpha property is yet guaranteed to render identically in worker export, so the producer should use the supported schema rather than claiming perfect round-trip fidelity.
+
+### Deployment limitations
+
+The producer runtime must implement these actions before enabling the flag in production. Run a smoke check on transcription, source sync, clip publication, preview/download, editor/export, lease retry, and per-clip re-run. With flag off, legacy opt-in discovery and `PROCESS_PROJECT` remain available. This document specifies the webhook-facing API, not a claim that the producer bot is deployed or certified.
