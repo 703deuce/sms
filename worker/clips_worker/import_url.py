@@ -198,10 +198,10 @@ def run_import_url_job(conn, job: dict, project: dict, post_progress) -> None:
             proc_id = f"job_{uuid.uuid4().hex}"
             cur.execute(
                 """
-                INSERT INTO clip_jobs (id, "projectId", type, status, payload, "createdAt")
-                VALUES (%s,%s,%s,'QUEUED','{}'::jsonb,NOW())
+                INSERT INTO clip_jobs (id, "projectId", type, status, payload, "maxAttempts", "createdAt")
+                VALUES (%s,%s,%s,'QUEUED','{}'::jsonb,%s,NOW())
                 """,
-                (proc_id, project_id, "PRODUCER_TRANSCRIBE" if producer else "PROCESS_PROJECT"),
+                (proc_id, project_id, "PRODUCER_TRANSCRIBE" if producer else "PROCESS_PROJECT", 1 if producer else 3),
             )
         conn.commit()
 

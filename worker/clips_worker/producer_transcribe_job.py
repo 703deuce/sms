@@ -6,30 +6,37 @@ word timing and provider-cost metadata are persisted before the project is READY
 from __future__ import annotations
 
 import json
+import hashlib
+import secrets
+import uuid
+from datetime import datetime,timezone,timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 
 def run_producer_transcribe_job(conn, job: dict) -> None:
-    from clips_worker.deepgram_transcribe import _http_listen, map_deepgram_words
+    from clips_worker.deepgram_transcribe import _http_listen, map_deepgram_words, deepgram_model
     from clips_worker.media_transcribe_job import transcribe_cost_usd
     from clips_worker.storage import put_json, sign_url, upload_file
 
     project_id = str(job["projectId"])
     with conn.cursor() as cur:
         cur.execute(
-            'SELECT p."workspaceId", p."uploadId", u.key, u."durationMs" '
+            'SELECT p."workspaceId", p."uploadId", u.key, u."durationMs", p.settings '
             'FROM clip_projects p JOIN clip_uploads u ON u.id=p."uploadId" '
             'WHERE p.id=%s AND u.status=%s',
             (project_id, "COMPLETE"),
         )
         row = cur.fetchone()
-    if not row or not row[2]:
-        raise RuntimeError("producer_source_missing")
-    workspace_id, upload_id, source_key, duration_ms = row
-    root = f"ws/{workspace_id}/projects/{project_id}/"
     try:
-        raw = _http_listen(audio_url=sign_url(str(source_key), 3600), model="nova-3", paragraphs=True)
+        if not row or not row[2]:
+            raise RuntimeError("producer_source_missing")
+        workspace_id, upload_id, source_key, duration_ms, settings = row
+        if isinstance(settings,str): settings=json.loads(settings)
+        settings=settings if isinstance(settings,dict) else {}
+        root=f"ws/{workspace_id}/projects/{project_id}/"
+        raw = _http_listen(audio_url=sign_url(str(source_key), 3600),
+                           model=deepgram_model(),language=settings.get("asrLanguage") or "en",paragraphs=True)
         results = raw.get("results") or {}
         channels = results.get("channels") or []
         alternatives = channels[0].get("alternatives") or [] if channels else []
@@ -78,8 +85,25 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
                 '"transcriptKey"=%s,"updatedAt"=now() WHERE id=%s',
                 ("READY", "agent_ready", 100, root + "words.json", project_id),
             )
+            # A durable idempotent producer job is created alongside READY, not by the browser.
+            id_="caf_"+str(uuid.uuid4())
+            token_hash=hashlib.sha256((id_+":"+secrets.token_urlsafe(32)).encode()).hexdigest()
+            cur.execute(
+                'INSERT INTO clip_agent_finish_jobs '
+                '(id,"workspaceId","projectId","clipId","idempotencyKey","tokenHash",'
+                '"tokenExpiresAt",status,phase,kind,message,"createdAt","updatedAt") '
+                'VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now(),now()) '
+                'ON CONFLICT ("clipId","idempotencyKey") DO NOTHING',
+                (id_,workspace_id,project_id,'project:'+project_id,
+                 'auto-grok-'+project_id,token_hash,
+                 datetime.now(timezone.utc)+timedelta(hours=36),'queued','dispatch',
+                 'clips','Finding your best moments.'),
+            )
         conn.commit()
     except Exception as exc:
+        # A failed INSERT/UPDATE leaves psycopg2's transaction aborted.
+        # Roll back before recording the terminal failure; never retry paid ASR.
+        conn.rollback()
         with conn.cursor() as cur:
             cur.execute(
                 'UPDATE clip_projects SET status=%s,stage=%s,error=%s,'
@@ -88,4 +112,4 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
             )
         conn.commit()
         print(f"[clipper:producer_transcribe] failed project={project_id} kind={type(exc).__name__}", flush=True)
-        raise
+        return  # No automatic paid Deepgram retry.

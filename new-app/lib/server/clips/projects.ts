@@ -148,14 +148,14 @@ export async function createClipProject(
       rangeEndMs: upload.durationMs || 0,
     }
   }
-  const producerPipeline = process.env.CLIPS_PRODUCER_PIPELINE === '1' && !settings.byo && !settings.fullVideo && !settings.blank
+  const producerPipeline = process.env.CLIPS_PRODUCER_PIPELINE === '1' && upload.mime.startsWith('video/') && !settings.byo && !settings.fullVideo && !settings.blank
   if (producerPipeline) settings = {...settings, autoGrokClipper: true, autoAgentClipMode: undefined}
   if (settings.autoAgentClipMode && !settings.autoGrokClipper && !settings.byo && !settings.fullVideo) {
     const { aiProducerAgentServerEnabled } = await import('@/lib/ai-producer-agent/flags')
     if (!aiProducerAgentServerEnabled()) throw new Error('ai_producer_agent_disabled')
   }
   if (settings.autoGrokClipper && !settings.byo && !settings.fullVideo && !upload.mime.startsWith('video/')) {
-    throw new Error('Transovo Agent clipper requires a video upload')
+    settings={...settings,autoGrokClipper:false} // audio-only uploads keep legacy discovery
   }
   const grokOnly = settings.autoGrokClipper === true && !settings.byo && !settings.fullVideo
   const rangeEnd = settings.byo
@@ -187,6 +187,7 @@ export async function createClipProject(
         type: producerPipeline ? 'PRODUCER_TRANSCRIBE' : 'PROCESS_PROJECT',
         status: 'QUEUED',
         payload: producerPipeline ? {provider: 'deepgram', pipeline: 'clips-producer'} : buildProcessProjectJobPayload(settings) as Prisma.InputJsonValue,
+        ...(producerPipeline?{maxAttempts:1}:{}),
       },
     })
   }

@@ -167,7 +167,8 @@ export async function listProjectClips(
       const [previewUrl, posterUrl, fullResUrl] = await Promise.all([
         c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
         c.posterKey ? signMedia(c.posterKey, 'poster') : Promise.resolve(null),
-        fullResKey ? createCachedSignedDownloadUrl(storage, fullResKey, signOpts).catch(()=>null) : Promise.resolve(null),
+        fullResKey ? storage.createSignedDownloadUrl(fullResKey,3600,{downloadFilename:
+          (c.title||'finished-clip').replace(/[^A-Za-z0-9._-]+/g,'_')+'.mp4'}).catch(()=>null) : Promise.resolve(null),
       ])
       let fallbackSourceUrl: string | null = null
       let fallbackStartMs = c.startMs

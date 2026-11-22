@@ -15,7 +15,7 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
   const [job,setJob]=useState<Job|null>(null)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState<string|null>(null)
-  const [count,setCount]=useState(5)
+  const [count,setCount]=useState(3)
   const previousPublished=useRef(0)
   const previousStatus=useRef<string|null>(null)
   const reload=useCallback(async()=>{
@@ -70,7 +70,7 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
         <label htmlFor={'grok-discover-count-'+projectId} className="text-xs text-muted-foreground">Up to</label>
         <select id={'grok-discover-count-'+projectId} value={count} onChange={e=>setCount(Number(e.target.value))}
           className="rounded-md border bg-background px-2 py-1.5 text-sm">
-          {[1,2,3,4,5,6,8,10,12,15].map(n=><option key={n} value={n}>{n} clips</option>)}
+          {[1,2,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n} clips</option>)}
         </select>
         <Button size="sm" disabled={busy||active} onClick={()=>void start()}>
           {busy||active?<Loader2 className="mr-2 size-4 animate-spin"/>:<Sparkles className="mr-2 size-4"/>}

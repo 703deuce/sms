@@ -82,6 +82,7 @@ export function ClipCard({
   const [cardActionBusy, setCardActionBusy] = useState(false)
   const aiMeta = (clip.aiMeta || {}) as ClipAiMeta & {
     whyThisClip?: string
+    agentClipper?: boolean
     editorialIssues?: string[]
     needsReviewReasons?: string[]
   }
@@ -166,6 +167,7 @@ export function ClipCard({
         a.href = clip.fullResUrl
         a.download = (clip.title || 'finished-clip').replace(/[^a-zA-Z0-9._-]+/g, '_') + '.mp4'
         a.rel = 'noopener noreferrer'
+        a.target = '_blank'
         document.body.appendChild(a)
         a.click()
         a.remove()

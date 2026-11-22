@@ -12,11 +12,13 @@ export async function POST(request: Request) {
       const jobs=await coordinatorSweep()
       const renders=await sweepSceneRenders()
       const deterministic=await sweepDeterministicJobs()
+      const clips=await sweepClipJobs().catch(() => ({enabled:true,error:'clip_sweep_unavailable'}))
       return NextResponse.json({jobs,renders,deterministic,clips})
     }
-    const [jobs,deterministic,clips]=await Promise.all([
-      coordinatePendingJobs(),coordinateDeterministicJobs(),coordinateClipJobs(),
+    const [jobs,deterministic]=await Promise.all([
+      coordinatePendingJobs(),coordinateDeterministicJobs(),
     ])
+    const clips=await coordinateClipJobs().catch(() => ({enabled:true,error:'clip_dispatch_unavailable'}))
     return NextResponse.json({jobs,deterministic,clips})
   } catch (error) { return motionStudioJsonError(error) }
 }

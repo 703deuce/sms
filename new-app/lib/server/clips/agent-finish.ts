@@ -7,7 +7,7 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
-import { clipProducerEnabled, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
+import { clipProducerEnabled, clipProducerConfigReady, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
 
 const prisma = () => getPrisma()
 const object = (v: unknown): Record<string, unknown> =>
@@ -97,7 +97,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     throw problem('Transovo Agent is not connected yet.',503)
   }
   if (process.env.GROKBOT_LIVE_MODE !== '1') throw problem('Transovo Agent production is not enabled.',503)
-  if (clipProducerEnabled() && process.env.MOTION_STUDIO_COORDINATOR !== '1')
+  if (clipProducerEnabled() && !clipProducerConfigReady())
     throw problem('Clip producer coordinator is not enabled.',503)
   const clip = await prisma().clip.findFirst({
     where:{id:clipId,projectId,workspaceId,deletedAt:null},
@@ -174,7 +174,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     mediaPolicy:'user_footage_primary',webResearch:false,
   }
   try {
-    const url=new URL(process.env.GROKBOT_WEBHOOK_URL)
+    const url=new URL(process.env.GROKBOT_WEBHOOK_URL!)
     if (url.protocol!=='https:') throw new Error('Webhook must use HTTPS')
     const response=await fetch(url,{method:'POST',cache:'no-store',redirect:'error',
       headers:{Authorization:'Bearer '+process.env.GROKBOT_WEBHOOK_KEY,'Content-Type':'application/json'},
@@ -204,7 +204,7 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
   request:Request,idempotencyKey:string,maximumClips:number) {
   if ((!clipProducerEnabled() && (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY)) ||
       process.env.GROKBOT_LIVE_MODE!=='1') throw problem('Transovo Agent is not connected.',503)
-  if (clipProducerEnabled() && process.env.MOTION_STUDIO_COORDINATOR !== '1')
+  if (clipProducerEnabled() && !clipProducerConfigReady())
     throw problem('Clip producer coordinator is not enabled.',503)
   const project=await prisma().clipProject.findFirst({
     where:{id:projectId,workspaceId,deletedAt:null},
@@ -259,13 +259,13 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
     source:{url:sourceUrl,filename:project.upload.filename,mime:project.upload.mime,
       startMs:0,endMs:project.upload.durationMs??project.rangeEndMs,
       durationMs:project.upload.durationMs??project.rangeEndMs},
-    maxClips:Math.max(1,Math.min(15,maximumClips)),
+    maxClips:Math.max(1,Math.min(10,maximumClips)),
     targetDurationsSeconds:[30,60],aspectRatio:'9:16',fps:30,
     mediaPolicy:'user_footage_primary',webResearch:false,quality:'premium',
     direction:'You are the ONE Transovo creative director. Analyze the full source recording, including picture, dialogue, action, speakers and changes in scene. Independently identify and score its strongest self-contained moments, rank by hook, payoff, comprehensibility, action and entertainment value, then produce up to maxClips polished social clips. Preserve the subjects original speech and video. Cut dead space, reorder only if coherent, dynamically reframe and track the relevant people, choose split-screen layouts when needed, and create story-specific motion graphics, captions and transitions. Choose any available engines, including layered ones, by creative merit and vary visual DNA across clips without sacrificing cohesion. Publish one editable transovo.live-project/1 and original scene bundles for the selected highlights through /portable. Complete with delivery:live, durationMs, portableVersionId, and scored clips[] entries containing sceneId, startMs, endMs, title, score and why. Do not render MP4 masters before export. Do not make a documentary from scratch.',
   }
   try {
-    const url=new URL(process.env.GROKBOT_WEBHOOK_URL)
+    const url=new URL(process.env.GROKBOT_WEBHOOK_URL!)
     if(url.protocol!=='https:') throw new Error('Webhook requires HTTPS')
     const response=await fetch(url,{method:'POST',cache:'no-store',redirect:'error',
       headers:{Authorization:'Bearer '+process.env.GROKBOT_WEBHOOK_KEY,'Content-Type':'application/json'},
@@ -298,7 +298,7 @@ async function completeDiscoveredClips(job:Awaited<ReturnType<typeof authorizeCl
     const data=JSON.parse(bytes.toString('utf8'))
     records=Array.isArray(data)?data:object(data).clips
   }catch{throw problem('Highlights manifest is invalid.',400)}
-  if(!Array.isArray(records)||!records.length||records.length>15)
+  if(!Array.isArray(records)||!records.length||records.length>(clipProducerEnabled()?15:10))
     throw problem('Provide 1–15 scored highlight records.',400)
   const videoFiles=new Set<string>()
   const normalized=records.map((rawRow:unknown)=>{
@@ -430,14 +430,60 @@ export async function failClipAgentJob(id: string, request: Request, raw: unknow
   const job = await authorizeClipAgentCallback(id, request)
   if (job.status === 'failed') return publicJob(job)
   if (finished(job.status)) throw problem('Job already completed.', 409)
-  const reason = friendly(object(raw).reason, 'failed')
+  const inputReason=word(object(raw).reason,2000)
+  const reason=(inputReason||'Producer reported failure')
+    .replace(/https?:\/\/\S+/gi,'[url]')
+    .replace(/\bBearer\s+\S+/gi,'Bearer [redacted]')
+    .replace(/(?:api[_-]?key|token|password|secret)\s*[:=]\s*\S+/gi,'[credential]')
+    .replace(/\/(?:workspace|tmp|home)\/\S+/gi,'[path]').slice(0,500)
   const row = await prisma().clipAgentFinishJob.update({
     where: {id}, data: {status: 'failed', phase: 'failed', error: reason, failReason: reason,
-      message: reason, completedAt: new Date()},
+      message: 'Clip production failed. Please try again.', completedAt: new Date()},
   })
   await closeClipLease(id,false)
   console.error('[clip-agent] producer_failed', {jobId: id, reason: 'reported'})
   return publicJob(row)
+}
+
+/** Register separately committed graphics as editor media for new clips and revisions. */
+async function nativeProducerEdits(job:{workspaceId:string;projectId:string},raw:Record<string,unknown>,
+  artifacts:Artifact[],startMs:number,endMs:number){
+  const layers=Array.isArray(raw.broll)?raw.broll:[]
+  const mapped:Record<string,unknown>[]=[]
+  for(const entry of layers){
+    const layer=object(entry)
+    if(layer.source!=='upload'){mapped.push(layer);continue}
+    const filename=word(layer.artifactFilename||layer.uploadId,150)
+    const artifact=artifacts.find(a=>a.state==='ready'&&a.filename===filename&&
+      ['video/mp4','video/webm','image/png','image/webp'].includes(a.mime))
+    if(!artifact)throw problem('Missing committed overlay asset.',409)
+    const uploadId='clipa_'+artifact.id
+    await prisma().clipUpload.upsert({where:{id:uploadId},
+      create:{id:uploadId,workspaceId:job.workspaceId,key:artifact.key,
+        filename:artifact.filename,bytes:BigInt(artifact.bytes),mime:artifact.mime,
+        kind:'media',status:'COMPLETE',storageDriver:storageDriverName()},update:{}})
+    await registerProjectMedia(job.workspaceId,job.projectId,{uploadId,label:artifact.filename})
+    mapped.push({...layer,source:'upload',uploadId})
+  }
+  return normalizeEdits({...raw,broll:mapped},{clipStartMs:startMs,clipEndMs:endMs})
+}
+
+/** Write transcript words only once the database clip is actually published. */
+async function refreshClipWords(job:{workspaceId:string;projectId:string},clipId:string,startMs:number,endMs:number){
+  try{
+    const root='ws/'+job.workspaceId+'/projects/'+job.projectId+'/'
+    const raw=await getClipStorage().getJson<unknown>(root+'words.json')
+    const words=Array.isArray(raw)?raw:[]
+    const selected=words.filter(v=>{
+      const w=object(v),s=Number(w.s),e=Number(w.e)
+      return Number.isFinite(s)&&Number.isFinite(e)&&e*1000>=startMs&&s*1000<=endMs
+    })
+    if(!selected.length)return
+    const key=root+'clips/'+clipId+'/words.json'
+    await getClipStorage().putJson(key,selected)
+    await prisma().clip.updateMany({where:{id:clipId,workspaceId:job.workspaceId,
+      projectId:job.projectId,deletedAt:null},data:{wordsKey:key}})
+  }catch{console.warn('[clip-agent] words_refresh_failed',{clipId})}
 }
 
 /** Publish one committed MP4 result immediately; repeated callbacks are idempotent. */
@@ -487,49 +533,13 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
       const trim = object(rawEdits.trim)
       if (Number(trim.in) !== startMs || Number(trim.out) !== endMs)
         throw new Error('Edit trim does not match published source range')
-      const rawBroll = Array.isArray(rawEdits.broll) ? rawEdits.broll : []
-      const mappedBroll: Record<string,unknown>[] = []
-      for (const rawLayer of rawBroll) {
-        const layer = object(rawLayer)
-        if (layer.source !== 'upload') {mappedBroll.push(layer);continue}
-        const filename = word(layer.artifactFilename || layer.uploadId,150)
-        const file = artifacts.find(a=>a.state==='ready' && a.filename===filename &&
-          ['video/webm','video/mp4','image/png','image/webp'].includes(a.mime))
-        if (!file) throw new Error('Missing uploaded graphic overlay')
-        const uploadId = 'clipa_' + file.id
-        await prisma().clipUpload.upsert({
-          where:{id:uploadId},
-          create:{id:uploadId,workspaceId:job.workspaceId,key:file.key,
-            filename:file.filename,bytes:BigInt(file.bytes),mime:file.mime,
-            kind:'media',status:'COMPLETE',storageDriver:storageDriverName()},
-          update:{},
-        })
-        await registerProjectMedia(job.workspaceId,job.projectId,{uploadId,label:file.filename})
-        mappedBroll.push({...layer,source:'upload',uploadId})
-      }
-      edits = normalizeEdits({...rawEdits,broll:mappedBroll}, {clipStartMs: startMs, clipEndMs: endMs})
+      edits = await nativeProducerEdits(job,rawEdits,artifacts,startMs,endMs)
       editable = true
     } catch {console.warn('[clip-agent] invalid_edits_fallback', {jobId: id})}
   } else console.warn('[clip-agent] missing_edits_fallback', {jobId: id})
 
   const score = virality * 10
   const newClipId = 'clip_' + randomUUID()
-  const wordsKey = 'ws/' + job.workspaceId + '/projects/' + job.projectId + '/clips/' + newClipId + '/words.json'
-  let hasWords = false
-  try {
-    const projectWords = await getClipStorage().getJson<unknown>('ws/' + job.workspaceId +
-      '/projects/' + job.projectId + '/words.json')
-    const words = Array.isArray(projectWords) ? projectWords : []
-    const selected = words.filter(value=>{
-      const row = object(value)
-      const start = Number(row.s),end=Number(row.e)
-      return Number.isFinite(start)&&Number.isFinite(end)&&end*1000>=startMs&&start*1000<=endMs
-    })
-    if (selected.length) {
-      await getClipStorage().putJson(wordsKey,selected)
-      hasWords = true
-    }
-  } catch { console.warn('[clip-agent] clip_words_fallback',{jobId:id}) }
   const result = await prisma().$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "clip_agent_finish_jobs" WHERE "id" = ${id} FOR UPDATE`
     const existing = await tx.clip.findMany({where:{workspaceId: job.workspaceId,
@@ -538,7 +548,7 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
     const count = existing.filter(c=>object(c.aiMeta).agentClipperRunId===id).length
     const duplicate = existing.find(c=>object(c.aiMeta).agentClipManifest === manifestName &&
       object(c.aiMeta).agentClipperRunId === id)
-    if (duplicate) return duplicate.id
+    if (duplicate) return {clipId:duplicate.id,created:false}
     if (count>=15) throw problem('Maximum of 15 clips per production.',409)
     const clipId = newClipId
     await tx.clip.create({data:{
@@ -546,7 +556,6 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
       title:word(detail.title, 120) || 'Highlight',reason:word(detail.why, 300) || 'Selected by Transovo Agent',
       startMs,endMs,score,scores:toPrismaJson({overall:score}),
       previewKey:preview.key,posterKey:poster.key,storageDriver:storageDriverName(),
-      ...(hasWords?{wordsKey}:{}),
       edits:toPrismaJson(edits), editsSaveVersion:1,
       aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:id,agentClipManifest:manifestName,
         virality,hook:word(detail.hook, 500),speakers:detail.speakers,
@@ -557,9 +566,10 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
     await tx.clipEditVersion.create({data:{id:'cev_'+randomUUID(),clipId,
       workspaceId:job.workspaceId,name:'Producer original',kind:'original',
       edits:toPrismaJson(edits),editsSaveVersion:1}})
-    return clipId
+    return {clipId,created:true}
   })
-  return {clipId: result, published: true, editable, score}
+  if(result.created)await refreshClipWords(job,result.clipId,startMs,endMs)
+  return {clipId: result.clipId, published: true, editable, score}
 }
 
 export async function getClipAgentAssignment(id: string,request: Request) {
@@ -664,7 +674,7 @@ async function completeDiscoveredLiveClips(
   body:Record<string,unknown>,versionId:string,durationMs:number,
 ){
   const raw=Array.isArray(body.clips)?body.clips:[]
-  if(!raw.length||raw.length>15)
+  if(!raw.length||raw.length>(clipProducerEnabled()?15:10))
     throw problem('Live discovery must return scored clip windows.',400)
   const clips=raw.map(value=>{
     const row=object(value)
@@ -781,6 +791,9 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&
     (!clipProducerEnabled()||a.filename===fullName))
   const preview=clipProducerEnabled()?items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&a.filename===previewName):null
+  const posterName=word(body.thumbnail,150)
+  const poster=clipProducerEnabled()?items(job.artifacts).find(a=>a.state==='ready'&&a.filename===posterName&&
+    ['image/png','image/jpeg','image/webp'].includes(a.mime)):null
   if (!video || (clipProducerEnabled()&&!preview)) throw problem('Upload and commit the finished MP4 and 480p preview first.',409)
   const durationMs=Number(body.durationMs)
   if (!Number.isSafeInteger(durationMs)||durationMs<1000||durationMs>600_000) {
@@ -804,7 +817,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       const trim=object(rawEdits.trim)
       if(doc.schema!=='transovo.clip-edits/2'||Number(trim.in)!==existing.startMs||
         Number(trim.out)!==existing.endMs)throw new Error('Invalid native clip edit')
-      imported=normalizeEdits(rawEdits,{clipStartMs:existing.startMs,clipEndMs:existing.endMs})
+      imported=await nativeProducerEdits(job,rawEdits,items(job.artifacts),existing.startMs,existing.endMs)
     }catch{console.warn('[clip-agent] revision_edits_fallback',{jobId:id})}
   }
   if (!imported && items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
@@ -836,7 +849,8 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       jobId:id,key:video.key,durationMs,completedAt:now.toISOString(),
     }].slice(-20)
     await tx.clip.update({where:{id:clip.id},data:{
-      previewKey:preview?.key||video.key,storageDriver:storageDriverName(),
+      previewKey:preview?.key||video.key,
+      ...(poster?{posterKey:poster.key}:{}),storageDriver:storageDriverName(),
       ...(imported?{edits:toPrismaJson(imported),editsSaveVersion:{increment:1}}:{}),
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
@@ -854,6 +868,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       resultKey:video.key,durationMs,completedAt:now,
     }})
   })
+  if(clipProducerEnabled())await refreshClipWords(job,job.clipId,existing.startMs,existing.endMs)
   await closeClipLease(id,true)
   return publicJob(result)
 }

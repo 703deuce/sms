@@ -146,3 +146,13 @@ An invalid/missing edits document must not prevent publishing the finished MP4. 
 ### Deployment limitations
 
 The producer runtime must implement these actions before enabling the flag in production. Run a smoke check on transcription, source sync, clip publication, preview/download, editor/export, lease retry, and per-clip re-run. With flag off, legacy opt-in discovery and `PROCESS_PROJECT` remain available. This document specifies the webhook-facing API, not a claim that the producer bot is deployed or certified.
+
+
+## Fix 1 — producer handoff and recovery rules (November 22, 2026)
+
+- After Deepgram persists the transcript, the worker enqueues the idempotent `auto-grok-{projectId}` producer job in the **same database transaction** as READY. Dispatch is via the existing coordinator cron and no browser tab needs to remain open.
+- The producer transcription uses configured `DEEPGRAM_MODEL` and project `asrLanguage` (English by default), and allows **one** paid attempt; a failure remains FAILED. Audio-only uploads keep the legacy worker.
+- Clip producer lease is **15 minutes**. Producer must make an authenticated `/progress`, `/inputs`, or `/assets` callback **at least every 60 seconds**, including during renders; successful calls renew near expiry. The accepted creative job is **never automatically retried** following lost lease or the 45-minute deadline: operations must initiate a manual retry. Only pre-accept webhook dispatch may retry once after **60 seconds**.
+- Clip coordinator setup/dispatch failures must not fail the film coordinator cron. The customer sees friendly failures, while redacted operational reasons persist separately.
+- New clips and per-clip revisions register the same source overlay assets. Revisions refresh the poster and clip words. Idempotent duplicate clip callbacks do not produce new orphan word objects.
+- With the flag off, discovery defaults to **3 clips**, maximum **10**. Finished full-resolution download URLs request attachment disposition and the browser preserves the app tab.

@@ -2,6 +2,8 @@ import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { dispatchClipAgentDiscover, listClipAgentFinishes, clipAgentError } from '@/lib/server/clips/agent-finish'
 
+import { clipProducerEnabled } from '@/lib/server/motion-studio/clip-producer-coordinator'
+
 export const runtime='nodejs'
 
 export async function GET(_request:Request,context:{params:Promise<{id:string}>}) {
@@ -19,9 +21,10 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
   try {
     const {id}=await context.params
     const body=await request.json().catch(()=>( {} )) as {maxClips?:unknown}
-    const maxClips=body.maxClips===undefined?5:Number(body.maxClips)
-    if(!Number.isInteger(maxClips)||maxClips<1||maxClips>15)
-      return Response.json({error:'Choose 1–15 finished highlights.'},{status:400})
+    const max=clipProducerEnabled()?15:10
+    const maxClips=body.maxClips===undefined?(clipProducerEnabled()?5:3):Number(body.maxClips)
+    if(!Number.isInteger(maxClips)||maxClips<1||maxClips>max)
+      return Response.json({error:'Choose 1–'+max+' finished highlights.'},{status:400})
     const job=await dispatchClipAgentDiscover(await resolveWorkspaceId(),id,request,
       request.headers.get('Idempotency-Key')||'agent-discovery-v1',maxClips)
     return Response.json({job},{status:202})

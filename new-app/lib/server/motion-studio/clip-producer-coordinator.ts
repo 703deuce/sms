@@ -1,11 +1,20 @@
 import 'server-only'
 import {createHash,randomBytes,randomUUID} from 'node:crypto'
 import {getPrisma} from '@/lib/server/db'
-import {coordinatorEnabled,COORDINATOR_TX,CREATIVE_LEASE_MS} from '@/lib/server/motion-studio/coordinator'
+import {coordinatorEnabled,COORDINATOR_TX} from '@/lib/server/motion-studio/coordinator'
 
 const db=()=>getPrisma()
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex')
 const active=['reserved','dispatched','running']
+export const CLIP_LEASE_MS=15*60_000
+const CLIP_DISPATCH_BACKOFF_MS=60_000
+export const clipProducerConfigReady=()=>{
+  const url=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||''
+  try{return process.env.MOTION_STUDIO_COORDINATOR==='1' &&
+    process.env.GROKBOT_LIVE_MODE==='1' &&
+    (process.env.MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY||'').length>=32 &&
+    new URL(url).protocol==='https:'}catch{return false}
+}
 type Reservation={id:string;projectId:string;workspaceId:string;clipId:string;
   workerId:string;webhookUrl:string;token:string;lease:string}
 export const clipProducerEnabled=()=>process.env.CLIPS_PRODUCER_PIPELINE==='1'
@@ -45,6 +54,7 @@ async function reserveClipJob():Promise<Reservation|null>{
     const globalMax=Math.max(1,Math.min(100,Number(process.env.MOTION_STUDIO_MAX_ACTIVE_JOBS)||8))
     if(assignments.length>=globalMax)return null
     for(const job of jobs){
+      if(job.attempts>0 && job.updatedAt.getTime()>now.getTime()-CLIP_DISPATCH_BACKOFF_MS)continue
       const available=workers.filter(w=>{
         const caps=Array.isArray(w.capabilities)?w.capabilities:[]
         const machine=byMachine.get(w.machineId),plan=byPlan.get(w.planId)
@@ -61,7 +71,7 @@ async function reserveClipJob():Promise<Reservation|null>{
       if(!worker)continue
       const lease=randomBytes(32).toString('base64url')
       const token=randomBytes(32).toString('base64url')
-      const expires=new Date(Date.now()+CREATIVE_LEASE_MS)
+      const expires=new Date(Date.now()+CLIP_LEASE_MS)
       await tx.motionStudioWorkerAssignment.upsert({
         where:{jobId:job.id},
         create:{id:'mswa_'+randomUUID(),jobId:job.id,workspaceId:job.workspaceId,
@@ -87,10 +97,9 @@ async function reserveClipJob():Promise<Reservation|null>{
 export async function coordinateClipJobs(limit=3){
   if(!clipProducerEnabled()||!coordinatorEnabled())return {enabled:false,dispatched:0}
   if(process.env.GROKBOT_LIVE_MODE!=='1')return {enabled:true,dispatched:0,setupMode:true}
-  const root=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||''
-  const secret=process.env.MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY||''
-  if(secret.length<32||!root||new URL(root).protocol!=='https:')
-    throw new Error('Clip producer coordinator not configured')
+  if(!clipProducerConfigReady())return {enabled:true,dispatched:0,error:'clip_coordinator_not_configured'}
+  const root=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL!
+  const secret=process.env.MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY!
   let dispatched=0,failed=0
   for(let i=0;i<Math.max(1,Math.min(10,limit));i++){
     const job=await reserveClipJob()
@@ -138,9 +147,9 @@ export async function coordinateClipJobs(limit=3){
 
 export async function renewClipLease(id:string,workerId:string,leaseExpiresAt:Date|null){
   if(!clipProducerEnabled()||!workerId||!leaseExpiresAt)return
-  if(leaseExpiresAt.getTime()-Date.now()>CREATIVE_LEASE_MS-120_000)return
+  if(leaseExpiresAt.getTime()-Date.now()>CLIP_LEASE_MS-5*60_000)return
   const now=new Date()
-  const until=new Date(Date.now()+CREATIVE_LEASE_MS)
+  const until=new Date(Date.now()+CLIP_LEASE_MS)
   await db().$transaction([
     db().clipAgentFinishJob.updateMany({where:{id,workerId,status:{in:['dispatching','dispatched','running']},
       leaseExpiresAt:{gt:now}},data:{leaseExpiresAt:until}}),
@@ -169,13 +178,14 @@ export async function sweepClipJobs(){
       if(fresh.startedAt&&fresh.startedAt<=old || fresh.leaseExpiresAt&&fresh.leaseExpiresAt<=now){
         await tx.motionStudioWorkerAssignment.updateMany({where:{jobId:job.id,status:{in:active}},
           data:{status:'expired',leaseExpiresAt:now}})
-        const terminal=fresh.attempts>=2
+        // Never automatically restart a job after a creative webhook accepted paid work.
+        const terminal=fresh.status!=='queued'||fresh.attempts>=2
         await tx.clipAgentFinishJob.update({where:{id:job.id},data:terminal?{
-          status:'failed',phase:'failed',message:'Clip production timed out. Please try again.',
+          status:'failed',phase:'failed',message:'Clip production timed out. Please retry manually.',
           error:'timed out',failReason:'timed out',completedAt:now,
           workerId:null,leaseHash:null,leaseExpiresAt:null,
         }:{
-          status:'queued',phase:'dispatch',message:'Retrying clip production.',
+          status:'queued',phase:'dispatch',message:'Retrying producer dispatch.',
           workerId:null,leaseHash:null,leaseExpiresAt:null,startedAt:null,
         }})
         if(terminal)failed++;else retried++
