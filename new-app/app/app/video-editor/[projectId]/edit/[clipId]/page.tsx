@@ -11,15 +11,15 @@ export default async function ClipEditorPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string; clipId: string }>
-  searchParams: Promise<{ tab?: string; motionStudio?: string }>
+  searchParams: Promise<{ tab?: string; motionStudio?: string; mode?: string }>
 }) {
   const { projectId, clipId } = await params
-  const { tab, motionStudio } = await searchParams
+  const { tab, motionStudio, mode } = await searchParams
   const workspaceId = await resolveWorkspaceId()
 
   return (
     <Suspense fallback={typeof motionStudio === 'string' && motionStudio ? <MotionStudioEditorLoading projectId={motionStudio} /> : <EditorPageSkeleton />}>
-      <EditorPayloadSection workspaceId={workspaceId} projectId={projectId} clipId={clipId} initialTab={tab} motionStudioProjectId={typeof motionStudio === 'string' && motionStudio ? motionStudio : null} />
+      <EditorPayloadSection workspaceId={workspaceId} projectId={projectId} clipId={clipId} initialTab={tab} simpleMode={mode === 'simple'} motionStudioProjectId={typeof motionStudio === 'string' && motionStudio ? motionStudio : null} />
     </Suspense>
   )
 }
