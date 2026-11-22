@@ -19,10 +19,10 @@ export default async function NewClipProjectPage({
     delete rest.intent
     permanentRedirect(withQuery(routes.videoEditorNew(), rest))
   }
-  const { reframeV2Enabled } = clipperCapabilities()
+  const { reframeV2Enabled, producerPipelineEnabled } = clipperCapabilities()
   return (
     <Suspense fallback={<p className="p-6 text-sm text-muted-foreground">Loading…</p>}>
-      <NewProjectWorkspace reframeV2Enabled={reframeV2Enabled} />
+      <NewProjectWorkspace reframeV2Enabled={reframeV2Enabled} producerPipelineEnabled={producerPipelineEnabled} />
     </Suspense>
   )
 }
