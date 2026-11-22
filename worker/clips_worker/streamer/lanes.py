@@ -25,8 +25,12 @@ def lane_types(lane: str | None = None) -> tuple[str, ...]:
     lane = (lane or worker_lane()).lower()
     if lane == "stream":
         return tuple(t for t in JOB_TYPES if t in _STREAM_TYPES)
+    if lane == "render":
+        return ("RENDER_CLIP",)
     if lane == "default":
-        return tuple(t for t in JOB_TYPES if t not in _STREAM_TYPES)
+        dedicated = os.environ.get("RENDER_WORKER_EXCLUSIVE") == "1"
+        return tuple(t for t in JOB_TYPES if t not in _STREAM_TYPES
+                     and (not dedicated or t != "RENDER_CLIP"))
     return JOB_TYPES
 
 

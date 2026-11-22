@@ -17,10 +17,13 @@ def worker_concurrency() -> int:
     """E6: job slots per worker process group. Default lane 2, stream lane 1 (capture is long-lived)."""
     from clips_worker.streamer.lanes import worker_lane
 
-    # Use available CPU capacity instead of fixing every render machine at two
-    # slots. Override WORKER_CONCURRENCY in deployment to respect RAM limits.
-    default = "1" if worker_lane() == "stream" else str(min(4, max(2, (os.cpu_count() or 4)//2)))
-    raw = (os.environ.get("WORKER_CONCURRENCY") or default).strip()
+    if worker_lane() == "render":
+        # Dedicated RENDER_CLIP lane is opt-in; preserve the default two slots.
+        default = str(min(4, max(1, (os.cpu_count() or 4)//2)))
+        raw = (os.environ.get("RENDER_WORKER_CONCURRENCY") or default).strip()
+    else:
+        default = "1" if worker_lane() == "stream" else "2"
+        raw = (os.environ.get("WORKER_CONCURRENCY") or default).strip()
     try:
         n = int(raw)
     except ValueError:

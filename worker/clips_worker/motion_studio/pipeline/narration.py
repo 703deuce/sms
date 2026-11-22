@@ -39,13 +39,19 @@ def _probe_dur(path: str) -> float:
         return 0.0
 
 
-def chapters_of(story: dict) -> list[list[dict]]:
+def chapters_of(story: dict, plan: dict | None = None) -> list[list[dict]]:
     out, cur, last = [], [], None
+    # Skip source quotations only when the *scene* actually plays its uploaded
+    # audio. Otherwise the line must remain in the narration clock and timeline.
+    clip_audio_lines = {
+        str(line_id)
+        for scene in (plan or {}).get("scenes") or []
+        if scene.get("kind") in ("handoff", "hardcut")
+        and (scene.get("handoff") or {}).get("audioMode") == "clip"
+        for line_id in (scene.get("lineIds") or [])
+    }
     for l in story["lines"]:
-        # Footage quotes must play from their original source; do not send
-        # attributed speech or explicit source audio to the TTS provider.
-        kind = str(l.get("audioMode") or l.get("kind") or "").lower()
-        if kind in ("source", "quote", "card") or isinstance(l.get("quote"), dict):
+        if str(l.get("id")) in clip_audio_lines:
             if cur:
                 out.append(cur)
                 cur = []
@@ -64,7 +70,7 @@ def chapters_of(story: dict) -> list[list[dict]]:
 def narrate(project: dict, story: dict, work: str, upload_key: str, log) -> dict:
     """Returns {voice, mock, chapters:[{index, lineIds, key, durationS, words:[{w,s,e,line}]}]} (chapter-local times)."""
     from clips_worker.storage import upload_file
-    chs = chapters_of(story)
+    chs = chapters_of(story, project.get("plan"))
     if not chs:
         # Footage-only stories have no lines to synthesize. Preserve the
         # timeline's word clock without making a paid TTS request.

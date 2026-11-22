@@ -31,14 +31,18 @@ export type UploadLimits = {
 }
 
 let limitsCache: UploadLimits | null = null
+let limitsInflight: Promise<UploadLimits> | null = null
 
 export async function fetchUploadLimits(): Promise<UploadLimits> {
   if (limitsCache) return limitsCache
-  const res = await fetch('/api/clips/uploads/limits')
-  const json = (await res.json()) as { data?: UploadLimits; error?: string }
-  if (!res.ok || !json.data) throw new Error(json.error || 'Could not load upload limits')
-  limitsCache = json.data
-  return json.data
+  if(!limitsInflight)limitsInflight=(async()=>{
+    const res = await fetch('/api/clips/uploads/limits')
+    const json = (await res.json()) as { data?: UploadLimits; error?: string }
+    if (!res.ok || !json.data) throw new Error(json.error || 'Could not load upload limits')
+    limitsCache = json.data
+    return json.data
+  })().finally(()=>{limitsInflight=null})
+  return limitsInflight
 }
 
 async function probeDurationMs(file: File): Promise<number | undefined> {
@@ -198,6 +202,7 @@ export async function uploadClipFile(
   onProgress: (p: UploadProgress) => void,
   opts?: { resumeUploadId?: string; kind?: 'media'; durationMs?: number },
 ): Promise<{ uploadId: string }> {
+  const uploadStartedAt = performance.now()
   const limits = await fetchUploadLimits()
   const effectiveMax = limits.effectiveMaxBytes ?? limits.maxBytes
   let maxLabel = limits.effectiveMaxLabel ?? limits.maxLabel
@@ -226,6 +231,11 @@ export async function uploadClipFile(
   }
   onProgress(base)
 
+  // Metadata decoding overlaps the storage-session request instead of
+  // adding several seconds of serial overhead to each short media upload.
+  const durationPromise = opts?.durationMs != null ? Promise.resolve(opts.durationMs) :
+    probeDurationMs(file)
+  const phaseStartedAt = performance.now()
   try {
     let storage: Awaited<ReturnType<typeof startUpload>>['storage']
     let resumeOffset = 0
@@ -272,7 +282,8 @@ export async function uploadClipFile(
       storage = started.storage
     }
 
-    const probedDuration = await probeDurationMs(file)
+    const storageSessionMs = Math.round(performance.now()-phaseStartedAt)
+    const probedDuration = await durationPromise
     const durationMs = Number.isFinite(probedDuration) && probedDuration! > 0 ? probedDuration :
       Number.isFinite(opts?.durationMs) && opts!.durationMs! > 0 ? Math.round(opts!.durationMs!) : undefined
     if (!uploadId) throw new Error('Upload session missing')
@@ -286,6 +297,7 @@ export async function uploadClipFile(
       )
     }
 
+    const transferStartedAt = performance.now()
     let multipartParts: { partNumber: number; etag: string }[] | undefined
 
     if (storage.mode === 's3_multipart' && storage.s3Multipart) {
@@ -318,7 +330,13 @@ export async function uploadClipFile(
       state: 'finalizing',
       durationMs,
     })
+    const bytesTransferredMs = Math.round(performance.now()-transferStartedAt)
+    const finalizeStartedAt = performance.now()
     await completeUpload(uploadId, { durationMs, parts: multipartParts })
+    console.info('[clip-upload:timing]', {sizeBytes:file.size,
+      sessionMs:storageSessionMs,transferMs:bytesTransferredMs,
+      finalizeMs:Math.round(performance.now()-finalizeStartedAt),
+      totalMs:Math.round(performance.now()-uploadStartedAt)})
     onProgress({ ...base, uploadId, loaded: file.size, percent: 100, state: 'complete', durationMs })
     return { uploadId }
   } catch (err) {

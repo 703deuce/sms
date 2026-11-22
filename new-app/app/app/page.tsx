@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { Clapperboard, Scissors, SquarePlay, Captions, WandSparkles, Megaphone, Film } from 'lucide-react'
-import { isT2vFeatureEnabled } from '../../lib/server/clips/feature-gates'
+import { isByoFeatureEnabled, isT2vFeatureEnabled } from '../../lib/server/clips/feature-gates'
 import { Page, PageHeader } from '../../components/app/page-primitives'
 import { ProjectStatusBadge } from '../../components/app/status'
 import { getClipsDriveProjects, getClipsWorkspaceId } from '../../lib/server/clips/drive-data'
@@ -23,10 +23,13 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
-  console.info('[app:home]', { mode: 'unified-create', choices: 4 })
+  if (isByoFeatureEnabled()) console.info('[app:home]', { mode: 'unified-create', choices: 4 })
+  else console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', ...(isT2vFeatureEnabled() ? ['text-to-video'] : []), 'captions', 'ai-studio', 'ad-studio', 'motion-studio'] })
   return (
     <Page>
       <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
+      {isByoFeatureEnabled() ? (
+        <>
       <section aria-label="Create video" className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold tracking-tight">Create a video</h2>
@@ -42,7 +45,7 @@ export default async function AppDashboardPage() {
           <LauncherCard href={routes.clipsNew()} icon={Scissors}
             title="Create Clips" description="Turn one recording into your best short highlights."
             testId="create-clips"/>
-          <LauncherCard href="/app/motion-studio/new?type=audiogram" icon={SquarePlay}
+          <LauncherCard href="/app/audio-to-video" icon={SquarePlay}
             title="Audio to Video" description="Turn spoken audio or a podcast into a visual story."
             testId="create-audio-to-video"/>
         </div>
@@ -73,6 +76,71 @@ export default async function AppDashboardPage() {
             testId="app-launcher-motion-studio"/>
         </div>
       </details>
+        </>
+      ) : (
+        <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <LauncherCard
+          href={routes.clips()}
+          icon={Scissors}
+          title="Clipper"
+          description="Projects, uploads, and stream clips."
+          testId="app-launcher-clipper"
+        />
+        <LauncherCard
+          href={routes.videoEditor()}
+          icon={Clapperboard}
+          title="Video Editor"
+          description="Edit a full video or open an existing project."
+          testId="app-launcher-video-editor"
+        />
+        <LauncherCard
+          href={routes.youtubeVideo()}
+          icon={SquarePlay}
+          title="YouTube Video"
+          description="Turn your footage into a complete YouTube video."
+          testId="app-launcher-youtube-video"
+        />
+        {isT2vFeatureEnabled() ? (
+          <LauncherCard
+            href="/app/ai-video/new"
+            icon={Film}
+            title="Text to Video"
+            description="Type an idea. Get a narrated video with real stock footage."
+            testId="app-launcher-text-to-video"
+          />
+        ) : null}
+        <LauncherCard
+          href="/app/captions"
+          icon={Captions}
+          title="AI Captions"
+          description="Generate and style captions for your videos."
+          testId="app-launcher-captions"
+        />
+        <LauncherCard
+          href="/app/studio"
+          icon={WandSparkles}
+          title="AI Studio"
+          description="Create and plan AI-powered video ads."
+          testId="app-launcher-ad-studio"
+        />
+        <LauncherCard
+          href="/app/ad-studio"
+          icon={Megaphone}
+          title="Ad Studio"
+          description="Create product ads from a brief or product image."
+          testId="app-launcher-product-ad-studio"
+        />
+        <LauncherCard
+          href="/app/motion-studio"
+          icon={Film}
+          title="Motion Studio"
+          description="Turn an idea, script, or footage into a cinematic documentary."
+          testId="app-launcher-motion-studio"
+        />
+      </div>
+        </>
+      )}
       <section className="mt-8" aria-labelledby="recent-projects-heading">
         <h2 id="recent-projects-heading" className="text-sm font-medium text-foreground">
           Recent projects

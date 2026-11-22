@@ -7,7 +7,7 @@ import { ADJUST_KEYS, ADJUST_LABELS, COLOR_PRESET_IDS, COLOR_PRESETS, type Color
 import { FX_LIMITS, isOverlayFxKey, type TrackComp, type TrackFx, type TrackVfxType } from '@/lib/clips/editor/track-fx'
 
 type FxBody = Omit<TrackFx, 'track'>
-const LUFS_CHOICES = [-14, -16, -18, -20, -23, -24] as const
+const LUFS_CHOICES = [-14, -15, -16, -18, -20, -23, -24] as const
 
 function Toggle({ on, label, onChange, testId }: { on: boolean; label: string; onChange: (v: boolean) => void; testId: string }) {
   return (

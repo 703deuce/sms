@@ -106,7 +106,7 @@ export type ScriptDocumentV1 = {
   /** M11 — Studio Sound / loudness (render when worker supports isolation mix). */
   audioFx?: {
     studioSound?: { enabled: boolean; mix: number; assetId?: string | null }
-    loudnessLufs?: -14 | -16 | -18 | -23 | -24 | null
+    loudnessLufs?: number | null
     roomTone?: boolean
   }
   /** M12 — transcript display overrides from edit-for-clarity (audio unchanged). */

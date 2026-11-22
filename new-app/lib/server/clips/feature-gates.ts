@@ -59,3 +59,6 @@ export function isScreenwritingProductEnabled(): boolean {
     .toLowerCase()
   return v === '1' || v === 'true' || v === 'on' || v === 'yes'
 }
+
+/** Additive V1 BYO product. Off by default until native multi-source export passes QA. */
+export function isByoFeatureEnabled():boolean{return process.env.FEATURE_BYO_V1==='1'}

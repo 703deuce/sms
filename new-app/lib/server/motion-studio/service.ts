@@ -210,7 +210,7 @@ async function attachUploads(workspaceId: string, projectId: string, clipProject
     const kind = assetKind(r.mime, r.filename, u.kind)
     const label = u.label || r.filename
     const role = u.role ?? (kind === 'video' ? 'footage' : kind === 'image' ? 'photo' : kind === 'audio' ? (isNarrationLabel(label) ? 'narration' : 'music') : 'script')
-    if((role==='talking_head'||role==='footage')&&kind!=='video'
+    if((role==='talking_head'||role==='footage'||role==='angle'||role==='broll')&&kind!=='video'
       || (role==='narration'||role==='music')&&kind!=='audio'
       || (role==='photo'||role==='logo')&&kind!=='image'
       || role==='reference'&&kind!=='image'&&kind!=='video'
@@ -294,7 +294,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
       throw new MotionStudioError('INVALID','Input must refer to a ready upload.',400)
     input.mime=row.mime
     input.filename=row.filename
-    if((input.role==='talking_head'||input.role==='footage')&&!row.mime.startsWith('video/')
+    if((input.role==='talking_head'||input.role==='footage'||input.role==='angle'||input.role==='broll')&&!row.mime.startsWith('video/')
        || (input.role==='narration'||input.role==='music')&&!row.mime.startsWith('audio/')
        || (input.role==='photo'||input.role==='logo')&&!row.mime.startsWith('image/')
        || input.role==='reference'&&!row.mime.startsWith('video/')&&!row.mime.startsWith('image/')
@@ -350,7 +350,8 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const plannedMs = settings.durationSeconds ? settings.durationSeconds * 1000 : settings.lengthMin * 60_000
   productionBrief.durationSeconds=Math.round(plannedMs/1000)
   settings.productionBrief=productionBrief
-  settings.productionMode=productionBrief.reviewPlan===false?'auto':'checkpoint'
+  if(workflow==='footage'&&typeof productionBrief.reviewPlan==='boolean')
+    settings.productionMode=productionBrief.reviewPlan?'checkpoint':'auto'
   settings.music=productionBrief.music.mode
   settings.voiceover=productionBrief.narration.mode==='none'?'none':
     productionBrief.narration.mode==='uploaded_narration'?'upload':'ai'

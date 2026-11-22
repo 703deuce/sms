@@ -1,3 +1,4 @@
+import {validProducerDiscoveryClipCount} from '@/lib/clips/producer-clip-count'
 import { assertDevApiAccess } from '@/lib/server/dev-api-guard'
 import { resolveWorkspaceId } from '@/lib/server/workspace'
 import { dispatchClipAgentDiscover, listClipAgentFinishes, clipAgentError } from '@/lib/server/clips/agent-finish'
@@ -23,7 +24,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
     const body=await request.json().catch(()=>( {} )) as {maxClips?:unknown}
     const max=clipProducerEnabled()?30:10
     const maxClips=body.maxClips===undefined?(clipProducerEnabled()?5:3):Number(body.maxClips)
-    if(!Number.isInteger(maxClips)||maxClips<1||maxClips>max)
+    if(!validProducerDiscoveryClipCount(maxClips)||maxClips>max)
       return Response.json({error:'Choose 1–'+max+' finished highlights.'},{status:400})
     const job=await dispatchClipAgentDiscover(await resolveWorkspaceId(),id,request,
       request.headers.get('Idempotency-Key')||'agent-discovery-v1',maxClips)

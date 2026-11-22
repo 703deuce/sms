@@ -253,7 +253,23 @@ export async function enqueueRenderClip(
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   const baseName = exportFilename(opts.title).replace(/\.[^.]+$/, '')
   const filename = `${baseName}.${fmt}`
-  const render = await prisma.clipRender.create({
+  const jobId = createId('job')
+  const render = await prisma.$transaction(async tx=>{
+    // Atomic claim + render row + job. No abandoned QUEUED row if the
+    // version changed or a concurrent save revoked this producer render.
+    if(opts.producerJobId){
+      const v=opts.producerEditsVersion??1
+      const meta=clipRow.aiMeta&&typeof clipRow.aiMeta==='object'&&!Array.isArray(clipRow.aiMeta)
+        ?clipRow.aiMeta as Record<string,unknown>:{}
+      const claimed=await tx.clip.updateMany({where:{id:clipId,editsSaveVersion:v},data:{
+        aiMeta:toPrismaJson({...meta,agentServerRender:true,
+          agentRenderId:renderId,agentRenderEditsVersion:v,
+          agentRenderJobId:opts.producerJobId,agentRenderStatus:'queued',
+          agentRenderEnqueueError:null,fullResKey:null,agentFullResEditsVersion:null}),
+      }})
+      if(claimed.count!==1)throw new Error('Producer edits changed before render enqueue')
+    }
+    const created=await tx.clipRender.create({
     data: {
       id: renderId,
       clipId,
@@ -271,21 +287,7 @@ export async function enqueueRenderClip(
     },
   })
 
-  // Persist current render ownership BEFORE publishing the queue item. Otherwise
-  // a fast render worker may finish before agentRenderId reaches the clip.
-  if(opts.producerJobId){
-    const v=opts.producerEditsVersion??1
-    const meta=clipRow.aiMeta&&typeof clipRow.aiMeta==='object'&&!Array.isArray(clipRow.aiMeta)
-      ?clipRow.aiMeta as Record<string,unknown>:{}
-    const claimed=await prisma.clip.updateMany({where:{id:clipId,editsSaveVersion:v},data:{
-      aiMeta:toPrismaJson({...meta,agentServerRender:true,
-        agentRenderId:renderId,agentRenderEditsVersion:v,agentRenderJobId:opts.producerJobId,
-        agentRenderStatus:'queued',fullResKey:null,agentFullResEditsVersion:null}),
-    }})
-    if(claimed.count!==1)throw new Error('Producer edits changed before render enqueue')
-  }
-  const jobId = createId('job')
-  await prisma.clipJob.create({
+  await tx.clipJob.create({
     data: {
       id: jobId,
       projectId: clipRow.projectId,
@@ -304,6 +306,8 @@ export async function enqueueRenderClip(
     },
   })
 
+  return created
+  })
   return { render, downloadUrl: null as string | null, filename, reused: false, inFlight: false, jobId }
 }
 

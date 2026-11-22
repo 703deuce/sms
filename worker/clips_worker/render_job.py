@@ -561,10 +561,12 @@ def _run_render_clip_job_body(
         resolution = "720p"
     if resolution in (1080, "1080"):
         resolution = "1080p"
-    settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
+    settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution,
+                "deferProgramLoudness": True}
     if payload.get("producerJobId"):
         settings["producerServerRender"] = True
-        edits["loudnessLufs"] = -14
+        requested = edits.get("loudnessLufs")
+        edits["loudnessLufs"] = float(requested) if isinstance(requested, (float, int)) and -36 <= requested <= -8 else -15.0
         edits["speechLevelingEnabled"] = True
     if is_landscape_aspect(aspect):
         from clips_worker.layout_router import landscape_layout
@@ -717,6 +719,8 @@ def _run_render_clip_job_body(
         from clips_worker.preview_reuse import export_edits_allow_preview_reuse, materialize_export_from_preview
 
         render_meta: dict = {}
+        if edits.get("speechLevelingEnabled") is True or payload.get("producerJobId"):
+            render_meta["defer_program_loudness"] = True
         if deliver_spec and deliver_spec.get("stems"):
             render_meta["export_stems"] = True
         preview_crop_track: Path | None = None
@@ -984,6 +988,19 @@ def _run_render_clip_job_body(
                     f"[clipper:duration_guard] {json.dumps({'renderId': render_id, 'targetMs': intended_ms, 'streams': observed_lengths})}",
                     flush=True,
                 )
+        # Final audio is measured *after* warp, inserts, brand bookends and
+        # duration changes; the working mix must not be normalized twice.
+        if edits.get("speechLevelingEnabled") is True or payload.get("producerJobId"):
+            from clips_worker.final_loudness import finalize_audio
+            requested = edits.get("loudnessLufs")
+            target = float(requested) if isinstance(requested, (float, int)) else -15.0
+            out_mp4 = finalize_audio(out_mp4, td_path, target, render_meta)
+            _export_stage_log(render_id, "audio_verified", t_job, {
+                "integratedLufs": render_meta["measured_lufs"],
+                "truePeakDbtp": render_meta["measured_true_peak_dbtp"],
+                "targetLufs": target,
+                "attempts": render_meta["loudness_verify_attempts"],
+            })
         pre_deliver = out_mp4
         from clips_worker.export_deliver import normalize_deliver, deliver as run_deliver, srt_slice
 
@@ -1000,6 +1017,15 @@ def _run_render_clip_job_body(
             if upload_srt and rin is not None and rout is not None and not deliver_spec.get("softSubs"):
                 upload_srt = srt_slice(upload_srt, rin, rout)
             final_out, out_ext, content_type = run_deliver(pre_deliver, td_path, deliver_spec, srt_body if deliver_spec.get("softSubs") else None)
+        # A delivery conversion can change AAC intersample peaks again.
+        if ("measured_lufs" in render_meta) and out_ext in ("mp4", "mov"):
+            from clips_worker.final_loudness import measure_ebu_r128
+            delivered_i, delivered_tp = measure_ebu_r128(final_out)
+            target_i = float(render_meta["loudness_target_lufs"])
+            render_meta["measured_lufs"] = delivered_i
+            render_meta["measured_true_peak_dbtp"] = delivered_tp
+            if abs(delivered_i-target_i)>0.5 or delivered_tp>-1.0:
+                raise RuntimeError("Delivery conversion changed audio beyond loudness/true-peak limits")
         stems_key = None
         if deliver_spec and deliver_spec.get("stems"):
             stems_ctx = render_meta.get("stems_ctx")
@@ -1053,6 +1079,19 @@ def _run_render_clip_job_body(
                 conn, render_id, job, final_out, workspace_id, project_id, clip_id,
                 int(payload.get("producerEditsVersion") or 1), out_key, srt_key,
             )
+        if "measured_lufs" in render_meta:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """UPDATE clip_jobs SET payload=COALESCE(payload,'{}'::jsonb)
+                       || %s::jsonb WHERE id=%s""",
+                    (json.dumps({"audioMeasurements": {
+                        "integratedLufs": render_meta["measured_lufs"],
+                        "truePeakDbtp": render_meta["measured_true_peak_dbtp"],
+                        "targetLufs": render_meta["loudness_target_lufs"],
+                        "verified": True,
+                    }}), job["id"]),
+                )
+            conn.commit()
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key, stems_key)
         _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):

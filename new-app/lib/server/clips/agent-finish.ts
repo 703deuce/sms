@@ -9,6 +9,7 @@ import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { normalizeEdits, editsVersionHash, type ClipEditsV2 } from '@/lib/clips/edits'
 import { enqueueProducerServerRender, producerClipRenderStatuses } from '@/lib/server/clips/producer-server-render'
 import { CAPTION_PRESETS } from '@/lib/clips/settings'
+import { requestedProducerClipCount } from '@/lib/clips/producer-clip-count'
 import { TEXT_FONTS } from '@/lib/clips/editor/text-items'
 import { normalizeProducerCostReport } from '@/lib/server/clips/producer-cost-report'
 import { clipProducerEnabled, clipProducerConfigReady, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
@@ -244,7 +245,8 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
       tokenHash:digest(id+':'+token).toString('hex'),
       tokenExpiresAt:new Date(Date.now()+36*3600_000),
       status:clipProducerEnabled()?'queued':'dispatching',phase:'dispatch',
-      kind:'clips',message:'Finding your best moments.',
+      kind:'clips',input:toPrismaJson({maximumClips:Math.max(1,Math.min(30,maximumClips))}),
+       message:'Finding your best moments.',
     }})
   }catch(err){
     if ((err as {code?:string})?.code!=='P2002') throw err
@@ -266,7 +268,7 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
     source:{url:sourceUrl,filename:project.upload.filename,mime:project.upload.mime,
       startMs:0,endMs:project.upload.durationMs??project.rangeEndMs,
       durationMs:project.upload.durationMs??project.rangeEndMs},
-    maxClips:Math.max(1,Math.min(10,maximumClips)),
+    maxClips:Math.max(1,Math.min(30,maximumClips)),
     targetDurationsSeconds:[30,60],aspectRatio:'9:16',fps:30,
     mediaPolicy:'user_footage_primary',webResearch:false,quality:'premium',
     direction:'You are the ONE Transovo creative director. Analyze the full source recording, including picture, dialogue, action, speakers and changes in scene. Independently identify and score its strongest self-contained moments, rank by hook, payoff, comprehensibility, action and entertainment value, then produce up to maxClips polished social clips. Preserve the subjects original speech and video. Cut dead space, reorder only if coherent, dynamically reframe and track the relevant people, choose split-screen layouts when needed, and create story-specific motion graphics, captions and transitions. Choose any available engines, including layered ones, by creative merit and vary visual DNA across clips without sacrificing cohesion. Publish one editable transovo.live-project/1 and original scene bundles for the selected highlights through /portable. Complete with delivery:live, durationMs, portableVersionId, and scored clips[] entries containing sceneId, startMs, endMs, title, score and why. Do not render MP4 masters before export. Do not make a documentary from scratch.',
@@ -461,7 +463,7 @@ export async function getClipAgentInputs(id: string, request: Request) {
         currentEdits:selected?.edits||null,previousClipJsonUrl,previousAnalysisUrl,
         previousAnalysisSummary:{hook:word(meta.hook,500),speakers:meta.speakers||null}},
     }),
-    clipCount: Math.max(1, Math.min(30, Number(settings.autoGrokMaxClips) || 5)),
+    clipCount: requestedProducerClipCount(job.input,settings),
     targetSeconds: lengthRequested,
     aspectRatio: settings.aspectRatio || '9:16',
     resolution: settings.aspectRatio==='16:9'?'1920x1080':
@@ -567,7 +569,7 @@ async function nativeProducerEdits(job:{workspaceId:string;projectId:string},raw
     mapped.push({...layer,source:'upload',uploadId})
   }
   const normalized=normalizeEdits({...raw,broll:mapped,
-    ...(clipProducerEnabled()?{loudnessLufs:-14,speechLevelingEnabled:true}:{})},
+    ...(clipProducerEnabled()?{loudnessLufs:Number.isFinite(Number(raw.loudnessLufs))&&Number(raw.loudnessLufs)>=-36&&Number(raw.loudnessLufs)<=-8?Number(raw.loudnessLufs):-15,speechLevelingEnabled:true}:{})},
     {clipStartMs:startMs,clipEndMs:endMs})
   ensureProducerEditsRoundTrip(raw,normalized)
   return normalized
@@ -779,8 +781,10 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
     }
     const uploadId=randomUUID()
     const objectKey='ws/'+j.workspaceId+'/clip-agent/'+id+'/'+uploadId+'/'+filename
+    const prepareStart=Date.now()
     const upload=await getClipStorage().createUpload({workspaceId:j.workspaceId,uploadId,
       filename,mime,bytes,objectKey})
+    const storagePrepareMs=Date.now()-prepareStart
     const item:Artifact={id:uploadId,key:objectKey,filename,kind,mime,bytes,state:'pending',
       ...(checksum?{sha256:checksum}:{}),
       ...(upload.s3Multipart?{s3UploadId:upload.s3Multipart.uploadId}:{})}
@@ -790,6 +794,8 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       if(current.length>=MAX_ARTIFACTS) throw problem('Too many job artifacts.',400)
       return [...current,item]
     })
+    console.info('[clip-agent:artifact-timing]',{phase:'prepare',kind,bytes,
+      storageMs:storagePrepareMs,totalMs:Date.now()-prepareStart})
     return {uploadId,objectKey,mode:upload.mode,signedPut:upload.signedPut,
       tus:upload.tus,s3Multipart:upload.s3Multipart}
   }
@@ -804,8 +810,11 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       throw problem('Multipart parts required.',400)
     }
     const storage=getClipStorage()
+    const commitStart=Date.now()
     await storage.completeUpload({objectKey:item.key,s3UploadId:item.s3UploadId,parts})
+    const storageCompleteMs=Date.now()-commitStart
     const size=await storage.getObjectSizeBytes(item.key)
+    const sizeVerifyMs=Date.now()-commitStart-storageCompleteMs
     if (!size||size>MAX_FILE_BYTES||size!==item.bytes)
       throw problem('Uploaded artifact size mismatch.',400)
     if(item.sha256){
@@ -819,6 +828,8 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       latest.state='ready'
       return current
     })
+    console.info('[clip-agent:artifact-timing]',{phase:'commit',kind:item.kind,
+      bytes:size,storageCompleteMs,sizeVerifyMs,totalMs:Date.now()-commitStart})
     return {uploadId:item.id,status:'ready',bytes:size}
   }
   throw problem('Expected prepare or commit.',400)
@@ -958,10 +969,18 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     if(state.summary.failed)throw problem('The revised clip render failed. Submit corrected edits.',409)
     if(state.summary.done!==1)throw problem('The revised clip is still rendering.',409)
     const meta=object(clip.aiMeta)
+    const reportName=word(body.jobJson,150)
+    const report=items(job.artifacts).find(a=>a.filename===reportName&&
+      a.mime==='application/json'&&a.state==='ready'&&a.bytes<=MAX_JSON_BYTES)
+    if(!report)throw problem('Commit job.json before completing the revised clip.',409)
+    let costReport:Record<string,unknown>
+    try{costReport=normalizeProducerCostReport(
+      JSON.parse((await getClipStorage().getObjectBytes(report.key)).toString('utf8')),id)}
+    catch{throw problem('Invalid job.json report.',400)}
     const result=await prisma().clipAgentFinishJob.update({where:{id},data:{
       status:'complete',phase:'complete',progress:100,message:messages.complete,
       resultKey:typeof meta.fullResKey==='string'?meta.fullResKey:null,
-      completedAt:new Date(),
+      costReport:toPrismaJson(costReport),completedAt:new Date(),
     }})
     await closeClipLease(id,true)
     return publicJob(result)
@@ -1136,13 +1155,20 @@ export async function reviseClipAgentRender(id:string,request:Request,raw:unknow
   const edits=await nativeProducerEdits(job,rawEdits,items(job.artifacts),start,end)
   const current=normalizeEdits(clip.edits,{clipStartMs:clip.startMs,clipEndMs:clip.endMs})
   if(editsVersionHash(current)===editsVersionHash(edits)){
-    // A standalone revision can complete against identical approved output
-    // without paying for a duplicate encode.
+    // If the original never went through the server renderer, one explicit
+    // finish_clip revision may render the stored edits for the first time.
+    const meta=object(clip.aiMeta)
+    if(isRevisionJob&&!meta.agentServerRender){
+      const queued=await enqueueProducerServerRender(clip,id)
+      return {...queued,unchanged:false,firstServerRender:true}
+    }
+    if(isRevisionJob&&meta.agentRenderStatus==='failed')
+      throw problem('Previous server render failed. Submit corrected edits for an explicit retry.',409)
     if(isRevisionJob)await prisma().clip.update({where:{id:clipId},data:{
-      aiMeta:toPrismaJson({...object(clip.aiMeta),agentRenderJobId:id}),
+      aiMeta:toPrismaJson({...meta,agentRenderJobId:id}),
     }})
     return {clipId,unchanged:true,editsVersion:clip.editsSaveVersion,
-      renderId:word(object(clip.aiMeta).agentRenderId,150)||null}
+      renderId:word(meta.agentRenderId,150)||null}
   }
   const meta=object(clip.aiMeta)
   const next=await prisma().$transaction(async tx=>{

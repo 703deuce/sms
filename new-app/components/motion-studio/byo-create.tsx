@@ -138,17 +138,12 @@ export function ByoCreate(){
           instructions:[instructions,keepNotes,captions?'Captions on':'Captions off'].filter(Boolean).join('\n')},
         productionBrief,idempotencyKey:idem.current,
       })
-      if(client.mode==='live'){
-        const response=await fetch('/api/motion-studio/agent/jobs',{
-          method:'POST',headers:{'Content-Type':'application/json',
-            'Idempotency-Key':'byo-start-'+project.id},
-          body:JSON.stringify({projectId:project.id}),
-        })
-        if(!response.ok){
-          const issue=await response.json().catch(()=>({})) as {error?:string}
-          throw new Error(issue.error||'Could not start editing your footage.')
-        }
-      }
+      // The producer-bot endpoint does not stop at the review checkpoint.
+      // Use the existing durable DOC_PLAN -> review -> DOC_PRODUCE state
+      // machine for BYO until native timeline delivery is fully integrated.
+      await client.createPlan(project.id,'byo-plan-'+project.id)
+      await client.startProduction(project.id,reviewPlan?'checkpoint':'auto',
+        'byo-run-'+project.id)
       router.push('/app/edit-my-footage/'+encodeURIComponent(project.id))
     }catch(err){
       setError(err instanceof Error?err.message:'Could not start your video. Try again.')

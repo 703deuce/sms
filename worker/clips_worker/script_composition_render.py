@@ -290,7 +290,7 @@ def run_script_composition_render_job(conn, job: dict, post_progress) -> None:
                 "mix": float(studio.get("mix", 0.8)),
             }
         if audio_fx.get("loudnessLufs") is not None:
-            edits["loudnessLufs"] = int(audio_fx["loudnessLufs"])
+            edits["loudnessLufs"] = float(audio_fx["loudnessLufs"])
         if audio_fx.get("roomTone"):
             edits["roomTone"] = True
         if not edits.get("audio") and document.get("musicTracks"):

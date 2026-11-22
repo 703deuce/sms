@@ -105,7 +105,9 @@ def loudnorm_template_music_bed(
         check=True,
     )
     blob = measure.stderr or ""
-    match = re.search(r"\{[\s\S]*\}\s*$", blob.strip())
+    # FFmpeg can emit mux statistics after loudnorm's JSON object.
+    # Search the measurement object itself instead of anchoring to stderr end.
+    match = re.search(r'\{[^{}]*"input_i"[^{}]*\}', blob, re.S)
     if not match:
         return src
     try:

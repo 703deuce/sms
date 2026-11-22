@@ -3,6 +3,7 @@ import {getPrisma} from '@/lib/server/db'
 import {enqueueRenderClip} from '@/lib/server/clips/renders'
 import {createReadableSignedUrl} from '@/lib/storage'
 import type {ClipEditsV2} from '@/lib/clips/edits'
+import { producerRenderState } from '@/lib/clips/producer-render-state'
 import {toPrismaJson} from '@/lib/server/clips/prisma-json'
 
 const object=(v:unknown):Record<string,unknown>=>v&&typeof v==='object'&&!Array.isArray(v)?v as Record<string,unknown>:{}
@@ -17,12 +18,30 @@ const db=()=>getPrisma()
 /** Each clip creates its own RENDER_CLIP queue row. Calls never serialize renders. */
 export async function enqueueProducerServerRender(clip:ProducerClip,producerJobId:string){
   const edits=clip.edits as ClipEditsV2
-  const result=await enqueueRenderClip(clip.workspaceId,clip.id,{
-    resolution:'1080p',aspect:edits.aspectRatio??'9:16',watermark:false,
-    edits,clipStartMs:clip.startMs,clipEndMs:clip.endMs,
-    previewKey:null,title:clip.title,producerJobId,
-    producerEditsVersion:clip.editsSaveVersion,
-  })
+  let result:Awaited<ReturnType<typeof enqueueRenderClip>>
+  try{
+    result=await enqueueRenderClip(clip.workspaceId,clip.id,{
+      resolution:'1080p',aspect:edits.aspectRatio??'9:16',watermark:false,
+      edits,clipStartMs:clip.startMs,clipEndMs:clip.endMs,
+      previewKey:null,title:clip.title,producerJobId,
+      producerEditsVersion:clip.editsSaveVersion,
+    })
+  }catch(error){
+    // The atomic queue transaction rolled back; keep a user-visible terminal
+    // enqueue error, not a false "render failed" from a missing row.
+    const fresh=await db().clip.findUnique({where:{id:clip.id},
+      select:{editsSaveVersion:true,aiMeta:true}})
+    if(fresh?.editsSaveVersion===clip.editsSaveVersion){
+      const meta=object(fresh.aiMeta)
+      await db().clip.updateMany({where:{id:clip.id,
+        editsSaveVersion:clip.editsSaveVersion},data:{
+        aiMeta:toPrismaJson({...meta,agentServerRender:true,
+          agentRenderJobId:producerJobId,agentRenderId:null,
+          agentRenderStatus:'failed',agentRenderEnqueueError:'queue_unavailable'}),
+      }})
+    }
+    throw error
+  }
   if(result.render.status==='READY'&&result.render.outputKey&&clip.previewKey){
     // Reused, already-finalized render: no new queue job or media generation.
     const current=await db().clip.findUnique({where:{id:clip.id},
@@ -68,16 +87,16 @@ export async function producerClipRenderStatuses(workspaceId:string,projectId:st
     const stale=Number(meta.agentRenderEditsVersion||0)!==c.editsSaveVersion
     const ready=legacyReady || (render?.status==='READY'&&!stale&&
       Number(meta.agentFullResEditsVersion||0)===c.editsSaveVersion&&Boolean(c.previewKey))
-    const missingRender=meta.agentServerRender&&!render&&
-      (!meta.agentRenderId||meta.agentRenderId!=='')
-    const status=ready?'done':missingRender||render?.status==='FAILED'?'failed':
-      render?.status==='RENDERING'?'rendering':'queued'
+    const enqueueError=typeof meta.agentRenderEnqueueError==='string' && meta.agentRenderEnqueueError.length>0
+    const status=producerRenderState({ready,
+      renderStatus:render?.status,enqueueError:enqueueError?
+        String(meta.agentRenderEnqueueError):null})
     const sign=async(key:string|null|undefined)=>key?
       createReadableSignedUrl(key,900).catch(()=>null):null
     return {clipId:c.id,renderId:render?.id||null,
       editsVersion:c.editsSaveVersion,
       renderedEditsVersion:ready?c.editsSaveVersion:null,
-      status,reason:status==='failed'?errorText(render?.error)||'Clip render failed. Check the editable layers.':null,
+      status,reason:status==='failed'?errorText(render?.error)||errorText(meta.agentRenderEnqueueError)||'Clip render failed. Check the editable layers.':null,
       ...(ready?{previewUrl:await sign(c.previewKey),posterUrl:await sign(c.posterKey),
         videoUrl:await sign(render?.outputKey??(typeof meta.fullResKey==='string'?meta.fullResKey:null)),
         srtUrl:await sign(render?.srtKey??(typeof meta.agentSrtKey==='string'?meta.agentSrtKey:null))}:{}),

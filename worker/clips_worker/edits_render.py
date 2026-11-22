@@ -2524,14 +2524,21 @@ def render_edited_clip(
         # after the speech/music mix; a failed normalization must not ship an
         # incorrectly leveled file without reporting an error.
         from clips_worker.audio_render import apply_program_loudnorm
-        target = float(loud_lufs) if loud_lufs is not None else -14.0
-        normalized_audio = work_dir / "program_loudnorm.mp4"
-        apply_program_loudnorm(caption_src, normalized_audio,
-                               target_lufs=target, true_peak_db=-1.2)
-        caption_src = normalized_audio
-        if render_meta is not None:
-            render_meta["program_loudnorm_lufs"] = target
-        print(f"[clipper:loudnorm] two_pass target={target:.1f}TP=-1.2", flush=True)
+        target = float(loud_lufs) if loud_lufs is not None else -15.0
+        if settings.get("deferProgramLoudness"):
+            # RENDER_CLIP has late speed, inserts and brand edits. Normalize once
+            # on the final program instead of doing a redundant pre-speed pass.
+            if render_meta is not None:
+                render_meta["defer_program_loudness"] = True
+        else:
+            normalized_audio = work_dir / "program_loudnorm.mp4"
+            apply_program_loudnorm(caption_src, normalized_audio,
+                                   target_lufs=target, true_peak_db=-1.6)
+            caption_src = normalized_audio
+            if render_meta is not None:
+                render_meta["program_loudnorm_lufs"] = target
+                render_meta["loudnorm_applied"] = True
+            print(f"[clipper:loudnorm] two_pass target={target:.1f}TP=-1.6", flush=True)
 
     from clips_worker.render_clip import aspect_size
 

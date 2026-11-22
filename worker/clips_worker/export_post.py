@@ -147,7 +147,7 @@ def apply_export_post(
     """Speed re-encode + optional composite loudnorm; updates render_meta duration fields."""
     speed = _edit_speed(edits)
     loud_lufs = edits.get("loudnessLufs")
-    need_loud = edits.get("speechLevelingEnabled") is True and loud_lufs is not None and not render_meta.get("loudnorm_applied")
+    need_loud = edits.get("speechLevelingEnabled") is True and loud_lufs is not None and not (render_meta.get("loudnorm_applied") or render_meta.get("program_loudnorm_lufs") is not None or render_meta.get("defer_program_loudness"))
     pieces = speed_warp_for(edits, render_meta)
     if speed == 1.0 and not need_loud and not pieces:
         return out_mp4, srt_body
@@ -203,7 +203,7 @@ def apply_export_post(
                 "-i",
                 str(out_mp4),
                 "-filter_complex",
-                fc,
+                fc_,
                 "-map",
                 "[v]",
                 *amap,
@@ -267,5 +267,7 @@ def apply_export_post(
             render_meta["effective_edits_ms"] = round(effective / speed)
         return out_path, scaled_srt
     except Exception as e:
-        print(f"[clipper:speed] fallback err={type(e).__name__}", flush=True)
+        print(f"[clipper:speed] failed err={type(e).__name__}", flush=True)
+        if edits.get("speechLevelingEnabled") is True:
+            raise RuntimeError("Export speed/audio processing failed; no unverified audio delivered") from e
         return out_mp4, srt_body

@@ -10,17 +10,13 @@ export function exportLoudnessLufs(
   edits: Pick<ClipEditsV2, 'speechLevelingEnabled' | 'loudnessLufs'>,
 ): ClipEditsV2['loudnessLufs'] | undefined {
   if (!isSpeechLevelingEnabled(edits)) return undefined
-  return edits.loudnessLufs === -16 ||
-    edits.loudnessLufs === -18 ||
-    edits.loudnessLufs === -23 ||
-    edits.loudnessLufs === -24
-    ? edits.loudnessLufs
-    : -14
+  return typeof edits.loudnessLufs === 'number' && Number.isFinite(edits.loudnessLufs)
+    ? edits.loudnessLufs : -15
 }
 
 export function speechLevelingPatch(enabled: boolean): Pick<ClipEditsV2, 'speechLevelingEnabled' | 'loudnessLufs'> {
   if (enabled) {
-    return { speechLevelingEnabled: true, loudnessLufs: -14 }
+    return { speechLevelingEnabled: true, loudnessLufs: -15 }
   }
   return { speechLevelingEnabled: undefined, loudnessLufs: undefined }
 }

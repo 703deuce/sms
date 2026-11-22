@@ -176,8 +176,7 @@ const opSchema = z.discriminatedUnion('type', [
             assetId: z.string().nullable().optional(),
           })
           .optional(),
-        loudnessLufs: z
-          .union([z.literal(-14), z.literal(-16), z.literal(-18), z.literal(-23), z.literal(-24)])
+        loudnessLufs: z.number().finite().min(-36).max(-8)
           .nullable()
           .optional(),
         roomTone: z.boolean().optional(),

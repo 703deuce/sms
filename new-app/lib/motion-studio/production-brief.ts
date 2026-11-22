@@ -1,7 +1,7 @@
 import {MS_VIDEO_TYPES,MS_CREATIVE_STYLES, type MsCreativeBrief, type MsCreativeStyle, type MsVideoType} from './creative-options'
 import type { MsWorkflow } from './types'
 
-export type InputRole = 'footage'|'photo'|'talking_head'|'narration'|'music'|'reference'|'logo'|'script'
+export type InputRole = 'footage'|'angle'|'broll'|'photo'|'talking_head'|'narration'|'music'|'reference'|'logo'|'script'
 export type ProductionInput = { uploadId:string; filename:string; mime:string; role:InputRole; handling:string }
 export type ProductionBrief = {
   prompt:string; workflow?:MsWorkflow; videoType:MsVideoType; durationSeconds:number
@@ -20,9 +20,9 @@ export type ProductionBrief = {
 }
 const object=(x:unknown):Record<string,unknown>=>x&&typeof x==='object'&&!Array.isArray(x)?x as Record<string,unknown>:{}
 const str=(x:unknown,max=4000)=>typeof x==='string'?x.trim().slice(0,max):''
-const allowedRoles:InputRole[]=['footage','photo','talking_head','narration','music','reference','logo','script']
+const allowedRoles:InputRole[]=['footage','angle','broll','photo','talking_head','narration','music','reference','logo','script']
 export const roleHandling:Record<InputRole,string>={
- footage:'use_as_picture',photo:'use_as_still',talking_head:'preserve_picture_and_sound_add_cutaways',
+ footage:'use_as_picture',angle:'use_as_picture',broll:'use_as_picture',photo:'use_as_still',talking_head:'preserve_picture_and_sound_add_cutaways',
  narration:'voiceover_drives_timing',music:'use_uploaded_track',reference:'visual_direction_only',
  logo:'apply_brand_identity',script:'use_customer_script'
 }
@@ -39,7 +39,7 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
  const inputs=(Array.isArray(x.inputs)?x.inputs:[]).slice(0,100).map(rawInput=>{
   const inp=object(rawInput),mime=str(inp.mime,100),role=allowedRoles.includes(inp.role as InputRole)?inp.role as InputRole:undefined
   if(!role||!str(inp.uploadId,120)||!mime)throw Error('Invalid production input')
-  if((role==='talking_head'||role==='footage')&&!mime.startsWith('video/'))throw Error('Camera footage must be video')
+  if((role==='talking_head'||role==='footage'||role==='angle'||role==='broll')&&!mime.startsWith('video/'))throw Error('Camera footage must be video')
   if((role==='narration'||role==='music')&&!mime.startsWith('audio/'))throw Error('Narration and music must be audio')
   if((role==='photo'||role==='logo')&&!mime.startsWith('image/'))throw Error('Photos and logos must be images')
   if(role==='reference'&&!mime.startsWith('image/')&&!mime.startsWith('video/'))throw Error('Reference must be a picture or video')
@@ -77,10 +77,10 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
   ...(str(x.goal,1000)?{goal:str(x.goal,1000)}:{}),
   ...(str(x.callToAction,1000)?{callToAction:str(x.callToAction,1000)}:{}),
   ...(str(x.footageType,80)?{footageType:str(x.footageType,80)}:{}),
-  captionsEnabled:x.captionsEnabled!==false,
+  ...(typeof x.captionsEnabled==='boolean'?{captionsEnabled:x.captionsEnabled}:{}),
   voiceoverAmount:['none','occasional','mostly'].includes(String(x.voiceoverAmount))
     ? x.voiceoverAmount as ProductionBrief['voiceoverAmount']:undefined,
-  reviewPlan:x.reviewPlan!==false,
+  ...(typeof x.reviewPlan==='boolean'?{reviewPlan:x.reviewPlan}:{}),
   ...(str(object(x.tone).preset,50)||str(object(x.tone).text,1000)?{tone:{
     preset:str(object(x.tone).preset,50)||undefined,text:str(object(x.tone).text,1000)||undefined}}:{}),
   ...(scriptText||scriptUpload?{script:{text:scriptText||undefined,uploadId:scriptUpload||undefined,

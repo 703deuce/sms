@@ -75,11 +75,14 @@ export function MotionStudioCreate({
   client: injected,
   initialView = 'create',
   mediaPickerEnabled = MS_MEDIA_PICKER_ENABLED,
+  audioStart = false,
 }: {
   client?: MotionStudioClient
   initialView?: 'create' | 'projects'
   /** ST-UI-107: hidden in v1. Only the flag-on test (and the later Media Researcher) turns it on. */
   mediaPickerEnabled?: boolean
+  /** Separate gated Audio to Video start; does not change legacy films. */
+  audioStart?: boolean
 }) {
   const client = useMemo(() => injected ?? getMotionStudioClient(), [injected])
   const router = useRouter()
@@ -134,9 +137,16 @@ export function MotionStudioCreate({
       if (['documentary','educational','explainer'].includes(category)) setDurationSeconds(180)
       if (['social_video','audiogram'].includes(category)) setFormat('9:16')
       if (category === 'video_editing') setWorkflow('footage')
-      if (category === 'audiogram') setWorkflow('script')
+      if (category === 'audiogram' && audioStart) setWorkflow('script')
     }
-  }, [])
+  }, [audioStart])
+  useEffect(() => {
+    if(audioStart){
+      setVideoType('audiogram')
+      setWorkflow('script')
+      setFormat('9:16')
+    }
+  }, [audioStart])
   useEffect(() => {
     // Folder upload needs the non-standard attribute (interviews, photos, charts, narration).
     folderRef.current?.setAttribute('webkitdirectory', '')
@@ -191,7 +201,7 @@ export function MotionStudioCreate({
         file,
         kind: assetKindForFile(file),
         uploadId: null,
-        role:role ?? (videoType==='audiogram' && file.type.startsWith('audio/')?'narration':undefined),
+        role:role ?? (audioStart && file.type.startsWith('audio/')?'narration':undefined),
         progress: { filename: file.name, bytes: file.size, loaded: 0, percent: 0, state: 'uploading' },
       }))
       setAttachments((prev) => role === 'logo' ? [...prev.filter(a => a.role !== 'logo'), ...next] : [...prev, ...next])
@@ -206,9 +216,9 @@ export function MotionStudioCreate({
         void uploadOne(att)
       }
       if (next.some((a) => a.kind === 'video' && !a.role) && !prompt.trim()) setWorkflow((w) => (w === 'idea' ? 'footage' : w))
-      if(videoType==='audiogram'&&next.some(a=>a.kind==='audio'))setWorkflow('script')
+      if(audioStart&&next.some(a=>a.kind==='audio'))setWorkflow('script')
     },
-    [uploadOne, prompt, videoType],
+    [uploadOne, prompt, audioStart],
   )
 
   const selectLogo = async (files: FileList | null) => {
