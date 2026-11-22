@@ -738,6 +738,15 @@ def handle_media_transcribe(conn, job: dict) -> None:
 DISPATCH["MEDIA_TRANSCRIBE"] = handle_media_transcribe
 
 
+def handle_producer_transcribe(conn, job: dict) -> None:
+    from clips_worker.producer_transcribe_job import run_producer_transcribe_job
+    run_producer_transcribe_job(conn, job)
+    _mark_job_done(conn, job["id"])
+
+
+DISPATCH["PRODUCER_TRANSCRIBE"] = handle_producer_transcribe
+
+
 def _t2v_m9_progress_wrapper(run_fn):
     def handler(conn, job: dict) -> None:
         def progress(job_id: str, payload: dict) -> None:
