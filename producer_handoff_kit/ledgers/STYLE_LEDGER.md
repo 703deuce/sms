@@ -202,3 +202,11 @@ Format: `## <date> · <jobId or test folder> · <title>` then `- Customer: <cust
 - Steer away next time: conveyor-belt/3D card factory, source flip-cards, lilac ground with magenta/teal colour fields, skewed card-swipe wipes, stamp-on-card rename.
 - Variety: concept family physical 3D conveyor/object-in-space · claim device source flip-cards · ground light lilac then magenta/teal fields · type formula grotesque 800 condensed + italic serif (no mono) · edit mix ~11% real footage (one 3.5 s talking clip + one 4.6 s silent clip), rest designed · 3D/2.5D three.js belt + 2.5D parallax cut-out (Mohan) · cut-outs yes (Mohan) · engines three.js, CSS3D/DOM, Canvas 2D, rembg, ffmpeg
 - Notes: runtime 65.7 s (narration 58.6 s at speed 0.85, inter-line gaps trimmed; 3.55 s real-clip window). Footage clip B (Stargaze, silent) source URL was not logged in the research step; used as a faceless-creator example without any claim about that channel. whisper vs provider alignment median offset -104 ms is the same as on the raw provider audio (-107 ms), so the sync follows the provider timings.
+
+## 2026-11-22 · caf_8caa3755-a198-4500-8bc9-700a86c88655 · Clip pack: T.I. & Young Dro on Chosen Journey (5 clips, 9:16, server render)
+- Customer/project: proj_fb1f55f5d03847be9ecbe04619bdd9a7 (Rick front-end test, 20-min podcast)
+- Concept: "Testimony". Faith, addiction and survival talk around the song "Thank God". Reverent editorial serif headline over hard condensed captions.
+- visualDna: DM Serif Display ivory headline on ink box + Oswald amber kicker tab; captions b2b_condensed_punch_1 base, Oswald upper, ivory with ember-amber (#FF9A3C) active word, 2 words/line pop (testimony clips) or 3 words/line slide-up (light clips); amber callout cards with ink type; ivory name tag; amber 6 px divider in stacked splits; 3-4 zoom punches per clip on payoff words.
+- Layouts: 01 fill T.I. / split (Dro joins 448-452 s) / fill · 02 fill Dro · 03 fill Dro · 04 fill T.I. / split (Dro 845-854 s) / fill · 05 fill host (host camera) / fill T.I.
+- Engines: native Transovo edits only (textItems, captions block, layoutSegments, zoom), server RENDER_CLIP queue. No overlays.
+- Steer away next time: ivory/amber/ink palette, DM Serif + Oswald pairing, amber kicker tab over serif headline, amber callout cards.
