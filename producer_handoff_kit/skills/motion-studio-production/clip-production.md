@@ -177,6 +177,15 @@ Write the layout decision per clip in `clips/<id>/layout.md`: people on screen, 
 
 Graphics go **over** the edited footage. They should feel specific to what is said and who is on screen, not like a skin applied to every short.
 
+### Style choice (Rick, Nov 22)
+
+- Choose caption and graphic style per job and per clip from the content, tone, footage type and brand kit. Never apply the same template to every video, and vary the style across jobs on purpose.
+- When `/inputs` provides a brand kit or caption preset, start from it unless it clashes with the content.
+- When unsure, briefly look up current premium short-form caption and graphics styles to choose from.
+- Hold a premium bar, as good as or better than Opus Clip and Submagic: clean typography, good timing, readable on a phone, purposeful motion. No cheap stock effects.
+- Add graphics only where they add something.
+- Everything chosen must be expressible and saved in `edits.json` using confirmed-storable features. If a style can't be stored, pick a storable one instead of burning it in.
+
 ### What to add
 
 The bar is Opus Clip / Submagic or better, in this order: layout (Stage C), then a strong hook in the first second, then captions, then accents. Custom content graphics are our edge over those tools.
