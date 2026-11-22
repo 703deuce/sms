@@ -6,6 +6,7 @@ import { getClipStorage, createReadableSignedUrl, storageDriverName } from '@/li
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { clipProducerEnabled, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
 
 const prisma = () => getPrisma()
 const object = (v: unknown): Record<string, unknown> =>
@@ -85,7 +86,7 @@ function callbackOrigin(request: Request) {
  */
 export async function dispatchClipAgentFinish(workspaceId: string, projectId: string,
   clipId: string, request: Request, idempotencyKey: string) {
-  if (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY) {
+  if (!clipProducerEnabled() && (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY)) {
     throw problem('Transovo Agent is not connected yet.',503)
   }
   if (process.env.GROKBOT_LIVE_MODE !== '1') throw problem('Transovo Agent production is not enabled.',503)
@@ -128,7 +129,9 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     job=await prisma().clipAgentFinishJob.create({data:{
       id,clipId,projectId,workspaceId,idempotencyKey:key,tokenHash,
       tokenExpiresAt:new Date(Date.now()+36*3600_000),
-      phase:'dispatch',status:'dispatching',message:'Preparing your clip for finishing.',
+      phase:'dispatch',status:clipProducerEnabled()?'queued':'dispatching',
+      kind:clipProducerEnabled()?'clip_revision':'clips',
+      message:'Preparing your clip for finishing.',
     }})
   } catch(e) {
     if ((e as {code?:string}).code!=='P2002') throw e
@@ -137,6 +140,10 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
     })
     if (!duplicate) throw e
     return publicJob(duplicate)
+  }
+  if (clipProducerEnabled()) {
+    await coordinateClipJobs(1)
+    return publicJob(await prisma().clipAgentFinishJob.findUniqueOrThrow({where:{id}}))
   }
   // For the original upload, clip timestamps are absolute. An isolated
   // segment/preview is already clip-local and must start at zero.
@@ -185,7 +192,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
  */
 export async function dispatchClipAgentDiscover(workspaceId:string,projectId:string,
   request:Request,idempotencyKey:string,maximumClips:number) {
-  if (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY ||
+  if ((!clipProducerEnabled() && (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY)) ||
       process.env.GROKBOT_LIVE_MODE!=='1') throw problem('Transovo Agent is not connected.',503)
   const project=await prisma().clipProject.findFirst({
     where:{id:projectId,workspaceId,deletedAt:null},
@@ -217,7 +224,8 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
       id,workspaceId,projectId,clipId:slot,idempotencyKey:key,
       tokenHash:digest(id+':'+token).toString('hex'),
       tokenExpiresAt:new Date(Date.now()+36*3600_000),
-      status:'dispatching',phase:'dispatch',message:'Finding your best moments.',
+      status:clipProducerEnabled()?'queued':'dispatching',phase:'dispatch',
+      kind:'clips',message:'Finding your best moments.',
     }})
   }catch(err){
     if ((err as {code?:string})?.code!=='P2002') throw err
@@ -226,6 +234,10 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
     })
     if(!duplicate) throw err
     return publicJob(duplicate)
+  }
+  if (clipProducerEnabled()) {
+    await coordinateClipJobs(1)
+    return publicJob(await prisma().clipAgentFinishJob.findUniqueOrThrow({where:{id}}))
   }
   const payload={
     version:1,action:'clip_and_finish',mode:'autonomous_clipper',
@@ -339,6 +351,12 @@ export async function authorizeClipAgentCallback(id: string,request: Request) {
   if (!job||job.tokenExpiresAt<=new Date()) throw problem('Invalid or expired job.',401)
   const got=digest(id+':'+token),expected=Buffer.from(job.tokenHash,'hex')
   if (got.length!==expected.length||!timingSafeEqual(got,expected)) throw problem('Invalid job token.',401)
+  if (job.workerId) {
+    if (!job.leaseExpiresAt || job.leaseExpiresAt <= new Date() ||
+        !['dispatching','dispatched','running'].includes(job.status))
+      throw problem('Clip worker lease expired or revoked.',401)
+    await renewClipLease(job.id,job.workerId,job.leaseExpiresAt)
+  }
   return job
 }
 
@@ -621,7 +639,8 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   if (job.status==='complete') return publicJob(job)
   if (finished(job.status)) throw problem('Job already finished.',409)
   const body=object(raw)
-  if (body.status==='failed') {
+  if (body.status==='failed') return failClipAgentJob(id,request,{reason:body.reason})
+  if (false) {
     const j=await prisma().clipAgentFinishJob.update({where:{id},data:{
       status:'failed',phase:'failed',message:'Your clip could not be finished. Try again.',
       completedAt:new Date(),error:'Producer reported failure.',
@@ -668,7 +687,27 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     })
     return {...publicJob(completed),delivery:'live',portableVersionId:versionId}
   }
-  if (job.clipId==='project:'+job.projectId) return completeDiscoveredClips(job,body)
+  if (job.clipId==='project:'+job.projectId) {
+    const reportName=word(body.jobJson,150)
+    const report=items(job.artifacts).find(a=>a.filename===reportName && a.mime==='application/json' && a.state==='ready' && a.bytes<=2_000_000)
+    if (clipProducerEnabled() && report) {
+      let costReport:Record<string,unknown>
+      try {costReport=object(JSON.parse((await getClipStorage().getObjectBytes(report.key)).toString('utf8')))}
+      catch {throw problem('Invalid job.json report.',400)}
+      const finishedClips=await prisma().clip.findMany({where:{workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null},select:{aiMeta:true}})
+      const count=finishedClips.filter(c=>object(c.aiMeta).agentClipperRunId===id).length
+      if(!count)throw problem('Publish at least one finished clip before completing.',409)
+      const completed=await prisma().clipAgentFinishJob.update({where:{id},data:{
+        status:'complete',phase:'complete',progress:100,completedAt:new Date(),
+        message:count+' finished clips are ready.',costReport:toPrismaJson(costReport),
+      }})
+      await closeClipLease(id,true)
+      return publicJob(completed)
+    }
+    const result=await completeDiscoveredClips(job,body)
+    await closeClipLease(id,true)
+    return result
+  }
   const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4')
   if (!video) throw problem('Upload and commit a finished MP4 first.',409)
   const durationMs=Number(body.durationMs)
