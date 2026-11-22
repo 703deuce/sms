@@ -382,6 +382,11 @@ export async function getClipAgentInputs(id: string, request: Request) {
   })
   if (!project?.upload?.key) throw problem('Source video not found.', 404)
   const settings = object(project.settings)
+  const selected = job.clipId.startsWith('project:') ? null : await prisma().clip.findFirst({
+    where:{id:job.clipId,workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null},
+    select:{startMs:true,endMs:true,title:true},
+  })
+  if (!job.clipId.startsWith('project:') && !selected) throw problem('Revision source clip not found.',404)
   const root = 'ws/' + job.workspaceId + '/projects/' + job.projectId + '/'
   const sign = async (key: string | null) =>
     key ? createReadableSignedUrl(key, 900).catch(() => null) : null
@@ -400,7 +405,8 @@ export async function getClipAgentInputs(id: string, request: Request) {
       mime: project.upload.mime, durationMs: project.upload.durationMs},
     transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl},
     ...(job.clipId.startsWith('project:')?{}:{
-      revision: {clipId:job.clipId,note:word(object(job.input).note,2000)},
+      revision: {clipId:job.clipId,note:word(object(job.input).note,2000),
+        sourceStartMs:selected?.startMs,sourceEndMs:selected?.endMs,title:selected?.title},
     }),
     clipCount: Math.max(1, Math.min(15, Number(settings.autoGrokMaxClips) || 5)),
     targetSeconds: {min: 20, max: 60},
@@ -762,8 +768,13 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     await closeClipLease(id,true)
     return result
   }
-  const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4')
-  if (!video) throw problem('Upload and commit a finished MP4 first.',409)
+  const fullName=word(body.video,150)
+  const previewName=word(body.preview,150)
+  const editName=word(body.editsJson,150)
+  const video=items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&
+    (!clipProducerEnabled()||a.filename===fullName))
+  const preview=clipProducerEnabled()?items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&a.filename===previewName):null
+  if (!video || (clipProducerEnabled()&&!preview)) throw problem('Upload and commit the finished MP4 and 480p preview first.',409)
   const durationMs=Number(body.durationMs)
   if (!Number.isSafeInteger(durationMs)||durationMs<1000||durationMs>600_000) {
     throw problem('Invalid output duration.',400)
@@ -774,11 +785,22 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   // enhanced master is still saved as the finished preview/download.
   const existing=await prisma().clip.findFirst({where:{
     id:job.clipId,projectId:job.projectId,workspaceId:job.workspaceId,deletedAt:null,
-  },select:{edits:true}})
+  },select:{edits:true,startMs:true,endMs:true}})
   if (!existing) throw problem('Source clip was removed.',404)
   const base=existing.edits as unknown as ClipEditsV2
   let imported:ClipEditsV2|null=null
-  if (items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
+  const editFile=items(job.artifacts).find(a=>a.filename===editName&&a.state==='ready'&&a.mime==='application/json'&&a.bytes<=2_000_000)
+  if (clipProducerEnabled()&&editFile) {
+    try {
+      const doc=object(JSON.parse((await getClipStorage().getObjectBytes(editFile.key)).toString('utf8')))
+      const rawEdits=object(doc.edits)
+      const trim=object(rawEdits.trim)
+      if(doc.schema!=='transovo.clip-edits/2'||Number(trim.in)!==existing.startMs||
+        Number(trim.out)!==existing.endMs)throw new Error('Invalid native clip edit')
+      imported=normalizeEdits(rawEdits,{clipStartMs:existing.startMs,clipEndMs:existing.endMs})
+    }catch{console.warn('[clip-agent] revision_edits_fallback',{jobId:id})}
+  }
+  if (!imported && items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
     try {
       imported=await importAgentTimeline({
         workspaceId:job.workspaceId,motionProjectId:job.clipId,clipProjectId:job.projectId,
@@ -807,11 +829,12 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       jobId:id,key:video.key,durationMs,completedAt:now.toISOString(),
     }].slice(-20)
     await tx.clip.update({where:{id:clip.id},data:{
-      previewKey:video.key,storageDriver:storageDriverName(),
+      previewKey:preview?.key||video.key,storageDriver:storageDriverName(),
       ...(imported?{edits:toPrismaJson(imported),editsSaveVersion:{increment:1}}:{}),
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
-        agentFinishedVersions:versions,agentFinishActiveJobId:id,
+        agentFinishedVersions:versions,fullResKey:video.key,
+        deliveredDurationMs:durationMs,agentFinishActiveJobId:id,
         agentFinishEditableLayersImported:Boolean(imported)}),
     }})
     // The original editable clip timeline is deliberately preserved. This output
@@ -821,6 +844,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       resultKey:video.key,durationMs,completedAt:now,
     }})
   })
+  await closeClipLease(id,true)
   return publicJob(result)
 }
 
