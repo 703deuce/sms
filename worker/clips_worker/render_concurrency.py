@@ -19,7 +19,7 @@ def worker_concurrency() -> int:
 
     if worker_lane() == "render":
         # Dedicated RENDER_CLIP lane is opt-in; preserve the default two slots.
-        default = str(min(4, max(1, (os.cpu_count() or 4)//2)))
+        default = "2"
         raw = (os.environ.get("RENDER_WORKER_CONCURRENCY") or default).strip()
     else:
         default = "1" if worker_lane() == "stream" else "2"
