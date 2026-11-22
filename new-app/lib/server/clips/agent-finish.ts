@@ -92,7 +92,7 @@ function callbackOrigin(request: Request) {
  * This job is enhancement only: dialogue/action must remain truthful and intact.
  */
 export async function dispatchClipAgentFinish(workspaceId: string, projectId: string,
-  clipId: string, request: Request, idempotencyKey: string) {
+  clipId: string, request: Request, idempotencyKey: string, note?: string) {
   if (!clipProducerEnabled() && (!process.env.GROKBOT_WEBHOOK_URL || !process.env.GROKBOT_WEBHOOK_KEY)) {
     throw problem('Transovo Agent is not connected yet.',503)
   }
@@ -138,6 +138,7 @@ export async function dispatchClipAgentFinish(workspaceId: string, projectId: st
       tokenExpiresAt:new Date(Date.now()+36*3600_000),
       phase:'dispatch',status:clipProducerEnabled()?'queued':'dispatching',
       kind:clipProducerEnabled()?'clip_revision':'clips',
+      ...(clipProducerEnabled()?{input:toPrismaJson({note:word(note,2000)})}:{}),
       message:'Preparing your clip for finishing.',
     }})
   } catch(e) {
@@ -398,6 +399,9 @@ export async function getClipAgentInputs(id: string, request: Request) {
     source: {url: sourceUrl, filename: project.upload.filename,
       mime: project.upload.mime, durationMs: project.upload.durationMs},
     transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl},
+    ...(job.clipId.startsWith('project:')?{}:{
+      revision: {clipId:job.clipId,note:word(object(job.input).note,2000)},
+    }),
     clipCount: Math.max(1, Math.min(15, Number(settings.autoGrokMaxClips) || 5)),
     targetSeconds: {min: 20, max: 60},
     aspectRatio: settings.aspectRatio || '9:16',
@@ -548,8 +552,8 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
 export async function getClipAgentAssignment(id: string,request: Request) {
   const j=await authorizeClipAgentCallback(id,request)
   return {...publicJob(j),mode:'source_footage_enhancement',
-    delivery:{mode:'live'},
-    portableUrl:callbackOrigin(request)+'/api/clips/agent/jobs/'+encodeURIComponent(id)+'/portable'}
+    delivery:{mode:clipProducerEnabled()?'mp4':'live'},
+    portableUrl:clipProducerEnabled()?null:callbackOrigin(request)+'/api/clips/agent/jobs/'+encodeURIComponent(id)+'/portable'}
 }
 
 export async function updateClipAgentProgress(id: string,request: Request,raw: unknown) {
