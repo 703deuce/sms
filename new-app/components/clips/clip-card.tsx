@@ -470,6 +470,12 @@ export function ClipCard({
               <MoreHorizontal className="size-4" aria-hidden />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {clip.subtitlesSrtUrl ? <DropdownMenuItem onClick={() => {
+                window.open(clip.subtitlesSrtUrl!, '_blank', 'noopener,noreferrer')
+              }}>Download SRT captions</DropdownMenuItem> : null}
+              {clip.subtitlesVttUrl ? <DropdownMenuItem onClick={() => {
+                window.open(clip.subtitlesVttUrl!, '_blank', 'noopener,noreferrer')
+              }}>Download VTT captions</DropdownMenuItem> : null}
               {false ? <DropdownMenuItem data-testid="clip-card-text-editor" onClick={() => { console.info('[editor:text] card-entry', { projectId, clipId: clip.id }); router.push('/app/video-editor/' + projectId + '/text/' + clip.id + (isStreamer ? '?from=studio' : '')) }}>Text editor</DropdownMenuItem> : null}
               <DropdownMenuItem data-testid="clip-card-story-editor" onClick={() => {
                 console.log('[editor:story-mode] card-entry', { projectId, clipId: clip.id })

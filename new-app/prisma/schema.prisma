@@ -8837,6 +8837,9 @@ model ClipUpload {
   durationMs  Int?
   width       Int?
   height      Int?
+  fps         Float?
+  rotation    Int?
+  hasAudio    Boolean?
   status      String   @default("PENDING")
   s3UploadId  String?
   uploadMode     String?

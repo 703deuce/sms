@@ -28,6 +28,18 @@ from clips_worker.chat_overlay_apply import try_apply_chat_overlay
 V3 = Path(__import__("os").environ.get("SPEAKERCROP_DIR", "/app/v3"))
 
 
+def _producer_zoom_anchor(edits: dict) -> dict | None:
+    zoom = edits.get("zoom")
+    if isinstance(zoom, dict) and isinstance(zoom.get("anchor"), dict):
+        return zoom["anchor"]
+    layout = edits.get("layout")
+    if isinstance(layout, dict):
+        for seg in layout.get("layoutSegments") or []:
+            if isinstance(seg, dict) and isinstance(seg.get("zoomAnchor"), dict):
+                return seg["zoomAnchor"]
+    return None
+
+
 def _sort_json(value):
     if isinstance(value, list):
         return [_sort_json(v) for v in value]
@@ -512,6 +524,99 @@ def _preview_crop_track_for_export(
         return preview_crop_track
 
 
+def _render_explicit_producer_segment(src: Path, dst: Path, seg: dict, width: int,
+                                      height: int, duration_s: float) -> None:
+    """Deterministic source boxes. Never call auto speaker detection for producer geometry."""
+    import re
+
+    def box(raw):
+        if not isinstance(raw, dict):
+            raise ValueError("Explicit producer framing requires a source box")
+        x, y, w, h = [float(raw[k]) for k in ("x", "y", "w", "h")]
+        if not (0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 and 0 < h <= 1
+                and x + w <= 1.001 and y + h <= 1.001):
+            raise ValueError("Invalid normalized producer crop box")
+        return x, y, w, h
+
+    def crop(raw):
+        x, y, w, h = box(raw)
+        return f"crop=iw*{w:.6f}:ih*{h:.6f}:iw*{x:.6f}:ih*{y:.6f}"
+
+    mode = str(seg.get("mode") or "fill")
+    people = seg.get("people") if isinstance(seg.get("people"), list) else []
+    duration_s = max(.08, duration_s)
+    graph = ""
+    if mode in ("split", "grid3", "grid4") and len(people) >= 2:
+        order = [str(p) for p in seg.get("order", [])] if isinstance(seg.get("order"), list) else []
+        ordered = sorted(people, key=lambda p: order.index(str(p.get("speakerId")))
+                         if str(p.get("speakerId")) in order else len(order))
+        count = min(len(ordered), 4)
+        if mode == "split":
+            count = 2
+            ratio = max(.1, min(.9, float(seg.get("splitRatio", .5))))
+            left_w = max(2, int(width * ratio)//2*2)
+            left_w = min(width-2, left_w)
+            sizes = [(left_w, height), (width-left_w, height)]
+        else:
+            half_w = width//2
+            half_h = height//2
+            sizes = [(half_w, half_h)] * count
+        graph = f"[0:v]split={count}" + "".join(f"[s{i}]" for i in range(count)) + ";"
+        for i in range(count):
+            pw, ph = sizes[i]
+            graph += f"[s{i}]{crop(ordered[i]['box'])},scale={pw}:{ph},setsar=1[p{i}];"
+        if mode == "split":
+            graph += "[p0][p1]hstack=inputs=2[stack];"
+        else:
+            layout = "0_0|w0_0|0_h0|w0_h0".split("|")[:count]
+            graph += "".join(f"[p{i}]" for i in range(count))
+            graph += f"xstack=inputs={count}:layout={'|'.join(layout)}:fill=black[stack];"
+        div = seg.get("divider") if isinstance(seg.get("divider"), dict) else {}
+        color = str(div.get("color") or "#FFFFFF")
+        if not re.fullmatch(r"#[A-Fa-f0-9]{6}", color):
+            color = "#FFFFFF"
+        opacity = max(0, min(1, float(div.get("opacity", 1))))
+        line = max(0, min(32, int(div.get("width", 0))))
+        if mode == "split" and line:
+            draw_x = max(0, left_w-line//2)
+            graph += (f"[stack]drawbox=x={draw_x}:y=0:w={line}:h=ih:"
+                      f"color=0x{color[1:]}@{opacity:.2f}:t=fill[v]")
+        else:
+            graph += "[stack]null[v]"
+    else:
+        raw_box = seg.get("cropBox")
+        if raw_box is None:
+            anchor = seg.get("zoomAnchor")
+            if isinstance(anchor, dict):
+                ax = max(0, min(1, float(anchor.get("x", .5))))
+                ay = max(0, min(1, float(anchor.get("y", .5))))
+                zoom_w, zoom_h = .85, .85
+                raw_box = {"x":max(0,min(1-zoom_w,ax-zoom_w/2)),
+                           "y":max(0,min(1-zoom_h,ay-zoom_h/2)),
+                           "w":zoom_w,"h":zoom_h}
+            elif mode != "fit_blur":
+                raise ValueError("Producer fill requires cropBox (not an auto tracker)")
+        if mode == "fit_blur":
+            foreground = crop(raw_box)+"," if raw_box else ""
+            graph = (f"[0:v]split[bg][fg];"
+                     f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,"
+                     f"crop={width}:{height},boxblur=10:2[blur];"
+                     f"[fg]{foreground}scale={width}:{height}:force_original_aspect_ratio=decrease,"
+                     "setsar=1[front];"
+                     "[blur][front]overlay=(W-w)/2:(H-h)/2:shortest=1[v]")
+        else:
+            graph = (f"[0:v]{crop(raw_box)},scale={width}:{height}:"
+                     f"force_original_aspect_ratio=increase,crop={width}:{height},"
+                     "setsar=1[v]")
+    subprocess.check_call([
+        "ffmpeg", "-y", "-v", "error", "-i", str(src),
+        "-filter_complex", graph, "-map", "[v]", "-map", "0:a?",
+        "-t", f"{duration_s:.6f}", "-r", "30", "-c:v", "libx264",
+        "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(dst),
+    ])
+
+
 def run_speakercrop_layout_timeline(
     clip_src: Path,
     out_mp4: Path,
@@ -537,13 +642,20 @@ def run_speakercrop_layout_timeline(
     from clips_worker.render_clip import aspect_size
     from clips_worker.needs_tracking import apply_layout_decision
 
-    apply_layout_decision(
-        edits,
-        clip_src,
-        clip_id=clip_id,
-        project_id=project_id,
-        settings=settings,
-    )
+    # Producer framing is explicit; an automatic layout decision may mutate the edit
+    # and overwrite bot-selected speakers and boxes. Do not invoke it in that case.
+    explicit_segments = (edits.get("layout") or {}).get("layoutSegments") or []
+    has_explicit = any(isinstance(seg, dict) and any(seg.get(k) is not None for k in
+                       ("cropBox", "people", "focusSpeaker", "zoomAnchor"))
+                       for seg in explicit_segments)
+    if not has_explicit:
+        apply_layout_decision(
+            edits,
+            clip_src,
+            clip_id=clip_id,
+            project_id=project_id,
+            settings=settings,
+        )
 
     aspect = settings.get("aspectRatio", "9:16")
     resolution = settings.get("exportResolution", "720p")
@@ -614,24 +726,27 @@ def run_speakercrop_layout_timeline(
             play_w=play_w,
             play_h=play_h,
         )
-        crop_track = _maybe_static_fit_blur_crop_track(trimmed, work_dir, int(seg["startMs"]), seg_mode)
-        run_speakercrop(
-            trimmed,
-            part_out,
-            seg_wpath,
-            seg_settings,
-            work_dir,
-            clip_start_ms=int(seg["startMs"]),
-            shot_overrides=shot_overrides,
-            render_id=render_id,
-            render_meta=render_meta,
-            crop_track_out=crop_track,
-            preserve_existing_crop_track=bool(crop_track),
-            conn=conn,
-            workspace_id=workspace_id,
-            project_id=project_id,
-            clip_id=clip_id,
-        )
+        if seg.get("cropBox") or seg.get("people") or seg.get("focusSpeaker") or seg.get("zoomAnchor"):
+            _render_explicit_producer_segment(trimmed, part_out, seg, play_w, play_h, rel_b-rel_a)
+        else:
+            crop_track = _maybe_static_fit_blur_crop_track(trimmed, work_dir, int(seg["startMs"]), seg_mode)
+            run_speakercrop(
+                trimmed,
+                part_out,
+                seg_wpath,
+                seg_settings,
+                work_dir,
+                clip_start_ms=int(seg["startMs"]),
+                shot_overrides=shot_overrides,
+                render_id=render_id,
+                render_meta=render_meta,
+                crop_track_out=crop_track,
+                preserve_existing_crop_track=bool(crop_track),
+                conn=conn,
+                workspace_id=workspace_id,
+                project_id=project_id,
+                clip_id=clip_id,
+            )
         part_paths.append(part_out)
 
     if not part_paths:
@@ -853,6 +968,7 @@ def _legacy_compose(
                 sw,
                 sh,
                 facecam_only=bool(zoom_cfg.get("facecamOnly")),
+                anchor=_producer_zoom_anchor(edits),
             )
             caption_src = zsrc
         from clips_worker.compose_spec_render import render_stream_band
@@ -1018,6 +1134,7 @@ def _legacy_compose(
             zh,
             facecam_only=bool(zoom_cfg.get("facecamOnly")),
             facecam_band_h=facecam_band_h,
+            anchor=_producer_zoom_anchor(edits),
         )
         shutil.copy(zoomed, out_mp4)
 

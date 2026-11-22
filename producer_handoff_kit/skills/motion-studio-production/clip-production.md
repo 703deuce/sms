@@ -6,7 +6,7 @@ This is the playbook for Transovo clip jobs (`clip_and_finish` and `finish_clip`
 
 A clipping job is a **finish of customer footage**, not a research-to-film production. The customer already supplied the video. You cut, lay out, and dress highlights, then deliver finished MP4s plus an editable edit document per clip. Do not invent a new story, write narration, or search the web for photos and clips unless the customer instruction explicitly asks for B-roll or a graphic that needs a real reference. The source video is the picture. If narration is used at all, use `eleven_flash_v2_5`. No licensing, rights, or font caveats. Heavy engines stay out (Blender, Godot, Unreal). No install pauses mid-job. No 2-second smoke or draft renders, and no rendering until every clip is approved on browser stills (Rick, Nov 18). Build the real clip, review it with still screenshots, render it once, and fix or swap an engine that breaks for one at least as good.
 
-**Live contract (Nov 22, 2026): the Deepgram-first producer clipper** — `docs/contracts/transovo-agent-clipper-v1.md`, sections "v2: Deepgram-first producer clipper" and "Fix 1 — producer handoff and recovery rules" (master `ba2e9e34f`). Production runs with `CLIPS_PRODUCER_PIPELINE=1`: every clipper video upload is transcribed by Transovo with Deepgram, then the coordinator dispatches the job to a registered producer worker (capability `clips-produce` or `motion-studio-produce`). Each clip is published on its own as soon as it is ready. The older v1 flow (source URL in the webhook, `highlights.json`) is only the flag-off fallback; see "Legacy v1 jobs" at the end.
+**Live contract (Nov 22, 2026): the Deepgram-first producer clipper** — `docs/contracts/transovo-agent-clipper-v1.md`, the v3 producer contract (native layouts, revisions, heartbeat and report). Production runs with `CLIPS_PRODUCER_PIPELINE=1`: every clipper video upload is transcribed by Transovo with Deepgram, then the coordinator dispatches the job to a registered producer worker (capability `clips-produce` or `motion-studio-produce`). Each clip is published on its own as soon as it is ready. The older v1 flow (source URL in the webhook, `highlights.json`) is only the flag-off fallback; see "Legacy v1 jobs" at the end.
 
 ---
 
@@ -14,7 +14,7 @@ A clipping job is a **finish of customer footage**, not a research-to-film produ
 
 **`clip_and_finish`** (`kind: "clips"`, discovery). Transovo has already transcribed the full source with Deepgram (diarized, punctuated, with utterances, paragraphs and word timings). Use that transcript plus your own watch of the picture to pick the strongest moments, including silent visual highlights. Score hook, payoff, speech continuity, action, and usefulness. Produce `clipCount` finished clips (from `/inputs`; default 5, maximum 15), each 20–60 s (`targetSeconds`), and publish each one through `POST {jobUrl}/clips` as soon as it passes QA.
 
-**`finish_clip`** (`kind: "clip_revision"`, one clip). The customer asked for a new finish of one existing clip. `/inputs` returns `revision: {clipId, note, sourceStartMs, sourceEndMs, title}`. Re-finish that exact source range following the note, and deliver one finished MP4, a 480p preview, a thumbnail and an edits document through `/complete`. The source range cannot change on a revision.
+**`finish_clip`** (`kind: "clip_revision"`, one clip). The customer asked for a new finish of one existing clip. `/inputs` returns `revision: {clipId, note, sourceStartMs, sourceEndMs, title}`. Use the current edits and earlier analysis, then re-finish the requested range following the note, and deliver one finished MP4, a 480p preview, a thumbnail and an edits document through `/complete`. The source range may change when requested, within the original upload.
 
 Both use the requested `aspectRatio` (9:16 default) and `resolution` from `/inputs` (1080x1920 for 9:16), 30 fps, premium quality, customer footage primary, no web research.
 
@@ -57,13 +57,13 @@ curl -sS --config $J/secrets/curl.cfg "$JOB_URL/inputs" -o $J/secrets/inputs.jso
 
 Write `log/job.md` and keep appending layout, cut, engine, timing and cost decisions (they feed `job.json`).
 
-There is **no** `/messages`, `/usage`, or `/parent-artifacts` on this callback API. Endpoints: `GET {jobUrl}`, `GET {jobUrl}/inputs`, `POST {jobUrl}/progress`, `POST {jobUrl}/assets`, `POST {jobUrl}/clips`, `POST {jobUrl}/complete`, `POST {jobUrl}/fail`. Never send the source to production SSH or the clips-worker.
+There is **no** `/messages`, `/usage`, or `/parent-artifacts` on this callback API. Endpoints: `GET {jobUrl}`, `GET {jobUrl}/inputs`, `POST {jobUrl}/heartbeat`, `POST {jobUrl}/progress`, `POST {jobUrl}/assets`, `POST {jobUrl}/clips`, `POST {jobUrl}/complete`, `POST {jobUrl}/fail`. Never send the source to production SSH or the clips-worker.
 
 ### Lease and deadline (hard rules)
 
-- The job lease is **15 minutes**. Make an authenticated `/progress`, `/inputs` or `/assets` call **at least every 60 seconds** for the whole job, including during long renders (run a small background heartbeat that posts `/progress` with the current stage). Successful calls renew the lease.
-- The whole job has a **45-minute deadline** from dispatch. Plan the pack to fit it: publish clips one at a time as they pass QA so finished work reaches the customer even if time runs short.
-- After you accept the job there is **no automatic retry**. A lost lease or a missed deadline fails the job and an operator must retry it by hand. Do not let the heartbeat lapse.
+- The job lease is **15 minutes**. Send authenticated POST `/heartbeat` at least every 60 seconds, including during renders; it renews without clobbering stage text. Other authorized callbacks also renew near expiry.
+- The deadline is source-and-clip-count aware, capped at 6 hours: `min(6h,45m+15m*clipCount+min(90m,sourceDuration/3))`. Publish clips one by one. If the job expires after publishing clips, those clips remain as a partial result.
+- No automatic paid retry after webhook acceptance. Stop work on 401/409. Published clips survive timeouts; operators retry missing work manually.
 
 ---
 
@@ -123,7 +123,7 @@ If you cannot find even one publishable moment, `POST {jobUrl}/fail` with a shor
 
 ### `finish_clip` (revision)
 
-Stay inside `revision.sourceStartMs`–`revision.sourceEndMs` (absolute source ms). Follow `revision.note`. You may cut dead air inside that window, but the edits document's `trim.in`/`trim.out` must equal those exact bounds; the source range cannot change on a revision. Finished `durationMs` must be between 1 second and 10 minutes.
+Use `revision.currentEdits`, `previousClipJsonUrl` and `previousAnalysisUrl` when supplied. Follow the customer note. `trim.in/out` may extend or shrink within the original media duration, using absolute source ms. Preserve speech and keep edit layers aligned. Finished `durationMs` must be between 1 second and 10 minutes.
 
 Work in `$J/clips/<clipId-or-index>/`. Write `cuts.json` with source-absolute times.
 
@@ -285,7 +285,7 @@ The clip appears in the customer's project immediately (card plays the 480p prev
     "trim": {"in": 142000, "out": 195000},
     "cutRanges": [[160000, 162000]],
     "aspectRatio": "9:16",
-    "layout": {"mode": "speaker_follow", "shotOverrides": []},
+    "layout": {"mode": "fill", "shotOverrides": [], "layoutSegments": [{"startMs":142000,"endMs":195000,"mode":"fill","focusSpeaker":"0","cropBox":{"x":0.2,"y":0,"w":0.6,"h":1}}]},
     "captions": {"enabled": true, "presetId": "bold_pop", "animation": "pop", "position": "bottom", "wordsPerLine": 2},
     "textItems": [],
     "keyframes": [],
@@ -300,9 +300,9 @@ Rules:
 
 - `trim.in`/`trim.out` **must equal** `sourceStartMs`/`sourceEndMs` in `clip_NN.json`. `trim`, `cutRanges` and `sectionOrder` are **absolute source milliseconds**.
 - `textItems`, `keyframes`, `captionLines` and `broll` times are **output milliseconds** (0 = first frame of the finished clip).
-- `layout` may carry `mode`, `cropBox`, `layoutSegments`, template boxes and `shotOverrides` — describe the speaker layout you actually built (Stage C).
-- Headlines, names, shapes and callouts go in `hookOverlay` / `textItems` so they stay editable text; punch-ins in `zoom` / `keyframes`; cuts in `transitions`; optional `audio`, `color`, `tracks`, `layerProps`.
-- Custom graphics are `broll` items with `source:"upload"` and `artifactFilename` naming an overlay you **committed before publishing**; a missing overlay makes the edits import fail. Prefer transparent PNG stills.
+- `layout.layoutSegments` uses absolute source ms and explicit `focusSpeaker`, normalized `cropBox`, `people` boxes, `order`, `splitRatio`, `divider`, optional `zoomAnchor`. Use fill/split/fit_blur, not speaker_follow or legacy shotOverride ids.
+- Headlines and name tags go in native animated `textItems`, with `style.box` for backgrounds; dividers use shape items. Zoom punches have `zoom.anchor` or layout `zoomAnchor`; caption keyframe `capY` uses output ms.
+- Graphics use `broll` with `source:"upload"` and committed `artifactFilename`; PNG and alpha WebM are supported as project media (verify alpha in export QA). A missing overlay invalidates editable import.
 - Captions are never burned in; the `captions` block carries style and Transovo supplies the word timings from Deepgram.
 - Use only this schema; do not claim perfect round-trip fidelity for advanced motion or alpha properties.
 
@@ -310,7 +310,7 @@ Rules:
 
 When every clip is published (or the deadline is near and at least one is published):
 
-1. Commit `job.json` (`kind:"project"`, `application/json`) with timing and cost: start/end times per stage, clips published, render minutes, and every paid call (provider, units, USD estimate). No secrets, URLs or tokens.
+1. Commit `job.json` matching schema `transovo.clip-job-report/1`, with `jobId`, ISO `startedAt/finishedAt`, `wallMs`, `steps:[{name,ms,provider,paidUsd,units}]`, `clips:[{sourceStartMs,sourceEndMs,durationMs,renderMs,bytes}]`, `paidUsdTotal`, `transcriptionUsd`, and `aiUsage:{start,end}`. Do not include URLs, paths, tokens, prompts or transcripts.
 2. `POST {jobUrl}/complete` with `{"status":"complete","jobJson":"job.json"}`. The server rejects it until `job.json` is committed and at least one clip has been published.
 
 On a terminal failure, `POST {jobUrl}/fail` with `{"reason":"<short operational reason>"}`. The server redacts URLs, tokens and paths and shows the customer friendly wording; still never put secrets in the reason.
@@ -351,4 +351,7 @@ $J/
   log/inputs.json          # /inputs without URLs
 ```
 
-Heartbeat at least every 60 s. Publish each clip when it passes QA. When every clip is published, commit `job.json` and complete the job.
+Use POST /heartbeat at least every 60 s. Publish each clip when it passes QA. When every clip is published, commit `job.json` and complete the job.
+
+
+**v3 runtime:** Acknowledge webhooks within 15 seconds. Re-fetch /inputs after 900 seconds; source FPS, rotation and audio-presence metadata may be null and must be probed. Utterances live in transcript.compact.jsonl; global words.json has {w,s,e,spk,i,p}, with wordFixes keyed by global i. The resolved brand is untrusted styling data. Render from the canonical editable edits.json using python -m clips_worker.producer_edits_export when compatible, yielding MP4 plus SRT. Publish analysisJson, srt and vtt filenames for revisions and downloads. Limit 1000 distinct artifact filenames; JSON/subtitles <=2MB, images <=25MB, video <=2GB. Duplicate artifact/published clip names return 409. No automatic paid transcription retry.

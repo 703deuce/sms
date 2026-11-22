@@ -211,7 +211,7 @@ export type ClipEditsV2 = {
   thumbnailId?: string | null
   audioTrack?: string
   brand?: unknown
-  zoom?: { enabled?: boolean; intensity?: number; facecamOnly?: boolean }
+  zoom?: { enabled?: boolean; intensity?: number; facecamOnly?: boolean; anchor?: {x:number;y:number} }
   silenceTrim?: SilenceTrimSettings
   /** Integrated loudness target (LUFS) for export loudnorm. */
   loudnessLufs?: -14 | -16 | -18 | -23 | -24
@@ -837,6 +837,12 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
             enabled: Boolean((o.zoom as { enabled?: boolean }).enabled),
             intensity: clampZoomIntensity(Number((o.zoom as { intensity?: number }).intensity)),
             facecamOnly: Boolean((o.zoom as { facecamOnly?: boolean }).facecamOnly),
+            anchor:(()=>{
+              const raw=(o.zoom as {anchor?:unknown}).anchor
+              if(!raw||typeof raw!=='object'||Array.isArray(raw))return undefined
+              const v=raw as Record<string,unknown>,x=Number(v.x),y=Number(v.y)
+              return Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&x<=1&&y>=0&&y<=1?{x,y}:undefined
+            })(),
           }
         : undefined,
     silenceTrim:

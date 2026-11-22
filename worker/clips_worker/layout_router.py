@@ -237,6 +237,7 @@ def normalize_layout_segments(edits: dict) -> list[dict]:
                 "startMs": max(tin, start_ms),
                 "endMs": min(tout, end_ms),
                 "mode": mode,
+                **{k:row[k] for k in ("focusSpeaker","cropBox","people","splitRatio","order","divider","zoomAnchor") if k in row},
             }
         )
     if not segs:
@@ -245,7 +246,8 @@ def normalize_layout_segments(edits: dict) -> list[dict]:
     merged: list[dict] = []
     for s in segs:
         prev = merged[-1] if merged else None
-        if prev and prev["mode"] == s["mode"] and prev["endMs"] >= s["startMs"] - 1:
+        if prev and all(prev.get(k) == s.get(k) for k in
+                        ("mode","focusSpeaker","cropBox","people","splitRatio","order","divider","zoomAnchor")) and prev["endMs"] >= s["startMs"] - 1:
             prev["endMs"] = max(prev["endMs"], s["endMs"])
         else:
             merged.append(dict(s))
@@ -255,9 +257,14 @@ def normalize_layout_segments(edits: dict) -> list[dict]:
 def needs_per_segment_layout_export(edits: dict) -> bool:
     """True when export must honor more than one layout mode across the trim span."""
     segs = normalize_layout_segments(edits)
+    # Explicit geometry must be routed through the per-segment renderer even
+    # for a single segment; otherwise the automatic face tracker would override it.
+    if any(seg.get("cropBox") or seg.get("people") or seg.get("focusSpeaker")
+           or seg.get("zoomAnchor") for seg in segs):
+        return True
     if len(segs) <= 1:
         return False
-    worker_modes = {editor_layout_to_worker(str(s["mode"])) for s in segs}
+    worker_modes = {editor_layout_to_worker(str(seg["mode"])) for seg in segs}
     return len(worker_modes) > 1
 
 

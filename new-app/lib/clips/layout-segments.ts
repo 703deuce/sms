@@ -1,6 +1,17 @@
 import type { ClipEditsV2 } from '@/lib/clips/edits'
 
+export type ProducerBox = {x:number;y:number;w:number;h:number}
+export type ProducerPerson = {speakerId:string;box:ProducerBox}
+export type ProducerDivider = {color?:string;width?:number;opacity?:number;style?:'solid'|'dashed'}
 export type LayoutSegment = {
+  /** Source ms. Framing is explicit, never delegated to speaker_follow. */
+  focusSpeaker?: string
+  cropBox?: ProducerBox
+  people?: ProducerPerson[]
+  splitRatio?: number
+  order?: string[]
+  divider?: ProducerDivider
+  zoomAnchor?: {x:number;y:number}
   startMs: number
   endMs: number
   mode: ClipEditsV2['layout']['mode']
@@ -39,10 +50,16 @@ export function normalizeLayoutSegments(
     'facecam_stack',
     'facecam_pip',
   ])
+  const box=(raw:unknown):ProducerBox|undefined=>{
+    if(!raw||typeof raw!=='object'||Array.isArray(raw))return undefined
+    const v=raw as Record<string,unknown>,x=Number(v.x),y=Number(v.y),w=Number(v.w),h=Number(v.h)
+    if(![x,y,w,h].every(Number.isFinite)||x<0||y<0||w<=0||h<=0||x+w>1.001||y+h>1.001)return undefined
+    return {x,y,w,h}
+  }
   const segs: LayoutSegment[] = []
   for (const row of raw) {
     if (!row || typeof row !== 'object') continue
-    const r = row as { startMs?: unknown; endMs?: unknown; mode?: unknown; auto?: unknown }
+    const r = row as Record<string,unknown>
     const startMs = Math.round(Number(r.startMs))
     const endMs = Math.round(Number(r.endMs))
     const mode = modes.has(r.mode as ClipEditsV2['layout']['mode'])
@@ -54,6 +71,31 @@ export function normalizeLayoutSegments(
       endMs: Math.min(trimOut, endMs),
       mode,
       ...(r.auto === true ? { auto: true as const } : {}),
+      ...((typeof r.focusSpeaker==='string'||typeof r.focusSpeaker==='number')
+        ? {focusSpeaker:String(r.focusSpeaker).slice(0,80)}:{}),
+      ...(box(r.cropBox)?{cropBox:box(r.cropBox)}:{}),
+      ...(Array.isArray(r.people)?{people:r.people.slice(0,4).flatMap(person=>{
+        const p=person&&typeof person==='object'?person as Record<string,unknown>:{}
+        const b=box(p.box)
+        return b&&(typeof p.speakerId==='string'||typeof p.speakerId==='number')
+          ?[{speakerId:String(p.speakerId).slice(0,80),box:b}]:[]
+      })}:{}),
+      ...(typeof r.splitRatio==='number'&&Number.isFinite(r.splitRatio)
+        ?{splitRatio:Math.max(.1,Math.min(.9,r.splitRatio))}:{}),
+      ...(Array.isArray(r.order)?{order:r.order.slice(0,4).map(v=>String(v).slice(0,80))}:{}),
+      ...(r.divider&&typeof r.divider==='object'&&!Array.isArray(r.divider)?{divider:{
+        color:typeof (r.divider as Record<string,unknown>).color==='string'
+          ?String((r.divider as Record<string,unknown>).color).slice(0,16):undefined,
+        width:Math.max(0,Math.min(32,Number((r.divider as Record<string,unknown>).width)||0)),
+        opacity:Math.max(0,Math.min(1,Number((r.divider as Record<string,unknown>).opacity??1))),
+        style:(r.divider as Record<string,unknown>).style==='dashed'?'dashed' as const:'solid' as const,
+      }}:{}),
+      ...((()=>{
+        const a=r.zoomAnchor&&typeof r.zoomAnchor==='object'?r.zoomAnchor as Record<string,unknown>:{}
+        const x=Number(a.x),y=Number(a.y)
+        return Number.isFinite(x)&&Number.isFinite(y)&&x>=0&&x<=1&&y>=0&&y<=1
+          ?{zoomAnchor:{x,y}}:{}
+      })()),
     })
   }
   if (!segs.length) return defaultLayoutSegments(trimIn, trimOut, fallbackMode)
@@ -64,7 +106,8 @@ function mergeAdjacentSegments(segs: LayoutSegment[]): LayoutSegment[] {
   const out: LayoutSegment[] = []
   for (const s of segs) {
     const prev = out[out.length - 1]
-    if (prev && prev.mode === s.mode && prev.endMs >= s.startMs - 1) {
+    if (prev && prev.endMs >= s.startMs - 1 &&
+      JSON.stringify({...prev,startMs:0,endMs:0})===JSON.stringify({...s,startMs:0,endMs:0})) {
       prev.endMs = Math.max(prev.endMs, s.endMs)
     } else {
       out.push({ ...s })
@@ -92,8 +135,8 @@ export function splitLayoutSegmentAt(edits: ClipEditsV2, sourceMs: number): Clip
   const idx = segs.findIndex((s) => ms > s.startMs + 200 && ms < s.endMs - 200)
   if (idx < 0) return edits
   const s = segs[idx]
-  const left = { startMs: s.startMs, endMs: ms, mode: s.mode }
-  const right = { startMs: ms, endMs: s.endMs, mode: s.mode }
+  const left:LayoutSegment = {...s,startMs:s.startMs,endMs:ms}
+  const right:LayoutSegment = {...s,startMs:ms,endMs:s.endMs}
   const next = [...segs.slice(0, idx), left, right, ...segs.slice(idx + 1)]
   return { ...edits, layout: { ...edits.layout, layoutSegments: next } }
 }

@@ -9,9 +9,51 @@ import json
 import hashlib
 import secrets
 import uuid
+import subprocess
+from fractions import Fraction
 from datetime import datetime,timezone,timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+
+def _probe_source(conn, source_url: str, upload_id: str) -> None:
+    """Non-billable best-effort ffprobe. Never print subprocess argv or signed URL."""
+    try:
+        result = subprocess.run(
+            ["ffprobe", "-v", "error", "-show_streams", "-of", "json", source_url],
+            capture_output=True, text=True, timeout=45, check=False,
+        )
+        if result.returncode != 0:
+            return
+        streams = json.loads(result.stdout).get("streams") or []
+        video = next((v for v in streams if v.get("codec_type") == "video"), None)
+        has_audio = any(v.get("codec_type") == "audio" for v in streams)
+        width = int(video.get("width")) if video and video.get("width") else None
+        height = int(video.get("height")) if video and video.get("height") else None
+        rate = video.get("avg_frame_rate") or video.get("r_frame_rate") if video else None
+        fps = float(Fraction(str(rate))) if rate and rate != "0/0" else None
+        if fps is not None and not (0.1 <= fps <= 240):
+            fps = None
+        rotation = None
+        if video:
+            tags = video.get("tags") or {}
+            raw = tags.get("rotate")
+            for datum in video.get("side_data_list") or []:
+                if "rotation" in datum:
+                    raw = datum["rotation"]
+            rotation = int(float(raw)) if raw is not None else None
+        with conn.cursor() as cur:
+            cur.execute(
+                'UPDATE clip_uploads SET width=COALESCE(width,%s),height=COALESCE(height,%s),'
+                '"fps"=COALESCE("fps",%s),"rotation"=COALESCE("rotation",%s),'
+                '"hasAudio"=COALESCE("hasAudio",%s) WHERE id=%s',
+                (width,height,fps,rotation,has_audio,upload_id),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        # Probe failure must never consume a second paid transcription attempt.
+        return
 
 
 def run_producer_transcribe_job(conn, job: dict) -> None:
@@ -35,8 +77,12 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
         if isinstance(settings,str): settings=json.loads(settings)
         settings=settings if isinstance(settings,dict) else {}
         root=f"ws/{workspace_id}/projects/{project_id}/"
-        raw = _http_listen(audio_url=sign_url(str(source_key), 3600),
-                           model=deepgram_model(),language=settings.get("asrLanguage") or "en",paragraphs=True)
+        media_url=sign_url(str(source_key), 3600)
+        _probe_source(conn, media_url, str(upload_id))
+        raw = _http_listen(audio_url=media_url,
+                           model=deepgram_model(),language=settings.get("asrLanguage") or "en",
+                           paragraphs=True,max_attempts=1,
+                           timeout_s=min(7200.0,max(600.0,float(duration_ms or 0)/1000*1.5)))
         results = raw.get("results") or {}
         channels = results.get("channels") or []
         alternatives = channels[0].get("alternatives") or [] if channels else []

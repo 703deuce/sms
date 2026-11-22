@@ -7,6 +7,9 @@ import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
+import { CAPTION_PRESETS } from '@/lib/clips/settings'
+import { TEXT_FONTS } from '@/lib/clips/editor/text-items'
+import { normalizeProducerCostReport } from '@/lib/server/clips/producer-cost-report'
 import { clipProducerEnabled, clipProducerConfigReady, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
 
 const prisma = () => getPrisma()
@@ -16,6 +19,9 @@ const word = (v: unknown, max = 240) => typeof v === 'string' ? v.trim().slice(0
 const digest = (value: string) => createHash('sha256').update(value).digest()
 const finished = (status: string) => ['complete', 'failed', 'cancelled', 'dispatch_failed'].includes(status)
 const MAX_FILE_BYTES = 2_000_000_000
+const MAX_ARTIFACTS = 1000
+const MAX_JSON_BYTES = 2_000_000
+const MAX_IMAGE_BYTES = 25_000_000
 const STAGES = ['selecting', 'editing', 'graphics', 'review', 'rendering', 'delivering', 'complete'] as const
 const messages: Record<string,string> = {
   selecting: "We're preparing your highlights…",
@@ -381,14 +387,15 @@ export async function getClipAgentInputs(id: string, request: Request) {
     where: {id: job.projectId, workspaceId: job.workspaceId, deletedAt: null},
     select: {
       title: true, settings: true, transcriptKey: true,
-      upload: {select: {key: true, filename: true, mime: true, durationMs: true}},
+      upload: {select: {key: true, filename: true, mime: true, durationMs: true,
+        fps:true,width:true,height:true,rotation:true,hasAudio:true}},
     },
   })
   if (!project?.upload?.key) throw problem('Source video not found.', 404)
   const settings = object(project.settings)
   const selected = job.clipId.startsWith('project:') ? null : await prisma().clip.findFirst({
     where:{id:job.clipId,workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null},
-    select:{startMs:true,endMs:true,title:true},
+    select:{startMs:true,endMs:true,title:true,edits:true,aiMeta:true},
   })
   if (!job.clipId.startsWith('project:') && !selected) throw problem('Revision source clip not found.',404)
   const root = 'ws/' + job.workspaceId + '/projects/' + job.projectId + '/'
@@ -401,26 +408,63 @@ export async function getClipAgentInputs(id: string, request: Request) {
     sign(project.transcriptKey),
   ])
   if (!sourceUrl) throw problem('Source video unavailable.', 409)
+  const brandId=word(settings.brandTemplateId,120)
+  const kit=await prisma().clipBrandTemplate.findFirst({where:{workspaceId:job.workspaceId,
+    ...(brandId?{id:brandId}:{isDefault:true})},
+    select:{name:true,settings:true,logoKey:true,headingFont:true,captionFont:true,palette:true}})
+  const brandSettings=object(kit?.settings)
+  const overrideBrand=object(settings.brand)
+  const logoUrl=kit?.logoKey?await sign(kit.logoKey):null
+  const transcripts=await prisma().clipMediaTranscript.findFirst({where:{
+    workspaceId:job.workspaceId,projectId:job.projectId,ref:'upload',
+    refId:(await prisma().clipProject.findUnique({where:{id:job.projectId},select:{uploadId:true}}))?.uploadId||'',
+    status:'done'},select:{costUsdMicros:true,language:true}})
+  const meta=object(selected?.aiMeta)
+  const target=Number(settings.targetClipLenS)
+  const lengthRequested=settings.clipLenMode==='target'&&Number.isFinite(target)&&target>=10&&target<=90
+    ? {min:target,max:target}
+    :settings.clipLength==='lt30'?{min:15,max:29}
+    :settings.clipLength==='30_60'?{min:30,max:60}
+    :settings.clipLength==='60_90'?{min:60,max:90}:{min:20,max:60}
+  const priorClipJsonUrl=await sign(word(meta.agentClipJsonKey,500)||null)
+  const previousAnalysisUrl=await sign(word(meta.agentAnalysisKey,500)||null)
   return {
     jobId: id, projectId: job.projectId, clipId: job.clipId,
     action: job.clipId.startsWith('project:') ? 'clip_and_finish' : 'finish_clip',
     delivery: {mode: 'mp4', editable: 'transovo.clip-edits/2'},
     source: {url: sourceUrl, filename: project.upload.filename,
-      mime: project.upload.mime, durationMs: project.upload.durationMs},
-    transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl},
+      mime: project.upload.mime, durationMs: project.upload.durationMs,
+      fps:project.upload.fps,width:project.upload.width,height:project.upload.height,
+      rotation:project.upload.rotation,hasAudio:project.upload.hasAudio},
+    transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl,
+      costUsd:transcripts?.costUsdMicros!=null?transcripts.costUsdMicros/1_000_000:null,
+      language:word(settings.asrLanguage,15)||transcripts?.language||'en',
+      wordsFormat:{w:'word',s:'absolute seconds',e:'absolute seconds',spk:'Deepgram speaker ID',
+        i:'global word index',p:'confidence'},
+      speakerNames:object((selected?.edits&&typeof selected.edits==='object'&&!Array.isArray(selected.edits))
+        ?(selected.edits as Record<string,unknown>).speakerNames:null)},
     ...(job.clipId.startsWith('project:')?{}:{
       revision: {clipId:job.clipId,note:word(object(job.input).note,2000),
-        sourceStartMs:selected?.startMs,sourceEndMs:selected?.endMs,title:selected?.title},
+        sourceStartMs:selected?.startMs,sourceEndMs:selected?.endMs,title:selected?.title,
+        currentEdits:selected?.edits||null,previousClipJsonUrl,previousAnalysisUrl,
+        previousAnalysisSummary:{hook:word(meta.hook,500),speakers:meta.speakers||null}},
     }),
     clipCount: Math.max(1, Math.min(15, Number(settings.autoGrokMaxClips) || 5)),
-    targetSeconds: {min: 20, max: 60},
+    targetSeconds: lengthRequested,
     aspectRatio: settings.aspectRatio || '9:16',
     resolution: settings.aspectRatio==='16:9'?'1920x1080':
       settings.aspectRatio==='1:1'?'1080x1080':
       settings.aspectRatio==='4:5'?'1080x1350':
       settings.aspectRatio==='3:4'?'1080x1440':'1080x1920',
     captionStyle: object(settings.captions),
-    brand: object(settings.brand),
+    captions:{presetIds:CAPTION_PRESETS.map(x=>x.id),
+      selectedPresetId:word(object(settings.captions).presetId,100)||'bold_pop',
+      emphasisIndex:'global word i',capYKeyframeTime:'output ms'},
+    brand:{name:kit?.name||'',palette:object(kit?.palette),
+      colors:object(overrideBrand.colors),headingFont:kit?.headingFont||null,
+      captionFont:kit?.captionFont||null,logoUrl,
+      settings:{...brandSettings,...overrideBrand}},
+    availableTextFonts:TEXT_FONTS.map(font=>font.id),
     notes: word(settings.prompt, 2000),
   }
 }
@@ -497,16 +541,32 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
   const videoName = word(input.video, 150)
   const previewName = word(input.preview, 150)
   const posterName = word(input.thumbnail, 150)
+  const analysisName=word(input.analysisJson,150)
+  const srtName=word(input.srt,150)
+  const vttName=word(input.vtt,150)
   const artifacts = items(job.artifacts)
   const artifact = (name: string, mime: string) => artifacts.find(a =>
     a.filename === name && a.mime === mime && a.state === 'ready')
   const manifest = artifact(manifestName, 'application/json')
+  const analysis=artifact(analysisName,'application/json')
+  const srt=artifact(srtName,'application/x-subrip')
+  const vtt=artifact(vttName,'text/vtt')
   const video = artifact(videoName, 'video/mp4')
   const preview = artifact(previewName, 'video/mp4')
   const poster = artifacts.find(a => a.filename === posterName && a.state === 'ready' &&
     ['image/jpeg','image/png','image/webp'].includes(a.mime))
   if (!manifest || !video || !preview || !poster) throw problem('Commit clip metadata, full MP4, 480p preview and thumbnail first.', 409)
-  if (manifest.bytes > 2_000_000) throw problem('Clip metadata is too large.', 400)
+  if (manifest.bytes > MAX_JSON_BYTES || (analysis&&analysis.bytes>MAX_JSON_BYTES))
+    throw problem('Clip metadata is too large.', 400)
+  if((analysisName&&!analysis)||(srtName&&!srt)||(vttName&&!vtt))
+    throw problem('Commit the named analysis or subtitle artifacts before publishing.',409)
+  if(analysis){
+    try{
+      const a=object(JSON.parse((await getClipStorage().getObjectBytes(analysis.key)).toString('utf8')))
+      if(!Array.isArray(a.shots)&&!Array.isArray(a.faceTracks)&&!Array.isArray(a.speakers))
+        throw new Error('analysis missing structured tracks')
+    }catch{throw problem('Invalid analysis.json.',400)}
+  }
   let detail: Record<string, unknown>
   try {
     detail = object(JSON.parse((await getClipStorage().getObjectBytes(manifest.key)).toString('utf8')))
@@ -548,7 +608,7 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
     const count = existing.filter(c=>object(c.aiMeta).agentClipperRunId===id).length
     const duplicate = existing.find(c=>object(c.aiMeta).agentClipManifest === manifestName &&
       object(c.aiMeta).agentClipperRunId === id)
-    if (duplicate) return {clipId:duplicate.id,created:false}
+    if (duplicate) throw problem('This clip manifest was already published. Use a unique corrected filename or start a revision.',409)
     if (count>=15) throw problem('Maximum of 15 clips per production.',409)
     const clipId = newClipId
     await tx.clip.create({data:{
@@ -559,6 +619,8 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
       edits:toPrismaJson(edits), editsSaveVersion:1,
       aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:id,agentClipManifest:manifestName,
         virality,hook:word(detail.hook, 500),speakers:detail.speakers,
+        agentClipJsonKey:manifest.key,...(analysis?{agentAnalysisKey:analysis.key}:{}),
+        ...(srt?{agentSrtKey:srt.key}:{}),...(vtt?{agentVttKey:vtt.key}:{}),
         fullResKey:video.key,agentFullResEditsVersion:1,deliveredDurationMs:durationMs,
         agentFinishEditableLayersImported:editable,
         agentFinishedVersions:[{jobId:id,key:video.key,durationMs,completedAt:new Date().toISOString()}]}),
@@ -614,6 +676,7 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
     const kind=word(input.kind,24),mime=word(input.mime,80),bytes=Number(input.bytes)
     const checksum=word(input.sha256,64).toLowerCase()
     const sourceKind=['bundle','font','image'].includes(kind)
+    if(all.some(a=>a.filename===filename))throw problem('Artifact filename already exists; use a new filename for corrected uploads.',409)
     if (!filename || !['video','project','media','audio','source','bundle','font','image','caption','subtitle'].includes(kind)
       || !['video/mp4','video/webm','application/json','image/png','image/jpeg','image/webp',
         'audio/mpeg','audio/wav','audio/mp4','text/vtt','application/x-subrip',
@@ -621,7 +684,11 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
         'font/ttf','font/otf','font/woff','font/woff2','application/octet-stream'].includes(mime)
       || (sourceKind&&(!/^[a-f0-9]{64}$/.test(checksum)||bytes>25*1024*1024))
       || (checksum&&!/^[a-f0-9]{64}$/.test(checksum))
-      || !Number.isSafeInteger(bytes)||bytes<1||bytes>MAX_FILE_BYTES||all.length>=10000) {
+      || !Number.isSafeInteger(bytes)||bytes<1||bytes>MAX_FILE_BYTES
+       || (mime==='application/json'&&bytes>MAX_JSON_BYTES)
+       || (mime.startsWith('image/')&&bytes>MAX_IMAGE_BYTES)
+       || (['text/vtt','application/x-subrip'].includes(mime)&&bytes>MAX_JSON_BYTES)
+       ||all.length>=MAX_ARTIFACTS) {
       throw problem('Invalid artifact.',400)
     }
     const uploadId=randomUUID()
@@ -632,7 +699,9 @@ export async function clipAgentArtifact(id: string,request: Request,raw: unknown
       ...(checksum?{sha256:checksum}:{}),
       ...(upload.s3Multipart?{s3UploadId:upload.s3Multipart.uploadId}:{})}
     await updateArtifactsLocked(id,current=>{
-      if(current.length>=10000) throw problem('Too many job artifacts.',400)
+      if(current.some(a=>a.filename===filename))
+        throw problem('Artifact filename already exists; use a unique filename.',409)
+      if(current.length>=MAX_ARTIFACTS) throw problem('Too many job artifacts.',400)
       return [...current,item]
     })
     return {uploadId,objectKey,mode:upload.mode,signedPut:upload.signedPut,
@@ -769,7 +838,8 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     if (clipProducerEnabled() && !report) throw problem('Upload and commit job.json before completing.',409)
     if (clipProducerEnabled() && report) {
       let costReport:Record<string,unknown>
-      try {costReport=object(JSON.parse((await getClipStorage().getObjectBytes(report.key)).toString('utf8')))}
+      try {costReport=normalizeProducerCostReport(
+        JSON.parse((await getClipStorage().getObjectBytes(report.key)).toString('utf8')),id)}
       catch {throw problem('Invalid job.json report.',400)}
       const finishedClips=await prisma().clip.findMany({where:{workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null},select:{aiMeta:true}})
       const count=finishedClips.filter(c=>object(c.aiMeta).agentClipperRunId===id).length
@@ -792,6 +862,18 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     (!clipProducerEnabled()||a.filename===fullName))
   const preview=clipProducerEnabled()?items(job.artifacts).find(a=>a.state==='ready'&&a.kind==='video'&&a.mime==='video/mp4'&&a.filename===previewName):null
   const posterName=word(body.thumbnail,150)
+  const analysisName=word(body.analysisJson,150)
+  const clipJsonName=word(body.clipJson,150)
+  const revisionSrtName=word(body.srt,150)
+  const revisionVttName=word(body.vtt,150)
+  const revisionArtifacts=items(job.artifacts)
+  const analysisArtifact=revisionArtifacts.find(a=>a.state==='ready'&&a.filename===analysisName&&a.mime==='application/json'&&a.bytes<=MAX_JSON_BYTES)
+  const clipJsonArtifact=revisionArtifacts.find(a=>a.state==='ready'&&a.filename===clipJsonName&&a.mime==='application/json'&&a.bytes<=MAX_JSON_BYTES)
+  const revisionSrt=revisionArtifacts.find(a=>a.state==='ready'&&a.filename===revisionSrtName&&a.mime==='application/x-subrip')
+  const revisionVtt=revisionArtifacts.find(a=>a.state==='ready'&&a.filename===revisionVttName&&a.mime==='text/vtt')
+  if((analysisName&&!analysisArtifact)||(clipJsonName&&!clipJsonArtifact)||
+    (revisionSrtName&&!revisionSrt)||(revisionVttName&&!revisionVtt))
+    throw problem('Commit revision metadata and subtitle files before completion.',409)
   const poster=clipProducerEnabled()?items(job.artifacts).find(a=>a.state==='ready'&&a.filename===posterName&&
     ['image/png','image/jpeg','image/webp'].includes(a.mime)):null
   if (!video || (clipProducerEnabled()&&!preview)) throw problem('Upload and commit the finished MP4 and 480p preview first.',409)
@@ -808,6 +890,10 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   },select:{edits:true,startMs:true,endMs:true}})
   if (!existing) throw problem('Source clip was removed.',404)
   const base=existing.edits as unknown as ClipEditsV2
+  const media=await prisma().clipProject.findUnique({where:{id:job.projectId},
+    select:{upload:{select:{durationMs:true}}}})
+  const sourceDuration=media?.upload?.durationMs||0
+  let rangeStart=existing.startMs,rangeEnd=existing.endMs
   let imported:ClipEditsV2|null=null
   const editFile=items(job.artifacts).find(a=>a.filename===editName&&a.state==='ready'&&a.mime==='application/json'&&a.bytes<=2_000_000)
   if (clipProducerEnabled()&&editFile) {
@@ -815,9 +901,13 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       const doc=object(JSON.parse((await getClipStorage().getObjectBytes(editFile.key)).toString('utf8')))
       const rawEdits=object(doc.edits)
       const trim=object(rawEdits.trim)
-      if(doc.schema!=='transovo.clip-edits/2'||Number(trim.in)!==existing.startMs||
-        Number(trim.out)!==existing.endMs)throw new Error('Invalid native clip edit')
-      imported=await nativeProducerEdits(job,rawEdits,items(job.artifacts),existing.startMs,existing.endMs)
+      const nextStart=Number(trim.in),nextEnd=Number(trim.out)
+      if(doc.schema!=='transovo.clip-edits/2'||!Number.isSafeInteger(nextStart)||
+        !Number.isSafeInteger(nextEnd)||nextStart<0||nextEnd<=nextStart||
+        (sourceDuration>0&&nextEnd>sourceDuration+1000))
+        throw new Error('Invalid revision source range')
+      imported=await nativeProducerEdits(job,rawEdits,items(job.artifacts),nextStart,nextEnd)
+      rangeStart=nextStart;rangeEnd=nextEnd
     }catch{console.warn('[clip-agent] revision_edits_fallback',{jobId:id})}
   }
   if (!imported && items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
@@ -850,11 +940,16 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     }].slice(-20)
     await tx.clip.update({where:{id:clip.id},data:{
       previewKey:preview?.key||video.key,
+      ...(imported?{startMs:rangeStart,endMs:rangeEnd}:{}),
       ...(poster?{posterKey:poster.key}:{}),storageDriver:storageDriverName(),
       ...(imported?{edits:toPrismaJson(imported),editsSaveVersion:{increment:1}}:{}),
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
         agentFinishedVersions:versions,
+        ...(analysisArtifact?{agentAnalysisKey:analysisArtifact.key}:{}),
+        ...(clipJsonArtifact?{agentClipJsonKey:clipJsonArtifact.key}:{}),
+        ...(revisionSrt?{agentSrtKey:revisionSrt.key}:{}),
+        ...(revisionVtt?{agentVttKey:revisionVtt.key}:{}),
         ...(clipProducerEnabled()?{fullResKey:video.key,
           agentFullResEditsVersion:clip.editsSaveVersion+(imported?1:0),
           deliveredDurationMs:durationMs}:{}),
@@ -868,7 +963,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       resultKey:video.key,durationMs,completedAt:now,
     }})
   })
-  if(clipProducerEnabled())await refreshClipWords(job,job.clipId,existing.startMs,existing.endMs)
+  if(clipProducerEnabled())await refreshClipWords(job,job.clipId,rangeStart,rangeEnd)
   await closeClipLease(id,true)
   return publicJob(result)
 }

@@ -163,6 +163,8 @@ def _http_listen(
     language: str | None = "en",
     keyterms: list[str] | None = None,
     paragraphs: bool = False,
+    timeout_s: float = REQUEST_TIMEOUT_S,
+    max_attempts: int = 2,
 ) -> dict[str, Any]:
     api_key = deepgram_api_key()
     if not api_key:
@@ -185,10 +187,10 @@ def _http_listen(
         raise DeepgramTranscribeError("no_audio_source")
 
     last_exc: Exception | None = None
-    for attempt in range(2):
+    for attempt in range(max(1,min(2,max_attempts))):
         try:
             req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT_S) as resp:
+            with urllib.request.urlopen(req, timeout=max(30.0,min(7200.0,timeout_s))) as resp:
                 raw = resp.read().decode("utf-8")
             return json.loads(raw)
         except urllib.error.HTTPError as exc:
@@ -201,14 +203,14 @@ def _http_listen(
             reason = f"http_{status}"
             if status in (401, 402, 403):
                 raise DeepgramTranscribeError(reason, status) from exc
-            if status in RETRYABLE_STATUS and attempt == 0:
+            if status in RETRYABLE_STATUS and attempt == 0 and max_attempts > 1:
                 time.sleep(1.5)
                 last_exc = exc
                 continue
             raise DeepgramTranscribeError(f"{reason}:{snippet[:120]}", status) from exc
         except urllib.error.URLError as exc:
             reason = "timeout" if "timed out" in str(exc).lower() else "network"
-            if attempt == 0:
+            if attempt == 0 and max_attempts > 1:
                 time.sleep(1.0)
                 last_exc = exc
                 continue

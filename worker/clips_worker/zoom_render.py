@@ -153,6 +153,7 @@ def apply_zoom(
     *,
     facecam_only: bool = False,
     facecam_band_h: int | None = None,
+    anchor: dict | None = None,
 ) -> None:
     from clips_worker.edits_render import probe_video_size
 
@@ -163,6 +164,12 @@ def apply_zoom(
         subprocess.check_call(["cp", str(video), str(out)])
         return
     z_expr = _scale_factor_expr(keyframes)
+    # A producer punch can explicitly focus an off-centre face. Crop offsets
+    # scale with the chosen normalized anchor instead of always using 0.5.
+    ax = max(0., min(1., float(anchor.get("x", .5)))) if isinstance(anchor, dict) else .5
+    ay = max(0., min(1., float(anchor.get("y", .5)))) if isinstance(anchor, dict) else .5
+    def offset(size: int, focus: float) -> str:
+        return f"(trunc({size}*({z_expr})/2)*2-{size})*{focus:.6f}"
     if z_expr == "1":
         subprocess.check_call(["cp", str(video), str(out)])
         return
@@ -175,7 +182,7 @@ def apply_zoom(
             f"split[full][full2];"
             f"[full]crop={w}:{band_h}:0:0,"
             f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
-            f"crop=w={w}:h={band_h}:x='{_centre_offset_expr(z_expr, w)}':y='{_centre_offset_expr(z_expr, band_h)}'"
+            f"crop=w={w}:h={band_h}:x='{offset(w, ax)}':y='{offset(band_h, ay)}'"
             f":exact=1[topz];"
             f"[full2]crop={w}:{rest_h}:0:{band_h}[bot];"
             f"[topz][bot]vstack=inputs=2"
@@ -183,7 +190,7 @@ def apply_zoom(
     else:
         vf = (
             f"scale=w='trunc(iw*({z_expr})/2)*2':h='trunc(ih*({z_expr})/2)*2':eval=frame,"
-            f"crop=w={w}:h={h}:x='{_centre_offset_expr(z_expr, w)}':y='{_centre_offset_expr(z_expr, h)}':exact=1"
+            f"crop=w={w}:h={h}:x='{offset(w, ax)}':y='{offset(h, ay)}':exact=1"
         )
     subprocess.check_call(
         [

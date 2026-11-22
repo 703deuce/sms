@@ -164,11 +164,15 @@ export async function listProjectClips(
       }
       const meta = c.aiMeta && typeof c.aiMeta === 'object' && !Array.isArray(c.aiMeta) ? c.aiMeta as Record<string, unknown> : {}
       const fullResKey = typeof meta.fullResKey === 'string' && c.editsSaveVersion === Number(meta.agentFullResEditsVersion ?? 1) ? meta.fullResKey : null
-      const [previewUrl, posterUrl, fullResUrl] = await Promise.all([
+      const [previewUrl, posterUrl, fullResUrl, subtitlesSrtUrl, subtitlesVttUrl] = await Promise.all([
         c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
         c.posterKey ? signMedia(c.posterKey, 'poster') : Promise.resolve(null),
         fullResKey ? storage.createSignedDownloadUrl(fullResKey,3600,{downloadFilename:
           (c.title||'finished-clip').replace(/[^A-Za-z0-9._-]+/g,'_')+'.mp4'}).catch(()=>null) : Promise.resolve(null),
+        typeof meta.agentSrtKey==='string'?storage.createSignedDownloadUrl(meta.agentSrtKey,3600,
+          {downloadFilename:'clip-'+c.id+'.srt'}).catch(()=>null):Promise.resolve(null),
+        typeof meta.agentVttKey==='string'?storage.createSignedDownloadUrl(meta.agentVttKey,3600,
+          {downloadFilename:'clip-'+c.id+'.vtt'}).catch(()=>null):Promise.resolve(null),
       ])
       let fallbackSourceUrl: string | null = null
       let fallbackStartMs = c.startMs
@@ -208,6 +212,7 @@ export async function listProjectClips(
         favorite: c.favorite,
         durationMs: Number(meta.deliveredDurationMs) > 0 ? Number(meta.deliveredDurationMs) : c.endMs - c.startMs,
         fullResUrl,
+        subtitlesSrtUrl,subtitlesVttUrl,
         previewUrl,
         posterUrl,
         fallbackSourceUrl,

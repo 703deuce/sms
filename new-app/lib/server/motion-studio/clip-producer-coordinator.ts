@@ -7,6 +7,11 @@ const db=()=>getPrisma()
 const hash=(v:string)=>createHash('sha256').update(v).digest('hex')
 const active=['reserved','dispatched','running']
 export const CLIP_LEASE_MS=15*60_000
+const CLIP_MAX_RUNTIME_MS=6*60*60_000
+/** Size-aware runtime cap, rather than a fixed 45 minutes for a 15-clip / 2-hour source. */
+const clipRuntimeMs=(clips:number,sourceMs:number)=>Math.min(CLIP_MAX_RUNTIME_MS,
+  45*60_000 + Math.max(1,Math.min(15,clips))*15*60_000 +
+  Math.min(90*60_000,Math.round(Math.max(0,sourceMs)/3)))
 const CLIP_DISPATCH_BACKOFF_MS=60_000
 export const clipProducerConfigReady=()=>{
   const url=process.env.MOTION_STUDIO_AGENT_PUBLIC_URL||''
@@ -164,34 +169,54 @@ export async function closeClipLease(id:string,ok:boolean){
 }
 export async function sweepClipJobs(){
   if(!clipProducerEnabled()||!coordinatorEnabled())return {enabled:false}
-  const now=new Date(),old=new Date(Date.now()-45*60_000)
+  const now=new Date()
   const stale=await db().clipAgentFinishJob.findMany({where:{
     status:{in:['queued','dispatching','dispatched','running']},
-    OR:[{startedAt:{lte:old}},{leaseExpiresAt:{lte:now}}],
+    OR:[{startedAt:{lte:new Date(now.getTime()-45*60_000)}},{leaseExpiresAt:{lte:now}}],
   },take:100})
-  let retried=0,failed=0
+  let retried=0,failed=0,partial=0
   for(const job of stale){
     await db().$transaction(async tx=>{
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(117131771)`
       const fresh=await tx.clipAgentFinishJob.findUnique({where:{id:job.id}})
       if(!fresh||!['queued','dispatching','dispatched','running'].includes(fresh.status))return
-      if(fresh.startedAt&&fresh.startedAt<=old || fresh.leaseExpiresAt&&fresh.leaseExpiresAt<=now){
-        await tx.motionStudioWorkerAssignment.updateMany({where:{jobId:job.id,status:{in:active}},
-          data:{status:'expired',leaseExpiresAt:now}})
-        // Never automatically restart a job after a creative webhook accepted paid work.
-        const terminal=fresh.status!=='queued'||fresh.attempts>=2
-        await tx.clipAgentFinishJob.update({where:{id:job.id},data:terminal?{
-          status:'failed',phase:'failed',message:'Clip production timed out. Please retry manually.',
-          error:'timed out',failReason:'timed out',completedAt:now,
-          workerId:null,leaseHash:null,leaseExpiresAt:null,
-        }:{
-          status:'queued',phase:'dispatch',message:'Retrying producer dispatch.',
-          workerId:null,leaseHash:null,leaseExpiresAt:null,startedAt:null,
-        }})
-        if(terminal)failed++;else retried++
-      }
+      const project=await tx.clipProject.findUnique({where:{id:fresh.projectId},
+        select:{settings:true,upload:{select:{durationMs:true}}}})
+      const settings=(project?.settings&&typeof project.settings==='object'&&!Array.isArray(project.settings))
+        ?project.settings as Record<string,unknown>:{}
+      const expected=Number(settings.autoGrokMaxClips)||5
+      const deadline=fresh.startedAt
+        ?new Date(fresh.startedAt.getTime()+clipRuntimeMs(expected,project?.upload?.durationMs||0)):null
+      const timedOut=Boolean(deadline&&deadline<=now)
+      const lostLease=Boolean(fresh.leaseExpiresAt&&fresh.leaseExpiresAt<=now)
+      if(!timedOut&&!lostLease)return
+      const published=await tx.clip.findMany({where:{workspaceId:fresh.workspaceId,
+        projectId:fresh.projectId,deletedAt:null},select:{aiMeta:true}})
+      const count=published.filter(c=>{
+        const m=c.aiMeta
+        return m&&typeof m==='object'&&!Array.isArray(m)&&
+          (m as Record<string,unknown>).agentClipperRunId===fresh.id
+      }).length
+      await tx.motionStudioWorkerAssignment.updateMany({where:{jobId:fresh.id,status:{in:active}},
+        data:{status:'expired',leaseExpiresAt:now}})
+      // Once the webhook accepted paid work there is no automatic retry.
+      const retryPreAccept=fresh.status==='queued'&&fresh.attempts<2&&count===0
+      await tx.clipAgentFinishJob.update({where:{id:fresh.id},data:count>0?{
+        status:'complete',phase:'complete',progress:100,
+        message:count+' clips ready (partial production; remaining clips were not completed).',
+        completedAt:now,workerId:null,leaseHash:null,leaseExpiresAt:null,
+      }:retryPreAccept?{
+        status:'queued',phase:'dispatch',message:'Retrying producer dispatch.',
+        workerId:null,leaseHash:null,leaseExpiresAt:null,startedAt:null,
+      }:{
+        status:'failed',phase:'failed',message:'Clip production timed out. Please retry manually.',
+        error:timedOut?'runtime cap exceeded':'lease expired',
+        failReason:timedOut?'runtime cap exceeded':'lease expired',
+        completedAt:now,workerId:null,leaseHash:null,leaseExpiresAt:null,
+      }})
+      if(count)partial++;else if(retryPreAccept)retried++;else failed++
     },COORDINATOR_TX)
   }
   const dispatched=await coordinateClipJobs()
-  return {...dispatched,retried,failed}
+  return {...dispatched,retried,failed,partial}
 }
