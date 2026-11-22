@@ -17,7 +17,7 @@ export const clipLayoutModes = [
   'fit',
 ] as const
 export const clipModes = ['auto', 'talking', 'anything', 'captions'] as const
-export const clipLengthBuckets = ['auto', 'lt30', '30_60', '60_90'] as const
+export const clipLengthBuckets = ['auto', 'lt30', '30_60', '60_90', '90_180'] as const
 export const clipAspectRatios = ['9:16', '4:5', '3:4', '1:1', '16:9'] as const
 export const clipGenres = [
   'auto',
@@ -66,6 +66,7 @@ export const clipProjectSettingsSchema = z.object({
   rangeStartMs: z.number().int().min(0).default(0),
   rangeEndMs: z.number().int().min(0).default(0),
   prompt: z.string().max(2000).optional(),
+  topic: z.string().max(500).optional(),
   layout: z.enum(clipLayoutModes).default('speaker_follow'),
   aspectRatio: z.enum(clipAspectRatios).default('9:16'),
   captions: z
@@ -100,7 +101,7 @@ export const clipProjectSettingsSchema = z.object({
   autoAgentClipSeconds: z.union([z.literal(30),z.literal(60),z.literal(90)]).optional(),
   /** Opt-in: run unified Grok on the full upload after preparation, including discovery. */
   autoGrokClipper: z.boolean().optional(),
-  autoGrokMaxClips: z.number().int().min(1).max(15).optional(),
+  autoGrokMaxClips: z.number().int().min(1).max(30).optional(),
   /** TX-30: transcription language for new uploads (unset = English). */
   asrLanguage: z
     .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])

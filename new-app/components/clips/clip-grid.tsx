@@ -1,5 +1,7 @@
 'use client'
 
+import {useEffect} from 'react'
+import {useRouter} from 'next/navigation'
 import { ClipCard } from './clip-card'
 import { UnifiedClipTypeBadge } from './unified-clip-type-badge'
 import { NeedsReviewBadge } from './needs-review-badge'
@@ -15,6 +17,8 @@ export type ClipCardData = {
   startMs: number
   endMs: number
   fullResUrl?: string | null
+  renderStatus?: 'queued'|'rendering'|'done'|'failed'|null
+  renderError?: string | null
   subtitlesSrtUrl?: string | null
   subtitlesVttUrl?: string | null
   previewUrl: string | null
@@ -54,6 +58,13 @@ export function ClipGrid({
   onToggleSelect?: (clipId: string) => void
   projectHasUpload?: boolean
 }) {
+  const router=useRouter()
+  const hasPending=clips.some(c=>c.renderStatus==='queued'||c.renderStatus==='rendering')
+  useEffect(()=>{
+    if(!hasPending)return
+    const timer=window.setInterval(()=>router.refresh(),10000)
+    return ()=>window.clearInterval(timer)
+  },[hasPending,router])
   return (
     <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((c) => (

@@ -29,7 +29,7 @@ export async function enqueueProjectExportAll(
     orderBy: { score: 'desc' },
   })
   const selected = opts.clipIds?.length ? clips.filter((c) => opts.clipIds!.includes(c.id)) : clips
-  const batch = selected.filter((c) => c.previewKey).slice(0, 10)
+  const batch = selected.filter((c) => c.previewKey).slice(0, 30)
   if (!batch.length) throw new Error('No clips to export')
 
   const batchId = createId('xbatch')
@@ -58,7 +58,7 @@ export async function enqueueProjectExportAll(
       continue
     }
     if (
-      clip.previewKey &&
+      clip.previewKey && !(clip.aiMeta as Record<string,unknown> | null)?.agentServerRender &&
       canReuseClipPreviewForExport({
         aspect: opts.aspect,
         resolution: opts.resolution,
@@ -87,7 +87,7 @@ export async function enqueueProjectExportAll(
       edits,
       clipStartMs: clip.startMs,
       clipEndMs: clip.endMs,
-      previewKey: clip.previewKey!,
+      previewKey: clip.previewKey,
       title: clip.title,
       batchId,
     })

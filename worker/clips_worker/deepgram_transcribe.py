@@ -190,7 +190,7 @@ def _http_listen(
     for attempt in range(max(1,min(2,max_attempts))):
         try:
             req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=max(30.0,min(7200.0,timeout_s))) as resp:
+            with urllib.request.urlopen(req, timeout=max(30.0,min(21600.0,timeout_s))) as resp:
                 raw = resp.read().decode("utf-8")
             return json.loads(raw)
         except urllib.error.HTTPError as exc:

@@ -156,6 +156,10 @@ export function ClipCard({
   }
 
   const runDownload = async () => {
+    if(clip.renderStatus&&clip.renderStatus!=='done'){
+      toast.message(clip.renderStatus==='failed'?'Render failed; revise this clip.':'Clip is rendering on our servers.')
+      return
+    }
     if (!clip.previewUrl && !clip.posterUrl) {
       toast.error('Preview still processing — try again in a moment')
       return
@@ -273,6 +277,15 @@ export function ClipCard({
             Select
           </label>
         ) : null}
+        {clip.renderStatus&&clip.renderStatus!=='done'?(
+          <div className="absolute inset-0 z-[9] flex flex-col items-center justify-center gap-2 bg-black/75 px-4 text-center text-white"
+            data-testid="producer-clip-render-status">
+            <span className="text-sm font-semibold">{clip.renderStatus==='failed'?'Render failed':
+              clip.renderStatus==='rendering'?'Rendering your clip…':'Queued for rendering…'}</span>
+            {clip.renderStatus==='failed'?<span className="text-xs text-white/80">
+              {clip.renderError||'Please revise this clip to try again.'}</span>:null}
+          </div>
+        ):null}
         {clip.previewUrl || clip.posterUrl || clip.fallbackSourceUrl ? (
           <ClipCardVideo
             clipId={clip.id}
@@ -444,7 +457,8 @@ export function ClipCard({
             size="sm"
             variant="outline"
             className="h-8 shrink-0"
-            disabled={downloadBusy || (!clip.previewUrl && !clip.posterUrl)}
+            disabled={downloadBusy || Boolean(clip.renderStatus&&clip.renderStatus!=='done') ||
+              (!clip.previewUrl && !clip.posterUrl)}
             title={!clip.previewUrl && !clip.posterUrl ? 'Preview still processing' : undefined}
             onClick={(e) => {
               e.stopPropagation()

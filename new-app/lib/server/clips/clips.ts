@@ -110,6 +110,15 @@ export async function listProjectClips(
   const visible = opts?.includeHidden
     ? clips
     : clips.filter((c) => !isClipUserHidden(c.aiMeta))
+  const renderIds=visible.flatMap(c=>{
+    const m=c.aiMeta&&typeof c.aiMeta==='object'&&!Array.isArray(c.aiMeta)
+      ?c.aiMeta as Record<string,unknown>:{}
+    return m.agentServerRender&&typeof m.agentRenderId==='string'?[m.agentRenderId]:[]
+  })
+  const producerRenders=renderIds.length?await prisma.clipRender.findMany({
+    where:{workspaceId,id:{in:renderIds}},select:{id:true,status:true,error:true},
+  }):[]
+  const producerRenderById=new Map(producerRenders.map(r=>[r.id,r]))
 
   const projectFallbackKey = project.proxyKey || project.upload?.key || null
   let projectFallbackPromise: Promise<{ url: string; offsetMs: number } | null> | null = null
@@ -163,6 +172,17 @@ export async function listProjectClips(
         }
       }
       const meta = c.aiMeta && typeof c.aiMeta === 'object' && !Array.isArray(c.aiMeta) ? c.aiMeta as Record<string, unknown> : {}
+      const currentRender=producerRenderById.get(String(meta.agentRenderId??''))
+      const renderStatus=meta.agentServerRender
+        ?currentRender?.status==='FAILED'?'failed'
+          :currentRender?.status==='RENDERING'?'rendering'
+          :currentRender?.status==='READY'&&Number(meta.agentFullResEditsVersion)===c.editsSaveVersion
+            ?'done':'queued'
+        :null
+      const renderError=renderStatus==='failed'?
+        (typeof currentRender?.error==='string'?
+          currentRender.error.replace(/https?:\/\/\S+|Bearer\s+\S+/gi,'[redacted]').slice(0,160):
+          'Render failed. Please revise this clip.') :null
       const fullResKey = typeof meta.fullResKey === 'string' && c.editsSaveVersion === Number(meta.agentFullResEditsVersion ?? 1) ? meta.fullResKey : null
       const [previewUrl, posterUrl, fullResUrl, subtitlesSrtUrl, subtitlesVttUrl] = await Promise.all([
         c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
@@ -212,6 +232,7 @@ export async function listProjectClips(
         favorite: c.favorite,
         durationMs: Number(meta.deliveredDurationMs) > 0 ? Number(meta.deliveredDurationMs) : c.endMs - c.startMs,
         fullResUrl,
+        renderStatus,renderError,
         subtitlesSrtUrl,subtitlesVttUrl,
         previewUrl,
         posterUrl,

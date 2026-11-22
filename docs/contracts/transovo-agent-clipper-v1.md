@@ -101,20 +101,20 @@ When `CLIPS_PRODUCER_PIPELINE=1`, ordinary find-clips uploads are transcribed wi
 
 ### Producer assignment
 
-A registered worker receives `{action:"clip_and_finish",kind:"clips",jobId,jobUrl,jobToken,leaseId,workerId,workspaceId,projectId,coordinator:true,delivery:{mode:"mp4"}}` (or `finish_clip` and `kind:"clip_revision"`). The coordinator authenticates the HTTPS webhook with its existing `MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY`. **Do not publish a live-only timeline; output rendered MP4s.** The producer must fetch fresh signed URLs from `GET {jobUrl}/inputs` using `Authorization: Bearer {jobToken}`, which returns the full source URL, Deepgram, compact transcript JSONL, and words URLs, clipCount (default 5, maximum 15), customer-resolved targetSeconds, aspectRatio (9:16 default), requested resolution, caption preset/brand/notes, and source bounds if a one-clip revision. Signed URLs expire: refresh from `/inputs` if necessary. No provider API key belongs in job input.
+A registered worker receives `{action:"clip_and_finish",kind:"clips",jobId,jobUrl,jobToken,leaseId,workerId,workspaceId,projectId,coordinator:true,delivery:{mode:"server_render",fallback:"mp4"}}` (or `finish_clip` and `kind:"clip_revision"`). The coordinator authenticates the HTTPS webhook with its existing `MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY`. **Do not publish a live-only timeline; publish editable native clips and let the app render them in the shared queue.** The producer must fetch fresh signed URLs from `GET {jobUrl}/inputs` using `Authorization: Bearer {jobToken}`, which returns the full source URL, Deepgram, compact transcript JSONL, and words URLs, clipCount (default 5, maximum 30), customer-resolved targetSeconds, aspectRatio (9:16 default), requested resolution, caption preset/brand/notes, and source bounds if a one-clip revision. Signed URLs expire: refresh from `/inputs` if necessary. No provider API key belongs in job input.
 
 ### Upload protocol and callbacks
 
 Keep the existing `POST {jobUrl}/assets` prepare/commit handshake. Supported kinds and MIME restrictions are enforced by the API; upload images with SHA-256 checksums when kind `image`. For each completed clip, commit:
 
-- `clip_01.mp4`: full-resolution finished edited MP4 (`kind:video`).
-- `clip_01.preview.mp4`: completed 480p MP4 (`kind:video`).
-- `clip_01.thumbnail.png`: thumbnail (`kind:image`, SHA-256 required).
-- `clip_01.json`: `{title,hook,why,sourceStartMs,sourceEndMs,durationMs,speakers,virality:1..10}` (`kind:project`).
+- No MP4 required in server-render mode. The app generates the full-resolution master.
+- No preview required in server-render mode. The app generates the 480p card preview.
+- No thumbnail required in server-render mode. The app extracts a poster.
+- `clip_01.json`: `{title,hook,reason,sourceStartMs,sourceEndMs,durationMs,speakers,score:0..100}` (`kind:project`).
 - `clip_01.edits.json`: a native editable document (`kind:project`); custom graphic media referenced here must be individually committed.
 - Optionally an SRT and separate transparent PNG or WebM overlay artwork, all committed before the clip is published.
 
-After committing, call `POST {jobUrl}/clips` with `{clipJson:"clip_01.json",editsJson:"clip_01.edits.json",video:"clip_01.mp4",preview:"clip_01.preview.mp4",thumbnail:"clip_01.thumbnail.png"}`. This *immediately publishes* one card. Repeat for up to 15 clips. The raw virality (1–10) becomes `clip.score = virality * 10`; both preview and original source ranges are saved. A repeated metadata filename is rejected with HTTP 409; use a unique filename or start a clip revision.
+After committing, call `POST {jobUrl}/clips` with `{clipJson:"clip_01.json",editsJson:"clip_01.edits.json",analysisJson:"clip_01.analysis.json"}`. This *immediately publishes* one card. Repeat for up to 30 clips. An integer score (0–100) is stored as-is; legacy virality (1–10) maps to ×10. Each edits-only clip queues its own RENDER_CLIP job; the server prepares its preview, poster, full MP4 and SRT. A repeated metadata filename is rejected with HTTP 409; use a unique filename or start a clip revision.
 
 For the final callback, upload/commit `job.json` (with timing and cost report) and send `POST {jobUrl}/complete` with `{status:"complete",jobJson:"job.json"}`. Uploading `highlights.json` and legacy completion remains supported with the flag off. Use `POST {jobUrl}/progress` with `{stage,percent,message}`, or `POST {jobUrl}/fail` with `{reason}` for a terminal error. Never automatically retry accepted paid work. Rejected pre-accept dispatch may retry once after 60 seconds. Jobs have a size-aware runtime cap up to 6 hours; already-published clips survive as a partial completion. Send heartbeats every 60 seconds.
 
@@ -216,7 +216,7 @@ The API validates the identity, timestamps, step/clip arrays, and **allowlists**
 
 ### Artifact budget
 
-Up to **1,000 unique filenames**. MP4/video <=2GB per file, image <=25MB, JSON/SRT/VTT <=2MB. All assets are committed before referenced. Preview is 480p MP4, with a size **target** of <=8 MB/minute (not a hard reject threshold). Both SRT (`application/x-subrip`) and VTT (`text/vtt`) are accepted and persisted in per-clip metadata. Deepgram producer transcription uses a source-duration-sized HTTP timeout (600–7200 seconds) and only **one** paid request; filler words are enabled for English.
+Up to **1,000 unique filenames**. MP4/video <=2GB per file, image <=25MB, JSON/SRT/VTT <=2MB. All assets are committed before referenced. Preview is 480p MP4, with a size **target** of <=8 MB/minute (not a hard reject threshold). Both SRT (`application/x-subrip`) and VTT (`text/vtt`) are accepted and persisted in per-clip metadata. Deepgram producer transcription uses a source-duration-sized HTTP timeout (600–21600 seconds) and only **one** paid request; filler words are enabled for English.
 
 
 ## Fix 3: canonical edits, browser preview and producer guardrails (2026-11-22)
@@ -253,3 +253,30 @@ Up to **1,000 unique filenames**. MP4/video <=2GB per file, image <=25MB, JSON/S
 
 - Discovery speaker names are saved in optional project `speakerNames` settings (a record keyed by Deepgram speaker ID); revisions take the latest saved clip edit labels first. Never invent a label for an unnamed diarized speaker.
 - For explicit `fill`, if no clip-level crop is supplied but `people` names the focus speaker, its per-person box is used by both renderers. If only `zoomAnchor` is provided, both renderers derive the same 0.85 × 0.85 normalized window. For a moving `faceTrack`, the source crop size stays fixed; use a separate segment for a size-changing punch.
+
+
+## Producer server-render v4 — authoritative contract (November 22, 2026)
+
+**This section supersedes earlier local-MP4 examples when CLIPS_PRODUCER_PIPELINE=1.** Producer webhook and GET /inputs advertise delivery `{mode:"server_render",fallback:"mp4",editable:"transovo.clip-edits/2"}`. The producer selects, scores and edits. It commits clip.json, a canonical `transovo.clip-edits/2` edits.json, optional analysis.json, SRT/VTT and all referenced overlays; it does not render/upload a full MP4, preview or poster on the primary path. Previous complete MP4+preview+poster uploads remain accepted as an all-or-nothing fallback.
+
+### Parallel render and finished-card assets
+
+`POST {jobUrl}/clips` with `{clipJson,editsJson,analysisJson?,srt?,vtt?}` validates source trims, native edits round trip, and overlay assets. An edits-only publish creates the card as **queued** and enqueues a separate ClipRender and `clip_jobs.RENDER_CLIP` task on the **existing shared worker queue**. The queued jobs run concurrently up to available worker slots, without serialization per producer job. Each finished worker render outputs full-resolution MP4 and SRT, then creates a 480p preview and poster. It attaches assets only if the current `editsSaveVersion` and `agentRenderId` match the completed work: stale renders cannot overwrite revised clips. Cards show queued/rendering/failed while waiting. No accepted creative work is retried automatically.
+
+Authenticated `GET {jobUrl}/renders` returns `{clips:[{clipId,renderId,editsVersion,renderedEditsVersion,status,reason,previewUrl,posterUrl,videoUrl,srtUrl}],summary:{total,done,failed,pending}}`. Status is queued/rendering/done/failed; URLs are signed for 900s and only exposed once done to the job-token holder. Poll while active, and continue POST /heartbeat every 60s; both renew the lease. Stop on 401/409. Never log tokens or signed URLs. Complete with an allowlisted committed job.json only after **all** server renders have finished successfully; pending/failed renders return HTTP 409.
+
+### Only re-render one clip
+
+After reviewing the server-produced preview, commit a newly named `clip_03.v2.edits.json` then `POST {jobUrl}/renders` with `{clipId:"clip_...",editsJson:"clip_03.v2.edits.json"}`. The server stores a new ClipEditVersion, advances that clip's editsSaveVersion and enqueues **only that clip** again; other results remain. Identical normalized edits return `unchanged:true` without a new render. Poll until renderedEditsVersion equals editsVersion before approval. A failed render requires a changed edit or explicit operator recovery; the app does not auto-retry. Standalone finish_clip MP4 delivery stays as fallback.
+
+### Capacity, score, source filtering and long uploads
+
+Producer clipCount now supports **1–30** (55 later), and the batch export path permits up to 30 ready clips. This is a ceiling, not a quota. Inputs include structured `timeRange:{startMs,endMs}` (absolute source ms) and `topic` keywords (<=500 characters), in addition to notes. Source windows outside the selected timeRange fail publication with HTTP 422. Settings expose 90–180 seconds (90_180 bucket), alongside shorter buckets. clip.json accepts integer score 0–100 plus a one-line reason; legacy virality 1–10 still maps to score×10, and project cards sort highest score first.
+
+The public upload limit endpoint `/api/clips/uploads/limits` is authoritative (defaults on compatible multipart storage: **10 hours, 30GB**, environment-overridable). Deepgram producer transcription makes one paid request with a duration-aware timeout and long-lived signed input. Per-clip server renders use signed HTTP seeking to extract only the needed source window, not the entire long recording. A source that does not support remote seeking fails explicitly instead of silently downloading hours of footage.
+
+### Editable effects and -14 LUFS
+
+The worker renders the stored native edits: source-absolute trim/cuts and layout segments (including vertical split, moving face boxes), captions and word emphasis, brand font and emoji, text/shape overlays with opacity, animated graphics and B-roll, zoom, J/L cuts, transitions and audio. Producer edits persist `speechLevelingEnabled:true`, `loudnessLufs:-14`; server render and editor re-export use the same two-pass `apply_program_loudnorm` for that setting, targeting -14 LUFS integrated and -1 dBTP true peak. **Acceptance is measured -14 ±0.5 LUFS and ≤-1 dBTP on the delivered MP4**, not merely the presence of a filter. Frame-level parity (10 timestamp comparisons, target SSIM >=0.98 or documented tolerance), audio loudness and long-upload acceptance still need the user's real on-site test. No test suite or real render was run for this commit.
+
+Billing and credit systems are unchanged.

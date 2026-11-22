@@ -8,9 +8,9 @@ const hash=(v:string)=>createHash('sha256').update(v).digest('hex')
 const active=['reserved','dispatched','running']
 export const CLIP_LEASE_MS=15*60_000
 const CLIP_MAX_RUNTIME_MS=6*60*60_000
-/** Size-aware runtime cap, rather than a fixed 45 minutes for a 15-clip / 2-hour source. */
+/** Size-aware runtime cap, rather than a fixed 45 minutes for a 30-clip long source. */
 const clipRuntimeMs=(clips:number,sourceMs:number)=>Math.min(CLIP_MAX_RUNTIME_MS,
-  45*60_000 + Math.max(1,Math.min(15,clips))*15*60_000 +
+  45*60_000 + Math.max(1,Math.min(30,clips))*15*60_000 +
   Math.min(90*60_000,Math.round(Math.max(0,sourceMs)/3)))
 const CLIP_DISPATCH_BACKOFF_MS=60_000
 export const clipProducerConfigReady=()=>{
@@ -119,7 +119,7 @@ export async function coordinateClipJobs(limit=3){
           jobId:job.id,jobUrl:new URL('/api/clips/agent/jobs/'+encodeURIComponent(job.id),root).toString(),
           jobToken:job.token,projectId:job.projectId,clipId:job.clipId,
           workspaceId:job.workspaceId,workerId:job.workerId,leaseId:job.lease,
-          coordinator:true,delivery:{mode:'mp4'}}),
+          coordinator:true,delivery:{mode:'server_render',fallback:'mp4',editable:'transovo.clip-edits/2'}}),
       })
       accepted=response.ok
     }catch{/* bounded retry from sweep */}
@@ -192,20 +192,39 @@ export async function sweepClipJobs(){
       if(!timedOut&&!lostLease)return
       const published=await tx.clip.findMany({where:{workspaceId:fresh.workspaceId,
         projectId:fresh.projectId,deletedAt:null},select:{aiMeta:true}})
-      const count=published.filter(c=>{
+      const producerClips=published.filter(c=>{
         const m=c.aiMeta
         return m&&typeof m==='object'&&!Array.isArray(m)&&
           (m as Record<string,unknown>).agentClipperRunId===fresh.id
-      }).length
+      })
+      const count=producerClips.length
+      const activeRenderIds=producerClips.flatMap(c=>{
+        const meta=c.aiMeta as Record<string,unknown>
+        return meta.agentServerRender&&typeof meta.agentRenderId==='string'
+          ?[meta.agentRenderId]:[]
+      })
+      const liveRenders=activeRenderIds.length?await tx.clipRender.count({where:{
+        id:{in:activeRenderIds},status:{in:['QUEUED','RENDERING']},
+      }}):0
+      const unqueued=producerClips.some(c=>{
+        const meta=c.aiMeta as Record<string,unknown>
+        return meta.agentServerRender&&!meta.agentRenderId
+      })
+      if(!timedOut&&(liveRenders>0||unqueued)){
+        // Server worker tasks outlive the producer's last callback. Keep the
+        // accepted lease alive while they finish, bounded by the hard cap.
+        const renew=new Date(now.getTime()+CLIP_LEASE_MS)
+        await tx.clipAgentFinishJob.update({where:{id:fresh.id},data:{leaseExpiresAt:renew}})
+        await tx.motionStudioWorkerAssignment.updateMany({
+          where:{jobId:fresh.id,status:{in:active}},data:{leaseExpiresAt:renew},
+        })
+        return
+      }
       await tx.motionStudioWorkerAssignment.updateMany({where:{jobId:fresh.id,status:{in:active}},
         data:{status:'expired',leaseExpiresAt:now}})
       // Once the webhook accepted paid work there is no automatic retry.
       const retryPreAccept=fresh.status==='queued'&&fresh.attempts<2&&count===0
-      await tx.clipAgentFinishJob.update({where:{id:fresh.id},data:count>0?{
-        status:'complete',phase:'complete',progress:100,
-        message:count+' clips ready (partial production; remaining clips were not completed).',
-        completedAt:now,workerId:null,leaseHash:null,leaseExpiresAt:null,
-      }:retryPreAccept?{
+      await tx.clipAgentFinishJob.update({where:{id:fresh.id},data:retryPreAccept?{
         status:'queued',phase:'dispatch',message:'Retrying producer dispatch.',
         workerId:null,leaseHash:null,leaseExpiresAt:null,startedAt:null,
       }:{

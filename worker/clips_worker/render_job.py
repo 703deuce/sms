@@ -189,7 +189,8 @@ def load_render_context(conn, render_id: str) -> dict:
                    r."aspectRatio", r.resolution,
                    c."startMs", c."endMs", c."previewKey", c."cropKey", c.edits, c."projectId",
                    c."sourceSegKey", c."sourceSegStartMs", c."sourceSegEndMs", c."aiMeta",
-                   p.settings, p."transcriptKey", p."transcriptWords", p."proxyKey", u.key AS source_key
+                   p.settings, p."transcriptKey", p."transcriptWords", p."proxyKey",
+                   u.key AS source_key, u."durationMs" AS source_duration_ms
             FROM clip_renders r
             JOIN clips c ON c.id = r."clipId"
             JOIN clip_projects p ON p.id = c."projectId"
@@ -337,6 +338,41 @@ def _export_stage_log(render_id: str, stage: str, t0: float, extra: dict | None 
     print(f"[clipper:export_stage] {json.dumps(payload)}", flush=True)
 
 
+def _finish_producer_render(conn, render_id: str, job: dict, finished_mp4: Path,
+                            workspace_id: str, project_id: str, clip_id: str,
+                            edits_version: int, output_key: str, srt_key: str | None) -> None:
+    """Materialize immutable card assets, then update only the still-current edit version."""
+    import subprocess
+    with tempfile.TemporaryDirectory(prefix="producer_card_") as folder:
+        root = Path(folder)
+        preview = root / "preview.mp4"
+        poster = root / "poster.jpg"
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(finished_mp4),
+                        "-vf", "scale=-2:480", "-c:v", "libx264", "-preset", "veryfast",
+                        "-crf", "23", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
+                        str(preview)], check=True, capture_output=True)
+        subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "0.3", "-i", str(preview),
+                        "-frames:v", "1", str(poster)], check=True, capture_output=True)
+        root_key = f"ws/{workspace_id}/projects/{project_id}/clips/{clip_id}/renders/{render_id}"
+        preview_key, poster_key = root_key + ".preview.mp4", root_key + ".poster.jpg"
+        upload_file(preview_key, preview, "video/mp4")
+        upload_file(poster_key, poster, "image/jpeg")
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE clips SET "previewKey"=%s, "posterKey"=%s,
+                "aiMeta"=COALESCE("aiMeta",'{}'::jsonb) || %s::jsonb,
+                "updatedAt"=NOW()
+            WHERE id=%s AND "workspaceId"=%s AND "editsSaveVersion"=%s
+              AND "aiMeta"->>'agentRenderId'=%s
+        """, (preview_key, poster_key,
+              json.dumps({"fullResKey":output_key, "agentFullResEditsVersion":edits_version,
+                          "agentRenderStatus":"done", "agentSrtKey":srt_key,
+                          "deliveredDurationMs":round(_probe_duration_sec(finished_mp4)*1000),
+                          "agentPreviewRenderId":render_id}),
+              clip_id, workspace_id, edits_version, render_id))
+    conn.commit()
+
+
 def run_render_clip_job(conn, job: dict, post_progress) -> None:
     from clips_worker.worker_drain import WorkerDrainExit, drain_requested
 
@@ -380,6 +416,11 @@ def run_render_clip_job(conn, job: dict, post_progress) -> None:
             t_job=t_job,
             _check_drain=_check_drain,
         )
+    except Exception as exc:
+        if payload.get("producerJobId"):
+            # Never leak URLs or subprocess argv in customer-visible failures.
+            mark_render(conn, render_id, "FAILED", error="Render failed: "+type(exc).__name__)
+        raise
     finally:
         flush_decision_log(force=True)
         unbind_decision_log()
@@ -509,6 +550,10 @@ def _run_render_clip_job_body(
     if resolution in (1080, "1080"):
         resolution = "1080p"
     settings = {**settings, "aspectRatio": aspect, "exportResolution": resolution}
+    if payload.get("producerJobId"):
+        settings["producerServerRender"] = True
+        edits["loudnessLufs"] = -14
+        edits["speechLevelingEnabled"] = True
     if is_landscape_aspect(aspect):
         from clips_worker.layout_router import landscape_layout
 
@@ -546,7 +591,7 @@ def _run_render_clip_job_body(
     if deliver_spec and deliver_spec.get("targetResolution") in ("1440p", "2160p"):
         resolution = "1080p"
         settings = {**settings, "exportResolution": resolution}
-    if preview_key and not compose_spec and not deliver_spec and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
+    if not payload.get("producerJobId") and preview_key and not compose_spec and not deliver_spec and can_reuse_clip_preview_for_render(aspect, resolution, edits, clip_start, clip_end):
         tmp = Path(tempfile.mkdtemp()) / "probe.mp4"
         try:
             download_object(preview_key, tmp)
@@ -570,12 +615,18 @@ def _run_render_clip_job_body(
     with tempfile.TemporaryDirectory() as td, ExitStack() as progress_stack:
         td_path = Path(td)
         src = td_path / "source.mp4"
-        download_object(source_key, src)
-        _export_stage_log(render_id, "download_source", t_job)
-        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("prep", 0.6)})
-        upload_dur_ms = int(_probe_duration_sec(src) * 1000)
-        trim_limits = export_trim_limits_ms(ctx, clip_start, clip_end, source_reason, upload_dur_ms)
         clip_file = td_path / "clip.mp4"
+        producer_server_render = bool(payload.get("producerJobId"))
+        if producer_server_render:
+            # The original may be 3–10 hours. ffmpeg HTTP seeks via S3/Supabase
+            # byte ranges, materializing ONLY the expanded clip window.
+            upload_dur_ms = int(ctx.get("source_duration_ms") or clip_end)
+        else:
+            download_object(source_key, src)
+            _export_stage_log(render_id, "download_source", t_job)
+            upload_dur_ms = int(_probe_duration_sec(src) * 1000)
+        post_progress(job["id"], {"jobStatus": "RUNNING", "stage": "render_clip", "progress": overall_progress("prep", 0.6)})
+        trim_limits = export_trim_limits_ms(ctx, clip_start, clip_end, source_reason, upload_dur_ms)
         cut_start, cut_end, lo_ms, hi_ms = expanded_source_cut_ms(
             clip_start, clip_end, edits, limits=trim_limits,
         )
@@ -585,7 +636,22 @@ def _run_render_clip_job_body(
         )
         rel_start = cut_start - source_offset_ms
         rel_end = cut_end - source_offset_ms
-        ffmpeg_cut(src, clip_file, rel_start, rel_end)
+        if producer_server_render:
+            from clips_worker.storage import sign_url
+            import subprocess
+            signed_source = sign_url(source_key, 7200)
+            # Capture stderr: ffmpeg errors can include the signed URL.
+            proc = subprocess.run([
+                "ffmpeg", "-y", "-v", "error", "-ss", f"{max(0,rel_start)/1000:.6f}",
+                "-i", signed_source, "-t", f"{max(0.05,(rel_end-rel_start)/1000):.6f}",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+                "-c:a", "aac", "-b:a", "192k", str(clip_file),
+            ], capture_output=True, timeout=1800)
+            if proc.returncode != 0:
+                raise RuntimeError("source_window_extract_failed")
+            _export_stage_log(render_id, "source_window", t_job)
+        else:
+            ffmpeg_cut(src, clip_file, rel_start, rel_end)
         _export_stage_log(render_id, "ffmpeg_cut", t_job)
         cut_dur = _probe_duration_sec(clip_file)
         if cut_dur < 0.1:
@@ -721,7 +787,7 @@ def _run_render_clip_job_body(
             remapped, _ = words_after_edits(ensure_word_i(source_words), edits)
             srt_body = export_srt(edits, remapped)
             _export_stage_log(render_id, "preview_composite_cut", t_job, {"resolution": resolution})
-        elif preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
+        elif not payload.get("producerJobId") and preview_key and export_edits_allow_preview_reuse(aspect, edits, clip_start, clip_end):
             post_progress(
                 job["id"],
                 {"jobStatus": "RUNNING", "stage": "render_clip", "progress": 55, "etaSeconds": 45},
@@ -970,6 +1036,11 @@ def _run_render_clip_job_body(
             length_mismatch=length_mismatch,
         )
         _assert_still_owned(conn, job)
+        if payload.get("producerJobId"):
+            _finish_producer_render(
+                conn, render_id, job, final_out, workspace_id, project_id, clip_id,
+                int(payload.get("producerEditsVersion") or 1), out_key, srt_key,
+            )
         mark_render(conn, render_id, "READY", out_key, size, None, srt_key, stems_key)
         _clear_stale_project_render_error(conn, str(ctx.get("projectId") or ""))
         if render_meta.get("fit_fallback"):

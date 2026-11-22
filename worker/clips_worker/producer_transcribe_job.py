@@ -77,12 +77,12 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
         if isinstance(settings,str): settings=json.loads(settings)
         settings=settings if isinstance(settings,dict) else {}
         root=f"ws/{workspace_id}/projects/{project_id}/"
-        media_url=sign_url(str(source_key), 3600)
+        media_url=sign_url(str(source_key), 21600)
         _probe_source(conn, media_url, str(upload_id))
         raw = _http_listen(audio_url=media_url,
                            model=deepgram_model(),language=settings.get("asrLanguage") or "en",
                            paragraphs=True,max_attempts=1,
-                           timeout_s=min(7200.0,max(600.0,float(duration_ms or 0)/1000*1.5)))
+                           timeout_s=min(21600.0,max(600.0,float(duration_ms or 0)/1000*1.5)))
         results = raw.get("results") or {}
         channels = results.get("channels") or []
         alternatives = channels[0].get("alternatives") or [] if channels else []

@@ -179,6 +179,8 @@ export async function enqueueRenderClip(
     previewKey: string | null
     title: string
     batchId?: string
+    producerJobId?: string
+    producerEditsVersion?: number
     deliver?: ExportDeliver | null
   },
 ) {
@@ -192,7 +194,9 @@ export async function enqueueRenderClip(
   const editsHash = editsVersionHash(opts.edits)
   const stemsRequested = Boolean(opts.deliver?.stems)
   const hashMaterial = clipRenderHashMaterial(editsHash, { composeSpec, deliver: opts.deliver })
-  const hash = renderVersionHash(hashMaterial, opts.aspect, targetRes)
+  const hash = renderVersionHash(opts.producerJobId
+    ?hashMaterial+':producer:'+opts.producerJobId+':edits-v'+String(opts.producerEditsVersion??1)
+    :hashMaterial, opts.aspect, targetRes)
   const fmt = opts.deliver && !isDefaultDeliver(opts.deliver) ? deliverExt(opts.deliver) : 'mp4'
   const existing = await prisma.clipRender.findFirst({
     where: { clipId, workspaceId, status: 'READY', editsVersionHash: hash },
@@ -272,9 +276,12 @@ export async function enqueueRenderClip(
       clipId,
       type: 'RENDER_CLIP',
       status: 'QUEUED',
+      ...(opts.producerJobId?{maxAttempts:1}:{}),
       payload: {
         renderId,
         editsVersionHash: hash,
+        ...(opts.producerJobId?{producerJobId:opts.producerJobId,
+          producerEditsVersion:opts.producerEditsVersion??1}:{}),
         ...(composeSpec ? { composeSpec } : {}),
         ...(opts.deliver && !isDefaultDeliver(opts.deliver) ? { deliver: opts.deliver, targetResolution: targetRes } : {}),
       },

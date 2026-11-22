@@ -2500,9 +2500,10 @@ def render_edited_clip(
         )
         caption_src = mixed
 
-    if isinstance(edits.get("templateProvenance"), dict) and not (
+    if (isinstance(edits.get("templateProvenance"), dict) and
+        not settings.get("producerServerRender") and not (
         edits.get("speechLevelingEnabled") is True and edits.get("loudnessLufs") is not None
-    ):
+    )):
         try:
             from clips_worker.audio_render import apply_program_loudnorm
 
@@ -2516,7 +2517,18 @@ def render_edited_clip(
             print(f"[clipper:template_audio] program_loudnorm skipped reason={type(e).__name__}", flush=True)
 
     loud_lufs = edits.get("loudnessLufs")
-    if edits.get("speechLevelingEnabled") is True and loud_lufs is not None:
+    if (settings.get("producerServerRender") or
+        (edits.get("speechLevelingEnabled") is True and edits.get("loudnessLufs")==-14)):
+        # Two-pass program analysis on the FINAL speech+music mix; no silent
+        # fallback to a single-pass target for producer server renders.
+        from clips_worker.audio_render import apply_program_loudnorm
+        producer_ln = work_dir / "producer_14_lufs.mp4"
+        apply_program_loudnorm(caption_src, producer_ln, target_lufs=-14.0,
+                               true_peak_db=-1.0)
+        caption_src = producer_ln
+        if render_meta is not None:
+            render_meta["producer_loudnorm_14"] = True
+    elif edits.get("speechLevelingEnabled") is True and loud_lufs is not None:
         try:
             from clips_worker.audio_render import apply_loudnorm
 

@@ -14,7 +14,7 @@ export function normalizeProducerCostReport(raw:unknown,jobId:string){
   const startedAt=date(r.startedAt),finishedAt=date(r.finishedAt)
   if(!startedAt||!finishedAt||Date.parse(finishedAt)<Date.parse(startedAt))
     throw new Error('Invalid job report timestamps')
-  if(!Array.isArray(r.steps)||!Array.isArray(r.clips)||r.steps.length>200||r.clips.length>15)
+  if(!Array.isArray(r.steps)||!Array.isArray(r.clips)||r.steps.length>200||r.clips.length>30)
     throw new Error('Invalid job report steps or clips')
   return {schema:'transovo.clip-job-report/1',jobId,startedAt,finishedAt,
     wallMs:number(r.wallMs,24*60*60_000),

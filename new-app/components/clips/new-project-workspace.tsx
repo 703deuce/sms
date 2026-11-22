@@ -66,6 +66,15 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
   const [estimate, setEstimate] = useState<{ credits: number } | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
+  const [uploadLimit,setUploadLimit]=useState<{maxLabel:string;maxDurationHours:number}|null>(null)
+  useEffect(()=>{
+    let active=true
+    void fetch('/api/clips/uploads/limits',{cache:'no-store'})
+      .then(r=>r.ok?r.json():null)
+      .then(payload=>{if(active&&payload?.data)setUploadLimit(payload.data)})
+      .catch(()=>{})
+    return ()=>{active=false}
+  },[])
   const byoAutoStartedRef = useRef(false)
 
   const onFile = (file: File, resumeUploadId?: string) => {
@@ -291,12 +300,19 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
               <select className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
                 value={settings.autoGrokMaxClips??5}
                 onChange={e=>setSettings(v=>({...v,autoGrokMaxClips:Number(e.target.value)}))}>
-                {[1,2,3,4,5,6,8,10,12,15].map(n=><option key={n} value={n}>{n} clips</option>)}
+                {[1,2,3,4,5,6,8,10,12,15,20,25,30].map(n=><option key={n} value={n}>{n} clips</option>)}
               </select>
             </label>
             <label className="space-y-1.5 text-xs font-medium">
               <span>Target length</span>
-              <div className="flex h-10 items-center rounded-lg border border-border bg-background px-3 text-sm">20–60 seconds per clip</div>
+              <select className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                value={settings.clipLength} onChange={e=>setSettings(v=>({...v,clipLength:e.target.value as ClipProjectSettings['clipLength'],clipLenMode:'auto'}))}>
+                <option value="auto">Auto · 20–60 seconds</option>
+                <option value="lt30">Under 30 seconds</option>
+                <option value="30_60">30–60 seconds</option>
+                <option value="60_90">60–90 seconds</option>
+                <option value="90_180">90–180 seconds</option>
+              </select>
             </label>
             <label className="space-y-1.5 text-xs font-medium">
               <span>Canvas format</span>
@@ -317,6 +333,25 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
                   enabled:v.captions?.enabled??true,language:v.captions?.language??'en'}}))}>
                 {CAPTION_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium sm:col-span-2">
+              <span>Source time range (minutes; end 0 uses whole source)</span>
+              <div className="flex gap-2">
+                <input type="number" min={0} step={0.5} value={settings.rangeStartMs/60000}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  aria-label="Range start minutes"
+                  onChange={e=>setSettings(v=>({...v,rangeStartMs:Math.max(0,Math.round(Number(e.target.value)*60000))}))}/>
+                <input type="number" min={0} step={0.5} value={settings.rangeEndMs/60000}
+                  className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                  aria-label="Range end minutes, 0 for whole source"
+                  onChange={e=>setSettings(v=>({...v,rangeEndMs:Math.max(0,Math.round(Number(e.target.value)*60000))}))}/>
+              </div>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium sm:col-span-2">
+              <span>Topic or keywords (optional)</span>
+              <input className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                maxLength={500} placeholder="e.g. money, business, investing"
+                value={settings.topic??''} onChange={e=>setSettings(v=>({...v,topic:e.target.value}))}/>
             </label>
             <label className="space-y-1.5 text-xs font-medium sm:col-span-2">
               <span>Creative direction <span className="font-normal text-muted-foreground">(optional)</span></span>
@@ -348,7 +383,7 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
               <select id="auto-grok-count" className="rounded-md border border-border bg-background px-2 py-1.5"
                 value={settings.autoGrokMaxClips??3}
                 onChange={e=>setSettings(v=>({...v,autoGrokMaxClips:Number(e.target.value)}))}>
-                {[1,2,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n}</option>)}
+                {(producerPipelineEnabled?[1,2,3,4,5,6,8,10,12,15,20,25,30]:[1,2,3,4,5,6,8,10]).map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </div>
           ):null}
@@ -412,6 +447,13 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
           ) : tab === 'upload' ? (
             <div className="flex flex-col gap-4">
               {!upload || upload.state === 'error' ? <Dropzone onFile={onFile} /> : null}
+              {projectIntent==='find'&&(
+                <p className="text-xs text-muted-foreground" data-testid="producer-upload-limits">
+                  Maximum uploaded source: {uploadLimit?.maxDurationHours??10} hours
+                  {uploadLimit?.maxLabel?' · '+uploadLimit.maxLabel:' · up to 30 GB on supported storage'}.
+                  Long videos are processed as individual clip windows during export.
+                </p>
+              )}
               {upload ? (
                 <UploadProgressItem
                   progress={upload}
