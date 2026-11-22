@@ -2,6 +2,9 @@
 
 Principles for "Edit My Footage" jobs. Read this before cutting on Path A. Where this file differs from a hard rule in `SKILL.md`, `qa.md` or `delivery.md`, that rule wins. Principles only: apply them with judgment to this footage. Defaults are not mandates. The edit is footage-driven. Graphics never cover faces or what is being shown. The look varies by job.
 
+
+**Full Edit gets full production.** A Full Edit of the user's footage gets the same production a regular film does: motion graphics, titles, lower thirds and name tags, callouts, captions, transitions, extra shots where they help, music, the grade and the mix, using whichever engines fit, in a look chosen for this job. The only difference from a regular film is where the footage comes from: the user supplies it instead of research and sourcing. Story and pacing come first, then the full production pass on top. Script and voiceover stay optional per job and per segment.
+
 There is no standalone Clean Up mode in this skill (Rick, Nov 22, deferred). Tightening dead air, fillers and false starts is part of a normal edit when it serves the ask. The editor's existing manual cleanup tools stay available to the customer.
 
 ## Why this is different from our films
