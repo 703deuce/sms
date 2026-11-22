@@ -14,6 +14,7 @@ export type ClipCardData = {
   durationMs: number
   startMs: number
   endMs: number
+  fullResUrl?: string | null
   previewUrl: string | null
   posterUrl: string | null
   fallbackSourceUrl?: string | null
