@@ -163,7 +163,7 @@ export async function listProjectClips(
         }
       }
       const meta = c.aiMeta && typeof c.aiMeta === 'object' && !Array.isArray(c.aiMeta) ? c.aiMeta as Record<string, unknown> : {}
-      const fullResKey = typeof meta.fullResKey === 'string' && c.editsSaveVersion <= 1 ? meta.fullResKey : null
+      const fullResKey = typeof meta.fullResKey === 'string' && c.editsSaveVersion === Number(meta.agentFullResEditsVersion ?? 1) ? meta.fullResKey : null
       const [previewUrl, posterUrl, fullResUrl] = await Promise.all([
         c.previewKey ? signMedia(c.previewKey, 'preview') : Promise.resolve(null),
         c.posterKey ? signMedia(c.posterKey, 'poster') : Promise.resolve(null),
