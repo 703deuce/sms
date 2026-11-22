@@ -188,13 +188,20 @@ def run_import_url_job(conn, job: dict, project: dict, post_progress) -> None:
                 """,
                 (upload_id, duration_ms, project_id),
             )
+            settings = project.get("settings") or {}
+            if isinstance(settings, str):
+                settings = json.loads(settings)
+            producer = isinstance(settings, dict) and settings.get("autoGrokClipper") is True
+            # The new pipeline's import projects carry a server-generated marker
+            # rather than relying on a worker environment variable.
+            producer = producer and settings.get("producerPipeline") is True
             proc_id = f"job_{uuid.uuid4().hex}"
             cur.execute(
                 """
                 INSERT INTO clip_jobs (id, "projectId", type, status, payload, "createdAt")
-                VALUES (%s,%s,'PROCESS_PROJECT','QUEUED','{}'::jsonb,NOW())
+                VALUES (%s,%s,%s,'QUEUED','{}'::jsonb,NOW())
                 """,
-                (proc_id, project_id),
+                (proc_id, project_id, "PRODUCER_TRANSCRIBE" if producer else "PROCESS_PROJECT"),
             )
         conn.commit()
 
