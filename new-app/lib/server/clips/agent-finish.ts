@@ -833,9 +833,11 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       ...(imported?{edits:toPrismaJson(imported),editsSaveVersion:{increment:1}}:{}),
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
-        agentFinishedVersions:versions,fullResKey:video.key,
-        agentFullResEditsVersion:clip.editsSaveVersion+(imported?1:0),
-        deliveredDurationMs:durationMs,agentFinishActiveJobId:id,
+        agentFinishedVersions:versions,
+        ...(clipProducerEnabled()?{fullResKey:video.key,
+          agentFullResEditsVersion:clip.editsSaveVersion+(imported?1:0),
+          deliveredDurationMs:durationMs}:{}),
+        agentFinishActiveJobId:id,
         agentFinishEditableLayersImported:Boolean(imported)}),
     }})
     // The original editable clip timeline is deliberately preserved. This output
