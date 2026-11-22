@@ -6,7 +6,7 @@ import { CheckCircle2, Loader2, Sparkles, AlertTriangle } from 'lucide-react'
 
 type Job = {
   id:string;status:string;phase:string;progress:number;
-  message:string|null;durationMs:number|null
+  message:string|null;durationMs:number|null;publishedClips?:number
 }
 
 export function AgentClipDiscoveryPanel({projectId,onFinished}:{
@@ -15,7 +15,8 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
   const [job,setJob]=useState<Job|null>(null)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState<string|null>(null)
-  const [count,setCount]=useState(3)
+  const [count,setCount]=useState(5)
+  const previousPublished=useRef(0)
   const previousStatus=useRef<string|null>(null)
   const reload=useCallback(async()=>{
     const response=await fetch('/api/clips/projects/'+encodeURIComponent(projectId)+'/agent-discover',
@@ -23,7 +24,9 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
     if(!response.ok) return
     const data=await response.json() as {job:Job|null}
     setJob(data.job)
-    if(data.job?.status==='complete'&&previousStatus.current!=='complete') onFinished()
+    if ((data.job?.publishedClips||0)>previousPublished.current ||
+      data.job?.status==='complete'&&previousStatus.current!=='complete') onFinished()
+    previousPublished.current=data.job?.publishedClips||0
     previousStatus.current=data.job?.status??null
   },[projectId,onFinished])
   useEffect(()=>{
@@ -67,7 +70,7 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
         <label htmlFor={'grok-discover-count-'+projectId} className="text-xs text-muted-foreground">Up to</label>
         <select id={'grok-discover-count-'+projectId} value={count} onChange={e=>setCount(Number(e.target.value))}
           className="rounded-md border bg-background px-2 py-1.5 text-sm">
-          {[1,2,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n} clips</option>)}
+          {[1,2,3,4,5,6,8,10,12,15].map(n=><option key={n} value={n}>{n} clips</option>)}
         </select>
         <Button size="sm" disabled={busy||active} onClick={()=>void start()}>
           {busy||active?<Loader2 className="mr-2 size-4 animate-spin"/>:<Sparkles className="mr-2 size-4"/>}
@@ -80,7 +83,8 @@ export function AgentClipDiscoveryPanel({projectId,onFinished}:{
         failed?<AlertTriangle className="size-4 text-destructive"/>:
         <Loader2 className="size-4 animate-spin"/>}
       <div className="min-w-0 flex-1">
-        <p>{job.message||job.phase} {active?'· '+job.progress+'%':''}</p>
+        <p>{job.message||job.phase} {active?'· '+job.progress+'%':''}
+          {job.publishedClips ? ' · '+job.publishedClips+' clips ready' : ''}</p>
         {active?<div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">
           <div className="h-full rounded bg-primary" style={{width:Math.max(0,Math.min(100,job.progress))+'%'}}/>
         </div>:null}
