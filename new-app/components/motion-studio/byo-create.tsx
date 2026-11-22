@@ -149,7 +149,7 @@ export function ByoCreate(){
           throw new Error(issue.error||'Could not start editing your footage.')
         }
       }
-      router.push('/app/motion-studio/'+encodeURIComponent(project.id))
+      router.push('/app/edit-my-footage/'+encodeURIComponent(project.id))
     }catch(err){
       setError(err instanceof Error?err.message:'Could not start your video. Try again.')
       pending.current=false;setStarting(false)
