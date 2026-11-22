@@ -113,7 +113,7 @@ These are the rules Rick James (Transovo owner) has given the Motion Studio prod
 
 ## 9. Job types
 
-1. **BYOF (bring your own footage):** no research and no voiceover. Follow the customer's direction on the type of edit and use only the footage they provided. *(Nov 18–19)*
+1. **BYOF (bring your own footage):** no research. Follow the customer's direction on the type of edit and use only the footage they provided. *(Nov 18–19)* **Script and voiceover updated Nov 22:** optional per job and per segment, not a blanket ban. Default to the speakers' own words; add a script, voiceover or title card only where the ask or the story needs it. See §15.
 2. **"No research" jobs:** customer-supplied script and footage; no fact-check or web material. *(Nov 17)*
 3. **Clip jobs must be batched.** 5–15 minutes per clip is too slow; customers often bring an hour of footage and want ~10 clips (or a 2-hour episode and ~30). Treat a clip set as one job: read the source once, pick every moment in one pass, design one look for the episode, run the mechanical work as a batch, review all clips together. *(Nov 18–19)*
 4. **Ask Rick before running clipper jobs** (`clip_and_finish`, `finish_clip`) while the clipper is parked. *(Nov 17)*
@@ -181,3 +181,17 @@ Approved so the producer answers editor critiques about AI editing in the skill,
 5. **Ship grade settings and full stems in `project.json`.** The grade is parameters the editor can reopen (not only a baked picture). Stems (dialog/narration, footage sound, music, SFX, ad-libs) are delivered as separate files, each the master's length, and referenced from `project.json`.
 6. **Request checklist.** Turn every explicit customer ask (prompt, `creative.instructions`, brief fields, revision text) into a checklist. Mark each one done, with the time and element ID, or not done with the reason. Store it with the job (`log/checklist.md`, and `project.json` / the note when those exist) and mention it in the final message.
 7. **Style ledger for BYO and clip jobs too.** Pull the shared ledger at the start of every job type, steer away from the last 5 entries of the same type (and this customer), and append an entry after delivery. See §12.11.
+
+## 15. BYO editing rules (Rick, Nov 22)
+
+Approved with the Edit My Footage plan (t220s720). A standalone Clean Up mode was deferred (t221u); tightening dead air and fillers stays part of a normal edit, and the editor's existing manual cleanup tools stay available. Full principles: `byo-editing.md`.
+
+1. **Script and voiceover are optional per job and per segment.** This supersedes §9.1's older "no voiceover" line. Default to the speakers' own words. VO may be none, sparse (bridges), or throughout, decided section by section from the customer's ask. Generate narration only where it's needed, with the brief's chosen voice (including a cloned voice). If they say no voiceover, use none.
+2. **Editor-style stages.** Log and selects, then a paper or radio edit, then picture, then narration only where needed, then mix. Don't lay graphics or VO before the audible story works. The story is found in the footage, not written first and forced onto it.
+3. **Interview ethics are hard rules.** Never change what someone meant through cuts. Never build a sentence out of fragments from different moments that reads as one quote. Never put an answer after a question it wasn't answering, or a reaction after a line it wasn't reacting to. Don't remove a hesitation if the hesitation is the point. When two separate remarks are joined, the join should be visible, not hidden under extra shots as if it were one continuous quote.
+4. **Cut precision on every BYO cut.** Snap each cut edge into the quiet gap between words, with a short crossfade and room tone at the join. Not a standalone Clean Up mode.
+5. **Read speaker-turn lines plus a candidate list**, not raw word-timing lists. Transcribe once; never re-transcribe a file that already has an analysis.
+6. **Per-segment `audioMode` in `project.json`:** `source`, `vo_over`, `vo_bridge`, or `card`.
+7. **Director's note for BYO** also states the story found in the footage, where VO or cards were added and why, and what the footage could not support.
+8. **Plan review defaults on.** Produce the plan for user approval where the app supports it. The user can turn it off. If the app has no review step, write the plan into the job folder and continue, and log that the review screen was not available.
+9. **Standing craft rules still hold:** defaults are not mandates, the edit is footage-driven, graphics never cover faces or what is being shown, and the look varies by job.

@@ -11,7 +11,7 @@ This is the working craft reference for every Motion Studio job: edits of custom
 - Enough graphics to lift the edit. Too few is a failure, and so is covering the subject.
 - Keep a film's signature layout as the base and vary it at key moments. Don't remove it, and don't lock it on screen the whole time.
 - Face tracking only for pure talking or podcast footage. Otherwise frame for the content (the board, screen, product or demo).
-- BYOF: the customer's direction sets the type of edit. No research and no voiceover unless they ask for it.
+- BYOF: the customer's direction sets the type of edit. No research. Script and voiceover are optional per job and per segment; default to the speakers' own words. See `byo-editing.md` and `SKILL.md` §4.
 - Captions are always a separate file or track, never burned in.
 - Voice (films): the best fit from the full ElevenLabs library, Flash model.
 - Review stills at 480p; full size only for a frame you can't judge at 480p.

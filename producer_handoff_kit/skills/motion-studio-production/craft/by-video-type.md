@@ -1,6 +1,6 @@
 # By video type: what each kind of video is for
 
-First name the type in plain words, including mixes ("whiteboard lesson with talking stretches"). Then answer it per section, because the type can change inside one video. These are judgment notes, not modes with locked tools. If footage fits none of them, reason from what the viewer needs to see. Detailed per-type standards are in `../craft-standards.md` Part 2. On BYOF jobs, the customer's direction picks the edit type, with no research and no voiceover.
+First name the type in plain words, including mixes ("whiteboard lesson with talking stretches"). Then answer it per section, because the type can change inside one video. These are judgment notes, not modes with locked tools. If footage fits none of them, reason from what the viewer needs to see. Detailed per-type standards are in `../craft-standards.md` Part 2. On BYOF jobs, the customer's direction picks the edit type, with no research; script and voiceover are optional per job and per segment (default to the speakers' own words).
 
 ## Talking head (one person, to camera)
 - **The viewer needs:** the person: eyes, expression, usually hands.
