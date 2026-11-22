@@ -55,6 +55,12 @@ export async function listClipAgentFinishes(workspaceId: string, projectId: stri
   const rows = await prisma().clipAgentFinishJob.findMany({
     where:{workspaceId,projectId},orderBy:{createdAt:'desc'},take:100,
   })
+  const published = await prisma().clip.findMany({where:{workspaceId,projectId,deletedAt:null},select:{aiMeta:true}})
+  const publishCounts = new Map<string,number>()
+  for (const clip of published) {
+    const jobId = word(object(clip.aiMeta).agentClipperRunId,100)
+    if (jobId) publishCounts.set(jobId,(publishCounts.get(jobId)||0)+1)
+  }
   const latest = new Map<string, typeof rows[number]>()
   for (const j of rows) if (!latest.has(j.clipId)) latest.set(j.clipId,j)
   return await Promise.all([...latest.values()].map(async j => {
@@ -62,7 +68,7 @@ export async function listClipAgentFinishes(workspaceId: string, projectId: stri
       where:{workspaceId,projectId,sourceJobId:j.id,status:'committed'},
       orderBy:{revision:'desc'},select:{id:true},
     }):null
-    return {...publicJob(j),
+    return {...publicJob(j),publishedClips:publishCounts.get(j.id)||0,
       delivery:portable?'live':'legacy',
       portableVersionId:portable?.id||null,
       liveEditorUrl:portable?'/app/motion-studio/'+encodeURIComponent(projectId)+'/live':null,
@@ -469,9 +475,11 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
     const existing = await tx.clip.findMany({where:{workspaceId: job.workspaceId,
       projectId:job.projectId, deletedAt:null},select:{id:true,aiMeta:true}})
     // An explicit producer manifest filename is a stable idempotency key.
+    const count = existing.filter(c=>object(c.aiMeta).agentClipperRunId===id).length
     const duplicate = existing.find(c=>object(c.aiMeta).agentClipManifest === manifestName &&
       object(c.aiMeta).agentClipperRunId === id)
     if (duplicate) return duplicate.id
+    if (count>=15) throw problem('Maximum of 15 clips per production.',409)
     const clipId = 'clip_' + randomUUID()
     await tx.clip.create({data:{
       id:clipId, workspaceId:job.workspaceId,projectId:job.projectId,
