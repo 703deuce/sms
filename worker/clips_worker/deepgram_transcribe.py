@@ -103,7 +103,7 @@ def deepgram_boost_param_name(model: str | None) -> str | None:
     return None
 
 
-def _listen_params(model: str | None = None, language: str | None = "en", keyterms: list[str] | None = None) -> str:
+def _listen_params(model: str | None = None, language: str | None = "en", keyterms: list[str] | None = None, *, paragraphs: bool = False) -> str:
     from urllib.parse import urlencode
 
     lang = (language or "en").strip().lower() if language is not None else "en"
@@ -116,6 +116,8 @@ def _listen_params(model: str | None = None, language: str | None = "en", keyter
         "utterances": "true",
         "diarize_version": "latest",
     }
+    if paragraphs:
+        params["paragraphs"] = "true"
     if lang in ("", "en"):
         params["language"] = "en"
         params["filler_words"] = "true"
@@ -160,12 +162,13 @@ def _http_listen(
     model: str | None = None,
     language: str | None = "en",
     keyterms: list[str] | None = None,
+    paragraphs: bool = False,
 ) -> dict[str, Any]:
     api_key = deepgram_api_key()
     if not api_key:
         raise DeepgramTranscribeError("no_api_key")
 
-    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params(model=model, language=language, keyterms=keyterms)}"
+    url = f"{DEEPGRAM_LISTEN_URL}?{_listen_params(model=model, language=language, keyterms=keyterms, paragraphs=paragraphs)}"
     if audio_url:
         body = json.dumps({"url": audio_url}).encode("utf-8")
         headers = {
