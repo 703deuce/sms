@@ -11099,6 +11099,15 @@ model ClipAgentFinishJob {
   resultKey      String?
   durationMs     Int?
   error          String?
+  kind           String    @default("clips")
+  input          Json?
+  workerId       String?
+  leaseHash      String?
+  leaseExpiresAt DateTime?
+  attempts       Int       @default(0)
+  startedAt      DateTime?
+  failReason     String?
+  costReport     Json?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   completedAt    DateTime?
@@ -11106,6 +11115,8 @@ model ClipAgentFinishJob {
   @@unique([clipId, idempotencyKey])
   @@index([workspaceId, projectId, createdAt])
   @@index([clipId, createdAt])
+  @@index([status, createdAt])
+  @@index([workerId, leaseExpiresAt])
   @@map("clip_agent_finish_jobs")
 }
 
