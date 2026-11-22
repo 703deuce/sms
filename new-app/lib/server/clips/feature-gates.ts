@@ -60,5 +60,5 @@ export function isScreenwritingProductEnabled(): boolean {
   return v === '1' || v === 'true' || v === 'on' || v === 'yes'
 }
 
-/** Additive V1 BYO product. Off by default until native multi-source export passes QA. */
-export function isByoFeatureEnabled():boolean{return process.env.FEATURE_BYO_V1==='1'}
+/** V1 unified Create hub (Edit My Footage, Audio to Video). On by default; FEATURE_BYO_V1=0 turns it off. */
+export function isByoFeatureEnabled():boolean{return process.env.FEATURE_BYO_V1!=='0'}

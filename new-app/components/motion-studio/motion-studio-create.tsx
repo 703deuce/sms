@@ -89,7 +89,8 @@ export function MotionStudioCreate({
   const view = initialView
   const [workflow, setWorkflow] = useState<MsWorkflow>('idea')
   const [creationTab,setCreationTab]=useState<'quick'|'customize'>('quick')
-  const [customize,setCustomize]=useState<CustomizeValues>(DEFAULT_CUSTOMIZE)
+  // Audio to Video: the customer's recording is the narration and sets the timing.
+  const [customize,setCustomize]=useState<CustomizeValues>(audioStart?{...DEFAULT_CUSTOMIZE,narrationMode:'uploaded_narration'}:DEFAULT_CUSTOMIZE)
   const [durationSeconds, setDurationSeconds] = useState<number>(30)
   const [customDuration, setCustomDuration] = useState(false)
   const [durationTouched, setDurationTouched] = useState(false)

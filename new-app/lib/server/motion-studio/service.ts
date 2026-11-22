@@ -10,6 +10,7 @@ import type { ClipEditsV2, ClipMotionStudioExt } from '@/lib/clips/edits'
 import type { Marker } from '@/lib/clips/editor/markers'
 import { buildMotionStudioEditorEdits, buildLiveMotionStudioEditorEdits, MS_MUSIC_ID_PREFIX, type MsEditorStems } from '@/lib/motion-studio/editor-timeline'
 import { registerProjectMedia } from '@/lib/server/clips/project-media'
+import { estimateMediaTranscript, queueMediaTranscript } from '@/lib/server/clips/media-transcripts'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
 import {validatePortableManifest} from '@/lib/motion-studio/portable-contract'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
@@ -234,6 +235,28 @@ async function attachUploads(workspaceId: string, projectId: string, clipProject
   return { narration, music }
 }
 
+/**
+ * Edit My Footage: transcribe every uploaded camera file once, app-side, with the
+ * clipper's existing MEDIA_TRANSCRIBE job (Deepgram, speakers). The words land in
+ * clip_media_transcripts on the editor's clip project, where the producer
+ * assignment (/inputs) and the editor's captions over every source read them.
+ * Billing is off: the estimate is accepted as-is and nothing is charged.
+ */
+async function queueFootageTranscripts(workspaceId: string, clipProjectId: string, uploads: UploadIn[], rows: Map<string, UploadRow>) {
+  const camera = new Set(['footage', 'talking_head', 'angle', 'broll'])
+  for (const u of uploads) {
+    const r = rows.get(u.uploadId)
+    if (!r || !r.mime.startsWith('video/') || (u.role && !camera.has(u.role))) continue
+    try {
+      const est = await estimateMediaTranscript(workspaceId, clipProjectId, { ref: 'upload', refId: r.id })
+      if (!est || est.hasAudio === false) continue
+      await queueMediaTranscript(workspaceId, clipProjectId, { ref: 'upload', refId: r.id, acceptedCredits: est.credits })
+    } catch (err) {
+      console.warn('[motion-studio:create] footage_transcript_queue_failed', { clipProjectId, type: err instanceof Error ? err.name : typeof err })
+    }
+  }
+}
+
 // ------------------------------------------------------------------ create
 export async function createProject(workspaceId: string, userId: string, body: unknown, headerKey?: string | null) {
   assertEnabled()
@@ -390,6 +413,7 @@ export async function createProject(workspaceId: string, userId: string, body: u
       ...(roles.music && productionBrief.music.mode==='upload' ? { music: 'upload', musicUploadKey: roles.music.key } : {}),
     }))
   }
+  if (workflow === 'footage') await queueFootageTranscripts(workspaceId, clipProjectId, allUploads, rows)
   console.info('[motion-studio:create] created', { projectId: id, clipProjectId, workflow, uploads: uploads.length })
   return { project: await getProject(workspaceId, id), created: true }
 }

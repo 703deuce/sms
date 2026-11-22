@@ -331,7 +331,7 @@ export async function botGetAssignment(id: string, request: Request) {
     where: { id: job.projectId, workspaceId: job.workspaceId },
     select: { id: true, workspaceId: true, title: true, brief: true, workflow: true,
       settings: true, story: true, plan: true, narration: true, music: true, qa: true,
-      exportInfo: true, timelineVersion: true },
+      exportInfo: true, timelineVersion: true, clipProjectId: true },
   })
   if (!project) throw new MotionStudioError('NOT_FOUND', 'Project not found.', 404)
   const [projectAssets, priorVersions, recentMessages, recoverableJobs] = await Promise.all([
@@ -354,12 +354,24 @@ export async function botGetAssignment(id: string, request: Request) {
     durationSeconds:Number(toObject(project.settings).durationSeconds)||180
   })
   const roleByUpload = new Map(projectAssets.map(a => [a.uploadId, toObject(a.provenanceLog).role]))
+  // Edit My Footage: the app already transcribed each camera file once (clipper
+  // MEDIA_TRANSCRIBE, Deepgram with speakers). Hand those words to the producer
+  // so it plans from them instead of re-transcribing.
+  const transcriptByUpload = new Map<string, { status: string; language: string | null; durationMs: number | null; words: unknown }>()
+  if (project.workflow === 'footage' && project.clipProjectId && uploads.length) {
+    const rows = await db().clipMediaTranscript.findMany({ where: { projectId: project.clipProjectId,
+      workspaceId: job.workspaceId, ref: 'upload', refId: { in: uploads.map(u => u.id) } },
+      select: { refId: true, status: true, language: true, durationMs: true, words: true } })
+    for (const r of rows) transcriptByUpload.set(r.refId, { status: r.status, language: r.language,
+      durationMs: r.durationMs, words: r.status === 'done' ? r.words : null })
+  }
   const inputs = await Promise.all(uploads.map(async upload => ({
     uploadId: upload.id, filename: upload.filename, mime: upload.mime,
     role: roleByUpload.get(upload.id) || 'source',
     handling:roleHandling[String(roleByUpload.get(upload.id)) as keyof typeof roleHandling]||'source_material',
     durableAssetId: upload.id,
     url: await createReadableSignedUrl(upload.key, 1800).catch(() => null),
+    ...(transcriptByUpload.has(upload.id) ? { transcript: transcriptByUpload.get(upload.id) } : {}),
   })))
   const versions = await Promise.all(priorVersions.map(async previous => ({
     jobId: previous.id, revision: previous.revision, durationMs: previous.durationMs,
@@ -390,6 +402,15 @@ export async function botGetAssignment(id: string, request: Request) {
       progress: 'Post research, story, voice, design, scenes, review, fixing, rendering and delivering on actual stage transitions. Send completed/total files during publishing.',
       delivery: 'After approval, upload and approveMaster the MP4 without completing the job. Upload the immutable editable project in the background, publish the producer document and transovo.live-project/1 with registered assets, then complete with delivery:live and portableVersionId. Keep the already-approved MP4 as the original preview.',
       heartbeat: 'The detached editable-delivery worker sends /checkpoint while uploading and retrying. Resume unfinished uploads before starting the next job. The job-token lease must remain valid; after an expired producer lease, obtain a new assignment rather than reusing an expired token.',
+      ...(project.workflow === 'footage' ? { footage: [
+        'Edit My Footage: the customer footage in inputs (in the listed order) is the asset pool; no web research or stock media unless the direction asks for it.',
+        'Each camera input may carry transcript {status, words} already produced by the app; use it instead of re-transcribing. If status is still queued or running, re-read the assignment later or transcribe locally.',
+        'brief.prompt / brief.goal is the direction and drives the edit, from "one coherent edit" to a specific brief. A script (brief.script) is optional; decide whether one is needed.',
+        'brief.voiceoverAmount: none = no narration, the footage carries the story; occasional = short narration only where needed, footage audio ducked under it; mostly = narration throughout. Use exactly brief.narration.voiceId when present; uploaded_narration uses the customer recording.',
+        'role angle = another camera of the same moment; role broll = extra shots to cut away to. Keep original footage audio unless narration covers it.',
+        'Deliver through the same live editable delivery as every film, with each used piece of customer footage as its own footage layer (assetId = the input uploadId, source in/out preserved), titles, graphics, captions, narration and music on their own tracks, so the Compact Editor can re-trim and reorder from the originals.',
+        'If brief.reviewPlan is true, post the story plan as a question and wait for the customer answer before producing.',
+      ] } : {}),
     },
     manualTimeline: await manualEditorBase(job.workspaceId,job.projectId),
     title: project.title, prompt: project.brief, brief:productionBrief,

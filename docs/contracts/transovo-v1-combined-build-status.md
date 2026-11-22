@@ -47,6 +47,23 @@ One Create Video hub, four public starting choices (Create with AI, Edit My Foot
 9. Brief and project settings store the new optional direction/VO/review/goal/audience/CTA values. No billing actions.
 10. Audio-to-Video entry selects the existing audio narration path instead of labeling customer audio as background music.
 
+## Finish band (Nov 22, 2026): wire V1 into the existing editor
+
+Direction from Rick: do not build a new editor, timeline engine, render graph or track system. Every V1 workflow lands in the existing Compact Editor through the existing film→editor handoff. The native-track redesign proposed for A6 is dropped.
+
+How each workflow reaches the Compact Editor now:
+
+- **Create with AI**: unchanged. `motion-studio-create.tsx` → `POST /api/motion-studio/agent/jobs` → Transovo Agent live delivery → `service.ts ensureEditorClip` / `editor-timeline.ts buildLiveMotionStudioEditorEdits` → `/app/video-editor/.../edit/...?motionStudio=` (Compact Editor with Motion Studio lanes, live canvas and agent chat).
+- **Edit My Footage**: `byo-create.tsx` now starts the **same** agent job as Create with AI (it previously called the app `DOC_PLAN` pipeline, which cannot run these projects: they are created with `director:'creative'`, which the worker registry does not know). `byo-project.tsx` reuses `AgentJobPanel` (progress, preview, download) and `AgentChatPanel` (plan check, change requests, versions) and opens the Compact Editor with `?mode=simple&motionStudio=`.
+  - Shared footage analysis: on create, every camera file is transcribed once with the clipper's existing `MEDIA_TRANSCRIBE` job (`queueMediaTranscript`, Deepgram with speakers) on the editor's clip project. The agent assignment returns each input's transcript; the editor's caption path reads the same rows.
+  - Brief: direction, optional script, voiceover none / occasional / mostly, the selected voice (existing `CreatorVoicePicker`) or the customer's voiceover recording, captions, music, shape, length (including "as long as it needs" and 30/60 min), file roles (main footage, another camera angle, B-roll) in the customer's order.
+  - The assignment carries footage-specific delivery instructions (footage as the asset pool, use app transcripts, voiceover amount and ducking, each used clip as its own footage layer, plan check when requested). No skill files were changed.
+- **Audio to Video**: `MotionStudioCreate audioStart` now defaults narration to the customer's recording (`uploaded_narration`), so it is never replaced by AI voice. Same agent job and editor handoff as Create with AI.
+- **Create Clips**: unchanged clipper path into the clip editor (≤30 clips, count from good clips).
+- **AI changes in the editor**: existing paths only. Motion Studio projects use `AgentChatPanel` → `submitAgentRevision` (revision job carries `manualTimeline`, so manual edits are kept); native clips use `editor-chat-rail.tsx` in-place proposals with Accept / Undo.
+
+Other changes: `FEATURE_BYO_V1` is on by default (`FEATURE_BYO_V1=0` turns the hub off). The ChatGPT-added test files were removed (no test gates). No migrations, no new env vars, billing off.
+
 ## Unmet acceptance checks — do not represent V1 as complete
 
 - Native per-file analysis and once-only transcription shared by all consumers.
@@ -58,4 +75,9 @@ One Create Video hub, four public starting choices (Create with AI, Edit My Foot
 - Rendered output -15/-14 LUFS and true peak verified by ebur128 (no samples run in this change).
 - Billing approval and reconciliation.
 
-No changes to producer skill files. No tests or real jobs were executed as part of this partial band. Keep its changes off master until the native-timeline integration and acceptance gates are ready or explicitly approved as a separate release.
+Still open after the finish band (not built, by decision or because it needs producer-skill approval):
+- Segmented parallel export of 30–60+ minute edits (`RENDER_CLIP` still renders one edit per job).
+- Producer-skill rules for Edit My Footage (the skill's intake length cap, footage-led planning, voiceover-amount handling) need Rick's approval; the assignment instructions cover them meanwhile.
+- Audio measurement (ebur128) happens in Rick's real-footage tests.
+
+No changes to producer skill files. No tests were run; Rick tests with real videos on the site.

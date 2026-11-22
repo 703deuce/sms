@@ -8,14 +8,15 @@ import {ArrowDown,ArrowLeft,ArrowUp,Clapperboard,FolderOpen,Plus,RefreshCw,Trash
 import {getMotionStudioClient,newIdempotencyKey} from '@/lib/motion-studio'
 import {sanitizeProductionBrief,type InputRole} from '@/lib/motion-studio/production-brief'
 import type {MsAssetKind} from '@/lib/motion-studio/types'
+import {CreatorVoicePicker,type VoiceSelection} from './creator-voice-picker'
 
-type FootageRole='footage'|'talking_head'|'reference'|'photo'|'narration'|'music'
+type FootageRole='footage'|'angle'|'broll'|'photo'|'narration'|'music'
 type UploadRow={id:string;file:File;role:FootageRole;progress:number;uploadId?:string;
   status:'uploading'|'ready'|'failed';error?:string;durationS?:number}
 type VoiceAmount='none'|'occasional'|'mostly'
 const allowedRoles:{value:FootageRole;label:string}[]=[
-  {value:'footage',label:'Main camera'},{value:'talking_head',label:'Second camera'},
-  {value:'reference',label:'Extra footage'},{value:'photo',label:'Photo'},
+  {value:'footage',label:'Main footage'},{value:'angle',label:'Another camera angle'},
+  {value:'broll',label:'Extra shots (B-roll)'},{value:'photo',label:'Photo'},
   {value:'music',label:'Music'},{value:'narration',label:'My voiceover'},
 ]
 const typeOptions=['Interview','Podcast','Talking head','Tutorial','Event or vlog','Other']
@@ -47,7 +48,9 @@ export function ByoCreate(){
   const [instructions,setInstructions]=useState('')
   const [videoType,setVideoType]=useState('Interview')
   const [voiceover,setVoiceover]=useState<VoiceAmount>('none')
-  const [length,setLength]=useState(180)
+  const [length,setLength]=useState(0)
+  const [voice,setVoice]=useState<VoiceSelection|null>(null)
+  const [script,setScript]=useState('')
   const [aspect,setAspect]=useState<'16:9'|'9:16'|'1:1'>('16:9')
   const [music,setMusic]=useState<'elevenlabs'|'none'>('elevenlabs')
   const [captions,setCaptions]=useState(true)
@@ -115,14 +118,22 @@ export function ByoCreate(){
         uploadId:r.uploadId!,filename:r.file.name,mime:r.file.type,
         role:r.role as InputRole,
       }))
+      // 0 = "as long as it needs": the footage itself sets the length.
+      const durationSeconds=length>0?length:Math.max(60,Math.round(minutes*60)||180)
+      const narrationFile=ready.find(r=>r.role==='narration')
+      const narration=voiceover==='none'?{mode:'none'}:
+        narrationFile?{mode:'uploaded_narration',uploadId:narrationFile.uploadId}:
+        {mode:voice?.voiceSource==='cloned'?'cloned_voice':'ai_voice',
+          ...(voice?{voiceId:voice.voiceId,voiceName:voice.voiceName,voiceSource:voice.voiceSource}:{})}
       const productionBrief=sanitizeProductionBrief({
-        workflow:'footage',prompt:goal.trim()+'\n'+instructions.trim(),
-        videoType:'video_editing',durationSeconds:length,
+        workflow:'footage',prompt:[goal.trim(),instructions.trim()].filter(Boolean).join('\n'),
+        videoType:'video_editing',durationSeconds,
         aspectRatio:aspect,resolution:'1080p',
         style:{id:'automatic'},audience,goal:goal.trim(),footageType:videoType,
         captionsEnabled:captions,callToAction:cta,
         voiceoverAmount:voiceover,reviewPlan,
-        narration:{mode:voiceover==='none'?'none':'ai_voice'},
+        narration,
+        ...(script.trim()?{script:{text:script.trim(),handling:'improve'}}:{}),
         music:{mode:music},inputs,
         sourcePreferences:{text:keepNotes,preferPrimaryFootage:true},
       })
@@ -132,18 +143,24 @@ export function ByoCreate(){
       }))
       const project=await client.createProject({
         workflow:'footage',prompt:goal.trim(),uploads,
-        mediaPolicy:'uploads_only',durationSeconds:length,
+        script:script.trim()||null,
+        mediaPolicy:'uploads_only',durationSeconds,
         format:(aspect+'_1080p') as '16:9_1080p'|'9:16_1080p'|'1:1_1080p',
         creative:{videoType:'video_editing',style:'automatic',brandMode:'none',
           instructions:[instructions,keepNotes,captions?'Captions on':'Captions off'].filter(Boolean).join('\n')},
         productionBrief,idempotencyKey:idem.current,
       })
-      // The producer-bot endpoint does not stop at the review checkpoint.
-      // Use the existing durable DOC_PLAN -> review -> DOC_PRODUCE state
-      // machine for BYO until native timeline delivery is fully integrated.
-      await client.createPlan(project.id,'byo-plan-'+project.id)
-      await client.startProduction(project.id,reviewPlan?'checkpoint':'auto',
-        'byo-run-'+project.id)
+      // Same production path as Create with AI: the server dispatches the
+      // Transovo Agent, whose result opens in the existing Compact Editor.
+      if(client.mode==='live'){
+        const response=await fetch('/api/motion-studio/agent/jobs',{method:'POST',
+          headers:{'Content-Type':'application/json','Idempotency-Key':'create-'+project.id},
+          body:JSON.stringify({projectId:project.id})})
+        if(!response.ok){
+          const issue=await response.json().catch(()=>({})) as {error?:string}
+          throw new Error(issue.error||'Could not start your video. Try again.')
+        }
+      }
       router.push('/app/edit-my-footage/'+encodeURIComponent(project.id))
     }catch(err){
       setError(err instanceof Error?err.message:'Could not start your video. Try again.')
@@ -201,7 +218,7 @@ export function ByoCreate(){
                   <select aria-label={'File role: '+r.file.name} className="h-9 rounded-lg border border-border bg-background px-2 text-xs"
                     value={r.role} onChange={e=>updateRow(r.id,{role:e.target.value as FootageRole})}>
                     {allowedRoles.filter(opt=>
-                      r.file.type.startsWith('video/')?['footage','talking_head','reference'].includes(opt.value):
+                      r.file.type.startsWith('video/')?['footage','angle','broll'].includes(opt.value):
                       r.file.type.startsWith('audio/')?['music','narration'].includes(opt.value):opt.value==='photo'
                     ).map(opt=><option key={opt.value} value={opt.value}>{opt.label}</option>)}
                   </select>
@@ -254,7 +271,8 @@ export function ByoCreate(){
             <label className="space-y-1.5 text-sm font-medium">Length
               <select className="block h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
                 value={length} onChange={e=>setLength(Number(e.target.value))}>
-                {[60,180,300,600,1200].map(n=><option key={n} value={n}>{n/60} {n===60?'minute':'minutes'}</option>)}
+                <option value={0}>As long as it needs</option>
+                {[60,180,300,600,1200,1800,3600].map(n=><option key={n} value={n}>{n/60} {n===60?'minute':'minutes'}</option>)}
               </select>
             </label>
             <label className="space-y-1.5 text-sm font-medium">Video shape
@@ -274,6 +292,13 @@ export function ByoCreate(){
                     onChange={()=>setVoiceover(value)} className="mr-2 accent-primary"/>{label}
                 </label>)}
             </div>
+            {voiceover!=='none'&&!ready.some(r=>r.role==='narration')?
+              <div className="rounded-xl border border-border p-3">
+                <CreatorVoicePicker client={client} value={voice} onChange={setVoice}
+                  onError={message=>toast.error(message)}/>
+              </div>:null}
+            {voiceover!=='none'&&ready.some(r=>r.role==='narration')?
+              <p className="text-xs text-muted-foreground">We'll use the voiceover recording you added.</p>:null}
           </fieldset>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="text-sm"><input type="checkbox" className="mr-2 accent-primary" checked={captions}
@@ -288,6 +313,11 @@ export function ByoCreate(){
           <button className="text-sm font-medium text-primary" onClick={()=>setMore(x=>!x)}
             aria-expanded={more}>{more?'Hide':'Show'} more options</button>
           {more?<div className="grid gap-3 rounded-xl border border-border p-4">
+            <label className="space-y-1 text-sm">Script or talking points (optional)
+              <textarea className="block w-full rounded-lg border border-border bg-background p-3 text-sm" rows={4}
+                value={script} onChange={e=>setScript(e.target.value)}
+                placeholder="Leave empty and we'll decide whether your video needs one."/>
+            </label>
             <label className="space-y-1 text-sm">Extra direction
               <textarea className="block w-full rounded-lg border border-border bg-background p-3 text-sm" rows={3}
                 value={instructions} onChange={e=>setInstructions(e.target.value)} placeholder="Keep the speaker's answer intact; add simple titles."/>
