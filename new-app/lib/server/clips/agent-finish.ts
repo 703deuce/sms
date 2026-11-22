@@ -235,7 +235,7 @@ export async function dispatchClipAgentDiscover(workspaceId:string,projectId:str
     source:{url:sourceUrl,filename:project.upload.filename,mime:project.upload.mime,
       startMs:0,endMs:project.upload.durationMs??project.rangeEndMs,
       durationMs:project.upload.durationMs??project.rangeEndMs},
-    maxClips:Math.max(1,Math.min(10,maximumClips)),
+    maxClips:Math.max(1,Math.min(15,maximumClips)),
     targetDurationsSeconds:[30,60],aspectRatio:'9:16',fps:30,
     mediaPolicy:'user_footage_primary',webResearch:false,quality:'premium',
     direction:'You are the ONE Transovo creative director. Analyze the full source recording, including picture, dialogue, action, speakers and changes in scene. Independently identify and score its strongest self-contained moments, rank by hook, payoff, comprehensibility, action and entertainment value, then produce up to maxClips polished social clips. Preserve the subjects original speech and video. Cut dead space, reorder only if coherent, dynamically reframe and track the relevant people, choose split-screen layouts when needed, and create story-specific motion graphics, captions and transitions. Choose any available engines, including layered ones, by creative merit and vary visual DNA across clips without sacrificing cohesion. Publish one editable transovo.live-project/1 and original scene bundles for the selected highlights through /portable. Complete with delivery:live, durationMs, portableVersionId, and scored clips[] entries containing sceneId, startMs, endMs, title, score and why. Do not render MP4 masters before export. Do not make a documentary from scratch.',
@@ -274,8 +274,8 @@ async function completeDiscoveredClips(job:Awaited<ReturnType<typeof authorizeCl
     const data=JSON.parse(bytes.toString('utf8'))
     records=Array.isArray(data)?data:object(data).clips
   }catch{throw problem('Highlights manifest is invalid.',400)}
-  if(!Array.isArray(records)||!records.length||records.length>10)
-    throw problem('Provide 1–10 scored highlight records.',400)
+  if(!Array.isArray(records)||!records.length||records.length>15)
+    throw problem('Provide 1–15 scored highlight records.',400)
   const videoFiles=new Set<string>()
   const normalized=records.map((rawRow:unknown)=>{
     const row=object(rawRow)
@@ -444,7 +444,7 @@ async function completeDiscoveredLiveClips(
   body:Record<string,unknown>,versionId:string,durationMs:number,
 ){
   const raw=Array.isArray(body.clips)?body.clips:[]
-  if(!raw.length||raw.length>10)
+  if(!raw.length||raw.length>15)
     throw problem('Live discovery must return scored clip windows.',400)
   const clips=raw.map(value=>{
     const row=object(value)
