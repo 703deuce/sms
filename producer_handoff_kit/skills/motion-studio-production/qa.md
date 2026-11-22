@@ -15,7 +15,7 @@ It checks:
 - codec h264, even dimensions, CFR
 - aspect
 - duration within ±10% of the request
-- integrated loudness −15 ±1.5 LUFS
+- integrated loudness −15 ±1.5 LUFS (film and BYO masters; −14 vs −15 is still open for Rick)
 - true peak ≤ −1.0 dBTP
 - no black stretch over 0.5 s mid-film
 - frozen stretches (≥2 s is a warning)
@@ -23,6 +23,8 @@ It checks:
 - **static stretches** with no visible change for ≥4 s
 
 It writes `sheet.jpg` (labelled tiles), `frames/` and `report.json`. Exit code 1 means a hard failure. The sheet is for the scripted checks on the final master only; it does not replace the browser-still review.
+
+Clip jobs are not measured with this film `--lufs -15` command as a gate. The clip edits format only accepts −14/−16/−18/−23/−24 and silently drops −15, so clip `edits.json` uses `loudnessLufs: -14` until the app is fixed. Measure clip loudness on the server preview as in `clip-production.md` (aim −14 ±0.5 LUFS, ≤ −1 dBTP; log a shortfall — true peak on the server render is an app-side issue).
 
 A WARN is not a pass. Open the frames it names and decide on purpose. For example, the GameStop reference has two near-black tiles mid-whip at 7 s and 9 s; that is fine there, because the next beat lands within a second.
 
