@@ -19,9 +19,9 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
   try {
     const {id}=await context.params
     const body=await request.json().catch(()=>( {} )) as {maxClips?:unknown}
-    const maxClips=body.maxClips===undefined?3:Number(body.maxClips)
-    if(!Number.isInteger(maxClips)||maxClips<1||maxClips>10)
-      return Response.json({error:'Choose 1–10 finished highlights.'},{status:400})
+    const maxClips=body.maxClips===undefined?5:Number(body.maxClips)
+    if(!Number.isInteger(maxClips)||maxClips<1||maxClips>15)
+      return Response.json({error:'Choose 1–15 finished highlights.'},{status:400})
     const job=await dispatchClipAgentDiscover(await resolveWorkspaceId(),id,request,
       request.headers.get('Idempotency-Key')||'agent-discovery-v1',maxClips)
     return Response.json({job},{status:202})
