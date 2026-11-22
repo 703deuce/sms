@@ -28,7 +28,7 @@ import { cancelClipUpload, uploadClipFile, type UploadProgress } from '@/lib/cli
 import { featuresAllUnlocked } from '@/lib/billing/entitlements'
 import { StreamerImportPanel } from '@/components/streamer/streamer-import-panel'
 import { classifyImportUrl } from '@/lib/clips/import-url'
-import { Clapperboard, Globe, Link2, Loader2, Radio, UploadCloud } from 'lucide-react'
+import { Clapperboard, Globe, Link2, Loader2, Radio, Sparkles, UploadCloud } from 'lucide-react'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
