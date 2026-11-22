@@ -294,7 +294,7 @@ export async function createClipProjectFromImportUrl(
   const useProducer = process.env.CLIPS_PRODUCER_PIPELINE === '1' &&
     !settings.byo && !settings.fullVideo && !settings.blank
   const importSettings = useProducer
-    ? {...settings, autoGrokClipper:true, autoAgentClipMode:undefined}
+    ? {...settings, autoGrokClipper:true, autoAgentClipMode:undefined, producerPipeline:true}
     : settings
 
   const projectId = createId('proj')
