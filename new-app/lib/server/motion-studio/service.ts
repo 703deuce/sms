@@ -76,7 +76,7 @@ function assertEnabled() {
 
 export function motionStudioConfig() {
   return {
-    lengths: [...LENGTHS], lengthInput: { min: 1, max: MAX_LENGTH_MIN, step: 1 }, betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['ai', 'upload'],
+    lengths: [...LENGTHS], lengthInput: { min: 1, max: MAX_LENGTH_MIN, step: 1 }, betaLengths: [10, 15], visualDirections: [...DIRECTIONS], voiceovers: ['none', 'ai', 'upload'],
     productionModes: ['checkpoint', 'auto'], formats: ['16:9_480p', '16:9_720p', '16:9_1080p', '16:9_2160p', '9:16_480p', '9:16_720p', '9:16_1080p', '9:16_2160p', '1:1_480p', '1:1_720p', '1:1_1080p', '1:1_2160p'], mediaPolicy: 'uploads_only',
     music: ['generated', 'upload', 'elevenlabs', 'none'],
     features: { narration: true, groundedResearch: true, generatedMusic: true, elevenLabsMusic: true, customSceneCode: true, directorChat: 'blueprint' },
@@ -94,7 +94,7 @@ function parseSettings(raw: unknown, prev: MsSettings): MsSettings {
     out.lengthMin = minutes
   }
   if ((DIRECTIONS as readonly unknown[]).includes(o.visualDirection)) out.visualDirection = o.visualDirection
-  if (o.voiceover === 'ai' || o.voiceover === 'upload') out.voiceover = o.voiceover
+  if (o.voiceover === 'ai' || o.voiceover === 'upload' || o.voiceover === 'none') out.voiceover = o.voiceover
   if (o.productionMode === 'checkpoint' || o.productionMode === 'auto') out.productionMode = o.productionMode
   if (MUSIC_CHOICES.includes(o.music)) out.music = o.music
   out.music = out.music ?? 'elevenlabs'          // always explicit in the API (incl. 'none')
@@ -350,8 +350,10 @@ export async function createProject(workspaceId: string, userId: string, body: u
   const plannedMs = settings.durationSeconds ? settings.durationSeconds * 1000 : settings.lengthMin * 60_000
   productionBrief.durationSeconds=Math.round(plannedMs/1000)
   settings.productionBrief=productionBrief
+  settings.productionMode=productionBrief.reviewPlan===false?'auto':'checkpoint'
   settings.music=productionBrief.music.mode
-  settings.voiceover=productionBrief.narration.mode==='uploaded_narration'?'upload':'ai'
+  settings.voiceover=productionBrief.narration.mode==='none'?'none':
+    productionBrief.narration.mode==='uploaded_narration'?'upload':'ai'
   const id = createId('msp')
   const clipProjectId = createId('proj')
   const canvasUploadId = createId('upl')

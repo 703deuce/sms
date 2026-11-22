@@ -7,11 +7,13 @@ export type ProductionBrief = {
   prompt:string; workflow?:MsWorkflow; videoType:MsVideoType; durationSeconds:number
   aspectRatio:'16:9'|'9:16'|'1:1'; resolution:'480p'|'720p'|'1080p'
   style:{id:MsCreativeStyle;custom?:string}; brand?:MsCreativeBrief
-  audience?:string; tone?:{preset?:string;text?:string}
+  audience?:string; goal?:string; callToAction?:string; footageType?:string; captionsEnabled?:boolean
+  voiceoverAmount?:'none'|'occasional'|'mostly';reviewPlan?:boolean
+  tone?:{preset?:string;text?:string}
   script?:{text?:string;uploadId?:string;role:'script';handling:'exact'|'improve'}
   commentary?:{text:string;role:'commentary';handling:'creator_opinion'}
   referenceLinks?:{url:string;note?:string;role:'reference_link';handling:'include_in_research'}[]
-  narration:{mode:'ai_voice'|'cloned_voice'|'uploaded_narration'|'talking_head';voiceId?:string;voiceName?:string;voiceSource?:'stock'|'cloned'|'auto';uploadId?:string;handling:'tts_with_voice_id'|'tts_auto_voice'|'voiceover_drives_timing'|'preserve_talking_head'}
+  narration:{mode:'none'|'ai_voice'|'cloned_voice'|'uploaded_narration'|'talking_head';voiceId?:string;voiceName?:string;voiceSource?:'stock'|'cloned'|'auto';uploadId?:string;handling:'no_narration'|'tts_with_voice_id'|'tts_auto_voice'|'voiceover_drives_timing'|'preserve_talking_head'}
   music:{mode:'elevenlabs'|'upload'|'none';uploadId?:string;placement?:string;role:'music';handling:'paid_generate'|'use_uploaded_track'|'no_music'}
   sourcePreferences?:{text?:string;preferPrimaryFootage?:boolean;preferOriginalInterviews?:boolean;preferDocuments?:boolean;domains?:string[];handling:'honor_source_preferences'}
   inputs:ProductionInput[]
@@ -27,7 +29,7 @@ export const roleHandling:Record<InputRole,string>={
 export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
  const x=object(raw),n=object(x.narration),m=object(x.music),sty=object(x.style)
  const prompt=str(x.prompt,15000)
- const declaredMode=['ai_voice','cloned_voice','uploaded_narration','talking_head'].includes(String(n.mode))?String(n.mode) as ProductionBrief['narration']['mode']:'ai_voice'
+ const declaredMode=['none','ai_voice','cloned_voice','uploaded_narration','talking_head'].includes(String(n.mode))?String(n.mode) as ProductionBrief['narration']['mode']:'ai_voice'
  const uploadedRoles=(Array.isArray(x.inputs)?x.inputs:[]).map(v=>object(v).role)
  const mode=declaredMode==='ai_voice'
    ? (uploadedRoles.includes('talking_head')?'talking_head':uploadedRoles.includes('narration')?'uploaded_narration':'ai_voice')
@@ -72,6 +74,13 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
   style:{id:MS_CREATIVE_STYLES.includes(sty.id as MsCreativeStyle)?sty.id as MsCreativeStyle:'automatic',...(str(sty.custom,1000)?{custom:str(sty.custom,1000)}:{})},
   ...(x.brand?{brand:x.brand as MsCreativeBrief}:{}),
   ...(str(x.audience,1000)?{audience:str(x.audience,1000)}:{}),
+  ...(str(x.goal,1000)?{goal:str(x.goal,1000)}:{}),
+  ...(str(x.callToAction,1000)?{callToAction:str(x.callToAction,1000)}:{}),
+  ...(str(x.footageType,80)?{footageType:str(x.footageType,80)}:{}),
+  captionsEnabled:x.captionsEnabled!==false,
+  voiceoverAmount:['none','occasional','mostly'].includes(String(x.voiceoverAmount))
+    ? x.voiceoverAmount as ProductionBrief['voiceoverAmount']:undefined,
+  reviewPlan:x.reviewPlan!==false,
   ...(str(object(x.tone).preset,50)||str(object(x.tone).text,1000)?{tone:{
     preset:str(object(x.tone).preset,50)||undefined,text:str(object(x.tone).text,1000)||undefined}}:{}),
   ...(scriptText||scriptUpload?{script:{text:scriptText||undefined,uploadId:scriptUpload||undefined,
@@ -81,7 +90,7 @@ export function sanitizeProductionBrief(raw:unknown):ProductionBrief{
   narration:{mode,...(voiceId&&(mode==='ai_voice'||mode==='cloned_voice')?{voiceId,voiceName:str(n.voiceName,120),voiceSource}:{}),
     ...(mode==='ai_voice'&&voiceSource==='auto'?{voiceSource:'auto' as const}:{}),
     ...(narrationUpload?{uploadId:narrationUpload}:{}),
-    handling:mode==='talking_head'?'preserve_talking_head':mode==='uploaded_narration'?'voiceover_drives_timing':voiceId?'tts_with_voice_id':'tts_auto_voice'},
+    handling:mode==='none'?'no_narration':mode==='talking_head'?'preserve_talking_head':mode==='uploaded_narration'?'voiceover_drives_timing':voiceId?'tts_with_voice_id':'tts_auto_voice'},
   music:{mode:musicMode,...(musicUpload?{uploadId:musicUpload}:{}),
     ...(str(m.placement,1000)?{placement:str(m.placement,1000)}:{}),role:'music',
     handling:musicMode==='none'?'no_music':musicMode==='upload'?'use_uploaded_track':'paid_generate'},

@@ -21,7 +21,7 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
   try {
     const {id}=await context.params
     const body=await request.json().catch(()=>( {} )) as {maxClips?:unknown}
-    const max=clipProducerEnabled()?15:10
+    const max=clipProducerEnabled()?30:10
     const maxClips=body.maxClips===undefined?(clipProducerEnabled()?5:3):Number(body.maxClips)
     if(!Number.isInteger(maxClips)||maxClips<1||maxClips>max)
       return Response.json({error:'Choose 1–'+max+' finished highlights.'},{status:400})

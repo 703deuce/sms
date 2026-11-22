@@ -42,6 +42,15 @@ def _probe_dur(path: str) -> float:
 def chapters_of(story: dict) -> list[list[dict]]:
     out, cur, last = [], [], None
     for l in story["lines"]:
+        # Footage quotes must play from their original source; do not send
+        # attributed speech or explicit source audio to the TTS provider.
+        kind = str(l.get("audioMode") or l.get("kind") or "").lower()
+        if kind in ("source", "quote", "card") or isinstance(l.get("quote"), dict):
+            if cur:
+                out.append(cur)
+                cur = []
+            last = None
+            continue
         if last is not None and l["chapter"] != last and cur:
             out.append(cur)
             cur = []
@@ -56,7 +65,24 @@ def narrate(project: dict, story: dict, work: str, upload_key: str, log) -> dict
     """Returns {voice, mock, chapters:[{index, lineIds, key, durationS, words:[{w,s,e,line}]}]} (chapter-local times)."""
     from clips_worker.storage import upload_file
     chs = chapters_of(story)
+    if not chs:
+        # Footage-only stories have no lines to synthesize. Preserve the
+        # timeline's word clock without making a paid TTS request.
+        sc = Script.from_json([{**l, "chapterId": str(l["chapter"])}
+                              for l in story.get("lines") or []])
+        words = estimate_words(sc, wps=2.05)
+        return {"voice": {"name": "none"}, "mock": config.mock(), "none": True,
+                "chapters": [{"index": 0, "lineIds": [l["id"] for l in story.get("lines") or []],
+                              "key": None, "durationS": (words[-1]["e"]+0.35) if words else 1.0,
+                              "words": words}]}
     preset = dict(config.NARRATION)
+    settings = project.get("settings") or {}
+    brief = settings.get("productionBrief") or {}
+    voice_brief = brief.get("narration") or {}
+    chosen_voice_id = str(voice_brief.get("voiceId") or "").strip()
+    chosen_voice_name = str(voice_brief.get("voiceName") or "").strip()
+    if chosen_voice_name:
+        preset["voiceName"] = chosen_voice_name
     out = {"voice": {"name": preset["voiceName"], "modelId": preset["modelId"], "speed": preset["speed"],
                      "format": preset["outputFormat"]}, "mock": config.mock(), "chapters": []}
     api_key = None
@@ -64,10 +90,14 @@ def narrate(project: dict, story: dict, work: str, upload_key: str, log) -> dict
     if not config.mock():
         from clips_worker.t2v.elevenlabs_tts import get_elevenlabs_api_key
         api_key = get_elevenlabs_api_key()
-        voice = {"voiceId": resolve_voice_id(api_key, preset["voiceName"]), "modelId": preset["modelId"],
+        resolved_voice = chosen_voice_id or resolve_voice_id(api_key, preset["voiceName"])
+        out["voice"]["voiceId"] = resolved_voice
+        voice = {"voiceId": resolved_voice, "modelId": preset["modelId"],
                  "speed": preset["speed"], "stability": preset["stability"], "similarityBoost": preset["similarityBoost"],
                  "style": preset["style"]}
-        log("narration_voice", f"voice resolved by name: {preset['voiceName']}", {"model": preset["modelId"], "speed": preset["speed"]})
+        log("narration_voice", "selected voice resolved",
+            {"model": preset["modelId"], "speed": preset["speed"],
+             "voiceId": resolved_voice, "source": "brief" if chosen_voice_id else "name"})
     for ci, lines in enumerate(chs):
         sc = Script.from_json([{**l, "chapterId": str(l["chapter"])} for l in lines])
         text = " ".join(l.spoken for l in sc.lines)

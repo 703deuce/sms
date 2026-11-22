@@ -18,7 +18,7 @@ export const MS_VIDEO_TYPES = [
   { id: 'ui_animation', label: 'UI/UX Animation', group: 'Motion Design', guidance: 'Respect supplied interface states and demonstrate accurate, meaningful interactions.' },
   { id: 'nft_design', label: 'NFT Design', group: 'Motion Design', guidance: 'Create original digital collectible designs and animations; never copy protected artwork.' },
   { id: 'gif', label: 'GIF / Short Loop', group: 'Motion Design', guidance: 'Create a short self-contained animation with a clear loop; output format depends on supported export options.' },
-  { id: 'video_editing', label: 'Edit Existing Video', group: 'Editing & Repurposing', guidance: 'Preserve user footage and meaning while improving structure, pacing and presentation.' },
+  { id: 'video_editing', label: 'Edit My Footage', group: 'Editing & Repurposing', guidance: 'Preserve user footage and meaning while improving structure, pacing and presentation.' },
   { id: 'audiogram', label: 'Audiogram', group: 'Editing & Repurposing', guidance: 'Keep uploaded audio accurate and synchronize original visual elements to it.' },
   { id: 'text_overlay', label: 'Text Overlays', group: 'Editing & Repurposing', guidance: 'Add accurate and legible text to the supplied media without obscuring important visual content.' },
   { id: 'template_customization', label: 'Customize Supplied Design', group: 'Editing & Repurposing', guidance: 'Respect the customer-provided design assets and instructions; do not impose built-in scene templates.' },

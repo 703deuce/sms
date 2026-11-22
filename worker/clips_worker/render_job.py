@@ -347,8 +347,20 @@ def _finish_producer_render(conn, render_id: str, job: dict, finished_mp4: Path,
         root = Path(folder)
         preview = root / "preview.mp4"
         poster = root / "poster.jpg"
+        probe = subprocess.run([
+            "ffprobe", "-v", "error", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "json", str(finished_mp4)
+        ], check=True, capture_output=True, text=True)
+        size = (json.loads(probe.stdout).get("streams") or [{}])[0]
+        source_w, source_h = int(size.get("width") or 0), int(size.get("height") or 0)
+        if source_w<=0 or source_h<=0:
+            raise RuntimeError("invalid_render_dimensions")
+        # Preview short side is 480, not the old long-side 480 (270x480).
+        preview_w = 480 if source_w<=source_h else max(2,2*round((source_w/source_h)*240))
+        preview_h = 480 if source_h<=source_w else max(2,2*round((source_h/source_w)*240))
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(finished_mp4),
-                        "-vf", "scale=-2:480", "-c:v", "libx264", "-preset", "veryfast",
+                        "-vf", f"scale={preview_w}:{preview_h}:flags=lanczos",
+                        "-c:v", "libx264", "-preset", "veryfast",
                         "-crf", "23", "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart",
                         str(preview)], check=True, capture_output=True)
         subprocess.run(["ffmpeg", "-y", "-v", "error", "-ss", "0.3", "-i", str(preview),

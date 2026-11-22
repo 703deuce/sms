@@ -2517,29 +2517,21 @@ def render_edited_clip(
             print(f"[clipper:template_audio] program_loudnorm skipped reason={type(e).__name__}", flush=True)
 
     loud_lufs = edits.get("loudnessLufs")
-    if (settings.get("producerServerRender") or
-        (edits.get("speechLevelingEnabled") is True and edits.get("loudnessLufs")==-14)):
-        # Two-pass program analysis on the FINAL speech+music mix; no silent
-        # fallback to a single-pass target for producer server renders.
+    if settings.get("producerServerRender") or (
+        edits.get("speechLevelingEnabled") is True and loud_lufs is not None
+    ):
+        # Always respect the *stored* program target. Two-pass loudnorm runs
+        # after the speech/music mix; a failed normalization must not ship an
+        # incorrectly leveled file without reporting an error.
         from clips_worker.audio_render import apply_program_loudnorm
-        producer_ln = work_dir / "producer_14_lufs.mp4"
-        apply_program_loudnorm(caption_src, producer_ln, target_lufs=-14.0,
-                               true_peak_db=-1.0)
-        caption_src = producer_ln
+        target = float(loud_lufs) if loud_lufs is not None else -14.0
+        normalized_audio = work_dir / "program_loudnorm.mp4"
+        apply_program_loudnorm(caption_src, normalized_audio,
+                               target_lufs=target, true_peak_db=-1.2)
+        caption_src = normalized_audio
         if render_meta is not None:
-            render_meta["producer_loudnorm_14"] = True
-    elif edits.get("speechLevelingEnabled") is True and loud_lufs is not None:
-        try:
-            from clips_worker.audio_render import apply_loudnorm
-
-            ln_out = work_dir / "loudnorm.mp4"
-            apply_loudnorm(caption_src, ln_out, int(loud_lufs))
-            caption_src = ln_out
-            if render_meta is not None:
-                render_meta["loudnorm_applied"] = True
-            print(f"[clipper:loudnorm] applied lufs={int(loud_lufs)}", flush=True)
-        except Exception as e:
-            print(f"[clipper:loudnorm] skipped reason={type(e).__name__}", flush=True)
+            render_meta["program_loudnorm_lufs"] = target
+        print(f"[clipper:loudnorm] two_pass target={target:.1f}TP=-1.2", flush=True)
 
     from clips_worker.render_clip import aspect_size
 

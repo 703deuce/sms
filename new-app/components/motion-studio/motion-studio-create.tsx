@@ -134,6 +134,7 @@ export function MotionStudioCreate({
       if (['documentary','educational','explainer'].includes(category)) setDurationSeconds(180)
       if (['social_video','audiogram'].includes(category)) setFormat('9:16')
       if (category === 'video_editing') setWorkflow('footage')
+      if (category === 'audiogram') setWorkflow('script')
     }
   }, [])
   useEffect(() => {
@@ -190,7 +191,7 @@ export function MotionStudioCreate({
         file,
         kind: assetKindForFile(file),
         uploadId: null,
-        role,
+        role:role ?? (videoType==='audiogram' && file.type.startsWith('audio/')?'narration':undefined),
         progress: { filename: file.name, bytes: file.size, loaded: 0, percent: 0, state: 'uploading' },
       }))
       setAttachments((prev) => role === 'logo' ? [...prev.filter(a => a.role !== 'logo'), ...next] : [...prev, ...next])
@@ -205,8 +206,9 @@ export function MotionStudioCreate({
         void uploadOne(att)
       }
       if (next.some((a) => a.kind === 'video' && !a.role) && !prompt.trim()) setWorkflow((w) => (w === 'idea' ? 'footage' : w))
+      if(videoType==='audiogram'&&next.some(a=>a.kind==='audio'))setWorkflow('script')
     },
-    [uploadOne, prompt],
+    [uploadOne, prompt, videoType],
   )
 
   const selectLogo = async (files: FileList | null) => {

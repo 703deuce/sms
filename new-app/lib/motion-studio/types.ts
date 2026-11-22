@@ -13,7 +13,7 @@ export type MsMediaPolicy = 'auto_plus_uploads' | 'auto_only' | 'uploads_only'
 /** Any positive whole-minute duration supported by the render/storage clock. */
 export type MsLengthMin = number
 export type MsVisualDirection = 'cinematic' | 'explainer' | 'investigative' | 'technical_3d'
-export type MsVoiceover = 'ai' | 'upload'
+export type MsVoiceover = 'none' | 'ai' | 'upload'
 export type MsProductionMode = 'checkpoint' | 'auto'
 export type MsFormat = `${'16:9' | '9:16' | '1:1'}_${'480p' | '720p' | '1080p' | '2160p'}`
 

@@ -23,40 +23,43 @@ export async function enqueueProducerServerRender(clip:ProducerClip,producerJobI
     previewKey:null,title:clip.title,producerJobId,
     producerEditsVersion:clip.editsSaveVersion,
   })
-  const metadata=object(clip.aiMeta)
-  if(result.render.status==='READY'&&result.render.outputKey){
-    // A byte-identical older export can be reused without a second paid render.
-    await db().clip.update({where:{id:clip.id},data:{
-      aiMeta:toPrismaJson({...metadata,agentRenderId:result.render.id,
-        agentRenderEditsVersion:clip.editsSaveVersion,
-        agentRenderStatus:'done',fullResKey:result.render.outputKey,
-        agentFullResEditsVersion:clip.editsSaveVersion}),
-    }})
-  }else{
-    await db().clip.update({where:{id:clip.id},data:{
-      aiMeta:toPrismaJson({...metadata,agentRenderId:result.render.id,
-        agentRenderEditsVersion:clip.editsSaveVersion,agentRenderStatus:'queued',
-        fullResKey:null,agentFullResEditsVersion:null}),
-    }})
+  if(result.render.status==='READY'&&result.render.outputKey&&clip.previewKey){
+    // Reused, already-finalized render: no new queue job or media generation.
+    const current=await db().clip.findUnique({where:{id:clip.id},
+      select:{aiMeta:true,editsSaveVersion:true}})
+    if(current?.editsSaveVersion===clip.editsSaveVersion){
+      const metadata=object(current.aiMeta)
+      await db().clip.updateMany({where:{id:clip.id,
+        editsSaveVersion:clip.editsSaveVersion},data:{
+        aiMeta:toPrismaJson({...metadata,agentRenderId:result.render.id,
+          agentRenderEditsVersion:clip.editsSaveVersion,
+          agentRenderStatus:'done',agentRenderJobId:producerJobId,
+          fullResKey:result.render.outputKey,
+          agentFullResEditsVersion:clip.editsSaveVersion}),
+      }})
+    }
   }
+  // Newly queued producer ownership was stored by enqueueRenderClip before
+  // the RENDER_CLIP job became visible to workers. Never overwrite it here:
+  // the worker may have finished while the enqueue response was in flight.
   return {clipId:clip.id,renderId:result.render.id,
     editsVersion:clip.editsSaveVersion,status:result.render.status==='READY'?'done':'queued'}
 }
 
-export async function producerClipRenderStatuses(workspaceId:string,projectId:string,producerJobId:string){
+export async function producerClipRenderStatuses(workspaceId:string,projectId:string,producerJobId:string,
+  targetClipId?:string){
   const clips=await db().clip.findMany({where:{workspaceId,projectId,deletedAt:null},
     select:{id:true,title:true,startMs:true,endMs:true,edits:true,editsSaveVersion:true,
       workspaceId:true,projectId:true,previewKey:true,posterKey:true,aiMeta:true}})
-  const selected=clips.filter(c=>object(c.aiMeta).agentClipperRunId===producerJobId)
+  const selected=clips.filter(c=>targetClipId
+    ? c.id===targetClipId&&object(c.aiMeta).agentRenderJobId===producerJobId
+    : object(c.aiMeta).agentClipperRunId===producerJobId)
   const renderIds=selected.map(c=>object(c.aiMeta).agentRenderId).filter((v):v is string=>typeof v==='string')
   const renders=await db().clipRender.findMany({where:{id:{in:renderIds},workspaceId},
     select:{id:true,status:true,outputKey:true,error:true,srtKey:true,editsVersionHash:true}})
   const byId=new Map(renders.map(r=>[r.id,r]))
-  const missing=selected.filter(c=>Boolean(object(c.aiMeta).agentServerRender)&&
-    !object(c.aiMeta).agentRenderId)
-  // Crash recovery only for a clip that never had a render queued. A failed or
-  // accepted render is NOT automatically retried.
-  await Promise.all(missing.map(c=>enqueueProducerServerRender(c,producerJobId).catch(()=>null)))
+  // Status polling is read-only. Never start paid work from GET or auto-retry
+  // an accepted job; the producer or operator must submit an explicit revision.
   const rows=await Promise.all(selected.map(async c=>{
     const meta=object(c.aiMeta)
     const render=byId.get(String(meta.agentRenderId||''))
@@ -65,7 +68,9 @@ export async function producerClipRenderStatuses(workspaceId:string,projectId:st
     const stale=Number(meta.agentRenderEditsVersion||0)!==c.editsSaveVersion
     const ready=legacyReady || (render?.status==='READY'&&!stale&&
       Number(meta.agentFullResEditsVersion||0)===c.editsSaveVersion&&Boolean(c.previewKey))
-    const status=ready?'done':render?.status==='FAILED'?'failed':
+    const missingRender=meta.agentServerRender&&!render&&
+      (!meta.agentRenderId||meta.agentRenderId!=='')
+    const status=ready?'done':missingRender||render?.status==='FAILED'?'failed':
       render?.status==='RENDERING'?'rendering':'queued'
     const sign=async(key:string|null|undefined)=>key?
       createReadableSignedUrl(key,900).catch(()=>null):null

@@ -946,6 +946,26 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
     await closeClipLease(id,true)
     return result
   }
+  // Standalone finish_clip revisions use the same server-render queue as
+  // discovery. The producer must have submitted versioned native edits first.
+  if(clipProducerEnabled()&&!job.clipId.startsWith('project:')&&!body.video){
+    const clip=await prisma().clip.findFirst({where:{id:job.clipId,
+      workspaceId:job.workspaceId,projectId:job.projectId,deletedAt:null},
+      select:{aiMeta:true,editsSaveVersion:true}})
+    if(!clip||object(clip.aiMeta).agentRenderJobId!==id)
+      throw problem('Submit a versioned editsJson to /renders before completion.',409)
+    const state=await producerClipRenderStatuses(job.workspaceId,job.projectId,id,job.clipId)
+    if(state.summary.failed)throw problem('The revised clip render failed. Submit corrected edits.',409)
+    if(state.summary.done!==1)throw problem('The revised clip is still rendering.',409)
+    const meta=object(clip.aiMeta)
+    const result=await prisma().clipAgentFinishJob.update({where:{id},data:{
+      status:'complete',phase:'complete',progress:100,message:messages.complete,
+      resultKey:typeof meta.fullResKey==='string'?meta.fullResKey:null,
+      completedAt:new Date(),
+    }})
+    await closeClipLease(id,true)
+    return publicJob(result)
+  }
   const fullName=word(body.video,150)
   const previewName=word(body.preview,150)
   const editName=word(body.editsJson,150)
@@ -1080,22 +1100,24 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
 /** Same-job producer render-status endpoint; callback authorization also renews the lease. */
 export async function getClipAgentRenders(id:string,request:Request){
   const job=await authorizeClipAgentCallback(id,request)
-  if(!job.clipId.startsWith('project:'))throw problem('Render list is for discovery jobs.',409)
-  return producerClipRenderStatuses(job.workspaceId,job.projectId,id)
+  return producerClipRenderStatuses(job.workspaceId,job.projectId,id,
+    job.clipId.startsWith('project:')?undefined:job.clipId)
 }
 
 /** Versioned native-edits correction for ONE clip. Never republish other clips. */
 export async function reviseClipAgentRender(id:string,request:Request,raw:unknown){
   const job=await authorizeClipAgentCallback(id,request)
   if(finished(job.status))throw problem('Job no longer accepts revisions.',409)
-  if(!job.clipId.startsWith('project:'))throw problem('Use discovery job for same-job revisions.',409)
-  const input=object(raw),clipId=word(input.clipId,128),filename=word(input.editsJson,150)
+  const isRevisionJob=!job.clipId.startsWith('project:')
+  const input=object(raw),clipId=word(input.clipId,128)||
+    (isRevisionJob?job.clipId:''),filename=word(input.editsJson,150)
   const file=items(job.artifacts).find(a=>a.filename===filename&&a.state==='ready'&&
     a.mime==='application/json'&&a.bytes<=MAX_JSON_BYTES)
   if(!clipId||!file)throw problem('Specify clipId and a committed versioned editsJson.',409)
   const clip=await prisma().clip.findFirst({where:{id:clipId,projectId:job.projectId,
     workspaceId:job.workspaceId,deletedAt:null}})
-  if(!clip||object(clip.aiMeta).agentClipperRunId!==id)
+  if(!clip||(isRevisionJob?clip.id!==job.clipId:
+    object(clip.aiMeta).agentClipperRunId!==id))
     throw problem('This clip does not belong to the producer job.',404)
   let doc:Record<string,unknown>
   try{doc=object(JSON.parse((await getClipStorage().getObjectBytes(file.key)).toString('utf8')))}
@@ -1113,9 +1135,15 @@ export async function reviseClipAgentRender(id:string,request:Request,raw:unknow
     throw problem('Revised edits must have an allowed absolute source trim.',422)
   const edits=await nativeProducerEdits(job,rawEdits,items(job.artifacts),start,end)
   const current=normalizeEdits(clip.edits,{clipStartMs:clip.startMs,clipEndMs:clip.endMs})
-  if(editsVersionHash(current)===editsVersionHash(edits))
+  if(editsVersionHash(current)===editsVersionHash(edits)){
+    // A standalone revision can complete against identical approved output
+    // without paying for a duplicate encode.
+    if(isRevisionJob)await prisma().clip.update({where:{id:clipId},data:{
+      aiMeta:toPrismaJson({...object(clip.aiMeta),agentRenderJobId:id}),
+    }})
     return {clipId,unchanged:true,editsVersion:clip.editsSaveVersion,
       renderId:word(object(clip.aiMeta).agentRenderId,150)||null}
+  }
   const meta=object(clip.aiMeta)
   const next=await prisma().$transaction(async tx=>{
     const fresh=await tx.clip.findUniqueOrThrow({where:{id:clipId}})
@@ -1126,6 +1154,7 @@ export async function reviseClipAgentRender(id:string,request:Request,raw:unknow
       startMs:start,endMs:end,edits:toPrismaJson(edits),editsSaveVersion:{increment:1},
       aiMeta:toPrismaJson({...meta,agentRenderId:null,agentRenderStatus:'queued',
         agentRenderEditsVersion:version,agentServerRender:true,
+        agentRenderJobId:id,
         agentLastEditsFilename:filename}),
     }})
     await tx.clipEditVersion.create({data:{id:'cev_'+randomUUID(),clipId,

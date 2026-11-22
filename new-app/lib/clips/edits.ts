@@ -214,7 +214,7 @@ export type ClipEditsV2 = {
   zoom?: { enabled?: boolean; intensity?: number; facecamOnly?: boolean; anchor?: {x:number;y:number} }
   silenceTrim?: SilenceTrimSettings
   /** Integrated loudness target (LUFS) for export loudnorm. */
-  loudnessLufs?: -14 | -16 | -18 | -23 | -24
+  loudnessLufs?: number
   /** Explicit opt-in for speech leveling (toggle); loudnessLufs alone is not enough. */
   speechLevelingEnabled?: boolean
   /** Source-ms blocks in output order (transcript rearrange). */
@@ -900,14 +900,11 @@ export function normalizeEdits(raw: unknown, bounds: ClipBounds): ClipEditsV2 {
     ...normalizeSourceFields(o),
     vocabApplied:
       typeof o.vocabApplied === 'string' && o.vocabApplied.length <= 64 ? o.vocabApplied : undefined,
-    loudnessLufs:
-      o.loudnessLufs === -14 ||
-      o.loudnessLufs === -16 ||
-      o.loudnessLufs === -18 ||
-      o.loudnessLufs === -23 ||
-      o.loudnessLufs === -24
-        ? (o.loudnessLufs as ClipEditsV2['loudnessLufs'])
-        : undefined,
+    // Preserve the precise mix target, including -15 LUFS. Do not silently
+    // substitute a preset after the user has saved an explicit target.
+    loudnessLufs: typeof o.loudnessLufs==='number' &&
+      Number.isFinite(o.loudnessLufs) && o.loudnessLufs>=-36 && o.loudnessLufs<=-8
+        ? o.loudnessLufs : undefined,
     speechLevelingEnabled: o.speechLevelingEnabled === true ? true : undefined,
     sectionOrder: normalizeSectionOrder(o.sectionOrder, trim.in, trim.out),
     speed: normalizeEditSpeed(o.speed),

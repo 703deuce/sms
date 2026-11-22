@@ -13,6 +13,7 @@ import {
   renderStatusWhere,
 } from '@/lib/server/clips/export-rows'
 import { getPrisma } from '@/lib/server/db'
+import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { getClipStorage } from '@/lib/storage'
 import { createCachedSignedDownloadUrl } from '@/lib/storage/signed-download-cache'
 import { createId } from '@/lib/supabase/id'
@@ -185,7 +186,9 @@ export async function enqueueRenderClip(
   },
 ) {
   const prisma = getPrisma()
-  const clipRow = await prisma.clip.findUniqueOrThrow({ where: { id: clipId }, select: { projectId: true } })
+  const clipRow = await prisma.clip.findUniqueOrThrow({ where: { id: clipId }, select: {
+    projectId: true, aiMeta: true, editsSaveVersion: true,
+  } })
   const targetRes = opts.targetResolution ?? opts.resolution
   const { width: playW, height: playH } = exportPixelSize(opts.aspect, opts.resolution)
   const composeSpec = composeSpecV1Enabled(workspaceId, clipRow.projectId)
@@ -268,11 +271,24 @@ export async function enqueueRenderClip(
     },
   })
 
+  // Persist current render ownership BEFORE publishing the queue item. Otherwise
+  // a fast render worker may finish before agentRenderId reaches the clip.
+  if(opts.producerJobId){
+    const v=opts.producerEditsVersion??1
+    const meta=clipRow.aiMeta&&typeof clipRow.aiMeta==='object'&&!Array.isArray(clipRow.aiMeta)
+      ?clipRow.aiMeta as Record<string,unknown>:{}
+    const claimed=await prisma.clip.updateMany({where:{id:clipId,editsSaveVersion:v},data:{
+      aiMeta:toPrismaJson({...meta,agentServerRender:true,
+        agentRenderId:renderId,agentRenderEditsVersion:v,agentRenderJobId:opts.producerJobId,
+        agentRenderStatus:'queued',fullResKey:null,agentFullResEditsVersion:null}),
+    }})
+    if(claimed.count!==1)throw new Error('Producer edits changed before render enqueue')
+  }
   const jobId = createId('job')
   await prisma.clipJob.create({
     data: {
       id: jobId,
-      projectId: (await prisma.clip.findUniqueOrThrow({ where: { id: clipId } })).projectId,
+      projectId: clipRow.projectId,
       clipId,
       type: 'RENDER_CLIP',
       status: 'QUEUED',

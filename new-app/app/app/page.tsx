@@ -23,70 +23,56 @@ export default async function AppDashboardPage() {
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 8)
 
-  console.info('[app:home]', { cards: ['clipper', 'video-editor', 'youtube-video', ...(isT2vFeatureEnabled() ? ['text-to-video'] : []), 'captions', 'ai-studio', 'ad-studio', 'motion-studio'] })
+  console.info('[app:home]', { mode: 'unified-create', choices: 4 })
   return (
     <Page>
       <PageHeader title="Home" description="Choose what you want to create. Recent projects are listed below." />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <LauncherCard
-          href={routes.clips()}
-          icon={Scissors}
-          title="Clipper"
-          description="Projects, uploads, and stream clips."
-          testId="app-launcher-clipper"
-        />
-        <LauncherCard
-          href={routes.videoEditor()}
-          icon={Clapperboard}
-          title="Video Editor"
-          description="Edit a full video or open an existing project."
-          testId="app-launcher-video-editor"
-        />
-        <LauncherCard
-          href={routes.youtubeVideo()}
-          icon={SquarePlay}
-          title="YouTube Video"
-          description="Turn your footage into a complete YouTube video."
-          testId="app-launcher-youtube-video"
-        />
-        {isT2vFeatureEnabled() ? (
-          <LauncherCard
-            href="/app/ai-video/new"
-            icon={Film}
-            title="Text to Video"
-            description="Type an idea. Get a narrated video with real stock footage."
-            testId="app-launcher-text-to-video"
-          />
-        ) : null}
-        <LauncherCard
-          href="/app/captions"
-          icon={Captions}
-          title="AI Captions"
-          description="Generate and style captions for your videos."
-          testId="app-launcher-captions"
-        />
-        <LauncherCard
-          href="/app/studio"
-          icon={WandSparkles}
-          title="AI Studio"
-          description="Create and plan AI-powered video ads."
-          testId="app-launcher-ad-studio"
-        />
-        <LauncherCard
-          href="/app/ad-studio"
-          icon={Megaphone}
-          title="Ad Studio"
-          description="Create product ads from a brief or product image."
-          testId="app-launcher-product-ad-studio"
-        />
-        <LauncherCard
-          href="/app/motion-studio"
-          icon={Film}
-          title="Motion Studio"
-          description="Turn an idea, script, or footage into a cinematic documentary."
-          testId="app-launcher-motion-studio"
-        />
-      </div>
+      <section aria-label="Create video" className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold tracking-tight">Create a video</h2>
+          <p className="text-xs text-muted-foreground">Start simple. You can adjust everything afterward.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <LauncherCard href="/app/motion-studio/new" icon={WandSparkles}
+            title="Create with AI" description="Give us a topic or script. We'll build the video."
+            testId="create-with-ai"/>
+          <LauncherCard href="/app/edit-my-footage" icon={Clapperboard}
+            title="Edit My Footage" description="Add your recordings and tell us the story you want."
+            testId="create-edit-my-footage"/>
+          <LauncherCard href={routes.clipsNew()} icon={Scissors}
+            title="Create Clips" description="Turn one recording into your best short highlights."
+            testId="create-clips"/>
+          <LauncherCard href="/app/motion-studio/new?type=audiogram" icon={SquarePlay}
+            title="Audio to Video" description="Turn spoken audio or a podcast into a visual story."
+            testId="create-audio-to-video"/>
+        </div>
+      </section>
+      <details className="mt-6 rounded-xl border border-border bg-card px-4 py-3">
+        <summary className="cursor-pointer text-sm font-medium">More tools and existing projects</summary>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <LauncherCard href={routes.videoEditor()} icon={Clapperboard}
+            title="Video Editor" description="Open an existing video to make changes."
+            testId="app-launcher-video-editor"/>
+          <LauncherCard href={routes.youtubeVideo()} icon={SquarePlay}
+            title="YouTube Video" description="Build a long YouTube video from your footage."
+            testId="app-launcher-youtube-video"/>
+          {isT2vFeatureEnabled() ? <LauncherCard href="/app/ai-video/new" icon={Film}
+            title="Text to Video" description="Start with a written idea."
+            testId="app-launcher-text-to-video"/> : null}
+          <LauncherCard href="/app/captions" icon={Captions}
+            title="AI Captions" description="Style captions on an existing video."
+            testId="app-launcher-captions"/>
+          <LauncherCard href="/app/studio" icon={WandSparkles}
+            title="AI Studio" description="Your other AI creation tools."
+            testId="app-launcher-ad-studio"/>
+          <LauncherCard href="/app/ad-studio" icon={Megaphone}
+            title="Ad Studio" description="Make product videos and advertisements."
+            testId="app-launcher-product-ad-studio"/>
+          <LauncherCard href="/app/motion-studio" icon={Film}
+            title="Motion Studio" description="View your video projects."
+            testId="app-launcher-motion-studio"/>
+        </div>
+      </details>
       <section className="mt-8" aria-labelledby="recent-projects-heading">
         <h2 id="recent-projects-heading" className="text-sm font-medium text-foreground">
           Recent projects
