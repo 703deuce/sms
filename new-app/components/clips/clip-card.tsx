@@ -477,6 +477,27 @@ export function ClipCard({
                 console.info('[editor:templates-mode] card-entry', { projectId, clipId: clip.id })
                 router.push(routes.templateMode(projectId, clip.id, isStreamer ? { from: 'studio' } : undefined))
               }}>Layouts</DropdownMenuItem>
+              {aiMeta.agentClipper ? (
+                <DropdownMenuItem disabled={cardActionBusy} onClick={() => {
+                  const note = window.prompt('What should the producer change in this clip?')
+                  if (note === null) return
+                  if (!note.trim()) { toast.error('Add a note describing the revision.'); return }
+                  setCardActionBusy(true)
+                  void fetch('/api/clips/projects/' + encodeURIComponent(projectId) + '/agent-finish', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json', 'Idempotency-Key':'clip-revision-'+crypto.randomUUID()},
+                    body: JSON.stringify({clipIds:[clip.id],note:note.trim().slice(0,2000)}),
+                  }).then(async response => {
+                    if (!response.ok) {
+                      const result = await response.json().catch(() => ({})) as {error?:string}
+                      throw new Error(result.error || 'Could not start this clip revision.')
+                    }
+                    toast.success('Revision submitted. Your existing clip remains available.')
+                    onChanged?.()
+                  }).catch(error => toast.error(error instanceof Error ? error.message : 'Could not start revision.'))
+                    .finally(() => setCardActionBusy(false))
+                }}>Re-run this clip with a note</DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-rename" onClick={() => void renameCard()}>Rename</DropdownMenuItem>
               <DropdownMenuItem disabled={cardActionBusy} data-testid="clip-card-duplicate" onClick={() => void duplicateCard()}>Duplicate</DropdownMenuItem>
               {projectHasUpload ? <DropdownMenuItem data-testid="clip-card-copy-moment" onClick={() => void copyMomentLink()}>Copy moment link</DropdownMenuItem> : null}
