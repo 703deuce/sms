@@ -5,6 +5,7 @@ import { getPrisma } from '@/lib/server/db'
 import { getClipStorage, createReadableSignedUrl, storageDriverName } from '@/lib/storage'
 import { toPrismaJson } from '@/lib/server/clips/prisma-json'
 import { importAgentTimeline } from '@/lib/server/motion-studio/agent-import'
+import { registerProjectMedia } from '@/lib/server/clips/project-media'
 import { normalizeEdits, type ClipEditsV2 } from '@/lib/clips/edits'
 import { clipProducerEnabled, coordinateClipJobs, renewClipLease, closeClipLease } from '@/lib/server/motion-studio/clip-producer-coordinator'
 
@@ -465,11 +466,53 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
     try {
       const doc = object(JSON.parse((await getClipStorage().getObjectBytes(editArtifact.key)).toString('utf8')))
       if (doc.schema !== 'transovo.clip-edits/2') throw new Error('Invalid edit schema')
-      edits = normalizeEdits(doc.edits, {clipStartMs: startMs, clipEndMs: endMs})
+      const rawEdits = object(doc.edits)
+      const trim = object(rawEdits.trim)
+      if (Number(trim.in) !== startMs || Number(trim.out) !== endMs)
+        throw new Error('Edit trim does not match published source range')
+      const rawBroll = Array.isArray(rawEdits.broll) ? rawEdits.broll : []
+      const mappedBroll: Record<string,unknown>[] = []
+      for (const rawLayer of rawBroll) {
+        const layer = object(rawLayer)
+        if (layer.source !== 'upload') {mappedBroll.push(layer);continue}
+        const filename = word(layer.artifactFilename || layer.uploadId,150)
+        const file = artifacts.find(a=>a.state==='ready' && a.filename===filename &&
+          ['video/webm','video/mp4','image/png','image/webp'].includes(a.mime))
+        if (!file) throw new Error('Missing uploaded graphic overlay')
+        const uploadId = 'clipa_' + file.id
+        await prisma().clipUpload.upsert({
+          where:{id:uploadId},
+          create:{id:uploadId,workspaceId:job.workspaceId,key:file.key,
+            filename:file.filename,bytes:BigInt(file.bytes),mime:file.mime,
+            kind:'media',status:'COMPLETE',storageDriver:storageDriverName()},
+          update:{},
+        })
+        await registerProjectMedia(job.workspaceId,job.projectId,{uploadId,label:file.filename})
+        mappedBroll.push({...layer,source:'upload',uploadId})
+      }
+      edits = normalizeEdits({...rawEdits,broll:mappedBroll}, {clipStartMs: startMs, clipEndMs: endMs})
       editable = true
     } catch {console.warn('[clip-agent] invalid_edits_fallback', {jobId: id})}
   } else console.warn('[clip-agent] missing_edits_fallback', {jobId: id})
+
   const score = virality * 10
+  const newClipId = 'clip_' + randomUUID()
+  const wordsKey = 'ws/' + job.workspaceId + '/projects/' + job.projectId + '/clips/' + newClipId + '/words.json'
+  let hasWords = false
+  try {
+    const projectWords = await getClipStorage().getJson<unknown>('ws/' + job.workspaceId +
+      '/projects/' + job.projectId + '/words.json')
+    const words = Array.isArray(projectWords) ? projectWords : []
+    const selected = words.filter(value=>{
+      const row = object(value)
+      const start = Number(row.s),end=Number(row.e)
+      return Number.isFinite(start)&&Number.isFinite(end)&&end*1000>=startMs&&start*1000<=endMs
+    })
+    if (selected.length) {
+      await getClipStorage().putJson(wordsKey,selected)
+      hasWords = true
+    }
+  } catch { console.warn('[clip-agent] clip_words_fallback',{jobId:id}) }
   const result = await prisma().$transaction(async tx => {
     await tx.$queryRaw`SELECT "id" FROM "clip_agent_finish_jobs" WHERE "id" = ${id} FOR UPDATE`
     const existing = await tx.clip.findMany({where:{workspaceId: job.workspaceId,
@@ -480,12 +523,13 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
       object(c.aiMeta).agentClipperRunId === id)
     if (duplicate) return duplicate.id
     if (count>=15) throw problem('Maximum of 15 clips per production.',409)
-    const clipId = 'clip_' + randomUUID()
+    const clipId = newClipId
     await tx.clip.create({data:{
       id:clipId, workspaceId:job.workspaceId,projectId:job.projectId,
       title:word(detail.title, 120) || 'Highlight',reason:word(detail.why, 300) || 'Selected by Transovo Agent',
       startMs,endMs,score,scores:toPrismaJson({overall:score}),
       previewKey:preview.key,posterKey:poster.key,storageDriver:storageDriverName(),
+      ...(hasWords?{wordsKey}:{}),
       edits:toPrismaJson(edits), editsSaveVersion:1,
       aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:id,agentClipManifest:manifestName,
         virality,hook:word(detail.hook, 500),speakers:detail.speakers,
@@ -493,6 +537,9 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
         agentFinishEditableLayersImported:editable,
         agentFinishedVersions:[{jobId:id,key:video.key,durationMs,completedAt:new Date().toISOString()}]}),
     }})
+    await tx.clipEditVersion.create({data:{id:'cev_'+randomUUID(),clipId,
+      workspaceId:job.workspaceId,name:'Producer original',kind:'original',
+      edits:toPrismaJson(edits),editsSaveVersion:1}})
     return clipId
   })
   return {clipId: result, published: true, editable, score}
