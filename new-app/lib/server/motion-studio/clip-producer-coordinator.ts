@@ -119,10 +119,14 @@ export async function coordinateClipJobs(limit=3){
       ])
     }else{
       failed++
+      const fresh=await db().clipAgentFinishJob.findUnique({where:{id:job.id},select:{attempts:true}})
+      const exhausted=(fresh?.attempts||0)>=2
       await db().$transaction([
         db().clipAgentFinishJob.updateMany({where:{id:job.id,workerId:job.workerId,status:'dispatching'},
-          data:{status:'queued',workerId:null,leaseHash:null,leaseExpiresAt:null,
-            message:'Waiting to retry producer dispatch.'}}),
+          data:{status:exhausted?'failed':'queued',workerId:null,leaseHash:null,leaseExpiresAt:null,
+            ...(exhausted?{phase:'failed',error:'Producer dispatch failed twice.',failReason:'dispatch failed',
+              completedAt:new Date(),message:'We could not start production. Please retry.'}:
+              {message:'Waiting to retry producer dispatch.'})}}),
         db().motionStudioWorkerAssignment.updateMany({where:{jobId:job.id,workerId:job.workerId,status:'reserved'},
           data:{status:'failed'}}),
       ])
