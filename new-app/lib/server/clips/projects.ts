@@ -291,6 +291,11 @@ export async function createClipProjectFromImportUrl(
   const settings = brandRow
     ? withAutoContentDetection(mergeDefaultBrandSettings(baseSettings, brandRow))
     : baseSettings
+  const useProducer = process.env.CLIPS_PRODUCER_PIPELINE === '1' &&
+    !settings.byo && !settings.fullVideo && !settings.blank
+  const importSettings = useProducer
+    ? {...settings, autoGrokClipper:true, autoAgentClipMode:undefined}
+    : settings
 
   const projectId = createId('proj')
   const defaultTitles: Record<string, string> = {
@@ -308,7 +313,7 @@ export async function createClipProjectFromImportUrl(
       workspaceId,
       title,
       sourceUrl: normalizedUrl,
-      settings: JSON.parse(JSON.stringify(settings)),
+      settings: JSON.parse(JSON.stringify(importSettings)),
       rangeStartMs: settings.rangeStartMs,
       rangeEndMs: settings.rangeEndMs || 0,
       status: 'QUEUED',
