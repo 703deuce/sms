@@ -543,7 +543,7 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
       edits:toPrismaJson(edits), editsSaveVersion:1,
       aiMeta:toPrismaJson({agentClipper:true,agentClipperRunId:id,agentClipManifest:manifestName,
         virality,hook:word(detail.hook, 500),speakers:detail.speakers,
-        fullResKey:video.key,deliveredDurationMs:durationMs,
+        fullResKey:video.key,agentFullResEditsVersion:1,deliveredDurationMs:durationMs,
         agentFinishEditableLayersImported:editable,
         agentFinishedVersions:[{jobId:id,key:video.key,durationMs,completedAt:new Date().toISOString()}]}),
     }})
@@ -834,6 +834,7 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
       aiMeta:toPrismaJson({...meta,agentFinishOriginalPreviewKey:
         meta.agentFinishOriginalPreviewKey||clip.previewKey||null,
         agentFinishedVersions:versions,fullResKey:video.key,
+        agentFullResEditsVersion:clip.editsSaveVersion+(imported?1:0),
         deliveredDurationMs:durationMs,agentFinishActiveJobId:id,
         agentFinishEditableLayersImported:Boolean(imported)}),
     }})
