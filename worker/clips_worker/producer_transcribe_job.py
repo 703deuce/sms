@@ -29,7 +29,7 @@ def run_producer_transcribe_job(conn, job: dict) -> None:
     workspace_id, upload_id, source_key, duration_ms = row
     root = f"ws/{workspace_id}/projects/{project_id}/"
     try:
-        raw = _http_listen(audio_url=sign_url(str(source_key), 3600), model="nova-3")
+        raw = _http_listen(audio_url=sign_url(str(source_key), 3600), model="nova-3", paragraphs=True)
         results = raw.get("results") or {}
         channels = results.get("channels") or []
         alternatives = channels[0].get("alternatives") or [] if channels else []
