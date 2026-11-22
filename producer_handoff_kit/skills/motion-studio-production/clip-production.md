@@ -100,6 +100,7 @@ Quality bar is unchanged: batching removes repeated work and waiting, never craf
 4. **Optionally split the clips across up to 4 helper subagents** (Task executors) when the pack is big enough that it truly saves time, building at the same time from that system. Each helper gets a self-contained brief: the design system path, its clips' cuts and transcript ranges, the full craft rules (key words and numbers readable, people and what they show well framed, real speech intact, captions as separate layers never burned in, no silent or lazier fallbacks), and the same QA pass. Each clip still gets story-specific graphics and custom touches; a clip that is only the shared components on footage fails.
 5. **Look closely only at the chosen windows.** After picking, make a contact sheet per chosen clip window to decide framing; that is the only close visual review before render. After render, the lead runs the one QA pass in Stage E on every clip and fixes problems directly or sends them back to the owning helper.
 6. **Benchmark (planning only, never a reason to cut quality):** an internal test made 5 polished clips from a 10-minute source in about 12.5 minutes wall time and about 0.4 points of weekly usage, with no paid API spend. Local transcription took only about a minute of that; most of the time went to writing a one-off renderer and to picking. With Deepgram upstream, the native renderer and the cheap picking above, aim well under that. Time and paid cost per step go into `job.json`.
+   **Speed and usage:** once the native render path is known, write the final edits and render straight away, with no trial renders. Render all clips in parallel, then run one contact-sheet QA over the whole pack. Reuse the saved `/inputs` and downloaded files for the whole job and refetch only when a signed URL is actually needed again. Batch uploads: commit all of a clip's files in one scripted pass and publish clips back to back. Most of the wall time is renders and uploads, so every extra render pass costs minutes.
 7. **`finish_clip`** (one clip) uses the same design-system-then-build approach, built by the lead alone.
 
 ---
@@ -162,7 +163,7 @@ Layout is the first thing the viewer judges; it must be as good as or better tha
 Each segment covers an absolute source-ms range and carries its own framing. Segments with differing speaker, boxes, people, split ratio, orientation, faceTrack, divider, or zoom anchor remain distinct. The browser preview reads these same fields.
 
 - **Punch-in:** `mode:"fill"` with `focusSpeaker` and a `cropBox` (normalized `{x,y,w,h}` on the unrotated source frame). A fill segment requires a source cropBox, a fixed-size moving faceTrack, or an explicit person box. Speaker ID alone is not a face tracker; use separate segments to change crop size. Make the box the same pixel aspect as the output (for 9:16 from a 16:9 source: `w ≈ 0.316 × h`); otherwise the renderer crops it further.
-- **Split:** `mode:"split"` with `people:[{speakerId, box}, …]`, `order` (which speaker comes first), `splitRatio` (0.1–0.9) and an optional `divider:{color:"#RRGGBB", width 0–32, opacity 0–1, style}`. The renderer supports side-by-side with `orientation:"horizontal"` and top/bottom with `orientation:"vertical"`. The splitRatio gives the first pane's fraction of width or height respectively. Choose vertical for a tall 9:16 interview when it makes faces larger. The editor also previews and exposes this orientation.
+- **Split:** `mode:"split"` with `people:[{speakerId, box}, …]`, `order` (which speaker comes first), `splitRatio` (0.1–0.9) and an optional `divider:{color:"#RRGGBB", width 0–32, opacity 0–1, style}`. The renderer supports side-by-side with `orientation:"horizontal"` and top/bottom with `orientation:"vertical"`. The splitRatio gives the first pane's fraction of width or height respectively. Choose vertical for a tall 9:16 interview when it makes faces larger (the stacked split is `orientation:"vertical"`; match each person box to its tile, about 1.125 w/h for two 1080x960 tiles). The editor also previews and exposes this orientation.
 - **Three or more:** `mode:"fit_blur"` (optionally with a `cropBox` for the foreground) or `grid3`/`grid4` with `people` boxes (2×2 tiles).
 - **Speaker ids** in `focusSpeaker`, `people` and `order` are the Deepgram `spk` values as strings (`"0"`, `"1"`, …).
 
@@ -181,6 +182,7 @@ The bar is Opus Clip / Submagic or better, in this order: layout (Stage C), then
 - **Hook in the first second:** start the clip on the strongest line (a cold-open teaser of the clip's best line is fine when it stays truthful), and a headline card for about the first 4 s.
 - **Word-timed captions with keyword emphasis** (Rules below).
 - **Light template accents, cheap and reusable across the pack:** zoom punches on 2–3 key lines per clip, and name tags only while that person is the punched-in speaker (never during a split or on a host shot), only when the name is known or clearly said. Do not guess a name.
+- **Placement of name tags and callouts:** put them in the top band (about y 10–16 % of the frame, after or instead of the headline, never at the same time), sized for phones (about 100 px at a 1920 px tall frame; headlines about 100–110), and never over a chin, mouth or eyes. A lower-third over a tight punch-in lands on the chin, so do not use one there. Check this on the first contact sheet; it should never need a second render pass.
 - **Custom content graphics when a clip earns them:** a number, date, list, map, score or pull-quote that the line actually calls for. Skip them when the cut and layout already carry the clip; an empty graphic list is a valid choice.
 
 ### Rules
@@ -196,7 +198,7 @@ The bar is Opus Clip / Submagic or better, in this order: layout (Stage C), then
 
 ## Stage E — Render, QA, fix (phases `review`, `rendering`)
 
-**Render once, QA once (Rick, Nov 19 and Nov 22).** Clip jobs from the coordinator send `delivery.mode:"mp4"`. Write each clip's canonical `clip_NN.edits.json`, render it once (entry point below) at the `/inputs` `resolution` and aspect, 30 fps CFR, h264, even dimensions, `+faststart`, loudness normalized to **-14 LUFS** (set `loudnessLufs: -14` and `speechLevelingEnabled: true` in the edits; the renderer applies loudnorm only when both are set, and editor exports then match), and make the 480p preview from that finished MP4 (about 3–4 MB per 45 s; the server's target is ≤8 MB per minute). Custom graphic layers built in browser engines are checked on browser stills before they are exported as overlays (`film-pipeline.md` recipes for non-browser engines). Sanitize every filename to `[A-Za-z0-9._-]`. Per clip, export:
+**Render once, QA once (Rick, Nov 19 and Nov 22).** Clip jobs from the coordinator send `delivery.mode:"mp4"`. Write each clip's canonical `clip_NN.edits.json`, render it once (entry point below) at the `/inputs` `resolution` and aspect, 30 fps CFR, h264, even dimensions, `+faststart`, loudness normalized to **-14 LUFS** (set `loudnessLufs: -14` and `speechLevelingEnabled: true` in the edits; the renderer applies loudnorm only when both are set, and editor exports then match; measured output is about -15.4 LUFS integrated, true peak about -1.3 dB, which is accepted as the renderer's result), and make the 480p preview from that finished MP4 (about 3–4 MB per 45 s; the server's target is ≤8 MB per minute). Custom graphic layers built in browser engines are checked on browser stills before they are exported as overlays (`film-pipeline.md` recipes for non-browser engines). Sanitize every filename to `[A-Za-z0-9._-]`. Per clip, export:
 
 - the finished full-resolution MP4 and the 480p preview MP4
 - a thumbnail PNG
@@ -219,6 +221,8 @@ cd <repo>/worker && python -m clips_worker.producer_edits_export \
 
 `--broll-specs` is required when the edits contain `broll` (the renderer needs the overlay media materialized locally).
 
+Local setup: the worker needs `psycopg2-binary` installed on the box just to import (it never connects to a database).
+
 It writes the MP4 plus an SRT and prints a JSON summary (`renderEngine`, …). This is the supported route to card/editor parity. Font ids must come from `/inputs` `availableTextFonts`. Layers it cannot express (custom engine graphics) go in as committed PNG/alpha-WebM `broll` overlays. Visual QA on stills and the final watch stay mandatory; a separately rendered MP4 alone does not prove parity. 
 
 ### Clip QA checklist
@@ -232,7 +236,7 @@ It writes the MP4 plus an SRT and prints a JSON summary (`renderEngine`, …). T
 - Key words and numbers stay readable; no object fully hides key text (Rick).
 - Motion is stable (no jittery crops, no 2-frame layout flips).
 - Audio is intelligible; music and SFX sit under speech.
-- Loudness normalized to -14 LUFS, true peak about -1.5 dB.
+- Loudness normalized toward -14 LUFS (the native render measures about -15.4 LUFS, true peak about -1.3 dB; accepted).
 - Filenames will survive sanitization and match `clip_NN.json` / the `/clips` call.
 - `clip_NN.edits.json` trim equals the clip's source range, every `artifactFilename` is committed, and times use the right clock (source ms vs output ms).
 
@@ -290,7 +294,7 @@ The clip appears in the customer's project immediately (card plays the 480p prev
     "trim": {"in": 142000, "out": 195000},
     "cutRanges": [[160000, 162000]],
     "aspectRatio": "9:16",
-    "layout": {"mode": "fill", "shotOverrides": [], "layoutSegments": [{"startMs":142000,"endMs":195000,"mode":"fill","focusSpeaker":"0","cropBox":{"x":0.2,"y":0,"w":0.6,"h":1}}]},
+    "layout": {"mode": "dynamic", "shotOverrides": [], "layoutSegments": [{"startMs":142000,"endMs":195000,"mode":"fill","focusSpeaker":"0","cropBox":{"x":0.2,"y":0,"w":0.6,"h":1}}]},
     "captions": {"enabled": true, "presetId": "bold_pop", "animation": "pop", "position": "bottom", "wordsPerLine": 2},
     "textItems": [],
     "keyframes": [],
@@ -305,8 +309,8 @@ Rules:
 
 - `trim.in`/`trim.out` **must equal** `sourceStartMs`/`sourceEndMs` in `clip_NN.json` (on a revision, the new range you chose). `trim`, `cutRanges` and `sectionOrder` are **absolute source milliseconds**.
 - `textItems`, `keyframes`, `captionLines` and `broll` times are **output milliseconds** (0 = first frame of the finished clip).
-- `layout.layoutSegments` follows Stage C (absolute source ms, explicit boxes; `fill`/`split`/`fit_blur`/`grid3`/`grid4`; never `speaker_follow` or legacy `shotOverrides` ids).
-- Headlines and name tags are native `textItems` (`{id, text, startMs, endMs, x, y, style, anim}`, x/y in % of the frame, output ms) with `style.box:{color, opacity, pad}` for a background box; the theme-bound `hookOverlay` is not used. Shapes (`kind`) can draw lines or bars.
+- `layout.layoutSegments` follows Stage C (absolute source ms, explicit boxes; `fill`/`split`/`fit_blur`/`grid3`/`grid4`; never `speaker_follow` or legacy `shotOverrides` ids). **Top-level `layout.mode` must be `"dynamic"`:** `fill`, `center_crop`, `fit_blur`, `full_frame`, `fit_top` or a stack/PiP mode there makes the worker take a whole-clip shortcut and silently ignore every layout segment.
+- Headlines and name tags are native `textItems` (`{id, text, startMs, endMs, x, y, style, anim}`, x/y in % of the frame, output ms) with `style.box:{color, opacity, pad}` for a background box (text box and shadow `opacity` are **0–100**, not 0–1; 0.8 renders invisible); the theme-bound `hookOverlay` is not used. Shapes (`kind`) can draw lines or bars.
 - Zoom punches: `zoom:{enabled:true, intensity, anchor:{x,y}}`; the renderer times the punches from `captions.emphasis` word indexes, anchored on `zoom.anchor` or the segment `zoomAnchor` (put the anchor on the named face). Check the punches in QA.
 - Caption position per layout: `keyframes` entries `{target:"captions", prop:"capY", points:[{tMs, v}]}`, output ms, value -50…50.
 - Graphics use `broll` with `source:"upload"` and committed `artifactFilename`; PNG and alpha WebM are supported as project media (verify alpha in export QA). A missing overlay invalidates editable import.
