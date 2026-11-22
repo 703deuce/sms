@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createProject, createProjectFromLink, estimateCredits } from '@/lib/clips-api'
 import { validateImportUrlForSubmit, YOUTUBE_UNSUPPORTED_MSG } from '@/lib/clips/import-url'
-import { defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
+import { CAPTION_PRESETS, defaultClipSettings, type ClipProjectSettings } from '@/lib/clips/settings'
 import { aiProducerAgentPublicEnabled } from '@/lib/ai-producer-agent/flags'
 import { initialNewProjectSettings } from '@/lib/clips/new-project-initial'
 import { BYO_DURATION_ERROR } from '@/lib/clips/byo-project'
@@ -276,6 +276,58 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, producerPipeline
           ))}
         </fieldset>
       ) : null}
+      {projectIntent==='find'&&tab==='upload'&&producerPipelineEnabled?(
+        <section className="mb-5 overflow-hidden rounded-2xl border border-primary/20 bg-card shadow-sm" aria-label="AI Clipper production settings">
+          <div className="border-b border-border/70 bg-gradient-to-r from-primary/10 via-card to-card p-5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="size-5 text-primary"/>
+              <h3 className="text-base font-semibold tracking-tight">AI Clipper Studio</h3>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">Your best moments, fully edited and ready to publish. Every upload includes research-free source analysis, custom graphics and an editable timeline.</p>
+          </div>
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <label className="space-y-1.5 text-xs font-medium">
+              <span>Number of clips</span>
+              <select className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                value={settings.autoGrokMaxClips??5}
+                onChange={e=>setSettings(v=>({...v,autoGrokMaxClips:Number(e.target.value)}))}>
+                {[1,2,3,4,5,6,8,10,12,15].map(n=><option key={n} value={n}>{n} clips</option>)}
+              </select>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium">
+              <span>Target length</span>
+              <div className="flex h-10 items-center rounded-lg border border-border bg-background px-3 text-sm">20–60 seconds per clip</div>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium">
+              <span>Canvas format</span>
+              <select className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                value={settings.aspectRatio}
+                onChange={e=>setSettings(v=>({...v,aspectRatio:e.target.value as ClipProjectSettings['aspectRatio']}))}>
+                <option value="9:16">Vertical 9:16</option>
+                <option value="4:5">Portrait 4:5</option>
+                <option value="1:1">Square 1:1</option>
+                <option value="16:9">Widescreen 16:9</option>
+              </select>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium">
+              <span>Caption style</span>
+              <select className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm"
+                value={settings.captions?.presetId??'bold_pop'}
+                onChange={e=>setSettings(v=>({...v,captions:{...v.captions,presetId:e.target.value,
+                  enabled:v.captions?.enabled??true,language:v.captions?.language??'en'}}))}>
+                {CAPTION_PRESETS.map(p=><option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+            <label className="space-y-1.5 text-xs font-medium sm:col-span-2">
+              <span>Creative direction <span className="font-normal text-muted-foreground">(optional)</span></span>
+              <textarea className="min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                placeholder="Topics to prioritize, words to avoid, brand or editing guidance…"
+                maxLength={2000} value={settings.prompt??''}
+                onChange={e=>setSettings(v=>({...v,prompt:e.target.value}))}/>
+            </label>
+          </div>
+        </section>
+      ):null}
       {projectIntent==='find'&&tab==='upload'&&!producerPipelineEnabled?(
         <div className="mb-4 rounded-xl border border-border bg-card p-4" data-testid="grok-clipper-choice">
           <label className="flex items-start gap-3 text-sm">
