@@ -1,0 +1,31 @@
+import { agentLabErrorResponse, agentLabJson, listConversationEvents, toAgentLabItems } from '@/lib/server/agent-lab'
+
+export const dynamic = 'force-dynamic'
+
+/** Conversation status plus chat items; `?since=<ISO timestamp>` returns only newer events. */
+export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params
+    const since = new URL(request.url).searchParams.get('since')
+    const [info, events] = await Promise.all([
+      agentLabJson<{ title?: string | null; execution_status?: string; stats?: any }>(`/api/conversations/${encodeURIComponent(id)}`),
+      listConversationEvents(id, since),
+    ])
+    let cost: number | null = null
+    const usage = info.stats?.usage_to_metrics
+    if (usage && typeof usage === 'object') {
+      cost = Object.values(usage).reduce((sum: number, m: any) => sum + (Number(m?.accumulated_cost) || 0), 0)
+    }
+    const lastTs = events.length ? String(events[events.length - 1].timestamp ?? '') : since
+    return Response.json({
+      id,
+      title: info.title || 'New conversation',
+      status: info.execution_status ?? 'idle',
+      cost,
+      lastTs,
+      items: toAgentLabItems(events),
+    })
+  } catch (err) {
+    return agentLabErrorResponse(err)
+  }
+}
