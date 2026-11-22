@@ -101,7 +101,7 @@ When `CLIPS_PRODUCER_PIPELINE=1`, ordinary find-clips uploads are transcribed wi
 
 ### Producer assignment
 
-A registered worker receives `{action:"clip_and_finish",kind:"clips",jobId,jobUrl,jobToken,leaseId,workerId,workspaceId,projectId,coordinator:true,delivery:{mode:"mp4"}}` (or `finish_clip` and `kind:"clip_revision"`). The coordinator authenticates the HTTPS webhook with its existing `MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY`. **Do not publish a live-only timeline; output rendered MP4s.** The producer must fetch fresh signed URLs from `GET {jobUrl}/inputs` using `Authorization: Bearer {jobToken}`, which returns the full source URL, Deepgram/utterance/words URLs, clipCount (default 5, maximum 15), targetSeconds (20–60), aspectRatio (9:16 default), requested resolution, caption preset/brand/notes, and source bounds if a one-clip revision. Signed URLs expire: refresh from `/inputs` if necessary. No provider API key belongs in job input.
+A registered worker receives `{action:"clip_and_finish",kind:"clips",jobId,jobUrl,jobToken,leaseId,workerId,workspaceId,projectId,coordinator:true,delivery:{mode:"mp4"}}` (or `finish_clip` and `kind:"clip_revision"`). The coordinator authenticates the HTTPS webhook with its existing `MOTION_STUDIO_COORDINATOR_WEBHOOK_KEY`. **Do not publish a live-only timeline; output rendered MP4s.** The producer must fetch fresh signed URLs from `GET {jobUrl}/inputs` using `Authorization: Bearer {jobToken}`, which returns the full source URL, Deepgram, compact transcript JSONL, and words URLs, clipCount (default 5, maximum 15), customer-resolved targetSeconds, aspectRatio (9:16 default), requested resolution, caption preset/brand/notes, and source bounds if a one-clip revision. Signed URLs expire: refresh from `/inputs` if necessary. No provider API key belongs in job input.
 
 ### Upload protocol and callbacks
 
@@ -152,7 +152,7 @@ The producer runtime must implement these actions before enabling the flag in pr
 
 - After Deepgram persists the transcript, the worker enqueues the idempotent `auto-grok-{projectId}` producer job in the **same database transaction** as READY. Dispatch is via the existing coordinator cron and no browser tab needs to remain open.
 - The producer transcription uses configured `DEEPGRAM_MODEL` and project `asrLanguage` (English by default), and allows **one** paid attempt; a failure remains FAILED. Audio-only uploads keep the legacy worker.
-- Clip producer lease is **15 minutes**. Producer must make an authenticated `/progress`, `/inputs`, or `/assets` callback **at least every 60 seconds**, including during renders; successful calls renew near expiry. The accepted creative job is **never automatically retried** following lost lease or the 45-minute deadline: operations must initiate a manual retry. Only pre-accept webhook dispatch may retry once after **60 seconds**.
+- Clip producer lease is **15 minutes**. Producer sends `POST /heartbeat` **at least every 60 seconds**, including during renders, without rewriting progress text; other authorized callbacks also renew near expiry. The accepted creative job is **never automatically retried** following lost lease or a size-aware runtime cap of up to six hours: operations must initiate a manual retry. Only pre-accept webhook dispatch may retry once after **60 seconds**.
 - Clip coordinator setup/dispatch failures must not fail the film coordinator cron. The customer sees friendly failures, while redacted operational reasons persist separately.
 - New clips and per-clip revisions register the same source overlay assets. Revisions refresh the poster and clip words. Idempotent duplicate clip callbacks do not produce new orphan word objects.
 - With the flag off, discovery defaults to **3 clips**, maximum **10**. Finished full-resolution download URLs request attachment disposition and the browser preserves the app tab.
@@ -174,7 +174,7 @@ The resolved brand kit supplies palette, colors, heading/caption fonts, short-li
 
 ### Explicit layoutSegments
 
-Each segment's startMs/endMs are **absolute source milliseconds**. Producer modes are `fill`, `split`, `fit_blur` (and grid3/grid4 when supported). Do not send `speaker_follow`; do not rely on old worker `shotOverrides` ids. Each segment independently carries `focusSpeaker`, `cropBox` normalized `{x,y,w,h}`, `people:[{speakerId,box}]`, `order:[speakerId]`, `splitRatio` (0.1–0.9), `divider:{color,width,opacity,style}` and optionally `zoomAnchor:{x,y}`. All boxes are in **unrotated source-frame normalized coordinates**. Example:
+Each segment's startMs/endMs are **absolute source milliseconds**. Producer modes are `fill`, `split`, `fit_blur` (and grid3/grid4 when supported). Do not send `speaker_follow`; do not rely on old worker `shotOverrides` ids. Each segment independently carries `focusSpeaker`, `cropBox` normalized `{x,y,w,h}`, `people:[{speakerId,box}]`, `order:[speakerId]`, `splitRatio` (0.1–0.9), split `orientation:'horizontal'|'vertical'`, `divider:{color,width,opacity,style}`, optional source-timed `faceTrack:[{sourceMs,box}]`, and `zoomAnchor:{x,y}`. All boxes are in **unrotated source-frame normalized coordinates**. Example:
 
 ```json
 {
@@ -184,7 +184,7 @@ Each segment's startMs/endMs are **absolute source milliseconds**. Producer mode
 }
 ```
 
-For a split, supply explicit boxes for speakers 0 and 1 and `splitRatio:0.5`, with `order:["0","1"]`. Segments with different focus, boxes, people, order, ratio, divider or anchor **must not merge**. Zoom punches should focus on the named face rather than defaulting to frame centre.
+For a split, supply explicit boxes for speakers 0 and 1 and `splitRatio:0.5`, with `order:["0","1"]`; `orientation:'vertical'` means top/bottom stack (recommended for tall 9:16), while `horizontal` means side-by-side. The editor exposes a split-orientation toggle. Segments with different focus, boxes, people, order, ratio, divider or anchor **must not merge**. Zoom punches should focus on the named face rather than defaulting to frame centre.
 
 ### Native editable layers
 
@@ -217,3 +217,39 @@ The API validates the identity, timestamps, step/clip arrays, and **allowlists**
 ### Artifact budget
 
 Up to **1,000 unique filenames**. MP4/video <=2GB per file, image <=25MB, JSON/SRT/VTT <=2MB. All assets are committed before referenced. Preview is 480p MP4, with a size **target** of <=8 MB/minute (not a hard reject threshold). Both SRT (`application/x-subrip`) and VTT (`text/vtt`) are accepted and persisted in per-clip metadata. Deepgram producer transcription uses a source-duration-sized HTTP timeout (600–7200 seconds) and only **one** paid request; filler words are enabled for English.
+
+
+## Fix 3: canonical edits, browser preview and producer guardrails (2026-11-22)
+
+- Revision `GET /inputs` uses the same `previousClipJsonUrl` variable it returns. On discovery, `transcript.speakerNames` is populated from known project or customer speaker-name settings when present; numeric diarization IDs without names are not invented.
+- Producer `POST /clips` requires a committed, valid `transovo.clip-edits/2` document whose trim matches `clip.json`. Native layout segments, source crops, people boxes, moving face tracks and editable layers must survive normalization, or the API returns a 4xx error rather than publishing a fallback MP4. Producer revisions similarly **reject** missing/invalid editable documents with 400/409/422 instead of preserving old edits silently. Flag-off legacy paths retain their old tolerance.
+- Split layout now accepts `orientation:"horizontal"` for left/right and `orientation:"vertical"` for top/bottom. `splitRatio` is the first pane's fractional width or height respectively. This is stored per source-time segment; source frames, speaker order and the divider are reapplied by the worker and the browser producer preview.
+- `faceTrack:[{sourceMs,box}]` stores source-absolute-ms moving face windows. **Current renderer constraint:** moving faceTrack is supported only in `mode:'fill'`, and crop `w/h` must be constant across one segment. The worker linearly interpolates crop x/y on each video frame. Use separate segments for size changes or zoom punches. Invalid changing-size face tracks are rejected with HTTP 422. The editor interpolates those same positions in playback.
+- Text, captions, audio, transitions and motion graphics stay in the normal editor schema, rather than being flattened into images merely to make the producer MP4. The native producer renderer consumes the canonical edits document and supplies SRT. Separate externally rendered effects not described in edits.json are **not** round-trippable and must not be advertised as editable.
+- The editor's producer-framing overlay reads `layout.layoutSegments` by **absolute source ms** and composites synchronized source-video panes under normal editable overlays. Speaker focus is an identifier attached to a segment, not an instruction to run automatic face tracking. For a `fill` segment supply a crop box, face track, or a person box for the selected speaker. For `split` supply at least two person boxes. The current preview is DOM/CSS and must be visually compared with final FFmpeg output before asserting pixel parity.
+
+### Feature parity assessment / boundaries
+
+*The table describes implemented code paths, **not passed tests**. Four-column parity requires live visual QA on a real source, editor reopen/save and fresh export. Pending that check, do not claim pixel-identical output.*
+
+| Feature | Canonical edits schema | Worker / native export | Browser editor preview | Fully verified |
+| --- | --- | --- | --- | --- |
+| Segment fill crop and fixed-width face-follow pan | Yes | Explicit FFmpeg crop; interpolated x/y | Producer layout overlay, interpolated | No — needs visual QA |
+| Split left/right and top/bottom; ratio, order | Yes | hstack/vstack | Producer layout overlay plus orientation control | No — needs visual QA |
+| Grid3/grid4 | Yes | Explicit tile compositor | Producer layout overlay | No — needs visual QA |
+| Fit-blur and divider | Yes | FFmpeg blur and solid/dashed divider | CSS blurred backdrop and divider | No — visual parity QA pending |
+| Per-segment speaker focus | Yes, Deepgram speaker ID | Uses explicitly supplied box; does not track by ID alone | Uses supplied box and speaker metadata | No — ID alone is not a tracking engine |
+| Zoom punches and anchor | Yes, `zoom.anchor` / `zoomAnchor` | Anchored FFmpeg zoom | Native zoom-keyframe preview with producer anchor; auto selection may still differ | No — automatic timing and render QA pending |
+| Trims, sub-cuts, rearrange | Yes | Existing native edit sequence | Existing playback timebase | No — integration QA pending |
+| Caption preset, word timing, highlights and capY | Yes, words/wordFixes/captions/captionLines/keyframes | Existing ASS renderer | CaptionOverlay + libass | No — font/timing parity QA pending |
+| Headline/name text and animations | Yes, textItems/anim/keyframes | Native text renderer | TextItem and libass layers | No — QA pending |
+| Shape dividers and cards | Yes, textItems shapes | Native shape renderer | Native shape preview | No — QA pending |
+| PNG/alpha WebM motion graphic layers | Yes, upload B-roll with in/out | Native B-roll composition | Native B-roll layer preview | No — alpha WebM parity not established |
+| B-roll | Yes | Native B-roll compositor | Native B-roll preview | No — QA pending |
+| Audio levels/loudness | Yes, audio and loudnessLufs | Audio mix/normalization | Browser audio tools; LUFS normalization not mirrored exactly live | No — LUFS preview gap |
+| Transitions | Yes, native keyframes/transitions | Worker cut/layer transitions | Editor transition previews | No — visual QA pending |
+
+**Producer rule:** use only elements representable in the canonical native edits schema. For any capability above without full parity, either produce a supported subset whose preview has been verified for the actual project or decline that effect—do not quietly bake a noneditable effect into the delivered MP4.
+
+- Discovery speaker names are saved in optional project `speakerNames` settings (a record keyed by Deepgram speaker ID); revisions take the latest saved clip edit labels first. Never invent a label for an unnamed diarized speaker.
+- For explicit `fill`, if no clip-level crop is supplied but `people` names the focus speaker, its per-person box is used by both renderers. If only `zoomAnchor` is provided, both renderers derive the same 0.85 × 0.85 normalized window. For a moving `faceTrack`, the source crop size stays fixed; use a separate segment for a size-changing punch.

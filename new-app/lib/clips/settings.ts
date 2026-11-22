@@ -105,6 +105,8 @@ export const clipProjectSettingsSchema = z.object({
   asrLanguage: z
     .enum(['auto', 'en', 'es', 'fr', 'de', 'pt', 'it', 'nl'])
     .optional(),
+  /** Known customer/project speaker labels keyed by Deepgram speaker ID. */
+  speakerNames: z.record(z.string().trim().min(1).max(80)).optional(),
 })
 
 export type ClipProjectSettings = z.infer<typeof clipProjectSettingsSchema>

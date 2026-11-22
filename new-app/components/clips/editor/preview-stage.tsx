@@ -104,6 +104,7 @@ const LibassPreviewLayers = lazy(() =>
   import('@/components/clips/editor/libass-overlay').then((m) => ({ default: m.LibassPreviewLayers })),
 )
 import { PreviewSegmentLayout, segmentLayoutAtSourceMs } from '@/components/clips/editor/segment-layout-preview'
+import { ProducerLayoutPreview } from '@/components/clips/editor/producer-layout-preview'
 import { segmentAudio, segmentMediaMs, sourceById, sourceSegmentAt, sourceSegmentFxCss, sourceSegmentPlaybackRate, sourceSegmentTransformCss } from '@/lib/clips/editor/sources'
 import type { SourceSegmentLayout } from '@/lib/clips/editor/segment-layout'
 
@@ -1214,6 +1215,14 @@ export function PreviewStage({
     () => segmentLayoutAtSourceMs(edits, previewSourceMs),
     [edits, previewSourceMs],
   )
+  // The producer's source-time segments take priority over the old automatic
+  // speaker-crop preview. Keep the media and its audio on the underlying main
+  // video clock; producer panes are muted synchronized picture copies.
+  const producerLayoutActive = useMemo(() => (edits.layout.layoutSegments??[]).find(seg=>
+    previewSourceMs>=seg.startMs && previewSourceMs<seg.endMs &&
+    (Boolean(seg.cropBox)||Boolean(seg.faceTrack?.length)||Boolean(seg.people?.length)||
+      Boolean(seg.zoomAnchor))
+  )??null,[edits.layout.layoutSegments,previewSourceMs])
   const templatePreviewTb = useMemo(
     () => (edits.templateProvenance?.v ? timebaseFor(previewEdits) : null),
     [edits.templateProvenance?.v, previewEdits],
@@ -1926,7 +1935,23 @@ export function PreviewStage({
             </div>
           )
         })}
-        {segmentLayoutActive ? (
+        {producerLayoutActive && videoUrl && box.w>0 && box.h>0 && !compositePreview ? (
+          <ProducerLayoutPreview
+            segment={producerLayoutActive}
+            videoUrl={videoUrl}
+            sourceMs={previewSourceMs}
+            mediaOffsetMs={mediaOffsetMs}
+            playing={playing}
+            width={box.w}
+            height={box.h}
+            zoom={lookEdits.zoom}
+            captionWords={captionWords as {w:string;s:number;e:number;i?:number}[]}
+            emphasis={lookEdits.captions?.emphasis}
+            outputMs={captionTimeSec*1000}
+            outputDurationMs={previewOutDurMs}
+          />
+        ) : null}
+        {!producerLayoutActive && segmentLayoutActive ? (
           <PreviewSegmentLayout
             edits={edits}
             seg={segmentLayoutActive.seg}

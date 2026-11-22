@@ -2,6 +2,7 @@ import type { ClipEditsV2 } from '@/lib/clips/edits'
 
 export type ProducerBox = {x:number;y:number;w:number;h:number}
 export type ProducerPerson = {speakerId:string;box:ProducerBox}
+export type ProducerFaceKeyframe = {sourceMs:number;box:ProducerBox}
 export type ProducerDivider = {color?:string;width?:number;opacity?:number;style?:'solid'|'dashed'}
 export type LayoutSegment = {
   /** Source ms. Framing is explicit, never delegated to speaker_follow. */
@@ -9,6 +10,10 @@ export type LayoutSegment = {
   cropBox?: ProducerBox
   people?: ProducerPerson[]
   splitRatio?: number
+  /** horizontal = left/right, vertical = top/bottom */
+  orientation?: 'horizontal'|'vertical'
+  /** Absolute source-ms smoothed face-follow crop windows. */
+  faceTrack?: ProducerFaceKeyframe[]
   order?: string[]
   divider?: ProducerDivider
   zoomAnchor?: {x:number;y:number}
@@ -65,7 +70,7 @@ export function normalizeLayoutSegments(
     const mode = modes.has(r.mode as ClipEditsV2['layout']['mode'])
       ? (r.mode as ClipEditsV2['layout']['mode'])
       : fallbackMode
-    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) continue
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs || endMs<=trimIn || startMs>=trimOut) continue
     segs.push({
       startMs: Math.max(trimIn, startMs),
       endMs: Math.min(trimOut, endMs),
@@ -80,12 +85,20 @@ export function normalizeLayoutSegments(
         return b&&(typeof p.speakerId==='string'||typeof p.speakerId==='number')
           ?[{speakerId:String(p.speakerId).slice(0,80),box:b}]:[]
       })}:{}),
+      ...(r.orientation==='vertical'||r.orientation==='horizontal'?{orientation:r.orientation}:{}),
+      ...(Array.isArray(r.faceTrack)?{faceTrack:r.faceTrack.slice(0,500).flatMap(value=>{
+        const row=value&&typeof value==='object'?value as Record<string,unknown>:{}
+        const sourceMs=Number(row.sourceMs),frameBox=box(row.box)
+        return Number.isSafeInteger(sourceMs)&&sourceMs>=startMs&&sourceMs<=endMs&&frameBox
+          ?[{sourceMs,box:frameBox}]:[]
+      }).sort((a,b)=>a.sourceMs-b.sourceMs)}:{}),
       ...(typeof r.splitRatio==='number'&&Number.isFinite(r.splitRatio)
         ?{splitRatio:Math.max(.1,Math.min(.9,r.splitRatio))}:{}),
       ...(Array.isArray(r.order)?{order:r.order.slice(0,4).map(v=>String(v).slice(0,80))}:{}),
       ...(r.divider&&typeof r.divider==='object'&&!Array.isArray(r.divider)?{divider:{
-        color:typeof (r.divider as Record<string,unknown>).color==='string'
-          ?String((r.divider as Record<string,unknown>).color).slice(0,16):undefined,
+        color:typeof (r.divider as Record<string,unknown>).color==='string' &&
+          /^#[0-9a-fA-F]{6}$/.test(String((r.divider as Record<string,unknown>).color))
+          ?String((r.divider as Record<string,unknown>).color):'#FFFFFF',
         width:Math.max(0,Math.min(32,Number((r.divider as Record<string,unknown>).width)||0)),
         opacity:Math.max(0,Math.min(1,Number((r.divider as Record<string,unknown>).opacity??1))),
         style:(r.divider as Record<string,unknown>).style==='dashed'?'dashed' as const:'solid' as const,

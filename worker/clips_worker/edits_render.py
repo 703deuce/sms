@@ -554,9 +554,15 @@ def _render_explicit_producer_segment(src: Path, dst: Path, seg: dict, width: in
         if mode == "split":
             count = 2
             ratio = max(.1, min(.9, float(seg.get("splitRatio", .5))))
-            left_w = max(2, int(width * ratio)//2*2)
-            left_w = min(width-2, left_w)
-            sizes = [(left_w, height), (width-left_w, height)]
+            vertical = seg.get("orientation") == "vertical"
+            if vertical:
+                first_h = max(2, int(height * ratio)//2*2)
+                first_h = min(height-2, first_h)
+                sizes = [(width, first_h), (width, height-first_h)]
+            else:
+                left_w = max(2, int(width * ratio)//2*2)
+                left_w = min(width-2, left_w)
+                sizes = [(left_w, height), (width-left_w, height)]
         else:
             half_w = width//2
             half_h = height//2
@@ -566,7 +572,7 @@ def _render_explicit_producer_segment(src: Path, dst: Path, seg: dict, width: in
             pw, ph = sizes[i]
             graph += f"[s{i}]{crop(ordered[i]['box'])},scale={pw}:{ph},setsar=1[p{i}];"
         if mode == "split":
-            graph += "[p0][p1]hstack=inputs=2[stack];"
+            graph += "[p0][p1]vstack=inputs=2[stack];" if vertical else "[p0][p1]hstack=inputs=2[stack];"
         else:
             layout = "0_0|w0_0|0_h0|w0_h0".split("|")[:count]
             graph += "".join(f"[p{i}]" for i in range(count))
@@ -578,13 +584,40 @@ def _render_explicit_producer_segment(src: Path, dst: Path, seg: dict, width: in
         opacity = max(0, min(1, float(div.get("opacity", 1))))
         line = max(0, min(32, int(div.get("width", 0))))
         if mode == "split" and line:
-            draw_x = max(0, left_w-line//2)
-            graph += (f"[stack]drawbox=x={draw_x}:y=0:w={line}:h=ih:"
-                      f"color=0x{color[1:]}@{opacity:.2f}:t=fill[v]")
+            dashed = div.get("style") == "dashed"
+            color_spec = f"0x{color[1:]}@{opacity:.2f}"
+            if vertical:
+                draw_y = max(0, first_h-line//2)
+                if dashed:
+                    bands = [f"drawbox=x={x}:y={draw_y}:w={min(14,width-x)}:h={line}:"
+                             f"color={color_spec}:t=fill"
+                             for x in range(0,width,24)]
+                else:
+                    bands = [f"drawbox=x=0:y={draw_y}:w=iw:h={line}:color={color_spec}:t=fill"]
+            else:
+                draw_x = max(0, left_w-line//2)
+                if dashed:
+                    bands = [f"drawbox=x={draw_x}:y={y}:w={line}:h={min(14,height-y)}:"
+                             f"color={color_spec}:t=fill"
+                             for y in range(0,height,24)]
+                else:
+                    bands = [f"drawbox=x={draw_x}:y=0:w={line}:h=ih:color={color_spec}:t=fill"]
+            graph += "[stack]"+",".join(bands)+"[v]"
         else:
             graph += "[stack]null[v]"
     else:
         raw_box = seg.get("cropBox")
+        if raw_box is None and people:
+            picked = next((p for p in people if str(p.get("speakerId")) ==
+                           str(seg.get("focusSpeaker"))), people[0])
+            raw_box = picked.get("box")
+        face_track = seg.get("faceTrack") if isinstance(seg.get("faceTrack"), list) else []
+        if face_track and mode != "fill":
+            raise ValueError("Moving producer faceTrack is supported in fill mode only")
+        if face_track:
+            if not all(isinstance(k, dict) and isinstance(k.get("box"), dict) for k in face_track):
+                raise ValueError("Invalid faceTrack keyframes")
+            raw_box = face_track[0]["box"]
         if raw_box is None:
             anchor = seg.get("zoomAnchor")
             if isinstance(anchor, dict):
@@ -605,7 +638,30 @@ def _render_explicit_producer_segment(src: Path, dst: Path, seg: dict, width: in
                      "setsar=1[front];"
                      "[blur][front]overlay=(W-w)/2:(H-h)/2:shortest=1[v]")
         else:
-            graph = (f"[0:v]{crop(raw_box)},scale={width}:{height}:"
+            crop_filter = crop(raw_box)
+            if face_track:
+                # Pan x/y on absolute source-ms keyframes. FFmpeg crop x/y are evaluated
+                # each frame; varying crop dimensions would require zoompan and are
+                # rejected rather than silently rendered incorrectly.
+                points = sorted(face_track,key=lambda k:int(k.get("sourceMs",0)))
+                base_w,base_h = float(raw_box["w"]),float(raw_box["h"])
+                if any(abs(float(k["box"]["w"])-base_w)>.001 or
+                       abs(float(k["box"]["h"])-base_h)>.001 for k in points):
+                    raise ValueError("faceTrack crop size must stay constant; use separate segments to zoom")
+                def axis_expr(axis):
+                    values=[(max(0,(float(k["sourceMs"])-float(seg["startMs"]))/1000),
+                             float(k["box"][axis])) for k in points]
+                    expr=f"{values[-1][1]:.6f}"
+                    for j in range(len(values)-2,-1,-1):
+                        t0,v0=values[j]
+                        t1,v1=values[j+1]
+                        if t1<=t0:continue
+                        mix=f"({v0:.6f}+({v1:.6f}-{v0:.6f})*(t-{t0:.6f})/{t1-t0:.6f})"
+                        expr=f"if(lt(t,{t1:.6f}),{mix},{expr})"
+                    return f"max(0,min(i{axis=='x' and 'w' or 'h'}-o{axis=='x' and 'w' or 'h'},i{axis=='x' and 'w' or 'h'}*({expr})))"
+                crop_filter=(f"crop=iw*{base_w:.6f}:ih*{base_h:.6f}:"
+                             f"'{axis_expr('x')}':'{axis_expr('y')}'")
+            graph = (f"[0:v]{crop_filter},scale={width}:{height}:"
                      f"force_original_aspect_ratio=increase,crop={width}:{height},"
                      "setsar=1[v]")
     subprocess.check_call([
@@ -646,7 +702,7 @@ def run_speakercrop_layout_timeline(
     # and overwrite bot-selected speakers and boxes. Do not invoke it in that case.
     explicit_segments = (edits.get("layout") or {}).get("layoutSegments") or []
     has_explicit = any(isinstance(seg, dict) and any(seg.get(k) is not None for k in
-                       ("cropBox", "people", "focusSpeaker", "zoomAnchor"))
+                       ("cropBox", "people", "focusSpeaker", "zoomAnchor", "faceTrack"))
                        for seg in explicit_segments)
     if not has_explicit:
         apply_layout_decision(
@@ -726,7 +782,7 @@ def run_speakercrop_layout_timeline(
             play_w=play_w,
             play_h=play_h,
         )
-        if seg.get("cropBox") or seg.get("people") or seg.get("focusSpeaker") or seg.get("zoomAnchor"):
+        if seg.get("cropBox") or seg.get("people") or seg.get("focusSpeaker") or seg.get("zoomAnchor") or seg.get("faceTrack"):
             _render_explicit_producer_segment(trimmed, part_out, seg, play_w, play_h, rel_b-rel_a)
         else:
             crop_track = _maybe_static_fit_blur_crop_track(trimmed, work_dir, int(seg["startMs"]), seg_mode)

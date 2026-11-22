@@ -386,7 +386,7 @@ export async function getClipAgentInputs(id: string, request: Request) {
   const project = await prisma().clipProject.findFirst({
     where: {id: job.projectId, workspaceId: job.workspaceId, deletedAt: null},
     select: {
-      title: true, settings: true, transcriptKey: true,
+      title: true, settings: true, transcriptKey: true, transcriptWords:true,
       upload: {select: {key: true, filename: true, mime: true, durationMs: true,
         fps:true,width:true,height:true,rotation:true,hasAudio:true}},
     },
@@ -420,13 +420,24 @@ export async function getClipAgentInputs(id: string, request: Request) {
     refId:(await prisma().clipProject.findUnique({where:{id:job.projectId},select:{uploadId:true}}))?.uploadId||'',
     status:'done'},select:{costUsdMicros:true,language:true}})
   const meta=object(selected?.aiMeta)
+  const savedEdits=object(selected?.edits)
+  const transcriptMeta=object(project.transcriptWords)
+  // Preserve known speaker labels for discovery as well as revisions.
+  // Do not invent names from Deepgram's numeric diarization ids.
+  const speakerNames=Object.keys(object(savedEdits.speakerNames)).length
+    ?object(savedEdits.speakerNames)
+    :Object.keys(object(settings.speakerNames)).length
+      ?object(settings.speakerNames)
+      :Object.keys(object(transcriptMeta.speakerNames)).length
+        ?object(transcriptMeta.speakerNames)
+        :object(settings.speakers)
   const target=Number(settings.targetClipLenS)
   const lengthRequested=settings.clipLenMode==='target'&&Number.isFinite(target)&&target>=10&&target<=90
     ? {min:target,max:target}
     :settings.clipLength==='lt30'?{min:15,max:29}
     :settings.clipLength==='30_60'?{min:30,max:60}
     :settings.clipLength==='60_90'?{min:60,max:90}:{min:20,max:60}
-  const priorClipJsonUrl=await sign(word(meta.agentClipJsonKey,500)||null)
+  const previousClipJsonUrl=await sign(word(meta.agentClipJsonKey,500)||null)
   const previousAnalysisUrl=await sign(word(meta.agentAnalysisKey,500)||null)
   return {
     jobId: id, projectId: job.projectId, clipId: job.clipId,
@@ -441,8 +452,7 @@ export async function getClipAgentInputs(id: string, request: Request) {
       language:word(settings.asrLanguage,15)||transcripts?.language||'en',
       wordsFormat:{w:'word',s:'absolute seconds',e:'absolute seconds',spk:'Deepgram speaker ID',
         i:'global word index',p:'confidence'},
-      speakerNames:object((selected?.edits&&typeof selected.edits==='object'&&!Array.isArray(selected.edits))
-        ?(selected.edits as Record<string,unknown>).speakerNames:null)},
+      speakerNames},
     ...(job.clipId.startsWith('project:')?{}:{
       revision: {clipId:job.clipId,note:word(object(job.input).note,2000),
         sourceStartMs:selected?.startMs,sourceEndMs:selected?.endMs,title:selected?.title,
@@ -489,6 +499,47 @@ export async function failClipAgentJob(id: string, request: Request, raw: unknow
   return publicJob(row)
 }
 
+/** Fail closed when a producer-only visual property cannot survive native normalization.
+ * This keeps rendered MP4s from being published over a visibly unrelated editor timeline. */
+function ensureProducerEditsRoundTrip(raw:Record<string,unknown>,edits:ClipEditsV2){
+  const layout=object(raw.layout)
+  const segments=Array.isArray(layout.layoutSegments)?layout.layoutSegments:[]
+  const saved=edits.layout.layoutSegments??[]
+  const key=(v:Record<string,unknown>)=>String(v.startMs)+':'+String(v.endMs)
+  for(const input of segments){
+    const original=object(input)
+    const segment=saved.find(x=>key(x as unknown as Record<string,unknown>)===key(original))
+    if(!segment)throw problem('Editable layout segments were merged or rejected. Supply valid source-time bounds.',422)
+    for(const field of ['orientation','focusSpeaker','cropBox','people','faceTrack',
+      'splitRatio','divider','order','zoomAnchor'] as const){
+      if(original[field]!==undefined && segment[field]===undefined)
+        throw problem('Editable layout segment has invalid '+field+'.',422)
+    }
+    if(['fill','split','fit_blur','grid3','grid4'].includes(String(segment.mode))){
+      if(segment.mode==='split' && (!segment.people||segment.people.length<2))
+        throw problem('Split layout needs two speaker boxes.',422)
+      if((segment.mode==='grid3'||segment.mode==='grid4')&&(!segment.people||segment.people.length<2))
+        throw problem('Grid layout needs explicit speaker boxes.',422)
+      if(segment.mode==='fill'&&!segment.cropBox&&!segment.faceTrack?.length&&!segment.people?.length)
+        throw problem('Producer fill must include cropBox or a faceTrack.',422)
+    }
+    if(segment.faceTrack?.length){
+      if(segment.mode!=='fill')throw problem('Moving faceTrack is supported on fill segments only.',422)
+      const ref=segment.faceTrack[0]!.box
+      if(segment.faceTrack.some(k=>Math.abs(k.box.w-ref.w)>.001||Math.abs(k.box.h-ref.h)>.001))
+        throw problem('Moving face-track keyframes require a constant crop size; use separate segments for zoom.',422)
+    }
+  }
+  const arrays:[string,unknown][]=[
+    ['textItems',edits.textItems],['captionLines',edits.captionLines],
+    ['broll',edits.broll],['keyframes',edits.keyframes],
+  ]
+  for(const [field,normalized] of arrays){
+    const original=raw[field]
+    if(Array.isArray(original)&&original.length && (!Array.isArray(normalized)||normalized.length<original.length))
+      throw problem('Some '+field+' layers could not be reopened by the editor.',422)
+  }
+}
 /** Register separately committed graphics as editor media for new clips and revisions. */
 async function nativeProducerEdits(job:{workspaceId:string;projectId:string},raw:Record<string,unknown>,
   artifacts:Artifact[],startMs:number,endMs:number){
@@ -509,7 +560,9 @@ async function nativeProducerEdits(job:{workspaceId:string;projectId:string},raw
     await registerProjectMedia(job.workspaceId,job.projectId,{uploadId,label:artifact.filename})
     mapped.push({...layer,source:'upload',uploadId})
   }
-  return normalizeEdits({...raw,broll:mapped},{clipStartMs:startMs,clipEndMs:endMs})
+  const normalized=normalizeEdits({...raw,broll:mapped},{clipStartMs:startMs,clipEndMs:endMs})
+  ensureProducerEditsRoundTrip(raw,normalized)
+  return normalized
 }
 
 /** Write transcript words only once the database clip is actually published. */
@@ -585,18 +638,27 @@ export async function publishClipAgentResult(id: string, request: Request, raw: 
   let editable = false
   let edits: ClipEditsV2 = normalizeEdits(null, {clipStartMs: startMs, clipEndMs: endMs})
   const editArtifact = artifact(editsName, 'application/json')
-  if (editArtifact && editArtifact.bytes <= 2_000_000) {
-    try {
-      const doc = object(JSON.parse((await getClipStorage().getObjectBytes(editArtifact.key)).toString('utf8')))
-      if (doc.schema !== 'transovo.clip-edits/2') throw new Error('Invalid edit schema')
-      const rawEdits = object(doc.edits)
-      const trim = object(rawEdits.trim)
-      if (Number(trim.in) !== startMs || Number(trim.out) !== endMs)
-        throw new Error('Edit trim does not match published source range')
-      edits = await nativeProducerEdits(job,rawEdits,artifacts,startMs,endMs)
-      editable = true
-    } catch {console.warn('[clip-agent] invalid_edits_fallback', {jobId: id})}
-  } else console.warn('[clip-agent] missing_edits_fallback', {jobId: id})
+  if(clipProducerEnabled()){
+    if(!editArtifact||editArtifact.bytes>MAX_JSON_BYTES)
+      throw problem('Commit an editable editsJson document before publishing a producer clip.',409)
+    let doc:Record<string,unknown>
+    try{doc=object(JSON.parse((await getClipStorage().getObjectBytes(editArtifact.key)).toString('utf8')))}
+    catch{throw problem('Clip editsJson must be valid JSON.',400)}
+    if(doc.schema!=='transovo.clip-edits/2')
+      throw problem('Clip editsJson requires schema transovo.clip-edits/2.',400)
+    const rawEdits=object(doc.edits),trim=object(rawEdits.trim)
+    if(Number(trim.in)!==startMs||Number(trim.out)!==endMs)
+      throw problem('Clip editsJson trim must match clip.json sourceStartMs and sourceEndMs.',422)
+    edits=await nativeProducerEdits(job,rawEdits,artifacts,startMs,endMs)
+    editable=true
+  }else if(editArtifact&&editArtifact.bytes<=MAX_JSON_BYTES){
+    try{
+      const doc=object(JSON.parse((await getClipStorage().getObjectBytes(editArtifact.key)).toString('utf8')))
+      const rawEdits=object(doc.edits)
+      edits=await nativeProducerEdits(job,rawEdits,artifacts,startMs,endMs)
+      editable=true
+    }catch{console.warn('[clip-agent] invalid_edits_fallback',{jobId:id})}
+  }
 
   const score = virality * 10
   const newClipId = 'clip_' + randomUUID()
@@ -895,20 +957,38 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   const sourceDuration=media?.upload?.durationMs||0
   let rangeStart=existing.startMs,rangeEnd=existing.endMs
   let imported:ClipEditsV2|null=null
-  const editFile=items(job.artifacts).find(a=>a.filename===editName&&a.state==='ready'&&a.mime==='application/json'&&a.bytes<=2_000_000)
-  if (clipProducerEnabled()&&editFile) {
-    try {
-      const doc=object(JSON.parse((await getClipStorage().getObjectBytes(editFile.key)).toString('utf8')))
-      const rawEdits=object(doc.edits)
-      const trim=object(rawEdits.trim)
-      const nextStart=Number(trim.in),nextEnd=Number(trim.out)
-      if(doc.schema!=='transovo.clip-edits/2'||!Number.isSafeInteger(nextStart)||
-        !Number.isSafeInteger(nextEnd)||nextStart<0||nextEnd<=nextStart||
-        (sourceDuration>0&&nextEnd>sourceDuration+1000))
-        throw new Error('Invalid revision source range')
+  const editFile=items(job.artifacts).find(a=>a.filename===editName&&a.state==='ready'&&a.mime==='application/json'&&a.bytes<=MAX_JSON_BYTES)
+  if(clipProducerEnabled()){
+    if(!editName)throw problem('Revision must provide editsJson, including its source trim.',400)
+    if(!editFile)throw problem('Commit a valid application/json editsJson before completing the revision.',409)
+    let doc:Record<string,unknown>
+    try{doc=object(JSON.parse((await getClipStorage().getObjectBytes(editFile.key)).toString('utf8')))}
+    catch{throw problem('Revision editsJson must be valid JSON.',400)}
+    if(doc.schema!=='transovo.clip-edits/2'||!doc.edits||typeof doc.edits!=='object')
+      throw problem('Revision editsJson requires schema transovo.clip-edits/2 and an edits object.',400)
+    const rawEdits=object(doc.edits)
+    const trim=object(rawEdits.trim)
+    const nextStart=Number(trim.in),nextEnd=Number(trim.out)
+    if(!Number.isSafeInteger(nextStart)||!Number.isSafeInteger(nextEnd)||nextStart<0||
+       nextEnd<=nextStart)
+      throw problem('Revision trim.in/out must be valid absolute source milliseconds.',400)
+    if(!sourceDuration||nextEnd>sourceDuration)
+      throw problem('Revision range exceeds the original source duration.',422)
+    // Reject missing or incorrect layout and cuts rather than presenting an unrelated MP4
+    // over the old editable version. The customer may retry with a corrected document.
+    if(!rawEdits.layout||typeof rawEdits.layout!=='object')
+      throw problem('Revision editsJson must include its editable layout.',400)
+    if(!Array.isArray(rawEdits.cutRanges))
+      throw problem('Revision editsJson must include editable cutRanges.',400)
+    try{
       imported=await nativeProducerEdits(job,rawEdits,items(job.artifacts),nextStart,nextEnd)
-      rangeStart=nextStart;rangeEnd=nextEnd
-    }catch{console.warn('[clip-agent] revision_edits_fallback',{jobId:id})}
+    }catch(error){
+      if(error instanceof Error&&'status' in error)throw error
+      throw problem('Revision editsJson contains unsupported or invalid media layers.',422)
+    }
+    if(imported.trim.in!==nextStart||imported.trim.out!==nextEnd)
+      throw problem('Revision trim could not be preserved by the editor.',422)
+    rangeStart=nextStart;rangeEnd=nextEnd
   }
   if (!imported && items(job.artifacts).some(a=>a.filename==='project.json'&&a.state==='ready')) {
     try {

@@ -276,6 +276,37 @@ export function LayoutPanel({
           <p className="text-xs text-muted-foreground">Updates the preview and export framing.</p>
         </div>
       )}
+      {onEdits && edits.layout.layoutSegments?.some(segment=>segment.cropBox||segment.faceTrack?.length||
+        segment.people?.length||segment.focusSpeaker) ? (
+        <div className="space-y-2 rounded-lg border border-border p-3" data-testid="producer-layout-segments">
+          <Label className="text-xs font-medium">Producer framing</Label>
+          <p className="text-xs text-muted-foreground">These source-time framing decisions reopen with your video.</p>
+          {(edits.layout.layoutSegments??[]).map((segment,index)=>{
+            const custom=segment.cropBox||segment.faceTrack?.length||segment.people?.length||segment.focusSpeaker
+            if(!custom)return null
+            return <div key={index} className="space-y-1 rounded border border-border/70 p-2 text-xs">
+              <div className="font-medium">{(segment.startMs/1000).toFixed(1)}s–{(segment.endMs/1000).toFixed(1)}s · {segment.mode}
+                {segment.focusSpeaker ? ' · speaker '+segment.focusSpeaker : ''}</div>
+              {segment.mode==='split' ? <div className="flex gap-1">
+                {(['horizontal','vertical'] as const).map(orientation=>
+                  <Button key={orientation} type="button" size="sm"
+                    variant={(segment.orientation??'horizontal')===orientation?'default':'outline'}
+                    onClick={() => onEdits({...edits,layout:{...edits.layout,
+                      layoutSegments:edits.layout.layoutSegments!.map((item,i)=>
+                        i===index?{...item,orientation}:item)}})}>
+                    {orientation==='horizontal'?'Side by side':'Top & bottom'}
+                  </Button>)}
+              </div> : null}
+              {segment.faceTrack?.length ? <p className="text-muted-foreground">
+                {segment.faceTrack.length} saved face-follow keyframes</p> : null}
+              {segment.cropBox ? <p className="text-muted-foreground">
+                Crop x={segment.cropBox.x.toFixed(3)}, y={segment.cropBox.y.toFixed(3)},
+                w={segment.cropBox.w.toFixed(3)}, h={segment.cropBox.h.toFixed(3)}
+              </p> : null}
+            </div>
+          })}
+        </div>
+      ):null}
       {onEdits && (
         <div className="space-y-2 rounded-lg border border-border p-3" data-testid="layout-blur-strength">
           <Label className="text-xs font-medium">Background blur</Label>

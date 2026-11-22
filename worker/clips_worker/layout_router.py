@@ -237,7 +237,7 @@ def normalize_layout_segments(edits: dict) -> list[dict]:
                 "startMs": max(tin, start_ms),
                 "endMs": min(tout, end_ms),
                 "mode": mode,
-                **{k:row[k] for k in ("focusSpeaker","cropBox","people","splitRatio","order","divider","zoomAnchor") if k in row},
+                **{k:row[k] for k in ("focusSpeaker","cropBox","people","splitRatio","orientation","faceTrack","order","divider","zoomAnchor") if k in row},
             }
         )
     if not segs:
@@ -260,7 +260,7 @@ def needs_per_segment_layout_export(edits: dict) -> bool:
     # Explicit geometry must be routed through the per-segment renderer even
     # for a single segment; otherwise the automatic face tracker would override it.
     if any(seg.get("cropBox") or seg.get("people") or seg.get("focusSpeaker")
-           or seg.get("zoomAnchor") for seg in segs):
+           or seg.get("faceTrack") or seg.get("zoomAnchor") for seg in segs):
         return True
     if len(segs) <= 1:
         return False
