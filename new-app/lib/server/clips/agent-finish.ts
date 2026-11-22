@@ -364,7 +364,7 @@ async function completeDiscoveredClips(job:Awaited<ReturnType<typeof authorizeCl
   return publicJob(completed)
 }
 
-export async function authorizeClipAgentCallback(id: string,request: Request) {
+export async function authorizeClipAgentCallback(id: string,request: Request,options?:{renewLease?:boolean}) {
   const auth=request.headers.get('authorization')||''
   const token=auth.startsWith('Bearer ')?auth.slice(7):''
   if (!token||token.length>256) throw problem('Job authorization required.',401)
@@ -376,7 +376,7 @@ export async function authorizeClipAgentCallback(id: string,request: Request) {
     if (!job.leaseExpiresAt || job.leaseExpiresAt <= new Date() ||
         !['dispatching','dispatched','running'].includes(job.status))
       throw problem('Clip worker lease expired or revoked.',401)
-    await renewClipLease(job.id,job.workerId,job.leaseExpiresAt)
+    if (options?.renewLease !== false) await renewClipLease(job.id,job.workerId,job.leaseExpiresAt)
   }
   return job
 }
@@ -1116,9 +1116,9 @@ export async function completeClipAgentJob(id: string,request: Request,raw: unkn
   return publicJob(result)
 }
 
-/** Same-job producer render-status endpoint; callback authorization also renews the lease. */
+/** Read-only producer render-status polling must not extend the worker lease. */
 export async function getClipAgentRenders(id:string,request:Request){
-  const job=await authorizeClipAgentCallback(id,request)
+  const job=await authorizeClipAgentCallback(id,request,{renewLease:false})
   return producerClipRenderStatuses(job.workspaceId,job.projectId,id,
     job.clipId.startsWith('project:')?undefined:job.clipId)
 }
