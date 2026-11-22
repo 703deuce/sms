@@ -4,51 +4,66 @@
 
 This is the playbook for Transovo clip jobs (`clip_and_finish` and `finish_clip`). It extends the Motion Studio production skill. The non-negotiables, secrets rules, Visual DNA rules, `qa.md`, `engines.md`, `engine-library.md` and `delivery-contract.md` still apply unless this file says otherwise. One unified director handles both clip actions and Motion Studio film jobs; only the intake, stages, and delivery shape change.
 
-A clipping job is a **finish of customer footage**, not a research-to-film production. The customer already supplied the video. You cut, lay out, and dress highlights, then deliver finished MP4s. Do not invent a new story, write narration, or search the web for photos and clips unless the customer instruction explicitly asks for B-roll or a graphic that needs a real reference. The source video is the picture. If narration is used at all, use `eleven_flash_v2_5`. No licensing, rights, or font caveats. Heavy engines stay out (Blender, Godot, Unreal). No install pauses mid-job. No 2-second smoke or draft renders, and no rendering until every clip is approved on browser stills (Rick, Nov 18). Build the real clip, review it with still screenshots, render it once, and fix or swap an engine that breaks for one at least as good.
+A clipping job is a **finish of customer footage**, not a research-to-film production. The customer already supplied the video. You cut, lay out, and dress highlights, then deliver finished MP4s plus an editable edit document per clip. Do not invent a new story, write narration, or search the web for photos and clips unless the customer instruction explicitly asks for B-roll or a graphic that needs a real reference. The source video is the picture. If narration is used at all, use `eleven_flash_v2_5`. No licensing, rights, or font caveats. Heavy engines stay out (Blender, Godot, Unreal). No install pauses mid-job. No 2-second smoke or draft renders, and no rendering until every clip is approved on browser stills (Rick, Nov 18). Build the real clip, review it with still screenshots, render it once, and fix or swap an engine that breaks for one at least as good.
 
-The live contract is Transovo Agent Clipper v1 (`docs/contracts/transovo-agent-clipper-v1.md`, master `855ca229`). Details and known gaps: `/workspace/motion_jobs/AGENT_CLIPPER_CONTRACT.md`.
+**Live contract (Nov 22, 2026): the Deepgram-first producer clipper** — `docs/contracts/transovo-agent-clipper-v1.md`, sections "v2: Deepgram-first producer clipper" and "Fix 1 — producer handoff and recovery rules" (master `ba2e9e34f`). Production runs with `CLIPS_PRODUCER_PIPELINE=1`: every clipper video upload is transcribed by Transovo with Deepgram, then the coordinator dispatches the job to a registered producer worker (capability `clips-produce` or `motion-studio-produce`). Each clip is published on its own as soon as it is ready. The older v1 flow (source URL in the webhook, `highlights.json`) is only the flag-off fallback; see "Legacy v1 jobs" at the end.
 
 ---
 
 ## How the two actions differ
 
-**`clip_and_finish`** (`mode: autonomous_clipper`). You watch and listen to the **full source** and pick your own moments, including silent visual highlights. Score hook, payoff, speech continuity, action, and usefulness. Produce up to `maxClips` (1–10) finished, separate MP4s and a `highlights.json` manifest. Do not wait for, or reuse, the legacy clip-finding worker — opted-in projects skip it.
+**`clip_and_finish`** (`kind: "clips"`, discovery). Transovo has already transcribed the full source with Deepgram (diarized, punctuated, with utterances, paragraphs and word timings). Use that transcript plus your own watch of the picture to pick the strongest moments, including silent visual highlights. Score hook, payoff, speech continuity, action, and usefulness. Produce `clipCount` finished clips (from `/inputs`; default 5, maximum 15), each 20–60 s (`targetSeconds`), and publish each one through `POST {jobUrl}/clips` as soon as it passes QA.
 
-**`finish_clip`** (`mode: source_footage_enhancement`). Transovo already found and scored one moment. You receive that clip's source URL, local or absolute bounds, score, and editorial brief. Retain the voice and meaningful action, trim unnecessary pauses, frame speakers, add story-specific motion graphics, and produce **one** finished MP4, plus `project.json` with editable layers (required).
+**`finish_clip`** (`kind: "clip_revision"`, one clip). The customer asked for a new finish of one existing clip. `/inputs` returns `revision: {clipId, note, sourceStartMs, sourceEndMs, title}`. Re-finish that exact source range following the note, and deliver one finished MP4, a 480p preview, a thumbnail and an edits document through `/complete`. The source range cannot change on a revision.
 
-Both jobs are 9:16, 30 fps, `quality: "premium"`, `mediaPolicy: "user_footage_primary"`, `webResearch: false`. Target lengths are typically 30 or 60 seconds (`targetDurationsSeconds: [30, 60]` on discover jobs). Do not treat a pack-level duration as one runtime for the whole job.
+Both use the requested `aspectRatio` (9:16 default) and `resolution` from `/inputs` (1080x1920 for 9:16), 30 fps, premium quality, customer footage primary, no web research.
 
 ---
 
 ## Intake
 
-Webhook fields, on top of the usual envelope (`version: 1`, `jobId`, `projectId`, `jobUrl`, `callbackUrl`, live-mode `jobToken`):
+The coordinator webhook (authenticated with the coordinator webhook key) carries only routing fields, never a source URL:
 
-- `action`: `clip_and_finish` | `finish_clip`
-- `mode`: `autonomous_clipper` | `source_footage_enhancement`
-- `title`, `direction`
-- `source`: `{url, filename, mime?, startMs, endMs, durationMs}`
-- `aspectRatio: "9:16"`, `fps: 30`, `quality: "premium"`
-- `mediaPolicy: "user_footage_primary"`, `webResearch: false`
-- For `clip_and_finish`: `maxClips`, `targetDurationsSeconds`
-- For `finish_clip`: `clipId`, `score`, `durationSeconds`, `projectTitle`. If `source.url` is the original upload, `startMs`/`endMs` are absolute on that file. If it is a clip-local segment or preview, they start at zero.
+```
+{action: "clip_and_finish" | "finish_clip", kind: "clips" | "clip_revision",
+ jobId, jobUrl, jobToken, projectId, clipId, workspaceId, workerId, leaseId,
+ coordinator: true, delivery: {mode: "mp4"}}
+```
 
-If `action` is `clip_and_finish` or `finish_clip`, follow this playbook even if a field name differs slightly. If there is no `jobToken`, or `setupMode` is true, do not download the source, do not render, and do not call paid APIs. Write a short validation report in the routine chat (fields present, action, maxClips or clipId, aspect, token yes/no only) and stop.
+`clipId` is `project:<projectId>` on a discovery job. Acknowledge with HTTP 2xx immediately and work asynchronously. If there is no `jobToken`, or `setupMode` is true, do not fetch inputs, do not render, and do not call paid APIs. Write a short validation report in the routine chat (fields present, action, kind, token yes/no only) and stop.
 
-**Live:** same secret handling as the main skill (`$J=/workspace/motion_jobs/$JOB_ID`, token only in `secrets/` mode 600, curl `--config`, never print tokens or signed URLs). Token lifetime is 36 hours; finish inside it. **Download the source immediately** — the signed URL expires in one hour, and this job API has no `/source`, `/transcript`, or `/moments` refetch. Pull `source.url` in a script; do not echo it. Save the file as `$J/assets/source/source.mp4`. Never modify that original file; copy or trim ranges into `$J/clips/<id>/`.
+**Live:** same secret handling as the main skill (`$J=/workspace/motion_jobs/$JOB_ID`, token only in `secrets/` mode 600, curl `--config`, never print tokens or signed URLs). Every callback uses `Authorization: Bearer {jobToken}`.
+
+1. **Fetch inputs first:** `GET {jobUrl}/inputs`. It returns:
+   - `action`, `delivery: {mode: "mp4", editable: "transovo.clip-edits/2"}`
+   - `source: {url, filename, mime, durationMs}` — signed, **15-minute** URL to the original upload
+   - `transcript: {deepgramUrl, compactTranscriptUrl, wordsUrl}` — signed 15-minute URLs to `deepgram.json`, `transcript.compact.jsonl` and `words.json`
+   - `clipCount` (1–15, default 5), `targetSeconds: {min: 20, max: 60}`, `aspectRatio`, `resolution`
+   - `captionStyle`, `brand`, `notes` (customer instructions)
+   - on `finish_clip` only: `revision: {clipId, note, sourceStartMs, sourceEndMs, title}`
+2. Save the response as `$J/log/inputs.json` with the URLs stripped (keep only the non-URL fields). Download the source and the three transcript files **in a script right away**, without echoing any URL. Save as `$J/assets/source/source.mp4`, `$J/research/deepgram.json`, `$J/research/transcript.compact.jsonl`, `$J/research/words.json`. If a URL has expired, call `/inputs` again for fresh ones. No provider API key is ever in job input, and none is needed.
+3. Never modify the original source file; copy or trim ranges into `$J/clips/<id>/`.
 
 ```bash
 J=/workspace/motion_jobs/$JOB_ID
 mkdir -p $J/{secrets,research,assets/source,clips,deliver,qa,log}
 # token + curl.cfg the same way as SKILL.md section 3 "Intake" (never echo the token)
-curl -sS --config $J/secrets/curl.cfg "$JOB_URL" -o $J/log/assignment.json
+curl -sS --config $J/secrets/curl.cfg "$JOB_URL/inputs" -o $J/secrets/inputs.json   # contains signed URLs: keep in secrets/, never print
 ```
 
-`GET {jobUrl}` returns status only (phase, progress, message). It does **not** re-issue a source URL and may even mis-label `mode` as `source_footage_enhancement` on a discover job. Trust the webhook payload you saved, not that GET, for action and source bounds.
+**Do not transcribe the source yourself.** The Deepgram transcript is the transcript for scoring, cut points, speaker labels and captions. Only if a transcript file is truly missing or unreadable after a fresh `/inputs` call may you fall back to a local transcript, and log that in `log/job.md`.
 
-Write `log/job.md` and keep appending layout, cut, engine and cost decisions.
+`GET {jobUrl}` returns status only. Trust `/inputs` and the saved webhook for action and source bounds.
 
-There is **no** `/messages`, `/usage`, or `/parent-artifacts` on this callback API. Do not call them. If you need a transcript for scoring or captions, make one yourself from the downloaded source (do not send the file to production SSH or the clips-worker).
+Write `log/job.md` and keep appending layout, cut, engine, timing and cost decisions (they feed `job.json`).
+
+There is **no** `/messages`, `/usage`, or `/parent-artifacts` on this callback API. Endpoints: `GET {jobUrl}`, `GET {jobUrl}/inputs`, `POST {jobUrl}/progress`, `POST {jobUrl}/assets`, `POST {jobUrl}/clips`, `POST {jobUrl}/complete`, `POST {jobUrl}/fail`. Never send the source to production SSH or the clips-worker.
+
+### Lease and deadline (hard rules)
+
+- The job lease is **15 minutes**. Make an authenticated `/progress`, `/inputs` or `/assets` call **at least every 60 seconds** for the whole job, including during long renders (run a small background heartbeat that posts `/progress` with the current stage). Successful calls renew the lease.
+- The whole job has a **45-minute deadline** from dispatch. Plan the pack to fit it: publish clips one at a time as they pass QA so finished work reaches the customer even if time runs short.
+- After you accept the job there is **no automatic retry**. A lost lease or a missed deadline fails the job and an operator must retry it by hand. Do not let the heartbeat lapse.
 
 ---
 
@@ -64,7 +79,7 @@ Use the clipper stages, not the film stages. Short, first-person-plural, Transov
 6. `delivering` — "We're adding it to your clips…"
 7. `complete` — set by `/complete`, not by a progress post past 99%
 
-Post `{stage, percent?, message}` to `{jobUrl}/progress`. Percent is monotonic and stays ≤99 until `/complete`. Invalid stages are stored as `editing`. For a `finish_clip` job you may start at `editing` (moments were already chosen). For `clip_and_finish`, start at `selecting`.
+Post `{stage, percent?, message}` to `{jobUrl}/progress`. Percent is monotonic and stays ≤99 until `/complete`. Invalid stages are stored as `editing`. For a `finish_clip` job you may start at `editing` (moments were already chosen). For `clip_and_finish`, start at `selecting`. Keep posting at least every 60 s (the lease heartbeat), with the current stage and an honest percent.
 
 ---
 
@@ -72,7 +87,7 @@ Post `{stage, percent?, message}` to `{jobUrl}/progress`. Percent is monotonic a
 
 Quality bar is unchanged: batching removes repeated work and waiting, never craft.
 
-1. **Transcribe and analyse the whole source once,** in parallel chunks, never per clip. Use fixed 30 s chunks without VAD (lesson from the first live clip job: whisper `small.en` hallucinates on crowd noise), run concurrently, then join them onto one source timeline. Every clip reads from that one transcript and analysis.
+1. **Analyse the whole source once,** never per clip. The transcript is Transovo's Deepgram transcript from `/inputs` (do not re-transcribe); add one pass of picture analysis (faces, speakers on screen, scene changes) on the same source timeline. Every clip reads from that one transcript and analysis.
 2. **Pick all moments in one pass,** scored (Stage B), each with clean in/out points on sentence boundaries (never mid-word or mid-sentence).
 3. **Lock ONE clip design system for the source before building:** caption style, graphic components (lower-thirds, callouts, score or stat cards, transitions), framing approach (decided per moment: face-led for pure talk, content-led when a board, screen, product or demo matters; never crop a face badly), colour and type, all expressing the pack's creative idea. Save it as `design/system.md` plus shared component code in `design/components/`. Build each component once and check it by browser still once.
 4. **Optionally split the clips across up to 4 helper subagents** (Task executors) when the pack is big enough that it truly saves time, building at the same time from that system. Each helper gets a self-contained brief: the design system path, its clips' cuts and transcript ranges, the full craft rules (key words and numbers readable, people and what they show well framed, real speech intact, captions as separate layers never burned in, no silent or lazier fallbacks), browser-still review, and no rendering. Each clip still gets story-specific graphics and custom touches; a clip that is only the shared components on footage fails.
@@ -98,17 +113,19 @@ Then, for the **pack** (one source video, N clips):
 
 ### `clip_and_finish`
 
-Watch the whole source once, including picture-only stretches, using the single transcript and analysis from the batched flow (step 1). Pick all moments in one pass: complete, self-contained highlights — a hook, a payoff, and enough context to stand alone. Score each integer 0–100 on hook, payoff, speech continuity, action, and usefulness. Stay within `maxClips`. Prefer the `targetDurationsSeconds` (30 and 60) when the moment supports it. Finished `durationMs` must be between 1 second and 180 seconds.
+Read the Deepgram transcript (`transcript.compact.jsonl` for a fast pass, `words.json` for exact word times, `deepgram.json` for speakers and paragraphs) and watch the picture, including picture-only stretches. Pick all moments in one pass: complete, self-contained highlights with a hook, a payoff, and enough context to stand alone. Cut on sentence boundaries using the word timings (never mid-word or mid-sentence). Make `clipCount` clips, or fewer only if the source truly lacks publishable moments. Each finished clip is 20–60 s (`targetSeconds`); the API accepts `durationMs` from 1 s to 10 min, but stay in the target window.
 
-You may tighten in/outs, cut dead air, and add a short bridge in a 30/60 s clip. Do not invent dialogue or unnecessarily reassemble the story. Reorder only if the result is still truthful and coherent. Keep original speech and picture central.
+Score each clip with an integer **`virality` from 1 to 10** (hook, payoff, speech continuity, action, usefulness). Transovo shows it as `score = virality × 10`. Use the whole range honestly; do not give every clip a 9.
 
-If you cannot find even one publishable moment, `POST /complete` with `{status:"failed"}` only. Do not start an open-ended research film.
+You may tighten in/outs, cut dead air, and add a short bridge. Do not invent dialogue or unnecessarily reassemble the story. Reorder only if the result is still truthful and coherent. Keep original speech and picture central.
 
-### `finish_clip`
+If you cannot find even one publishable moment, `POST {jobUrl}/fail` with a short operational `{reason}`. Do not start an open-ended research film.
 
-Stay inside the assigned `source.startMs`–`source.endMs`. You may tighten in/outs and cut dead air inside that window, and you may add a short bridge in a 30/60 s clip. You must not invent a new moment outside the assignment. If the window has nothing usable after cuts, keep the assigned in/outs, note it, and finish the footage you were given. Finished `durationMs` must be between 1 second and 10 minutes.
+### `finish_clip` (revision)
 
-Work in `$J/clips/<clipId-or-index>/`. Write `cuts.json` with source-absolute times (map clip-local bounds back onto the original timeline when the payload started at zero).
+Stay inside `revision.sourceStartMs`–`revision.sourceEndMs` (absolute source ms). Follow `revision.note`. You may cut dead air inside that window, but the edits document's `trim.in`/`trim.out` must equal those exact bounds; the source range cannot change on a revision. Finished `durationMs` must be between 1 second and 10 minutes.
+
+Work in `$J/clips/<clipId-or-index>/`. Write `cuts.json` with source-absolute times.
 
 ---
 
@@ -127,7 +144,7 @@ This is the edit the in-app clipper could not reliably automate. You decide the 
 
 Suggested use: Face Detector on a sampled grid (short-range for close talking heads, full-range when people sit farther back), Face Landmarker (`VIDEO` mode) on each face crop for `jawOpen` / lip activity, OpenCV (CSRT or optical flow) to hold the box between detections. Smooth with a minimum shot length of about 1.0–1.5 s, hysteresis before switching the active speaker, and eased crop keys so the punch-in does not jitter.
 
-If you transcribe the source, speaker labels are a **hint**, not ground truth for how many faces are on screen. If transcript and vision disagree, **vision wins for how many boxes you need**; lip activity plus speaker labels win for who is active.
+Deepgram speaker labels are a **hint**, not ground truth for how many faces are on screen. If transcript and vision disagree, **vision wins for how many boxes you need**; lip activity plus speaker labels win for who is active.
 
 ### Decision rules (Rick's framing rule)
 
@@ -181,23 +198,23 @@ An empty graphic list is the correct choice when the cut and the layout already 
 ### Rules
 
 - Safe area depends on the layout. In a stack, do not put a title through someone's face in the top tile or through captions in the bottom tile. In a punch-in, stay clear of eyes, mouth, and the caption band.
-- Captions are word-timed from your transcript of the kept ranges. They are always delivered as their own layer in `project.json`, never burned into the footage or the clean plate (Rick, Nov 18); the finished MP4 shows them as composited on top. This job API **does not accept `.srt` uploads** (mime not in the allow-list), so do not try to commit a caption file as its own artifact.
+- Captions are word-timed from the Deepgram words of the kept ranges. They are **never burned into the footage or the clean plate** (Rick, Nov 18). In the edits document, set the `captions` block (style, preset, animation, position, words per line); Transovo builds the word timing from the saved Deepgram clip words, and `wordFixes` may correct individual words. The finished MP4 shows captions composited on top. You may also commit a `.srt` (`application/x-subrip`) for the clip.
 - Caption style may vary between clips in the pack (weight, emphasis, placement) inside the same type family. Do not ship five clips with one identical caption skin.
-- Mix engines as layers (GSAP, Motion Canvas, Remotion, HyperFrames, Pixi, p5, Lottie, and so on). Pick what serves the graphic. Record `engine` and `layers[]` on every element, same as a film job.
+- Mix engines as layers (GSAP, Motion Canvas, Remotion, HyperFrames, Pixi, p5, Lottie, and so on). Pick what serves the graphic. Log `engine` and `layers[]` per element in `clips/<id>/layout.md`.
 - No licensing notes, no font disclaimers, no engine names in customer messages.
 
 ---
 
 ## Stage E — Render, QA, fix (phases `review`, `rendering`)
 
-**Render first (Rick, Nov 19):** every approved clip is rendered once and gets its final check on that render (steps below), live delivery or not. If a clip job ever carries `delivery.mode:"live"`, the editable package follows `delivery.md` "Live delivery" (render first, editable in the background); `bg_delivery/launch.sh` handles one master per job, so report a multi-clip live job to Rick before delivering it. The clipper contract has not been seen sending `delivery.mode` yet; until then keep the steps below: render each approved clip once and upload the MP4s.
+**Render first (Rick, Nov 19):** every approved clip is rendered once and gets its final check on that render (steps below), live delivery or not. If a clip job ever carries `delivery.mode:"live"`, the editable package follows `delivery.md` "Live delivery" (render first, editable in the background); `bg_delivery/launch.sh` handles one master per job, so report a multi-clip live job to Rick before delivering it. Clip jobs from the coordinator send `delivery.mode:"mp4"`: render each approved clip once and upload the MP4s.
 
-Before rendering, review every clip in the browser on still screenshots (480p by default, full size only for a frame that can't be judged at 480p; first, busiest and last frame plus wherever something changes; SKILL.md section 7) and fix it there. Browser engines are always reviewed with browser stills. Skia/CanvasKit is built inside the browser scene. Only Cinematic Skill, Manim, Natron and any existing Node Skia script run outside the browser; their layers are checked with the exact still recipes in `film-pipeline.md`, and before approval nothing beyond the exact frame or few seconds being checked is rendered (Rick, Nov 18). Only once every clip is approved, render each clip once to 9:16 (or the requested aspect), 30 fps CFR, h264, even dimensions, `+faststart`. Sanitize every filename to `[A-Za-z0-9._-]`. Also export, as separate files for the timeline when you will upload them:
+Before rendering, review every clip in the browser on still screenshots (480p by default, full size only for a frame that can't be judged at 480p; first, busiest and last frame plus wherever something changes; SKILL.md section 7) and fix it there. Browser engines are always reviewed with browser stills. Skia/CanvasKit is built inside the browser scene. Only Cinematic Skill, Manim, Natron and any existing Node Skia script run outside the browser; their layers are checked with the exact still recipes in `film-pipeline.md`, and before approval nothing beyond the exact frame or few seconds being checked is rendered (Rick, Nov 18). Only once every clip is approved, render each clip once at the `/inputs` `resolution` and aspect (1080x1920 for 9:16), plus its 480p preview,, 30 fps CFR, h264, even dimensions, `+faststart`. Sanitize every filename to `[A-Za-z0-9._-]`. Export, as separate files:
 
-- silent or clean footage tiles / layout plates (`kind: "media"`)
-- title and graphic overlays as separate layers with alpha (`kind: "media"`; baking is a last resort only after real alpha attempts, logged with what was tried; `image/png` or a video with alpha if the mime is allowed — today only `video/mp4` and `video/webm`)
-- source-dialogue stem and any music/SFX stems (`kind: "audio"`)
-- for `finish_clip` only: `project.json` (`kind: "project"`, schema `transovo.motion-project/1`)
+- the finished full-resolution MP4 (`clip_01.mp4`) and a 480p MP4 preview (`clip_01.preview.mp4`), both h264, `+faststart`
+- a thumbnail PNG (`clip_01.thumbnail.png`)
+- custom graphics and titles as separate transparent overlays: **prefer transparent PNG stills** (`image/png`); alpha WebM (`video/webm`) is allowed but its export parity is unverified. Baking a graphic into the footage is a last resort only after real alpha attempts, logged with what was tried. Never bake captions into artwork that should stay editable as native text.
+- the per-clip `clip_01.json` and `clip_01.edits.json` (Stage F)
 
 Look at the browser stills before approval (`qa.md` §2), then watch each final clip once before you claim it is done. Fix the scene code, not a post-process cover-up. No draft or smoke renders.
 
@@ -212,58 +229,111 @@ Look at the browser stills before approval (`qa.md` §2), then watch each final 
 - Motion is stable (no jittery crops, no 2-frame layout flips).
 - Audio is intelligible; music and SFX sit under speech.
 - Master around the `qa.md` loudness window.
-- Filenames will survive sanitization and match the manifest.
+- Filenames will survive sanitization and match `clip_NN.json` / the `/clips` call.
+- `clip_NN.edits.json` trim equals the clip's source range, every `artifactFilename` is committed, and times use the right clock (source ms vs output ms).
 
 If a clip fails the final watch, fix it in the browser, re-check its stills, and render only that clip again. No round cap; never ship a known-broken clip.
 
 ---
 
-## Stage F — Upload and complete (phase `delivering`)
+## Stage F — Upload, publish per clip, complete (phase `delivering`)
 
-For each artifact: `POST {jobUrl}/assets` with `{action:"prepare", kind, filename, mime, bytes}`, upload to the returned `signedPut` / `tus` / `s3Multipart` destination (never through Next.js, never log the URL), then `{action:"commit", uploadId, parts?}`. Supply multipart ETags when the prepare step used `s3Multipart`. Wait for `ready`. Only committed files may appear in completion records. Max 100 artifacts, 2 GB each.
+### Upload protocol
 
-### `clip_and_finish`
+For each artifact: `POST {jobUrl}/assets` with `{action:"prepare", kind, filename, mime, bytes, sha256}`, upload to the returned `signedPut` / `tus` / `s3Multipart` destination (never through Next.js, never log the URL), then `{action:"commit", uploadId, parts?}`. Supply multipart ETags when the prepare step used `s3Multipart`. Wait for `ready`. Only committed files may be referenced. Sanitize filenames to `[A-Za-z0-9._-]`. Always send `sha256` (lowercase hex); it is **required** for `kind:"image"` (images ≤25 MB). JSON documents are ≤2 MB.
 
-1. Commit each finished MP4, `kind: "video"`, `mime: "video/mp4"` (for example `highlight_1.mp4`).
-2. Commit a file **named exactly `highlights.json`**, `kind: "project"`, `mime: "application/json"`, ≤2 MB:
+### `clip_and_finish`: publish each clip as soon as it passes QA
+
+For clip `NN` (`01`, `02`, …), commit:
+
+| File | kind | mime |
+|---|---|---|
+| `clip_NN.mp4` — full-resolution finished clip | `video` | `video/mp4` |
+| `clip_NN.preview.mp4` — 480p finished clip | `video` | `video/mp4` |
+| `clip_NN.thumbnail.png` | `image` (sha256 required) | `image/png` |
+| `clip_NN.json` — clip metadata | `project` | `application/json` |
+| `clip_NN.edits.json` — native editable edit | `project` | `application/json` |
+| optional `clip_NN.srt` | `caption` | `application/x-subrip` |
+| optional overlays referenced by the edits (`clip_NN_title.png`, …) | `image` or `media` | `image/png` / `video/webm` |
+
+`clip_NN.json`:
+
+```json
+{"title": "…", "hook": "…", "why": "…", "sourceStartMs": 142000, "sourceEndMs": 195000,
+ "durationMs": 42000, "speakers": ["Speaker 1", "Speaker 2"], "virality": 8}
+```
+
+`sourceStartMs`/`sourceEndMs` are absolute ms in the original upload (end > start, inside the source). `durationMs` is the finished MP4 length (integer, 1 000–600 000). `virality` is an integer 1–10.
+
+Then publish the card:
+
+```
+POST {jobUrl}/clips
+{"clipJson":"clip_NN.json","editsJson":"clip_NN.edits.json","video":"clip_NN.mp4",
+ "preview":"clip_NN.preview.mp4","thumbnail":"clip_NN.thumbnail.png"}
+```
+
+The clip appears in the customer's project immediately (card plays the 480p preview, download gives the full MP4, Edit opens the native edits). Publishing is idempotent per job + `clipJson` filename, so a retry of the same call is safe. A broken or missing edits document does not block the MP4, but the customer then loses editability, so validate it before publishing.
+
+### `clip_NN.edits.json` (native editable timeline)
 
 ```json
 {
-  "clips": [
-    {
-      "filename": "highlight_1.mp4",
-      "title": "A complete highlight",
-      "startMs": 142000,
-      "endMs": 195000,
-      "durationMs": 42000,
-      "score": 93,
-      "why": "Strong hook, context and payoff"
-    }
-  ]
+  "schema": "transovo.clip-edits/2",
+  "edits": {
+    "v": 2,
+    "trim": {"in": 142000, "out": 195000},
+    "cutRanges": [[160000, 162000]],
+    "aspectRatio": "9:16",
+    "layout": {"mode": "speaker_follow", "shotOverrides": []},
+    "captions": {"enabled": true, "presetId": "bold_pop", "animation": "pop", "position": "bottom", "wordsPerLine": 2},
+    "textItems": [],
+    "keyframes": [],
+    "broll": [
+      {"id": "title1", "source": "upload", "artifactFilename": "clip_01_title.png", "startMs": 0, "endMs": 2500, "still": true}
+    ]
+  }
 }
 ```
 
-`startMs`/`endMs` are absolute in the original uploaded source. `durationMs` is the produced MP4 length, even if pauses were cut. `score` is an integer 0–100. `filename` must equal a committed MP4 filename. Provide 1–10 records.
+Rules:
 
-3. `POST {jobUrl}/complete` with `{ "status": "complete" }`. Do not rely on a `clips` array in this body — the server reads `highlights.json`. This path does **not** import `project.json`; do not claim editable timeline parity for discover jobs.
+- `trim.in`/`trim.out` **must equal** `sourceStartMs`/`sourceEndMs` in `clip_NN.json`. `trim`, `cutRanges` and `sectionOrder` are **absolute source milliseconds**.
+- `textItems`, `keyframes`, `captionLines` and `broll` times are **output milliseconds** (0 = first frame of the finished clip).
+- `layout` may carry `mode`, `cropBox`, `layoutSegments`, template boxes and `shotOverrides` — describe the speaker layout you actually built (Stage C).
+- Headlines, names, shapes and callouts go in `hookOverlay` / `textItems` so they stay editable text; punch-ins in `zoom` / `keyframes`; cuts in `transitions`; optional `audio`, `color`, `tracks`, `layerProps`.
+- Custom graphics are `broll` items with `source:"upload"` and `artifactFilename` naming an overlay you **committed before publishing**; a missing overlay makes the edits import fail. Prefer transparent PNG stills.
+- Captions are never burned in; the `captions` block carries style and Transovo supplies the word timings from Deepgram.
+- Use only this schema; do not claim perfect round-trip fidelity for advanced motion or alpha properties.
 
-### `finish_clip`
+### Finish the job
 
-1. Commit one MP4, `kind: "video"`, `mime: "video/mp4"`.
-2. Also commit **`project.json`** (required) (`kind: "project"`, `mime: "application/json"`, filename exactly `project.json`) and any media/audio assets it references by filename. Use the existing `transovo.motion-project/1` tracks/elements contract. The app tries to import layers without overwriting the original source audio. If the manifest fails, only the finished MP4 is delivered — do not claim full timeline parity.
-3. `POST {jobUrl}/complete` with `{ "status": "complete", "durationMs": <finished video length> }`. `durationMs` is required and must be a safe integer from 1_000 to 600_000.
+When every clip is published (or the deadline is near and at least one is published):
 
-On failure for either action: `{ "status": "failed" }` only. The server supplies the customer wording.
+1. Commit `job.json` (`kind:"project"`, `application/json`) with timing and cost: start/end times per stage, clips published, render minutes, and every paid call (provider, units, USD estimate). No secrets, URLs or tokens.
+2. `POST {jobUrl}/complete` with `{"status":"complete","jobJson":"job.json"}`. The server rejects it until `job.json` is committed and at least one clip has been published.
+
+On a terminal failure, `POST {jobUrl}/fail` with `{"reason":"<short operational reason>"}`. The server redacts URLs, tokens and paths and shows the customer friendly wording; still never put secrets in the reason.
 
 After delivery, append one **pack** entry to `STYLE_LEDGER.md` (date, jobId, customer or `projectId`, title, concept, `visualDna`, and a short note of per-clip layouts and engine mixes).
 
 ---
 
-## Revisions
+## Revisions (`finish_clip`, `kind:"clip_revision"`)
 
-Clipper v1 has **no** `revise_clip` action and no `/parent-artifacts`. If a later contract adds one, follow that contract and reuse this playbook's layout, graphics, and QA rules. Until then, a new `finish_clip` job on the same clip is a fresh finish, not a linked revision.
+1. `GET {jobUrl}/inputs`; read `revision.note`, `revision.sourceStartMs`, `revision.sourceEndMs`, `revision.title`.
+2. Re-finish that exact range with the same craft stages (C–E). Start progress at `editing`.
+3. Commit the full MP4 (`kind:video`), the 480p preview (`kind:video`), a thumbnail (`kind:image`, sha256), and an edits document (`kind:project`) whose `trim.in`/`trim.out` equal the revision bounds exactly, plus any overlays it references.
+4. `POST {jobUrl}/complete` with `{"status":"complete","video":"clip.mp4","preview":"clip.preview.mp4","thumbnail":"clip.thumbnail.png","editsJson":"clip.edits.json","durationMs":<finished length>}`. `/clips` is discovery-only and returns 409 on a revision.
+5. Failure: `POST {jobUrl}/fail` with `{reason}`.
 
-If you receive `{ action: "cancel", jobId }`, stop paid work and do not `/complete` a partial pack unless a clip has already been committed and the server asks otherwise. The server status is authoritative.
+If you receive `{action: "cancel", jobId}`, stop paid work. The server status is authoritative.
+
+---
+
+## Legacy v1 jobs (flag off only)
+
+If a webhook arrives with `source.url` in the payload and no `kind` (the old `GROKBOT_WEBHOOK_URL` path), it is a v1 job: download `source.url` immediately (1-hour URL), and for `clip_and_finish` commit the MP4s plus `highlights.json` (`{clips:[{filename,title,startMs,endMs,durationMs,score 0–100,why}]}`) then `POST /complete {status:"complete"}`; for `finish_clip` commit one MP4 plus `project.json` (`transovo.motion-project/1`) and `POST /complete {status:"complete",durationMs}`. Production runs the v2 flow above; treat a v1 job as unusual and note it in `log/job.md`.
 
 ---
 
@@ -271,14 +341,14 @@ If you receive `{ action: "cancel", jobId }`, stop paid work and do not `/comple
 
 ```
 $J/
-  secrets/                 # token, curl.cfg — never commit or print
-  research/                # treatment.md, optional local transcript
+  secrets/                 # token, curl.cfg, inputs.json (signed URLs) — never commit or print
+  research/                # deepgram.json, transcript.compact.jsonl, words.json, treatment.md
   assets/source/source.mp4
   clips/<id>/              # cuts.json, layout.md, plates, overlays, qa/
-  deliver/                 # files about to be prepared
+  deliver/                 # clip_NN.* files about to be prepared, job.json
   qa/                      # pack-level notes
   log/job.md
-  log/assignment.json
+  log/inputs.json          # /inputs without URLs
 ```
 
-Report progress as you move. When every clip has passed QA and is committed, complete the job.
+Heartbeat at least every 60 s. Publish each clip when it passes QA. When every clip is published, commit `job.json` and complete the job.
