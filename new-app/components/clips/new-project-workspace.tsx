@@ -294,9 +294,9 @@ export function NewProjectWorkspace({ reframeV2Enabled = false, forcedIntent }: 
             <div className="mt-3 flex items-center gap-2 text-xs">
               <label htmlFor="auto-grok-count">Maximum finished clips</label>
               <select id="auto-grok-count" className="rounded-md border border-border bg-background px-2 py-1.5"
-                value={settings.autoGrokMaxClips??3}
+                value={settings.autoGrokMaxClips??5}
                 onChange={e=>setSettings(v=>({...v,autoGrokMaxClips:Number(e.target.value)}))}>
-                {[1,2,3,4,5,6,8,10].map(n=><option key={n} value={n}>{n}</option>)}
+                {[1,2,3,4,5,6,8,10,12,15].map(n=><option key={n} value={n}>{n}</option>)}
               </select>
             </div>
           ):null}
