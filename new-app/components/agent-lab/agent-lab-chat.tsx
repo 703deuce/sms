@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Bell, Bot, ChevronRight, FileText, Flag, KeyRound, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   HandoffNotice,
   LiveScreen,
@@ -28,7 +29,27 @@ type Item = {
   text: string
   isError?: boolean
 }
-type Conversation = { id: string; title: string; status: string; createdAt: string | null }
+type Conversation = { id: string; title: string; status: string; createdAt: string | null; model?: string | null }
+type ProviderInfo = {
+  id: string
+  label: string
+  hasKey: boolean
+  needsKey?: string
+  models: { id: string; label: string; provider: string }[]
+}
+type ModelCatalog = { providers: ProviderInfo[]; defaultModel: string }
+
+const MODEL_PREF = 'agent-lab-model'
+
+function modelLabel(id: string | null | undefined, catalog?: ModelCatalog | null) {
+  if (!id) return ''
+  for (const p of catalog?.providers ?? []) {
+    const hit = p.models.find((m) => m.id === id)
+    if (hit) return hit.label
+  }
+  return id.includes('/') ? id.slice(id.indexOf('/') + 1) : id
+}
+
 type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
 
 const RUNNING = new Set(['running', 'queued', 'starting'])
@@ -145,9 +166,56 @@ function ChatThread({ items }: { items: Item[] }) {
       )
       continue
     }
-    nodes.push(<ToolRow key={item.id} title={item.title || 'Error'} text={item.text} isError />)
+    nodes.push(
+      <ToolRow key={item.id} title={item.title || 'Error'} text={item.text} isError />,
+    )
   }
   return <>{nodes}</>
+}
+
+function ModelSwitcher({
+  catalog,
+  value,
+  disabled,
+  onChange,
+}: {
+  catalog: ModelCatalog | null
+  value: string | null
+  disabled?: boolean
+  onChange: (model: string) => void
+}) {
+  const options = catalog?.providers ?? []
+  const known = options.some((p) => p.models.some((m) => m.id === value))
+  return (
+    <Select value={value ?? undefined} onValueChange={onChange} disabled={disabled || !catalog}>
+      <SelectTrigger size="sm" className="max-w-56" title="Model for new conversations, or this conversation between turns" aria-label="Model">
+        <SelectValue placeholder="Model">{value ? modelLabel(value, catalog) : 'Model'}</SelectValue>
+      </SelectTrigger>
+      <SelectContent align="start" className="min-w-64">
+        {value && !known ? (
+          <SelectGroup>
+            <SelectItem value={value}>{modelLabel(value, catalog)}</SelectItem>
+          </SelectGroup>
+        ) : null}
+        {options.map((provider) => (
+          <SelectGroup key={provider.id}>
+            <SelectLabel>{provider.label}</SelectLabel>
+            {provider.hasKey ? (
+              provider.models.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label}
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value={`needs-key:${provider.id}`} disabled>
+                Needs {provider.needsKey}
+              </SelectItem>
+            )}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
+  )
 }
 
 export function AgentLabChat() {
@@ -156,6 +224,10 @@ export function AgentLabChat() {
   const [items, setItems] = useState<Item[]>([])
   const [status, setStatus] = useState<string>('idle')
   const [cost, setCost] = useState<number | null>(null)
+  const [model, setModel] = useState<string | null>(null)
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
+  const [preferredModel, setPreferredModel] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [preview, setPreview] = useState<FileEntry | null>(null)
   const [draft, setDraft] = useState('')
@@ -202,12 +274,13 @@ export function AgentLabChat() {
 
   const poll = useCallback(async (id: string, reset = false) => {
     const since = reset ? null : lastTs.current
-    const data = await api<{ items: Item[]; status: string; cost: number | null; lastTs: string | null }>(
+    const data = await api<{ items: Item[]; status: string; cost: number | null; lastTs: string | null; model?: string | null }>(
       `/api/agent-lab/conversations/${id}${since ? `?since=${encodeURIComponent(since)}` : ''}`,
     )
     lastTs.current = data.lastTs
     setStatus(data.status)
     setCost(data.cost)
+    if (data.model) setModel(data.model)
     setItems((prev) => {
       const base = reset ? [] : prev
       const seen = new Set(base.map((i) => i.id))
@@ -221,6 +294,20 @@ export function AgentLabChat() {
     void loadConversations()
     void loadFiles()
   }, [loadConversations, loadFiles])
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(MODEL_PREF)
+    if (saved) setPreferredModel(saved)
+    void api<ModelCatalog>('/api/agent-lab/models')
+      .then((data) => {
+        setCatalog(data)
+        setPreferredModel((prev) => prev || data.defaultModel)
+        setModel((prev) => prev || saved || data.defaultModel)
+      })
+      .catch(() => {
+        /* the switcher stays empty until the catalog loads */
+      })
+  }, [])
 
   // Load a conversation, then keep polling while the agent is working.
   useEffect(() => {
@@ -280,6 +367,7 @@ export function AgentLabChat() {
     try {
       const form = new FormData()
       form.append('message', message)
+      if (model) form.append('model', model)
       for (const f of attachments) form.append('files', f, f.name)
       if (!activeId) {
         const { id } = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
@@ -305,6 +393,32 @@ export function AgentLabChat() {
       await api(`/api/agent-lab/conversations/${activeId}/stop`, { method: 'POST' })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function chooseModel(next: string) {
+    if (next.startsWith('needs-key:')) return
+    setPreferredModel(next)
+    window.localStorage.setItem(MODEL_PREF, next)
+    if (!activeId) {
+      setModel(next)
+      return
+    }
+    if (RUNNING.has(status)) {
+      setError('Stop the agent first, then switch models. The new model starts on the next turn.')
+      return
+    }
+    if (next === model) return
+    setSwitching(true)
+    setError(null)
+    try {
+      await api(`/api/agent-lab/conversations/${activeId}/model`, { method: 'POST', body: JSON.stringify({ model: next }) })
+      setModel(next)
+      setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, model: next } : c)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSwitching(false)
     }
   }
 
@@ -398,6 +512,7 @@ export function AgentLabChat() {
               setItems([])
               setStatus('idle')
               setCost(null)
+              setModel(preferredModel || catalog?.defaultModel || null)
             }}
           >
             <Plus /> New conversation
@@ -414,6 +529,7 @@ export function AgentLabChat() {
               >
                 <div className="truncate">{c.title}</div>
                 <div className="text-xs text-muted-foreground">
+                  {c.model ? `${modelLabel(c.model, catalog)} · ` : ''}
                   {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''} · {c.status}
                 </div>
               </button>
@@ -423,7 +539,10 @@ export function AgentLabChat() {
 
         <section className="flex min-h-[70vh] flex-col rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2 text-sm">
-            <span className="truncate font-medium">{activeId ? conversations.find((c) => c.id === activeId)?.title ?? 'Conversation' : 'New conversation'}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate font-medium">{activeId ? conversations.find((c) => c.id === activeId)?.title ?? 'Conversation' : 'New conversation'}</span>
+              <ModelSwitcher catalog={catalog} value={model} disabled={switching} onChange={(id) => void chooseModel(id)} />
+            </div>
             <div className="flex items-center gap-2">
               {cost != null ? <span className="text-xs text-muted-foreground">${cost.toFixed(3)}</span> : null}
               {activeId ? <Badge variant={running ? 'default' : 'secondary'}>{running ? 'Working' : status}</Badge> : null}

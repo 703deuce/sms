@@ -182,16 +182,18 @@ export function attachmentNote(paths: string[]): string {
   return `\n\n[Rick attached ${paths.length === 1 ? 'a file' : `${paths.length} files`}, saved in your job folder]\n${lines.join('\n')}`
 }
 
-/** Reads `{ message, files[] }` from either JSON or multipart form data. */
-export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[] }> {
+/** Reads `{ message, files[], model? }` from either JSON or multipart form data. */
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; model: string | null }> {
   const type = request.headers.get('content-type') ?? ''
   if (type.includes('multipart/form-data')) {
     const form = await request.formData()
     const files = form.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    return { message: String(form.get('message') ?? '').trim(), files }
+    const model = String(form.get('model') ?? '').trim() || null
+    return { message: String(form.get('message') ?? '').trim(), files, model }
   }
-  const body = (await request.json().catch(() => ({}))) as { message?: string }
-  return { message: String(body.message ?? '').trim(), files: [] }
+  const body = (await request.json().catch(() => ({}))) as { message?: string; model?: string }
+  const model = String(body.model ?? '').trim() || null
+  return { message: String(body.message ?? '').trim(), files: [], model }
 }
 
 // ---- Conversation events → compact chat items ----
@@ -346,7 +348,7 @@ type AgentSettings = { mcp_config?: Record<string, McpServer> | null; [k: string
  * The saved settings in encrypted form (MCP env/headers stay as ciphertext the agent server can decrypt, instead of
  * the redacted '**********' a plain GET returns), with the built-in `agent` MCP server pointed at this job folder.
  */
-export async function conversationSettings(id: string) {
+export async function conversationSettings(id: string, model?: string | null) {
   const settings = await agentLabJson<{ agent_settings: AgentSettings; conversation_settings?: { max_iterations?: number } }>(
     '/api/settings',
     { headers: { 'X-Expose-Secrets': 'encrypted' } },
@@ -355,6 +357,10 @@ export async function conversationSettings(id: string) {
   const dir = jobDir(id)
   if (agent.mcp_config?.agent && dir) {
     agent.mcp_config = { ...agent.mcp_config, agent: { ...agent.mcp_config.agent, args: ['--job', dir] } }
+  }
+  if (model) {
+    const { llmConfigForModel } = await import('@/lib/server/agent-lab-models')
+    agent.llm = await llmConfigForModel(model)
   }
   return { agentSettings: agent, maxIterations: settings.conversation_settings?.max_iterations ?? 200 }
 }
