@@ -1,7 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, Bot, FileText, Flag, KeyRound, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Bell, Bot, ChevronRight, FileText, Flag, KeyRound, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   HandoffNotice,
   LiveScreen,
@@ -27,7 +29,27 @@ type Item = {
   text: string
   isError?: boolean
 }
-type Conversation = { id: string; title: string; status: string; createdAt: string | null }
+type Conversation = { id: string; title: string; status: string; createdAt: string | null; model?: string | null }
+type ProviderInfo = {
+  id: string
+  label: string
+  hasKey: boolean
+  needsKey?: string
+  models: { id: string; label: string; provider: string }[]
+}
+type ModelCatalog = { providers: ProviderInfo[]; defaultModel: string }
+
+const MODEL_PREF = 'agent-lab-model'
+
+function modelLabel(id: string | null | undefined, catalog?: ModelCatalog | null) {
+  if (!id) return ''
+  for (const p of catalog?.providers ?? []) {
+    const hit = p.models.find((m) => m.id === id)
+    if (hit) return hit.label
+  }
+  return id.includes('/') ? id.slice(id.indexOf('/') + 1) : id
+}
+
 type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
 
 const RUNNING = new Set(['running', 'queued', 'starting'])
@@ -62,52 +84,137 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T
 }
 
-function ChatItem({ item }: { item: Item }) {
-  if (item.type === 'message') {
-    const mine = item.role === 'user'
-    return (
-      <div className={cn('flex gap-2', mine && 'flex-row-reverse')}>
-        <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
-          {mine ? <User className="size-4" /> : <Bot className="size-4" />}
-        </div>
-        <div
-          className={cn(
-            'max-w-[85%] whitespace-pre-wrap break-words rounded-xl px-3 py-2 text-sm',
-            mine ? 'bg-primary text-primary-foreground' : 'bg-muted',
-          )}
-        >
-          {item.text}
-        </div>
+function ChatMessage({ item }: { item: Item }) {
+  const mine = item.role === 'user'
+  return (
+    <div className={cn('flex gap-2', mine && 'flex-row-reverse')}>
+      <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
+        {mine ? <User className="size-4" /> : <Bot className="size-4" />}
       </div>
-    )
-  }
-  if (item.type === 'action') {
-    return (
-      <div className="ml-9 rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-xs">
-        <div className="flex items-center gap-1.5 font-medium text-muted-foreground">
-          <Terminal className="size-3.5" />
-          {item.title}
-        </div>
-        {item.text ? <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-all font-mono text-[11px]">{item.text}</pre> : null}
+      <div
+        className={cn(
+          'max-w-[85%] break-words rounded-2xl px-3.5 py-2 text-sm',
+          mine ? 'whitespace-pre-wrap bg-primary text-primary-foreground' : 'bg-muted',
+        )}
+      >
+        {mine ? item.text : <AgentMarkdown text={item.text} />}
       </div>
-    )
-  }
-  if (item.type === 'observation') {
-    if (!item.text.trim()) return null
+    </div>
+  )
+}
+
+function ToolRow({ title, text, isError, defaultOpen }: { title: string; text?: string; isError?: boolean; defaultOpen?: boolean }) {
+  const body = text?.trim()
+  if (!body) {
     return (
-      <details className="ml-9 text-xs" open={item.tool === 'helper'}>
-        <summary className={cn('cursor-pointer select-none text-muted-foreground', item.isError && 'text-destructive')}>
-          {item.title ?? (item.isError ? 'Output (error)' : 'Output')}
-        </summary>
-        <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/60 p-2 font-mono text-[11px]">{item.text}</pre>
-      </details>
+      <div className={cn('ml-9 flex items-center gap-1.5 py-0.5 text-xs text-muted-foreground', isError && 'text-destructive')}>
+        <Terminal className="size-3 shrink-0" />
+        <span className="truncate">{title}</span>
+      </div>
     )
   }
   return (
-    <div className="ml-9 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">
-      {item.title ? <div className="mb-0.5 font-medium">{item.title}</div> : null}
-      {item.text}
-    </div>
+    <details className="group ml-9 text-xs" open={defaultOpen}>
+      <summary
+        className={cn(
+          'flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden',
+          isError && 'text-destructive',
+        )}
+      >
+        <ChevronRight className="size-3 shrink-0 transition-transform group-open:rotate-90" />
+        <Terminal className="size-3 shrink-0" />
+        <span className="min-w-0 truncate">{title}</span>
+      </summary>
+      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/60 p-2 font-mono text-[11px]">{body}</pre>
+    </details>
+  )
+}
+
+function ChatThread({ items }: { items: Item[] }) {
+  const nodes: ReactNode[] = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (item.type === 'message') {
+      nodes.push(<ChatMessage key={item.id} item={item} />)
+      continue
+    }
+    if (item.type === 'action') {
+      const next = items[i + 1]
+      const paired = next && next.type === 'observation' && (!next.tool || !item.tool || next.tool === item.tool)
+      if (paired && next) {
+        const title = item.title || next.title || item.tool || 'Tool'
+        const text = [item.text, next.text].filter((s) => s && s.trim()).join('\n\n')
+        nodes.push(
+          <ToolRow key={item.id} title={title} text={text} isError={next.isError} defaultOpen={item.tool === 'helper' || next.tool === 'helper'} />,
+        )
+        i += 1
+        continue
+      }
+      nodes.push(<ToolRow key={item.id} title={item.title || item.tool || 'Tool'} text={item.text} isError={item.isError} />)
+      continue
+    }
+    if (item.type === 'observation') {
+      if (!item.text.trim() && !item.title) continue
+      nodes.push(
+        <ToolRow
+          key={item.id}
+          title={item.title ?? (item.isError ? 'Output (error)' : 'Output')}
+          text={item.text}
+          isError={item.isError}
+          defaultOpen={item.tool === 'helper'}
+        />,
+      )
+      continue
+    }
+    nodes.push(
+      <ToolRow key={item.id} title={item.title || 'Error'} text={item.text} isError />,
+    )
+  }
+  return <>{nodes}</>
+}
+
+function ModelSwitcher({
+  catalog,
+  value,
+  disabled,
+  onChange,
+}: {
+  catalog: ModelCatalog | null
+  value: string | null
+  disabled?: boolean
+  onChange: (model: string) => void
+}) {
+  const options = catalog?.providers ?? []
+  const known = options.some((p) => p.models.some((m) => m.id === value))
+  return (
+    <Select value={value ?? undefined} onValueChange={onChange} disabled={disabled || !catalog}>
+      <SelectTrigger size="sm" className="max-w-56" title="Model for new conversations, or this conversation between turns" aria-label="Model">
+        <SelectValue placeholder="Model">{value ? modelLabel(value, catalog) : 'Model'}</SelectValue>
+      </SelectTrigger>
+      <SelectContent align="start" className="min-w-64">
+        {value && !known ? (
+          <SelectGroup>
+            <SelectItem value={value}>{modelLabel(value, catalog)}</SelectItem>
+          </SelectGroup>
+        ) : null}
+        {options.map((provider) => (
+          <SelectGroup key={provider.id}>
+            <SelectLabel>{provider.label}</SelectLabel>
+            {provider.hasKey ? (
+              provider.models.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  {m.label}
+                </SelectItem>
+              ))
+            ) : (
+              <SelectItem value={`needs-key:${provider.id}`} disabled>
+                Needs {provider.needsKey}
+              </SelectItem>
+            )}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 
@@ -117,6 +224,10 @@ export function AgentLabChat() {
   const [items, setItems] = useState<Item[]>([])
   const [status, setStatus] = useState<string>('idle')
   const [cost, setCost] = useState<number | null>(null)
+  const [model, setModel] = useState<string | null>(null)
+  const [catalog, setCatalog] = useState<ModelCatalog | null>(null)
+  const [preferredModel, setPreferredModel] = useState<string | null>(null)
+  const [switching, setSwitching] = useState(false)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [preview, setPreview] = useState<FileEntry | null>(null)
   const [draft, setDraft] = useState('')
@@ -163,12 +274,13 @@ export function AgentLabChat() {
 
   const poll = useCallback(async (id: string, reset = false) => {
     const since = reset ? null : lastTs.current
-    const data = await api<{ items: Item[]; status: string; cost: number | null; lastTs: string | null }>(
+    const data = await api<{ items: Item[]; status: string; cost: number | null; lastTs: string | null; model?: string | null }>(
       `/api/agent-lab/conversations/${id}${since ? `?since=${encodeURIComponent(since)}` : ''}`,
     )
     lastTs.current = data.lastTs
     setStatus(data.status)
     setCost(data.cost)
+    if (data.model) setModel(data.model)
     setItems((prev) => {
       const base = reset ? [] : prev
       const seen = new Set(base.map((i) => i.id))
@@ -182,6 +294,20 @@ export function AgentLabChat() {
     void loadConversations()
     void loadFiles()
   }, [loadConversations, loadFiles])
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(MODEL_PREF)
+    if (saved) setPreferredModel(saved)
+    void api<ModelCatalog>('/api/agent-lab/models')
+      .then((data) => {
+        setCatalog(data)
+        setPreferredModel((prev) => prev || data.defaultModel)
+        setModel((prev) => prev || saved || data.defaultModel)
+      })
+      .catch(() => {
+        /* the switcher stays empty until the catalog loads */
+      })
+  }, [])
 
   // Load a conversation, then keep polling while the agent is working.
   useEffect(() => {
@@ -241,6 +367,7 @@ export function AgentLabChat() {
     try {
       const form = new FormData()
       form.append('message', message)
+      if (model) form.append('model', model)
       for (const f of attachments) form.append('files', f, f.name)
       if (!activeId) {
         const { id } = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
@@ -266,6 +393,32 @@ export function AgentLabChat() {
       await api(`/api/agent-lab/conversations/${activeId}/stop`, { method: 'POST' })
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  async function chooseModel(next: string) {
+    if (next.startsWith('needs-key:')) return
+    setPreferredModel(next)
+    window.localStorage.setItem(MODEL_PREF, next)
+    if (!activeId) {
+      setModel(next)
+      return
+    }
+    if (RUNNING.has(status)) {
+      setError('Stop the agent first, then switch models. The new model starts on the next turn.')
+      return
+    }
+    if (next === model) return
+    setSwitching(true)
+    setError(null)
+    try {
+      await api(`/api/agent-lab/conversations/${activeId}/model`, { method: 'POST', body: JSON.stringify({ model: next }) })
+      setModel(next)
+      setConversations((prev) => prev.map((c) => (c.id === activeId ? { ...c, model: next } : c)))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSwitching(false)
     }
   }
 
@@ -359,6 +512,7 @@ export function AgentLabChat() {
               setItems([])
               setStatus('idle')
               setCost(null)
+              setModel(preferredModel || catalog?.defaultModel || null)
             }}
           >
             <Plus /> New conversation
@@ -375,6 +529,7 @@ export function AgentLabChat() {
               >
                 <div className="truncate">{c.title}</div>
                 <div className="text-xs text-muted-foreground">
+                  {c.model ? `${modelLabel(c.model, catalog)} · ` : ''}
                   {c.createdAt ? new Date(c.createdAt).toLocaleString() : ''} · {c.status}
                 </div>
               </button>
@@ -384,7 +539,10 @@ export function AgentLabChat() {
 
         <section className="flex min-h-[70vh] flex-col rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2 text-sm">
-            <span className="truncate font-medium">{activeId ? conversations.find((c) => c.id === activeId)?.title ?? 'Conversation' : 'New conversation'}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate font-medium">{activeId ? conversations.find((c) => c.id === activeId)?.title ?? 'Conversation' : 'New conversation'}</span>
+              <ModelSwitcher catalog={catalog} value={model} disabled={switching} onChange={(id) => void chooseModel(id)} />
+            </div>
             <div className="flex items-center gap-2">
               {cost != null ? <span className="text-xs text-muted-foreground">${cost.toFixed(3)}</span> : null}
               {activeId ? <Badge variant={running ? 'default' : 'secondary'}>{running ? 'Working' : status}</Badge> : null}
@@ -421,7 +579,7 @@ export function AgentLabChat() {
                 {activeId ? 'Loading…' : 'Ask for anything: “Find a 20 second clip of a lighthouse at sunset and make it vertical with a slow push-in.”'}
               </p>
             ) : (
-              items.map((item) => <ChatItem key={item.id} item={item} />)
+              <ChatThread items={items} />
             )}
             {running ? (
               <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground">

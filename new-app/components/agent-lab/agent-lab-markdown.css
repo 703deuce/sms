@@ -1,0 +1,112 @@
+/* Agent Lab chat markdown. Works in light and dark themes. */
+.agent-md {
+  line-height: 1.55;
+}
+.agent-md > :first-child { margin-top: 0; }
+.agent-md > :last-child { margin-bottom: 0; }
+.agent-md p,
+.agent-md ul,
+.agent-md ol,
+.agent-md pre,
+.agent-md table,
+.agent-md blockquote {
+  margin: 0.5em 0;
+}
+.agent-md h1,
+.agent-md h2,
+.agent-md h3,
+.agent-md h4 {
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 0.8em 0 0.35em;
+}
+.agent-md h1 { font-size: 1.15em; }
+.agent-md h2 { font-size: 1.08em; }
+.agent-md h3,
+.agent-md h4 { font-size: 1em; }
+.agent-md ul,
+.agent-md ol {
+  padding-left: 1.3em;
+}
+.agent-md li { margin: 0.15em 0; }
+.agent-md a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.agent-md blockquote {
+  border-left: 3px solid currentColor;
+  opacity: 0.9;
+  padding-left: 0.75em;
+}
+.agent-md hr {
+  border: 0;
+  border-top: 1px solid currentColor;
+  opacity: 0.2;
+  margin: 0.75em 0;
+}
+.agent-md table {
+  border-collapse: collapse;
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  font-size: 0.92em;
+}
+.agent-md th,
+.agent-md td {
+  border: 1px solid color-mix(in oklab, currentColor 20%, transparent);
+  padding: 0.3em 0.55em;
+  text-align: left;
+}
+.agent-md th { font-weight: 600; }
+.agent-md pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  padding: 0.7em 0.8em;
+  background: color-mix(in oklab, currentColor 8%, transparent);
+  font-size: 0.8em;
+  line-height: 1.45;
+}
+.agent-md pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  border-radius: 0;
+}
+.agent-md :not(pre) > code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  border-radius: 0.25rem;
+  padding: 0.1em 0.35em;
+  background: color-mix(in oklab, currentColor 10%, transparent);
+}
+.agent-md img { max-width: 100%; height: auto; border-radius: 0.4rem; }
+
+/* highlight.js tokens, theme-agnostic */
+.agent-md .hljs { background: transparent; color: inherit; }
+.agent-md .hljs-comment,
+.agent-md .hljs-quote { opacity: 0.65; font-style: italic; }
+.agent-md .hljs-keyword,
+.agent-md .hljs-selector-tag,
+.agent-md .hljs-meta .hljs-keyword { font-weight: 600; }
+.agent-md .hljs-string,
+.agent-md .hljs-attr,
+.agent-md .hljs-attribute,
+.agent-md .hljs-template-tag { color: color-mix(in oklab, #0a7 55%, currentColor); }
+.dark .agent-md .hljs-string,
+.dark .agent-md .hljs-attr,
+.dark .agent-md .hljs-attribute,
+.dark .agent-md .hljs-template-tag { color: color-mix(in oklab, #5d9 50%, currentColor); }
+.agent-md .hljs-number,
+.agent-md .hljs-literal,
+.agent-md .hljs-built_in { color: color-mix(in oklab, #c60 50%, currentColor); }
+.dark .agent-md .hljs-number,
+.dark .agent-md .hljs-literal,
+.dark .agent-md .hljs-built_in { color: color-mix(in oklab, #fc8 45%, currentColor); }
+.agent-md .hljs-title,
+.agent-md .hljs-section,
+.agent-md .hljs-selector-id { font-weight: 600; }
+.agent-md .hljs-type,
+.agent-md .hljs-class .hljs-title { color: color-mix(in oklab, #26c 50%, currentColor); }
+.dark .agent-md .hljs-type,
+.dark .agent-md .hljs-class .hljs-title { color: color-mix(in oklab, #8af 50%, currentColor); }
