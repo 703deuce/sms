@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabFetch, safeWorkspacePath } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabFetch, redactSecrets, safeWorkspacePath } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +18,8 @@ export async function GET(request: Request) {
     if (!path) return Response.json({ error: 'Invalid path' }, { status: 400 })
     const headers: Record<string, string> = {}
     const range = request.headers.get('range')
-    if (range) headers.Range = range
+    const isText = /\.(srt|vtt|md|txt|json)$/i.test(path)
+    if (range && !isText) headers.Range = range
     const res = await agentLabFetch(`/api/file/download?path=${encodeURIComponent(path)}`, { headers, timeoutMs: 300_000 })
     if (!res.ok) return Response.json({ error: `File not available (${res.status})` }, { status: res.status === 404 ? 404 : 502 })
     const ext = path.split('.').pop()?.toLowerCase() ?? ''
@@ -30,6 +31,14 @@ export async function GET(request: Request) {
     for (const h of ['content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
       const v = res.headers.get(h)
       if (v) out.set(h, v)
+    }
+    if (isText && res.status === 200) {
+      // Text files pass through the same secret filter as chat messages.
+      const text = redactSecrets(await res.text())
+      out.delete('content-length')
+      out.delete('content-range')
+      out.delete('accept-ranges')
+      return new Response(text, { status: 200, headers: out })
     }
     return new Response(res.body, { status: res.status, headers: out })
   } catch (err) {

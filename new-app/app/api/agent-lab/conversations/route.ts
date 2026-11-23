@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, jobDir, userMessage } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, attachmentNote, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,7 @@ export async function GET() {
     const page = await agentLabJson<{ items: ConvInfo[] }>('/api/conversations/search?limit=50&sort_order=CREATED_AT_DESC')
     const conversations = page.items.map((c) => ({
       id: c.id,
-      title: c.title || 'New conversation',
+      title: redactSecrets(c.title || 'New conversation'),
       status: c.execution_status ?? 'idle',
       createdAt: c.created_at ?? null,
       updatedAt: c.updated_at ?? null,
@@ -27,9 +27,8 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json().catch(() => ({}))) as { message?: string }
-    const message = String(body.message ?? '').trim()
-    if (!message) return Response.json({ error: 'Message is required' }, { status: 400 })
+    const { message: text, files } = await readMessageRequest(request)
+    if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
     const settings = await agentLabJson<{ agent_settings: unknown; conversation_settings?: { max_iterations?: number } }>(
       '/api/settings',
     )
@@ -38,6 +37,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({ load_user_hooks: true, load_project_hooks: false }),
     })
     const id = crypto.randomUUID()
+    const saved = files.length ? await saveAttachments(id, files) : []
+    const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
     const conv = await agentLabJson<{ id: string }>('/api/conversations', {
       method: 'POST',
       body: JSON.stringify({

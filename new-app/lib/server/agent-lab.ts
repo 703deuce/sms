@@ -36,7 +36,7 @@ export async function agentLabFetch(path: string, init: RequestInit & { timeoutM
   const { url, token } = config()
   const headers = new Headers(init.headers)
   headers.set('X-Session-API-Key', token)
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  if (typeof init.body === 'string' && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const { timeoutMs = 30_000, ...rest } = init
   try {
     return await fetch(`${url}${path}`, { ...rest, headers, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
@@ -60,6 +60,76 @@ export function agentLabErrorResponse(err: unknown): Response {
   return Response.json({ error: message }, { status })
 }
 
+// ---- Run daemon (queue, routines, notifications, desktop) on the agent server, port 8010 ----
+
+function runnerBase(): string {
+  const explicit = process.env.AGENT_LAB_RUNNER_URL?.trim().replace(/\/+$/, '')
+  if (explicit) return explicit
+  const { url } = config()
+  const u = new URL(url)
+  u.port = '8010'
+  return u.toString().replace(/\/+$/, '')
+}
+
+export async function runnerFetch(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<Response> {
+  const { token } = config()
+  const headers = new Headers(init.headers)
+  headers.set('X-Session-API-Key', token)
+  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
+  const { timeoutMs = 20_000, ...rest } = init
+  try {
+    return await fetch(`${runnerBase()}${path}`, { ...rest, headers, cache: 'no-store', signal: AbortSignal.timeout(timeoutMs) })
+  } catch {
+    throw new AgentLabError('Agent Lab runner unreachable')
+  }
+}
+
+export async function runnerJson<T = unknown>(path: string, init: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+  const res = await runnerFetch(path, init)
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
+  if (!res.ok) throw new AgentLabError(String(data?.error ?? `Runner ${res.status}`), res.status >= 500 ? 502 : res.status)
+  return data
+}
+
+// ---- Output filter: redact anything that looks like a secret before it reaches the page ----
+
+const SECRET_PATTERNS: RegExp[] = [
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g,
+  /\bsk-(?:proj-|ant-)?[A-Za-z0-9_-]{16,}/g,
+  /\bsk_[A-Za-z0-9]{20,}/g,
+  /\bAIza[0-9A-Za-z_-]{30,}/g,
+  /\bgh[pousr]_[A-Za-z0-9]{30,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{30,}/g,
+  /\bxai-[A-Za-z0-9]{20,}/g,
+  /\br8_[A-Za-z0-9]{20,}/g,
+  /\bxox[abprs]-[A-Za-z0-9-]{10,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+  /(Bearer|Token)\s+[A-Za-z0-9._~+/-]{20,}=*/g,
+]
+const ASSIGNMENT = /\b([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD|PWD))(["']?\s*[=:]\s*["']?)([^\s"',;]{8,})/g
+const URL_SECRET = /([?&](?:key|token|api_key|apikey|access_token|secret|sig|signature|X-Amz-Signature|X-Amz-Credential)=)[^&\s"']+/gi
+
+let knownValues: string[] | null = null
+function knownSecretValues(): string[] {
+  if (knownValues) return knownValues
+  knownValues = Object.entries(process.env)
+    .filter(([k, v]) => /KEY|TOKEN|SECRET|PASSWORD/i.test(k) && typeof v === 'string' && v.trim().length >= 16)
+    .map(([, v]) => (v as string).trim())
+    .sort((a, b) => b.length - a.length)
+  return knownValues
+}
+
+export function redactSecrets(text: string): string {
+  if (!text) return text
+  let out = text
+  for (const v of knownSecretValues()) if (out.includes(v)) out = out.split(v).join('[redacted]')
+  for (const re of SECRET_PATTERNS) out = out.replace(re, '[redacted]')
+  out = out.replace(ASSIGNMENT, (_m, name, sep) => `${name}${sep}[redacted]`)
+  out = out.replace(URL_SECRET, (_m, p) => `${p}[redacted]`)
+  return out
+}
+
 /** Paths the browser may read: files inside a conversation's job folder (or the legacy project folder) only. */
 export function safeWorkspacePath(raw: string | null): string | null {
   if (!raw) return null
@@ -69,6 +139,59 @@ export function safeWorkspacePath(raw: string | null): string | null {
   if (job && isConversationId(job[1])) return p
   if (p.startsWith(`${LEGACY_WORKDIR}/`)) return p
   return null
+}
+
+// ---- Attachments: files Rick uploads go to <job folder>/inputs/ ----
+
+export const MAX_ATTACHMENT_BYTES = 200 * 1024 * 1024
+const IMAGE_EXT = /\.(png|jpe?g|webp|gif|heic|bmp)$/i
+
+function safeFileName(name: string): string {
+  const base = name.split(/[\\/]/).pop() ?? 'file'
+  const clean = base.replace(/[^\w.\- ]+/g, '_').replace(/^\.+/, '').trim().slice(0, 120)
+  return clean || 'file'
+}
+
+/** Uploads files into /workspace/jobs/<id>/inputs/ and returns the saved paths. */
+export async function saveAttachments(conversationId: string, files: File[]): Promise<string[]> {
+  const dir = jobDir(conversationId)
+  if (!dir) throw new AgentLabError('Invalid conversation id', 400)
+  const total = files.reduce((n, f) => n + f.size, 0)
+  if (total > MAX_ATTACHMENT_BYTES) throw new AgentLabError('Attachments are too large (200 MB max per message)', 413)
+  const used = new Set<string>()
+  const paths: string[] = []
+  for (const f of files) {
+    let name = safeFileName(f.name)
+    const dot = name.lastIndexOf('.')
+    for (let i = 2; used.has(name.toLowerCase()); i++) name = dot > 0 ? `${name.slice(0, dot)}-${i}${name.slice(dot)}` : `${name}-${i}`
+    used.add(name.toLowerCase())
+    const path = `${dir}/inputs/${Date.now().toString(36)}-${name}`
+    const form = new FormData()
+    form.append('file', f, name)
+    const res = await agentLabFetch(`/api/file/upload?path=${encodeURIComponent(path)}`, { method: 'POST', body: form, timeoutMs: 300_000 })
+    if (!res.ok) throw new AgentLabError(`Upload failed for ${name} (${res.status})`)
+    paths.push(path)
+  }
+  return paths
+}
+
+/** The note appended to Rick's message so the agent knows where the files are. */
+export function attachmentNote(paths: string[]): string {
+  if (!paths.length) return ''
+  const lines = paths.map((p) => `- ${p}${IMAGE_EXT.test(p) ? ' (image: inspect it with `look`)' : ''}`)
+  return `\n\n[Rick attached ${paths.length === 1 ? 'a file' : `${paths.length} files`}, saved in your job folder]\n${lines.join('\n')}`
+}
+
+/** Reads `{ message, files[] }` from either JSON or multipart form data. */
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[] }> {
+  const type = request.headers.get('content-type') ?? ''
+  if (type.includes('multipart/form-data')) {
+    const form = await request.formData()
+    const files = form.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
+    return { message: String(form.get('message') ?? '').trim(), files }
+  }
+  const body = (await request.json().catch(() => ({}))) as { message?: string }
+  return { message: String(body.message ?? '').trim(), files: [] }
 }
 
 // ---- Conversation events → compact chat items ----
@@ -119,6 +242,10 @@ function describeAction(e: RawEvent): { title: string; text: string } {
 }
 
 export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
+  return rawItems(events).map((i) => ({ ...i, text: redactSecrets(i.text), title: i.title ? redactSecrets(i.title) : i.title }))
+}
+
+function rawItems(events: RawEvent[]): AgentLabItem[] {
   const out: AgentLabItem[] = []
   for (const e of events) {
     const base = { id: String(e.id), ts: String(e.timestamp ?? '') }
@@ -129,6 +256,10 @@ export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
         if (e.source === 'environment') {
           // Auto-loaded session context (job folder rule, memory, skills index): show collapsed.
           out.push({ ...base, type: 'observation', tool: 'context', title: 'Loaded memory and skills', text: clip(text, 6000) })
+          break
+        }
+        if (e.source === 'user' && typeof e.sender === 'string' && e.sender.startsWith('conversation:')) {
+          out.push({ ...base, type: 'observation', tool: 'helper', title: 'Message from a background helper', text: clip(text, 6000) })
           break
         }
         out.push({ ...base, type: 'message', role: e.source === 'user' ? 'user' : 'agent', text })

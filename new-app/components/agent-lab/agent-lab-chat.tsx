@@ -1,7 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bot, FileText, Loader2, Plus, RefreshCw, Send, Square, Terminal, User } from 'lucide-react'
+import { Bell, Bot, FileText, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, Square, Terminal, User, X } from 'lucide-react'
+import {
+  HandoffNotice,
+  LiveScreen,
+  NotificationsPanel,
+  useDesktopStatus,
+  useNotifications,
+  type AgentNotification,
+} from '@/components/agent-lab/agent-lab-extras'
 import { Page, PageHeader } from '@/components/app/page-primitives'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -28,6 +36,13 @@ const AUDIO = /\.(mp3|wav|m4a)$/i
 
 function fileUrl(path: string, download = false) {
   return `/api/agent-lab/file?path=${encodeURIComponent(path)}${download ? '&download=1' : ''}`
+}
+
+async function postForm<T>(url: string, form: FormData): Promise<T> {
+  const res = await fetch(url, { method: 'POST', body: form })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`)
+  return data as T
 }
 
 function fmtSize(n: number) {
@@ -76,7 +91,7 @@ function ChatItem({ item }: { item: Item }) {
   if (item.type === 'observation') {
     if (!item.text.trim()) return null
     return (
-      <details className="ml-9 text-xs">
+      <details className="ml-9 text-xs" open={item.tool === 'helper'}>
         <summary className={cn('cursor-pointer select-none text-muted-foreground', item.isError && 'text-destructive')}>
           {item.title ?? (item.isError ? 'Output (error)' : 'Output')}
         </summary>
@@ -103,6 +118,14 @@ export function AgentLabChat() {
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<File[]>([])
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [showNotes, setShowNotes] = useState(false)
+  const [showScreen, setShowScreen] = useState(false)
+  const [banner, setBanner] = useState<AgentNotification | null>(null)
+  const notes = useNotifications((n) => setBanner(n))
+  const desk = useDesktopStatus()
+  const handoffWaiting = desk.status?.status === 'waiting'
   const lastTs = useRef<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
@@ -191,19 +214,24 @@ export function AgentLabChat() {
 
   async function send() {
     const message = draft.trim()
-    if (!message || sending) return
+    if ((!message && !attachments.length) || sending) return
     setSending(true)
     setError(null)
     try {
+      const form = new FormData()
+      form.append('message', message)
+      for (const f of attachments) form.append('files', f, f.name)
       if (!activeId) {
-        const { id } = await api<{ id: string }>('/api/agent-lab/conversations', { method: 'POST', body: JSON.stringify({ message }) })
+        const { id } = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
         setActiveId(id)
         void loadConversations()
       } else {
-        await api(`/api/agent-lab/conversations/${activeId}/messages`, { method: 'POST', body: JSON.stringify({ message }) })
+        await postForm(`/api/agent-lab/conversations/${activeId}/messages`, form)
         setStatus('running')
       }
       setDraft('')
+      setAttachments([])
+      if (fileInput.current) fileInput.current.value = ''
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -233,6 +261,69 @@ export function AgentLabChat() {
           </button>
         </div>
       ) : null}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={showNotes ? 'default' : 'outline'}
+          onClick={() => {
+            setShowNotes((v) => !v)
+            setBanner(null)
+          }}
+        >
+          <Bell /> Notifications
+          {notes.unread ? <Badge variant="destructive">{notes.unread}</Badge> : null}
+        </Button>
+        <Button size="sm" variant={showScreen ? 'default' : 'outline'} onClick={() => setShowScreen((v) => !v)}>
+          <Monitor /> Live screen
+        </Button>
+        <a className="text-sm text-muted-foreground underline" href="/app/agent-lab/pages" target="_blank" rel="noreferrer">
+          Pages
+        </a>
+      </div>
+      {handoffWaiting ? (
+        <HandoffNotice
+          message={desk.status?.message ?? ''}
+          onOpenScreen={() => setShowScreen(true)}
+          onDone={async () => {
+            await api('/api/agent-lab/desktop/done', { method: 'POST', body: '{}' }).catch((e) => setError(String(e)))
+            await desk.reload()
+          }}
+        />
+      ) : null}
+      {banner && !showNotes ? (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/60 px-3 py-2 text-sm">
+          <Bell className="size-4 shrink-0" />
+          <span className="min-w-0 flex-1 truncate">{banner.title}</span>
+          {banner.conversationId ? (
+            <button
+              className="underline"
+              onClick={() => {
+                setActiveId(banner.conversationId)
+                void notes.markRead([banner.id])
+                setBanner(null)
+              }}
+            >
+              Open
+            </button>
+          ) : null}
+          <button className="underline" onClick={() => setBanner(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
+      {showNotes ? (
+        <NotificationsPanel
+          items={notes.items}
+          fileUrl={(p) => fileUrl(p)}
+          onOpen={(n) => {
+            if (n.conversationId) setActiveId(n.conversationId)
+            void notes.markRead([n.id])
+          }}
+          onMarkAll={() => void notes.markRead()}
+          onClose={() => setShowNotes(false)}
+        />
+      ) : null}
+      {showScreen ? <LiveScreen onClose={() => setShowScreen(false)} /> : null}
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <aside className="flex flex-col gap-2">
           <Button
@@ -293,8 +384,40 @@ export function AgentLabChat() {
             ) : null}
             <div ref={endRef} />
           </div>
+          {attachments.length ? (
+            <div className="flex flex-wrap gap-1.5 border-t border-border px-3 pt-2">
+              {attachments.map((f, i) => (
+                <span key={`${f.name}-${i}`} className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs">
+                  <Paperclip className="size-3" />
+                  <span className="max-w-48 truncate">{f.name}</span>
+                  <span className="text-muted-foreground">{fmtSize(f.size)}</span>
+                  <button aria-label={`Remove ${f.name}`} onClick={() => setAttachments((a) => a.filter((_, j) => j !== i))}>
+                    <X className="size-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          ) : null}
           <div className="flex items-end gap-2 border-t border-border p-3">
+            <input
+              ref={fileInput}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                const picked = Array.from(e.target.files ?? [])
+                if (picked.length) setAttachments((a) => [...a, ...picked].slice(0, 20))
+                e.target.value = ''
+              }}
+            />
+            <Button size="icon" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Attach files" title="Attach files or images">
+              <Paperclip />
+            </Button>
             <Textarea
+              onPaste={(e) => {
+                const pasted = Array.from(e.clipboardData.files ?? [])
+                if (pasted.length) setAttachments((a) => [...a, ...pasted].slice(0, 20))
+              }}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="Message the agent…"
@@ -306,7 +429,7 @@ export function AgentLabChat() {
                 }
               }}
             />
-            <Button onClick={() => void send()} disabled={sending || !draft.trim()}>
+            <Button onClick={() => void send()} disabled={sending || (!draft.trim() && !attachments.length)}>
               {sending ? <Loader2 className="animate-spin" /> : <Send />} Send
             </Button>
           </div>

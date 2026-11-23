@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, listConversationEvents, toAgentLabItems } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, listConversationEvents, redactSecrets, toAgentLabItems } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,7 +19,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     const lastTs = events.length ? String(events[events.length - 1].timestamp ?? '') : since
     return Response.json({
       id,
-      title: info.title || 'New conversation',
+      title: redactSecrets(info.title || 'New conversation'),
       status: info.execution_status ?? 'idle',
       cost,
       lastTs,
