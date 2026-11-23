@@ -13,8 +13,9 @@ const TYPES: Record<string, string> = {
 }
 
 /**
- * Agent-made HTML is served sandboxed (opaque origin): scripts and charts run, but the page can't read
- * transovo.ai cookies or storage.
+ * Agent-made HTML is served from /api/agent-lab/pages/<slug> (outside the /app CSP) with a sandbox CSP
+ * (opaque origin): scripts and charts run, but the page can't read transovo.ai cookies or storage.
+ * /app/agent-lab/pages/<slug> redirects there.
  */
 const SANDBOX_CSP = 'sandbox allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-downloads'
 
@@ -38,7 +39,7 @@ export async function servePageFile(slug: string, rel: string[]): Promise<Respon
   if (['html', 'css', 'js', 'json', 'md', 'txt', 'csv', 'svg'].includes(ext)) {
     let text = redactSecrets(await res.text())
     if (ext === 'html' && !/<base\s/i.test(text)) {
-      const base = `<base href="/app/agent-lab/pages/${slug}/">`
+      const base = `<base href="/api/agent-lab/pages/${slug}/">`
       text = /<head[^>]*>/i.test(text) ? text.replace(/<head[^>]*>/i, (m) => `${m}${base}`) : `${base}${text}`
     }
     return new Response(text, { headers })
