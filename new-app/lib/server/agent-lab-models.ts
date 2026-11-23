@@ -36,7 +36,7 @@ const PROVIDER_META: Record<ProviderId, ProviderMeta> = {
 
 /**
  * Curated chat/agent models. Every id was checked against that provider's models API
- * on 23 Nov 2026 (America/New_York). Anthropic is omitted until a key is added.
+ * on 23 Nov 2026 (America/New_York). Anthropic models are listed once lab-anthropic exists on the agent server. gemini-2.5-flash removed (Google: no longer available to new users).
  */
 const CATALOG: ModelInfo[] = [
   { id: 'deepseek/deepseek-flash', label: 'DeepSeek Flash', provider: 'deepseek' },
@@ -51,8 +51,10 @@ const CATALOG: ModelInfo[] = [
   { id: 'gemini/gemini-3.5-flash', label: 'Gemini 3.5 Flash', provider: 'gemini' },
   { id: 'gemini/gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro Preview', provider: 'gemini' },
   { id: 'gemini/gemini-2.5-pro', label: 'Gemini 2.5 Pro', provider: 'gemini' },
-  { id: 'gemini/gemini-2.5-flash', label: 'Gemini 2.5 Flash', provider: 'gemini' },
 
+  { id: 'anthropic/claude-haiku-5-5', label: 'Claude Haiku 5.5', provider: 'anthropic' },
+  { id: 'anthropic/claude-sonnet-5-5', label: 'Claude Sonnet 5.5', provider: 'anthropic' },
+  { id: 'anthropic/claude-opus-5-5', label: 'Claude Opus 5.5', provider: 'anthropic' },
   { id: 'openai/gpt-6.2-sol', label: 'GPT-6.2 Sol', provider: 'openai' },
   { id: 'openai/gpt-6.2-astra', label: 'GPT-6.2 Astra', provider: 'openai' },
   { id: 'openai/gpt-6.1-sol', label: 'GPT-6.1 Sol', provider: 'openai' },
