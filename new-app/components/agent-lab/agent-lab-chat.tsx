@@ -218,6 +218,49 @@ function ModelSwitcher({
   )
 }
 
+type TaskCriterion = { id: string; text: string; status: string }
+type TaskMilestone = { id: string; text: string; status: string; criteria: string[] }
+type TaskRecord = { goal: string; phase: string; milestones: TaskMilestone[]; criteria: TaskCriterion[] }
+
+function verdictMark(status: string) {
+  return status === 'PASS' ? '✓' : status === 'FAIL' ? '✗' : '?'
+}
+
+function TaskChecklist({ task }: { task: TaskRecord }) {
+  const byId = new Map(task.criteria.map((c) => [c.id, c]))
+  const linked = new Set(task.milestones.flatMap((m) => m.criteria))
+  const loose = task.criteria.filter((c) => !linked.has(c.id))
+  return (
+    <div className="flex flex-col gap-1 rounded-md border p-2 text-xs">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">Checklist</span>
+        {task.phase ? <span className="text-muted-foreground">{task.phase}</span> : null}
+      </div>
+      {task.goal ? <p className="text-muted-foreground">{task.goal}</p> : null}
+      {task.milestones.map((m) => (
+        <div key={m.id}>
+          <div className={m.status === 'done' ? 'text-muted-foreground line-through' : ''}>
+            {m.status === 'done' ? '☑' : '☐'} {m.text}
+          </div>
+          {m.criteria.map((cid) => {
+            const c = byId.get(cid)
+            return c ? (
+              <div key={cid} className="pl-4" title={c.status}>
+                {verdictMark(c.status)} {c.text}
+              </div>
+            ) : null
+          })}
+        </div>
+      ))}
+      {loose.map((c) => (
+        <div key={c.id} title={c.status}>
+          {verdictMark(c.status)} {c.text}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function AgentLabChat() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -229,6 +272,7 @@ export function AgentLabChat() {
   const [preferredModel, setPreferredModel] = useState<string | null>(null)
   const [switching, setSwitching] = useState(false)
   const [files, setFiles] = useState<FileEntry[]>([])
+  const [task, setTask] = useState<TaskRecord | null>(null)
   const [preview, setPreview] = useState<FileEntry | null>(null)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -254,19 +298,32 @@ export function AgentLabChat() {
     }
   }, [])
 
+  // The checklist is the agent's task record (log/task.json): milestones, each with its success criteria.
+  const loadTask = useCallback(async () => {
+    if (!activeId) return setTask(null)
+    try {
+      const d = await api<{ task: TaskRecord | null }>(`/api/agent-lab/conversations/${encodeURIComponent(activeId)}/tasks`)
+      setTask(d.task && (d.task.milestones.length || d.task.criteria.length) ? d.task : null)
+    } catch {
+      /* the checklist is optional */
+    }
+  }, [activeId])
+
   // The files panel shows the current conversation's job folder only.
   const loadFiles = useCallback(async () => {
     if (!activeId) {
       setFiles([])
+      setTask(null)
       return
     }
+    void loadTask()
     try {
       const data = await api<{ files: FileEntry[] }>(`/api/agent-lab/files?conversation=${encodeURIComponent(activeId)}`)
       setFiles(data.files)
     } catch {
       /* the list is optional */
     }
-  }, [activeId])
+  }, [activeId, loadTask])
 
   useEffect(() => {
     setPreview(null)
@@ -315,6 +372,7 @@ export function AgentLabChat() {
     let stopped = false
     let timer: ReturnType<typeof setTimeout> | undefined
     let wasRunning = false
+    let ticks = 0
     const tick = async (reset: boolean) => {
       try {
         const s = await poll(activeId, reset)
@@ -323,6 +381,7 @@ export function AgentLabChat() {
           void loadFiles()
           void loadConversations()
         }
+        if (running && ++ticks % 4 === 0) void loadTask()
         wasRunning = running
         if (!stopped) timer = setTimeout(() => void tick(false), running ? 1500 : 5000)
       } catch (e) {
@@ -337,7 +396,7 @@ export function AgentLabChat() {
       stopped = true
       if (timer) clearTimeout(timer)
     }
-  }, [activeId, poll, loadFiles, loadConversations])
+  }, [activeId, poll, loadFiles, loadTask, loadConversations])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
@@ -505,6 +564,7 @@ export function AgentLabChat() {
       {showScreen ? <LiveScreen onClose={() => setShowScreen(false)} /> : null}
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <aside className="flex flex-col gap-2">
+          {task ? <TaskChecklist task={task} /> : null}
           <Button
             variant="outline"
             onClick={() => {
