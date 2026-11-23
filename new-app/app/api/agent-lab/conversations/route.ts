@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, attachmentNote, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, attachmentNote, conversationSettings, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage, vaultSecretRefs } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,24 +29,24 @@ export async function POST(request: Request) {
   try {
     const { message: text, files } = await readMessageRequest(request)
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
-    const settings = await agentLabJson<{ agent_settings: unknown; conversation_settings?: { max_iterations?: number } }>(
-      '/api/settings',
-    )
     const hooks = await agentLabJson<{ hook_config?: unknown }>('/api/hooks', {
       method: 'POST',
       body: JSON.stringify({ load_user_hooks: true, load_project_hooks: false }),
     })
     const id = crypto.randomUUID()
+    const [settings, secrets] = await Promise.all([conversationSettings(id), vaultSecretRefs()])
     const saved = files.length ? await saveAttachments(id, files) : []
     const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
     const conv = await agentLabJson<{ id: string }>('/api/conversations', {
       method: 'POST',
       body: JSON.stringify({
         conversation_id: id,
-        agent_settings: settings.agent_settings,
+        agent_settings: settings.agentSettings,
+        secrets,
+        secrets_encrypted: true,
         hook_config: hooks.hook_config ?? null,
         workspace: { working_dir: jobDir(id) },
-        max_iterations: settings.conversation_settings?.max_iterations ?? 200,
+        max_iterations: settings.maxIterations,
         initial_message: userMessage(message),
         tags: { source: 'transovo-agent-lab' },
       }),

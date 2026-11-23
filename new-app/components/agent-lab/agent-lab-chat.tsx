@@ -1,11 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, Bot, FileText, Flag, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { Bell, Bot, FileText, Flag, KeyRound, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import {
   HandoffNotice,
   LiveScreen,
   NotificationsPanel,
+  VaultPanel,
   useDesktopStatus,
   useNotifications,
   type AgentNotification,
@@ -125,6 +126,7 @@ export function AgentLabChat() {
   const fileInput = useRef<HTMLInputElement>(null)
   const [showNotes, setShowNotes] = useState(false)
   const [showScreen, setShowScreen] = useState(false)
+  const [showVault, setShowVault] = useState(false)
   const [banner, setBanner] = useState<AgentNotification | null>(null)
   const notes = useNotifications((n) => setBanner(n))
   const desk = useDesktopStatus()
@@ -295,6 +297,9 @@ export function AgentLabChat() {
         <Button size="sm" variant={showScreen ? 'default' : 'outline'} onClick={() => setShowScreen((v) => !v)}>
           <Monitor /> Live screen
         </Button>
+        <Button size="sm" variant={showVault ? 'default' : 'outline'} onClick={() => setShowVault((v) => !v)}>
+          <KeyRound /> Vault
+        </Button>
         <a className="text-sm text-muted-foreground underline" href="/app/agent-lab/pages" target="_blank" rel="noreferrer">
           Pages
         </a>
@@ -340,8 +345,10 @@ export function AgentLabChat() {
           }}
           onMarkAll={() => void notes.markRead()}
           onClose={() => setShowNotes(false)}
+          onVault={() => setShowVault(true)}
         />
       ) : null}
+      {showVault ? <VaultPanel onClose={() => setShowVault(false)} /> : null}
       {showScreen ? <LiveScreen onClose={() => setShowScreen(false)} /> : null}
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_320px]">
         <aside className="flex flex-col gap-2">

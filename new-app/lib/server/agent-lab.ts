@@ -336,3 +336,38 @@ export async function listConversationEvents(id: string, sinceTs?: string | null
 export function userMessage(text: string) {
   return { role: 'user', content: [{ type: 'text', text }], run: true }
 }
+
+// ---- Conversation settings: saved agent settings + this conversation's job folder for the Agent Lab MCP tools + vault refs ----
+
+type McpServer = { command?: string; args?: string[]; [k: string]: unknown }
+type AgentSettings = { mcp_config?: Record<string, McpServer> | null; [k: string]: unknown }
+
+/**
+ * The saved settings in encrypted form (MCP env/headers stay as ciphertext the agent server can decrypt, instead of
+ * the redacted '**********' a plain GET returns), with the built-in `agent` MCP server pointed at this job folder.
+ */
+export async function conversationSettings(id: string) {
+  const settings = await agentLabJson<{ agent_settings: AgentSettings; conversation_settings?: { max_iterations?: number } }>(
+    '/api/settings',
+    { headers: { 'X-Expose-Secrets': 'encrypted' } },
+  )
+  const agent = { ...settings.agent_settings }
+  const dir = jobDir(id)
+  if (agent.mcp_config?.agent && dir) {
+    agent.mcp_config = { ...agent.mcp_config, agent: { ...agent.mcp_config.agent, args: ['--job', dir] } }
+  }
+  return { agentSettings: agent, maxIterations: settings.conversation_settings?.max_iterations ?? 200 }
+}
+
+/** Vault entries as lazy references the agent server resolves in-process; no value passes through this app. */
+export async function vaultSecretRefs(): Promise<Record<string, { kind: 'LookupSecret'; url: string; description: string }>> {
+  const base = process.env.AGENT_LAB_INTERNAL_URL?.trim().replace(/\/+$/, '') || 'http://127.0.0.1:8000'
+  try {
+    const data = await agentLabJson<{ secrets?: { name: string }[] }>('/api/settings/secrets')
+    return Object.fromEntries(
+      (data.secrets ?? []).map((s) => [s.name, { kind: 'LookupSecret' as const, url: `${base}/api/settings/secrets/${s.name}`, description: 'from the Agent Lab vault' }]),
+    )
+  } catch {
+    return {}
+  }
+}

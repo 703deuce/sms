@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, CheckCircle2, CornerDownLeft, KeyRound, Monitor, X } from 'lucide-react'
+import { Bell, CheckCircle2, CornerDownLeft, KeyRound, Monitor, Trash2, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,7 +26,7 @@ async function call<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T
 }
 
-const KIND_LABEL: Record<string, string> = { run_done: 'Finished', reminder: 'Reminder', alert: 'Alert', info: 'Note' }
+const KIND_LABEL: Record<string, string> = { run_done: 'Finished', reminder: 'Reminder', alert: 'Alert', info: 'Note', ask: 'Needs you' }
 
 /** Polls the notifications feed; calls onNew for items that arrive while the page is open. */
 export function useNotifications(onNew: (n: AgentNotification) => void) {
@@ -72,12 +72,14 @@ export function NotificationsPanel({
   onMarkAll,
   onClose,
   fileUrl,
+  onVault,
 }: {
   items: AgentNotification[]
   onOpen: (n: AgentNotification) => void
   onMarkAll: () => void
   onClose: () => void
   fileUrl: (path: string) => string
+  onVault?: () => void
 }) {
   return (
     <div className="rounded-xl border border-border bg-card p-3">
@@ -105,6 +107,11 @@ export function NotificationsPanel({
             </div>
             {n.body && n.body !== n.title ? <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-muted-foreground">{n.body}</p> : null}
             <div className="mt-1 flex flex-wrap gap-2">
+              {n.kind === 'ask' && onVault ? (
+                <button className="underline" onClick={onVault}>
+                  Open vault
+                </button>
+              ) : null}
               {n.conversationId ? (
                 <button className="underline" onClick={() => onOpen(n)}>
                   Open conversation
@@ -266,6 +273,108 @@ export function LiveScreen({ onClose }: { onClose: () => void }) {
       </div>
       <p className="mt-1 text-[11px] text-muted-foreground">Click the picture to click on the agent&apos;s screen (double-click works too).</p>
       {err ? <p className="mt-1 text-xs text-destructive">{err}</p> : null}
+    </div>
+  )
+}
+
+type VaultSecret = { name: string; description: string }
+
+/**
+ * Vault: encrypted keys the agent can use (e.g. for MCP servers) without ever seeing them in chat.
+ * Values are write-only here: the list shows names only.
+ */
+export function VaultPanel({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<VaultSecret[]>([])
+  const [name, setName] = useState('')
+  const [value, setValue] = useState('')
+  const [description, setDescription] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const data = await call<{ secrets: VaultSecret[] }>('/api/agent-lab/vault')
+      setItems(data.secrets)
+      setError(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }, [])
+
+  useEffect(() => {
+    void load()
+  }, [load])
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      await call('/api/agent-lab/vault', { method: 'POST', body: JSON.stringify({ name, value, description }) })
+      setName('')
+      setValue('')
+      setDescription('')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (n: string) => {
+    if (!window.confirm(`Delete ${n} from the vault?`)) return
+    try {
+      await call(`/api/agent-lab/vault?name=${encodeURIComponent(n)}`, { method: 'DELETE' })
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-sm font-medium">
+          <KeyRound className="size-4" /> Vault
+        </span>
+        <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close vault">
+          <X />
+        </Button>
+      </div>
+      <p className="mb-2 text-xs text-muted-foreground">
+        Keys stored encrypted on the agent server. The agent uses them by name (for example in MCP servers); values are never shown again.
+      </p>
+      <form
+        className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (name && value && !busy) void save()
+        }}
+      >
+        <Input
+          placeholder="NAME (e.g. GITHUB_TOKEN)"
+          value={name}
+          onChange={(e) => setName(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))}
+          autoComplete="off"
+        />
+        <Input type="password" placeholder="Value" value={value} onChange={(e) => setValue(e.target.value)} autoComplete="new-password" />
+        <Input placeholder="What it is for (optional)" value={description} onChange={(e) => setDescription(e.target.value)} />
+        <Button size="sm" type="submit" disabled={!name || !value || busy}>
+          {busy ? 'Saving' : 'Save'}
+        </Button>
+      </form>
+      {error ? <p className="mt-2 text-xs text-destructive">{error}</p> : null}
+      <div className="mt-3 flex max-h-[40vh] flex-col gap-1 overflow-auto">
+        {items.length === 0 ? <p className="text-xs text-muted-foreground">No keys yet.</p> : null}
+        {items.map((s) => (
+          <div key={s.name} className="flex items-center gap-2 rounded-md border border-border/70 px-2 py-1.5 text-xs">
+            <span className="font-mono font-medium">{s.name}</span>
+            <span className="min-w-0 flex-1 truncate text-muted-foreground">{s.description}</span>
+            <Button size="icon-sm" variant="ghost" onClick={() => void remove(s.name)} aria-label={`Delete ${s.name}`}>
+              <Trash2 />
+            </Button>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
