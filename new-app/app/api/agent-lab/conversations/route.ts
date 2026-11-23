@@ -1,9 +1,8 @@
 import { agentLabErrorResponse, agentLabJson, attachmentNote, conversationSettings, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage, vaultSecretRefs } from '@/lib/server/agent-lab'
-import { conversationModel } from '@/lib/server/agent-lab-models'
 
 export const dynamic = 'force-dynamic'
 
-type ConvInfo = { id: string; title?: string | null; execution_status?: string; created_at?: string; updated_at?: string; current_model_id?: string | null; agent?: { llm?: { model?: string | null } | null } | null }
+type ConvInfo = { id: string; title?: string | null; execution_status?: string; created_at?: string; updated_at?: string }
 
 export async function GET() {
   try {
@@ -14,7 +13,6 @@ export async function GET() {
       status: c.execution_status ?? 'idle',
       createdAt: c.created_at ?? null,
       updatedAt: c.updated_at ?? null,
-      model: conversationModel(c),
     }))
     return Response.json({ conversations })
   } catch (err) {
@@ -29,14 +27,14 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const { message: text, files, model } = await readMessageRequest(request)
+    const { message: text, files } = await readMessageRequest(request)
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
     const hooks = await agentLabJson<{ hook_config?: unknown }>('/api/hooks', {
       method: 'POST',
       body: JSON.stringify({ load_user_hooks: true, load_project_hooks: false }),
     })
     const id = crypto.randomUUID()
-    const [settings, secrets] = await Promise.all([conversationSettings(id, model), vaultSecretRefs()])
+    const [settings, secrets] = await Promise.all([conversationSettings(id), vaultSecretRefs()])
     const saved = files.length ? await saveAttachments(id, files) : []
     const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
     const conv = await agentLabJson<{ id: string }>('/api/conversations', {
@@ -54,7 +52,7 @@ export async function POST(request: Request) {
       }),
       timeoutMs: 60_000,
     })
-    return Response.json({ id: conv.id, model: model ?? null })
+    return Response.json({ id: conv.id })
   } catch (err) {
     return agentLabErrorResponse(err)
   }
