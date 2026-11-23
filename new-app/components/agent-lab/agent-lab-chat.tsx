@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Bell, Bot, FileText, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, Square, Terminal, User, X } from 'lucide-react'
+import { Bell, Bot, FileText, Flag, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import {
   HandoffNotice,
   LiveScreen,
@@ -30,6 +30,9 @@ type Conversation = { id: string; title: string; status: string; createdAt: stri
 type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
 
 const RUNNING = new Set(['running', 'queued', 'starting'])
+const WRAP_UP =
+  'Wrap it up and leave it: stop the current sub-work now (no more fixes or retries for it), make sure the best current output is saved, and deliver it with a short list of open issues.'
+const SKIP = 'Skip that: drop the part you are working on right now, note it as skipped, and move on with the rest of the task.'
 const VIDEO = /\.(mp4|m4v|mov|webm)$/i
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i
 const AUDIO = /\.(mp3|wav|m4a)$/i
@@ -212,6 +215,22 @@ export function AgentLabChat() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
   }, [items.length])
 
+  /** Quick steering while the agent works: sent as a normal message, read before its next step. */
+  async function steer(text: string) {
+    if (!activeId || sending) return
+    setSending(true)
+    setError(null)
+    try {
+      const form = new FormData()
+      form.append('message', text)
+      await postForm(`/api/agent-lab/conversations/${activeId}/messages`, form)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSending(false)
+    }
+  }
+
   async function send() {
     const message = draft.trim()
     if ((!message && !attachments.length) || sending) return
@@ -363,9 +382,29 @@ export function AgentLabChat() {
               {cost != null ? <span className="text-xs text-muted-foreground">${cost.toFixed(3)}</span> : null}
               {activeId ? <Badge variant={running ? 'default' : 'secondary'}>{running ? 'Working' : status}</Badge> : null}
               {running ? (
-                <Button size="xs" variant="outline" onClick={() => void stop()}>
-                  <Square /> Stop
-                </Button>
+                <>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={sending}
+                    title="Finish now: stop the current sub-task, deliver the best current result and list open issues"
+                    onClick={() => void steer(WRAP_UP)}
+                  >
+                    <Flag /> Wrap up
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={sending}
+                    title="Drop the part it is working on and continue with the rest"
+                    onClick={() => void steer(SKIP)}
+                  >
+                    <SkipForward /> Skip this
+                  </Button>
+                  <Button size="xs" variant="outline" title="Stop immediately (send a message to continue later)" onClick={() => void stop()}>
+                    <Square /> Stop
+                  </Button>
+                </>
               ) : null}
             </div>
           </div>
@@ -420,7 +459,7 @@ export function AgentLabChat() {
               }}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Message the agent…"
+              placeholder={running ? "Steer it while it works (e.g. “skip the intro”, “wrap it up”). It reads your message before its next step." : "Message the agent…"}
               className="max-h-48"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

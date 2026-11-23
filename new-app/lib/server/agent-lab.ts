@@ -258,6 +258,11 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
           out.push({ ...base, type: 'observation', tool: 'context', title: 'Loaded memory and skills', text: clip(text, 6000) })
           break
         }
+        if (e.source === 'user' && text.startsWith('[view] ')) {
+          // Images the agent asked to see with its `view` tool (posted by the runner, not typed by Rick).
+          out.push({ ...base, type: 'observation', tool: 'view', title: 'Agent looked at images', text: clip(text, 2000) })
+          break
+        }
         if (e.source === 'user' && typeof e.sender === 'string' && e.sender.startsWith('conversation:')) {
           out.push({ ...base, type: 'observation', tool: 'helper', title: 'Message from a background helper', text: clip(text, 6000) })
           break
