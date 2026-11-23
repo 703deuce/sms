@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, AGENT_LAB_WORKDIR, userMessage } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, jobDir, userMessage } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +20,11 @@ export async function GET() {
   }
 }
 
-/** Start a conversation with the agent server's saved settings (model, instructions, skills). */
+/**
+ * Start a conversation with the agent server's saved settings (model, instructions, skills).
+ * Each conversation gets its own job folder (/workspace/jobs/<id>) and the server's hooks
+ * (memory + skills auto-load, delete guard).
+ */
 export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => ({}))) as { message?: string }
@@ -29,11 +33,18 @@ export async function POST(request: Request) {
     const settings = await agentLabJson<{ agent_settings: unknown; conversation_settings?: { max_iterations?: number } }>(
       '/api/settings',
     )
+    const hooks = await agentLabJson<{ hook_config?: unknown }>('/api/hooks', {
+      method: 'POST',
+      body: JSON.stringify({ load_user_hooks: true, load_project_hooks: false }),
+    })
+    const id = crypto.randomUUID()
     const conv = await agentLabJson<{ id: string }>('/api/conversations', {
       method: 'POST',
       body: JSON.stringify({
+        conversation_id: id,
         agent_settings: settings.agent_settings,
-        workspace: { working_dir: AGENT_LAB_WORKDIR },
+        hook_config: hooks.hook_config ?? null,
+        workspace: { working_dir: jobDir(id) },
         max_iterations: settings.conversation_settings?.max_iterations ?? 200,
         initial_message: userMessage(message),
         tags: { source: 'transovo-agent-lab' },

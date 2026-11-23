@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  Bot,
   Captions,
   Clapperboard,
   Film as MotionStudioIcon,
@@ -78,6 +79,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   exports: Download,
   learn: GraduationCap,
   settings: Settings,
+  agentLab: Bot,
 }
 
 const navButtonClass =

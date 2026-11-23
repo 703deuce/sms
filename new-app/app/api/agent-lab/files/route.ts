@@ -1,15 +1,19 @@
-import { agentLabErrorResponse, agentLabJson, AGENT_LAB_WORKDIR } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, jobDir } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
 const EXT = ['mp4', 'mov', 'webm', 'm4v', 'mkv', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp3', 'wav', 'm4a', 'srt', 'vtt', 'md', 'json', 'txt']
 
-/** Recent media/output files the agent made under its project folder (newest first). */
-export async function GET() {
+/** Recent media/output files in one conversation's job folder (newest first). */
+export async function GET(request: Request) {
   try {
+    const conversation = new URL(request.url).searchParams.get('conversation')
+    if (!conversation) return Response.json({ files: [] })
+    const dir = jobDir(conversation)
+    if (!dir) return Response.json({ error: 'Invalid conversation id' }, { status: 400 })
     const names = EXT.map((e) => `-iname '*.${e}'`).join(' -o ')
     const command =
-      `find ${AGENT_LAB_WORKDIR} -type f \\( ${names} \\) -not -path '*/node_modules/*' -not -path '*/.git/*' ` +
+      `find ${dir} -type f \\( ${names} \\) -not -path '*/node_modules/*' -not -path '*/.git/*' ` +
       `-not -path '*/frames/*' -not -name 'AGENTS.md' -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -rn | head -200`
     const out = await agentLabJson<{ stdout?: string | null }>('/api/bash/execute_bash_command', {
       method: 'POST',
@@ -17,7 +21,7 @@ export async function GET() {
     })
     const files = String(out.stdout ?? '')
       .split('\n')
-      .filter(Boolean)
+      .filter((line) => line.split('\t')[2]?.startsWith(`${dir}/`))
       .map((line) => {
         const [mtime, size, ...rest] = line.split('\t')
         const path = rest.join('\t')

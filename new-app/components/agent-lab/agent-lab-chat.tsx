@@ -78,13 +78,18 @@ function ChatItem({ item }: { item: Item }) {
     return (
       <details className="ml-9 text-xs">
         <summary className={cn('cursor-pointer select-none text-muted-foreground', item.isError && 'text-destructive')}>
-          {item.isError ? 'Output (error)' : 'Output'}
+          {item.title ?? (item.isError ? 'Output (error)' : 'Output')}
         </summary>
         <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted/60 p-2 font-mono text-[11px]">{item.text}</pre>
       </details>
     )
   }
-  return <div className="ml-9 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">{item.text}</div>
+  return (
+    <div className="ml-9 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive whitespace-pre-wrap">
+      {item.title ? <div className="mb-0.5 font-medium">{item.title}</div> : null}
+      {item.text}
+    </div>
+  )
 }
 
 export function AgentLabChat() {
@@ -110,14 +115,23 @@ export function AgentLabChat() {
     }
   }, [])
 
+  // The files panel shows the current conversation's job folder only.
   const loadFiles = useCallback(async () => {
+    if (!activeId) {
+      setFiles([])
+      return
+    }
     try {
-      const data = await api<{ files: FileEntry[] }>('/api/agent-lab/files')
+      const data = await api<{ files: FileEntry[] }>(`/api/agent-lab/files?conversation=${encodeURIComponent(activeId)}`)
       setFiles(data.files)
     } catch {
       /* the list is optional */
     }
-  }, [])
+  }, [activeId])
+
+  useEffect(() => {
+    setPreview(null)
+  }, [activeId])
 
   const poll = useCallback(async (id: string, reset = false) => {
     const since = reset ? null : lastTs.current
@@ -335,7 +349,7 @@ export function AgentLabChat() {
                 className={cn('flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted', preview?.path === f.path && 'bg-muted')}
               >
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{f.path.replace('/workspace/project/', '')}</span>
+                <span className="min-w-0 flex-1 truncate">{f.path.replace(/^\/workspace\/(jobs\/[^/]+|project)\//, '')}</span>
                 <span className="shrink-0 text-muted-foreground">{fmtSize(f.size)}</span>
               </button>
             ))}

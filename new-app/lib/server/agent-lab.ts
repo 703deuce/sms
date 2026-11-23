@@ -5,7 +5,19 @@ import 'server-only'
  * AGENT_LAB_URL / AGENT_LAB_TOKEN stay on the server; the browser only talks to /api/agent-lab/*.
  */
 
-export const AGENT_LAB_WORKDIR = '/workspace/project'
+/** Each conversation works only in its own job folder: /workspace/jobs/<conversation id>. */
+export const AGENT_LAB_JOBS_ROOT = '/workspace/jobs'
+const LEGACY_WORKDIR = '/workspace/project'
+const CONVERSATION_ID = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i
+
+export function isConversationId(id: string | null | undefined): id is string {
+  return typeof id === 'string' && CONVERSATION_ID.test(id)
+}
+
+/** The job folder for a conversation (null for a malformed id). */
+export function jobDir(id: string | null | undefined): string | null {
+  return isConversationId(id) ? `${AGENT_LAB_JOBS_ROOT}/${id}` : null
+}
 
 export class AgentLabError extends Error {
   constructor(message: string, public status = 502) {
@@ -48,12 +60,15 @@ export function agentLabErrorResponse(err: unknown): Response {
   return Response.json({ error: message }, { status })
 }
 
-/** Paths the browser may read: files inside the agent's project folder only. */
+/** Paths the browser may read: files inside a conversation's job folder (or the legacy project folder) only. */
 export function safeWorkspacePath(raw: string | null): string | null {
   if (!raw) return null
   const p = raw.trim()
-  if (!p.startsWith(`${AGENT_LAB_WORKDIR}/`) || p.includes('/../') || p.includes('\0') || p.endsWith('/..')) return null
-  return p
+  if (p.includes('\0') || p.split('/').some((seg) => seg === '..' || seg === '.')) return null
+  const job = /^\/workspace\/jobs\/([^/]+)\/./.exec(p)
+  if (job && isConversationId(job[1])) return p
+  if (p.startsWith(`${LEGACY_WORKDIR}/`)) return p
+  return null
 }
 
 // ---- Conversation events → compact chat items ----
@@ -111,6 +126,11 @@ export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
       case 'MessageEvent': {
         const text = textOf(e.llm_message?.content)
         if (!text) break
+        if (e.source === 'environment') {
+          // Auto-loaded session context (job folder rule, memory, skills index): show collapsed.
+          out.push({ ...base, type: 'observation', tool: 'context', title: 'Loaded memory and skills', text: clip(text, 6000) })
+          break
+        }
         out.push({ ...base, type: 'message', role: e.source === 'user' ? 'user' : 'agent', text })
         break
       }
@@ -139,6 +159,15 @@ export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
         })
         break
       }
+      case 'UserRejectObservation':
+        out.push({
+          ...base,
+          type: 'error',
+          title: 'Blocked by safety guard',
+          text: clip(String(e.rejection_reason ?? 'Blocked'), 2000),
+          isError: true,
+        })
+        break
       case 'AgentErrorEvent':
       case 'ConversationErrorEvent':
       case 'ServerErrorEvent':

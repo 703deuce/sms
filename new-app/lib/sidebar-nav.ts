@@ -9,7 +9,7 @@ export type SidebarNavFlags = {
 export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer'
 export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'captions' | 'record' | 'aiVideo'
-  | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings'
+  | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings' | 'agentLab'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -69,6 +69,7 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     { id: 'studio', label: 'Studio', href: '/app/studio', icon: 'studio', group: 'products' },
     { id: 'ad-studio', label: 'Ad Studio', href: '/app/ad-studio', icon: 'studio', group: 'products' },
     { id: 'motion-studio', label: 'Motion Studio', href: '/app/motion-studio', icon: 'motionStudio', group: 'products' },
+    { id: 'agent-lab', label: 'Agent Lab', href: '/app/agent-lab', icon: 'agentLab', group: 'products' },
     { id: 'media', label: 'Media', href: '/app/clips/media', icon: 'media', group: 'library' },
     { id: 'brand', label: 'Brand kit', href: '/app/clips/brand', icon: 'brand', group: 'library' },
     { id: 'templates', label: 'Templates', href: '/app/clips/templates', icon: 'templates', group: 'library' },
@@ -85,6 +86,7 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
   const p = pathname.replace(/\/+$/, '') || '/'
   if (p === '/app/ad-studio' || p.startsWith('/app/ad-studio/')) return 'ad-studio'
   if (p === '/app/motion-studio' || p.startsWith('/app/motion-studio/')) return 'motion-studio'
+  if (p === '/app/agent-lab' || p.startsWith('/app/agent-lab/')) return 'agent-lab'
   if (p === '/app/studio' || p.startsWith('/app/studio/')) return 'studio'
   if (p === '/app/youtube-video' || p.startsWith('/app/youtube-video/')) return 'youtube-video'
   if (p === '/app/captions' || p.startsWith('/app/captions/')) return 'captions'

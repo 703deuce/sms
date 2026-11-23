@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import {
+  Bot,
   Captions,
   Clapperboard,
   Film as MotionStudioIcon,
   Download,
+  Film,
   GraduationCap,
   House,
   Images,
@@ -38,6 +40,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   clips: Scissors,
   streamer: Radio,
   editor: Clapperboard,
+  youtubeVideo: Film,
   record: Video,
   aiVideo: Sparkles,
   studio: Sparkles,
@@ -49,6 +52,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   exports: Download,
   learn: GraduationCap,
   settings: Settings,
+  agentLab: Bot,
 }
 
 export function SidebarCreateMenu({ items }: { items: CreateMenuItem[] }) {
