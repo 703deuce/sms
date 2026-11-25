@@ -30,12 +30,12 @@ type Item = {
   systemNote?: boolean
 }
 type Conversation = { id: string; title: string; status: string; createdAt: string | null }
-type BackgroundJob = { name: string; status: string; elapsedSeconds: number | null; progress: string }
+type BackgroundJob = { n: number; name: string; status: string; progress: string; elapsed: string; cost: number | null }
+type JobsPollResult = { ok: true; active: number } | { ok: false; stale: true } | { ok: false; error: true }
 
 type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
 
 const RUNNING = new Set(['running', 'queued', 'starting'])
-const JOB_ACTIVE = new Set(['running', 'queued', 'starting', 'pending', 'active', 'working'])
 const WRAP_UP =
   'Wrap it up and leave it: stop the current sub-work now (no more fixes or retries for it), make sure the best current output is saved, and deliver it with a short list of open issues.'
 const SKIP = 'Skip that: drop the part you are working on right now, note it as skipped, and move on with the rest of the task.'
@@ -67,29 +67,30 @@ async function api<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T
 }
 
-function fmtElapsed(sec: number | null) {
-  if (sec == null) return '—'
-  if (sec < 60) return `${sec}s`
-  const m = Math.floor(sec / 60)
-  const s = sec % 60
-  return s ? `${m}m ${s}s` : `${m}m`
+async function fetchJobs(id: string, signal?: AbortSignal): Promise<{ jobs: BackgroundJob[]; active: number }> {
+  const res = await fetch(`/api/agent-lab/conversations/${encodeURIComponent(id)}/jobs`, { cache: 'no-store', signal })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`)
+  return data as { jobs: BackgroundJob[]; active: number }
 }
 
 function SystemNote({ text }: { text: string }) {
-  return <p className="mx-auto max-w-[92%] text-center text-[11px] leading-snug text-muted-foreground">{text}</p>
+  return (
+    <p className="mx-auto max-w-[92%] whitespace-pre-wrap text-center text-[11px] leading-snug text-muted-foreground">{text}</p>
+  )
 }
 
 function JobsStrip({ jobs }: { jobs: BackgroundJob[] }) {
   if (!jobs.length) return null
   return (
     <div className="flex flex-col gap-1 border-b border-border bg-muted/30 px-4 py-2 text-xs">
-      {jobs.map((j, i) => (
-        <div key={`${j.name}-${i}`} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      {jobs.map((j) => (
+        <div key={j.n} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
           <span className="font-medium text-foreground">{j.name}</span>
           <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-normal">
             {j.status}
           </Badge>
-          <span className="text-muted-foreground">{fmtElapsed(j.elapsedSeconds)}</span>
+          <span className="text-muted-foreground">{j.elapsed}</span>
           {j.progress ? <span className="min-w-0 flex-1 truncate text-muted-foreground">{j.progress}</span> : null}
         </div>
       ))}
@@ -240,6 +241,7 @@ export function AgentLabChat() {
   const [status, setStatus] = useState<string>('idle')
   const [cost, setCost] = useState<number | null>(null)
   const [jobs, setJobs] = useState<BackgroundJob[]>([])
+  const [jobsActiveCount, setJobsActiveCount] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
   const [task, setTask] = useState<TaskRecord | null>(null)
   const [preview, setPreview] = useState<FileEntry | null>(null)
@@ -257,6 +259,8 @@ export function AgentLabChat() {
   const handoffWaiting = desk.status?.status === 'waiting'
   const lastTs = useRef<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const jobsPollGenRef = useRef(0)
+  const jobsAbortRef = useRef<AbortController | null>(null)
 
   const loadConversations = useCallback(async () => {
     try {
@@ -320,42 +324,62 @@ export function AgentLabChat() {
     void loadFiles()
   }, [loadConversations, loadFiles])
 
-  const pollJobs = useCallback(async (id: string) => {
+  const pollJobs = useCallback(async (id: string, signal?: AbortSignal): Promise<JobsPollResult> => {
+    const gen = jobsPollGenRef.current
     try {
-      const data = await api<{ jobs: BackgroundJob[] }>(`/api/agent-lab/conversations/${encodeURIComponent(id)}/jobs`)
+      const data = await fetchJobs(id, signal)
+      if (gen !== jobsPollGenRef.current) return { ok: false, stale: true }
       setJobs(data.jobs)
-      return data.jobs.some((j) => JOB_ACTIVE.has(j.status.toLowerCase()))
-    } catch {
-      return false
+      setJobsActiveCount(data.active)
+      return { ok: true, active: data.active }
+    } catch (e) {
+      const aborted = signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')
+      if (aborted || gen !== jobsPollGenRef.current) return { ok: false, stale: true }
+      setJobs([])
+      setJobsActiveCount(0)
+      return { ok: false, error: true }
     }
   }, [])
 
   const running = RUNNING.has(status)
 
-  const jobsActive = jobs.some((j) => JOB_ACTIVE.has(j.status.toLowerCase()))
-
-  // Poll background jobs every 2s while the chat or any job is active; stop when both are idle.
   useEffect(() => {
-    if (!activeId) {
-      setJobs([])
-      return
-    }
-    if (!running && !jobsActive) {
-      void pollJobs(activeId)
-      return
-    }
+    jobsPollGenRef.current += 1
+    jobsAbortRef.current?.abort()
+    const ac = new AbortController()
+    jobsAbortRef.current = ac
+    setJobs([])
+    setJobsActiveCount(0)
+    return () => ac.abort()
+  }, [activeId])
+
+  // Poll /jobs every 2s while the chat or runner-reported active jobs; backoff on errors (max 30s).
+  useEffect(() => {
+    if (!activeId) return
+    const signal = jobsAbortRef.current?.signal
     let stopped = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    let backoffMs = 2000
+
     const tick = async () => {
-      const anyJobActive = await pollJobs(activeId)
-      if (!stopped && (running || anyJobActive)) timer = setTimeout(() => void tick(), 2000)
+      const result = await pollJobs(activeId, signal)
+      if (stopped) return
+      if (!result.ok) {
+        if (result.stale) return
+        backoffMs = Math.min(backoffMs * 2, 30000)
+        timer = setTimeout(() => void tick(), backoffMs)
+        return
+      }
+      backoffMs = 2000
+      if (running || result.active > 0) timer = setTimeout(() => void tick(), 2000)
     }
+
     void tick()
     return () => {
       stopped = true
       if (timer) clearTimeout(timer)
     }
-  }, [activeId, running, jobsActive, pollJobs])
+  }, [activeId, running, pollJobs])
 
   // Load a conversation, then keep polling while the agent is working.
   useEffect(() => {
@@ -438,18 +462,27 @@ export function AgentLabChat() {
 
   async function stop() {
     if (!activeId) return
-    try {
-      await Promise.all([
-        api(`/api/agent-lab/conversations/${activeId}/stop`, { method: 'POST' }),
-        api(`/api/agent-lab/conversations/${activeId}/jobs/cancel`, { method: 'POST' }),
-      ])
-      void pollJobs(activeId)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+    const id = activeId
+    const [stopRes, cancelRes] = await Promise.allSettled([
+      api(`/api/agent-lab/conversations/${id}/stop`, { method: 'POST' }),
+      api(`/api/agent-lab/conversations/${id}/jobs/cancel`, { method: 'POST' }),
+    ])
+    await pollJobs(id, jobsAbortRef.current?.signal)
+    const cancelFailed = cancelRes.status === 'rejected'
+    const bothFailed = stopRes.status === 'rejected' && cancelRes.status === 'rejected'
+    if (bothFailed || cancelFailed) {
+      const err =
+        cancelRes.status === 'rejected'
+          ? cancelRes.reason
+          : stopRes.status === 'rejected'
+            ? stopRes.reason
+            : null
+      setError(err instanceof Error ? err.message : String(err ?? 'Stop failed'))
     }
   }
 
-  const stoppable = Boolean(activeId && (running || jobsActive))
+  const backgroundActive = jobsActiveCount > 0
+  const stoppable = Boolean(activeId && (running || backgroundActive))
 
   return (
     <Page>
@@ -541,6 +574,7 @@ export function AgentLabChat() {
               setStatus('idle')
               setCost(null)
               setJobs([])
+              setJobsActiveCount(0)
             }}
           >
             <Plus /> New conversation
@@ -571,7 +605,9 @@ export function AgentLabChat() {
             </span>
             <div className="flex shrink-0 items-center gap-2">
               {cost != null ? <span className="text-xs text-muted-foreground">${cost.toFixed(3)}</span> : null}
-              {activeId ? <Badge variant={running || jobsActive ? 'default' : 'secondary'}>{running || jobsActive ? 'Working' : status}</Badge> : null}
+              {activeId ? (
+                <Badge variant={running || backgroundActive ? 'default' : 'secondary'}>{running || backgroundActive ? 'Working' : status}</Badge>
+              ) : null}
               {running ? (
                 <>
                   <Button

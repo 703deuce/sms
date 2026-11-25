@@ -182,18 +182,16 @@ export function attachmentNote(paths: string[]): string {
   return `\n\n[Rick attached ${paths.length === 1 ? 'a file' : `${paths.length} files`}, saved in your job folder]\n${lines.join('\n')}`
 }
 
-/** Reads `{ message, files[], model? }` from either JSON or multipart form data. */
-export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; model: string | null }> {
+/** Reads `{ message, files[] }` from either JSON or multipart form data. */
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[] }> {
   const type = request.headers.get('content-type') ?? ''
   if (type.includes('multipart/form-data')) {
     const form = await request.formData()
     const files = form.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    const model = String(form.get('model') ?? '').trim() || null
-    return { message: String(form.get('message') ?? '').trim(), files, model }
+    return { message: String(form.get('message') ?? '').trim(), files }
   }
-  const body = (await request.json().catch(() => ({}))) as { message?: string; model?: string }
-  const model = String(body.model ?? '').trim() || null
-  return { message: String(body.message ?? '').trim(), files: [], model }
+  const body = (await request.json().catch(() => ({}))) as { message?: string }
+  return { message: String(body.message ?? '').trim(), files: [] }
 }
 
 // ---- Conversation events → compact chat items ----

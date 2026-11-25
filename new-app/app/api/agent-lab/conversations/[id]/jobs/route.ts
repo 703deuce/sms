@@ -2,40 +2,45 @@ import { agentLabErrorResponse, isConversationId, redactSecrets, runnerJson } fr
 
 export const dynamic = 'force-dynamic'
 
-type RawJob = Record<string, unknown>
-
-function jobName(j: RawJob): string {
-  const n = j.name ?? j.job_name ?? j.title
-  return typeof n === 'string' && n.trim() ? redactSecrets(n.trim()) : 'Background job'
+type RunnerJob = {
+  n?: number
+  name?: string
+  status?: string
+  progress?: string | null
+  progress_at?: string | null
+  started_at?: string | null
+  finished_at?: string | null
+  elapsed?: string | number | null
+  cost?: number | null
 }
 
-function jobProgress(j: RawJob): string {
-  for (const key of ['latest_progress', 'last_progress', 'progress', 'message', 'detail']) {
-    const v = j[key]
-    if (typeof v === 'string' && v.trim()) return redactSecrets(v.trim())
+type RunnerJobsPayload = { items?: RunnerJob[]; active?: number }
+
+function formatElapsed(v: unknown): string {
+  if (v == null) return '—'
+  if (typeof v === 'string' && v.trim()) return redactSecrets(v.trim())
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    const sec = Math.max(0, Math.round(v))
+    if (sec < 60) return `${sec}s`
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return s ? `${m}m ${s}s` : `${m}m`
   }
-  return ''
+  return redactSecrets(String(v))
 }
 
-function jobElapsedSeconds(j: RawJob): number | null {
-  if (typeof j.elapsed_seconds === 'number' && Number.isFinite(j.elapsed_seconds)) return Math.max(0, Math.round(j.elapsed_seconds))
-  const started = typeof j.started_at === 'string' ? j.started_at : typeof j.created_at === 'string' ? j.created_at : null
-  if (!started) return null
-  const ms = Date.now() - Date.parse(started)
-  if (!Number.isFinite(ms) || ms < 0) return null
-  return Math.round(ms / 1000)
-}
-
-function normalizeJobs(data: unknown): { name: string; status: string; elapsedSeconds: number | null; progress: string }[] {
-  const raw = Array.isArray(data) ? data : Array.isArray((data as { jobs?: unknown })?.jobs) ? (data as { jobs: unknown[] }).jobs : []
-  return raw
-    .filter((j): j is RawJob => j !== null && typeof j === 'object')
-    .map((j) => ({
-      name: jobName(j),
-      status: String(j.status ?? j.state ?? 'unknown'),
-      elapsedSeconds: jobElapsedSeconds(j),
-      progress: jobProgress(j),
-    }))
+function normalizeJobs(data: RunnerJobsPayload) {
+  const raw = Array.isArray(data.items) ? data.items : []
+  const jobs = raw.map((j, i) => ({
+    n: typeof j.n === 'number' && Number.isFinite(j.n) ? j.n : i + 1,
+    name: typeof j.name === 'string' && j.name.trim() ? redactSecrets(j.name.trim()) : 'Background job',
+    status: String(j.status ?? 'unknown'),
+    progress: typeof j.progress === 'string' && j.progress.trim() ? redactSecrets(j.progress.trim()) : '',
+    elapsed: formatElapsed(j.elapsed),
+    cost: typeof j.cost === 'number' && Number.isFinite(j.cost) ? j.cost : null,
+  }))
+  const active = typeof data.active === 'number' && Number.isFinite(data.active) ? Math.max(0, Math.floor(data.active)) : 0
+  return { jobs, active }
 }
 
 /** Background jobs for a conversation (runner queue on :8010). */
@@ -43,8 +48,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   try {
     const { id } = await ctx.params
     if (!isConversationId(id)) return Response.json({ error: 'Invalid conversation id' }, { status: 400 })
-    const data = await runnerJson<unknown>(`/jobs?conversation_id=${encodeURIComponent(id)}`)
-    return Response.json({ jobs: normalizeJobs(data) })
+    const data = await runnerJson<RunnerJobsPayload>(`/jobs?conversation_id=${encodeURIComponent(id)}`)
+    return Response.json(normalizeJobs(data))
   } catch (err) {
     return agentLabErrorResponse(err)
   }

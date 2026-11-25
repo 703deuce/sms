@@ -1,6 +1,4 @@
 import { agentLabErrorResponse, agentLabJson, attachmentNote, conversationSettings, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage, vaultSecretRefs } from '@/lib/server/agent-lab'
-import { conversationModel } from '@/lib/server/agent-lab-models'
-
 export const dynamic = 'force-dynamic'
 
 type ConvInfo = {
@@ -16,16 +14,16 @@ type ConvInfo = {
 
 export async function GET() {
   try {
-    const page = await agentLabJson<{ items: ConvInfo[] }>('/api/conversations/search?limit=50&sort_order=CREATED_AT_DESC')
+    const page = await agentLabJson<{ items: ConvInfo[] }>('/api/conversations/search?limit=120&sort_order=CREATED_AT_DESC')
     const conversations = page.items
       .filter((c) => String(c.tags?.source ?? '') !== 'runner-helper')
+      .slice(0, 50)
       .map((c) => ({
         id: c.id,
         title: redactSecrets(c.title || 'New conversation'),
         status: c.execution_status ?? 'idle',
         createdAt: c.created_at ?? null,
         updatedAt: c.updated_at ?? null,
-        model: conversationModel(c),
       }))
     return Response.json({ conversations })
   } catch (err) {
