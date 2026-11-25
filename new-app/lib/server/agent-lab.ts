@@ -207,6 +207,8 @@ export type AgentLabItem = {
   title?: string
   text: string
   isError?: boolean
+  /** Runner-injected user lines (helpers, front desk, job status) — not Rick's chat bubbles. */
+  systemNote?: boolean
 }
 
 type RawEvent = Record<string, any>
@@ -221,6 +223,14 @@ function textOf(content: unknown): string {
 
 function clip(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}\n… (${s.length - n} more characters)` : s
+}
+
+const RUNNER_USER_NOTE = /^\[(?:Sent by|Background job|Front desk|Helper|Message from)/
+
+function isRunnerInjectedUserMessage(e: RawEvent, text: string): boolean {
+  if (e.source !== 'user') return false
+  if (typeof e.sender === 'string' && e.sender.startsWith('conversation:')) return true
+  return RUNNER_USER_NOTE.test(text)
 }
 
 function describeAction(e: RawEvent): { title: string; text: string } {
@@ -265,8 +275,8 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
           out.push({ ...base, type: 'observation', tool: 'view', title: 'Agent looked at images', text: clip(text, 2000) })
           break
         }
-        if (e.source === 'user' && typeof e.sender === 'string' && e.sender.startsWith('conversation:')) {
-          out.push({ ...base, type: 'observation', tool: 'helper', title: 'Message from a background helper', text: clip(text, 6000) })
+        if (isRunnerInjectedUserMessage(e, text)) {
+          out.push({ ...base, type: 'message', systemNote: true, text: clip(text, 6000) })
           break
         }
         out.push({ ...base, type: 'message', role: e.source === 'user' ? 'user' : 'agent', text })
