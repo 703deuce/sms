@@ -10,6 +10,7 @@ import {
   wallTimeInZoneToUtc,
   zonedDateParts,
 } from "./timezone";
+import { DEFAULT_SCHEDULING_LOOKAHEAD_DAYS } from "../calendar/find-existing-appointment-window";
 import type {
   NormalizedSchedulingPreference,
   SchedulingMeaning,
@@ -17,6 +18,71 @@ import type {
   SchedulingWeekday,
 } from "./scheduling-types";
 import { DEFAULT_SCHEDULING_POLICY } from "./scheduling-types";
+
+const EARLIEST_AVAILABLE_EXPRESSION_PATTERNS: RegExp[] = [
+  /\bearliest\b/,
+  /\bsoonest\b/,
+  /\bas soon as\b/,
+  /\bfirst available\b/,
+  /\bnext available\b/,
+  /\bwhatever day\b/,
+  /\bget me in\b/,
+];
+
+function inferEarliestAvailableRelation(meaning: SchedulingMeaning): SchedulingMeaning {
+  if (meaning.date_relation !== "UNSPECIFIED") {
+    return meaning;
+  }
+  const expr = (meaning.date_expression ?? "").toLowerCase().trim();
+  if (!expr) {
+    return meaning;
+  }
+  if (EARLIEST_AVAILABLE_EXPRESSION_PATTERNS.some((pattern) => pattern.test(expr))) {
+    return { ...meaning, date_relation: "EARLIEST_AVAILABLE" };
+  }
+  return meaning;
+}
+
+function normalizeEarliestAvailable(
+  meaning: SchedulingMeaning,
+  clock: VoiceV3CallClock,
+  policy: SchedulingPolicy,
+): NormalizedSchedulingPreference {
+  const timezone = clock.timezone;
+  const base = emptyNormalized(timezone);
+  base.sourceDateExpression = meaning.date_expression?.trim() || null;
+  base.sourceTimeExpression = meaning.time_expression?.trim() || null;
+  base.localDate = clock.localDate;
+
+  const now = new Date(clock.nowUtc);
+  const lookaheadMs = DEFAULT_SCHEDULING_LOOKAHEAD_DAYS * 24 * 60 * 60_000;
+  base.utcStart = now.toISOString();
+  base.utcEnd = new Date(now.getTime() + lookaheadMs).toISOString();
+
+  switch (meaning.time_kind) {
+    case "UNSPECIFIED":
+    case "ANYTIME":
+      base.precision = "OPEN_RANGE";
+      return base;
+
+    case "DAYPART": {
+      if (!meaning.daypart) {
+        base.precision = "OPEN_RANGE";
+        return base;
+      }
+      const window = policyWindow(policy, meaning.daypart);
+      const range = buildRange(timezone, clock.localDate, window.start, window.end);
+      base.localStartDateTime = range.localStartDateTime;
+      base.localEndDateTime = range.localEndDateTime;
+      base.precision = "DAYPART";
+      return base;
+    }
+
+    default:
+      base.precision = "OPEN_RANGE";
+      return base;
+  }
+}
 
 function emptyNormalized(timezone: string): NormalizedSchedulingPreference {
   return {
@@ -65,6 +131,8 @@ function resolveLocalDate(
       if (meaning.explicit_date && parseYmd(meaning.explicit_date)) {
         return { localDate: meaning.explicit_date.trim(), ambiguous: false };
       }
+      return { localDate: null, ambiguous: false };
+    case "EARLIEST_AVAILABLE":
       return { localDate: null, ambiguous: false };
     default:
       return { localDate: null, ambiguous: false };
@@ -188,23 +256,29 @@ export function normalizeSchedulingMeaning(
   clock: VoiceV3CallClock,
   policy: SchedulingPolicy = DEFAULT_SCHEDULING_POLICY,
 ): NormalizedSchedulingPreference {
+  const resolvedMeaning = inferEarliestAvailableRelation(meaning);
+
+  if (resolvedMeaning.date_relation === "EARLIEST_AVAILABLE") {
+    return normalizeEarliestAvailable(resolvedMeaning, clock, policy);
+  }
+
   const timezone = clock.timezone;
   const base = emptyNormalized(timezone);
-  base.sourceDateExpression = meaning.date_expression?.trim() || null;
-  base.sourceTimeExpression = meaning.time_expression?.trim() || null;
+  base.sourceDateExpression = resolvedMeaning.date_expression?.trim() || null;
+  base.sourceTimeExpression = resolvedMeaning.time_expression?.trim() || null;
 
   const hasDateSignal =
-    meaning.date_relation !== "UNSPECIFIED" ||
-    Boolean(meaning.explicit_date?.trim()) ||
-    Boolean(meaning.weekday);
+    resolvedMeaning.date_relation !== "UNSPECIFIED" ||
+    Boolean(resolvedMeaning.explicit_date?.trim()) ||
+    Boolean(resolvedMeaning.weekday);
 
-  const hasTimeSignal = meaning.time_kind !== "UNSPECIFIED";
+  const hasTimeSignal = resolvedMeaning.time_kind !== "UNSPECIFIED";
 
   if (!hasDateSignal && !hasTimeSignal) {
     return base;
   }
 
-  const { localDate, ambiguous: dateAmbiguous } = resolveLocalDate(meaning, clock);
+  const { localDate, ambiguous: dateAmbiguous } = resolveLocalDate(resolvedMeaning, clock);
   if (dateAmbiguous || !localDate) {
     if (hasDateSignal) {
       base.precision = "UNRESOLVED";
@@ -214,18 +288,18 @@ export function normalizeSchedulingMeaning(
 
   base.localDate = localDate;
 
-  switch (meaning.time_kind) {
+  switch (resolvedMeaning.time_kind) {
     case "UNSPECIFIED":
     case "ANYTIME":
       base.precision = "DATE_ONLY";
       return base;
 
     case "DAYPART": {
-      if (!meaning.daypart) {
+      if (!resolvedMeaning.daypart) {
         base.precision = "UNRESOLVED";
         return base;
       }
-      const window = policyWindow(policy, meaning.daypart);
+      const window = policyWindow(policy, resolvedMeaning.daypart);
       const range = buildRange(timezone, localDate, window.start, window.end);
       Object.assign(base, range);
       base.precision = "DAYPART";
@@ -233,22 +307,22 @@ export function normalizeSchedulingMeaning(
     }
 
     case "EXACT": {
-      if (!meaning.exact_time || !parseHm(meaning.exact_time)) {
+      if (!resolvedMeaning.exact_time || !parseHm(resolvedMeaning.exact_time)) {
         base.precision = "UNRESOLVED";
         return base;
       }
-      const exact = buildExact(timezone, localDate, meaning.exact_time);
+      const exact = buildExact(timezone, localDate, resolvedMeaning.exact_time);
       Object.assign(base, exact);
       base.precision = "EXACT_TIME";
       return base;
     }
 
     case "AFTER": {
-      if (!meaning.start_time || !parseHm(meaning.start_time)) {
+      if (!resolvedMeaning.start_time || !parseHm(resolvedMeaning.start_time)) {
         base.precision = "UNRESOLVED";
         return base;
       }
-      const start = buildExact(timezone, localDate, meaning.start_time);
+      const start = buildExact(timezone, localDate, resolvedMeaning.start_time);
       base.localStartDateTime = start.localStartDateTime;
       base.utcStart = start.utcStart;
       base.precision = "OPEN_RANGE";
@@ -256,11 +330,11 @@ export function normalizeSchedulingMeaning(
     }
 
     case "BEFORE": {
-      if (!meaning.end_time || !parseHm(meaning.end_time)) {
+      if (!resolvedMeaning.end_time || !parseHm(resolvedMeaning.end_time)) {
         base.precision = "UNRESOLVED";
         return base;
       }
-      const end = buildExact(timezone, localDate, meaning.end_time);
+      const end = buildExact(timezone, localDate, resolvedMeaning.end_time);
       base.localEndDateTime = end.localStartDateTime;
       base.utcEnd = end.utcStart;
       base.precision = "OPEN_RANGE";
@@ -269,15 +343,15 @@ export function normalizeSchedulingMeaning(
 
     case "BETWEEN": {
       if (
-        !meaning.start_time ||
-        !meaning.end_time ||
-        !parseHm(meaning.start_time) ||
-        !parseHm(meaning.end_time)
+        !resolvedMeaning.start_time ||
+        !resolvedMeaning.end_time ||
+        !parseHm(resolvedMeaning.start_time) ||
+        !parseHm(resolvedMeaning.end_time)
       ) {
         base.precision = "UNRESOLVED";
         return base;
       }
-      const range = buildRange(timezone, localDate, meaning.start_time, meaning.end_time);
+      const range = buildRange(timezone, localDate, resolvedMeaning.start_time, resolvedMeaning.end_time);
       Object.assign(base, range);
       base.precision = "RANGE";
       return base;
@@ -314,13 +388,14 @@ export function buildFrozenClockFields(
 }
 
 export function schedulingMeaningHasSignal(meaning: SchedulingMeaning): boolean {
+  const withEarliest = inferEarliestAvailableRelation(meaning);
   return (
-    meaning.date_relation !== "UNSPECIFIED" ||
-    Boolean(meaning.date_expression?.trim()) ||
-    Boolean(meaning.explicit_date?.trim()) ||
-    Boolean(meaning.weekday) ||
-    meaning.time_kind !== "UNSPECIFIED" ||
-    Boolean(meaning.time_expression?.trim()) ||
-    Boolean(meaning.daypart)
+    withEarliest.date_relation !== "UNSPECIFIED" ||
+    Boolean(withEarliest.date_expression?.trim()) ||
+    Boolean(withEarliest.explicit_date?.trim()) ||
+    Boolean(withEarliest.weekday) ||
+    withEarliest.time_kind !== "UNSPECIFIED" ||
+    Boolean(withEarliest.time_expression?.trim()) ||
+    Boolean(withEarliest.daypart)
   );
 }
