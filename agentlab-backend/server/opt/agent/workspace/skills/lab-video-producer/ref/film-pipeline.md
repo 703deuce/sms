@@ -1,0 +1,106 @@
+# Film pipeline (Path C: films made from scratch)
+
+**Creator brief first:** The Producer must read `brief` from the job before research. Use explicit script exact/improve, attributed commentary, source links, preferred primary material, narration mode and music placement when making the story/treatment. A talking-head input is a research-backed presenter-led film, not merely a BYOF cleanup. A recorded voiceover drives timing instead of generated TTS. Default score remains paid ElevenLabs. See SKILL.md §3 typed creator brief.
+
+## 1. Research and story (progress `research`, 5→20)
+
+Read first: `/workspace/motion_kit/code_motion_cinematic/repo/skills/cinematic-film/references/story.md` and the "Research" and "Script" parts of `reference-films.md`.
+
+1. Name the film kind (documentary/history, true crime, data story, explainer, SaaS/product demo, launch/ad, social short, biography, music/culture, or a mix).
+
+2. Research in parallel (searches, page reads, downloads at once). Build `research/facts.md`: narration line | verified fact | source URL. Keep source hedges ("a *reported* $6M deal"). Verify each fact once from a solid source; look for a second source only if the first is weak or sources disagree. Research ends when every on-screen and spoken fact is cited and every planned shot has media.
+
+3. Collect real data (prices, dates, counts, coordinates, routes) into `assets/data/` with its source. Real data can be the world.
+
+4. Script length = `durationSeconds × ~2.0–2.1 words/s` (~120–125 wpm). Short declarative sentences, one beat each; numbers spelled out in `spoken`, display form in `text`; every spoken date or number also on screen; one hero per line; a phrase is typed on screen or shown on a real document, never both; after the cold open, time only moves forward.
+
+5. Save `script.json` in the Cinematic Skill format (`takes[].lines[] {id, text, spoken, hero, typed}`): the job's timing spine.
+
+6. `research/treatment.md`: one-sentence angle, anchor motif, world concept, scene list with intended engine, music idea, which beats get real footage. Break the treatment's music idea into `audio/music_cues.json` prompts at each important mood change. Read `retention-psychology.md` and run its script-stage checklist when the script is locked.
+
+## 2. Creative direction (`research`, 20→25)
+
+This is where the creative decision (SKILL.md section 1, Rick, Nov 19) gets made for a film: the idea that makes this film the best version of itself, carried through design, type, motion, transitions, pacing and sound.
+
+1. **Three concepts,** two or three lines each; pick the best fit for story, audience and request, and say why. On a remake, pick a different one than the previous version.
+
+3. **Customer style direction:** `creative.style` (+ `creative.customStyle`), or older `settings.styleDirection` / `workflow.styleDirection`, is the lane all three concepts sit in; `automatic` or missing means choose freely. Apply `brand-and-type.md`.
+
+4. **Ledger check:** if the look matches a recent or same-customer entry on type, layout and colour, change it now (unless the customer asked for the same look, or strict branding requires it).
+
+5. **Invent the world:** what is this story physically made of (a map, the data, an evidence wall, a machine, the product UI, a city)? Write geometry and scale, background/mid/foreground layers, palette (exact RGB), type roles, grade, grain and vignette, camera grammar and transitions.
+
+6. **Engines per layer:** survey `engines.md` and `engine-library.md` and choose each layer for how it looks, considering at least one real alternative. Any engine can make a whole scene or one layer; no fixed pairings, no auto-mapping scene types to engines, no engine-count limit. Port the palette, fonts, grain and grade to each engine's theme.
+
+7. **Plan** `scenes/plan.json`: per scene `id`, engine, start/end anchored to script line and word (never seconds), tracks, overlays, footage inserts, transitions, camera intent (a hold is a stated choice).
+
+## 3. Media sourcing (`building`, 25→35)
+
+1. Photos and documents: search broadly (image search, news and press photos, editorial pages, social posts, official sites, YouTube thumbnails `maxresdefault.jpg` and frame grabs (no YouTube logo/UI visible), Wikimedia Commons via `python3 /workspace/motion_kit/code_motion_cinematic/repo/skills/cinematic-film/scripts/fetch_commons.py search "<query>"` then `get --project <dir>`). Use the best, most specific image.
+
+2. Footage: **no YouTube video footage** (Rick, Nov 20). YouTube may be searched for information and downloaded only to grab stills (no logo/UI visible); its footage never appears in the film. Talking clips play their own audio (narration paused, score ducked); music-bed clips stay muted. Sources in order: X (full-archive search with `has:videos`; good for old reposts too), Dailymotion (`api.dailymotion.com/videos?search=`), Internet Archive (`archive.org/advancedsearch.php`, mediatype:movies; strong for older TV), Odysee (`lighthouse.odysee.tv/search?mediaType=video`), news/outlet-hosted players, TikTok/Instagram/Facebook, then other non-YouTube hosts. Check an embed is not a YouTube player before using it. Download with `yt-dlp` (`~/.local/bin/yt-dlp`) from those sites; find the moment from captions where available, otherwise by scrubbing, and download that section plus padding (`--download-sections "*START-END"`). Pick the moment the line is about, cut on clean phrase or musical boundaries, ~6–10 s; prefer sources without burned-in lower-thirds when an equally good one exists, otherwise frame or cover them on purpose. When no non-YouTube copy exists, cover the beat with photos, a quoted card or graphics. Log every clip's source URL. Conform: `ffmpeg -i in -vf "scale=W:H:force_original_aspect_ratio=increase,crop=W:H,fps=30" -c:v libx264 -crf 16 -pix_fmt yuv420p -c:a aac -ar 48000 out.mp4`.
+2b. Real-subject films: real clips ≥50% of runtime (aim a little higher); search every non-YouTube source before falling back to photos or graphics; log clip share. A target, not a gate: if footage doesn't exist, still make the film and note it; never fail a job for too few clips. (Rick, Nov 20)
+
+3. Search for the specific person, place, date or object the line names; stock only for genuinely generic lines.
+
+4. Never upscale a source past ~1.5× in the final frame; small sources go small in the world.
+
+5. Code-drawn UI instead of screenshots for app interfaces; label recreations; quote only words really written.
+
+6. AI stills or clips only for illustration, never as evidence; plan and price them first.
+
+## 4. Narration and timing (`building`, 35→45)
+
+1. Scratch voice first (free): edge-tts with word boundaries (`/workspace/motion_kit/code_motion_cinematic/edge_take.py` with `tts_say.py --cmd`; demo scripts in `reference-films.md`).
+
+2. Final voice: ElevenLabs `/v1/text-to-speech/{voice_id}/with-timestamps`, voice and settings per SKILL.md "Voice". One paid call for the whole script (two at most). Convert character timings to `audio/words.json` (`{line_id: [{w, t0, t1}]}`).
+
+3. Build `audio/narration.wav` and `audio/timing.json` (`split_takes.py`, `build_narration.py`, or directly from the ElevenLabs timings).
+
+4. Word anchors raise, never guess (the GME `words_W()` pattern): a missing word is an error you fix.
+
+5. Narration + ~0.9 s lead + ~2–3 s tail within ±10% of `durationSeconds`; rewrite rather than time-stretch (gentle `build_narration.py --target` within ±5% is OK).
+
+6. QA: `faster-whisper small.en` on the narration; median word offset vs `words.json` within ±50 ms.
+
+## 5. Design system and scene build (`building`, 45→70)
+
+1. The lead designs this film's system: `design/system.md` + shared components in `design/components/` (type, colour and grade, grid, the components this concept needs, engine per layer, timing map from `audio/words.json`). Freshly designed for every film; reuse happens only inside a film.
+
+2. Build each component once, check it by still, then build scenes from it with beat-specific custom touches.
+
+3. **Helpers only when they truly save time** (many scenes, roughly films over ~60 s). Up to 4 Task executors, each owning a contiguous block. Brief: the system path and job folder; its lines, word anchors, assets and engines; the SKILL.md principles and hard rules; still review only, no rendering. The lead reviews every scene itself and both sides of every cut between blocks.
+
+4. One folder per scene `scenes/<sceneId>/` with its code and a `README.md`. All times derive from word anchors.
+
+5. Author at the scale you'll film: hero zoom ~0.5–1.0 in Cinematic Skill world units, wides not below ~0.3 for more than a beat, labels ≥40 px cap height at 1080p (`cap_px = size × cap_ratio × zoom × (1080/2160)`). Source/credit lines may stay small.
+
+6. Camera is a journey: Cinematic Skill `film.shot()` keys on word anchors every 0.5–2 s with velocity through keys and whips between clusters; other engines use an equivalent camera or parallax move.
+
+7. Fill the frame with meaning: a hero, supporting context and depth layers; old items dim instead of vanishing; photos live in the world and enter with a designed move.
+
+8. Titles readable: big, high contrast, inside the platform safe area (9:16 at 1080x1920: x 120–888, y 288–1248, and left of x 780 below y 780; see `craft-standards.md`). Platform safe areas protect from app UI only; they don't make a spot safe over the person.
+
+9. Footage integration: RETURN by default (push into the print holding the clip's first frame, play full-frame, pull back out on its last frame; `reference-films.md` §Return), a hard cut when the story wants it.
+
+### Non-browser still recipes (review without rendering)
+
+Render at the real output size, then view a 480p downscale (`ffmpeg -i t.png -vf scale=-2:480 t_480.png`).
+
+- **Cinematic Skill:** `python3 $S/render.py --project <scene> --probe t1,t2 --size <WxH>` → `out/probe/t<time>.png`; `--strip t0:t1:n` for a sheet along a move. Never pass `--out` before approval.
+
+- **Skia/CanvasKit:** build inside the browser scene. An existing Node Skia script renders one frame index (`MS_FRAME=<n>`) to PNG.
+
+- **Manim (v0.22.1):** `manim render -s -qh -r <W>,<H> scene.py <Scene>`; drive motion from one `ValueTracker` clock and support `MS_FREEZE_T=<t>` to save an exact mid-move frame.
+
+- **Natron:** single frame, e.g. `LD_LIBRARY_PATH=/workspace/motion_engines/natron/extra_lib /workspace/motion_engines/natron/Natron-2.5.0-Linux-x86_64-no-installer/NatronRenderer -w Write1 45-45 comp.ntp`; if it won't run headless, composite with FFmpeg/OpenCV and bring the result in as a layer.
+
+- SAM 2, OpenCV, FFmpeg and Replicate are footage-prep tools; their outputs are reviewed inside the scene.
+
+## 6. Sound (`building`, 70→75)
+
+1. SFX: Cinematic `render.py --cues` + `build_sfx.py`, or engine SFX (Dolly `sfx.mjs`, Claude Remotion `npm run audio`), or synthesised cues on visual hits. Hits ~0–150 ms after the word, not on the stressed syllable, peaks at or below the voice median (`measure_mix.py`).
+
+2. Music: choose whether music improves the film; use a customer-supplied track when provided. Otherwise write `audio/music_cues.json` with film duration, narration presence and 1–4 cues `{id,start,end,prompt,bpm,drums,vocals}`, each placed on the film timeline according to its mood. Use `scripts/gen_music.py` and `music_v2_5` to generate instrumental music under narration (no artist/song/copyrighted lyric prompts). Generate each cue's full length up to ~2 min; for a longer section generate a 2–3 min loopable track and loop on whole-bar boundaries with overlap crossfades, not silence. Join cues with short crossfades, end on the last frame, save/cache originals in `audio/music_src/`, output one 48-kHz stereo `audio/music.wav`. Before paid calls estimate total generated minutes × $0.15, cap music around $2 and stay within the remaining ~$5 overall paid-call budget. Reuse cached cues on retries; at most two diagnosed attempts per paid cue. If missing key, over budget or repeatedly failed, use the existing procedural synth for the entire bed and record why. Ensure the account's terms permit the intended customer-video use; music generation runs automatically with an available key under the existing spend caps. No vendor or price details in customer-facing progress. Run: `python3 "$SKILL_ROOT/scripts/gen_music.py" --cues "$J/audio/music_cues.json" --out "$J/audio/music.wav" --raw-dir "$J/audio/music_src/"`. The installed skill may also live at `/home/box/agent-data/workflows/motion-studio-production/`.
+
+3. Mix: `mix_soundtrack.py --project P --music audio/music.wav --stems --music-db -6 --duck-ratio 4 --duck-threshold 0.025 --fade-in 0.05 --fade-out 0.05` (sidechain duck, two-pass loudnorm, −1.5 dBTP; integrated target per `qa.md`). Measure ducking during speech versus gaps; if below 10 dB, adjust **invocation flags** to `--duck-ratio 6` or `--duck-threshold 0.015` and listen for pumping. Never edit the mixer source. Stems: `narration`, `music`, `sfx`, `footage_audio` (if any), `dialog` (narration + SFX + footage sound), all master length, 48 kHz WAV.

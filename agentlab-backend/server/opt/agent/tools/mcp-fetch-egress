@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""Launch official mcp-server-fetch with 3-tier egress fallback on HTTP calls."""
+import os, sys, runpy
+
+# Ensure we don't force a global HTTP_PROXY (that would skip "direct first").
+for k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "all_proxy"):
+    os.environ.pop(k, None)
+
+sys.path.insert(0, "/opt/tools/egress")
+sys.path.insert(0, "/opt/agent/tools/egress")
+sys.path.insert(0, "/opt/agent/ops/egress")
+
+def _install():
+    try:
+        import mcp_server_fetch.server as srv
+    except ImportError:
+        return False
+    try:
+        import egresslib as E
+        from blockdetect import detect_block
+    except Exception:
+        return False
+    orig = srv.fetch_url
+
+    async def fetch_url(url, *args, **kwargs):
+        # Let the official function try direct (no proxy_url) first unless forced.
+        force = (os.environ.get("EGRESS_FORCE_TIER") or "").strip().lower() or None
+        if force in ("residential", "mobile"):
+            kwargs["proxy_url"] = E.GATEWAY
+            # We cannot set extra headers on httpx easily here; /force the host.
+            try:
+                from urllib.parse import urlparse
+                import json, urllib.request
+                host = urlparse(url).hostname
+                req = urllib.request.Request(
+                    "http://127.0.0.1:18081/force",
+                    data=json.dumps({"host": host, "tier": force, "job": E.job_from_cwd()}).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=3).read()
+            except Exception:
+                pass
+            return await orig(url, *args, **kwargs)
+
+        try:
+            result = await orig(url, *args, **kwargs)
+        except Exception as e:
+            blocked, reason = detect_block(error=str(e))
+            if not blocked:
+                raise
+            result = None
+            first_err = e
+        else:
+            first_err = None
+            # Official fetch_url returns markdown/text; we may not have status.
+            # If it succeeded, we're done (direct worked).
+            return result
+
+        # Direct failed with a transport/block error: retry via gateway residential, then mobile.
+        last_err = first_err
+        for tier in ("residential", "mobile"):
+            if tier == "mobile" and not E.mobile_enabled():
+                continue
+            try:
+                from urllib.parse import urlparse
+                import json, urllib.request
+                host = urlparse(url).hostname
+                req = urllib.request.Request(
+                    "http://127.0.0.1:18081/force",
+                    data=json.dumps({"host": host, "tier": tier, "job": E.job_from_cwd()}).encode(),
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=3).read()
+            except Exception:
+                pass
+            try:
+                kwargs["proxy_url"] = E.GATEWAY
+                return await orig(url, *args, **kwargs)
+            except Exception as e:
+                last_err = e
+                continue
+        if last_err:
+            raise last_err
+        raise RuntimeError("fetch blocked on every egress tier")
+
+    srv.fetch_url = fetch_url
+    return True
+
+def main():
+    # Prefer a preinstalled tree so each conversation does not wait on (or flake on) uvx.
+    for pkg in ("/opt/tools/mcp-fetch-pkgs", "/opt/agent/tools/mcp-fetch-pkgs"):
+        if os.path.isdir(pkg) and pkg not in sys.path:
+            sys.path.insert(0, pkg)
+    if _install():
+        import runpy
+        runpy.run_module("mcp_server_fetch", run_name="__main__")
+        return
+    sys.stderr.write("mcp-fetch-egress: preinstall missing; falling back to uvx\n")
+    if os.environ.get("EGRESS_FETCH_REEXEC") == "1":
+        sys.stderr.write("mcp-fetch-egress: mcp-server-fetch is not importable\n")
+        sys.exit(1)
+    os.environ["EGRESS_FETCH_REEXEC"] = "1"
+    os.execv("/usr/bin/uvx", ["/usr/bin/uvx", "--from", "mcp-server-fetch", "python", os.path.abspath(__file__), *sys.argv[1:]])
+
+if __name__ == "__main__":
+    main()

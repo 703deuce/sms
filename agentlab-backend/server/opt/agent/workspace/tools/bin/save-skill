@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+import os, sys
+sys.path.insert(0, "/opt/agent/ops/sandbox")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+try:
+    from helper_client import proxy_cli
+except ImportError:
+    sys.path.insert(0, "/workspace/tools/bin")
+    from helper_client import proxy_cli
+proxy_cli("save-skill")

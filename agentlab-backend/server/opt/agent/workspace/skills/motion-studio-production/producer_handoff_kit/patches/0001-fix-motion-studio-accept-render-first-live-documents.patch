@@ -1,0 +1,103 @@
+From 66ed9bb7587b6736e7c5fbf7dd1d81a58f09a845 Mon Sep 17 00:00:00 2001
+From: Grok Bot <grok-bot@localhost>
+Date: Thu, 19 Nov 2026 23:46:11 -0500
+Subject: [PATCH] fix(motion-studio): accept render-first live documents with
+ an unrendered master on /portable
+
+Modal publish_editable posts the native producer document; publish-live.mjs writes
+master:{recipe,renderedInVersion:0,origin:'live_delivery'} with no asset, which the
+envelope check rejected (400 'invalid producer document envelope'). Also surface the
+server's error text in Modal qa_fail reasons and in server request_failed logs.
+---
+ .../lib/motion-studio/producer-project-adapter.ts    |  9 +++++++--
+ new-app/lib/server/motion-studio/http.ts             |  3 ++-
+ .../motion-studio-producer-project-adapter.test.ts   | 12 ++++++++++++
+ worker/modal_motion/pipeline.py                      |  8 +++++++-
+ 4 files changed, 28 insertions(+), 4 deletions(-)
+
+diff --git a/new-app/lib/motion-studio/producer-project-adapter.ts b/new-app/lib/motion-studio/producer-project-adapter.ts
+index 58e964d..c2262a1 100644
+--- a/new-app/lib/motion-studio/producer-project-adapter.ts
++++ b/new-app/lib/motion-studio/producer-project-adapter.ts
+@@ -50,7 +50,11 @@ export function validateNativeProducerEnvelope(value:unknown):NativeProducerDocu
+        (Number.isSafeInteger(value.parentVersion)&&Number(value.parentVersion)>=1&&Number(value.parentVersion)<Number(value.version)))||
+      !object(value.format)||!Array.isArray(value.scenes)||value.scenes.length<1||
+      value.scenes.length>1000||!object(value.theme)||!object(value.overrides)||
+-     (value.master!=null&&(!object(value.master)||!id(value.master.asset)||!id(value.master.recipe)))||
++     // Render-first live delivery (publish-live.mjs) ships the export recipe before
++     // any master exists: master.renderedInVersion===0 with no asset. The MP4 is
++     // approved separately (approveMaster), so only an unrendered master may omit it.
++     (value.master!=null&&(!object(value.master)||!id(value.master.recipe)||
++       !(id(value.master.asset)||(value.master.asset==null&&value.master.renderedInVersion===0))))||
+      !Array.isArray(value.assetRefs)||value.assetRefs.length>10000||
+      value.assetRefs.some(v=>!id(v)))
+     reject('invalid producer document envelope')
+@@ -77,7 +81,8 @@ export function adaptProducerProject(input:ProducerImport):MsPortableManifest{
+   }
+   // Do not lose the native project's stems/assembly/font/source references.
+   for(const ref of native.assetRefs)if(!assetMap.has(ref))reject('native asset missing: '+ref)
+-  const critical=native.master?[native.master.asset,native.master.recipe]:[]
++  const critical=native.master?[native.master.recipe,
++    ...(native.master.asset!=null?[native.master.asset]:[])]:[]
+   for(const ref of critical)if(!id(ref)||!assetMap.has(ref))reject('master asset missing: '+ref)
+   const bundleMap=new Map<string,ProducerSceneBundle>()
+   for(const b of input.bundles){
+diff --git a/new-app/lib/server/motion-studio/http.ts b/new-app/lib/server/motion-studio/http.ts
+index 2d5bba1..17bb95c 100644
+--- a/new-app/lib/server/motion-studio/http.ts
++++ b/new-app/lib/server/motion-studio/http.ts
+@@ -19,7 +19,8 @@ export function motionStudioJsonError(err: unknown) {
+   const error = err instanceof MotionStudioError ? err : new MotionStudioError('INTERNAL', 'Motion Studio could not complete the request.', 500)
+   console.error('[motion-studio:api] request_failed', {
+     code: error.code, status: error.status, type: err instanceof Error ? err.name : typeof err,
+-    detail: err instanceof MotionStudioError ? undefined : err instanceof Error ? err.message.slice(0, 200) : undefined,
++    // MotionStudioError messages are server-authored validation text; log them so a 400 is diagnosable.
++    detail: err instanceof Error ? err.message.slice(0, 200) : undefined,
+   })
+   return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
+ }
+diff --git a/new-app/tests/motion-studio/motion-studio-producer-project-adapter.test.ts b/new-app/tests/motion-studio/motion-studio-producer-project-adapter.test.ts
+index 94f450c..0977713 100644
+--- a/new-app/tests/motion-studio/motion-studio-producer-project-adapter.test.ts
++++ b/new-app/tests/motion-studio/motion-studio-producer-project-adapter.test.ts
+@@ -50,6 +50,18 @@ describe('native producer project -> editable portable project',()=>{
+     expect((m as unknown as {producerAssetMap:Record<string,string>}).producerAssetMap.fnt_display).toBe('upload_5')
+     expect((m as unknown as {producerDocument:ReturnType<typeof document>}).producerDocument.assetRefs).toContain('fnt_display')
+   })
++  it('accepts a render-first live document whose master is not rendered yet',()=>{
++    const live={...document(),delivery:{mode:'live'},
++      master:{recipe:'ast_recipe',renderedInVersion:0,origin:'live_delivery'}}
++    const m=adaptProducerProject({document:live,assets,bundles})
++    expect((m as unknown as {producerDocument:unknown}).producerDocument).toEqual(live)
++  })
++  it('still requires a master asset once a master has been rendered',()=>{
++    expect(()=>validateNativeProducerEnvelope({...document(),
++      master:{recipe:'ast_recipe',renderedInVersion:1}})).toThrow(/envelope/)
++    expect(()=>validateNativeProducerEnvelope({...document(),
++      master:{asset:'ast_master'}})).toThrow(/envelope/)
++  })
+   it('refuses missing referenced media rather than silently omitting',()=>{
+     expect(()=>adaptProducerProject({document:document(),assets:assets.slice(1),bundles})).toThrow()
+   })
+diff --git a/worker/modal_motion/pipeline.py b/worker/modal_motion/pipeline.py
+index 8ca3d0e..6e21ea3 100644
+--- a/worker/modal_motion/pipeline.py
++++ b/worker/modal_motion/pipeline.py
+@@ -33,7 +33,13 @@ def api(job_id,method,path="",payload=None,params=None,timeout=120,attempts=8):
+         if r.status_code in (429,500,502,503,504) and attempt<attempts:
+             time.sleep(min(60,2**attempt)+random.uniform(0,3)); continue
+         if not r.ok:
+-            raise RuntimeError("Job API failed: "+str(r.status_code))
++            # Keep the server's own validation message (never the URL or token) so a
++            # qa_fail reason says WHICH check refused, e.g. "POST /portable 400: ...".
++            try: detail=str((r.json() or {}).get("error") or "")
++            except Exception: detail=""
++            detail=re.sub(r"https?://\S+","[url]",detail)[:300]
++            raise RuntimeError("Job API failed: "+str(r.status_code)+
++                (" "+method+" "+(path or "/")+(": "+detail if detail else "")))
+         return r.json()
+ 
+ def heartbeat(job_id,stop):
+-- 
+2.47.3
+

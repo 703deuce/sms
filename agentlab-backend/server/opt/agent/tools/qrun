@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""qrun: run a shell command; print the exit code, the last 40 lines and any error/fail lines; the FULL output is saved to a
+file you can search (rg/grep/read_section --lines) instead of pulling it into context.
+  qrun [--tail N] [--digest] -- <command ...>     (the command is run with bash -lc)
+--digest: a cheap model (Haiku) also compresses the output to ~12 lines; use it when a command may print a lot."""
+import os, re, subprocess, sys, time
+args = sys.argv[1:]
+tail = 40
+digest = False
+while args[:1] in (['--tail'], ['--digest']):
+    if args[0] == '--digest': digest = True; args = args[1:]
+    else: tail = int(args[1]); args = args[2:]
+if args[:1] == ['--']: args = args[1:]
+if not args: sys.exit(__doc__)
+cmd = ' '.join(args) if len(args) > 1 else args[0]
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+m = re.match(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)', os.getcwd())
+d = (m.group(1) if m else '/tmp') + '/log/out'
+os.makedirs(d, exist_ok=True)
+p = f'{d}/{time.strftime("%H%M%S")}-{abs(hash(cmd)) % 10000}.log'
+t0 = time.time()
+with open(p, 'w') as f:
+    r = subprocess.run(['bash', '-lc', cmd], stdout=f, stderr=subprocess.STDOUT)
+L = open(p, errors='replace').read().split('\n')
+errs = [l for l in L if re.search(r'(?i)\b(error|fail(ed|ure)?|traceback|exception|fatal|cannot|no such file)\b', l)]
+print(f'exit={r.returncode}  {len(L)} lines  {time.time() - t0:.1f}s  full output: {p}')
+if errs and r.returncode != 0:
+    print(f'--- error/fail lines ({min(len(errs), 25)} of {len(errs)}) ---'); print('\n'.join(l[:300] for l in errs[:25]))
+if digest:
+    try:
+        import json as _j, urllib.request as _u
+        rq = _u.Request('http://127.0.0.1:6075/digest', data=_j.dumps({'text': '\n'.join(L), 'goal': cmd[:300]}).encode(), method='POST', headers={'content-type': 'application/json'})
+        d = _j.loads(_u.urlopen(rq, timeout=60).read())
+        if d.get('text'):
+            print(f'--- digest (Haiku, ${d.get("cost_usd")}) ---'); print(d['text'])
+    except Exception as e:
+        print(f'(digest unavailable: {type(e).__name__})')
+print(f'--- last {min(tail, len(L))} lines ---'); print('\n'.join(l[:300] for l in L[-tail:]))
+sys.exit(r.returncode)

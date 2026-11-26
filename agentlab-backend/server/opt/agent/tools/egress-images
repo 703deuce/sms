@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""egress-images: toggle product images / YouTube thumbnails on proxied CDNs.
+
+usage:
+  egress-images          show whether images are blocked
+  egress-images on       block images on Amazon/YouTube CDNs (default, saves proxy bytes)
+  egress-images off      allow those images when you truly need to see product photos
+
+HTML, JS and CSS are never blocked. chrome-keeper picks up the change within a few seconds
+(no browser restart). Turn images back on-block when you are done looking.
+"""
+import json, os, sys, urllib.request
+
+FLAG = "/workspace/desktop/egress-block-images"
+
+
+def current():
+    if os.path.isfile(FLAG):
+        v = open(FLAG).read().strip().lower()
+        return v not in ("off", "0", "false", "allow", "no")
+    return os.environ.get("EGRESS_BLOCK_IMAGES", "1").strip().lower() not in ("0", "off", "false", "no")
+
+
+def main():
+    args = [a.lower() for a in sys.argv[1:]]
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    if args and args[0] in ("on", "block", "1", "true"):
+        os.makedirs(os.path.dirname(FLAG), exist_ok=True)
+        open(FLAG, "w").write("on\n")
+        print("egress-images: blocked (Amazon/YouTube CDN images and thumbnails).")
+        return
+    if args and args[0] in ("off", "allow", "0", "false"):
+        os.makedirs(os.path.dirname(FLAG), exist_ok=True)
+        open(FLAG, "w").write("off\n")
+        print("egress-images: allowed. Turn back on with `egress-images on` when you are done looking at photos.")
+        return
+    if args:
+        print(f"egress-images: unknown argument {args[0]!r} (use on or off)", file=sys.stderr)
+        sys.exit(2)
+    state = "blocked" if current() else "allowed"
+    extra = ""
+    try:
+        st = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=2))
+        extra = f"  Chrome CDP is up ({st.get('Browser')})."
+    except Exception:
+        extra = "  Chrome CDP is not up yet."
+    print(f"egress-images: {state}.{extra}")
+
+
+if __name__ == "__main__":
+    main()

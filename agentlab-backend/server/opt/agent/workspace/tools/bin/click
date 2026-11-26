@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""click: click on the agent desktop (1920x1080 screen; take a desktop-shot first to find coordinates).
+
+usage: click X Y [--right | --middle | --button N] [--double | --triple | --repeat N]
+                 [--mods ctrl,shift,alt,super] [--shot [OUT.png]] [--wait S]
+examples:
+  click 640 300                    left click
+  click 640 300 --right            right click (context menu)
+  click 640 300 --double           double click (open, select a word)
+  click 640 300 --triple           triple click (select a line/paragraph)
+  click 640 300 --mods ctrl        ctrl+click (open link in new tab, multi-select)
+  click 640 300 --mods shift       shift+click (extend a selection)
+  click 640 300 --shot after.png   then agent_view after.png to check the result
+"""
+import argparse, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import add_common, run, mods_list
+
+p = argparse.ArgumentParser(prog="click", usage=__doc__)
+p.add_argument("x", type=int); p.add_argument("y", type=int)
+p.add_argument("--button", type=int, default=1)
+p.add_argument("--right", action="store_true"); p.add_argument("--middle", action="store_true")
+p.add_argument("--double", action="store_true"); p.add_argument("--triple", action="store_true")
+p.add_argument("--repeat", type=int)
+p.add_argument("--mods", default="")
+add_common(p)
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__); sys.exit(0)
+a = p.parse_args()
+button = 3 if a.right else 2 if a.middle else a.button
+repeat = a.repeat or (3 if a.triple else 2 if a.double else 1)
+kind = {1: "clicked", 2: "double-clicked", 3: "triple-clicked"}.get(repeat, f"clicked x{repeat}")
+mods = mods_list(a.mods)
+run("click", "/click", {"x": a.x, "y": a.y, "button": button, "repeat": repeat, "mods": mods}, a,
+    f"{'+'.join(mods) + '+' if mods else ''}{kind} button {button} at {a.x},{a.y}")

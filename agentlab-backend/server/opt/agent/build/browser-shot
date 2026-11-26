@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""browser-shot: save a screenshot of what your browser tool is showing right now.
+
+usage: browser-shot [out.png] [--url URL] [--full]
+  With no --url it attaches to the running browser (the one your browser_* tools drive)
+  and captures the active tab exactly as it is (logged-in state, scroll position, popups).
+  With --url it opens that URL in a separate headless Chromium and captures it.
+Then: look out.png "What is on screen? Where should I click to <goal>?"
+"""
+import glob, os, re, sys, time
+
+def cdp_endpoints():
+    eps = []
+    for cmd in glob.glob('/proc/[0-9]*/cmdline'):
+        try:
+            args = open(cmd, 'rb').read().split(b'\0')
+        except Exception:
+            continue
+        for a in args:
+            m = re.match(rb'--remote-debugging-port=(\d+)', a)
+            if m and m.group(1) != b'0':
+                eps.append(int(m.group(1)))
+    # browser-use may use port 0 + DevToolsActivePort file
+    for f in glob.glob('/tmp/**/DevToolsActivePort', recursive=True) + glob.glob(os.path.expanduser('~/.config/**/DevToolsActivePort'), recursive=True):
+        try:
+            eps.append(int(open(f).read().split()[0]))
+        except Exception:
+            pass
+    return list(dict.fromkeys(eps))
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] in ('-h', '--help'):
+        print(__doc__); return
+    url, full, out = None, False, None
+    i = 0
+    while i < len(args):
+        if args[i] == '--url': url = args[i + 1]; i += 2
+        elif args[i] == '--full': full = True; i += 1
+        else: out = args[i]; i += 1
+    out = out or f"/workspace/project/.shots/shot_{int(time.time())}.png"
+    os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        if not url:
+            for port in cdp_endpoints():
+                try:
+                    b = p.chromium.connect_over_cdp(f"http://127.0.0.1:{port}", timeout=5000)
+                except Exception:
+                    continue
+                pages = [pg for c in b.contexts for pg in c.pages if not pg.url.startswith('chrome')]
+                if not pages:
+                    continue
+                pg = pages[-1]
+                for cand in pages:  # prefer the visible tab
+                    try:
+                        if cand.evaluate('document.visibilityState') == 'visible': pg = cand
+                    except Exception:
+                        pass
+                pg.screenshot(path=out, full_page=full)
+                print(f"{out}  ({pg.url})"); return
+            print("browser-shot: no running browser found; open the page with browser_navigate first, or pass --url", file=sys.stderr)
+            sys.exit(1)
+        b = p.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
+        pg = b.new_page(viewport={'width': 1366, 'height': 900})
+        pg.goto(url, wait_until='networkidle', timeout=60000)
+        pg.screenshot(path=out, full_page=full)
+        print(f"{out}  ({pg.url})")
+
+if __name__ == '__main__':
+    main()

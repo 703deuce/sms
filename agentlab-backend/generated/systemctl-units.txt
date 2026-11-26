@@ -1,0 +1,14 @@
+  agent-lab-anthropic-shim.service loaded active   running Agent Lab Anthropic pass-through for thinking-block binding (127.0.0.1:6074, no secrets)
+  agent-lab-browser-heal.service   loaded inactive dead    Reconnect Agent Lab browser tools after a Chromium restart (only when idle)
+  agent-lab-chrome.service         loaded active   running Agent Lab persistent desktop Chromium (shared logins, CDP 127.0.0.1:9222)
+  agent-lab-desktop.service        loaded active   running Transovo Agent Lab virtual desktop (Xvfb, Openbox, live view)
+  agent-lab-egress.service         loaded active   running Agent Lab egress gateway (direct first, then DataImpulse residential/mobile)
+  agent-lab-embed.service          loaded active   running Agent Lab local search service (hybrid BM25 + embeddings + rerank, Haiku digest) on 127.0.0.1:6075
+  agent-lab-helper.service         loaded active   running Transovo Agent Lab memory/skill/job helper
+  agent-lab-jobbrowsers.service    loaded active   running Agent Lab per-job browsers (job-browser daemon on 127.0.0.1:6073: a private Chromium per run/helper)
+  agent-lab-keys.service           loaded active   running Agent Lab key proxy (KIE, AgentMail, Anthropic Opus sub-calls) on 127.0.0.1:6071
+  agent-lab-runner.service         loaded active   running Agent Lab run daemon (queue, routines, watchdog, notifications)
+  agent-lab-telegram.service       loaded active   running Agent Lab Telegram adapter (idle until token)
+  agent-lab-vaultd.service         loaded active   running Agent Lab login vault service on 127.0.0.1:6072 (types stored website logins, never returns them)
+  agentlab-connectors.service      loaded active   running AgentLab connector broker (OAuth tokens host-only)
+  agent-lab-browser-heal.timer     loaded active   waiting Check Agent Lab browser-tool connection every 2 minutes

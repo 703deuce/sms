@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""project-note: per-project notes as markdown in /workspace/memory/projects/<slug>.md
+
+usage: project-note <slug> "note text"     append a dated note
+       project-note <slug>                  print the project's notes
+       project-note --list                  list projects (with first line)
+       project-note <slug> --summary "..."  set/replace the summary at the top
+"""
+import os, re, sys
+from datetime import datetime, timezone
+
+ROOT = os.environ.get('AGENT_PROJECTS_DIR', '/workspace/memory/projects')
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+os.makedirs(ROOT, exist_ok=True)
+if a[0] == '--list':
+    for f in sorted(os.listdir(ROOT)):
+        if f.endswith('.md'):
+            lines = [l for l in open(os.path.join(ROOT, f)).read().splitlines() if l.strip() and not l.startswith('#')]
+            print(f'{f[:-3]}: {lines[0][:120] if lines else ""}')
+    sys.exit(0)
+slug = re.sub(r'[^a-z0-9\-]+', '-', a[0].lower()).strip('-')
+path = os.path.join(ROOT, f'{slug}.md')
+if not os.path.exists(path):
+    open(path, 'w').write(f'# {a[0]}\n\n## Summary\n\n(none yet)\n\n## Notes\n')
+if len(a) == 1:
+    print(open(path).read()); sys.exit(0)
+stamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+src = re.match(r'^/workspace/jobs/([^/]+)', os.getcwd())
+if a[1] == '--summary':
+    s = open(path).read()
+    s = re.sub(r'## Summary\n.*?\n## Notes', f'## Summary\n\n{" ".join(a[2:]).strip()} _(updated {stamp})_\n\n## Notes', s, flags=re.S)
+    open(path, 'w').write(s); print(f'Updated summary of {slug}')
+else:
+    with open(path, 'a') as f:
+        f.write(f'- {stamp}{" (job " + src.group(1)[:8] + ")" if src else ""}: {" ".join(a[1:]).strip()}\n')
+    print(f'Noted in {path}')

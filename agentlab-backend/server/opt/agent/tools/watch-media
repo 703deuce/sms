@@ -1,0 +1,4 @@
+#!/bin/sh
+# watch-media: send a WHOLE video (picture + sound), audio file or PDF to Gemini with a question.
+# Same as `look FILE "question" --whole`; prints ANSWER, TIMESTAMPS and CONFIDENCE. See `look --help`.
+exec /opt/tools/look --whole "$@"

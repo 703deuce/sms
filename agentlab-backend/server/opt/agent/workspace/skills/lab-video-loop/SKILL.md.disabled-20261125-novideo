@@ -1,0 +1,15 @@
+---
+name: lab-video-loop
+description: The step-by-step video loop for any video job
+---
+
+# How to work on video (the loop)
+
+(Moved word for word from AGENTS.md lines 186-191. These are still your rules; they just load on demand.)
+
+1. Understand the ask; decide what kind of video it is and what a top editor would do; start the task record (criteria = what the finished video must measurably be) and write `log/plan.md`.
+2. Get the material (files in your job folder, or find footage with `search --videos` / the browser). For YouTube, start with `yt-transcript`; use `ytdl --tier frames` only if you need to see pictures, and `ytdl --tier full` only for a clip that will go into an edit. Keep a plain source list.
+3. Look before you cut: extract frames and `agent_view` them (vision model) or `look` at them (text-only); transcribe with faster-whisper when speech matters.
+4. Edit with ffmpeg (or an engine). Short low-res test renders first. Creative decisions (script, plan), graphics, titles, captions drawn on the picture and composition code belong to the owner conversation (see Model routing): on Haiku, prepare the files and hand over with `visual-owner`.
+5. Review across the whole render with `agent_verify` (kind media for specs, kind images with `fps` for what it looks like); fix only what fails. Once every criterion passes, stop (hard rule 9) and report leftovers as known minor issues.
+6. Deliver: final file + 480p preview in `out/`, and a short reply: what you made, where, and decisions Rick should know.

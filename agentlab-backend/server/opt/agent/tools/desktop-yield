@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""PreToolUse hook: while Rick has the desktop (Live screen input in the last 30 s,
+or a sign-in handoff is waiting and not expired) pause browser and CDP actions so
+the agent never fights him for the page.
+
+Fails open if the desktop service is down. Expired handoffs are cleared automatically.
+Only applies to browser_* tools and terminal commands that drive the shared Chromium
+(CDP / browser-shot / desktop-open). Other tools return immediately.
+"""
+import json, sys, time, urllib.error, urllib.request
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
+CONTROL = "http://127.0.0.1:6070"
+BROWSER_PREFIXES = ("browser_",)
+TERMINAL_MARKERS = (
+    "browser-shot", "browser_shot", "connect_over_cdp", "127.0.0.1:9222",
+    "localhost:9222", "desktop-open", "chrome-profile",
+    "browser-upload", "fill-login", "captcha-solve",
+)
+
+
+def _get(path, timeout=5):
+    with urllib.request.urlopen(CONTROL + path, timeout=timeout) as r:
+        return json.loads(r.read().decode() or "{}")
+
+
+def _post(path, body=None, timeout=5):
+    data = None if body is None else json.dumps(body).encode()
+    req = urllib.request.Request(CONTROL + path, data=data, method="POST",
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+        try:
+            return json.loads(raw.decode() or "{}")
+        except Exception:
+            return {}
+
+
+def state():
+    try:
+        return _get("/status")
+    except Exception:
+        return {}
+
+
+def expired(st):
+    if st.get("status") != "waiting" or st.get("kind") != "handoff":
+        return False
+    exp = st.get("expires_at")
+    if not exp:
+        return False
+    try:
+        return datetime.now(ET) > datetime.fromisoformat(exp)
+    except Exception:
+        return False
+
+
+def relevant(payload):
+    name = str(payload.get("tool_name") or payload.get("tool") or "")
+    if any(name.startswith(p) for p in BROWSER_PREFIXES) or name == "browser":
+        return True
+    if name == "terminal":
+        cmd = ""
+        inp = payload.get("tool_input") or payload.get("tool_args") or {}
+        if isinstance(inp, dict):
+            cmd = str(inp.get("command") or "")
+        return any(m in cmd for m in TERMINAL_MARKERS)
+    return False
+
+
+def own_browser(payload):
+    name = str(payload.get("tool_name") or payload.get("tool") or "")
+    if name == "terminal":
+        inp = payload.get("tool_input") or payload.get("tool_args") or {}
+        cmd = str(inp.get("command") or "") if isinstance(inp, dict) else ""
+        if any(m in cmd for m in ("--shared", "fill-login", "9222", "chrome-profile", "handoff")):
+            return False  # these still use the shared desktop browser
+    try:
+        sys.path.insert(0, "/opt/tools")
+        import jobbrowser
+        return jobbrowser.ensure(False, jobbrowser.job_id(payload.get("working_dir"))).get("mode") == "job"
+    except Exception:
+        return False
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    if not relevant(payload):
+        sys.exit(0)
+    if own_browser(payload):
+        sys.exit(0)  # this run drives its own browser; Rick on the shared Live screen is not in its way
+    st = state()
+    if expired(st):
+        try:
+            _post("/handoff/done")
+        except Exception:
+            pass
+        sys.exit(0)
+    deadline = time.time() + 540
+    while time.time() < deadline:
+        st = state()
+        if expired(st):
+            try:
+                _post("/handoff/done")
+            except Exception:
+                pass
+            sys.exit(0)
+        if not st.get("rick_busy"):
+            sys.exit(0)
+        time.sleep(3)
+    print(json.dumps({
+        "decision": "deny",
+        "reason": "Rick is still using the desktop browser (Live screen or sign-in handoff). "
+                  "Do other work, then retry this browser action; it will run as soon as he stops."
+    }))
+    sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

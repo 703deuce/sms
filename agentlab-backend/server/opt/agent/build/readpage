@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+"""readpage: fetch a web page and print clean readable text (markdown-ish).
+
+usage: readpage <url> [--max 20000] [--js] [--links] [--html]
+  --js     render with headless Chromium first (for JS-heavy pages); used automatically
+           when the plain fetch gives too little text
+  --links  also list the page's links at the end
+  --html   print raw HTML instead
+Also works on PDFs (extracts text with pdftotext).
+
+Plain fetches try the site directly first, then the lab egress gateway
+(residential, then mobile if enabled) when the response is blocked.
+"""
+import os, subprocess, sys, tempfile, urllib.request
+
+sys.path.insert(0, "/opt/tools/egress")
+sys.path.insert(0, "/opt/agent/tools/egress")
+sys.path.insert(0, "/opt/agent/ops/egress")
+
+UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+
+def fetch(url):
+    try:
+        import egresslib as E
+    except Exception:
+        E = None
+    if E is not None:
+        r = E.fetch(url)
+        print(f"egress: {r.report()}", file=sys.stderr)
+        if not r.ok and not r.body:
+            raise RuntimeError(r.report())
+        ctype = (r.headers.get("content-type") or "")
+        return r.body, ctype, r.url or url
+    req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9'})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read(), (resp.headers.get('Content-Type') or ''), resp.geturl()
+
+def render(url):
+    # Headless Chromium; PAC/gateway applies the same direct-then-proxy policy
+    # for the headed/job browsers. This helper is a short-lived browser.
+    from playwright.sync_api import sync_playwright
+    proxy = None
+    # After a blocked plain fetch, egresslib may have already recorded a working
+    # paid tier; render() stays direct unless EGRESS_FORCE_TIER is set.
+    force = (os.environ.get("EGRESS_FORCE_TIER") or "").strip().lower()
+    launch_args = ['--no-sandbox', '--disable-dev-shm-usage']
+    if force in ("residential", "mobile"):
+        launch_args.append("--proxy-server=127.0.0.1:18080")
+        # Playwright has no custom header hook here; the gateway default is
+        # direct. Set force via a one-shot /force call.
+        try:
+            import urllib.request as u, json
+            from urllib.parse import urlparse
+            host = urlparse(url).hostname
+            req = u.Request("http://127.0.0.1:18081/force",
+                            data=json.dumps({"host": host, "tier": force, "job": "readpage"}).encode(),
+                            headers={"Content-Type": "application/json"}, method="POST")
+            u.urlopen(req, timeout=3).read()
+        except Exception:
+            pass
+    with sync_playwright() as p:
+        b = p.chromium.launch(args=launch_args)
+        pg = b.new_page(user_agent=UA)
+        pg.goto(url, wait_until='domcontentloaded', timeout=45000)
+        try: pg.wait_for_load_state('networkidle', timeout=10000)
+        except Exception: pass
+        html = pg.content(); final = pg.url; b.close()
+        return html, final
+
+def extract(html, url, links):
+    import trafilatura
+    txt = trafilatura.extract(html, url=url, output_format='markdown', include_links=links,
+                              include_tables=True, include_comments=False, favor_recall=True) or ''
+    if len(txt) < 200:
+        try:
+            from readability import Document
+            from markdownify import markdownify
+            doc = Document(html)
+            alt = f"# {doc.short_title()}\n\n" + markdownify(doc.summary(), heading_style='ATX')
+            if len(alt) > len(txt): txt = alt
+        except Exception:
+            pass
+    return txt.strip()
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'): print(__doc__); return
+    url = next(x for x in a if not x.startswith('--') and not x.isdigit())
+    mx = int(a[a.index('--max') + 1]) if '--max' in a else 20000
+    js, links, raw = '--js' in a, '--links' in a, '--html' in a
+    html, final = '', url
+    if not js:
+        try:
+            body, ctype, final = fetch(url)
+            if 'pdf' in ctype or url.lower().endswith('.pdf'):
+                with tempfile.NamedTemporaryFile(suffix='.pdf') as f:
+                    f.write(body); f.flush()
+                    out = subprocess.run(['pdftotext', '-layout', f.name, '-'], capture_output=True, text=True).stdout
+                print(f"SOURCE: {final}\n\n{out[:mx]}"); return
+            html = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else body
+        except Exception as e:
+            print(f"(plain fetch failed: {e}; rendering with Chromium)", file=sys.stderr)
+    text = extract(html, final, links) if html else ''
+    if js or len(text) < 400:
+        try:
+            html, final = render(url)
+            t2 = extract(html, final, links)
+            if len(t2) > len(text): text = t2
+        except Exception as e:
+            if not text: print(f"read: could not load {url}: {e}", file=sys.stderr); sys.exit(1)
+    if raw: print(html[:mx]); return
+    print(f"SOURCE: {final}\n")
+    print(text[:mx] + (f"\n\n… (truncated, {len(text) - mx} more characters; use --max)" if len(text) > mx else ''))
+    if links:
+        import re
+        hrefs = sorted(set(re.findall(r'href="(https?://[^"#]+)"', html)))[:150]
+        print("\nLINKS:\n" + '\n'.join(hrefs))
+
+if __name__ == '__main__':
+    main()

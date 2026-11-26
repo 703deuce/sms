@@ -1,0 +1,6 @@
+# Manual
+intro
+## Install
+Run the installer twice.
+## Uninstall
+Delete the folder.

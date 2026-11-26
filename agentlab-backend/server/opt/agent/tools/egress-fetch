@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""egress-fetch: fetch a URL with direct → residential → mobile fallback.
+
+usage: egress-fetch [--job ID] [--force-tier direct|residential|mobile] [--head] [--no-rescue] [--no-cache] [--raw] URL
+Routes: direct, Chrome-TLS (curl_cffi), residential, mobile; if all fail: stealth browser (+ already-paid CapSolver on a
+captcha), Wayback copy, other-page candidates (--no-rescue to skip). Prints a one-line report of the routes tried,
+the HTTP status, and writes the body to stdout (truncated to 64k unless --out FILE). Text bodies are wrapped as untrusted
+web content unless --raw. Results are cached 20 minutes (--no-cache).
+"""
+import os, sys
+sys.path.insert(0, "/opt/tools/egress")
+sys.path.insert(0, "/opt/agent/tools/egress")
+sys.path.insert(0, "/opt/agent/ops/egress")
+import egresslib as E
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__); return
+    job = a[a.index("--job")+1] if "--job" in a else E.job_from_cwd()
+    force = a[a.index("--force-tier")+1] if "--force-tier" in a else None
+    head = "--head" in a
+    out = a[a.index("--out")+1] if "--out" in a else None
+    url = next(x for x in a if not x.startswith("-") and x not in {job, force, out})
+    r = E.fetch(url, job=job, force_tier=force, head_only=head, rescue=("--no-rescue" not in a), cache=("--no-cache" not in a))
+    print("egress:", r.report(), file=sys.stderr)
+    print("status:", r.status, "final_tier:", r.final_tier, "blocked:", r.blocked, file=sys.stderr)
+    print("tiers:", r.tiers_tried, file=sys.stderr)
+    if out:
+        open(out, "wb").write(r.body or b"")
+        print("wrote", out, "bytes", len(r.body or b""), file=sys.stderr)
+    else:
+        body = (r.body or b"")[:65536]
+        ctype = (r.headers or {}).get("content-type", "")
+        if "--raw" not in a and ("text" in ctype or "json" in ctype or "xml" in ctype):
+            import fence
+            sys.stdout.write(fence.fence(body.decode("utf-8", "replace"), url))
+        else:
+            sys.stdout.buffer.write(body)
+        alt = getattr(r, "alt", None) or {}
+        if not r.ok and alt.get("candidates"):
+            print("Other pages that may carry the same content:", file=sys.stderr)
+            for c in alt["candidates"]:
+                print("  -", c["url"], c["title"], file=sys.stderr)
+            print("NEXT:", alt.get("next"), file=sys.stderr)
+    sys.exit(0 if r.ok else 2)
+
+if __name__ == "__main__":
+    main()

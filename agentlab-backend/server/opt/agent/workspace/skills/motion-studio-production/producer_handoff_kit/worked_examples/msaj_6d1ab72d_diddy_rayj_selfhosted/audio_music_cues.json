@@ -1,0 +1,3 @@
+{"film_duration_seconds":30,"has_narration":true,"cues":[
+{"id":"feud","start":0,"end":22.3,"prompt":"Dark modern cinematic trap underscore: deep sub-bass 808 pulses, sparse ticking hi-hats, low brooding piano motif in a minor key, rising tension, instrumental, no vocals, restrained so a voiceover can sit on top","bpm":80,"drums":true,"vocals":false},
+{"id":"settle","start":22.3,"end":30,"prompt":"Unresolved cinematic outro: drums drop out, low drone and slow minor piano, one final heavy sub-bass hit that rings out on the last beat, instrumental, no vocals","bpm":80,"drums":false,"vocals":false}]}

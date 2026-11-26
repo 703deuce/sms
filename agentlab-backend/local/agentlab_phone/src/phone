@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""phone: AgentLab's phone line (after-hours call agent). Read/change its setup and read call logs.
+
+  phone status                       number, worker health, current setup in plain words
+  phone config                       full setup as JSON
+  phone set '<json>'                 merge a JSON patch into the setup (validated), e.g. phone set '{"greeting":"..."}'
+  phone set-followups '<json list>'  replace the after-call follow-up list (plain-language instructions)
+  phone calls [-n 10] [--open]       recent calls: time, caller, name, status, message, summary
+  phone call <call_id>               one call in full (details + transcript)
+  phone handled <call_id> --note "…" mark a call handled (what you did)
+
+Owner controls (all validated; the next call uses them):
+  phone on | phone off               turn the phone agent on/off (off: calls are dropped by the AI; set it back on any time)
+  phone emergency transfer|text|message    urgent calls: warm-transfer to the targets | text the owner right away | no urgent handling, take a message for the next business day
+  phone booking live | request | off | link <https://booking-url>    live = book on the connected calendar; request = just collect the preferred time; link = text the owner's booking link
+  phone info '<short facts about the business>'     goes straight into the agent's prompt (hours, address, services, policies)
+  phone faq add "Question" "Answer" | phone faq rm "Question" | phone faq list       short Q&A, in the prompt
+  phone kb add "Title" --file /path/doc.txt   (or --text '...')   long documents (catalogs, manuals, price lists): searched during calls, not in the prompt
+  phone kb list | phone kb rm "Title" | phone kb search "words"
+  phone voices | phone voice <name>   list / change the GPT Live voice (next call)
+Temporary or scheduled changes (code applies them at call time and they expire by themselves; nothing to restore):
+  phone override add '<config patch json>' [--from WHEN] [--until WHEN] [--note "why"]     WHEN = now | tomorrow | monday..sunday | next-open | YYYY-MM-DD | 'YYYY-MM-DD HH:MM' (business timezone)
+      e.g. no transfers tonight:      phone override add '{"emergency":{"policy":"message"}}' --until next-open --note "movies"
+           messages not bookings:     phone override add '{"options":{"appointments":"request"}}' --until monday
+           Calendly link from tomorrow: phone override add '{"options":{"appointments":"link"},"booking":{"booking_link":"https://calendly.com/x"}}' --from tomorrow
+           vacation:                  phone override add '{"greeting":"...","options":{"appointments":"off"}}' --until 2026-12-07
+  phone override list | phone override rm <id>
+Per caller type (existing = number found in call history or in customers; new = everyone else):
+  phone rule existing|new emergency transfer|text|message      phone rule existing|new booking live|request|link|off      phone rule clear existing|new
+  phone customers add +1703... | rm +1703... | list
+After-call standing instructions (run by the follow-up run after EVERY call):  phone followup add "plain words" | rm <n> | list     Local contacts (CRM fallback): phone contact add "Name" --phone +1.. --email .. --note ".." --call <id> | list | search <text>
+phone timing [<call_id>]   per-turn latency table (caller end-of-speech -> GPT Live first audio, tool, Luna steps)    phone cost [-n 10]   per-call cost
+First-time setup: phone setup   (checklist of what is still needed)   phone setup done
+Self-improvement (owner opt-in; nothing runs by itself, nothing changes without the owner approving):
+  phone review [--days 30]           quality evidence from real calls: unanswered questions, abandoned calls, failed bookings, unneeded transfers, wrong captures, top requests
+  phone briefing [--day YYYY-MM-DD]  outcomes summary computed from the logs;  phone briefing enable --at 08:00 | disable
+  phone watch enable|disable | add <url> [--every DAYS] | rm <url> | list | check [--force] [--quiet]    cheap fetch+diff of the owner's site, only when enabled
+  phone proposal add <faq_add|faq_rm|info_set|instructions_add|greeting_set|kb_add> "<question|title>" --text "..." --why "evidence"
+  phone proposal list [--all] | show <id> | approve <id> | reject <id>      approve applies it and records it in config history (phone undo reverts)
+Change history:  phone history   (what changed, when, diff)     phone undo   (put back the previous setup)
+  phone standard <name|callback_number|email|reason> on|off [required|optional] [--ask "wording"]
+  phone field add '{"key":"budget","label":"Budget","ask":"What budget do you have in mind?","required":false,"intents":[]}'
+  phone field rm <key>            phone field list
+  phone intent add '{"name":"new customer","description":"...","fields":["budget"],"questions":["..."],"urgent":false}'
+  phone intent rm <name>
+  phone closure add '{"date":"2026-12-25","name":"Christmas","message":"..."}'   (or start/end, optional "hours":["10:00","14:00"])
+  phone closure rm <date-or-name>
+  phone target add '{"name":"Rick","number":"+17038166017"}'   (ordered fallback list: first added rings first)
+  phone target rm <number>        phone target clear
+Booking setup (times are always in the business timezone; it is required, IANA like America/New_York):
+  phone set '{"timezone":"America/New_York"}'
+  phone set '{"booking":{"appointment_minutes":30,"buffer_minutes":10,"min_notice_hours":4,"days_ahead":30}}'    (slot length 15|30|60)
+  phone set '{"booking":{"booking_hours":{"mon":["09:00","17:00"],"tue":["09:00","17:00"],"wed":null,"thu":["10:00","16:00"],"fri":null,"sat":null,"sun":null}}}'   (give all 7 days; null = no bookings)
+  phone holiday list | open <key> | close <key>      US holidays: closed = not bookable (default all closed)
+  phone blackout add <YYYY-MM-DD | YYYY-MM-DD..YYYY-MM-DD> [name]   one-off days off   |   phone blackout rm <date> | list
+Transfer ring time per number: phone set '{"transfer":{"ring_seconds":30}}'. Hold music: phone set '{"hold_music":{"enabled":true,"path":"/workspace/runs/phone/hold.ogg","volume":0.35}}'.
+Modes: phone set '{"mode":"overflow"}' (answer calls forwarded on busy/no-answer), "after_hours", or "always".
+Spam: phone set '{"spam":{"enabled":true}}'. Owner alerts: phone set '{"notify":{"when":"every_call|messages|urgent|off","email":true,"sms":true}}'.
+"""
+import argparse, json, os, sys
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+sys.path.insert(0, '/opt/tools/pylib_phone'); sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pylib_phone'))
+import store  # noqa
+
+TZ = ZoneInfo('America/New_York')
+
+
+def local(s):
+    try:
+        return datetime.strptime(s, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc).astimezone(TZ).strftime('%a %b %d %I:%M %p ET')
+    except Exception:
+        return s
+
+
+def local_iso(s):
+    if not s:
+        return '-'
+    try:
+        return datetime.fromisoformat(s).astimezone(TZ).strftime('%a %b %d %I:%M %p ET')
+    except Exception:
+        return s
+
+
+def fmt_phone(n):
+    """Ready-to-quote US number, e.g. '(571) 477-6175'. Leave other values unchanged."""
+    if n is None or n == '':
+        return n if n is not None else ''
+    digits = ''.join(c for c in str(n) if c.isdigit())
+    if len(digits) == 11 and digits.startswith('1'):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f'({digits[:3]}) {digits[3:6]}-{digits[6:]}'
+    return str(n)
+
+
+def status():
+    cfg = store.load_config()
+    hb = {}
+    try:
+        hb = json.load(open(os.path.join(store.PHONE_DIR, 'worker-heartbeat.json')))
+    except Exception:
+        pass
+    age = None
+    if hb.get('at'):
+        age = (datetime.now(timezone.utc) - datetime.strptime(hb['at'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)).total_seconds()
+    base_cfg = cfg
+    cfg, _act = store.effective_config(base_cfg)
+    for o in base_cfg.get('overrides') or []:
+        print(f"Override {o['id']} [{'ACTIVE NOW' if o in _act else 'not active'}]: {json.dumps(o['set'])} from {local_iso(o.get('from'))} until {local_iso(o.get('until'))} {o.get('note') or ''}")
+    cr = base_cfg.get('caller_rules') or {}
+    if cr.get('existing') or cr.get('new'):
+        print(f"Caller-type rules: existing={json.dumps(cr.get('existing'))} new={json.dumps(cr.get('new'))}; extra customers: {len(base_cfg.get('customers') or [])}")
+    t = cfg['transfer']
+    print(f"Number: {cfg['phone_number']}  enabled={cfg['enabled']}  worker={'UP' if age is not None and age < 120 else 'DOWN?'} (heartbeat {int(age) if age is not None else '?'}s ago)")
+    print(f"Mode: {cfg['mode']} (AI answers {'every call' if cfg['mode']=='always' else 'outside business hours'}); business hours now: {store.is_business_hours(cfg)}; tz {cfg['timezone']}")
+    print(f"Hours: {json.dumps(cfg['business_hours'])}")
+    print(f"During business hours: {cfg['during_business_hours']}")
+    print(f"Assistant: {cfg['assistant_name']} voice={cfg['voice']}  Greeting: {cfg['greeting']}")
+    print(f"Business info: {cfg['business_info']}")
+    o, b, sms = cfg['options'], cfg['booking'], cfg['sms']
+    print(f"Options: take messages={o['take_message']}  booking mode={o['appointments']} (live|request|link|off)  transfer={o['transfer']}")
+    print(f"Emergency policy: {cfg['emergency']['policy']} (transfer | text the owner | message only for the next business day)")
+    print(f"Business info: {len(cfg['business_info'])} chars in prompt; FAQ items: {len(cfg.get('faq') or [])}; knowledge base docs: {len(store.kb_list())}")
+    tg = ', '.join(f"{x.get('name')} {fmt_phone(x['number'])}" for x in t.get('targets') or []) or '(none set!)'
+    if o.get('transfer'):
+        print(f"Transfer: ON {t['mode']} -> {tg}; rings {t['ring_seconds']}s each; when: {t['when']}")
+    else:
+        print(f"Transfer: off (targets: {tg})")
+    hm = cfg['hold_music']
+    print(f"Hold music: {'on' if hm['enabled'] else 'off'} {hm['path']} vol {hm['volume']}")
+    it = cfg['intake']
+    print('Intake (what the agent asks): ' + '; '.join(f"{k}={'ON' if v['on'] else 'off'}{'*' if v['on'] and v['required'] else ''}" for k, v in it['standard'].items()) + '   (* required)')
+    for c in it['custom']:
+        print(f"  custom {c['key']} [{'required' if c.get('required') else 'optional'}] ask: {c['ask']}" + (f"  only for: {c['intents']}" if c.get('intents') else ''))
+    for i in it['intents']:
+        print(f"  intent {i['name']}: {i.get('description') or ''} fields={i.get('fields')} questions={i.get('questions')}{' URGENT' if i.get('urgent') else ''}")
+    for c in cfg.get('closures') or []:
+        print(f"  closure {c.get('date') or (c['start'] + '..' + c['end'])} {c.get('name') or ''} {c.get('hours') or 'closed'}")
+    nt = cfg['notify']
+    print(f"Owner alerts: when={nt['when']} email={nt['email']} -> {nt['owner_email']}  sms={nt['sms']} -> {[fmt_phone(n) for n in nt['owner_sms']]}  spam filter={cfg['spam']['enabled']}")
+    print(f"Booking: {b['provider']} calendar={b['calendar_id'] or 'default'} tz={cfg['timezone']} {b['appointment_minutes']}min slots, buffer {b['buffer_minutes']}min, next {b['days_ahead']} days, "
+          f"min notice {b['min_notice_hours']}h, hold {b['slot_hold_minutes']}min, link={b['booking_link'] or '-'}")
+    print(f"  booking hours: {json.dumps(b['booking_hours'] or cfg['business_hours'])}{' (= business hours)' if not b['booking_hours'] else ''}")
+    print(f"  closed US holidays: {', '.join(b['holidays']['closed']) or 'none'}; blackout dates: {json.dumps(b['blackout_dates']) if b['blackout_dates'] else 'none'}")
+    print(f"SMS: {'on' if sms['enabled'] else 'off'} from {sms['from']} (platform toll-free; a local number needs A2P)  "
+          f"confirm-by-text={sms['text_caller_confirmation']} text-link={sms['text_booking_link']}")
+    print(f"After call: run agent={cfg['after_call']['run_agent']}; instructions: {cfg['after_call']['instructions']}")
+    for i, f in enumerate(cfg['after_call'].get('follow_ups') or [], 1):
+        print(f"  follow-up {i}: {f}")
+    if cfg.get('extra_instructions'):
+        print(f"Extra instructions: {cfg['extra_instructions']}")
+
+
+def apply(patch):
+    cfg = store.load_config()
+    new = store._merge(cfg, patch)
+    errs = store.validate(new)
+    if errs:
+        sys.exit('Not saved: ' + '; '.join(errs))
+    store.save_config(new)
+    print('Saved. The next call uses it.')
+    status()
+
+
+def main():
+    p = argparse.ArgumentParser(prog='phone', description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('cmd', nargs='?', default='status')
+    p.add_argument('arg', nargs='?')
+    p.add_argument('arg2', nargs='?')
+    p.add_argument('arg3', nargs='?')
+    p.add_argument('--ask', default=None)
+    p.add_argument('--from', dest='frm', default=None)
+    p.add_argument('--until', default=None)
+    p.add_argument('--file', default=None)
+    p.add_argument('--text', default=None)
+    p.add_argument('-n', type=int, default=10)
+    p.add_argument('--open', action='store_true')
+    p.add_argument('--note', default='')
+    p.add_argument('--days', default=None); p.add_argument('--day', default=None); p.add_argument('--today', action='store_true')
+    p.add_argument('--force', action='store_true'); p.add_argument('--quiet', action='store_true'); p.add_argument('--all', action='store_true')
+    p.add_argument('--phone', default=''); p.add_argument('--email', default=''); p.add_argument('--call', default='')
+    p.add_argument('--why', default=''); p.add_argument('--at', default=None); p.add_argument('--every', default=None)
+    a = p.parse_args()
+    if a.cmd == 'status':
+        status()
+    elif a.cmd == 'config':
+        print(json.dumps(store.load_config(), indent=2))
+    elif a.cmd == 'set':
+        try:
+            patch = json.loads(a.arg or '')
+        except Exception as e:
+            sys.exit(f'set needs a JSON object: {e}')
+        if 'phone_number' in patch or 'models' in patch:
+            sys.exit('phone_number/models are changed by the admin (provisioning), not here.')
+        apply(patch)
+    elif a.cmd == 'set-followups':
+        try:
+            lst = json.loads(a.arg or '')
+            assert isinstance(lst, list) and all(isinstance(x, str) for x in lst)
+        except Exception:
+            sys.exit('set-followups needs a JSON list of strings')
+        cfg = store.load_config(); cfg['after_call']['follow_ups'] = lst
+        store.save_config(cfg); print('Saved follow-ups.'); status()
+    elif a.cmd == 'calls':
+        db = store.db()
+        q = 'SELECT * FROM calls' + (' WHERE handled_at IS NULL' if a.open else '') + ' ORDER BY started_at DESC LIMIT ?'
+        rows = db.execute(q, (a.n,)).fetchall()
+        if not rows:
+            print('No calls yet.')
+        for r in rows:
+            print(f"{r['id']}  {local(r['started_at'])}  {r['duration_s']}s  from {fmt_phone(r['caller'])}  name={r['caller_name']}  status={r['status']}"
+                  f"  {'HANDLED' if r['handled_at'] else 'open'}\n   message: {r['message']}\n   summary: {r['summary']}\n   callback: {fmt_phone(r['callback_number'])}"
+                  f"  urgency: {r['urgency']}  intent: {r['intent']}\n   fields: {r['fields']}\n   appointment: {r['appointment']}  transfer: {r['transfer']}  spam: {r['spam']}  alerts: {r['alerts']}")
+    elif a.cmd == 'call':
+        r = store.db().execute('SELECT * FROM calls WHERE id=?', (a.arg,)).fetchone()
+        if not r:
+            sys.exit('No such call id. Use `phone calls`.')
+        d = dict(r); tr = json.loads(d.pop('transcript') or '[]')
+        d['started_at'] = local(d['started_at']); d['ended_at'] = local(d['ended_at'])
+        d['caller'] = fmt_phone(d.get('caller'))
+        d['callback_number'] = fmt_phone(d.get('callback_number'))
+        print(json.dumps(d, indent=1))
+        print('\nTranscript:')
+        for x in tr:
+            print(f"{x['role']}: {x['text']}")
+    elif a.cmd == 'handled':
+        db = store.db()
+        n = db.execute('UPDATE calls SET handled_at=?, handled_note=? WHERE id=?', (store.iso(), a.note[:2000], a.arg)).rowcount
+        print('Marked handled.' if n else 'No such call id.')
+    elif a.cmd in ('on', 'off'):
+        cfg = store.load_config(); cfg['enabled'] = a.cmd == 'on'; store.save_config(cfg)
+        print(f"Phone agent is now {'ON: it answers calls again' if cfg['enabled'] else 'OFF: the AI drops incoming calls until you turn it back on'}."); status()
+    elif a.cmd == 'emergency':
+        pol = {'transfer': 'transfer', 'text': 'text', 'message': 'message'}.get(a.arg or '')
+        if not pol:
+            sys.exit('usage: phone emergency transfer|text|message')
+        cfg = store.load_config(); cfg['emergency']['policy'] = pol
+        cfg['options']['transfer'] = bool(pol == 'transfer' and (cfg['transfer'].get('targets')))
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg); print('Saved. The next call uses it.'); status()
+    elif a.cmd == 'booking':
+        m = (a.arg or '').lower()
+        if m not in ('live', 'request', 'off', 'link'):
+            sys.exit('usage: phone booking live | request | off | link <https://booking-url>')
+        cfg = store.load_config(); cfg['options']['appointments'] = m
+        if m == 'link':
+            if not (a.arg2 or '').startswith('http'):
+                sys.exit('link mode needs the booking URL: phone booking link https://...')
+            cfg['booking']['booking_link'] = a.arg2
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg); print('Saved. The next call uses it.'); status()
+    elif a.cmd == 'info':
+        if not a.arg:
+            print(store.load_config()['business_info']); return
+        cfg = store.load_config(); cfg['business_info'] = a.arg
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg); print('Saved (in the prompt on the next call).')
+    elif a.cmd == 'faq':
+        cfg = store.load_config(); fq = cfg.get('faq') or []
+        if a.arg == 'list':
+            for f in fq:
+                print(f"Q: {f['q']}\nA: {f['a']}")
+            return
+        if a.arg == 'add' and a.arg2 and a.arg3:
+            fq = [f for f in fq if f['q'] != a.arg2] + [{'q': a.arg2, 'a': a.arg3}]
+        elif a.arg == 'rm' and a.arg2:
+            fq = [f for f in fq if f['q'] != a.arg2]
+        else:
+            sys.exit('usage: phone faq add "Question" "Answer" | rm "Question" | list')
+        cfg['faq'] = fq
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg); print(f'Saved. {len(fq)} FAQ items.')
+    elif a.cmd == 'kb':
+        if a.arg == 'add':
+            text = open(a.file).read() if a.file else a.text
+            if not (a.arg2 and text):
+                sys.exit('usage: phone kb add "Title" --file /path/doc.txt  (or --text "...")')
+            print(f'Added "{a.arg2}": {store.kb_add(a.arg2, text)} searchable chunks.')
+        elif a.arg == 'list':
+            for d in store.kb_list():
+                print(f"{d['title']}  ({d['chunks']} chunks, {d['chars']} chars, added {d['added_at']})")
+            if not store.kb_list():
+                print('Knowledge base is empty.')
+        elif a.arg == 'rm' and a.arg2:
+            print('Removed.' if store.kb_rm(a.arg2) else 'No such document.')
+        elif a.arg == 'search' and a.arg2:
+            for r in store.kb_search(a.arg2):
+                print(f"[{r['title']}] {r['text'][:400]}\n")
+        else:
+            sys.exit('usage: phone kb add|list|rm|search')
+    elif a.cmd == 'voices':
+        cfg = store.load_config()
+        print('GPT Live voices: ' + ', '.join(f"{v}{' (current)' if v == cfg['voice'] else ''}" for v in store.VOICES))
+    elif a.cmd == 'voice':
+        if a.arg not in store.VOICES:
+            sys.exit('Not a GPT Live voice. Choose one of: ' + ', '.join(store.VOICES))
+        cfg = store.load_config(); cfg['voice'] = a.arg; store.save_config(cfg); print(f'Voice is now {a.arg}; the next call uses it.')
+    elif a.cmd == 'history':
+        for e in store.history(15):
+            print(f"#{e['id']} {local(e['ts'])} {e['kind']}{' (UNDONE)' if e.get('undone') else ''} {e.get('note') or ''}")
+            for d in e['diff'][:8]:
+                print('    ' + d)
+    elif a.cmd == 'undo':
+        r = store.undo()
+        if not r:
+            sys.exit('Nothing to undo.')
+        print(f"Undid change #{r[0]['id']} ({local(r[0]['ts'])}). Now back to the previous setup:")
+        for d in r[1][:12]:
+            print('    ' + d)
+    elif a.cmd == 'override':
+        cfg = store.load_config(); ov = cfg.get('overrides') or []
+        if a.arg == 'list':
+            eff, act = store.effective_config(cfg)
+            for o in ov:
+                print(f"{o['id']}  {'ACTIVE' if o in act else 'inactive'}  from {local_iso(o.get('from'))} until {local_iso(o.get('until'))}  {json.dumps(o['set'])}  {o.get('note') or ''}")
+            print('No overrides.' if not ov else '')
+            return
+        if a.arg == 'rm':
+            ov = [o for o in ov if o['id'] != a.arg2]
+        elif a.arg == 'add':
+            try:
+                patch = json.loads(a.arg2 or '')
+                assert isinstance(patch, dict)
+                import uuid
+                o = {'id': 'ov-' + uuid.uuid4().hex[:6], 'set': patch, 'from': store.resolve_when(a.frm, cfg, 'from') if a.frm else None,
+                     'until': store.resolve_when(a.until, cfg, 'until') if a.until else None, 'note': a.note or None, 'created': store.iso()}
+            except Exception as e:
+                sys.exit(f'override add needs a JSON patch and valid --from/--until: {e}')
+            if o['from'] and o['until'] and o['until'] <= o['from']:
+                sys.exit('--until must be after --from')
+            ov = ov + [o]
+        else:
+            sys.exit('override add|list|rm')
+        cfg['overrides'] = ov
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        # also validate each override applied on its own
+        for o in ov:
+            e2 = store.validate(store._merge({k: v for k, v in cfg.items() if k != 'overrides'}, o['set']))
+            if e2:
+                sys.exit('Not saved (override would make the setup invalid): ' + '; '.join(e2))
+        store.save_config(cfg, note=f"override {a.arg} {a.arg2 or ''}"[:200]); print('Saved. Applies at call time and expires on its own.'); status()
+    elif a.cmd == 'rule':
+        cfg = store.load_config(); cr = cfg.setdefault('caller_rules', {'existing': {}, 'new': {}})
+        if a.arg == 'clear' and a.arg2 in ('existing', 'new'):
+            cr[a.arg2] = {}
+        elif a.arg in ('existing', 'new') and a.arg2 == 'emergency' and a.arg3 in ('transfer', 'text', 'message'):
+            cr[a.arg].setdefault('emergency', {})['policy'] = a.arg3
+        elif a.arg in ('existing', 'new') and a.arg2 == 'booking' and a.arg3 in ('live', 'request', 'link', 'off'):
+            cr[a.arg].setdefault('options', {})['appointments'] = a.arg3
+        else:
+            sys.exit('usage: phone rule existing|new emergency transfer|text|message | booking live|request|link|off | phone rule clear existing|new')
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg, note=f'rule {a.arg} {a.arg2} {a.arg3 or ""}'); print('Saved.'); status()
+    elif a.cmd == 'customers':
+        cfg = store.load_config(); cu = cfg.get('customers') or []
+        if a.arg == 'list':
+            print('\n'.join(cu) or 'No extra customers (numbers that have called before also count as existing).'); return
+        if a.arg == 'add' and a.arg2:
+            cu = cu + [a.arg2] if a.arg2 not in cu else cu
+        elif a.arg == 'rm' and a.arg2:
+            cu = [x for x in cu if x != a.arg2]
+        else:
+            sys.exit('usage: phone customers add|rm <+E164> | list')
+        cfg['customers'] = cu
+        errs = store.validate(cfg)
+        if errs:
+            sys.exit('Not saved: ' + '; '.join(errs))
+        store.save_config(cfg, note='customers'); print('Saved.')
+    elif a.cmd in ('timing', 'cost'):
+        import extras
+        getattr(extras, a.cmd)(a, print)
+    elif a.cmd in ('followup', 'contact'):
+        import extras
+        getattr(extras, a.cmd)(a, print)
+    elif a.cmd == 'setup':
+        import extras
+        extras.setup(a, print)
+    elif a.cmd in ('watch', 'review', 'briefing', 'proposal'):
+        import extras
+        getattr(extras, a.cmd)(a, print)
+    elif a.cmd in ('standard', 'field', 'intent', 'closure', 'target', 'holiday', 'blackout'):
+        edit(a)
+    else:
+        print(__doc__)
+
+
+def edit(a):
+    cfg = store.load_config()
+    it = cfg['intake']; sub = a.arg
+    if a.cmd == 'standard':
+        k, onoff = a.arg, a.arg2
+        if k not in it['standard'] or onoff not in ('on', 'off'):
+            sys.exit('usage: phone standard <name|callback_number|email|reason> on|off [required|optional] [--ask "wording"]')
+        it['standard'][k]['on'] = onoff == 'on'
+        if a.arg3 in ('required', 'optional'):
+            it['standard'][k]['required'] = a.arg3 == 'required'
+        if a.ask:
+            it['standard'][k]['ask'] = a.ask
+    elif a.cmd == 'holiday':
+        b = cfg['booking']; hl = b.setdefault('holidays', {}).setdefault('closed', [])
+        if sub == 'list':
+            import datetime as _dt
+            y = _dt.date.today().year
+            for k, nm in store.US_HOLIDAYS.items():
+                d = store.us_holidays(y)[k]
+                if d < _dt.date.today():
+                    d = store.us_holidays(y + 1)[k]
+                print(f"{k:12} {nm:28} next {d}  {'CLOSED (not bookable)' if k in hl else 'open (bookable)'}")
+            return
+        if a.arg2 not in store.US_HOLIDAYS or sub not in ('open', 'close'):
+            sys.exit('usage: phone holiday list | open <key> | close <key>; keys: ' + ', '.join(store.US_HOLIDAYS))
+        b['holidays']['closed'] = [k for k in hl if k != a.arg2] + ([a.arg2] if sub == 'close' else [])
+    elif a.cmd == 'blackout':
+        b = cfg['booking']; bl = b.get('blackout_dates') or []
+        if sub == 'list':
+            print(json.dumps(bl)); return
+        if sub == 'add':
+            spec = a.arg2 or ''
+            e = {'start': spec.split('..')[0], 'end': spec.split('..')[1]} if '..' in spec else {'date': spec}
+            if a.arg3:
+                e['name'] = a.arg3
+            bl = bl + [e]
+        elif sub == 'rm':
+            bl = [x for x in bl if (x if isinstance(x, str) else (x.get('date') or x.get('start'))) != a.arg2]
+        else:
+            sys.exit('blackout add|rm|list')
+        b['blackout_dates'] = bl
+    else:
+        def js():
+            try:
+                v = json.loads(a.arg2 or '')
+                assert isinstance(v, dict)
+                return v
+            except Exception:
+                sys.exit(f'{a.cmd} {sub} needs a JSON object')
+        if a.cmd == 'field':
+            if sub == 'list':
+                for c in it['custom']:
+                    print(json.dumps(c))
+                return
+            if sub == 'add':
+                v = js(); it['custom'] = [c for c in it['custom'] if c['key'] != v.get('key')] + [v]
+            elif sub == 'rm':
+                it['custom'] = [c for c in it['custom'] if c['key'] != a.arg2]
+            else:
+                sys.exit('field add|rm|list')
+        elif a.cmd == 'intent':
+            if sub == 'add':
+                v = js(); it['intents'] = [c for c in it['intents'] if c['name'] != v.get('name')] + [v]
+            elif sub == 'rm':
+                it['intents'] = [c for c in it['intents'] if c['name'] != a.arg2]
+                for c in it['custom']:
+                    c['intents'] = [n for n in c.get('intents') or [] if n != a.arg2]
+            else:
+                sys.exit('intent add|rm')
+        elif a.cmd == 'closure':
+            cl = cfg.get('closures') or []
+            if sub == 'add':
+                cl = cl + [js()]
+            elif sub == 'rm':
+                cl = [c for c in cl if a.arg2 not in (c.get('date'), c.get('start'), c.get('name'))]
+            else:
+                sys.exit('closure add|rm')
+            cfg['closures'] = cl
+        elif a.cmd == 'target':
+            t = cfg['transfer']; tg = t.get('targets') or []
+            if sub == 'add':
+                v = js(); tg = [x for x in tg if x['number'] != v.get('number')] + [v]
+            elif sub == 'rm':
+                tg = [x for x in tg if x['number'] != a.arg2]
+            elif sub == 'clear':
+                tg = []
+            else:
+                sys.exit('target add|rm|clear')
+            t['targets'] = tg; t['number'] = tg[0]['number'] if tg else ''
+    errs = store.validate(cfg)
+    if errs:
+        sys.exit('Not saved: ' + '; '.join(errs))
+    store.save_config(cfg)
+    print('Saved. The next call uses it.')
+    status()
+
+
+main()

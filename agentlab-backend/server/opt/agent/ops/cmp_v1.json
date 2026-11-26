@@ -1,0 +1,647 @@
+{
+ "S1": {
+  "name": "Schedule Reminder for Rick's Weekly Status",
+  "before": {
+   "cost": 0.0058,
+   "tokens": {
+    "input": 234,
+    "cache_write": 41114,
+    "cache_read": 40414,
+    "output": 522
+   },
+   "minutes": 0.1,
+   "start_tokens": 40418,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I set up a one-off reminder, `rm_36058e6351`, for tomorrow, Wednesday, November 25, 2026 at 9:00 AM ET. It is scheduled in the system (about 16 hours from now), not just written down.\n\nWhen it fires, it posts a notification to you with the text \"Send Rick's weekly Agent Lab status report.\" It does not start an agent run, so the report itself still has to be written. If you want the agent to draft the report automatically at that time, I can schedule it with `--run` instead."
+  },
+  "after": {
+   "cost": 0.0066,
+   "tokens": {
+    "input": 236,
+    "cache_write": 43422,
+    "cache_read": 84696,
+    "output": 698
+   },
+   "minutes": 0.2,
+   "start_tokens": 42015,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I scheduled the reminder. It fires **Thursday, November 26, 2026 at 9:00 AM ET** (reminder ID rm_ce524b850e).\n\nWhen it fires, it posts a notification to you with the text \"Send Rick's weekly Agent Lab status.\" It only reminds you. It does not compile or send the status itself. If you want the agent to generate and send the status automatically at that time, I can schedule it as an agent run instead."
+  }
+ },
+ "S2": {
+  "name": "Extract Invoice Line Items from PDF to Markdown",
+  "before": {
+   "cost": 0.0061,
+   "tokens": {
+    "input": 268,
+    "cache_write": 41622,
+    "cache_read": 40543,
+    "output": 883
+   },
+   "minutes": 0.1,
+   "start_tokens": 40547,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I read the invoice text directly from the PDF (`pdftotext -layout`). Every figure below comes from the document.\n\n**Vendor:** Northstar Equipment Co., 1847 Howard Street, Suite 200, San Francisco, CA 94103\n**Invoice number:** INV-2026-4418\n**Invoice date:** November 14, 2026 (due December 14, 2026, Net 30)\n**Bill to:** Transovo Studio, Rick James, New York, NY\n\n| # | Description | Qty | Unit price | Amount |\n|---|---|---:|---:|---:|\n| 1 | LED panel kit (bi-color, 1x1) | 2 | $189.00 | $378.00 |\n| 2 | Shotgun microphone | 1 | $249.00 | $249.00 |\n| 3 | C-stand pair | 3 | $75.00 | $225.00 |\n| 4 | Sandbag, 25 lb | 6 | $18.50 | $111.00 |\n| 5 | Gaffer tape (case of 12) | 1 | $42.00 | $42.00 |\n\n**Line items subtotal:** $1,005.00\n**Sales tax:** $80.40\n**Shipping:** $25.00\n**Total due:** $1,110.40\n\n**Check:** The line items add up to the $1,005.00 subtotal, and $1,005.00 + $80.40 tax + $25.00 shipping = $1,110.40, which matches the stated total. Difference: $0.00.\n\nI also checked each row (qty \u00d7 unit price = amount) and all five match."
+  },
+  "after": {
+   "cost": 0.0064,
+   "tokens": {
+    "input": 268,
+    "cache_write": 43073,
+    "cache_read": 41849,
+    "output": 1077
+   },
+   "minutes": 0.3,
+   "start_tokens": 41853,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I read the PDF with `pdftotext`, which extracted the full text on the single page. I checked the arithmetic by hand.\n\n**Invoice INV-2026-4418 from Northstar Equipment Co.**\n\n- **Vendor:** Northstar Equipment Co., 1847 Howard Street, Suite 200, San Francisco, CA 94103\n- **Bill to:** Transovo Studio, Rick James, New York, NY\n- **Invoice date:** November 14, 2026\n- **Invoice number:** INV-2026-4418\n- **Due date:** December 14, 2026 (Net 30)\n\n| Description | Qty | Unit price | Amount |\n|---|---:|---:|---:|\n| LED panel kit (bi-color, 1x1) | 2 | $189.00 | $378.00 |\n| Shotgun microphone | 1 | $249.00 | $249.00 |\n| C-stand pair | 3 | $75.00 | $225.00 |\n| Sandbag, 25 lb | 6 | $18.50 | $111.00 |\n| Gaffer tape (case of 12) | 1 | $42.00 | $42.00 |\n| **Line items subtotal** | | | **$1,005.00** |\n| Sales tax | | | $80.40 |\n| Shipping | | | $25.00 |\n| **Total due** | | | **$1,110.40** |\n\n**Check:** The line items add up to $1,005.00, which matches the stated line-items subtotal, with a difference of $0.00. Each qty \u00d7 unit price matches its amount. The total is $1,005.00 + $80.40 tax + $25.00 shipping = $1,110.40, which matches the total due, with a difference of $0.00. The tax is 8.0% of the subtotal."
+  }
+ },
+ "S3": {
+  "name": "Fill httpbin post form and report submitted data",
+  "before": {
+   "cost": 0.0132,
+   "tokens": {
+    "input": 281,
+    "cache_write": 49430,
+    "cache_read": 537137,
+    "output": 3210
+   },
+   "minutes": 0.5,
+   "start_tokens": 40249,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "The form posted successfully. httpbin returned the submitted values as JSON at `https://httpbin.org/post`:\n\n- **Customer name:** Rick James\n- **Telephone:** 555-0100\n- **E-mail:** rick@transovo.ai\n- **Pizza size:** medium\n- **Toppings:** bacon, onion\n- **Delivery time:** 12:00 (I entered it as 12:00 PM)\n- **Comments:** Agent Lab form test\n\nI chose the telephone, email, size, toppings and delivery time myself since you left those open. Those are placeholder values, not real contact details. The first try to load the page came back blank, so I reloaded it. Before submitting I took a screenshot and checked that every field held the intended value.\n\nChecks: pass/fail is **PASS**. The result page shows every field I filled with the value I entered. Quality is good: the posted values match the form. Cost is about $0 (browser only, no paid tools used).\n\nScreenshot of the filled form before submit: `/workspace/jobs/3b595bf4-ceca-4d63-b843-413872fb6133/form_before.png`"
+  },
+  "after": {
+   "cost": 0.021,
+   "tokens": {
+    "input": 291,
+    "cache_write": 104524,
+    "cache_read": 559749,
+    "output": 4662
+   },
+   "minutes": 0.9,
+   "start_tokens": 41906,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Heads-up: my first submission was incomplete. The server only received Customer name \"Rick James\" and Telephone \"555-0100\"; the email, size, toppings, time and instructions were lost because my fill step failed partway and I submitted anyway. I've started a background job to fill every field and submit once more, then report the exact values the server received. I'll send you the result when it finishes."
+  }
+ },
+ "S4": {
+  "name": "Slugify CSV Dates CLI With Strict Mode",
+  "before": {
+   "cost": 0.0085,
+   "tokens": {
+    "input": 368,
+    "cache_write": 43951,
+    "cache_read": 124434,
+    "output": 3375
+   },
+   "minutes": 0.2,
+   "start_tokens": 40383,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I wrote `out/slugify-dates.py` and `out/README.md`, and ran a 4-row sample through the script in normal and strict modes. All four dates parse correctly, and the one bad date behaves as specified.\n\nSample input (the CSV is `title,date`, with the `Nov 22, 2026` field quoted):\n```\n\"Launch Day: Caf\u00e9 & Cr\u00e8me!\",11/22/26\nHello World,2026-11-22\n\"Q4 Recap \u2014 Final\",\"Nov 22, 2026\"\nBroken Date,2026-13-45\n```\n\nNormal mode (`python3 slugify-dates.py < sample.csv`), exit code 1:\n```\nslug,iso_date\nlaunch-day-cafe-creme,2026-11-22\nhello-world,2026-11-22\nq4-recap-final,2026-11-22\nerror: bad date '2026-13-45' for title 'Broken Date'\nbroken-date,\n```\n\nStrict mode (`--strict`), exit code 2:\n```\nslug,iso_date\nlaunch-day-cafe-creme,2026-11-22\nhello-world,2026-11-22\nq4-recap-final,2026-11-22\nerror: bad date '2026-13-45' for title 'Broken Date'\n```\n\nWhat I checked:\n- Slugs are lowercase ASCII with hyphens; accents are stripped (Caf\u00e9 \u2192 cafe) and punctuation collapses to single hyphens.\n- All three date formats and the `11/22/26` short year produce `YYYY-MM-DD`.\n- A bad date gives exit 2 in strict mode and stops at that row. In normal mode it prints an empty `iso_date`, writes a message to stderr, and exits 1.\n- No network install was used.\n\nDecisions to note:\n- The spec didn't say what non-strict mode should do with a bad date, so I print an empty `iso_date` and exit 1. Tell me if you want a different behaviour.\n- Dates containing a comma, such as `Nov 22, 2026`, must be quoted in the CSV. The first "
+  },
+  "after": {
+   "cost": 0.0102,
+   "tokens": {
+    "input": 370,
+    "cache_write": 48506,
+    "cache_read": 177242,
+    "output": 4610
+   },
+   "minutes": 0.5,
+   "start_tokens": 42027,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Done. The CLI is at `out/slugify-dates.py` and its usage notes are at `out/README.md`. It uses only the Python standard library, with no network install.\n\n**What it does**\n- Reads `title,date` CSV from stdin and prints `slug,iso_date` with no header.\n- Slugs are lowercase ASCII with hyphens; accents are folded (Caf\u00e9 \u2192 cafe, \u00dcber \u2192 uber).\n- Accepts `11/22/26`, `11/22/2026`, `2026-11-22`, `Nov 22, 2026`, `November 22, 2026`. Output is always `YYYY-MM-DD`.\n- Without `--strict`, a bad date prints an empty date field and a warning on stderr; exit 0.\n- With `--strict`, the first bad date exits 2.\n\n**Sample run (4 rows, one bad date)**\n```\n== normal ==\nhello-world-friends,2026-11-22\ncafe-ole-year-end-review,2026-11-22\nuber-plan-2,2026-11-22\nbad date for 'Bad Row': '22/11/2026'\nbad-row,\nexit=0\n== strict ==\nhello-world-friends,2026-11-22\ncafe-ole-year-end-review,2026-11-22\nuber-plan-2,2026-11-22\nbad date for 'Bad Row': '22/11/2026'\nexit=2\n```\n\n**Checks**\n- Three valid formats parsed to the correct ISO date. The bad row (`22/11/2026`, day-first) was flagged in both modes.\n- Strict mode exits 2, normal mode exits 0.\n- My first sample had unquoted commas in the titles and the `Nov 22, 2026` date, which broke the CSV columns. That was my input error; the rerun uses proper quoting, and the script is unchanged.\n\n**Known minor issues**\n- Only the day-first input `22/11/2026` is rejected. The tool assumes US month-first for slash dates, which is what the examples show.\n- Non-ASCII characters "
+  }
+ },
+ "S5": {
+  "name": "Q1 Marketing Budget Excel Workbook with Formulas",
+  "before": {
+   "cost": 0.0093,
+   "tokens": {
+    "input": 304,
+    "cache_write": 45886,
+    "cache_read": 126633,
+    "output": 4601
+   },
+   "minutes": 0.3,
+   "start_tokens": 40524,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I created the workbook at `out/q1-budget.xlsx`. The grand total is **$19,630.00**.\n\nI read \"3-month marketing budget\" as January\u2013March spend for a small video studio. The figures are invented, as you asked.\n\n- **Actuals sheet:** 13 rows with Month, Category and Amount (Jan\u2013Mar, seven categories).\n- **Summary sheet:** totals by category, totals by month, and a grand total. Every number is a formula (`SUMIFS` and `SUM`) that references Actuals, with no pasted values.\n\nChecks I ran:\n- I recalculated the file in LibreOffice and read back the values. Category totals sum to $19,630 and month totals (Jan $5,750, Feb $5,730, Mar $8,150) sum to $19,630.\n- A direct Python sum of the 13 Actuals rows also gives $19,630.\n\nI did not make a 480p preview, since this is a spreadsheet and not a video. Costs: none; no paid calls were made."
+  },
+  "after": {
+   "cost": 0.0109,
+   "tokens": {
+    "input": 306,
+    "cache_write": 49762,
+    "cache_read": 174453,
+    "output": 5759
+   },
+   "minutes": 0.6,
+   "start_tokens": 41991,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I made `out/q1-budget.xlsx` with an Actuals sheet and a Summary sheet. The grand total is **$31,340.00**.\n\n- **Actuals:** 15 rows of invented spend for Jan\u2013Mar 2026 across seven categories (Paid Social Ads, Google Search Ads, Video Production, Events & Trade Shows, Influencer Partnerships, Print & Signage, Software & Tools).\n- **Summary:** one row per category with Jan, Feb, Mar and Total columns, plus a monthly Total row and a Grand total. Every number is a live formula: SUMIFS against Actuals for the category-by-month cells, SUM for the totals.\n\nChecks:\n- I recalculated the workbook in LibreOffice. The Summary totals match a direct Python sum of the Actuals rows: $31,340.00 both ways. Monthly totals are $8,470 (Jan), $9,970 (Feb) and $12,900 (Mar).\n- The Actuals sheet has 15 data rows, above your 12-row minimum.\n\nThe file was saved by openpyxl, so the formula cells have no cached values. Excel and LibreOffice calculate them on open, but a previewer that doesn't calculate may show them blank."
+  }
+ },
+ "S6": {
+  "name": "Gemini Nano Banana model ID and 1K image pricing",
+  "before": {
+   "cost": 0.0106,
+   "tokens": {
+    "input": 239,
+    "cache_write": 70979,
+    "cache_read": 98822,
+    "output": 1458
+   },
+   "minutes": 0.2,
+   "start_tokens": 40404,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "**Short answer:** The current official model id is **`gemini-nano-banana-2.1`**. A single 1K image costs **$0.0336 on the paid Standard tier** (Batch is $0.0168). This is list pricing, not a cost from this conversation, so I did not run `usage`.\n\n- **Model id:** `gemini-nano-banana-2.1` is described as the latest Nano Banana model, an update to Nano Banana 2 (`gemini-3.1-flash-image`). The guide says Nano Banana 2 is now the previous generation and recommends 2.1 for new projects. Default output is 1K.\n- **Price:** The model page's Standard tab gives output images at $30 per 1M tokens, which is equivalent to $0.0336 per 1K image (1024\u00d71024, 1,120 tokens). It also lists $0.0504 for 2K and $0.113 for 4K. The Batch tab gives $0.0168 per 1K image. Google's free tier does not cover image output.\n- **Caveat:** The model page is dated October 2026. The free-tier and Standard prices can change, so check the pricing page before budgeting. I read the model page's pricing tab in full. I did not read the pricing page's own Nano Banana section, which I could not reach in the truncated fetch.\n\n**Sources read:**\n- https://ai.google.dev/gemini-api/docs/image-generation\n- https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1\n- https://ai.google.dev/gemini-api/docs/pricing (partially; the header and Gemini 4/3.x tables only)"
+  },
+  "after": {
+   "cost": 0.0105,
+   "tokens": {
+    "input": 239,
+    "cache_write": 70770,
+    "cache_read": 102135,
+    "output": 1299
+   },
+   "minutes": 0.3,
+   "start_tokens": 41964,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "**Short answer**\n\n- **Model id:** `gemini-nano-banana-2.1`. Google's docs call it the latest Nano Banana model and list it as the stable version. The docs also say Nano Banana 2 (`gemini-3.1-flash-image`) is the previous generation and is \"recommended for all new projects to use Nano Banana 2.1.\"\n- **1K image cost (paid Standard tier):** **$0.0336 per image**. That is $30.00 per 1M output image tokens, with a 1K image consuming 1,120 tokens. The Batch tier is $0.0168 per 1K image.\n\n**Sources I read**\n- https://ai.google.dev/gemini-api/docs/image-generation (model list and code samples using `gemini-nano-banana-2.1`)\n- https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1 (model page with the Standard and Batch pricing tables)\n- https://ai.google.dev/gemini-api/docs/pricing (general pricing page; it only has the 1K figure in the per-model sections that were truncated)\n\n**Caveat:** The pricing page I read was truncated before its image-model section. The per-model page gives the same $0.0336 figure, so the two sources agree on the number I'm quoting. This is a web read, not a live API call, and no paid calls were made."
+  }
+ },
+ "S7": {
+  "name": "Save Rick's Agent Lab test recap preferences",
+  "before": {
+   "cost": 0.0053,
+   "tokens": {
+    "input": 218,
+    "cache_write": 40095,
+    "cache_read": 0,
+    "output": 450
+   },
+   "minutes": 0.1,
+   "start_tokens": 40099,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "It's already in long-term memory, so I didn't add a duplicate. Three shared entries cover it:\n\n- **#23** (preference, Nov 24): Agent Lab test recaps lead with pass/fail, then quality, then cost.\n- **#12** (rule): the same order, stated as a rule.\n- **#11** (preference, Nov 23): the same order again.\n\nFrom now on I'll lead Agent Lab test recaps with pass/fail, then quality, then cost, and I'll quote the cost total from `usage --conversation` when I state a cost."
+  },
+  "after": {
+   "cost": 0.0054,
+   "tokens": {
+    "input": 218,
+    "cache_write": 41648,
+    "cache_read": 0,
+    "output": 355
+   },
+   "minutes": 0.2,
+   "start_tokens": 41652,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Got it. This preference is already in long-term memory as three shared entries (#11, #12 and #23), so I didn't add a duplicate. Agent Lab test recaps will lead with pass/fail, then quality, then cost."
+  }
+ },
+ "S8": {
+  "name": "Parallel Transcription and Title Card Generation",
+  "before": {
+   "cost": 0.0081,
+   "tokens": {
+    "input": 288,
+    "cache_write": 44445,
+    "cache_read": 165626,
+    "output": 1669
+   },
+   "minutes": 0.7,
+   "start_tokens": 40518,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "Both outputs are done. They ran one after the other, not in parallel, because I started the transcription in the background and then ran the image generation in the foreground. Both finished in about a minute.\n\n**Outputs** (in `/workspace/jobs/1dd4bd70-4a18-40c6-a9aa-62c242bdd56a/out/`):\n- `talk.json`: transcript with word timestamps. It has 13 words over 6.02 s, and the first words are \"so\" at 1.60 s and \"talk\" at 2.56 s. The text is \"So, talk about a little bit about your background and your military background.\"\n- `title.png`: a 1K title card with \"Weekly Status\" in white on a near-black background, with a pink-to-orange accent line under it. I checked it by eye and it has no other text. I chose a 16:9 aspect ratio myself because you didn't specify one.\n\n**Cost** (`usage --conversation`, measured total): **$0.0448**\n- Image generation: $0.0379\n- Transcription: $0.0004\n- This conversation's LLM use: $0.0064"
+  },
+  "after": {
+   "cost": 0.0095,
+   "tokens": {
+    "input": 306,
+    "cache_write": 49298,
+    "cache_read": 222781,
+    "output": 2190
+   },
+   "minutes": 0.5,
+   "start_tokens": 42087,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Nothing new from Rick, so the task is complete and nothing is still running.\n\n- `out/talk.json`: word timestamps for the 13 words in the 6.02 s clip.\n- `out/title.png`: 1K \"Weekly Status\" title card, 16:9 (an aspect ratio you did not ask for; say if you want another).\n- Combined cost: $0.0456 (measured with `usage --conversation`, before this reply's LLM call)."
+  }
+ },
+ "S9": {
+  "name": "Trim, Scale, and Add Title Card to Video",
+  "before": {
+   "cost": 0.011,
+   "tokens": {
+    "input": 331,
+    "cache_write": 47522,
+    "cache_read": 306515,
+    "output": 3844
+   },
+   "minutes": 0.5,
+   "start_tokens": 40262,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I made `out/open.mp4` and its 480p preview `out/open_480p.mp4`. The title card shows for the first second over the trimmed clip.\n\nI read the title card as `src/title.png`, since `out/weekly-status.png` doesn't exist in this job and you said to use `src/title.png` if you provided one.\n\n**What I did**\n- Trimmed the first 3 seconds from `src/clip.mp4`, which is 5.5 s long.\n- The clip was already 1920x1080, so I didn't scale it.\n- The title image is square (1024x1024). Stretching it to 16:9 distorted the text, so I fit it at its native aspect, centred, on its own background colour (#121216).\n- Overlaid the title for 0 to 1.0 s. The audio track is kept.\n\n**Measured results**\n\n| Item | Requested | Measured |\n|---|---|---|\n| Trim | first 3 s removed | output 2.500 s |\n| Resolution | 1920x1080 | 1920x1080 |\n| Title card | first 1.0 s | frames 0 and 29 (0 to 0.97 s) show the title, frames 30 and 74 show the clip |\n| Preview | 480p | 854x480, 2.507 s |\n| Audio | kept | AAC present in both files |\n\nI checked the frames by eye: the title is readable and undistorted, and there are no black frames.\n\n**Known minor issues**\n- The preview is 854x480 rather than exactly 640x360, because it keeps the 16:9 ratio at 480 lines.\n\nNo costs were incurred; this was local ffmpeg work."
+  },
+  "after": {
+   "cost": 0.0121,
+   "tokens": {
+    "input": 361,
+    "cache_write": 51136,
+    "cache_read": 317866,
+    "output": 5054
+   },
+   "minutes": 0.6,
+   "start_tokens": 41888,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "No new instruction from Rick, so nothing further to do. The earlier delivery stands: out/open.mp4 (1920x1080, 3.00 s audio, video stream 2.97 s) with the title card for the first 1.0 s, and out/open_480p.mp4 (854x480, 3.00 s). Known minor issue: the video stream is one frame short of 3 seconds. No paid tools were used, so the cost is zero."
+  }
+ },
+ "S10": {
+  "name": "Weekly Status Title Card Image Generation and QA",
+  "before": {
+   "cost": 0.0075,
+   "tokens": {
+    "input": 292,
+    "cache_write": 43554,
+    "cache_read": 124533,
+    "output": 1470
+   },
+   "minutes": 0.3,
+   "start_tokens": 40404,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "The title card is saved at `/workspace/jobs/7dc494a7-a34d-4c7a-8f42-af54351f402e/out/weekly-status.png`.\n\n**QA:**\n- `look` would not run on this model. It told me to use `agent_view` because my model can see images, so I judged the image with `agent_view` instead. The `look` QA line you asked for does not exist for this run.\n- What I saw: the text reads exactly \"WEEKLY STATUS\" in a clean, condensed sans-serif. It is white on a near-black background, fully readable, not cropped, with no photos or watermarks.\n- Measured size: 1024\u00d71024 PNG (1K), checked with PIL.\n\n**Cost:** the image tool reported an estimated $0.0379 for this one image. I have not run `usage --conversation`, so that figure is the tool's estimate, not the conversation total.\n\nI did not need a second attempt because the first image passed."
+  },
+  "after": {
+   "cost": 0.0082,
+   "tokens": {
+    "input": 294,
+    "cache_write": 45524,
+    "cache_read": 173116,
+    "output": 1490
+   },
+   "minutes": 0.5,
+   "start_tokens": 41989,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "The title card is saved at `/workspace/jobs/f87306ec-6a89-4e6e-a48c-3057c4d4c977/out/weekly-status.png`.\n\n**QA:**\n- **`look`:** The command did not return a verdict. It told me my own model can see images and to judge the image with `agent_view`, so I did. `look` only printed that redirect and the file size.\n- **My own check (`agent_view`):** The image shows \"WEEKLY STATUS\" in white, clean sans-serif capitals on a solid dark background. The text is fully readable and not cropped, with no photos or watermarks. It passes on that basis.\n\n**Measured:** 1376\u00d7768 PNG (16:9). I passed `--aspect 16:9` myself because you didn't specify an aspect ratio. The 1K size is the tool's standard size, not an extra choice.\n\n**Cost:** The image call was estimated at $0.0384 (1K). I did not run `usage --conversation`, so that is the only figure I have, not a conversation total."
+  }
+ },
+ "S11": {
+  "name": "Rick's Skill: Burned-In Captions Rules Check",
+  "before": {
+   "cost": 0.0096,
+   "tokens": {
+    "input": 231,
+    "cache_write": 62906,
+    "cache_read": 99286,
+    "output": 1481
+   },
+   "minutes": 0.2,
+   "start_tokens": 40225,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "**Short answer: no.** Burned-in captions are not acceptable for a customer-facing social clip under Rick's production rules. Captions must be a separate file or track, and the editable package keeps them as layers.\n\nI loaded the `motion-studio-production` skill and read its hard-rules section and the rule files. Where the rule is stated:\n\n- **`SKILL.md`, section 2 \"Hard rules\"** (around line 83): \"Captions are always a separate file or track, never burned in. Titles, lower-thirds and captions are separate layers, never burned into footage.\"\n- **`RULES_FROM_RICK.md`, \u00a73 rule 7** (line 60, dated Nov 17\u201318): \"Captions are never burned in\u2026 no burn-in option. The finished MP4 and preview show them composited on top, but the editable package always keeps them as layers.\"\n- **`clip-production.md`** (caption section, around line 206): clip captions are \"never burned into the editable package,\" and they are rendered only in the finished MP4 and preview. This is the rule for social clips specifically.\n- **Supporting mentions:** `craft/README.md` line 15, `craft/by-video-type.md` line 50, `craft/review.md` line 66 (burned-in captions are a review failure), `qa.md` line 104, and `delivery.md` line 5.\n\nSome nuance. The finished MP4 can show captions composited on top; that is the only place they are rendered. The \"never burned in\" rule governs the source and editable layers, which must stay separate. So for a social clip, the right output is a clean caption track or `.srt`/`.vtt` delivere"
+  },
+  "after": {
+   "cost": 0.0098,
+   "tokens": {
+    "input": 231,
+    "cache_write": 64318,
+    "cache_read": 102835,
+    "output": 1485
+   },
+   "minutes": 0.2,
+   "start_tokens": 41780,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "**Short answer: no.** Under Rick's production rules, captions on a customer-facing social clip are never burned into the video. They have to be a separate .srt file or editable track.\n\nI loaded the `motion-studio-production` skill in full and found the rule in these places:\n\n- **`SKILL.md`, section 2 \"Hard rules\"** (the rule that never bends): \"Captions are always a separate file or track, never burned in. Titles, lower-thirds and captions are separate layers, never burned into footage.\"\n- **`RULES_FROM_RICK.md`, item 7** (dated Nov 17\u201318): \"Captions are never burned in. Captions, titles and lower-thirds are separate editable layers/tracks (captions as SRT/track); no burn-in option.\"\n- **`RULES_FROM_RICK.md`, item 9** (Nov 18): captions are \"always a separate track and never burned in.\"\n- **`craft/design-and-motion.md`, section 7 \"Captions (always a separate file or track)\"**.\n- **`SKILL.md`, section 5 (clip jobs)**: clip captions are delivered as `srt`/`vtt` plus edits layers, and `emphasis` is limited to 3\u20134 payoff words.\n\nOne thing to be aware of: `RULES_FROM_RICK.md` item 7 says \"the finished MP4 and preview show them composited on top.\" That describes how the preview looks, not a burn-in option. The rule still requires the captions to stay as separate layers or an SRT. If Rick wants the finished MP4 to show captions, the skill doesn't address that case, so ask him before treating it as allowed."
+  }
+ },
+ "S12": {
+  "name": "Agent Lab Test Recap Page Publishing",
+  "before": {
+   "cost": 0.0093,
+   "tokens": {
+    "input": 266,
+    "cache_write": 47583,
+    "cache_read": 217325,
+    "output": 2295
+   },
+   "minutes": 0.3,
+   "start_tokens": 40176,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "The recap is published. It leads with how we score, then the example table, then notes.\n\n- **Slug:** `agent-lab-test-recap-nov24`\n- **URL:** https://transovo.ai/app/agent-lab/pages/agent-lab-test-recap-nov24\n\n**Checks:**\n- The page loads in the browser at 5:00 PM ET on Nov 24, with the title, the \"How we score\" section and the scoring order (pass/fail, quality 1\u20135, time, cost).\n- The source file has the three-row example table (Pass/Fail, Quality, Time, Cost, Note) with made-up results. The table sits below the first screen, so I confirmed its rows in the source rather than in the screenshot.\n\nI reused the wording from the Nov 22 recap (`agent-lab-test-recap-scoring`) and did not write new content. The 15-task list is described there only in summary, so if you want the task list itself in the page, tell me which tasks to include."
+  },
+  "after": {
+   "cost": 0.0231,
+   "tokens": {
+    "input": 286,
+    "cache_write": 112224,
+    "cache_read": 538106,
+    "output": 7284
+   },
+   "minutes": 1.1,
+   "start_tokens": 41741,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I'm on it. The recap page is being written and published in the background, and I'll send you the slug and URL when it's live."
+  }
+ },
+ "S13": {
+  "name": "Browser Research: 6 Wikipedia Pages Summary",
+  "before": {
+   "cost": 0.0382,
+   "tokens": {
+    "input": 561,
+    "cache_write": 141086,
+    "cache_read": 1386653,
+    "output": 13250
+   },
+   "minutes": 1.8,
+   "start_tokens": 40785,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "All six pages are done. The two files are:\n\n- `/workspace/jobs/b0f3d1df-2395-4a39-9b7d-6fe6d58ebff5/notes.md`\n- `/workspace/jobs/b0f3d1df-2395-4a39-9b7d-6fe6d58ebff5/summary.md`\n\n**What I checked**\n- Each page was opened in the browser, its full text was read, and a screenshot was taken (shot1\u2013shot6.png). I viewed shot5 and shot6 with `agent_view`. Shot5 confirmed the Motion graphics page. Shot6 confirmed the Documentary film page.\n- I did not view shots 1\u20134 again in this pass. Shot4 was viewed earlier.\n- Page 5's screenshot was taken earlier, but I had written its notes before confirming the file, so I checked it now.\n- Notes for all six pages are in `notes.md`. The summary has 10 bullets. I corrected one bullet that claimed a link between pages 2 and 3 that I had not verified.\n\n**Caveat**\n- The task did not name an output format, so `summary.md` is plain bullets. Tell me if you want it in a different form.\n\nNo cost was incurred: the browser and the screenshots are free local tools, and no paid media calls were made."
+  },
+  "after": {
+   "cost": 0.047,
+   "tokens": {
+    "input": 559,
+    "cache_write": 147833,
+    "cache_read": 2203154,
+    "output": 12922
+   },
+   "minutes": 1.8,
+   "start_tokens": 42069,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I'm on it. The six-page Wikipedia test is running in the background, and I'll send you the two file paths (notes.md and summary.md) when it finishes."
+  }
+ },
+ "R1": {
+  "name": "rt1 trim clip",
+  "before": {
+   "cost": 0.0151,
+   "tokens": {
+    "input": 384,
+    "cache_write": 102138,
+    "cache_read": 147408,
+    "output": 1704
+   },
+   "minutes": 0.3,
+   "start_tokens": 48849,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I've started the background job \"rt1 trim clip\" to trim the first 5 seconds, scale it to 1280x720 and save it as out/clip5s_720p.mp4. I'll send you the duration, resolution and codecs when it finishes."
+  },
+  "after": {
+   "cost": 0.0136,
+   "tokens": {
+    "input": 384,
+    "cache_write": 90338,
+    "cache_read": 128009,
+    "output": 1936
+   },
+   "minutes": 0.5,
+   "start_tokens": 42045,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I've started the background job \"rt1 trim clip\" to trim the first 5 seconds of the clip, scale it to 1280x720 H.264 with AAC audio, and verify it with ffprobe. I'll relay the result when it arrives."
+  }
+ },
+ "R2": {
+  "name": "rt2 file report",
+  "before": {
+   "cost": 0.0161,
+   "tokens": {
+    "input": 381,
+    "cache_write": 103185,
+    "cache_read": 197756,
+    "output": 2281
+   },
+   "minutes": 0.4,
+   "start_tokens": 48896,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the file report on the Deen/Ray J clips is running in the background, and I'll send you the results when it finishes."
+  },
+  "after": {
+   "cost": 0.0157,
+   "tokens": {
+    "input": 383,
+    "cache_write": 93389,
+    "cache_read": 218836,
+    "output": 3527
+   },
+   "minutes": 0.5,
+   "start_tokens": 42084,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the \"rt2 file report\" background job is running and I'll send you the result when it finishes."
+  }
+ },
+ "R3": {
+  "name": "rt3 landing page",
+  "before": {
+   "cost": 0.463,
+   "tokens": {
+    "input": 389,
+    "cache_write": 108360,
+    "cache_read": 307262,
+    "output": 5111
+   },
+   "minutes": 1.1,
+   "start_tokens": 48872,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "On it: the Lumen Mug landing page is running in the background, and I'll send it over when it's done."
+  },
+  "after": {
+   "cost": 1.136,
+   "tokens": {
+    "input": 40,
+    "cache_write": 183935,
+    "cache_read": 790273,
+    "output": 9116
+   },
+   "minutes": 1.8,
+   "start_tokens": 43072,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the Lumen Mug landing page is running in the background, and I'll send it to you when it's done."
+  }
+ },
+ "R4": {
+  "name": "rt4 title card",
+  "before": {
+   "cost": 0.5164,
+   "tokens": {
+    "input": 381,
+    "cache_write": 171333,
+    "cache_read": 678471,
+    "output": 8066
+   },
+   "minutes": 1.6,
+   "start_tokens": 48740,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I've started the background job for the 5-second title card (1920x1080, 30 fps, silent H.264 MP4 at `out/title.mp4`). I'll send the result when it's ready."
+  },
+  "after": {
+   "cost": 1.7831,
+   "tokens": {
+    "input": 70,
+    "cache_write": 273562,
+    "cache_read": 2066536,
+    "output": 15960
+   },
+   "minutes": 3.9,
+   "start_tokens": 44177,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the title card video is running in the background, and I'll send it over when it's done."
+  }
+ },
+ "R5": {
+  "name": "rt5 sales chart",
+  "before": {
+   "cost": 0.51,
+   "tokens": {
+    "input": 376,
+    "cache_write": 110119,
+    "cache_read": 413440,
+    "output": 4964
+   },
+   "minutes": 1.2,
+   "start_tokens": 48883,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the Lumen Mug sales bar chart is running in the background, and I'll send it here when it's done."
+  },
+  "after": {
+   "cost": 1.0184,
+   "tokens": {
+    "input": 388,
+    "cache_write": 179159,
+    "cache_read": 728909,
+    "output": 7975
+   },
+   "minutes": 1.9,
+   "start_tokens": 42067,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "The sales chart is ready: `helpers/16a5e461-f44e-47c0-82af-1595f0abda84/out/chart.png` in your job folder.\n\nI checked the image myself. It is 1600x900 and titled \"Lumen Mug sales 2026\". It has four bars labelled $120K, $165K, $140K and $210K for Q1 to Q4, and nothing is clipped. The chart also has a \"Total 2026: $635K\" note in the corner, which you didn't ask for. It adds up correctly.\n\nThe fictional-data subtitle and the dark pink-to-orange styling were also in the result. The font is DejaVu Sans, because the brand font Geist isn't installed on the server. The job cost nothing."
+  }
+ }
+}

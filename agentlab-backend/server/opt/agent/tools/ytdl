@@ -1,0 +1,305 @@
+#!/usr/bin/env python3
+"""ytdl: YouTube fetch through the AgentLab egress gateway, with size tiers.
+
+usage:
+  yt-transcript URL [-o DIR] [--lang en]
+  ytdl [--tier transcript|frames|full] [--job ID] URL [yt-dlp args...]
+  yt-dlp ...   (drop-in; same proxy/retry, defaults to --tier frames if you omit -f)
+
+Tiers (smallest media that does the job):
+  transcript  captions/transcript only (no video). Prefer this to understand a video.
+  frames      240p video-only (144p or 360p if 240p is missing). For looking at pictures.
+  full        edit-quality download. Only when a clip will go into an edit.
+
+Retries "Sign in to confirm you're not a bot" up to 5 times with a new sticky
+session (and one immediate retry of the same session if configured).
+Caches under /workspace/usage/ytdl-cache/<video_id>/.
+"""
+from __future__ import annotations
+
+import hashlib, json, os, re, shutil, subprocess, sys, time
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+GATEWAY = os.environ.get("EGRESS_PROXY", "http://127.0.0.1:18080")
+VENV_YT = os.environ.get("YTDLP_BIN", "/workspace/usage/ytdlp-venv/bin/yt-dlp")
+SYSTEM_YT = "/usr/local/bin/yt-dlp"
+DENO = os.environ.get("YTDLP_DENO", "/usr/local/bin/deno")
+CACHE = Path(os.environ.get("YTDL_CACHE", "/workspace/usage/ytdl-cache"))
+MAX_TRIES = 5
+# Tuned by the Nov 24 same-sessid test: a blocked sticky IP stayed blocked on
+# retries of the same sessid, so we switch immediately after one quick retry
+# (no minute-long wait). Set to 0 to switch on the first block.
+SAME_IP_RETRIES = 1
+FRAMES_FORMAT = "bv*[width<=240]/bv*[height<=240]/bv*[width<=360]/bv*[height<=360]/b[width<=240]/b[height<=240]"
+BOT = re.compile(r"Sign in to confirm|not a bot", re.I)
+ID_RE = re.compile(r"(?:v=|/shorts/|/live/|/embed/|youtu\.be/)([A-Za-z0-9_-]{11})")
+
+
+def die(msg, code=1):
+    print(f"ytdl: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def which_yt():
+    for p in (VENV_YT, SYSTEM_YT):
+        if p and os.path.isfile(p) and os.access(p, os.X_OK):
+            # never call ourselves
+            if os.path.realpath(p) == os.path.realpath(__file__):
+                continue
+            return p
+    die("yt-dlp binary not found (install the ytdlp-venv)")
+
+
+def video_id(url: str):
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", url or ""):
+        return url
+    m = ID_RE.search(url or "")
+    if m:
+        return m.group(1)
+    q = parse_qs(urlparse(url or "").query)
+    v = (q.get("v") or [None])[0]
+    return v if v and re.fullmatch(r"[A-Za-z0-9_-]{11}", v) else None
+
+
+def job_id(explicit=None):
+    if explicit:
+        return explicit
+    env = os.environ.get("AGENT_JOB_ID") or os.environ.get("JOB_ID")
+    if env:
+        return env
+    cwd = os.getcwd()
+    m = re.search(r"/workspace/jobs/([0-9a-fA-F-]{36})", cwd)
+    if m:
+        return m.group(1)
+    return "default"
+
+
+def proxy_url(job, attempt):
+    # Local gateway uses the user as the sticky key. Changing it rotates the IP.
+    # A dummy password is required: user-only URLs are not sent as Proxy-Authorization.
+    key = f"{job}-r{attempt}"
+    host = GATEWAY.split("://", 1)[-1]
+    return f"http://{key}:x@{host}"
+
+
+def cache_dir(vid):
+    d = CACHE / vid
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def copy_out(src: Path, dest: Path):
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() and dest.resolve() == src.resolve():
+        return dest
+    shutil.copy2(src, dest)
+    return dest
+
+
+def run_yt(args, job, attempt):
+    yt = which_yt()
+    cmd = [yt, "--proxy", proxy_url(job, attempt)]
+    if os.path.isfile(DENO):
+        cmd += ["--js-runtimes", f"deno:{DENO}"]
+    cmd += args
+    env = os.environ.copy()
+    # never inherit a global proxy that could leak creds or loop
+    for k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        env.pop(k, None)
+    p = subprocess.run(cmd, env=env)
+    return p.returncode
+
+
+def looks_blocked(log_text: str):
+    return bool(BOT.search(log_text or ""))
+
+
+def run_with_retries(args, job, capture_log=True):
+    """Run yt-dlp, retrying on the YouTube bot wall. Returns the last return code."""
+    log_path = Path("/tmp") / f"ytdl-{os.getpid()}.log"
+    tries = 0
+    same_left = SAME_IP_RETRIES
+    attempt = 1
+    last = 1
+    while tries < MAX_TRIES:
+        tries += 1
+        extra = ["--newline"]
+        if capture_log:
+            # tee-like: we pass --print-traffic? No, just merge stderr by wrapping
+            pass
+        yt = which_yt()
+        cmd = [yt, "--proxy", proxy_url(job, attempt)]
+        if os.path.isfile(DENO):
+            cmd += ["--js-runtimes", f"deno:{DENO}"]
+        cmd += args
+        env = os.environ.copy()
+        for k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+            env.pop(k, None)
+        with open(log_path, "w") as lf:
+            p = subprocess.run(cmd, env=env, stderr=subprocess.PIPE, stdout=None)
+        err = p.stderr.decode("utf-8", "replace") if p.stderr else ""
+        # show yt-dlp stderr to the user, minus any proxy URLs
+        safe = re.sub(r"http://[^@\s]+@", "http://<job>@", err)
+        if safe:
+            sys.stderr.write(safe)
+        last = p.returncode
+        if p.returncode == 0 and not looks_blocked(err):
+            try:
+                log_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            return 0
+        if looks_blocked(err) or p.returncode != 0:
+            if looks_blocked(err) and same_left > 0:
+                same_left -= 1
+                print(f"ytdl: bot check on session {attempt}, retrying the same session once", file=sys.stderr)
+                # same attempt number = same sessid
+                continue
+            if tries < MAX_TRIES and looks_blocked(err):
+                attempt += 1
+                print(f"ytdl: bot check, switching sticky session (try {tries + 1}/{MAX_TRIES})", file=sys.stderr)
+                continue
+            if tries < MAX_TRIES and p.returncode != 0:
+                attempt += 1
+                print(f"ytdl: yt-dlp failed (rc={p.returncode}), retrying with a new session (try {tries + 1}/{MAX_TRIES})", file=sys.stderr)
+                continue
+            break
+    try:
+        log_path.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return last
+
+
+def parse_ours(argv):
+    tier = None
+    job = None
+    out = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--tier",):
+            i += 1
+            if i >= len(argv):
+                die("--tier needs transcript, frames or full")
+            tier = argv[i].lower()
+        elif a.startswith("--tier="):
+            tier = a.split("=", 1)[1].lower()
+        elif a == "--job":
+            i += 1
+            if i >= len(argv):
+                die("--job needs an id")
+            job = argv[i]
+        elif a.startswith("--job="):
+            job = a.split("=", 1)[1]
+        elif a in ("-h", "--help"):
+            print(__doc__)
+            sys.exit(0)
+        else:
+            out.append(a)
+        i += 1
+    if tier and tier not in ("transcript", "frames", "full"):
+        die("tier must be transcript, frames or full")
+    return tier, job, out
+
+
+def first_url(args):
+    for a in args:
+        if a.startswith("-"):
+            continue
+        if "youtube.com" in a or "youtu.be" in a or re.fullmatch(r"[A-Za-z0-9_-]{11}", a):
+            return a
+    for a in args:
+        if not a.startswith("-") and (a.startswith("http") or ":" not in a[:8]):
+            return a
+    return None
+
+
+def has_format(args):
+    opts = set()
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-f", "--format", "-F", "--audio-format", "-x", "--extract-audio",
+                 "--write-subs", "--write-auto-subs", "--skip-download",
+                 "--list-subs"):
+            return True
+        if a.startswith("-f") and a != "-f":
+            return True
+        i += 1
+    return False
+
+
+def transcript_tool(argv):
+    # lazy import of the sibling tool by exec? just implement here
+    import runpy
+    # call yt-transcript in-process by locating it
+    sib = Path("/opt/tools/yt-transcript")
+    os.execv(sib, [str(sib)] + argv)
+
+
+def main():
+    name = os.path.basename(sys.argv[0])
+    argv = sys.argv[1:]
+    if name == "yt-transcript":
+        die("internal: yt-transcript should be a separate script")
+    tier, job, args = parse_ours(argv)
+    job = job_id(job)
+    url = first_url(args)
+    if not args:
+        print(__doc__)
+        sys.exit(0)
+
+    if tier == "transcript":
+        os.execv("/opt/tools/yt-transcript", ["/opt/tools/yt-transcript", "--job", job] + ([url] if url else args))
+
+    # default tier for bare ytdl / yt-dlp without -f
+    if tier is None and not has_format(args):
+        tier = "frames"
+        print("ytdl: defaulting to 240p video-only (--tier frames). "
+              "Use --tier transcript for text, --tier full (or pass -f) for edit quality.",
+              file=sys.stderr)
+
+    vid = video_id(url) if url else None
+    extra = []
+    dest_hint = None
+    if tier == "frames":
+        extra = ["-f", FRAMES_FORMAT]
+        if vid:
+            cdir = cache_dir(vid)
+            hits = list(cdir.glob("frames.240p.*")) + list(cdir.glob("frames.*"))
+            hits = [p for p in hits if p.suffix in (".mp4", ".webm", ".mkv") and p.stat().st_size > 1000]
+            if hits:
+                src = max(hits, key=lambda p: p.stat().st_mtime)
+                # if user passed -o, copy there
+                out = None
+                if "-o" in args:
+                    o = args[args.index("-o") + 1]
+                    out = Path(o.replace("%(id)s", vid).replace("%(ext)s", src.suffix.lstrip(".")))
+                else:
+                    out = Path(f"{vid}{src.suffix}")
+                copy_out(src, out)
+                print(f"ytdl: cache hit {src} -> {out}")
+                return
+            extra += ["-o", str(cdir / "frames.240p.%(ext)s")]
+    elif tier == "full" and vid:
+        cdir = cache_dir(vid)
+        # don't force a format; still record under cache if no -o
+        if "-o" not in args and "--output" not in args:
+            extra += ["-o", str(cdir / "full.%(ext)s")]
+
+    rc = run_with_retries(extra + args, job)
+    if rc == 0 and tier == "frames" and vid:
+        cdir = cache_dir(vid)
+        hits = [p for p in cdir.glob("frames.240p.*") if p.suffix in (".mp4", ".webm", ".mkv")]
+        if hits and "-o" in args:
+            # already written to cache; also copy to -o if different
+            pass
+        if hits:
+            print(f"ytdl: saved {hits[0]} ({hits[0].stat().st_size} bytes)")
+    sys.exit(rc)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,14 @@
+---
+name: lab-youtube-download
+description: YouTube transcripts, frames and clips (ytdl, yt-transcript, proxy tiers)
+---
+
+# YouTube download and the residential proxy
+
+(Moved word for word from AGENTS.md lines 78-82. These are still your rules; they just load on demand.)
+
+  - **YouTube and other hard sites (Amazon in the browser) exit through a residential proxy, allowlist only.** Use the wrappers, not raw curl and not `python -m yt_dlp`. Do not set `HTTP_PROXY`/`HTTPS_PROXY` globally (that would break or be refused for GitHub, LLM APIs, Supabase, Backblaze, Modal, auth and billing). Size rule — use the smallest media that does the job:
+    1. **Understand / check a video:** `yt-transcript URL` (captions only, no video).
+    2. **Need to see frames:** `ytdl --tier frames URL` (240p video-only; 144p or 360p if 240p is missing). Then `look` / `agent_view`.
+    3. **A clip will go into an edit:** `ytdl --tier full URL` (or pass `-f` / `--download-sections`).
+    Bare `yt-dlp URL` defaults to tier frames. `egress-usage` shows proxy bytes for today. Transcripts and 240p files are cached under `/workspace/usage/ytdl-cache/`.

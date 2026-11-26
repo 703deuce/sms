@@ -1,0 +1,359 @@
+#!/usr/bin/env python3
+"""autocheck: after you edit code, run the project's quick checks and show ONLY what your edits broke.
+
+  autocheck [PATH]        check the project containing PATH (default: the current folder) now
+Checks: ruff (syntax errors, undefined names) on edited .py files; tsc --noEmit when the project has a tsconfig.json;
+eslint when the project has it installed; node --check on edited .js; the project's tests (pytest, or unittest
+discover, or npm test when node_modules exists). Failures that were already there BEFORE your first edit are the
+baseline and are not repeated; you see new failures and how many baseline failures your edits fixed.
+
+As hooks (automatic, no action needed): every edit is recorded; when an edit batch ends (your next non-edit tool call)
+the checks run, and if your edits broke something that call is held once with the failing lines. Before you finish,
+unchecked edits are checked again. Off switch: /opt/tools/flags/AUTOCHECK_OFF."""
+import hashlib, json, os, re, shutil, subprocess, sys, time
+
+FLAG = '/opt/tools/flags/AUTOCHECK_OFF'
+MARKERS = ('pyproject.toml', 'setup.py', 'setup.cfg', 'package.json', 'tsconfig.json', 'go.mod', 'Cargo.toml', 'requirements.txt',
+           'pytest.ini', 'tox.ini', 'Makefile')
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+JOB_RE = re.compile(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)')
+EDIT_CMDS = {'str_replace', 'create', 'insert', 'undo_edit'}
+EDIT_TOOLS = {'file_editor', 'str_replace_editor', 'edit', 'write_file', 'planning_file_editor'}
+CODE_EXT = {'.py', '.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx', '.mts', '.cts'}
+TEST_TIMEOUT = 120
+RUFF = shutil.which('ruff') or '/opt/tools/ruff'
+CHECKERS_IN_CMD = re.compile(r'\b(pytest|unittest|npm (run )?test|yarn test|pnpm test|vitest|jest|ava|mocha|tsc|ruff|eslint|go test|cargo test|autocheck)\b')
+
+
+def job_of(p):
+    m = JOB_RE.match(p or '')
+    return m.group(1) if m else None
+
+
+def project_of(path, job=None):
+    d = path if os.path.isdir(path) else os.path.dirname(path)
+    while d and d != '/':
+        if job and d == job:
+            break
+        if any(os.path.exists(os.path.join(d, m)) for m in MARKERS):
+            return d
+        d = os.path.dirname(d)
+    return None
+
+
+def run(cmd, cwd, timeout):
+    try:
+        r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+                           env=dict(os.environ, CI='1', FORCE_COLOR='0', NO_COLOR='1', PYTHONDONTWRITEBYTECODE='1'))
+        return r.returncode, (r.stdout or '') + (r.stderr or ''), False
+    except subprocess.TimeoutExpired as e:
+        return -1, '', True
+    except FileNotFoundError:
+        return None, '', False
+
+
+def pyfiles_have_tests(proj):
+    return any(os.path.isdir(os.path.join(proj, d)) for d in ('tests', 'test')) or \
+        any(f.startswith('test_') and f.endswith('.py') for f in os.listdir(proj))
+
+
+def lint(proj, files):
+    """Failure keys (str) from linters on the given files (and the TS project)."""
+    out = {}
+    py = [f for f in files if f.endswith('.py') and os.path.exists(f)]
+    if py and os.path.exists(RUFF):
+        code, txt, _ = run([RUFF, 'check', '--no-cache', '--isolated', '--select', 'E9,F63,F7,F82', '--output-format', 'concise', *py], proj, 60)
+        for l in txt.splitlines():
+            m = re.match(r'^(.+?):(\d+):(\d+): (\w+\d*) (.*)$', l)
+            if m:
+                rel = os.path.relpath(m.group(1), proj) if os.path.isabs(m.group(1)) else m.group(1)
+                out[f'ruff {rel} {m.group(4)} {m.group(5)}'] = f'{rel}:{m.group(2)}: {m.group(4)} {m.group(5)}'
+    js = [f for f in files if f.endswith(('.js', '.mjs', '.cjs')) and os.path.exists(f)]
+    for f in js:
+        code, txt, _ = run(['node', '--check', f], proj, 30)
+        if code:
+            first = next((l for l in txt.splitlines() if 'Error' in l), txt.strip().splitlines()[-1:] or ['syntax error'])
+            first = first if isinstance(first, str) else first[0]
+            out[f'node {os.path.relpath(f, proj)} {first}'] = f'{os.path.relpath(f, proj)}: {first}'
+    ts = [f for f in files if f.endswith(('.ts', '.tsx', '.mts', '.cts'))]
+    if ts and os.path.exists(os.path.join(proj, 'tsconfig.json')):
+        tsc = os.path.join(proj, 'node_modules', '.bin', 'tsc')
+        tsc = tsc if os.path.exists(tsc) else shutil.which('tsc')
+        if tsc:
+            code, txt, to = run([tsc, '--noEmit', '-p', proj, '--pretty', 'false'], proj, 120)
+            for l in txt.splitlines():
+                m = re.match(r'^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$', l)
+                if m:
+                    out[f'tsc {m.group(1)} {m.group(4)} {m.group(5)}'] = f'{m.group(1)}:{m.group(2)}: {m.group(4)} {m.group(5)[:200]}'
+    es = os.path.join(proj, 'node_modules', '.bin', 'eslint')
+    jsts = [f for f in files if os.path.splitext(f)[1] in CODE_EXT and not f.endswith('.py') and os.path.exists(f)]
+    if jsts and os.path.exists(es):
+        code, txt, _ = run([es, '--format', 'unix', '--quiet', *jsts], proj, 120)
+        for l in txt.splitlines():
+            m = re.match(r'^(.+?):(\d+):(\d+): (.*)$', l)
+            if m:
+                rel = os.path.relpath(m.group(1), proj)
+                out[f'eslint {rel} {m.group(4)}'] = f'{rel}:{m.group(2)}: {m.group(4)[:200]}'
+    return out
+
+
+def tests(proj, st):
+    """(failure keys, how, timed_out) from the project's test runner, or ({}, None, False) if none is usable."""
+    if st.get('slow', {}).get(proj):
+        return {}, None, False
+    pkg = os.path.join(proj, 'package.json')
+    if os.path.exists(pkg) and os.path.isdir(os.path.join(proj, 'node_modules')):
+        try:
+            script = (json.load(open(pkg)).get('scripts') or {}).get('test') or ''
+        except Exception:
+            script = ''
+        if script and 'no test specified' not in script and 'watch' not in script:
+            code, txt, to = run(['npm', 'test', '--silent'], proj, TEST_TIMEOUT)
+            if to:
+                return {}, 'npm test', True
+            keys = {}
+            for l in txt.splitlines():
+                s = l.strip()
+                if re.search(r'(✖|✗|✘|\bFAIL\b|^not ok\b|AssertionError|\d+ failing|Error:)', s):
+                    keys['npm ' + re.sub(r'\d+(\.\d+)?\s*m?s\b', '', s)[:200]] = s[:240]
+            if code and not keys:
+                keys['npm test exit'] = f'npm test exited {code}: ' + ' | '.join(txt.strip().splitlines()[-3:])[:300]
+            return keys, 'npm test', False
+    if any(os.path.exists(os.path.join(proj, m)) for m in ('pyproject.toml', 'setup.py', 'setup.cfg', 'pytest.ini', 'tox.ini')) or \
+            pyfiles_have_tests(proj):
+        if not pyfiles_have_tests(proj):
+            return {}, None, False
+        has_pytest = run([sys.executable, '-c', 'import pytest'], proj, 20)[0] == 0
+        if has_pytest:
+            code, txt, to = run([sys.executable, '-m', 'pytest', '-q', '-rfE', '--tb=line', '-p', 'no:cacheprovider', '--no-header'], proj, TEST_TIMEOUT)
+            how = 'pytest'
+            pat = re.compile(r'^(FAILED|ERROR) (\S+)(?: - (.*))?$')
+            if to:
+                return {}, how, True
+            keys = {}
+            for l in txt.splitlines():
+                m = pat.match(l.strip())
+                if m:
+                    keys[f'{m.group(1)} {m.group(2)}'] = l.strip()[:240]
+            if code not in (0, 1, 5) and not keys:
+                keys['pytest exit'] = ' | '.join(txt.strip().splitlines()[-3:])[:300]
+            return keys, how, False
+        tdir = 'tests' if os.path.isdir(os.path.join(proj, 'tests')) else ('test' if os.path.isdir(os.path.join(proj, 'test')) else '.')
+        code, txt, to = run([sys.executable, '-m', 'unittest', 'discover', '-s', tdir, '-t', '.'], proj, TEST_TIMEOUT)
+        how = f'python -m unittest discover -s {tdir} -t .'
+        if to:
+            return {}, how, True
+        keys = {}
+        lines = txt.splitlines()
+        for i, l in enumerate(lines):
+            m = re.match(r'^(FAIL|ERROR): (.+)$', l)
+            if m:
+                # the assertion/exception line that follows the traceback
+                detail = ''
+                for l2 in lines[i + 1:i + 40]:
+                    if re.match(r'^(\w+Error|AssertionError|\w+Exception)\b', l2):
+                        detail = l2.strip(); break
+                keys[f'{m.group(1)} {m.group(2)}'] = f'{m.group(1)}: {m.group(2)}' + (f' -> {detail[:160]}' if detail else '')
+        if code and not keys:
+            keys['unittest exit'] = ' | '.join(lines[-3:])[:300]
+        return keys, how, False
+    return {}, None, False
+
+
+def state_path(job):
+    d = os.path.join(job, 'log', 'autocheck'); os.makedirs(d, exist_ok=True)
+    return os.path.join(d, 'state.json')
+
+
+def load(job):
+    try:
+        return json.load(open(state_path(job)))
+    except Exception:
+        return {'pending': [], 'baseline': {}, 'slow': {}, 'reported': ''}
+
+
+def save(job, st):
+    p = state_path(job); json.dump(st, open(p + '.tmp', 'w'), indent=1); os.replace(p + '.tmp', p)
+
+
+def take_baseline(job, st, proj, files):
+    b = st['baseline'].setdefault(proj, {'lint': {}, 'tests': None, 'linted': []})
+    new = [f for f in files if f not in b['linted']]
+    if new:
+        b['lint'].update(lint(proj, new)); b['linted'] += new
+    if b['tests'] is None:
+        k, how, to = tests(proj, st)
+        if to:
+            st['slow'][proj] = True
+        b['tests'] = sorted(k); b['how'] = how
+
+
+def check(job, st, proj, files, with_tests=True):
+    b = st['baseline'].get(proj) or {'lint': {}, 'tests': [], 'linted': []}
+    cur_l = lint(proj, files)
+    new_l = [v for k, v in cur_l.items() if k not in b['lint']]
+    new_t, fixed, how, to = [], 0, None, False
+    if with_tests:
+        cur_t, how, to = tests(proj, st)
+        if to:
+            st['slow'][proj] = True
+        base = set(b.get('tests') or [])
+        new_t = [v for k, v in cur_t.items() if k not in base]
+        fixed = len([k for k in base if k not in cur_t]) if not to and how else 0
+        remaining = len([k for k in base if k in cur_t])
+    else:
+        remaining = None
+    return {'proj': proj, 'new_lint': new_l, 'new_tests': new_t, 'fixed': fixed, 'remaining': remaining, 'how': how,
+            'timed_out': to}
+
+
+def report(res, rel):
+    parts = []
+    for r in res:
+        if not (r['new_lint'] or r['new_tests']):
+            continue
+        groups = {}   # many tests failing for one reason -> one line
+        for x in r['new_tests']:
+            m = re.search(r' (?:- |-> )(.*)$', x)
+            groups.setdefault(m.group(1) if m else x, []).append(x)
+        tl = []
+        for why, xs in sorted(groups.items(), key=lambda kv: -len(kv[1])):
+            tl.append(xs[0] if len(xs) == 1 else f'{len(xs)} tests fail with: {why[:200]} (e.g. {re.sub(r" (- |-> ).*$", "", xs[0])[:160]})')
+        bad = r['new_lint'] + tl
+        lines = [f'- {x}' for x in bad[:15]] + ([f'- ... {len(bad) - 15} more'] if len(bad) > 15 else [])
+        parts.append(f'{rel(r["proj"])}: {len(r["new_lint"]) + len(r["new_tests"])} new problem(s) since before your edits' +
+                     (f' (tests: `{r["how"]}`; {r["fixed"]} earlier failure(s) now pass)' if r['how'] else '') + ':\n' + '\n'.join(lines))
+    return '\n'.join(parts)
+
+
+def summary_ok(res, rel):
+    out = []
+    for r in res:
+        s = f'{rel(r["proj"])}: no new problems'
+        if r['how']:
+            s += f' (tests `{r["how"]}`: {r["fixed"]} earlier failure(s) fixed, {r["remaining"]} still failing from before)'
+        if r['timed_out']:
+            s += ' (tests took over 2 min: skipped from now on in hooks; run them yourself)'
+        out.append(s)
+    return '\n'.join(out)
+
+
+def group(job, paths):
+    by = {}
+    for p in paths:
+        if os.path.splitext(p)[1].lower() not in CODE_EXT:
+            continue
+        proj = project_of(p, job)
+        if proj:
+            by.setdefault(proj, []).append(p)
+    return by
+
+
+def reindex_bg(proj):
+    if not proj.startswith('/workspace/'):
+        return
+    code = ("import json,urllib.request as u;u.urlopen(u.Request('http://127.0.0.1:6075/reindex',data=json.dumps({'root':%r}).encode(),"
+            "method='POST',headers={'content-type':'application/json'}),timeout=600).read()" % proj)
+    try:
+        subprocess.Popen([sys.executable, '-c', code], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    except Exception:
+        pass
+
+
+def hook(kind):
+    if os.path.exists(FLAG):
+        return
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    job = job_of(payload.get('working_dir') or os.environ.get('OPENHANDS_PROJECT_DIR') or os.getcwd())
+    if not job:
+        return
+    tool = str(payload.get('tool_name') or '')
+    ti = payload.get('tool_input') or {}
+    path = str(ti.get('path') or ti.get('file_path') or '')
+    is_edit = tool in EDIT_TOOLS and (tool != 'file_editor' or ti.get('command') in EDIT_CMDS)
+    rel = lambda p: os.path.relpath(p, job) if p.startswith(job + '/') else p
+    st = load(job)
+    if kind == 'post':
+        if is_edit and path and os.path.splitext(path)[1].lower() in CODE_EXT and project_of(path, job):
+            if path not in st['pending']:
+                st['pending'].append(path)
+            save(job, st)
+            reindex_bg(project_of(path, job))
+        return
+    if kind == 'pre':
+        if is_edit:
+            if path and os.path.splitext(path)[1].lower() in CODE_EXT:
+                proj = project_of(path, job)
+                if proj:
+                    t0 = time.time()
+                    take_baseline(job, st, proj, [path])
+                    save(job, st)
+            return
+        if not st['pending']:
+            return
+        cmd = str(ti.get('command') or '')
+        runs_own_checks = tool == 'terminal' and bool(CHECKERS_IN_CMD.search(cmd))
+        by = group(job, st['pending'])
+        st['pending'] = []
+        res = [check(job, st, proj, files, with_tests=not runs_own_checks) for proj, files in by.items()]
+        txt = report(res, rel)
+        st['last'] = {'at': time.strftime('%H:%M:%S'), 'ok': not txt, 'text': txt or summary_ok(res, rel)}
+        save(job, st)
+        if txt:
+            print(json.dumps({'decision': 'deny', 'reason': '[Auto-check] Your last edits broke something (checked automatically after the '
+                              'edit batch; failures that existed before your first edit are not shown):\n' + txt +
+                              '\nThis one tool call was held so you see this first. Fix it, or re-issue the call if the problem is expected.'}))
+            sys.exit(2)
+        return
+    if kind == 'stop':
+        by = group(job, st['pending'])
+        if not by:
+            return
+        st['pending'] = []
+        res = [check(job, st, proj, files) for proj, files in by.items()]
+        txt = report(res, rel)
+        st['last'] = {'at': time.strftime('%H:%M:%S'), 'ok': not txt, 'text': txt or summary_ok(res, rel)}
+        if txt and st.get('reported') != txt:
+            st['reported'] = txt; save(job, st)
+            print(json.dumps({'decision': 'deny', 'reason': 'auto-check found new failures',
+                              'additionalContext': '[Auto-check before finishing] Your edits left new failures:\n' + txt +
+                              '\nFix them, or say clearly in your report why they are expected. This check does not repeat for the same failures.'}))
+            return
+        save(job, st)
+
+
+def main():
+    a = sys.argv[1:]
+    if a[:1] == ['--hook']:
+        try:
+            hook(a[1])
+        except SystemExit:
+            raise
+        except Exception:
+            pass   # a checker problem must never block the agent
+        return
+    if a[:1] in (['-h'], ['--help']):
+        print(__doc__); return
+    target = os.path.abspath(a[0] if a else os.getcwd())
+    job = job_of(target)
+    proj = project_of(target, job) or target
+    st = load(job) if job else {'pending': [], 'baseline': {}, 'slow': {}}
+    files = []
+    for dp, dn, fn in os.walk(proj):
+        dn[:] = [d for d in dn if d not in ('node_modules', '.git', 'dist', 'build', '__pycache__', '.venv', 'venv')]
+        files += [os.path.join(dp, f) for f in fn if os.path.splitext(f)[1] in CODE_EXT]
+    edited = [p for p in st.get('pending', []) if p.startswith(proj)] or files[:400]
+    r = check(job, st, proj, edited) if job else check(None, st, proj, edited)
+    rel = (lambda p: os.path.relpath(p, os.getcwd()))
+    print(report([r], rel) or summary_ok([r], rel))
+    if job:
+        st['pending'] = [p for p in st.get('pending', []) if not p.startswith(proj)]
+        save(job, st)
+    sys.exit(1 if (r['new_lint'] or r['new_tests']) else 0)
+
+
+if __name__ == '__main__':
+    main()

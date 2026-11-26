@@ -1,0 +1,19 @@
+--- a/worker/modal_motion/pipeline.py
++++ b/worker/modal_motion/pipeline.py
+@@ -334,5 +334,15 @@
+     records.sort(key=lambda a:a["id"])
+     payload={"document":pkg["document"],"assets":records,"bundles":bundles}
+     live=root/"live-project.json"
+-    if live.is_file():payload["liveProject"]=json.loads(live.read_text())
++    if live.is_file():
++        # The live timeline references assets by their NATIVE ids (ast_/fnt_/bnd_...), but the server only
++        # accepts registered STORAGE ids (random upload ids). Remap every string that is a native id,
++        # exactly like bg_delivery/manifest.mjs buildManifest does, or /portable refuses the timeline.
++        storage={r["id"]:r["storageId"] for r in records}
++        def remap(value):
++            if isinstance(value,str):return storage.get(value,value)
++            if isinstance(value,list):return [remap(x) for x in value]
++            if isinstance(value,dict):return {k:remap(x) for k,x in value.items()}
++            return value
++        payload["liveProject"]=remap(json.loads(live.read_text()))
+     return api(job_id,"POST","/portable",payload,timeout=300)

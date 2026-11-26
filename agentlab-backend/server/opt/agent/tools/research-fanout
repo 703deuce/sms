@@ -1,0 +1,102 @@
+#!/usr/bin/env python3
+"""research-fanout: run many searches at once, merge and dedupe the results, rank sources, and fetch the best pages.
+One step instead of dozens. Free (local SearXNG search + the normal page reader).
+
+usage: research-fanout --queries queries.txt [--per-query 8] [--fetch 12] [--out research]
+       research-fanout "query one" "query two" ... [same options]
+  queries.txt: one query per line. Write 6-20 varied queries (synonyms, sub-areas, list/directory pages, news, official
+  sources). Output: <out>/sources.jsonl (ranked, deduped: url, title, domain, queries hit, score, file) and the fetched
+  page text in <out>/sources/NN-domain.md. Prints a short ranked table only.
+Ranking: found by more queries first, then search rank; at most 3 pages per domain in the fetch set (diversity).
+Off switch: /opt/tools/flags/DEEP_RESEARCH_OFF."""
+import json, os, re, sys, urllib.parse
+from concurrent.futures import ThreadPoolExecutor
+sys.path.insert(0, '/opt/tools')
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+if os.path.exists('/opt/tools/flags/DEEP_RESEARCH_OFF'):
+    sys.exit('research-fanout is switched off; use search/readpage directly.')
+os.environ.setdefault('LABTOOLS_MAX_CALLS', '400')
+import labtools as L
+
+queries, per, nfetch, out = [], 8, 12, 'research'
+i = 0
+while i < len(a):
+    if a[i] == '--queries':
+        queries += [l.strip() for l in open(a[i + 1]) if l.strip() and not l.startswith('#')]; i += 2
+    elif a[i] == '--per-query':
+        per = max(3, min(int(a[i + 1]), 20)); i += 2
+    elif a[i] == '--fetch':
+        nfetch = max(0, min(int(a[i + 1]), 40)); i += 2
+    elif a[i] == '--out':
+        out = a[i + 1]; i += 2
+    else:
+        queries.append(a[i]); i += 1
+queries = list(dict.fromkeys(queries))[:30]
+if not queries:
+    sys.exit('research-fanout: no queries')
+TRACK = re.compile(r'^(utm_|fbclid|gclid|ref$|ref_|mc_)')
+
+
+def norm(u):
+    try:
+        p = urllib.parse.urlsplit(u.strip())
+    except Exception:
+        return u
+    host = p.netloc.lower().removeprefix('www.')
+    q = '&'.join(x for x in p.query.split('&') if x and not TRACK.match(x.split('=')[0]))
+    return urllib.parse.urlunsplit(('https', host, p.path.rstrip('/') or '/', q, ''))
+
+
+with ThreadPoolExecutor(6) as ex:
+    results = list(ex.map(lambda q: (q, L.search(q, n=per)), queries))
+pool = {}
+for q, hits in results:
+    for rank, h in enumerate(hits):
+        if not h.get('url', '').startswith('http'):
+            continue
+        k = norm(h['url'])
+        e = pool.setdefault(k, {'url': h['url'], 'title': h.get('title', ''), 'snippet': h.get('content', '')[:300],
+                                'domain': urllib.parse.urlsplit(k).netloc, 'queries': [], 'best_rank': rank})
+        if q not in e['queries']:
+            e['queries'].append(q)
+        e['best_rank'] = min(e['best_rank'], rank)
+for e in pool.values():
+    e['score'] = round(len(e['queries']) * 2 + 1 / (1 + e['best_rank']), 3)
+ranked = sorted(pool.values(), key=lambda e: -e['score'])
+per_domain, pick = {}, []
+for e in ranked:
+    if len(pick) >= nfetch:
+        break
+    if per_domain.get(e['domain'], 0) >= 3:
+        continue
+    per_domain[e['domain']] = per_domain.get(e['domain'], 0) + 1
+    pick.append(e)
+os.makedirs(os.path.join(out, 'sources'), exist_ok=True)
+
+
+def get(ix_e):
+    ix, e = ix_e
+    txt = L.read_page(e['url'], max_chars=15000)
+    if txt.strip():
+        fn = os.path.join(out, 'sources', f"{ix + 1:02d}-{re.sub(r'[^a-z0-9]+', '-', e['domain'])[:40]}.md")
+        open(fn, 'w').write(f"# {e['title']}\n{e['url']}\n\n{txt}")
+        e['file'], e['chars'] = fn, len(txt)
+    else:
+        e['file'], e['chars'] = None, 0
+    return e
+
+
+with ThreadPoolExecutor(4) as ex:
+    list(ex.map(get, enumerate(pick)))
+with open(os.path.join(out, 'sources.jsonl'), 'w') as f:
+    for e in ranked:
+        f.write(json.dumps(e) + '\n')
+ok = sum(1 for e in pick if e.get('chars'))
+print(f'{len(queries)} queries -> {sum(len(h) for _, h in results)} hits -> {len(pool)} unique sources '
+      f'({len({e["domain"] for e in pool.values()})} domains); fetched {ok}/{len(pick)} into {out}/sources/')
+for e in pick[:20]:
+    print(f"{e['score']:>5}  {len(e['queries'])}q  {e['domain'][:28]:<28} {(e['title'] or '')[:60]}  {'[saved]' if e.get('chars') else '[fetch failed]'}")
+print(f'Full ranked list: {out}/sources.jsonl. Next: extract items, then `research-coverage add` each with 2+ sources.')

@@ -1,0 +1,6 @@
+FROM agentlab-phone:base
+RUN pip install --no-cache-dir "livekit-agents[silero]==1.8.13" && python -c "from livekit.plugins import silero; silero.VAD.load(); print(\"silero ok\")"
+WORKDIR /app
+COPY worker /app/worker
+COPY provision.py /app/provision.py
+CMD ["python","-u","-m","worker.main","start"]

@@ -1,0 +1,42 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/edit-patch.schema.json",
+ "title": "Edit patch / overrides (transovo.edit-patch/1). null deletes an override.",
+ "type": "object",
+ "additionalProperties": false,
+ "properties": {
+  "schema": {
+   "const": "transovo.edit-patch/1"
+  },
+  "theme": {
+   "type": "object"
+  },
+  "scenes": {
+   "type": "object",
+   "propertyNames": {
+    "pattern": "^[A-Za-z0-9_-]{1,64}$"
+   },
+   "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+     "tokens": {
+      "type": "object"
+     },
+     "elements": {
+      "type": "object",
+      "additionalProperties": {
+       "type": [
+        "object",
+        "null"
+       ]
+      }
+     },
+     "render": {
+      "type": "object"
+     }
+    }
+   }
+  }
+ }
+}

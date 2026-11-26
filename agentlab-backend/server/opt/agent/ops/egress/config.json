@@ -1,0 +1,44 @@
+{
+ "proxy_listen": "127.0.0.1:18080",
+ "status_listen": "127.0.0.1:18081",
+ "upstream_host": "gw.dataimpulse.com",
+ "upstream_port": 823,
+ "country": "us",
+ "job_cap_bytes": 314572800,
+ "daily_budget_bytes": 1073741824,
+ "allow_suffixes": [
+  "youtube.com",
+  "youtu.be",
+  "googlevideo.com",
+  "ytimg.com",
+  "youtube-nocookie.com",
+  "media-amazon.com",
+  "images-amazon.com",
+  "ssl-images-amazon.com",
+  "tiktok.com",
+  "tiktokcdn.com",
+  "tiktokv.com"
+ ],
+ "allow_exact": [
+  "youtubei.googleapis.com",
+  "youtube.googleapis.com",
+  "www.google.com",
+  "google.com",
+  "consent.google.com",
+  "amazon.com",
+  "www.amazon.com",
+  "m.amazon.com",
+  "smile.amazon.com"
+ ],
+ "deny_suffixes": [
+  "aws.amazon.com",
+  "aws-portal.amazon.com",
+  "pay.amazon.com",
+  "payments.amazon.com",
+  "amazonpay.amazon.com",
+  "sellercentral.amazon.com",
+  "advertising.amazon.com"
+ ],
+ "mobile_enabled": false,
+ "geo_residential_suffixes": []
+}

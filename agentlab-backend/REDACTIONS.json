@@ -1,0 +1,29 @@
+{
+ "server/opt/agent/oh-home/profiles/lab-anthropic.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-deepseek.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-fable.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-gemini.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-luna.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-openai.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/profiles/lab-opus.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/oh-home/settings.json": {
+  "json-sensitive-key": 1
+ },
+ "server/opt/agent/searxng/settings.yml": {
+  "assign-sensitive-key": 1
+ }
+}

@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+"""lab-doctor (host): cheap self-test + heartbeat for Agent Lab (audit M4).
+
+  lab-doctor              fast checks (free, a few seconds); writes runner/state/doctor.json and heartbeat.json
+  lab-doctor --deep       also one real transcript fetch through the paid gateway (about 0.4 MB, under $0.001) and a TLS test
+  lab-doctor --quiet      no stdout unless something failed
+On failure it adds ONE notification to the Agent Lab page feed (deduped: same failure set is repeated at most every 6 h).
+It never pushes, texts, or emails by itself: push stays off until John turns it on.
+Optional dead-man ping: put HEARTBEAT_URL=https://... in /opt/agent/secrets/heartbeat.env (an outside checker such as
+healthchecks.io then alerts when pings stop). File absent = no outside ping. Never prints secrets.
+"""
+import json, os, shutil, subprocess, sys, time, urllib.request
+
+sys.path.insert(0, "/opt/agent/tools")
+STATE = "/opt/agent/runner/state"
+SERVICES = ["agent-lab-runner", "agent-lab-chrome", "agent-lab-desktop", "agent-lab-egress", "agent-lab-keys",
+            "agent-lab-helper", "agent-lab-vaultd", "cron"]
+
+
+def sh(cmd, timeout=60):
+    try:
+        p = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+        return p.returncode, (p.stdout + p.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return 124, "timeout"
+
+
+def http(url, timeout=5, limit=2000):
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return r.status, r.read(limit)
+    except Exception as e:
+        return None, str(e).encode()[:200]
+
+
+def checks(deep):
+    out = []
+
+    def add(name, ok, detail=""):
+        out.append({"name": name, "ok": bool(ok), "detail": str(detail)[:200]})
+
+    for s in SERVICES:
+        rc, o = sh(f"systemctl is-active {s}")
+        add(f"service:{s}", rc == 0 and o.strip() == "active", o.strip()[:40])
+    rc, o = sh("docker inspect -f '{{.State.Running}} {{.RestartCount}}' agent-lab")
+    add("container:agent-lab", o.startswith("true"), o)
+    st, _ = http("http://127.0.0.1:8010/health"); add("runner:/health", st == 200, st)
+    st, _ = http("http://127.0.0.1:8000/health"); add("agent-server:/health", st == 200, st)
+    st, _ = http("http://127.0.0.1:9222/json/version"); add("chromium:cdp", st == 200, st)
+    st, b = http("http://127.0.0.1:18081/usage"); add("egress-gateway", st == 200, st)
+    st, b = http("http://127.0.0.1:8888/search?q=weather&format=json", timeout=15, limit=2_000_000)
+    try:
+        n = len(json.loads(b).get("results", []))
+    except Exception:
+        n = 0
+    add("searxng", st == 200 and n > 0, f"{n} results")
+    for path in ("/", "/opt/agent/workspace"):
+        u = shutil.disk_usage(path)
+        pct = u.used * 100 // u.total
+        add(f"disk:{path}", pct < 85, f"{pct}% used")
+    mem = {}
+    for l in open("/proc/meminfo"):
+        k, v = l.split(":", 1); mem[k] = int(v.split()[0])
+    avail = mem.get("MemAvailable", 0) // 1024
+    add("memory", avail > 600, f"{avail} MB available")
+    rc, o = sh("ls -t /opt/agent/backups/agent-lab-*.tar.gz 2>/dev/null | head -1")
+    if o:
+        age_h = (time.time() - os.path.getmtime(o)) / 3600
+        add("backup:fresh", age_h < 30, f"{age_h:.0f} h old")
+    else:
+        add("backup:fresh", False, "no backup found")
+    rc, o = sh("docker exec agent-lab pgrep -fc mcp-server-fetch")
+    try:
+        cnt = int(o.strip().splitlines()[-1])
+    except Exception:
+        cnt = 0
+    add("orphans:mcp-fetch", cnt <= 12, f"{cnt} processes")
+    rc, o = sh("docker exec agent-lab bash -c 'cd /tmp && /opt/tools/egress-fetch --no-rescue --no-cache --raw https://example.com/ 2>&1 >/dev/null | head -1'", 60)
+    add("fetch:direct", "ok via" in o, o[:100])
+    if deep:
+        rc, o = sh("docker exec agent-lab bash -c 'cd /tmp && /opt/tools/yt-transcript https://www.youtube.com/watch?v=jNQXAC9IVRw 2>&1 | head -5'", 150)
+        add("deep:yt-transcript", rc == 0 and len(o) > 20 and "Error" not in o[:200] and "Traceback" not in o, o[:100].replace("\n", " "))
+        rc, o = sh("docker exec agent-lab python3 -c \"import sys;sys.path.insert(0,'/opt/tools/egress');import egresslib as E;r=E._cffi_once('https://example.com/','direct','doctor');print(r['status'])\"", 60)
+        add("deep:tls-impersonation", o.strip().endswith("200"), o[-60:])
+        rc, o = sh("docker exec agent-lab /opt/tools/captcha-solve --check")
+        add("deep:captcha-solver-key", '"ready": true' in o, "key present" if '"ready": true' in o else o[:80])
+    return out
+
+
+def notify(title, body):
+    import runlib as R
+    db = R.connect()
+    R.notify(db, "alert", title, body)
+
+
+def main():
+    a = sys.argv[1:]
+    res = checks("--deep" in a)
+    failed = [c for c in res if not c["ok"]]
+    now = time.time()
+    doc = {"t": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "ok": not failed, "failed": [c["name"] for c in failed], "checks": res}
+    os.makedirs(STATE, exist_ok=True)
+    json.dump(doc, open(STATE + "/doctor.json", "w"), indent=1)
+    json.dump({"t": doc["t"], "epoch": int(now), "ok": doc["ok"], "failed": doc["failed"]}, open(STATE + "/heartbeat.json", "w"))
+    sig = ",".join(sorted(doc["failed"]))
+    try:
+        last = json.load(open(STATE + "/doctor-alert.json"))
+    except Exception:
+        last = {}
+    if failed:
+        if sig != last.get("sig") or now - last.get("t", 0) > 6 * 3600:
+            try:
+                notify("Agent Lab self-test: " + ", ".join(doc["failed"])[:120],
+                       "\n".join(f"- {c['name']}: {c['detail']}" for c in failed))
+                json.dump({"sig": sig, "t": now}, open(STATE + "/doctor-alert.json", "w"))
+            except Exception as e:
+                print("lab-doctor: could not write notification:", str(e)[:100], file=sys.stderr)
+    elif last.get("sig"):
+        try:
+            notify("Agent Lab self-test: all checks passing again", "Recovered from: " + last["sig"])
+        except Exception:
+            pass
+        json.dump({}, open(STATE + "/doctor-alert.json", "w"))
+    # optional outside dead-man ping
+    try:
+        env = dict(l.strip().split("=", 1) for l in open("/opt/agent/secrets/heartbeat.env") if "=" in l and not l.startswith("#"))
+        url = env.get("HEARTBEAT_URL") if doc["ok"] else (env.get("HEARTBEAT_FAIL_URL") or None)
+        if url:
+            urllib.request.urlopen(url.strip().strip('"\''), timeout=10).read(100)
+    except FileNotFoundError:
+        pass
+    except Exception:
+        pass
+    if "--quiet" not in a or failed:
+        print(json.dumps({"ok": doc["ok"], "failed": doc["failed"], "checks": len(res)}))
+        for c in res:
+            if not c["ok"] or "--verbose" in a:
+                print(("FAIL " if not c["ok"] else "ok   ") + c["name"] + ": " + c["detail"])
+    sys.exit(0 if doc["ok"] else 1)
+
+
+if __name__ == "__main__":
+    main()

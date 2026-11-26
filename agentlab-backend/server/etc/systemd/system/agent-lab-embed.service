@@ -1,0 +1,12 @@
+[Unit]
+Description=Agent Lab local search service (hybrid BM25 + embeddings + rerank, Haiku digest) on 127.0.0.1:6075
+After=network.target
+[Service]
+User=agentlab
+EnvironmentFile=/opt/agent/.env
+Environment=FASTEMBED_CACHE_PATH=/opt/agent/embed/models
+ExecStart=/opt/agent/embed/venv/bin/python /opt/agent/embed/server.py
+Restart=on-failure
+Nice=10
+[Install]
+WantedBy=multi-user.target

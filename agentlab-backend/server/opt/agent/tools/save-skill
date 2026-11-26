@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+"""save-skill: create or update a skill (a reusable how-to for a kind of task).
+
+usage: save-skill <slug> --when-to-use "Use when … Not for …" [--description "blurb"] [--name "Name"] [--file body.md] [--shared|--mine]
+       (body text from --file, else from stdin)
+       --description is accepted as a fallback for --when-to-use on new skills.
+
+  Writes <skills>/<slug>/SKILL.md with frontmatter (name, when_to_use, description).
+  Updating keeps a dated backup (.SKILL.md.<stamp>.bak) and preserves other frontmatter keys.
+  Default scope is shared (/workspace/skills); --mine saves only for this bot.
+
+  Refuses: core-rules slugs, disabled video (or any SKILL.md.disabled* folder), bodies over
+  500 lines, when_to_use over 220 characters, and drafts that look like they contain secrets.
+"""
+import os, re, sys, shutil
+from datetime import datetime, timezone
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import skilllib as s
+
+PROTECTED_CORE = {'agents', 'agents-md', 'core-rules', 'core'}
+PROTECTED_VIDEO = {
+    'footage-gathering', 'lab-motion-engines', 'lab-site-video-download',
+    'lab-stock-and-sfx', 'lab-video-loop', 'lab-video-minimal',
+    'lab-video-producer', 'lab-youtube-download', 'motion-studio-production',
+    'pixabay-stock', 'sfx',
+}
+# web-lookups was folded into other skills and disabled; do not re-enable.
+PROTECTED_DISABLED_ALWAYS = PROTECTED_VIDEO | {'web-lookups'}
+
+SECRET_RE = re.compile(
+    r'(-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----'
+    r'|AKIA[0-9A-Z]{16}'
+    r'|ghp_[A-Za-z0-9]{20,}'
+    r'|github_pat_[A-Za-z0-9_]{20,}'
+    r'|gho_[A-Za-z0-9]{20,}'
+    r'|xox[baprs]-[A-Za-z0-9-]{10,}'
+    r'|sk-ant-[A-Za-z0-9\-]+'
+    r'|sk_live_[A-Za-z0-9]+'
+    r'|sk-proj-[A-Za-z0-9]+'
+    r')',
+    re.I,
+)
+SECRET_ASSIGN_RE = re.compile(
+    r'(?:api[_-]?key|password|secret[_-]?key|access[_-]?token)\s*[:=]\s*\S{8,}',
+    re.I,
+)
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+slug = re.sub(r'[^a-z0-9\-]+', '-', a[0].lower()).strip('-')
+when, desc, name, src, root = None, None, None, None, s.SHARED
+i = 1
+while i < len(a):
+    if a[i] in ('--when-to-use', '--when'):
+        when = a[i + 1]; i += 2
+    elif a[i] == '--description':
+        desc = a[i + 1]; i += 2
+    elif a[i] == '--name':
+        name = a[i + 1]; i += 2
+    elif a[i] == '--file':
+        src = a[i + 1]; i += 2
+    elif a[i] == '--mine':
+        root = s.OWN; i += 1
+    elif a[i] == '--shared':
+        root = s.SHARED; i += 1
+    else:
+        sys.exit(f'save-skill: unknown argument {a[i]}')
+
+def map_file(path):
+    """Helperd runs this CLI on the host; map a container /workspace path if needed."""
+    if not path:
+        return path
+    if os.path.isfile(path):
+        return path
+    if path.startswith('/workspace/'):
+        skills_dir = os.environ.get('AGENT_SKILLS_DIR', '/workspace/skills')
+        ws = os.path.dirname(skills_dir) if os.path.basename(skills_dir) == 'skills' else '/opt/agent/workspace'
+        mapped = os.path.join(ws, path[len('/workspace/'):])
+        if os.path.isfile(mapped):
+            return mapped
+    return path
+
+if src and os.path.basename(src) == 'AGENTS.md':
+    sys.exit('save-skill: refused: will not use AGENTS.md as a skill body (core rules are not a skill)')
+
+src = map_file(src) if src else src
+body = open(src).read() if src else ('' if sys.stdin.isatty() else sys.stdin.read())
+d = os.path.join(root, slug)
+p = os.path.join(d, 'SKILL.md')
+old_meta, old_body = s.parse(p) if os.path.exists(p) else ({}, '')
+
+if slug in PROTECTED_CORE:
+    sys.exit('save-skill: refused: will not write a skill that replaces core rules (AGENTS.md)')
+
+def is_disabled_folder(path, slug_name):
+    if slug_name in PROTECTED_DISABLED_ALWAYS:
+        return True
+    if not os.path.isdir(path):
+        return False
+    has_skill = os.path.isfile(os.path.join(path, 'SKILL.md'))
+    has_disabled = any(f.startswith('SKILL.md.disabled') for f in os.listdir(path))
+    return has_disabled and not has_skill
+
+if is_disabled_folder(d, slug):
+    sys.exit(f'save-skill: refused: {slug} is a disabled skill (including disabled video skills); will not rewrite or re-enable it')
+
+when = (when or desc or old_meta.get('when_to_use') or old_meta.get('description') or '').replace('\n', ' ').strip()
+desc = (desc or old_meta.get('description') or when or '').replace('\n', ' ').strip()
+if not when:
+    sys.exit('save-skill: --when-to-use (or --description) is required for a new skill')
+if len(when) > 220:
+    sys.exit(f'save-skill: when_to_use is {len(when)} characters; keep it to 220 so the router sees the exclusions')
+
+body = body.strip() or old_body.strip()
+if not body:
+    sys.exit('save-skill: empty body (pass --file or pipe the text)')
+# If the file included frontmatter, keep only the body so we don't double-wrap.
+m = re.match(r'^---\n.*?\n---\n?(.*)$', body, re.S)
+if m:
+    body = m.group(1).strip()
+
+nlines = body.count('\n') + 1
+if nlines > 500:
+    sys.exit(f'save-skill: body is {nlines} lines; keep SKILL.md under ~500 lines and move detail to a one-level-deep reference file')
+
+scan = when + '\n' + desc + '\n' + body
+if SECRET_RE.search(scan) or SECRET_ASSIGN_RE.search(scan):
+    sys.exit('save-skill: refused: draft looks like it contains a secret (key, token, password, or private key). Remove it and try again.')
+
+# Similar-skill notice (does not block). Compare token overlap of when_to_use.
+def tokens(t):
+    return {w for w in re.findall(r'[a-z0-9]{4,}', (t or '').lower())}
+
+me = tokens(when)
+notices = []
+if os.path.isdir(root):
+    for other in sorted(os.listdir(root)):
+        if other == slug:
+            continue
+        op = os.path.join(root, other, 'SKILL.md')
+        if not os.path.isfile(op):
+            continue
+        om, _ = s.parse(op)
+        ow = om.get('when_to_use') or om.get('description') or ''
+        ot = tokens(ow)
+        if me and ot and len(me & ot) / len(me | ot) >= 0.5:
+            notices.append(other)
+
+os.makedirs(d, exist_ok=True)
+if os.path.exists(p):
+    shutil.copy2(p, os.path.join(d, f'.SKILL.md.{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}.bak'))
+
+# Preserve extra frontmatter keys (checklist, must_read, …) on update.
+keys = []
+seen = set()
+def add(k, v):
+    if k in seen:
+        return
+    seen.add(k)
+    keys.append((k, v))
+add('name', name or old_meta.get('name') or slug)
+add('when_to_use', when)
+add('description', desc)
+for k, v in old_meta.items():
+    if k not in seen:
+        add(k, v)
+fm = '---\n' + ''.join(f'{k}: {v}\n' for k, v in keys) + '---\n'
+open(p, 'w').write(fm + body + ('\n' if not body.endswith('\n') else ''))
+print(f'Saved skill {slug} -> {p}')
+if notices:
+    print('Note: similar existing skills (consider updating one of these instead of adding a near-duplicate): ' + ', '.join(notices))

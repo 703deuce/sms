@@ -1,0 +1,569 @@
+#!/usr/bin/env python3
+"""chrome-keeper: keep ONE persistent Chromium running on the agent desktop (:99) with remote debugging on
+127.0.0.1:9222, using the shared profile /workspace/desktop/chrome-profile (cookies and logins persist).
+
+Both the OpenHands browser tools (cdp_url=http://127.0.0.1:9222) and the desktop (desktop-open, click, drag,
+the Live screen) drive this same browser, so a login done in either place is there for every conversation.
+Runs in the agent-lab container under systemd agent-lab-chrome (host): docker exec agent-lab python3 /opt/tools/chrome-keeper
+Singleton safety: a flock makes sure only one keeper runs; profile locks are only cleared when no Chromium
+is using the profile; nothing else ever launches a second Chromium on this profile.
+  chrome-keeper            run the keep-alive loop (service)
+  chrome-keeper --status   print whether the browser and CDP are up
+Egress: PAC at http://127.0.0.1:18081/proxy.pac sends public hosts to the local gateway,
+which tries DIRECT first and only uses DataImpulse after a blocked response
+(YouTube, Amazon) through the local gateway; everything else is DIRECT. Locale is
+en-US. Timezone and geolocation follow the sticky exit IP (fallback America/New_York).
+Product images and YouTube thumbnails on CDN hosts are blocked by default; toggle
+with `egress-images on|off`. HTML, JS and CSS are not blocked.
+"""
+import base64, fcntl, json, os, shutil, signal, socket, subprocess, sys, time, urllib.parse, urllib.request
+sys.path.insert(0, '/opt/tools')
+import chromeclean
+
+WS = "/workspace/desktop"
+PROFILE = os.environ.get("DESKTOP_CHROME_PROFILE", f"{WS}/chrome-profile")
+DOWNLOADS = os.environ.get("CHROME_DOWNLOADS", f"{WS}/downloads")
+DISPLAY = os.environ.get("DESKTOP_DISPLAY", "127.0.0.1:99")
+AUTH = os.environ.get("DESKTOP_XAUTHORITY", f"{WS}/Xauthority")  # "" = display without an auth file (job displays)
+PORT = int(os.environ.get("CHROME_CDP_PORT", "9222"))
+LOG = os.environ.get("CHROME_KEEPER_LOG", f"{WS}/chrome-keeper.log")
+LOCK = os.environ.get("CHROME_KEEPER_LOCK", f"{WS}/.chrome-keeper.lock")
+CHROME_LOG = os.environ.get("CHROME_LOG", f"{WS}/chrome.log")
+# Per-job browsers (job-browser daemon) run full-screen in kiosk mode on their own display, so the page
+# viewport is exactly the 1920x1080 screen and screenshot pixels == click pixels.
+KIOSK = os.environ.get("CHROME_KIOSK", "") in ("1", "true", "yes")
+FLAG = f"{WS}/egress-block-images"
+EXIT_INFO_URL = os.environ.get("EGRESS_EXIT_INFO", "http://127.0.0.1:18081/exit-info?job=chrome")
+
+# Image/media CDNs only — never www.amazon.com / www.youtube.com (HTML/JS/CSS).
+BLOCK_URLS = [
+    "*://m.media-amazon.com/*",
+    "*://*.media-amazon.com/*",
+    "*://images-na.ssl-images-amazon.com/*",
+    "*://*.ssl-images-amazon.com/*",
+    "*://*.images-amazon.com/*",
+    "*://ytimg.com/*",
+    "*://*.ytimg.com/*",
+]
+
+_sessions = {}  # target id -> {"sock", "n", "key", "ws"}
+_last_policy_log = ""
+_policy_started = False
+
+
+def log(msg):
+    try:
+        with open(LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def cdp_up(timeout=2):
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/version", timeout=timeout) as r:
+            return json.load(r).get("Browser")
+    except Exception:
+        return None
+
+
+def images_blocked():
+    if os.path.isfile(FLAG):
+        v = open(FLAG).read().strip().lower()
+        return v not in ("off", "0", "false", "allow", "no")
+    return os.environ.get("EGRESS_BLOCK_IMAGES", "1").strip().lower() not in ("0", "off", "false", "no")
+
+
+def exit_info():
+    try:
+        with urllib.request.urlopen(EXIT_INFO_URL, timeout=8) as r:
+            d = json.load(r)
+            if isinstance(d, dict):
+                return d
+    except Exception as e:
+        return {"timezone": "America/New_York", "fallback": True, "error": str(e)[:80]}
+    return {"timezone": "America/New_York", "fallback": True}
+
+
+# --- minimal sync CDP over a page websocket ---
+def _ws_connect(url, timeout=5):
+    u = urllib.parse.urlparse(url)
+    sock = socket.create_connection((u.hostname, u.port or 80), timeout=timeout)
+    key = base64.b64encode(os.urandom(16)).decode()
+    path = u.path + (("?" + u.query) if u.query else "")
+    sock.sendall(
+        f"GET {path} HTTP/1.1\r\nHost: {u.hostname}:{u.port}\r\n"
+        f"Upgrade: websocket\r\nConnection: Upgrade\r\n"
+        f"Sec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode()
+    )
+    buf = b""
+    while b"\r\n\r\n" not in buf:
+        chunk = sock.recv(4096)
+        if not chunk:
+            raise ConnectionError("cdp handshake closed")
+        buf += chunk
+    if b" 101 " not in buf.split(b"\r\n", 1)[0]:
+        raise ConnectionError("cdp handshake failed")
+    return sock
+
+
+def _ws_send(sock, payload: bytes, opcode=1):
+    mask = os.urandom(4)
+    plen = len(payload)
+    hdr = bytearray([0x80 | opcode])
+    if plen < 126:
+        hdr.append(0x80 | plen)
+    elif plen < 65536:
+        hdr.append(0x80 | 126)
+        hdr.extend(plen.to_bytes(2, "big"))
+    else:
+        hdr.append(0x80 | 127)
+        hdr.extend(plen.to_bytes(8, "big"))
+    hdr.extend(mask)
+    sock.sendall(bytes(hdr) + bytes(b ^ mask[i % 4] for i, b in enumerate(payload)))
+
+
+def _ws_recv(sock, timeout=5):
+    sock.settimeout(timeout)
+
+    def exact(n):
+        buf = b""
+        while len(buf) < n:
+            c = sock.recv(n - len(buf))
+            if not c:
+                raise ConnectionError("cdp closed")
+            buf += c
+        return buf
+
+    b1, b2 = exact(2)
+    opcode, plen = b1 & 0x0F, b2 & 0x7F
+    if plen == 126:
+        plen = int.from_bytes(exact(2), "big")
+    elif plen == 127:
+        plen = int.from_bytes(exact(8), "big")
+    mask = exact(4) if (b2 & 0x80) else b""
+    data = exact(plen)
+    if mask:
+        data = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+    if opcode == 0x8:
+        return None
+    if opcode == 0x9:
+        _ws_send(sock, data, opcode=0xA)
+        return _ws_recv(sock, timeout)
+    return data
+
+
+def cdp_call(sock, mid, method, params=None, timeout=8):
+    msg = {"id": mid, "method": method}
+    if params is not None:
+        msg["params"] = params
+    _ws_send(sock, json.dumps(msg).encode())
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        raw = _ws_recv(sock, max(0.2, deadline - time.time()))
+        if raw is None:
+            raise ConnectionError("cdp closed")
+        try:
+            ev = json.loads(raw)
+        except Exception:
+            continue
+        if ev.get("id") == mid:
+            if "error" in ev:
+                raise RuntimeError(f"{method}: {ev['error']}")
+            return ev.get("result") or {}
+    raise TimeoutError(method)
+
+
+def apply_tab(ws_url, tz, lat, lon, block):
+    sock = _ws_connect(ws_url, timeout=5)
+    try:
+        n = 0
+
+        def call(method, params=None):
+            nonlocal n
+            n += 1
+            return cdp_call(sock, n, method, params)
+
+        call("Emulation.setTimezoneOverride", {"timezoneId": tz or "America/New_York"})
+        if lat is not None and lon is not None:
+            try:
+                call("Emulation.setGeolocationOverride", {
+                    "latitude": float(lat), "longitude": float(lon), "accuracy": 10000
+                })
+            except Exception:
+                pass
+        call("Network.enable")
+        call("Network.setBlockedURLs", {"urls": BLOCK_URLS if block else []})
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
+def _close_session(tid):
+    s = _sessions.pop(tid, None)
+    if not s:
+        return
+    try:
+        s["sock"].close()
+    except Exception:
+        pass
+
+
+def _session_call(s, method, params=None, timeout=8):
+    s["n"] += 1
+    return cdp_call(s["sock"], s["n"], method, params, timeout=timeout)
+
+
+def _drain_sessions(timeout=0.2):
+    """Read and drop events so held sockets do not stall."""
+    import select
+    socks = [s["sock"] for s in _sessions.values()]
+    if not socks:
+        return
+    try:
+        ready, _, _ = select.select(socks, [], [], timeout)
+    except Exception:
+        return
+    for sock in ready:
+        try:
+            raw = _ws_recv(sock, timeout=0.2)
+        except Exception:
+            # drop the broken session; next tick reconnects
+            for tid, s in list(_sessions.items()):
+                if s["sock"] is sock:
+                    _close_session(tid)
+                    break
+            continue
+        if not raw:
+            continue
+        try:
+            ev = json.loads(raw)
+        except Exception:
+            continue
+        try:
+            import sys as _sys
+            for d in ("/opt/tools/egress", "/opt/agent/tools/egress", "/opt/agent/ops/egress"):
+                if d not in _sys.path:
+                    _sys.path.insert(0, d)
+            import chrome_hook
+            sess = next((s for s in _sessions.values() if s["sock"] is sock), None)
+            def _reload():
+                if not sess:
+                    return
+                nonlocal_n = sess.get("n") or 0
+                sess["n"] = nonlocal_n + 1
+                cdp_call(sess["sock"], sess["n"], "Page.reload", {"ignoreCache": True}, timeout=5)
+            chrome_hook.handle_event(ev, _reload, job="chrome", log=log)
+        except Exception:
+            pass
+
+
+
+WEBGL_JS = r"""(()=>{try{
+const V='Google Inc. (Intel)',R='ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6)';
+const patch=(pr)=>{if(!pr||pr.__tvp)return;const o=pr.getParameter;
+const f=function getParameter(p){if(p===37445)return V;if(p===37446)return R;return o.apply(this,arguments)};
+Object.defineProperty(f,'toString',{value:()=>'function getParameter() { [native code] }'});
+pr.getParameter=f;Object.defineProperty(pr,'__tvp',{value:1})};
+patch(window.WebGLRenderingContext&&WebGLRenderingContext.prototype);
+patch(window.WebGL2RenderingContext&&WebGL2RenderingContext.prototype);
+}catch(e){}})();"""
+
+def apply_to_session(s, tz, lat, lon, block):
+    """Apply overrides on a socket we will KEEP open. Chrome reverts them on detach."""
+    _session_call(s, "Emulation.setTimezoneOverride", {"timezoneId": tz or "America/New_York"})
+    if lat is not None and lon is not None:
+        try:
+            _session_call(s, "Emulation.setGeolocationOverride", {
+                "latitude": float(lat), "longitude": float(lon), "accuracy": 10000
+            })
+        except Exception:
+            pass
+    _session_call(s, "Network.enable")
+    _session_call(s, "Network.setBlockedURLs", {"urls": BLOCK_URLS if block else []})
+    # 2026-11-25: the WebGL string spoof is OFF by default. The working CoS browser shows SwiftShader honestly, and a
+    # patched getParameter is itself detectable. AGENTLAB_WEBGL_SPOOF=1 turns it back on.
+    if not s.get("webgl") and os.environ.get("AGENTLAB_WEBGL_SPOOF", "0") == "1":
+        try:  # coherent GPU strings (SwiftShader is a server tell); kept for this session's lifetime
+            _session_call(s, "Page.enable")
+            _session_call(s, "Page.addScriptToEvaluateOnNewDocument", {"source": WEBGL_JS})
+            _session_call(s, "Runtime.evaluate", {"expression": WEBGL_JS})
+            s["webgl"] = True
+        except Exception:
+            pass
+
+
+def _catchup(s):
+    """A tab is attached a moment AFTER a fast navigation started, so its first response events were never seen.
+    Read the page's own navigation timing (structured: HTTP status of the main document) and feed it to the egress hook
+    as if it had arrived live, so a first-load 403/429 still falls back to the residential tier and reloads."""
+    try:
+        r = _session_call(s, "Runtime.evaluate", {"returnByValue": True, "expression":
+            "(()=>{const n=performance.getEntriesByType('navigation')[0];"
+            "return n&&location.protocol.startsWith('http')?{s:n.responseStatus,u:location.href}:null})()"}, timeout=4)
+        v = ((r or {}).get("result") or {}).get("value") if isinstance(r, dict) else None
+        if not v or not v.get("s"):
+            return
+        import sys as _sys
+        for d in ("/opt/tools/egress", "/opt/agent/tools/egress", "/opt/agent/ops/egress"):
+            if d not in _sys.path:
+                _sys.path.insert(0, d)
+        import chrome_hook
+        def _reload():
+            _session_call(s, "Page.reload", {"ignoreCache": True}, timeout=5)
+        ev = {"method": "Network.responseReceived", "params": {"type": "Document",
+              "response": {"url": v["u"], "status": v["s"], "headers": {}}}}
+        chrome_hook.handle_event(ev, _reload, job="chrome", log=log)
+    except Exception as e:
+        log(f"catchup: {e}")
+
+
+def apply_policy():
+    """Attach to every page target and leave the CDP session open.
+
+    Emulation.setTimezoneOverride and Network.setBlockedURLs only last for as
+    long as the session that set them stays attached. apply-and-disconnect
+    made both look like they worked, then immediately revert.
+    """
+    global _last_policy_log
+    if not cdp_up(1):
+        for tid in list(_sessions):
+            _close_session(tid)
+        return
+    info = exit_info()
+    tz = info.get("timezone") or "America/New_York"
+    lat, lon = info.get("lat"), info.get("lon")
+    block = images_blocked()
+    key = (tz, block, None if lat is None else round(float(lat), 2),
+           None if lon is None else round(float(lon), 2))
+    try:
+        tabs = json.load(urllib.request.urlopen(f"http://127.0.0.1:{PORT}/json/list", timeout=2))
+    except Exception:
+        return
+    live = set()
+    applied_n = 0
+    for t in tabs:
+        if t.get("type") != "page" or not t.get("webSocketDebuggerUrl"):
+            continue
+        tid = t.get("id") or t.get("webSocketDebuggerUrl")
+        live.add(tid)
+        s = _sessions.get(tid)
+        if s and s.get("ws") != t["webSocketDebuggerUrl"]:
+            _close_session(tid)
+            s = None
+        if s is None:
+            try:
+                sock = _ws_connect(t["webSocketDebuggerUrl"], timeout=5)
+                s = {"sock": sock, "n": 0, "key": None, "ws": t["webSocketDebuggerUrl"]}
+                _sessions[tid] = s
+            except Exception as e:
+                log(f"policy connect: {e}")
+                continue
+        if s.get("key") == key:
+            continue
+        try:
+            first = s.get("key") is None
+            apply_to_session(s, tz, lat, lon, block)
+            s["key"] = key
+            applied_n += 1
+            if first:
+                _catchup(s)
+        except Exception as e:
+            log(f"policy tab: {e}")
+            _close_session(tid)
+    for tid in list(_sessions):
+        if tid not in live:
+            _close_session(tid)
+    _drain_sessions(0.05)
+    summary = (
+        f"tz={tz} fallback={bool(info.get('fallback'))} "
+        f"ip={info.get('ip') or '-'} city={info.get('city') or '-'} "
+        f"images={'blocked' if block else 'allowed'} sessions={len(_sessions)}"
+    )
+    if (applied_n or _last_policy_log != summary) and summary != _last_policy_log:
+        if applied_n or "sessions=0" not in summary:
+            log("policy " + summary)
+            _last_policy_log = summary
+
+
+def policy_loop():
+    while True:
+        try:
+            if cdp_up(1):
+                apply_policy()
+                _drain_sessions(0.4)
+            else:
+                for tid in list(_sessions):
+                    _close_session(tid)
+                time.sleep(1)
+        except Exception as e:
+            log(f"policy loop: {e}")
+            time.sleep(1)
+
+
+def start_policy_thread():
+    global _policy_started
+    if _policy_started:
+        return
+    import threading
+    threading.Thread(target=policy_loop, name="chrome-policy", daemon=True).start()
+    _policy_started = True
+
+
+def policy_status():
+    info = exit_info()
+    return {
+        "images_blocked": images_blocked(),
+        "timezone": info.get("timezone"),
+        "ip": info.get("ip"),
+        "city": info.get("city"),
+        "region": info.get("region"),
+        "fallback": bool(info.get("fallback")),
+    }
+
+
+def profile_pids():
+    """Main Chromium processes (not renderers) using our profile."""
+    out = []
+    for pid in os.listdir('/proc'):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = open(f'/proc/{pid}/cmdline', 'rb').read().split(b'\0')
+        except OSError:
+            continue
+        cmd = [c.decode(errors='replace') for c in cmd if c]
+        if cmd and 'chrom' in os.path.basename(cmd[0]) and f'--user-data-dir={PROFILE}' in cmd \
+                and not any(c.startswith('--type=') for c in cmd):
+            out.append((int(pid), cmd))
+    return out
+
+
+def x_ok():
+    if not AUTH:  # job display: no auth file, local unix socket only
+        num = DISPLAY.rsplit(":", 1)[-1].split(".")[0]
+        return os.path.exists(f"/tmp/.X11-unix/X{num}")
+    env = dict(os.environ, DISPLAY=DISPLAY, XAUTHORITY=AUTH)
+    try:
+        return subprocess.run(["xdpyinfo"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                              timeout=5).returncode == 0 if shutil.which("xdpyinfo") else os.path.exists(AUTH)
+    except Exception:
+        return False
+
+
+def launch():
+    chrome = None
+    # 2026-11-25: Google Chrome stable first (same setup as the Chief of Staff browser that loads Walmart/Best Buy
+    # without a challenge); Chromium stays as the fallback. AGENTLAB_CHROME_BIN overrides it.
+    for cand in (
+        os.environ.get("AGENTLAB_CHROME_BIN") or None,  # (the container sets CHROME_BIN=/usr/bin/chromium; not used)
+        "/opt/google/chrome/chrome",
+        "/usr/lib/chromium/chromium",
+        "/usr/lib/chromium-browser/chromium",
+        shutil.which("chromium"),
+        shutil.which("chromium-browser"),
+        shutil.which("google-chrome"),
+    ):
+        if cand and os.path.isfile(cand) and os.access(cand, os.X_OK):
+            chrome = cand
+            break
+    if not chrome:
+        log("chromium not installed"); return
+    os.makedirs(PROFILE, exist_ok=True)
+    import importlib; importlib.reload(chromeclean)  # pick up edits without restarting the keeper
+    chromeclean.clean_profile(PROFILE, DOWNLOADS)   # only called when no Chromium uses the profile
+    env = dict(os.environ, DISPLAY=DISPLAY, XAUTHORITY=AUTH,
+               TZ="America/New_York", LANG="en_US.UTF-8", LANGUAGE="en_US:en",
+               LC_ALL="en_US.UTF-8")
+    pac = "http://127.0.0.1:18081/proxy.pac"
+    ext = "/opt/tools/egress/block-images-ext"
+    # No --test-type (an automation tell); AutomationControlled off (navigator.webdriver stays false, no infobar);
+    # Accept-Language set explicitly; SwiftShader via --enable-unsafe-swiftshader like the working CoS browser.
+    cmd = [chrome, "--no-sandbox", "--disable-dev-shm-usage", "--password-store=basic",
+           "--ozone-platform=x11", "--enable-unsafe-swiftshader",
+           "--disable-blink-features=AutomationControlled",
+           "--no-first-run", "--no-default-browser-check",
+           "--hide-crash-restore-bubble", "--disable-session-crashed-bubble", "--noerrdialogs",
+           "--lang=en-US", "--accept-lang=en-US,en-GB,en",
+           "--disable-features=DisableLoadExtensionCommandLineSwitch",
+           "--disable-quic", "--disable-ipv6",
+           f"--proxy-pac-url={pac}",
+           f"--load-extension={ext}",
+           f"--remote-debugging-port={PORT}", "--remote-debugging-address=127.0.0.1",
+           "--remote-allow-origins=http://127.0.0.1", f"--user-data-dir={PROFILE}",
+           ]
+    cmd += (["--kiosk", "--window-position=0,0", "--window-size=1920,1080"] if KIOSK else ["--start-maximized"])
+    cmd += ["about:blank"]
+    if not AUTH:
+        env.pop("XAUTHORITY", None)
+    with open(CHROME_LOG, "ab") as lf:
+        subprocess.Popen(cmd, env=env, stdout=lf, stderr=lf, start_new_session=True)
+    for _ in range(40):
+        if cdp_up(1):
+            log(f"launched persistent Chromium, CDP on 127.0.0.1:{PORT}, PAC {pac}")
+            start_policy_thread()
+            try:
+                apply_policy()
+            except Exception as e:
+                log(f"policy after launch: {e}")
+            return
+        time.sleep(0.5)
+    log("launched Chromium but CDP did not answer within 20s")
+
+
+def tick():
+    if cdp_up():
+        start_policy_thread()
+        return
+    pids = profile_pids()
+    if pids:
+        # A Chromium on our profile without CDP (old desktop-open launch) or one still starting/exiting.
+        time.sleep(3)
+        if cdp_up() or not profile_pids():
+            return
+        if any(f"--remote-debugging-port={PORT}" in c for _, c in pids):
+            return  # ours, starting up or busy: leave it alone
+        log(f"closing a Chromium without remote debugging ({[p for p, _ in pids]}) so the shared one can start")
+        for p, _ in pids:
+            try: os.kill(p, signal.SIGTERM)
+            except OSError: pass
+        for _ in range(20):
+            if not profile_pids(): break
+            time.sleep(0.5)
+        if profile_pids():
+            return
+    if not x_ok():
+        return  # desktop not up yet
+    launch()
+
+
+def main():
+    if sys.argv[1:] and sys.argv[1] in ("-h", "--help"):
+        print(__doc__); return
+    if sys.argv[1:] and sys.argv[1] == "--status":
+        st = {"cdp": cdp_up(), "pids": [p for p, _ in profile_pids()], "profile": PROFILE,
+              "cdp_url": f"http://127.0.0.1:{PORT}"}
+        try:
+            st.update(policy_status())
+        except Exception:
+            pass
+        print(json.dumps(st, indent=1)); return
+    lf = open(LOCK, "w")
+    try:
+        fcntl.flock(lf, fcntl.LOCK_EX)  # wait: an older keeper may still be alive
+    except OSError:
+        print("chrome-keeper: another keeper is running", file=sys.stderr); sys.exit(0)
+    log("keeper started")
+    start_policy_thread()
+    while True:
+        try:
+            tick()
+        except Exception as e:
+            log(f"tick error: {e}")
+        time.sleep(3)
+
+
+if __name__ == "__main__":
+    main()

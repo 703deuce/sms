@@ -1,0 +1,13 @@
+{
+  "backend": "self_hosted",
+  "jobId": "msaj_6d1ab72d-bcc8-4de7-9e37-2118a7f3506e",
+  "mode": "cpu",
+  "segmentFrames": 150,
+  "segments": 6,
+  "filmMinutes": 0.5,
+  "submittedAt": "2026-11-20T22:24:10.201872-05:00",
+  "bundle": "render_bundle_v1.zip",
+  "benchmarkOnly": false,
+  "renderId": "msaj_6d1ab72d-bcc8-4de7-9e37-2118a7f3506e",
+  "alreadyExists": false
+}

@@ -1,0 +1,121 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/scene-bundle.schema.json",
+ "title": "Immutable scene bundle (transovo.scene-bundle/1); stored as a kind=bundle asset, id = bnd_<sha256(canonical json)>",
+ "type": "object",
+ "required": [
+  "schema",
+  "sceneId",
+  "revision",
+  "engine",
+  "files",
+  "capabilities",
+  "runtime",
+  "render"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.scene-bundle/1"
+  },
+  "sceneId": {
+   "$ref": "common.schema.json#/$defs/sceneId"
+  },
+  "revision": {
+   "type": "integer",
+   "minimum": 1
+  },
+  "parentBundle": {
+   "oneOf": [
+    {
+     "type": "null"
+    },
+    {
+     "$ref": "common.schema.json#/$defs/bundleId"
+    }
+   ]
+  },
+  "engine": {
+   "enum": [
+    "browser",
+    "python",
+    "clip"
+   ]
+  },
+  "entry": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "manifest": {
+   "type": [
+    "string",
+    "null"
+   ]
+  },
+  "files": {
+   "type": "object",
+   "additionalProperties": {
+    "type": "object",
+    "required": [
+     "asset",
+     "sha256",
+     "bytes"
+    ],
+    "properties": {
+     "asset": {
+      "$ref": "common.schema.json#/$defs/assetId"
+     },
+     "sha256": {
+      "$ref": "common.schema.json#/$defs/sha"
+     },
+     "bytes": {
+      "type": "integer"
+     }
+    }
+   }
+  },
+  "dependencies": {
+   "type": "object",
+   "properties": {
+    "assets": {
+     "type": "array",
+     "items": {
+      "$ref": "common.schema.json#/$defs/anyAsset"
+     }
+    }
+   }
+  },
+  "liveAssets": {
+   "type": "array",
+   "items": {
+    "$ref": "common.schema.json#/$defs/anyAsset"
+   }
+  },
+  "capabilities": {
+   "$ref": "capabilities.schema.json"
+  },
+  "runtime": {
+   "type": "object"
+  },
+  "render": {
+   "type": "object",
+   "required": [
+    "adapter"
+   ],
+   "properties": {
+    "adapter": {
+     "enum": [
+      "browser-capture",
+      "python-frames",
+      "python-video",
+      "static-clip"
+     ]
+    }
+   }
+  },
+  "createdBy": {
+   "type": "object"
+  }
+ }
+}

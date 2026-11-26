@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""gitckpt: checkpoint commit of this job folder so half-finished work can be recovered.
+  gitckpt "stage 4 done: plan.md written"      commit all small text/code files (media, frames, node_modules ignored)
+  gitckpt --log                                last 15 checkpoints
+  gitckpt --restore PATH [REV]                 restore one file from a checkpoint (default: the latest commit)"""
+import os, re, subprocess, sys
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+m = re.match(rf'^((?:/opt/agent)?/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)', os.getcwd())
+root = m.group(1) if m else os.getcwd()
+IGN = '''# gitckpt: checkpoints keep work files, not media or bulky outputs
+*.mp4
+*.mov
+*.webm
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.aac
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.zip
+*.tar*
+node_modules/
+frames/
+view/
+assets/
+clips/
+helpers/
+log/out/
+.cache/
+__pycache__/
+'''
+def git(*a, check=False):
+    r = subprocess.run(['git', '-c', 'user.name=agent', '-c', 'user.email=agent@lab.local', '-c', 'safe.directory=*', '-C', root, *a], capture_output=True, text=True)
+    if check and r.returncode: sys.exit(r.stderr.strip()[:300])
+    return r
+args = sys.argv[1:]
+if args[:1] == ['--log']:
+    print(git('log', '--oneline', '-15').stdout or 'no checkpoints yet'); sys.exit(0)
+if args[:1] == ['--restore']:
+    git('checkout', args[2] if len(args) > 2 else 'HEAD', '--', args[1], check=True); print('restored', args[1]); sys.exit(0)
+msg = ' '.join(args) or 'checkpoint'
+if not os.path.isdir(root + '/.git'):
+    git('init', '-q', check=True)
+if not os.path.exists(root + '/.gitignore'):
+    open(root + '/.gitignore', 'w').write(IGN)
+git('add', '-A', '--', '.', ':!helpers')
+r = git('commit', '-q', '-m', msg[:200])
+if r.returncode and 'nothing to commit' in (r.stdout + r.stderr):
+    print('nothing new to checkpoint'); sys.exit(0)
+if r.returncode: sys.exit((r.stderr or r.stdout).strip()[:300])
+h = git('rev-parse', '--short', 'HEAD').stdout.strip()
+n = git('show', '--stat', '--oneline', 'HEAD').stdout.strip().split('\n')[-1]
+print(f'checkpoint {h}: {n}')

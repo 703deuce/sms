@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""desktop-open: open a URL (or a blank window) in Chromium on the agent desktop.
+
+usage: desktop-open [url] [--fresh] [--shared]
+In a run or helper this opens the URL in the job's OWN browser (its own display, tabs and CDP port; see
+job-browser). --shared opens it in the shared desktop browser Rick sees on the Live screen instead (for
+sign-ins and handoffs; afterwards run `job-browser sync` to copy the new login into your own browser).
+Uses the container Chromium so the live view shows the same browser. Profile:
+/workspace/desktop/chrome-profile (cookies and logins persist across chats).
+This is the SAME persistent browser the browser_* tools drive (chrome-keeper keeps it running with remote
+debugging on 127.0.0.1:9222), so a login made here or with browser_navigate is shared and survives restarts.
+desktop-open opens the URL as a new tab in that browser and brings it to the front.
+--fresh closes the browser and lets chrome-keeper restart it clean (logins are kept). Avoid it while another
+conversation may be using the browser.
+Downloads land in /workspace/desktop/downloads; copy what you need into your job folder.
+"""
+import json, os, re, shutil, subprocess, sys, time, urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, '/opt/tools')
+import chromeclean
+
+WS_DESKTOP = "/workspace/desktop" if os.path.isdir("/workspace") else "/opt/agent/workspace/desktop"
+DISPLAY = os.environ.get("DESKTOP_DISPLAY", "127.0.0.1:99")
+AUTH = os.environ.get("XAUTHORITY") or f"{WS_DESKTOP}/Xauthority"
+PROFILE = os.environ.get("DESKTOP_CHROME_PROFILE", f"{WS_DESKTOP}/chrome-profile")
+DOWNLOADS = f"{WS_DESKTOP}/downloads"
+OWNER = f"{WS_DESKTOP}/owner.json"
+CONTROL = os.environ.get("DESKTOP_CONTROL", "http://127.0.0.1:6070")
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+
+def die(msg):
+    print(f"desktop-open: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def my_job():
+    m = re.match(rf'^(/workspace/jobs/{UUID})', os.path.realpath(os.getcwd()))
+    return m.group(1) if m else os.environ.get('AGENT_SANDBOX') or 'none'
+
+
+def browser_running():
+    for pid in os.listdir('/proc'):
+        if pid.isdigit():
+            try:
+                cmd = open(f'/proc/{pid}/cmdline', 'rb').read().replace(b'\0', b' ').decode(errors='replace')
+            except OSError:
+                continue
+            if 'chrom' in cmd and f'--user-data-dir={PROFILE}' in cmd and '--type=' not in cmd:
+                return True
+    return False
+
+
+def reset_browser():
+    """Ask the desktop service (outside every job sandbox) to close the browser and clean the profile."""
+    req = urllib.request.Request(f"{CONTROL}/browser/reset", data=b'{}', method='POST',
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=30).read()
+    except Exception as e:
+        print(f"desktop-open: could not reset the previous browser ({e}); opening in it anyway", file=sys.stderr)
+        return
+    for _ in range(20):
+        if not browser_running():
+            return
+        time.sleep(0.5)
+
+
+CDP = os.environ.get("CHROME_CDP", "http://127.0.0.1:9222")
+
+
+def cdp(path, method="GET", timeout=5):
+    req = urllib.request.Request(CDP + path, method=method)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    try:
+        return json.loads(raw or b"null")
+    except ValueError:
+        return raw
+
+
+def cdp_up():
+    try:
+        return bool(cdp("/json/version", timeout=2))
+    except Exception:
+        return False
+
+
+def main():
+    args = [a for a in sys.argv[1:]]
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    fresh = '--fresh' in args
+    shared = '--shared' in args or os.environ.get("DESKTOP_SHARED") == "1"
+    args = [a for a in args if a not in ('--fresh', '--shared')]
+    url = args[0] if args else "about:blank"
+    if not shared:
+        try:
+            sys.path.insert(0, '/opt/tools')
+            import jobbrowser
+            info = jobbrowser.ensure(True)
+        except Exception:
+            info = {"mode": "shared"}
+        if info.get("mode") == "job":
+            from urllib.parse import quote
+            port = info["port"]
+            if fresh:
+                for t in jobbrowser.pages(port):
+                    jobbrowser.http_json(port, "/json/close/" + t["id"])
+            tab = jobbrowser.http_json(port, "/json/new?" + quote(url, safe=":/?&=%#@+,;~"), method="PUT")
+            if isinstance(tab, dict) and tab.get("id"):
+                try:
+                    jobbrowser.http_json(port, "/json/activate/" + tab["id"])
+                except Exception:
+                    pass
+            print(f"opened {url} in this job's own browser (display {info.get('display')}, CDP {info.get('cdp')}); "
+                  "use --shared for the Live-screen browser")
+            return
+        if info.get("reason"):
+            print(f"desktop-open: using the shared browser ({info['reason']})", file=sys.stderr)
+    if not os.path.exists(AUTH):
+        die(f"Xauthority not found at {AUTH}. Is the desktop service running?")
+    if fresh and browser_running():
+        reset_browser()
+    try:
+        with open(OWNER, 'w') as f:
+            json.dump({'job': my_job(), 'at': time.time()}, f)
+    except OSError:
+        pass
+    # chrome-keeper (systemd agent-lab-chrome) owns the one browser on this profile; never start a second one.
+    for _ in range(60):
+        if cdp_up():
+            break
+        time.sleep(0.5)
+    else:
+        die("the shared browser is not up (CDP 127.0.0.1:9222). On the host: systemctl restart agent-lab-chrome")
+    from urllib.parse import quote
+    tab = cdp("/json/new?" + quote(url, safe=":/?&=%#@+,;~"), method="PUT")
+    if isinstance(tab, dict) and tab.get("id"):
+        try:
+            cdp("/json/activate/" + tab["id"])
+        except Exception:
+            pass
+    print(f"opened {url} on the agent desktop (shared persistent browser)")
+
+
+if __name__ == "__main__":
+    main()

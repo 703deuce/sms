@@ -1,0 +1,313 @@
+[
+ {
+  "id": "M1",
+  "category": "Manus: market research + deck",
+  "level": "HARD",
+  "prompt": "I'm thinking about building an AI meeting-notes tool just for small law firms. Who are the main competitors I'd be up against (the general ones like Otter and Fireflies, plus anything built specifically for lawyers)? What do they charge and what's each one's angle? Put together a short slide deck I can show my cofounder, and include your sources.",
+  "criteria": [
+   "A .pptx that opens, 6-15 slides, readable (no overflowing text blocks)",
+   "Covers Otter and Fireflies plus >=2 legal-specific or legal-adjacent tools that really exist",
+   "Prices match the vendors' live pricing pages (spot-check Otter + Fireflies + one more); stale/unsure prices labelled",
+   "Sources slide with real URLs that resolve",
+   "Fabricated product or price = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M2",
+  "category": "Manus: trip planning",
+  "level": "HARD",
+  "prompt": "Plan 4 days in Lisbon for me and my wife, March 12-15, 2027. Mid-range, around $250 a night for the hotel. We love food and walking, and we're not into big group tours. I want real hotel options with current prices and booking links, a day-by-day plan, and restaurant picks. Make it something I can open on my phone.",
+  "criteria": [
+   "Phone-friendly deliverable (HTML or PDF) that opens",
+   "3+ real hotels with links that resolve; prices for the dates or clearly labelled as estimates with a source",
+   "Day-by-day plan for 4 days that is geographically sensible",
+   "Restaurants exist (spot-check 3)",
+   "No invented prices presented as quotes; fabricated hotel/restaurant = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M3",
+  "category": "Manus: lead list",
+  "level": "MEDIUM",
+  "prompt": "I sell commercial brewing equipment. Build me a lead list of 25 craft breweries in Portland, Oregon: name, website, street address, phone number, and whether they have a taproom. CSV please.",
+  "criteria": [
+   "CSV with 25 rows and the 5 asked-for columns",
+   "Spot-check 6 random rows against the brewery's site/Google: exists, in Portland OR, address and phone right",
+   "No duplicate breweries; closed breweries flagged or excluded",
+   "Made-up phone/address = FAIL for that row; >2 fabricated rows = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M4",
+  "category": "Manus: product comparison",
+  "level": "MEDIUM",
+  "prompt": "I need a robot vacuum for a house with two shedding dogs, mostly hardwood floors and a couple of rugs. Budget is $500. Compare the top 5 options you can find right now and tell me which one to buy.",
+  "criteria": [
+   "5 real, currently sold models at or under ~$500 (or clearly flagged when on sale)",
+   "Prices with retailer source; spot-check 2 live",
+   "Pet-hair relevant specs (suction, tangle-free brush, bin/self-empty) correct for spot-checked models",
+   "Clear single recommendation with reasons",
+   "Invented model or spec = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M5",
+  "category": "Manus: build + serve a website",
+  "level": "MEDIUM",
+  "prompt": "Make me a website for my dog-walking business, Paws on Pine, in Asheville, NC. Services: 30-minute walk $22, 60-minute walk $35, puppy check-in visit $18, weekends are +$5. Phone is (828) 555-0142. I want it to look professional and work on phones, with a form where people can request a booking. Get it running so I can see it.",
+  "criteria": [
+   "Site files delivered (index.html + assets) and the agent actually served it and gave a URL/how to view",
+   "Renders well at desktop 1366px and mobile 390px (headless screenshot), no broken layout",
+   "All prices, weekend surcharge and phone exactly right; no invented facts (reviews/years in business are a minus if presented as real)",
+   "Booking form with sensible fields; does something on submit (even a confirmation) and is honest that it doesn't email anyone"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M6",
+  "category": "Manus: live data -> dashboard",
+  "level": "HARD",
+  "prompt": "Can you pull every magnitude 4.5+ earthquake worldwide from the last 30 days from USGS and make me a dashboard? I want a map, counts by day, and a list of the biggest ones. Give me the raw data as a CSV too.",
+  "criteria": [
+   "CSV with the USGS events; count within ~3% of the USGS 4.5_month feed at grading time",
+   "Dashboard HTML opens; has a working map with points, a daily-count chart, and a top-N list",
+   "Largest quakes match USGS (top 3 magnitude/place)",
+   "Numbers on dashboard match the CSV"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M7",
+  "category": "Manus: business plan + model",
+  "level": "VERY HARD",
+  "prompt": "I want to open a mobile coffee trailer in Austin, Texas. Write me a business plan I can take to a bank for a $60,000 SBA microloan: the market, startup costs, permits I'll need, a 12-month cash flow projection in Excel, and break-even. Be realistic.",
+  "criteria": [
+   "Plan document (docx/pdf/md) + xlsx with real formulas (not just typed numbers)",
+   "Judgement: flags that SBA microloans cap at $50,000 (and suggests alternatives such as 7(a)/SBA Express or lowering the ask)",
+   "Austin/Texas permits real (Austin Public Health mobile food vendor permit, central preparation facility/commissary, TX sales tax permit, fire inspection etc.)",
+   "Numbers in the plan match the spreadsheet; break-even math correct",
+   "Made-up statistics presented as sourced = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M8",
+  "category": "Manus: stock analysis",
+  "level": "HARD",
+  "prompt": "Compare NVIDIA, AMD and Intel stock over the last 12 months. Chart how they've done, pull the key numbers (P/E, revenue growth, market cap), and give me a short take on which looks best right now. I know it's not financial advice.",
+  "criteria": [
+   "Chart image/HTML that opens with 3 lines over ~12 months",
+   "12-month % change for each within ~3 points of real close prices (check vs stooq/Yahoo)",
+   "P/E, market cap and revenue growth plausible and dated with source",
+   "A clear take with caveats",
+   "Invented numbers = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M9",
+  "category": "Manus: job search shortlist",
+  "level": "HARD",
+  "prompt": "I'm a senior data engineer (Python, Spark, Airflow, AWS) looking for fully remote US roles paying $170k or more. Find me 10 real openings that are live right now, with links, the salary if they list it, and a line on why each one fits me. Spreadsheet please.",
+  "criteria": [
+   "Spreadsheet (xlsx/csv) with 10 rows",
+   "Spot-check 4 links: posting is live, remote US, title matches",
+   "Salary matches the posting when stated (>= $170k or flagged)",
+   "No fabricated postings or salaries (dead or invented links count against)"
+  ],
+  "round": 1
+ },
+ {
+  "id": "M10",
+  "category": "Manus: real-estate scan (blocked sites)",
+  "level": "VERY HARD",
+  "prompt": "We're looking to buy in the Columbus, Ohio area: 3 bedrooms, at least 2 baths, under $375k, good schools. We're thinking Clintonville, Westerville or Worthington. What's on the market right now? Give me a shortlist of 10 with links, and explain the tradeoffs between those three areas.",
+  "criteria": [
+   "10 listings with links; spot-check 4: listing exists, price/beds/baths match, actually in or near the named areas",
+   "Honest when Zillow/Redfin are blocked; uses another source rather than inventing",
+   "Neighborhood tradeoffs reasonable (schools districts: Columbus City vs Westerville City vs Worthington City)",
+   "Invented listings or prices = FAIL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C1",
+  "category": "ChatGPT: email tone fix",
+  "level": "EASY",
+  "prompt": "Can you rewrite this so it's firm but professional? I don't want to burn the bridge with him but I want it in writing. Keep it short. It's in /workspace/testdata/customer22_nov25/draft_email_to_contractor.txt",
+  "criteria": [
+   "Keeps every fact: Oct 15, Nov 20, $18,500 paid of $24,000, $5,500 withheld, countertops, non-GFCI outlet by sink, Dec 5 deadline, will hire someone else and deduct, gate left open twice / dog got out",
+   "No invented facts or commitments",
+   "Firm, professional, under ~220 words, has subject line"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C2",
+  "category": "ChatGPT: spreadsheet analysis + charts",
+  "level": "HARD",
+  "prompt": "My boss wants to know which products are hurting our margins and how we're trending month to month. The data is in /workspace/testdata/customer22_nov25/outdoor_gear_sales_2026.xlsx. Returned orders shouldn't count. Can you dig in and give me a few charts and a short write-up I can forward?",
+  "criteria": [
+   "Net revenue (excl. returns, after discount) within 0.5% of truth; overall gross margin within 0.5 pt",
+   "Names TrailPro 2P Tent as the margin problem (~6% margin vs ~47% overall) and ties it to 40-50% discounting",
+   "Notes the August dip and October high; monthly numbers match",
+   "Mentions Trail Runner Shoe high return rate (~18%) as a bonus",
+   "Charts are real image/xlsx charts that open; write-up is forwardable"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C3",
+  "category": "ChatGPT: long PDF Q&A",
+  "level": "MEDIUM",
+  "prompt": "I have to brief my team on this NIST AI framework tomorrow and I haven't read it: /workspace/testdata/customer22_nov25/nist_ai_rmf.pdf. Give me a one-page summary, then answer these:\n1. What are the core functions, and which one is meant to run across all the others?\n2. What are the characteristics of trustworthy AI it lists?\n3. Which characteristic is the foundation for the others?\n4. How many categories does each function have?\n5. What does it say about residual risk in the MANAGE function?\n6. What's the difference between a current profile and a target profile?\n7. Does it set a specific risk tolerance we have to meet?\n8. What's the penalty if we don't comply?\nCite page numbers.",
+  "criteria": [
+   "Q1 GOVERN, MAP, MEASURE, MANAGE; GOVERN cross-cutting",
+   "Q2 seven: valid&reliable, safe, secure&resilient, accountable&transparent, explainable&interpretable, privacy-enhanced, fair with harmful bias managed",
+   "Q3 valid & reliable",
+   "Q4 GOVERN 6, MAP 5, MEASURE 4, MANAGE 4",
+   "Q5 MANAGE 1.4: negative residual risks (sum of unmitigated risks) to downstream acquirers and end users are documented",
+   "Q6 current = how AI is managed now; target = desired outcomes; compare to find gaps",
+   "Q7 No, it does not prescribe risk tolerance",
+   "Q8 none: it is voluntary (inventing a penalty = FAIL)",
+   "Page citations roughly right"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C4",
+  "category": "ChatGPT: meal plan + grocery list",
+  "level": "MEDIUM",
+  "prompt": "Make me a 7-day dinner plan for a family of 4 (two kids, 6 and 9). We're vegetarian, my son has a tree nut and peanut allergy, and I want to keep groceries around $150 for the week. Weeknight dinners need to be 30 minutes or less. Then give me one grocery list grouped by store section with quantities.",
+  "criteria": [
+   "7 dinners, all vegetarian, none with nuts/peanuts/nut butters/pesto-with-pine-nuts etc.",
+   "Weeknight times <=30 min",
+   "Grocery list covers every ingredient in the recipes with quantities for 4, grouped by section; no orphan items",
+   "Cost estimate near $150 and plausible",
+   "Kid-friendly"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C5",
+  "category": "ChatGPT: explain + debug code",
+  "level": "MEDIUM",
+  "prompt": "My teammate wrote these helpers (/workspace/testdata/customer22_nov25/utils_from_teammate.py) and we're seeing weird stuff: page 1 sometimes shows the wrong items, the average order value looks too low, customers are getting each other's tags, and the days-until-deadline is off by one. Can you explain what's wrong in plain English and give me a fixed version? Keep the same function names and save it as fixed_utils.py.",
+  "criteria": [
+   "Hidden tests pass: paginate 1-based with full pages, add_tag no shared default, average excludes refunded from denominator and handles no valid orders without crashing, days_until(tomorrow)=1/today=0/yesterday=-1",
+   "Plain-English explanation of each of the 4 bugs",
+   "No behaviour changes beyond the fixes"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C6",
+  "category": "ChatGPT: document conversion",
+  "level": "EASY",
+  "prompt": "Can you turn this Word doc into a nicely formatted PDF, and also a Markdown version for our wiki? Keep the table. /workspace/testdata/customer22_nov25/onboarding_guide.docx",
+  "criteria": [
+   "PDF opens, has title, headings, bullet + numbered lists, the 4x5 training table, bold email",
+   "Markdown has # headings, - and 1. lists, a pipe table with all 20 cells",
+   "No content dropped or added"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C7",
+  "category": "ChatGPT: resume tailoring",
+  "level": "MEDIUM",
+  "prompt": "I'm applying for this job (/workspace/testdata/customer22_nov25/job_posting.txt). Here's my resume (/workspace/testdata/customer22_nov25/my_resume.txt). Tailor my resume for it and write me a cover letter. Word docs please.",
+  "criteria": [
+   "Two .docx files that open",
+   "Resume reorders/rewords toward experimentation, SQL, retention, BI; keeps all facts",
+   "NO fabrication: no claimed Looker/dbt/subscription experience, no invented metrics, employers, dates or titles (claiming Looker = FAIL)",
+   "Cover letter specific to Fernway, honest about Tableau->Looker gap, <1 page"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C8",
+  "category": "ChatGPT: social post batch",
+  "level": "EASY",
+  "prompt": "I run Sweet Rise Bakery in Columbus, Ohio. Write me a holiday social media batch for Dec 1-24: 8 Instagram captions, 8 posts for X, and 4 LinkedIn posts. What we're pushing: holiday cookie boxes $32 (pre-order by Dec 20), gingerbread house kits $45, and gift cards. We're closed Dec 25 and 26. Put it all in a posting calendar I can upload (CSV).",
+  "criteria": [
+   "20 posts: 8 IG, 8 X, 4 LinkedIn",
+   "Every X post <=280 characters",
+   "Facts right: $32 boxes, Dec 20 pre-order, $45 kits, gift cards, closed Dec 25-26; no invented discounts/products/addresses",
+   "CSV parses with date, platform, text columns; dates within Dec 1-24"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C9",
+  "category": "ChatGPT: finance word problems",
+  "level": "MEDIUM",
+  "prompt": "Help me check my math on these, show the work briefly:\n1. $420,000 mortgage, 30 years fixed, 6.75% APR. Monthly payment (principal and interest)?\n2. Total interest over the life of that loan?\n3. Credit card balance $5,000 at 22.99% APR, no new charges, I pay $200 a month. Interest is charged monthly on the balance (APR/12, rounded to the cent) before each payment. How many months to pay it off and how much interest in total?\n4. Fixed costs are $18,000 a month, I sell at $45, variable cost is $27 a unit. Break-even units per month?\n5. I invest $500 at the end of every month for 25 years at 7% a year compounded monthly. What will I have?\n6. A $180 jacket is 30% off, then another 20% off at the register, then 8.25% sales tax. What do I pay?\n7. How much do I need to put in today at 5% compounded yearly to have $100,000 in 18 years?",
+  "criteria": [
+   "q1 $2,724.11",
+   "q2 $560,680.32 (+-$5)",
+   "q3 35 months, $1,871.10 interest (+-$2)",
+   "q4 1,000 units",
+   "q5 $405,035.85 (+-$5)",
+   "q6 $109.12",
+   "q7 $41,552.07 (+-$1)",
+   "Each answer correct = 1 point; 7/7 PASS, 5-6 PARTIAL"
+  ],
+  "round": 1
+ },
+ {
+  "id": "C10",
+  "category": "ChatGPT: decision memo",
+  "level": "HARD",
+  "prompt": "We need to decide whether to lease or buy a delivery van for 5 years. Buy: $48,000, 10% down, finance the rest at 7.2% APR over 5 years, maintenance $1,200 a year for years 1-2 and $2,400 a year for years 3-5, we'd sell it at the end for about $18,000. Lease: $3,000 at signing, $699 a month for 60 months, maintenance $600 a year, 15,000 miles a year allowed and we drive about 22,000, overage is $0.25 a mile (paid at the end). Insurance is the same either way. Use an 8% discount rate. Write me a one-page memo with a recommendation and show the numbers.",
+  "criteria": [
+   "Loan payment ~$859.49",
+   "5-year total: buy ~$47,970 net of resale; lease ~$56,690 incl. $8,750 overage",
+   "NPV at 8%: buy ~$42.4k vs lease ~$45.8k (+-3%)",
+   "Recommends buying, with sensible caveats (resale risk, cash flow, tax treatment as a check-with-accountant)",
+   "One page, clear"
+  ],
+  "round": 1
+ },
+ {
+  "id": "K1",
+  "category": "Code: real repo feature (open issue)",
+  "level": "MEDIUM",
+  "prompt": "Can you implement this open feature request in the humanize library? https://github.com/python-humanize/humanize/issues/214 . Clone the repo fresh. Rather than the boolean the issue suggests, use a string parameter conjunction that defaults to \"and\", so natural_list([1, 2, 3], conjunction=\"or\") gives \"1, 2 or 3\" and any word works. Keep the current behaviour by default, update the docstring, add tests, and make sure the whole test suite and the repo's linter pass. Give me the diff.",
+  "criteria": [
+   "Hidden tests pass: default unchanged; conjunction='or' for 2 and 3+ items; custom word; single/empty unchanged",
+   "Full repo test suite passes; ruff passes on changed files",
+   "Tests added in tests/test_lists.py; docstring updated; diff delivered"
+  ],
+  "round": 1
+ },
+ {
+  "id": "K2",
+  "category": "Code: fix 2 real open bugs",
+  "level": "HARD",
+  "prompt": "There are two open bugs in python-humanize I need fixed: https://github.com/python-humanize/humanize/issues/459 (naturalsize truncates fractional bytes) and https://github.com/python-humanize/humanize/issues/521 (intcomma goes to scientific notation for big floats). Clone the repo, fix both the way the issues describe, add regression tests, and run the full test suite. Give me a short summary per fix and the diff.",
+  "criteria": [
+   "Hidden: naturalsize(1.5)=='1.5 Bytes', naturalsize(1.9)=='1.9 Bytes', naturalsize(300)=='300 Bytes', naturalsize(1)=='1 Byte', naturalsize(1.5,gnu=True)=='1.5B', naturalsize(1500)=='1.5 kB'",
+   "Hidden: intcomma(1e16)=='10,000,000,000,000,000.0', intcomma(1.5e17)=='150,000,000,000,000,000.0', intcomma(1e15) unchanged, intcomma(10**16) unchanged",
+   "Full suite passes; regression tests added"
+  ],
+  "round": 1
+ },
+ {
+  "id": "K3",
+  "category": "Code: triage + fix 3 real open bugs",
+  "level": "VERY HARD",
+  "prompt": "We use python-tabulate in production and three open issues are biting us: https://github.com/astanin/python-tabulate/issues/515 , https://github.com/astanin/python-tabulate/issues/494 and https://github.com/astanin/python-tabulate/issues/428 . Clone the repo, reproduce each one, fix them with the smallest safe changes, add regression tests, and make sure the existing test suite still passes. Tell me what the root cause was for each.",
+  "criteria": [
+   "Hidden #515: tabulate([iter([1,2])],headers='keys',tablefmt='plain') == '  0    1\\n  1    2'",
+   "Hidden #494: 'KEEP' appears for headers=['tail'] and headers='firstrow' ragged tables",
+   "Hidden #428: disable_numparse+maxcolwidths with '80,443' no crash and keeps '80,443'",
+   "Existing suite passes (same skips as clean clone); root causes explained"
+  ],
+  "round": 1
+ }
+]

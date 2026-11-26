@@ -1,0 +1,10 @@
+{
+  "_doc": "Who owns which kind of work. Read by runlib.owner_config() (runner + container tools). Haiku-only window (2026-11-25): visual_owner is lab-anthropic and allow_opus is false, so Opus is never started (visual-owner, helpers with --model opus, stuck-step escalate, switch_llm to opus, POST /runs with model=opus). The lab-opus profile remains defined and unused. To switch back: set visual_owner to \"lab-opus\" and allow_opus to true (or remove allow_opus), restore runlib.py / runcli.py / agentd.py / agent-guard from /opt/agent/backups/2026-11-25-haiku-only/ if those were patched, then systemctl restart agent-lab-runner. See that folder's ROLLBACK.md. Earlier rollback note: /opt/agent/backups/2026-11-24-model-ownership/ROLLBACK.md 2026-11-26 cache-fixes: still Haiku-for-everything; Opus/Fable unused; do not flip allow_opus.",
+  "visual_owner": "lab-anthropic",
+  "mechanical_owner": "lab-anthropic",
+  "gate_max_rejections": 2,
+  "legacy_opus_plan": false,
+  "legacy_opus_judge_for_haiku": false,
+  "legacy_visual_guard": false,
+  "allow_opus": false
+}

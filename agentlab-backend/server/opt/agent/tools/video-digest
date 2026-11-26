@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+"""video-digest: turn a video into keyframes + a timed transcript you can read and look at (free: ffmpeg + local
+faster-whisper, or the video's own caption file).
+
+usage: video-digest VIDEO [--frames 8] [--model tiny|base|small] [--lang en] [--subs FILE.vtt|.srt]
+Writes log/video/<name>/: frame_NN_<mm-ss>.jpg (scene changes, evenly topped up), transcript.txt (timed lines) and
+digest.md (frames with their times next to what is said). Then look at the frames with agent_view (or `look DIR`).
+For YouTube, captions via `yt-transcript` are faster than transcribing. Off switch: /opt/tools/flags/VIDEO_DIGEST_OFF."""
+import glob, json, os, re, subprocess, sys
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+if os.path.exists('/opt/tools/flags/VIDEO_DIGEST_OFF'):
+    sys.exit('video-digest is switched off.')
+v, nf, model, lang, subs = None, 8, 'base', None, None
+i = 0
+while i < len(a):
+    if a[i] == '--frames':
+        nf = max(2, min(int(a[i + 1]), 40)); i += 2
+    elif a[i] == '--model':
+        model = a[i + 1]; i += 2
+    elif a[i] == '--lang':
+        lang = a[i + 1]; i += 2
+    elif a[i] == '--subs':
+        subs = a[i + 1]; i += 2
+    else:
+        v = a[i]; i += 1
+if not v or not os.path.isfile(v):
+    sys.exit(f'video-digest: no such file {v}')
+name = re.sub(r'[^A-Za-z0-9]+', '-', os.path.basename(v).rsplit('.', 1)[0])[:40]
+out = os.path.join(os.getcwd(), 'log', 'video', name)
+os.makedirs(out, exist_ok=True)
+dur = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', v],
+                           capture_output=True, text=True).stdout.strip() or 0)
+# scene-change times, topped up with evenly spaced times
+sc = subprocess.run(['ffmpeg', '-hide_banner', '-i', v, '-vf', "select='gt(scene,0.35)',showinfo", '-an', '-f', 'null', '-'],
+                    capture_output=True, text=True, timeout=600).stderr
+times = sorted({round(float(t), 1) for t in re.findall(r'pts_time:([0-9.]+)', sc)})
+if len(times) > nf:
+    step = len(times) / nf
+    times = [times[int(k * step)] for k in range(nf)]
+even = [round(dur * (k + 0.5) / nf, 1) for k in range(nf)] if dur else [0]
+for t in even:
+    if len(times) >= nf:
+        break
+    if all(abs(t - x) > dur / (nf * 2) for x in times):
+        times.append(t)
+times = sorted(times)[:nf]
+frames = []
+for k, t in enumerate(times):
+    fp = os.path.join(out, f'frame_{k + 1:02d}_{int(t // 60):02d}-{int(t % 60):02d}.jpg')
+    subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-ss', str(t), '-i', v, '-frames:v', '1', '-vf',
+                    'scale=960:-2', '-q:v', '4', fp], capture_output=True)
+    if os.path.exists(fp):
+        frames.append((t, fp))
+lines = []
+if subs and os.path.isfile(subs):
+    cur = None
+    for l in open(subs, errors='replace'):
+        m = re.match(r'(\d+):(\d\d):(\d\d)[.,](\d+)\s*-->', l) or re.match(r'(\d\d):(\d\d)[.,](\d+)\s*-->', l)
+        if m:
+            g = [int(x) for x in m.groups()]
+            cur = g[0] * 3600 + g[1] * 60 + g[2] if len(g) == 4 else g[0] * 60 + g[1]
+        elif l.strip() and cur is not None and not l.strip().isdigit() and 'WEBVTT' not in l:
+            lines.append((cur, re.sub(r'<[^>]+>', '', l.strip())))
+else:
+    has_audio = 'audio' in subprocess.run(['ffprobe', '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=codec_type',
+                                           '-of', 'csv=p=0', v], capture_output=True, text=True).stdout
+    if has_audio:
+        from faster_whisper import WhisperModel
+        segs, info = WhisperModel(model, device='cpu', compute_type='int8').transcribe(v, language=lang, vad_filter=True)
+        lines = [(s.start, s.text.strip()) for s in segs]
+with open(os.path.join(out, 'transcript.txt'), 'w') as fh:
+    fh.write('\n'.join(f'[{int(t // 60):02d}:{int(t % 60):02d}] {x}' for t, x in lines))
+md = [f'# Video digest: {os.path.basename(v)} ({dur:.1f} s)\n']
+for k, (t, fp) in enumerate(frames):
+    nxt = frames[k + 1][0] if k + 1 < len(frames) else dur + 1
+    said = ' '.join(x for tt, x in lines if t - 2 <= tt < nxt)[:600]
+    md.append(f'## {int(t // 60):02d}:{int(t % 60):02d}  {os.path.relpath(fp)}\n{said or "(no speech)"}\n')
+open(os.path.join(out, 'digest.md'), 'w').write('\n'.join(md))
+print(f'{len(frames)} frames, {len(lines)} transcript lines -> {os.path.relpath(out)}/digest.md')
+print('Next: agent_view the frames (or `look ' + os.path.relpath(out) + ' "question"`) and read digest.md.')

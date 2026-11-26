@@ -1,0 +1,14 @@
+[Unit]
+Description=Agent Lab persistent desktop Chromium (shared logins, CDP 127.0.0.1:9222)
+After=docker.service agent-lab-desktop.service agent-lab-egress.service
+Wants=agent-lab-desktop.service agent-lab-egress.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/docker exec agent-lab python3 /opt/tools/chrome-keeper
+ExecStopPost=-/usr/bin/docker exec agent-lab pkill -f /opt/tools/chrome-keeper
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

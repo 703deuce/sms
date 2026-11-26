@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+"""repomap: a compact, ranked map of a code repo (Aider-style): files with their most important classes/functions and
+signatures, ranked by how much the rest of the repo references them (PageRank over a file reference graph, tree-sitter
+parsing, free and local). Read this BEFORE opening files, then read only the line ranges you need.
+
+  repomap [PATH] [--tokens 1000] [--focus "words or file names"] [--refresh] [--json]
+PATH defaults to the git repo you are in (or the current folder). --focus boosts symbols/files you care about.
+Cached per repo (~/.cache/repomap); only files whose size/mtime changed are re-parsed, so re-running after edits is fast.
+Languages: python, js/ts/tsx, go, rust, java, c/c++, ruby, php, c#, kotlin, swift, scala, bash."""
+import argparse, hashlib, json, math, os, re, subprocess, sys, time
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import tslib
+
+SKIP = {'node_modules', '.git', 'dist', 'build', 'vendor', 'target', '.venv', 'venv', '__pycache__', '.tox', '.next',
+        'coverage', 'site-packages', '.mypy_cache', '.pytest_cache', 'third_party', 'out'}
+MAX_FILES = 4000
+MAX_BYTES = 1_000_000
+
+
+def repo_root(p):
+    p = os.path.abspath(p or os.getcwd())
+    try:
+        r = subprocess.run(['git', '-C', p, 'rev-parse', '--show-toplevel'], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except Exception:
+        pass
+    return p
+
+
+def list_files(root):
+    files = []
+    try:
+        r = subprocess.run(['git', '-C', root, 'ls-files', '-co', '--exclude-standard'], capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            files = [l for l in r.stdout.split('\n') if l]
+    except Exception:
+        pass
+    if not files:
+        for dp, dn, fn in os.walk(root):
+            dn[:] = [d for d in dn if d not in SKIP and not d.startswith('.')]
+            files += [os.path.relpath(os.path.join(dp, f), root) for f in fn]
+    out = []
+    for f in files:
+        parts = f.split('/')
+        if any(x in SKIP for x in parts[:-1]):
+            continue
+        if os.path.splitext(f)[1].lower() not in tslib.LANG_BY_EXT or f.endswith(('.min.js', '.d.ts')):
+            continue
+        out.append(f)
+    have = set(out)
+    out = [f for f in out if not (f.endswith('.pyi') and f[:-1] in have)]   # stubs duplicate the real module
+    return sorted(out)[:MAX_FILES]
+
+
+def is_test(f):
+    return bool(re.search(r'(^|/)(tests?|test-d|__tests__|spec|testing)(/|$)|(^|/)test_[^/]*$|_test\.[a-z]+$|\.(test|spec)\.[a-z]+$', f))
+
+
+def load_cache(root):
+    d = os.path.join(os.path.expanduser('~'), '.cache', 'repomap')
+    os.makedirs(d, exist_ok=True)
+    p = os.path.join(d, hashlib.sha1(root.encode()).hexdigest()[:16] + '.json')
+    try:
+        return p, json.load(open(p))
+    except Exception:
+        return p, {}
+
+
+def parse_all(root, files, refresh):
+    cp, cache = load_cache(root)
+    if refresh:
+        cache = {}
+    out, changed = {}, 0
+    for f in files:
+        ap = os.path.join(root, f)
+        try:
+            st = os.stat(ap)
+        except OSError:
+            continue
+        if st.st_size > MAX_BYTES:
+            continue
+        sig = f'{st.st_mtime_ns}:{st.st_size}'
+        c = cache.get(f)
+        if not c or c.get('sig') != sig:
+            o = tslib.outline(ap)
+            if o is None:
+                continue
+            c = {'sig': sig, 'defs': o['defs'], 'refs': o['refs']}
+            cache[f] = c; changed += 1
+        out[f] = c
+    for c in out.values():
+        c['defs'] = [d for d in c['defs'] if '()' not in (d[6] or '')]
+    if changed or len(cache) != len(out):
+        cache = {k: v for k, v in cache.items() if k in out}
+        tmp = cp + '.tmp'; json.dump(cache, open(tmp, 'w')); os.replace(tmp, cp)
+    return out, changed
+
+
+def rank(data, focus_words, focus_files):
+    defined = {}
+    for f, c in data.items():
+        for d in c['defs']:
+            defined.setdefault(d[0], set()).add(f)
+    files = list(data)
+    edges = {}   # (src, dst) -> [(name, w)]
+    for f, c in data.items():
+        for name, cnt in c['refs'].items():
+            dst = defined.get(name)
+            if not dst:
+                continue
+            mul = 1.0
+            if name in focus_words:
+                mul *= 10
+            if name.startswith('_'):
+                mul *= 0.1
+            if len(dst) > 5:
+                mul *= 0.1
+            for g in dst:
+                if g == f:
+                    continue
+                edges.setdefault((f, g), []).append((name, math.sqrt(cnt) * mul))
+    outw = {}
+    for (f, g), lst in edges.items():
+        outw[f] = outw.get(f, 0) + sum(w for _, w in lst)
+    n = len(files) or 1
+    pers = {f: (10.0 if f in focus_files else (0.3 if is_test(f) else 1.0)) for f in files}
+    tot = sum(pers.values()) or 1
+    pers = {f: v / tot for f, v in pers.items()}
+    pr = dict(pers)
+    for _ in range(30):
+        nxt = {f: 0.15 * pers[f] for f in files}
+        dangling = sum(pr[f] for f in files if not outw.get(f))
+        for f in files:
+            nxt[f] += 0.85 * dangling * pers[f]
+        for (f, g), lst in edges.items():
+            nxt[g] += 0.85 * pr[f] * sum(w for _, w in lst) / outw[f]
+        pr = nxt
+    score = {}
+    for (f, g), lst in edges.items():
+        for name, w in lst:
+            score[(g, name)] = score.get((g, name), 0) + pr[f] * w / outw[f]
+    for f, c in data.items():            # unreferenced public top-level defs still get a little weight from their file
+        for d in c['defs']:
+            if d[5] == 0 and not d[0].startswith('_'):
+                score.setdefault((f, d[0]), pr[f] * 0.01)
+    for k in list(score):
+        if is_test(k[0]):
+            score[k] *= 0.1
+        if k[1] in focus_words:
+            score[k] *= 3
+    return pr, score
+
+
+def render(root, data, pr, score, budget_tokens):
+    ranked = sorted(score.items(), key=lambda kv: -kv[1])
+    chosen = {}   # file -> set of def indexes
+    def cost(f, idxs):
+        return sum(len(data[f]['defs'][i][4]) + 12 for i in idxs) + len(f) + 2
+    used = 0
+    budget = budget_tokens * 4   # ~4 chars per token
+    for (f, name), s in ranked:
+        defs = data[f]['defs']
+        idx = [i for i, d in enumerate(defs) if d[0] == name][:2]
+        add = set(idx)
+        for i in idx:   # keep the enclosing class header so a method has context
+            par = defs[i][6]
+            if par:
+                last = par.split('.')[-1]
+                add |= {j for j, d in enumerate(defs) if d[0] == last and d[2] <= defs[i][2] <= d[3]}
+        cur = chosen.get(f, set())
+        new = add - cur
+        if not new:
+            continue
+        c = cost(f, cur | new) - (cost(f, cur) if cur else 0)
+        if used + c > budget:
+            continue
+        chosen[f] = cur | new; used += c
+    lines = []
+    for f in sorted(chosen, key=lambda f: -pr.get(f, 0)):
+        lines.append(f'{f}:')
+        for i in sorted(chosen[f], key=lambda i: data[f]['defs'][i][2]):
+            nm, kind, a, b, sig, depth, parent = data[f]['defs'][i]
+            lines.append(f'│{"  " * depth} L{a}-{b} {sig}')
+    return lines
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('path', nargs='?')
+    ap.add_argument('--tokens', type=int, default=1000)
+    ap.add_argument('--focus', default='')
+    ap.add_argument('--refresh', action='store_true')
+    ap.add_argument('--json', action='store_true')
+    a = ap.parse_args()
+    if tslib.pack() is None:
+        sys.exit('repomap: tree-sitter is not available here')
+    root = repo_root(a.path)
+    t0 = time.time()
+    files = list_files(root)
+    data, changed = parse_all(root, files, a.refresh)
+    fw = set(re.findall(r'[A-Za-z_][A-Za-z0-9_]{2,}', a.focus))
+    ff = {f for f in data if any(w and (w in f) for w in re.findall(r'[\w./-]{3,}', a.focus) if '/' in w or '.' in w)}
+    pr, score = rank(data, fw, ff)
+    lines = render(root, data, pr, score, a.tokens)
+    body = '\n'.join(lines)
+    ndefs = sum(len(c['defs']) for c in data.values())
+    toks = (len(body) + 3) // 4
+    if a.json:
+        print(json.dumps({'root': root, 'files': len(data), 'defs': ndefs, 'reparsed': changed, 'approx_tokens': toks, 'map': body}))
+        return
+    print(f'# repomap {root}: {len(data)} code files, {ndefs} definitions; top symbols by references, ~{toks} tokens '
+          f'({changed} file(s) re-parsed, {time.time() - t0:.1f}s). Lines are L<start>-<end>: read one with '
+          f'`read_section FILE --lines A:B` or the editor view_range.')
+    print(body)
+
+
+if __name__ == '__main__':
+    main()

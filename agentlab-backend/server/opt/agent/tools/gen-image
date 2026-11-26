@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""gen-image: generate or edit an image through KIE (paid; never retried automatically).
+
+usage: gen-image "prompt" [--ref IMG_OR_URL ...] [--aspect 1:1] [--size 1K|2K|4K] [--format png|jpg] [-o out.png]
+                 [--model nano-banana-2] [--timeout 600]
+       gen-image --task TASK_ID [-o out.png]      fetch a finished task again (no new charge)
+  --ref     reference/input image(s), local file or URL, repeatable (edits, style, character consistency)
+  --aspect  1:1 (default), 16:9, 9:16, 4:3, 3:4, 21:9, ... ; --size 1K (default, cheapest), 2K, 4K
+  default output: <job folder>/media/img-<time>.png. Prints JSON: paths, task_id, credits_used, cost_usd.
+"""
+import argparse, sys
+sys.path.insert(0, '/opt/tools')
+import keyclient as K
+
+ap = argparse.ArgumentParser(add_help=False)
+ap.add_argument('prompt', nargs='?')
+ap.add_argument('--ref', action='append', default=[])
+ap.add_argument('--aspect', default='1:1')
+ap.add_argument('--size', default='1K')
+ap.add_argument('--format', default='png')
+ap.add_argument('-o', '--out')
+ap.add_argument('--model', default='nano-banana-2')
+ap.add_argument('--timeout', type=int, default=600)
+ap.add_argument('--task')
+ap.add_argument('-h', '--help', action='store_true')
+a = ap.parse_args()
+if a.help or not (a.prompt or a.task):
+    print(__doc__); sys.exit(0)
+import os
+if os.path.exists('/opt/tools/flags/IMAGE_GEN_OFF'):
+    sys.exit('gen-image: image generation is switched off (flag IMAGE_GEN_OFF)')
+_est = {'1K': 0.04, '2K': 0.14, '4K': 0.24}.get(a.size.upper(), 0.24)  # per-call cost cap (core8)
+if not a.task and _est > float(os.environ.get('IMAGE_MAX_USD', '0.15')):
+    sys.exit(f"gen-image: --size {a.size} is about ${_est:.2f}, over the per-call cap (IMAGE_MAX_USD). Use 1K or 2K.")
+path = K.out_path(a.out, 'img', 'jpg' if a.format.startswith('jp') else 'png')
+before = K.credits()
+if a.task:
+    tid = a.task
+else:
+    refs = [K.upload(r) for r in a.ref]
+    tid = K.create(a.model, {'prompt': a.prompt, 'image_input': refs, 'image_urls': refs, 'aspect_ratio': a.aspect,
+                             'resolution': a.size.upper(), 'output_format': 'jpg' if a.format.startswith('jp') else 'png'})
+    print(f"task {tid} ({a.model}) submitted", file=sys.stderr)
+rec = K.wait(tid, a.timeout)
+K.finish('gen-image', a.model, tid, rec, None if a.task else before, path, {'size': a.size, 'aspect': a.aspect, 'refs': len(a.ref)})

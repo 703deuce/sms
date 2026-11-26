@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""desktop-type: type text into the focused window on the agent desktop.
+
+usage: desktop-type "text" [--enter]
+Does not log the typed text. Prefer this over pasting secrets into a shell command.
+For a single key or combo (Return, ctrl+l, alt+F4) use: key <combo>
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import api, die
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__); return
+    enter, parts = False, []
+    for a in args:
+        if a == "--enter":
+            enter = True
+        elif a.startswith("-"):
+            die("desktop-type", f"unknown option {a}")
+        else:
+            parts.append(a)
+    text = " ".join(parts)
+    try:
+        rec, _, _ = api("POST", "/type", {"text": text, "enter": enter})
+    except Exception as e:
+        die("desktop-type", str(e))
+    if not rec.get("ok"):
+        die("desktop-type", "xdotool failed")
+    print(f"typed {len(text)} characters" + (" + Return" if enter else ""))
+
+if __name__ == "__main__":
+    main()

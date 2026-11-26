@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""view: see images with your own eyes.
+
+`view` is a real tool now: call the `agent_view` tool (not this terminal command). The images come back as the
+tool's own result, together with an automatic QA verdict (PASS / LOOKS BROKEN), in the same step.
+
+  agent_view  paths=["out/render.mp4"] fps=1          frames from a video (start/end to narrow)
+  agent_view  paths=["work/frames/"]                  a folder of frames (sampled evenly)
+  agent_view  paths=["shot.png", "b.jpg"] question="Is any text cut off?"
+
+If `agent_view` is not in your tool list, use `look <image|dir|video> "question" --second-opinion` here instead.
+"""
+import sys
+print(__doc__.strip())
+sys.exit(0 if any(a in ('-h', '--help') for a in sys.argv[1:]) else 2)

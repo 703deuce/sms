@@ -1,0 +1,24 @@
+{
+  "film_duration_seconds": 60,
+  "has_narration": true,
+  "cues": [
+    {
+      "id": "opening",
+      "start": 0,
+      "end": 32.7,
+      "prompt": "Dark pulsing electronic underscore with focused bass and rhythmic tension",
+      "bpm": 100,
+      "drums": true,
+      "vocals": false
+    },
+    {
+      "id": "turn",
+      "start": 32.7,
+      "end": 60,
+      "prompt": "Reflective resolution with warm harmonic pads and a closing musical cadence",
+      "bpm": 100,
+      "drums": false,
+      "vocals": false
+    }
+  ]
+}

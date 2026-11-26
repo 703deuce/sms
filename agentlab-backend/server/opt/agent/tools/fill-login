@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""fill-login: type a stored website login into the current browser tab. You never see the password or code.
+usage: fill-login --list                         which sites have stored logins (names only)
+       fill-login SITE [--submit]                fill username + password (two-step logins handled); SITE = host, e.g. github.com
+       fill-login SITE --user|--pass [--submit]  fill only that field (for multi-page logins)
+       fill-login SITE --totp [--submit]         fill the current 2FA one-time code
+Open the login page first (desktop-open URL). The tab's hostname must match SITE or nothing is typed.
+John stores logins on the Agent Lab secrets page as LOGIN_<HOST>_USER / _PASS / _TOTP (HOST uppercase, dots -> _).
+After submitting, check the result with browser-shot; never try to read the field values back."""
+import json, sys, urllib.request
+a = sys.argv[1:]
+def call(path, body=None):
+    r = urllib.request.Request("http://127.0.0.1:6072" + path, json.dumps(body).encode() if body is not None else None,
+                               {"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(r, timeout=70) as f: return json.load(f)
+    except urllib.error.HTTPError as e:
+        try: return json.load(e)
+        except Exception: return {"ok": False, "error": f"HTTP {e.code}"}
+    except Exception as e:
+        sys.exit(f"fill-login: vault service not reachable ({e}); ask Rick to check agent-lab-vaultd.service")
+if not a or a[0] in ("-h", "--help"): print(__doc__); sys.exit(0)
+if a[0] == "--list": print(json.dumps(call("/logins"), indent=1)); sys.exit(0)
+site = a[0]; fl = set(a[1:]); sub = "--submit" in fl
+if "--totp" in fl: r = call("/totp", {"site": site, "submit": sub})
+else: r = call("/fill", {"site": site, "submit": sub, "part": "user" if "--user" in fl else "pass" if "--pass" in fl else "login"})
+print(json.dumps(r)); sys.exit(0 if r.get("ok") else 1)

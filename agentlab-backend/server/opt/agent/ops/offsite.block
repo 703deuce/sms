@@ -1,0 +1,11 @@
+# Offsite copy to Backblaze B2 (S3 API) under agent-lab-backups/ in the bucket from /opt/agent/secrets/b2.env
+# (root-only; never printed). Only objects under that prefix are ever written or pruned; keeps the newest 14.
+if [ -r /opt/agent/secrets/b2.env ]; then
+  if python3 /opt/agent/ops/b2s3.py put "$ARCHIVE" && python3 /opt/agent/ops/b2s3.py prune 14; then
+    echo "backup: offsite copy uploaded to B2 (agent-lab-backups/$(basename "$ARCHIVE"))"
+  else
+    echo "backup: OFFSITE UPLOAD FAILED (local copy kept)" >&2
+  fi
+else
+  echo "backup: no /opt/agent/secrets/b2.env; local copy only"
+fi

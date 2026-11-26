@@ -1,0 +1,102 @@
+{
+ "session_start": [
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/agent-context",
+     "timeout": 30
+    }
+   ]
+  }
+ ],
+ "user_prompt_submit": [
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/agent-context",
+     "timeout": 30
+    }
+   ]
+  }
+ ],
+ "pre_tool_use": [
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/agent-guard",
+     "timeout": 10
+    }
+   ]
+  },
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/autocheck --hook pre",
+     "timeout": 300
+    }
+   ]
+  },
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/desktop-yield",
+     "timeout": 600
+    }
+   ]
+  }
+ ],
+ "post_tool_use": [
+  {
+   "matcher": "terminal",
+   "hooks": [
+    {
+     "command": "/opt/tools/agent-guard",
+     "timeout": 10
+    }
+   ]
+  },
+  {
+   "matcher": "browser_navigate",
+   "hooks": [
+    {
+     "command": "/opt/tools/evidence-shot",
+     "timeout": 20
+    }
+   ]
+  },
+  {
+   "matcher": "file_editor",
+   "hooks": [
+    {
+     "command": "/opt/tools/autocheck --hook post",
+     "timeout": 15
+    }
+   ]
+  }
+ ],
+ "stop": [
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/autocheck --hook stop",
+     "timeout": 300
+    }
+   ]
+  },
+  {
+   "matcher": "*",
+   "hooks": [
+    {
+     "command": "/opt/tools/agent-complete",
+     "timeout": 20
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""read_section: find and read ONE section of any skill file, document or big file instead of loading the whole thing.
+
+Order of use: (1) search or list, (2) read the one section you need, (3) write a short note instead of re-reading.
+  read_section --find "words or a question"   hybrid search (keywords + meaning + rerank) across ALL skills, this job's
+                                              folder and added doc folders; docs by heading, code by function/class
+  read_section --find "words" PATH_OR_DIR     same, limited to one file or folder
+  read_section PATH --list                    the file's table of contents: line, heading, size
+  read_section PATH "heading words"           one section (heading to the next heading of the same or higher level)
+  read_section PATH --lines 120:180           a line range (at most 200 lines per call)
+  read_section --index                        (re)build the heading index now (it also refreshes itself when files change)
+  read_section --add-docs DIR                 add a folder of the user's documents to the index (remembered)
+PATH: absolute, relative to here, relative to /workspace/skills (e.g. lab-video-producer/ref/engines.md), or just a file name /
+path tail that matches one indexed file. Works on .md .txt .rst .html .pdf .docx (any other text file: use --lines).
+Other options: --pick N (several headings match), --max CHARS (default 14000).
+Section reads are logged to <job>/log/read-manifest.jsonl (kind=section)."""
+import argparse, hashlib, json, os, re, subprocess, sys, time, urllib.request
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import seclib
+from seclib import load, span, CACHE
+
+SKILLS = ['/workspace/skills'] if os.path.isdir('/workspace/skills') else ['/opt/agent/workspace/skills']
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+JOB_RE = re.compile(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)')
+EXTS = ('.md', '.markdown', '.txt', '.rst', '.html', '.htm', '.pdf', '.docx')
+SKIP_DIRS = {'node_modules', '.git', '__pycache__', 'venv', 'src', 'dist', 'build', 'out', 'frames', 'work', 'visuals', 'view'}
+MAX_BYTES = 30_000_000
+
+
+def job_root():
+    m = JOB_RE.match(os.getcwd())
+    return m.group(1) if m else None
+
+
+# ---------- index of every skill file, this job's documents and added folders ----------
+def roots():
+    r = list(SKILLS)
+    jr = job_root()
+    if jr: r.append(jr)
+    try:
+        r += [x.strip() for x in open(os.path.join(CACHE, 'roots.txt')) if x.strip() and os.path.isdir(x.strip())]
+    except OSError:
+        pass
+    return r
+
+
+def walk_files(rs):
+    for root in rs:
+        for dp, dn, fn in os.walk(root):
+            dn[:] = [d for d in dn if not d.startswith('.') and d not in SKIP_DIRS]
+            if root in SKILLS and dp == root:   # a skill folder without SKILL.md is disabled: not searchable
+                dn[:] = [d for d in dn if os.path.isfile(os.path.join(root, d, 'SKILL.md'))]
+            for f in fn:
+                if f.lower().endswith(EXTS):
+                    p = os.path.join(dp, f)
+                    try:
+                        if os.path.getsize(p) <= MAX_BYTES: yield p
+                    except OSError: pass
+
+
+def build_index(rs, force=False):
+    os.makedirs(CACHE, exist_ok=True)
+    ip = os.path.join(CACHE, 'index.json')
+    try: idx = json.load(open(ip))
+    except Exception: idx = {}
+    seen, changed = set(), False
+    for p in walk_files(rs):
+        seen.add(p)
+        try: st = os.stat(p)
+        except OSError: continue
+        sig = f'{st.st_mtime_ns}:{st.st_size}'
+        if not force and idx.get(p, {}).get('sig') == sig: continue
+        try:
+            lines, hs = load(p)
+        except Exception:
+            idx[p] = {'sig': sig, 'n': 0, 'h': []}; changed = True; continue
+        idx[p] = {'sig': sig, 'n': len(lines), 'h': [[i, lv, t[:120], sum(len(x) + 1 for x in lines[slice(*span(lines, hs, k))])] for k, (i, lv, t) in enumerate(hs)]}
+        changed = True
+    for p in list(idx):
+        if p not in seen and any(p.startswith(r.rstrip('/') + '/') for r in rs):
+            del idx[p]; changed = True
+    if changed:
+        json.dump(idx, open(ip + '.tmp', 'w')); os.replace(ip + '.tmp', ip)
+    return {p: v for p, v in idx.items() if p in seen}
+
+
+def resolve(arg, idx):
+    cands = [arg, os.path.join(os.getcwd(), arg)] + [os.path.join(s, arg) for s in SKILLS]
+    jr = job_root()
+    if jr: cands.append(os.path.join(jr, arg))
+    for c in cands:
+        if os.path.isfile(c): return os.path.abspath(c)
+    m = [p for p in idx if p.endswith('/' + arg.lstrip('/'))]
+    if len(m) == 1: return m[0]
+    if len(m) > 1:
+        sys.exit(f'read_section: {arg!r} matches several files; use a longer path:\n  ' + '\n  '.join(m[:15]))
+    sys.exit(f'read_section: no file {arg!r}. Try `read_section --find "words"`.')
+
+
+def log(path, what, n):
+    jr = job_root()
+    if not jr: return
+    try:
+        os.makedirs(jr + '/log', exist_ok=True)
+        with open(jr + '/log/read-manifest.jsonl', 'a') as f:
+            f.write(json.dumps({'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'kind': 'section', 'file': path, 'section': what, 'chars': n}) + '\n')
+    except OSError:
+        pass
+
+
+def short(p):
+    for s in SKILLS:
+        if p.startswith(s + '/'): return p[len(s) + 1:]
+    jr = job_root()
+    return os.path.relpath(p, jr) if jr and p.startswith(jr + '/') else p
+
+
+SERVICE = os.environ.get('SEARCH_SERVICE', 'http://127.0.0.1:6075')
+
+
+def svc_call(path, body, timeout=60):
+    req = urllib.request.Request(SERVICE + path, data=json.dumps(body).encode(), method='POST', headers={'content-type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def find_hybrid(term, scope, k=8):
+    """Hybrid search via the local search service. Returns True when it answered."""
+    try:
+        jr = job_root()
+        if jr:
+            try: svc_call('/reindex', {'job': jr}, timeout=120)   # only changed files (sha1) are re-embedded
+            except Exception: pass
+        res = svc_call('/search', {'q': term, 'scope': scope, 'k': k})
+    except Exception as e:
+        print(f'(search service unavailable: {type(e).__name__}; using the plain heading/text search)')
+        return False
+    rs = res.get('results') or []
+    print(f'Search "{term}": {res.get("how")}, {res.get("indexed_chunks")} chunks indexed')
+    if not rs:
+        print('no results'); return True
+    for n, r in enumerate(rs, 1):
+        p = short(r['path'])
+        print(f'{n}. {p}:{r["a"]}-{r["b"]}  [{r["heading"][:90]}]  ({r["kind"]})')
+        print(f'   {r["snippet"][:200]}')
+        last = r['heading'].split(' > ')[-1].strip()
+        if r['kind'] == 'doc' and last and last != 'top':
+            print(f'   -> read_section {p} "{last[:50]}"   or   --lines {r["a"]}:{r["b"]}')
+        else:
+            print(f'   -> read_section {p} --lines {r["a"]}:{r["b"]}')
+    return True
+
+
+def find(term, scope, idx, limit=40):
+    words = [w for w in re.split(r'\s+', term.lower().strip()) if w]
+    files = [p for p in idx if (not scope or p == scope or p.startswith(scope.rstrip('/') + '/'))]
+    scored = []
+    for p in files:
+        for i, lv, t, n in idx[p]['h']:
+            tl = t.lower(); sc = sum(w in tl for w in words)
+            if sc: scored.append((-sc, -lv * 0 + lv, p, i, t, n))
+    scored.sort()
+    shown = 0
+    if scored:
+        print('HEADINGS:')
+        for sc, lv, p, i, t, n in scored[:15]:
+            print(f'  {short(p)}:{i + 1}  "{t[:70]}" ({n} chars)  -> read_section {short(p)} "{t[:50]}"')
+            shown += 1
+    body = []
+    for p in files:
+        try: lines, hs = load(p)
+        except Exception: continue
+        hh = idx[p]['h']
+        for i, l in enumerate(lines):
+            ll = l.lower()
+            if all(w in ll for w in words):
+                path = ''
+                for h in hh:
+                    if h[0] <= i: path = h[2]
+                    else: break
+                body.append(f'  {short(p)}:{i + 1}  [{path[:50]}]  {l.strip()[:100]}')
+                if len(body) >= limit: break
+        if len(body) >= limit: break
+    if body:
+        print('TEXT (all words on one line):')
+        print('\n'.join(body))
+    if not scored and not body:
+        # fall back: any word
+        print('no line has all the words; headings with any word:')
+        for p in files[:400]:
+            for i, lv, t, n in idx[p]['h']:
+                if any(w in t.lower() for w in words): print(f'  {short(p)}:{i + 1}  "{t[:70]}"')
+    print(f'(searched {len(files)} files)')
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('file', nargs='?'); ap.add_argument('heading', nargs='?')
+    ap.add_argument('--list', action='store_true'); ap.add_argument('--find'); ap.add_argument('--lines')
+    ap.add_argument('--pick', type=int); ap.add_argument('--max', type=int, default=14000)
+    ap.add_argument('--index', action='store_true'); ap.add_argument('--add-docs')
+    a = ap.parse_args()
+    if a.add_docs:
+        os.makedirs(CACHE, exist_ok=True)
+        d = os.path.abspath(a.add_docs)
+        if not os.path.isdir(d): sys.exit('not a folder: ' + d)
+        with open(os.path.join(CACHE, 'roots.txt'), 'a') as f: f.write(d + '\n')
+        try: print('search service:', svc_call('/add_root', {'dir': d}, timeout=900))
+        except Exception as e: print('search service not reachable (heading index only):', e)
+        print('added', d); a.index = True
+    if a.index:
+        idx = build_index(roots(), force=False)
+        print(f'heading index: {len(idx)} files, {sum(len(v["h"]) for v in idx.values())} headings')
+        try: print('search service reindex:', svc_call('/reindex', {'job': job_root()} if job_root() else {}, timeout=900))
+        except Exception as e: print('search service not reachable:', e)
+        return
+    idx = build_index(roots())
+    if a.find:
+        scope = None
+        if a.file:
+            if os.path.isfile(a.file) or any(p.endswith('/' + a.file) for p in idx): scope = resolve(a.file, idx)
+            elif os.path.exists(a.file): scope = os.path.abspath(a.file)
+            else:
+                cands = [sk.rstrip('/') + '/' + a.file for sk in SKILLS if os.path.isdir(sk.rstrip('/') + '/' + a.file)]
+                scope = cands[0] if cands else os.path.abspath(a.file)
+        if not find_hybrid(a.find, scope):
+            find(a.find, scope, idx)
+        return
+    if not a.file: ap.error('give a PATH, or --find "words"')
+    path = resolve(a.file, idx)
+    lines, hs = load(path)
+    sp = short(path)
+    if a.list or (not a.heading and not a.lines):
+        print(f'{sp}: {len(lines)} lines, {sum(len(x) + 1 for x in lines)} chars, {len(hs)} headings')
+        for k, (i, lv, t) in enumerate(hs):
+            i0, j = span(lines, hs, k)
+            print(f'L{i + 1:<6} {"  " * (lv - 1)}{t[:80]}  ({sum(len(x) + 1 for x in lines[i0:j])} chars)')
+        if not hs: print('(no headings found: use --lines A:B, at most 200 lines per call)')
+        return
+    if a.lines:
+        s, _, e = a.lines.partition(':'); s = max(1, int(s or 1)); e = int(e or s + 199)
+        if e - s + 1 > 200: e = s + 199; print(f'[read_section: capped at 200 lines; continue with --lines {e + 1}:{e + 200}]')
+        txt = '\n'.join(lines[s - 1:e]); what = f'lines {s}:{e}'
+    else:
+        q = a.heading.lower()
+        cand = [k for k, h in enumerate(hs) if q in h[2].lower()]
+        exact = [k for k in cand if hs[k][2].lower() == q]
+        if len(exact) == 1: cand = exact
+        if not cand: sys.exit(f'read_section: no heading in {sp} contains {a.heading!r}. `read_section {sp} --list` shows them, or `read_section --find "words" {sp}`.')
+        if len(cand) > 1 and not a.pick:
+            print(f'{len(cand)} headings match; run again with a longer heading or --pick N:')
+            for n, k in enumerate(cand, 1):
+                i0, j = span(lines, hs, k); print(f'  {n}. L{hs[k][0] + 1} {hs[k][2][:80]} ({sum(len(x) + 1 for x in lines[i0:j])} chars)')
+            return
+        k = cand[(a.pick or 1) - 1]; i0, j = span(lines, hs, k)
+        txt = '\n'.join(lines[i0:j]).rstrip(); what = hs[k][2]
+    cut = ''
+    if len(txt) > a.max:
+        cut = f'\n\n[read_section: cut at {a.max} of {len(txt)} chars; open a sub-heading (`read_section {sp} --list`) or use --lines for the rest]'
+        txt = txt[:a.max]
+    print(f'<<{sp} :: {what}>>\n' + txt + cut)
+    log(sp, what, len(txt))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Hook (PostToolUse on browser_navigate): save an evidence screenshot of the page the agent just opened into
+<job>/evidence/ (see evidencelib). Silent, never blocks the tool (any error is ignored). Off: /opt/tools/flags/EVIDENCE_OFF."""
+import json, os, sys
+sys.path.insert(0, '/opt/tools')
+
+
+def main():
+    if os.path.exists('/opt/tools/flags/EVIDENCE_OFF'):
+        return
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    import evidencelib
+    root = evidencelib.job_root(payload.get('working_dir') or os.environ.get('OPENHANDS_PROJECT_DIR', ''))
+    if not root:
+        return
+    import jobbrowser
+    info = jobbrowser.ensure(False, jobbrowser.job_id(root))
+    if info.get('mode') != 'job':
+        return  # never screenshot the shared desktop browser
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.connect_over_cdp(info['cdp'], timeout=5000)
+        pages = [pg for c in b.contexts for pg in c.pages if not pg.url.startswith(('chrome', 'devtools', 'about:'))]
+        if not pages:
+            return
+        pg = pages[-1]
+        for cand in pages:
+            try:
+                if cand.evaluate('document.visibilityState') == 'visible':
+                    pg = cand
+            except Exception:
+                pass
+        host = pg.url.split('//', 1)[-1].split('/', 1)[0]
+        evidencelib.save_page(pg, host, root)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception:
+        pass

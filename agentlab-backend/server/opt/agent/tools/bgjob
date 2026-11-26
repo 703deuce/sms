@@ -1,0 +1,234 @@
+#!/usr/bin/env python3
+"""bgjob: run long commands in the background and wait for them (renders, downloads, installs, servers).
+
+usage:
+  bgjob start [--name N] -- <command ...>   start it detached; output goes to log/bg/N.log in your job folder
+  bgjob wait N [--timeout 600] [--pattern REGEX]
+                                         block until N finishes (or its log matches REGEX, or the timeout);
+                                         prints the exit code and the end of the log. Keeps printing a heartbeat,
+                                         so the terminal never pauses. Give the terminal tool a `timeout` a bit
+                                         longer than --timeout.
+  bgjob status [N]                          running / exit code / elapsed for one or all background jobs
+  bgjob log N [--tail 60] [--grep REGEX]    read a job's output
+  bgjob stop N                              stop the job (its whole process group)
+
+Use it instead of `cmd &` + `sleep` loops: start the render, do other work, then `bgjob wait` when you need it.
+"""
+import os, re, signal, subprocess, sys, time, shlex
+
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+
+def base_dir():
+    parts = os.getcwd().rstrip('/').split('/')
+    if parts[:3] == ['', 'workspace', 'jobs'] and len(parts) >= 4 and re.fullmatch(UUID, parts[3]):
+        end, i = 4, 4
+        while i + 1 < len(parts) and parts[i] == 'helpers' and re.fullmatch(UUID, parts[i + 1]):
+            end, i = i + 2, i + 2
+        d = '/'.join(parts[:end]) + '/log/bg'
+    else:
+        d = f'/tmp/bg-{os.getuid()}'
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def die(msg, code=2):
+    print(f'bgjob: {msg}', file=sys.stderr)
+    sys.exit(code)
+
+
+def files(d, n):
+    return {k: os.path.join(d, f'{n}.{k}') for k in ('log', 'pid', 'exit', 'cmd', 'start')}
+
+
+def read(p, default=None):
+    try:
+        return open(p).read().strip()
+    except OSError:
+        return default
+
+
+def alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
+def state(d, n):
+    f = files(d, n)
+    if not os.path.exists(f['cmd']):
+        die(f'no background job "{n}" (see `bgjob status`)')
+    ex = read(f['exit'])
+    start = float(read(f['start'], '0') or 0)
+    end = os.path.getmtime(f['exit']) if ex is not None else time.time()
+    pid = read(f['pid'])
+    if ex is not None:
+        st = f'finished, exit code {ex}'
+    elif alive(pid):
+        st = 'running'
+    elif os.path.exists(f['log'][:-4] + '.stopped'):
+        st = 'stopped by bgjob stop'
+    else:
+        st = 'gone (stopped or killed before it could record an exit code)'
+    return st, ex, int(end - start), f
+
+
+def tail(path, n=60, grep=None):
+    try:
+        lines = open(path, errors='replace').read().splitlines()
+    except OSError:
+        return '(no output yet)'
+    if grep:
+        rx = re.compile(grep)
+        lines = [f'{i + 1}: {l}' for i, l in enumerate(lines) if rx.search(l)]
+    total = len(lines)
+    out = lines[-n:]
+    txt = '\n'.join(l if len(l) <= 2000 else l[:2000] + ' ...[line cut]' for l in out)
+    head = f'--- last {len(out)} of {total} lines ---' if total > len(out) else f'--- {total} lines ---'
+    return head + '\n' + txt
+
+
+def start(argv):
+    name = None
+    if argv[:1] == ['--name']:
+        if len(argv) < 2:
+            die('--name needs a value')
+        name, argv = argv[1], argv[2:]
+    if argv[:1] == ['--']:
+        argv = argv[1:]
+    if not argv:
+        die('usage: bgjob start [--name N] -- <command ...>')
+    d = base_dir()
+    if not name:
+        name = re.sub(r'[^\w.-]+', '-', os.path.basename(argv[0]))[:24] + time.strftime('-%H%M%S')
+    if not re.fullmatch(r'[\w.-]{1,64}', name):
+        die('name may use letters, digits, . _ - only')
+    f = files(d, name)
+    if os.path.exists(f['pid']) and read(f['exit']) is None and alive(read(f['pid'])):
+        die(f'"{name}" is already running; pick another --name or `bgjob stop {name}`')
+    for k in ('exit', 'log', 'stopped'):
+        try:
+            os.unlink(f.get(k) or f['log'][:-4] + '.stopped')
+        except OSError:
+            pass
+    cmd = argv[0] if len(argv) == 1 else shlex.join(argv)
+    open(f['cmd'], 'w').write(cmd + '\n' + os.getcwd() + '\n')
+    open(f['start'], 'w').write(str(time.time()))
+    wrapper = f'{cmd}\nprintf "%s" "$?" > {shlex.quote(f["exit"])}.tmp && mv {shlex.quote(f["exit"])}.tmp {shlex.quote(f["exit"])}'
+    log = open(f['log'], 'ab')
+    p = subprocess.Popen(['bash', '-c', wrapper], stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                         start_new_session=True, cwd=os.getcwd())
+    open(f['pid'], 'w').write(str(p.pid))
+    print(f'started "{name}" (pid {p.pid}); log: {f["log"]}\nnext: `bgjob wait {name}` when you need the result, '
+          f'`bgjob log {name}` to peek, `bgjob stop {name}` to cancel.')
+
+
+def wait(argv):
+    if not argv:
+        die('usage: bgjob wait N [--timeout S] [--pattern REGEX]')
+    n, rest = argv[0], argv[1:]
+    timeout, pattern = 600.0, None
+    i = 0
+    while i < len(rest):
+        if rest[i] == '--timeout' and i + 1 < len(rest):
+            timeout = float(rest[i + 1]); i += 2
+        elif rest[i] == '--pattern' and i + 1 < len(rest):
+            pattern = re.compile(rest[i + 1], re.M); i += 2
+        else:
+            die(f'unknown option {rest[i]}')
+    d = base_dir()
+    t0 = time.time()
+    beats = 0
+    matched = None
+    while True:
+        st, ex, el, f = state(d, n)
+        if pattern and not matched:
+            try:
+                m = pattern.search(open(f['log'], errors='replace').read())
+                if m:
+                    matched = m.group(0)[:200]
+            except OSError:
+                pass
+        if st != 'running' or matched or time.time() - t0 >= timeout:
+            break
+        time.sleep(4)
+        beats += 1
+        print('.', end='\n' if beats % 30 == 0 else '', flush=True)
+    if beats:
+        print()
+    if matched and st == 'running':
+        print(f'[bgjob] "{n}": log matched {pattern.pattern!r} ("{matched}") after {el}s; still running.')
+    elif st == 'running':
+        print(f'[bgjob] "{n}": still running after waiting {int(time.time() - t0)}s (total {el}s). '
+              f'Do other work and `bgjob wait {n}` again later, or `bgjob stop {n}`.')
+    else:
+        print(f'[bgjob] "{n}": {st} after {el}s.')
+    print(tail(f['log'], 40))
+    sys.exit(0 if st == 'running' or ex == '0' else 1)
+
+
+def status(argv):
+    d = base_dir()
+    names = argv[:1] or sorted({x.rsplit('.', 1)[0] for x in os.listdir(d) if x.endswith('.cmd')})
+    if not names:
+        print('No background jobs in this folder.'); return
+    for n in names:
+        st, ex, el, f = state(d, n)
+        cmd = (read(f['cmd'], '') or '').split('\n')[0]
+        print(f'{n:28} {st:28} {el:>6}s  {cmd[:100]}')
+
+
+def log_cmd(argv):
+    if not argv:
+        die('usage: bgjob log N [--tail 60] [--grep REGEX]')
+    n, rest = argv[0], argv[1:]
+    k, g = 60, None
+    i = 0
+    while i < len(rest):
+        if rest[i] == '--tail' and i + 1 < len(rest):
+            k = int(rest[i + 1]); i += 2
+        elif rest[i] == '--grep' and i + 1 < len(rest):
+            g = rest[i + 1]; i += 2
+        else:
+            die(f'unknown option {rest[i]}')
+    st, ex, el, f = state(base_dir(), n)
+    print(f'[bgjob] "{n}": {st}, {el}s')
+    print(tail(f['log'], k, g))
+
+
+def stop(argv):
+    if not argv:
+        die('usage: bgjob stop N')
+    n = argv[0]
+    st, ex, el, f = state(base_dir(), n)
+    pid = read(f['pid'])
+    if st != 'running':
+        print(f'[bgjob] "{n}" is not running ({st}).'); return
+    try:
+        os.killpg(int(pid), signal.SIGTERM)
+        for _ in range(20):
+            if not alive(pid):
+                break
+            time.sleep(0.25)
+        if alive(pid):
+            os.killpg(int(pid), signal.SIGKILL)
+    except OSError as e:
+        die(f'could not stop {n}: {e}', 1)
+    open(f['log'][:-4] + '.stopped', 'w').write(str(time.time()))
+    print(f'[bgjob] stopped "{n}" after {el}s.')
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help', 'help'):
+        print(__doc__.strip()); return
+    cmds = {'start': start, 'wait': wait, 'status': status, 'list': status, 'log': log_cmd, 'stop': stop}
+    if a[0] not in cmds:
+        die(f'unknown subcommand {a[0]!r}; run `bgjob --help`')
+    cmds[a[0]](a[1:])
+
+
+if __name__ == '__main__':
+    main()

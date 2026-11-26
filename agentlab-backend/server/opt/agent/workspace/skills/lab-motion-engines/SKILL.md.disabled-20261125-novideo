@@ -1,0 +1,10 @@
+---
+name: lab-motion-engines
+description: Motion engines: versions, paths, verified render commands
+---
+
+# Motion engines
+
+(Moved word for word from AGENTS.md lines 74. These are still your rules; they just load on demand.)
+
+  - Motion engines (same as Transovo's producer): Python — skia-python 144.1 + moderngl 5.13 (the Cinematic Skill renderer stack), manim, rembg (background removal), opencv-contrib, mediapipe, scenedetect. JS — one shared npm project at `/opt/engines/js` with Remotion 4.0.528 (+cli/renderer/bundler, React 19), Motion Canvas 3.17, Revideo 0.11, PixiJS 8, three.js 0.187 + Theatre.js + postprocessing, GSAP, p5, d3, MapLibre + deck.gl, Rive, Lottie/dotLottie, CanvasKit (Skia WASM), puppeteer-core. Use them from a job folder with `NODE_PATH=/opt/engines/js/node_modules` or `cp -r /opt/engines/js/node_modules` / `npm i` in the job. Engine/skill source repos (producer's pinned commits, read their README/SKILL.md first): `/opt/engines/repos/{cinematic-skill,claude-remotion-skill,dolly,hyperframes,open-3d-skills}`. Verified renders (Nov 22): **Cinematic Skill** (Transovo's production motion engine, same engine.py as the Motion Studio worker): copy a project (e.g. `assets/template`) into your job, then in `/opt/engines/repos/cinematic-skill/skills/cinematic-film/scripts`: `tts_say.py` (free espeak-ng scratch voice; edge-tts is installed too) or your real VO → `split_takes.py` → `build_narration.py` → `prep_assets.py` → `render.py --project P --size WxH [--t0 --t1] --out F` (about 10-15 fps per worker at 540p on this 4-core CPU server, no GPU). **Remotion** (`npx remotion render src/index.tsx Comp out.mp4 --browser-executable=/usr/bin/chromium`, node_modules symlinked from /opt/engines/js), **HyperFrames CLI** 0.9.84 (`npx --prefix /opt/engines/js hyperframes render DIR -o out.mp4`; run with `env -u PUPPETEER_EXECUTABLE_PATH -u CHROME_BIN` to use its cached chrome-headless-shell), manim, skia-python → ffmpeg pipes; moderngl only headless via `create_standalone_context(backend='egl')` (software llvmpipe). Not pre-installed (install on demand if really needed): SAM2/torch, Natron.

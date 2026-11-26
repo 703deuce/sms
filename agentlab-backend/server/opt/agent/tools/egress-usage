@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""egress-usage: show DataImpulse proxy bytes used (no secrets).
+
+usage: egress-usage [--job ID] [--today]
+"""
+import json, os, sys
+from pathlib import Path
+
+USAGE = Path("/workspace/usage/egress")
+STATUS = "http://127.0.0.1:18081/usage"
+
+
+def mb(n):
+    return (n or 0) / 1e6
+
+
+def main():
+    import urllib.request
+    job = None
+    if "--job" in sys.argv:
+        job = sys.argv[sys.argv.index("--job") + 1]
+    data = None
+    try:
+        data = json.load(urllib.request.urlopen(STATUS, timeout=3))
+    except Exception as e:
+        cur = USAGE / "current.json"
+        if cur.exists():
+            data = json.loads(cur.read_text())
+        else:
+            print(f"egress-usage: gateway not reachable ({e}) and no log yet", file=sys.stderr)
+            sys.exit(1)
+    budget = data.get("budget_bytes") or 0
+    used = data.get("bytes") or 0
+    res = data.get("residential_bytes") or 0
+    mob = data.get("mobile_bytes") or 0
+    pct = data.get("pct") or (100.0 * used / budget if budget else 0)
+    mobile_on = data.get("mobile_enabled")
+    print(f"today {data.get('date')}: {used} bytes ({mb(used):.2f} MB) / {budget/1e6:.0f} MB budget ({pct:.1f}%)")
+    print(f"  residential {mb(res):.2f} MB, mobile {mb(mob):.2f} MB, mobile_enabled={mobile_on}")
+    if data.get("alerted_80"):
+        print("ALERT: past 80% of the daily budget")
+    jobs = data.get("jobs") or {}
+    by = data.get("jobs_by_tier") or {}
+    if job:
+        print(f"job {job}: {jobs.get(job, 0)} bytes ({mb(jobs.get(job, 0)):.2f} MB) {by.get(job, {})}")
+        return
+    for j, n in list(jobs.items())[:20]:
+        extra = by.get(j) or {}
+        print(f"  {j}: {n} bytes ({mb(n):.2f} MB) {extra}")
+    alert = USAGE / "ALERT"
+    if alert.exists():
+        print(alert.read_text().strip())
+
+
+if __name__ == "__main__":
+    main()

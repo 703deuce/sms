@@ -1,0 +1,10 @@
+---
+name: lab-site-video-download
+description: Video from TikTok, Instagram, X, Vimeo, Drive (footage tool)
+---
+
+# Video from other sites (footage)
+
+(Moved word for word from AGENTS.md lines 83. These are still your rules; they just load on demand.)
+
+  - **Other sites (TikTok, Instagram, X, Vimeo, public Drive/Dropbox):** `footage --tier transcript|frames|full URL` (same size-tier rule). It tries a direct connection first and uses the egress gateway only if the site blocks this server. For YouTube keep using `yt-transcript` / `ytdl`. Load the `footage-gathering` skill first.

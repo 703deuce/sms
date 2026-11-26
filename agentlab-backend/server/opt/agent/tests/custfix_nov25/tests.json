@@ -1,0 +1,244 @@
+[
+ {
+  "id": "RM2",
+  "category": "Manus: trip planning",
+  "level": "HARD",
+  "prompt": "Plan 4 days in Lisbon for me and my wife, March 12-15, 2027. Mid-range, around $250 a night for the hotel. We love food and walking, and we're not into big group tours. I want real hotel options with current prices and booking links, a day-by-day plan, and restaurant picks. Make it something I can open on my phone.",
+  "criteria": [
+   "Phone-friendly deliverable (HTML or PDF) that opens",
+   "3+ real hotels with links that resolve; prices for the dates or clearly labelled as estimates with a source",
+   "Day-by-day plan for 4 days that is geographically sensible",
+   "Restaurants exist (spot-check 3)",
+   "No invented prices presented as quotes; fabricated hotel/restaurant = FAIL"
+  ],
+  "round": 1,
+  "retest_of": "M2"
+ },
+ {
+  "id": "RM3",
+  "category": "Manus: lead list",
+  "level": "MEDIUM",
+  "prompt": "I sell commercial brewing equipment. Build me a lead list of 25 craft breweries in Portland, Oregon: name, website, street address, phone number, and whether they have a taproom. CSV please.",
+  "criteria": [
+   "CSV with 25 rows and the 5 asked-for columns",
+   "Spot-check 6 random rows against the brewery's site/Google: exists, in Portland OR, address and phone right",
+   "No duplicate breweries; closed breweries flagged or excluded",
+   "Made-up phone/address = FAIL for that row; >2 fabricated rows = FAIL"
+  ],
+  "round": 1,
+  "retest_of": "M3"
+ },
+ {
+  "id": "RM4",
+  "category": "Manus: product comparison",
+  "level": "MEDIUM",
+  "prompt": "I need a robot vacuum for a house with two shedding dogs, mostly hardwood floors and a couple of rugs. Budget is $500. Compare the top 5 options you can find right now and tell me which one to buy.",
+  "criteria": [
+   "5 real, currently sold models at or under ~$500 (or clearly flagged when on sale)",
+   "Prices with retailer source; spot-check 2 live",
+   "Pet-hair relevant specs (suction, tangle-free brush, bin/self-empty) correct for spot-checked models",
+   "Clear single recommendation with reasons",
+   "Invented model or spec = FAIL"
+  ],
+  "round": 1,
+  "retest_of": "M4"
+ },
+ {
+  "id": "RC1",
+  "category": "ChatGPT: email tone fix",
+  "level": "EASY",
+  "prompt": "Can you rewrite this so it's firm but professional? I don't want to burn the bridge with him but I want it in writing. Keep it short. It's in /workspace/testdata/customer22_nov25/draft_email_to_contractor.txt",
+  "criteria": [
+   "Keeps every fact: Oct 15, Nov 20, $18,500 paid of $24,000, $5,500 withheld, countertops, non-GFCI outlet by sink, Dec 5 deadline, will hire someone else and deduct, gate left open twice / dog got out",
+   "No invented facts or commitments",
+   "Firm, professional, under ~220 words, has subject line"
+  ],
+  "round": 1,
+  "retest_of": "C1"
+ },
+ {
+  "id": "RC5",
+  "category": "ChatGPT: explain + debug code",
+  "level": "MEDIUM",
+  "prompt": "My teammate wrote these helpers (/workspace/testdata/customer22_nov25/utils_from_teammate.py) and we're seeing weird stuff: page 1 sometimes shows the wrong items, the average order value looks too low, customers are getting each other's tags, and the days-until-deadline is off by one. Can you explain what's wrong in plain English and give me a fixed version? Keep the same function names and save it as fixed_utils.py.",
+  "criteria": [
+   "Hidden tests pass: paginate 1-based with full pages, add_tag no shared default, average excludes refunded from denominator and handles no valid orders without crashing, days_until(tomorrow)=1/today=0/yesterday=-1",
+   "Plain-English explanation of each of the 4 bugs",
+   "No behaviour changes beyond the fixes"
+  ],
+  "round": 1,
+  "retest_of": "C5"
+ },
+ {
+  "id": "RK3",
+  "category": "Code: triage + fix 3 real open bugs",
+  "level": "VERY HARD",
+  "prompt": "We use python-tabulate in production and three open issues are biting us: https://github.com/astanin/python-tabulate/issues/515 , https://github.com/astanin/python-tabulate/issues/494 and https://github.com/astanin/python-tabulate/issues/428 . Clone the repo, reproduce each one, fix them with the smallest safe changes, add regression tests, and make sure the existing test suite still passes. Tell me what the root cause was for each.",
+  "criteria": [
+   "Hidden #515: tabulate([iter([1,2])],headers='keys',tablefmt='plain') == '  0    1\\n  1    2'",
+   "Hidden #494: 'KEEP' appears for headers=['tail'] and headers='firstrow' ragged tables",
+   "Hidden #428: disable_numparse+maxcolwidths with '80,443' no crash and keeps '80,443'",
+   "Existing suite passes (same skips as clean clone); root causes explained"
+  ],
+  "round": 1,
+  "retest_of": "K3"
+ },
+ {
+  "id": "Q1",
+  "category": "Platform: helper waits on its own child",
+  "level": "PLATFORM",
+  "prompt": "This is a plumbing test of background helpers. Start ONE background job named 'nested test'. Inside that job, the worker must start its own helper with the task 'Reply with the number 1729 and nothing else.', then wait for it with `helper result <id> --wait 600`, and finally report the number the helper returned. Do nothing else.",
+  "criteria": [
+   "Child helper starts while its parent waits, even when the helper cap is full",
+   "Parent gets the child's result (1729) and the front desk relays it",
+   "No queue freeze: other runs keep finishing/starting during the wait"
+  ]
+ },
+ {
+  "id": "N1",
+  "category": "Manus: retail comparison (Best Buy + Walmart, browser)",
+  "level": "HARD",
+  "prompt": "I want a 65-inch TV under $600 for a bright living room, mostly for watching sports. Compare 4 options that Best Buy or Walmart sell right now, with the current price and a link for each, and tell me which one to get.",
+  "criteria": [
+   "4 real 65-inch models, each priced <= $600 on a bestbuy.com or walmart.com page, with the product URL",
+   "Spot-check 2 prices against the live pages (allow small drift, flag sale prices)",
+   "Brightness / motion relevant to sports discussed correctly for spot-checked models",
+   "One clear pick",
+   "Invented model, price or URL = FAIL; prices from non-store sources presented as store prices = FAIL"
+  ],
+  "mirrors": "https://manus.im/usecase-official-collection (Manus: product comparison/research); https://openai.com/index/introducing-chatgpt-agent/ (navigate sites, filter results)",
+  "round": 2
+ },
+ {
+  "id": "N2",
+  "category": "ChatGPT/Manus: grocery price check Walmart vs Target (browser)",
+  "level": "HARD",
+  "prompt": "Can you price-check this list at Walmart and Target and tell me which store is cheaper overall? Tide Original liquid laundry detergent 92 oz, Bounty Select-A-Size paper towels (6 double rolls), Folgers Classic Roast ground coffee 30.5 oz, and Clorox Disinfecting Wipes 3-pack. Give me a table with the prices and links.",
+  "criteria": [
+   "Each of the 4 items matched to the same size at both stores (or a clearly flagged closest size)",
+   "Prices and product URLs from walmart.com and target.com; spot-check 3 live",
+   "Totals add up; cheaper store named correctly from its own table",
+   "Missing prices clearly explained (not guessed)",
+   "Invented price = FAIL"
+  ],
+  "mirrors": "https://openai.com/index/introducing-chatgpt-agent/ ('plan and buy ingredients'); https://openai.com/index/introducing-chatgpt-atlas/ (grocery cart from recipe)",
+  "round": 2
+ },
+ {
+  "id": "X1",
+  "round": 2,
+  "category": "Manus: store sales analysis from 3 messy exports",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://manus.im/usecase-official-collection ('Online store operation analysis: upload your store sales data -> insights, visualizations, strategies')",
+  "prompt": "My shop's sales exports for Aug, Sep and Oct are in /workspace/testdata/custfix_nov25/sales_exports/ (three files, our tools changed so they're all in different formats). Merge them into one clean Excel workbook: an Orders sheet with every order, and a Summary sheet that uses real formulas for net sales by month and by product. Then tell me in a few lines what's going on and two things I should do to grow sales next month.",
+  "obstacles": [
+   "Sep file is semicolon, latin-1, decimal commas, dd.mm.yyyy, German headers",
+   "Oct is xlsx with title rows and a TOTAL row that must not be counted",
+   "Aug has one exact duplicate order (AUG-1003)"
+  ],
+  "criteria": [
+   "Orders sheet has 135 unique orders (duplicate dropped or flagged; TOTAL row excluded)",
+   "Net by month 8648.95 / 10522.85 / 11239.55, total 30411.35 (\u00b10.05)",
+   "Summary uses formulas (SUMIFS etc.) that recalc to those values",
+   "Insights consistent with the numbers (tents/sleeping bags = most revenue; growth each month)",
+   "Recovery: noticed the format differences and handled them, verified totals"
+  ]
+ },
+ {
+  "id": "X2",
+  "round": 2,
+  "category": "Duet: chase overdue invoices (reconcile + draft reminders)",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://claude.com/product/claude-duet ('finding unpaid invoices and drafting the reminders'); https://thinkmacro.co/guides/duet/",
+  "prompt": "Can you figure out who still owes me money? My invoices are in /workspace/testdata/custfix_nov25/ar/invoices.csv and my bank export is /workspace/testdata/custfix_nov25/ar/bank_payments_export.csv. Today is Nov 25, 2026. I need an aging list of everything overdue with what's still owed, and a short friendly reminder email drafted for each customer (don't send anything).",
+  "obstacles": [
+   "Bank memos reference invoices in 3 different formats (INV-2401 / inv 2401 / INV2401)",
+   "Partial payments",
+   "Amounts with $ and commas; US dates; non-payment rows (fee, interest)"
+  ],
+  "criteria": [
+   "Overdue list matches truth: 9 invoices, total $8,120.50 (\u00b1$1)",
+   "Partial payments credited (INV-2401/2404/2412/2422 not shown as fully unpaid if partly paid)",
+   "Bank fee/interest rows ignored",
+   "One reminder per customer with correct invoice numbers and amounts",
+   "Nothing sent"
+  ]
+ },
+ {
+  "id": "X3",
+  "round": 2,
+  "category": "ChatGPT/Duet: fix + schedule a recurring report whose API died",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://learn.chatgpt.com/training/walkthroughs/scheduled-tasks ('do it once, then schedule it'); https://academy.claude.com/tutorials/use-claude-duet ('put recurring work on a schedule')",
+  "prompt": "Our old weekly FX report script stopped working after we moved servers: /workspace/testdata/custfix_nov25/fxreport/fx_report.py (it reads open_invoices.csv in the same folder). Get it working again, run it for today, and set it up so it runs every Monday at 8am. Show me the report and how it's scheduled.",
+  "obstacles": [
+   "api.exchangeratesapi.io now errors / needs a paid key",
+   "Must swap to a free keyless source (e.g. Frankfurter/ECB, open.er-api.com) and handle missing currencies",
+   "cron may not exist in the sandbox: must find another way (routine, systemd timer, or a crontab line + wrapper) and say which"
+  ],
+  "criteria": [
+   "Script runs and writes fx_report_<date>.csv with 12 rows",
+   "USD values within 0.5% of ECB rates for the run date (spot-check 3)",
+   "Handles currencies the source lacks without crashing",
+   "A real schedule exists (AgentLab routine or verified cron/timer) or an honest, specific explanation",
+   "Recovery: diagnosed the API failure and tried alternatives"
+  ]
+ },
+ {
+  "id": "X4",
+  "round": 2,
+  "category": "Claude Code: tests fail after Python/dependency upgrade",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://support.claude.com/en/articles/14553517-claude-code-common-developer-use-cases ('Fix a failing test'); https://code.claude.com/docs/en/common-workflows",
+  "prompt": "Our little fleetstats package (/workspace/testdata/custfix_nov25/fleetstats, it's a git repo) won't install or pass tests on the new machine. Get it installing and the tests green on the current Python, keep the behaviour the same, and send me the patch.",
+  "obstacles": [
+   "numpy==1.21.6 / pandas==1.3.5 pins have no wheels for current Python",
+   "np.float removed",
+   "DataFrame.append removed"
+  ],
+  "criteria": [
+   "pip install -r requirements.txt works on py3.12+",
+   "pytest passes (3 tests)",
+   "Hidden test: monthly_summary on empty input + trips stays integer; mpg NaN behaviour unchanged",
+   "Patch delivered (out/code or diff)",
+   "Recovery: diagnosed build failure, changed pins sensibly"
+  ]
+ },
+ {
+  "id": "X5",
+  "round": 2,
+  "category": "Manus/ChatGPT: public data chart when the documented API is gone",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://manus.im/usecase-official-collection (Data Analysis category); https://openai.com/index/introducing-chatgpt-agent/ ('run code, conduct analysis')",
+  "prompt": "Use the OECD.Stat API (stats.oecd.org, the SDMX-JSON DP_LIVE dataset) to get the annual unemployment rate for each G7 country for 2024, make a bar chart (PNG) and a CSV, and write two sentences on what stands out.",
+  "obstacles": [
+   "stats.oecd.org SDMX-JSON is retired (redirects to sdmx.oecd.org archive, 404)",
+   "Must find the new OECD Data Explorer API or another official source (ILO/World Bank/IMF) and say which"
+  ],
+  "criteria": [
+   "7 countries, 2024 values within 0.3 pp of OECD harmonised unemployment (or of the cited alternative)",
+   "Source named honestly (not claiming DP_LIVE if it wasn't used)",
+   "PNG + CSV delivered",
+   "Recovery: noticed the retired API and switched"
+  ]
+ },
+ {
+  "id": "X6",
+  "round": 2,
+  "category": "Manus: interactive dashboard from a raw export",
+  "level": "HARD+RECOVERY",
+  "mirrors": "https://www.linkedin.com/posts/manus-im_manus-turns-any-file-into-an-engaging-website-activity-7313241384872734720-nh4y ('raw sales data into an interactive dashboard website')",
+  "prompt": "Turn our September ridership export (/workspace/testdata/custfix_nov25/dashboard/ridership_sept2026.csv.gz) into a single-page interactive dashboard I can open in a browser: boardings by route, daily trend, and on-time performance, with a route filter. Check it actually works.",
+  "obstacles": [
+   "gzip + UTF-8 BOM",
+   "Numbers with thousands separators and % signs",
+   "Footer rows (generator line + TOTAL) that must not be counted"
+  ],
+  "criteria": [
+   "Total boardings 398,074; top route 'Route 4 - Airport' 88,336; late trips 3,064",
+   "Single HTML that opens offline/without server errors; filter works",
+   "Agent verified it rendered (screenshot or headless check)",
+   "Footer rows excluded"
+  ]
+ }
+]

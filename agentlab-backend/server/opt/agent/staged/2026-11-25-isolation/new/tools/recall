@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+"""recall: search long-term memory (keywords + meaning). Shows this bot's facts and shared facts.
+
+usage: recall "query" [-n 10] [--type rule]
+       recall --all [--type rule]     list every active fact
+       recall --history ID            show a fact and what replaced it
+Past conversations (what was said, decided or done, not just saved facts): history-search "query".
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import memlib as m
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+db = m.connect()
+n, types, q, mode = 10, None, [], 'search'
+i = 0
+while i < len(a):
+    if a[i] == '-n': n = int(a[i + 1]); i += 2
+    elif a[i] == '--type': types = a[i + 1].split(','); i += 2
+    elif a[i] == '--all': mode = 'all'; i += 1
+    elif a[i] == '--history': mode = 'history'; q = [a[i + 1]]; i += 2
+    else: q.append(a[i]); i += 1
+if mode == 'history':
+    fid = int(q[0].lstrip('#'))
+    while fid:
+        r = db.execute('SELECT id, bot_id, type, text, created_at, replaced_by, source FROM facts WHERE id=?', (fid,)).fetchone()
+        if not r: break
+        print(m.fmt(r), f'source={r[6]}', f'-> replaced by #{r[5]}' if r[5] else '(current)')
+        fid = r[5]
+    sys.exit(0)
+if mode == 'all':
+    sql = f'SELECT id, bot_id, type, text, created_at FROM facts f WHERE {m.active_clause()}'
+    rows = db.execute(sql + ' ORDER BY type, id', m.scopes()).fetchall()
+    rows = [r for r in rows if not types or r[2] in types]
+else:
+    rows = m.search(db, ' '.join(q), n, types)
+if not rows: print('No matching memories.')
+for r in rows: print(m.fmt(r))

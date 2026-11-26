@@ -1,0 +1,30 @@
+[
+ {
+  "id": "r1",
+  "level": "VERY HARD",
+  "category": "coding / full-stack app from spec (API + DB + frontend + tests)",
+  "name": "Build the 'Tracker' issue tracker from an 8-endpoint spec, stdlib only, graded by a hidden 50-check API suite",
+  "prompt": "Build the app described in /workspace/testdata/hard5_nov25/r2/tracker_spec/SPEC.md exactly as specified (Python standard library only, SQLite storage, plain HTML/JS frontend, unittest tests). Put the app in out/tracker/ so that `cd out/tracker && python server.py --port 8123 --db tracker.db` runs it and `python -m unittest discover -s tests` runs your tests. Read the whole spec carefully: status codes, validation rules, label normalisation, pagination limits, status transitions and persistence will all be checked by an independent test suite. Run your own tests and also exercise the running server with real HTTP requests before you finish. Final reply: how to run it, the endpoint list, and your test run output."
+ },
+ {
+  "id": "r2",
+  "level": "VERY HARD",
+  "category": "coding / performance rewrite with exact-output equivalence",
+  "name": "Make an O(n^2) bank reconciliation script ~1000x faster with byte-identical output, verified on hidden data",
+  "prompt": "/workspace/testdata/hard5_nov25/r2/recon/reconcile.py matches bank transactions to ledger entries. Its rules are in its docstring and its output is the reference. It is far too slow: on recon/full (80,000 bank rows, 76,000 ledger rows) it would take hours. recon/sample has a small dataset plus expected_out.csv produced by the original script.\n\nWrite out/reconcile_fast.py with the same command line (python reconcile_fast.py BANK.csv LEDGER.csv OUT.csv) that produces BYTE-IDENTICAL output to the original on any input, and runs on recon/full in under 5 seconds on this machine. Do not change the matching rules, including the tie-breaking. It will be checked on a different, larger hidden dataset for both exact output and speed, so do not special-case these files. Prove equivalence yourself (for example by comparing against the original on the sample and on extra random datasets you generate), then run it on recon/full and write the result to out/full_out.csv.\n\nFinal reply: the approach, how you proved equivalence, the run time on recon/full, and the number of UNMATCHED rows in out/full_out.csv."
+ },
+ {
+  "id": "r3",
+  "level": "HARD",
+  "category": "long-document reasoning (124 notes, ~490 KB, more than fits in context)",
+  "name": "Reconstruct the current state of 14 projects from 124 unordered meeting notes (drafts, mixed date formats, latest-wins, slip counting)",
+  "prompt": "/workspace/testdata/hard5_nov25/r2/notes/ holds 124 meeting-note files (about 490 KB in total) for 14 projects (Atlas, Beacon, Cobalt, Delta, Ember, Falcon, Garnet, Harbor, Iris, Juniper, Kestrel, Lumen, Meridian, Nimbus). File names are random, not in date order, and the dates inside use several formats. Rules:\n- Each project starts from its kickoff note (owner, approved budget, target deadline; status active).\n- Only notes whose status line says Approved count. DRAFT notes are proposals and must be ignored.\n- Decisions apply in date order; the latest approved decision for a field wins. A note's decisions are only about the project in its title (asides about other projects are not decisions).\n- A deadline slip is an approved deadline change that moves the deadline LATER than the deadline in force at that moment.\n\nWrite out/projects.json with: projects: an object keyed by project name, each with owner, budget (integer USD), deadline (YYYY-MM-DD), status (active, on hold, cancelled or completed), deadline_slips (integer); plus total_budget_active_usd (sum of budgets of projects whose final status is active), n_cancelled, most_deadline_slips (project name), top_owner (the person who owns the most projects at the end) and top_owner_count, latest_deadline_project. Also write out/projects_timeline.md listing, per project, each approved decision you applied with its date and file name. Final reply: the projects.json contents."
+ },
+ {
+  "id": "r4",
+  "level": "VERY HARD",
+  "category": "long-horizon autonomy (reuse + extend a saved skill on harder variants)",
+  "name": "Three new vendor drops that break the saved vendor-legacy-drop skill (memo .dbt file, zero record count/no EOF, new schema + cp850); extend the skill",
+  "prompt": "Three more vendor stock drops arrived in /workspace/testdata/hard5_nov25/vendor/drop3/, drop4/ and drop5/. There is already a saved skill for this kind of drop (vendor-legacy-drop); use it as your starting point, but read each drop's email first, because these drops are different from the earlier ones and the existing script may give wrong answers without failing loudly.\n\nFor each drop N (3, 4 and 5) write out/stockN.csv (UTF-8, columns sku,description,qty,price,updated with updated as YYYY-MM-DD; for drop3 also a final notes column with the full memo text, empty when there is none) and out/summaryN.json with keys records_in_file, deleted, active_kept, total_qty, inventory_value (sum of qty*price over kept rows, rounded to 2 decimals). Only real (not deleted), active records count.\n\nVerify each result a second independent way before you trust it. Then update the vendor-legacy-drop skill with save-skill so it handles all of these variations next time (keep it short; the skill must stay under 500 lines). Final reply: the three summaries, what was different about each drop and how you handled it, and what you changed in the skill."
+ }
+]

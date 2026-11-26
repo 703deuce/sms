@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""skill: list skills or load one.
+
+usage: skill                 list skills (slug, description)
+       skill <slug>          print the skill's SKILL.md and list its other files
+       skill <slug> <file>   print another file from the skill folder (e.g. craft/editing.md)
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import skilllib as s
+
+
+def log_read(kind, slug, rel, path, chars):
+    """Same read manifest as the skill tools: <job>/log/read-manifest.jsonl and /workspace/runs/skill-reads.jsonl."""
+    import json, re
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    m = re.match(r'^(/workspace/jobs/[0-9a-f-]{36}(?:/helpers/[0-9a-f-]{36})*)', os.path.realpath(os.getcwd()))
+    ids = re.findall(r'[0-9a-f-]{36}', m.group(1)) if m else []
+    row = {'at': datetime.now(ZoneInfo('America/New_York')).isoformat(timespec='seconds'), 'kind': kind, 'skill': slug,
+           'file': rel, 'path': path, 'chars': chars, 'conversation_id': ids[-1] if ids else None, 'via': 'terminal'}
+    for t in ([m.group(1) + '/log/read-manifest.jsonl'] if m else []) + ['/workspace/runs/skill-reads.jsonl']:
+        try:
+            os.makedirs(os.path.dirname(t), exist_ok=True)
+            open(t, 'a').write(json.dumps(row) + '\n')
+        except OSError:
+            pass
+
+
+def emit(text):
+    if len(text) > 28000:
+        print(f'[NOTE: this file is {len(text):,} chars; the terminal shows only the first 30,000. '
+              'Use the skill / skill_file tool to get the complete text.]\n')
+    print(text)
+
+a = sys.argv[1:]
+if a and a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+sk = s.all_skills()
+if not a:
+    for k, v in sk.items(): print(f'{k}: {v["description"]}' + ('' if v['scope'] == 'shared' else f' [{v["scope"]}]'))
+    sys.exit(0)
+if a[0] not in sk:
+    sys.exit(f'skill: no skill "{a[0]}". Available: {", ".join(sk) or "none"}')
+d = sk[a[0]]['path']
+if len(a) > 1:
+    p = os.path.realpath(os.path.join(d, a[1]))
+    if not p.startswith(os.path.realpath(d) + os.sep) or not os.path.isfile(p):
+        sys.exit(f'skill: no file {a[1]} in {a[0]}')
+    body = open(p, encoding='utf-8', errors='replace').read()
+    log_read('file', a[0], os.path.relpath(p, d), p, len(body)); emit(body); sys.exit(0)
+body = open(os.path.join(d, 'SKILL.md'), encoding='utf-8', errors='replace').read()
+log_read('skill', a[0], 'SKILL.md', os.path.join(d, 'SKILL.md'), len(body)); emit(body)
+others = []
+for root, _, files in os.walk(d):
+    for f in files:
+        rel = os.path.relpath(os.path.join(root, f), d)
+        if rel != 'SKILL.md' and not rel.startswith('.'): others.append(rel)
+if others:
+    print(f'\n---\nOther files in this skill (read with `skill {a[0]} <file>` when the SKILL.md points to them):')
+    for o in sorted(others): print('  ' + o)

@@ -1,0 +1,376 @@
+#!/usr/bin/env python3
+"""publish: turn a markdown or HTML file into a shareable report page.
+
+usage: publish <file.html|.md> [--title "Title"] [--slug slug]
+Renders to /workspace/pages/<slug>/index.html, updates /workspace/pages/index.json,
+and prints the slug. Charts are allowed (inline <script> and a Chart.js include).
+
+After track A adds the public route, the page will be at:
+  https://transovo.ai/app/agent-lab/pages/<slug>
+"""
+from __future__ import annotations
+
+import json, os, re, shutil, subprocess, sys
+from datetime import datetime
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
+PAGES = Path(os.environ.get("AGENT_PAGES_DIR") or (
+    "/workspace/pages" if Path("/workspace").is_dir() else "/opt/agent/workspace/pages"
+))
+
+TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{title} · Transovo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
+<style>
+  :root {{
+    --bg: #f6f3ee;
+    --ink: #1b1e23;
+    --muted: #5c615b;
+    --accent: #1f6b4a;
+    --card: #fffdf8;
+    --line: #e4ddd0;
+  }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0;
+    font-family: "Source Serif 4", "Iowan Old Style", Georgia, serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+  }}
+  header {{
+    background: #14261c;
+    color: #f6f3ee;
+    padding: 20px 24px 18px;
+  }}
+  header .brand {{
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: .14em;
+    font-size: .72rem;
+    text-transform: uppercase;
+    color: #b7cbb8;
+    margin: 0 0 6px;
+  }}
+  header h1 {{
+    font-weight: 600;
+    font-size: 1.6rem;
+    margin: 0;
+  }}
+  header .meta {{
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: .8rem;
+    color: #c9d4c8;
+    margin-top: 8px;
+  }}
+  main {{
+    max-width: 820px;
+    margin: 0 auto;
+    padding: 28px 20px 64px;
+  }}
+  article {{
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 28px 32px;
+  }}
+  article h1, article h2, article h3 {{
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    line-height: 1.25;
+  }}
+  article h1 {{ font-size: 1.5rem; }}
+  article h2 {{ font-size: 1.2rem; margin-top: 1.6em; color: var(--accent); }}
+  article p, article li {{ font-size: 1.02rem; }}
+  article a {{ color: var(--accent); }}
+  article pre, article code {{
+    font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    font-size: .9rem;
+  }}
+  article pre {{
+    background: #14261c;
+    color: #f6f3ee;
+    padding: 14px 16px;
+    border-radius: 10px;
+    overflow: auto;
+  }}
+  article code {{
+    background: #efe8da;
+    padding: .1em .35em;
+    border-radius: 4px;
+  }}
+  article pre code {{ background: none; padding: 0; color: inherit; }}
+  article table {{
+    border-collapse: collapse;
+    width: 100%;
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: .95rem;
+  }}
+  article th, article td {{
+    border-bottom: 1px solid var(--line);
+    padding: 8px 10px;
+    text-align: left;
+  }}
+  article img, article canvas {{ max-width: 100%; height: auto; }}
+  article blockquote {{
+    margin: 1em 0;
+    padding: 0 0 0 1em;
+    border-left: 3px solid var(--accent);
+    color: var(--muted);
+  }}
+  footer {{
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    font-size: .78rem;
+    color: var(--muted);
+    text-align: center;
+    padding: 8px 20px 32px;
+  }}
+</style>
+</head>
+<body>
+  <header>
+    <p class="brand">Transovo Agent Lab</p>
+    <h1>{title}</h1>
+    <p class="meta">{stamp} · {slug}</p>
+  </header>
+  <main>
+    <article>
+{body}
+    </article>
+  </main>
+  <footer>Published from the Transovo Agent Lab. Charts may use the included Chart.js.</footer>
+</body>
+</html>
+"""
+
+
+def die(msg):
+    print(f"publish: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def slugify(text: str) -> str:
+    s = text.lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s[:60] or "page"
+
+
+def unique_slug(base: str) -> str:
+    slug, n = base, 2
+    while (PAGES / slug).exists():
+        slug = f"{base}-{n}"
+        n += 1
+        if n > 200:
+            die("could not allocate a unique slug")
+    return slug
+
+
+def md_to_html(text: str) -> str:
+    pandoc = shutil.which("pandoc")
+    if pandoc:
+        r = subprocess.run(
+            [pandoc, "-f", "markdown", "-t", "html", "--wrap=none"],
+            input=text.encode(),
+            capture_output=True,
+            timeout=30,
+        )
+        if r.returncode == 0 and r.stdout:
+            return r.stdout.decode("utf-8", "replace")
+    # Minimal fallback if pandoc is missing.
+    return _simple_md(text)
+
+
+def _is_table_sep(line: str) -> bool:
+    s = line.strip()
+    if "|" not in s:
+        return False
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    cells = [c.strip() for c in s.split("|")]
+    return bool(cells) and all(re.fullmatch(r":?-{3,}:?", c) for c in cells)
+
+
+def _table_cells(line: str) -> list[str]:
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|"):
+        s = s[:-1]
+    return [c.strip() for c in s.split("|")]
+
+
+def _inline(s: str) -> str:
+    s = _esc(s)
+    s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    s = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", s)
+    s = re.sub(r"\*([^*]+)\*", r"<em>\1</em>", s)
+    s = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', s)
+    return s
+
+
+def _simple_md(text: str) -> str:
+    lines, out, in_code, i = text.splitlines(), [], False, 0
+    list_open = None
+    def close_list():
+        nonlocal list_open
+        if list_open:
+            out.append(f"</{list_open}>")
+            list_open = None
+    while i < len(lines):
+        line = lines[i]
+        if line.startswith("```"):
+            close_list()
+            if in_code:
+                out.append("</code></pre>"); in_code = False
+            else:
+                out.append("<pre><code>"); in_code = True
+            i += 1
+            continue
+        if in_code:
+            out.append(line.replace("&", "&amp;").replace("<", "&lt;"))
+            i += 1
+            continue
+        # GFM table: header, separator, then rows
+        if (
+            i + 1 < len(lines)
+            and "|" in line
+            and _is_table_sep(lines[i + 1])
+        ):
+            close_list()
+            headers = _table_cells(line)
+            out.append("<table><thead><tr>")
+            out.extend(f"<th>{_inline(h)}</th>" for h in headers)
+            out.append("</tr></thead><tbody>")
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                if _is_table_sep(lines[i]):
+                    i += 1
+                    continue
+                cells = _table_cells(lines[i])
+                out.append("<tr>")
+                out.extend(f"<td>{_inline(c)}</td>" for c in cells)
+                out.append("</tr>")
+                i += 1
+            out.append("</tbody></table>")
+            continue
+        if line.startswith("# "):
+            close_list(); out.append(f"<h1>{_inline(line[2:])}</h1>")
+        elif line.startswith("## "):
+            close_list(); out.append(f"<h2>{_inline(line[3:])}</h2>")
+        elif line.startswith("### "):
+            close_list(); out.append(f"<h3>{_inline(line[4:])}</h3>")
+        elif re.match(r"^[-*] ", line):
+            if list_open != "ul":
+                close_list(); out.append("<ul>"); list_open = "ul"
+            out.append(f"<li>{_inline(line[2:])}</li>")
+        elif re.match(r"^\d+\. ", line):
+            if list_open != "ol":
+                close_list(); out.append("<ol>"); list_open = "ol"
+            out.append(f"<li>{_inline(re.sub(r'^\d+\. ', '', line))}</li>")
+        elif not line.strip():
+            close_list(); out.append("")
+        else:
+            close_list(); out.append(f"<p>{_inline(line)}</p>")
+        i += 1
+    if in_code:
+        out.append("</code></pre>")
+    close_list()
+    return "\n".join(out)
+
+
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def extract_html_body(html: str) -> str:
+    m = re.search(r"<body[^>]*>(.*)</body>", html, re.S | re.I)
+    return m.group(1).strip() if m else html
+
+
+def load_index() -> dict:
+    p = PAGES / "index.json"
+    if p.is_file():
+        try:
+            return json.loads(p.read_text())
+        except json.JSONDecodeError:
+            pass
+    return {"pages": []}
+
+
+def save_index(idx: dict):
+    tmp = PAGES / "index.json.tmp"
+    tmp.write_text(json.dumps(idx, indent=2) + "\n")
+    tmp.replace(PAGES / "index.json")
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__); return
+    title, slug, files = None, None, []
+    i = 0
+    while i < len(args):
+        if args[i] == "--title":
+            title = args[i + 1]; i += 2
+        elif args[i] == "--slug":
+            slug = args[i + 1]; i += 2
+        elif args[i].startswith("-"):
+            die(f"unknown option {args[i]}")
+        else:
+            files.append(args[i]); i += 1
+    if len(files) != 1:
+        die("exactly one input file is required")
+    src = Path(files[0])
+    if not src.is_file():
+        die(f"not found: {src}")
+    raw = src.read_text(encoding="utf-8", errors="replace")
+    suffix = src.suffix.lower()
+    if suffix in (".md", ".markdown"):
+        # Title from first heading if not given
+        if not title:
+            m = re.search(r"^#\s+(.+)$", raw, re.M)
+            title = m.group(1).strip() if m else src.stem
+        body = md_to_html(raw)
+    elif suffix in (".html", ".htm"):
+        body = extract_html_body(raw)
+        if not title:
+            m = re.search(r"<title[^>]*>(.*?)</title>", raw, re.S | re.I)
+            title = re.sub(r"\s+", " ", m.group(1)).strip() if m else src.stem
+    else:
+        die("input must be .md or .html")
+    title = title or src.stem
+    base = slugify(slug or title)
+    PAGES.mkdir(parents=True, exist_ok=True)
+    slug = base if not (PAGES / base).exists() else unique_slug(base)
+    dest_dir = PAGES / slug
+    dest_dir.mkdir(parents=True, exist_ok=False)
+    stamp = datetime.now(ET).strftime("%b %-d, %Y, %-I:%M %p") + " America/New_York"
+    html = TEMPLATE.format(title=_esc(title), stamp=_esc(stamp), slug=_esc(slug), body=body)
+    (dest_dir / "index.html").write_text(html, encoding="utf-8")
+    # Keep a copy of the source next to it
+    shutil.copy2(src, dest_dir / f"source{suffix}")
+    idx = load_index()
+    idx.setdefault("pages", [])
+    idx["pages"] = [p for p in idx["pages"] if p.get("slug") != slug]
+    idx["pages"].insert(0, {
+        "slug": slug,
+        "title": title,
+        "source": str(src),
+        "path": f"/workspace/pages/{slug}/index.html",
+        "created_at": datetime.now(ET).isoformat(timespec="seconds"),
+    })
+    idx["updated_at"] = datetime.now(ET).isoformat(timespec="seconds")
+    save_index(idx)
+    print(slug)
+    print(f"https://transovo.ai/app/agent-lab/pages/{slug}", file=sys.stderr)
+    print(f"wrote {dest_dir / 'index.html'}", file=sys.stderr)
+
+
+if __name__ == "__main__":
+    main()

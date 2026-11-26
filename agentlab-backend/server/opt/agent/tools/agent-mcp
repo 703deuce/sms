@@ -1,0 +1,1050 @@
+#!/usr/bin/env python3
+"""agent-mcp: Agent Lab's own tools as real tool calls (MCP over stdio, no dependencies).
+
+OpenHands starts one copy per conversation (settings: agent_settings.mcp_config.agent).
+Args:  --job <job folder>   the conversation's /workspace/jobs/<id> (set by whoever starts the conversation).
+Tools: view, look, search, remember, recall, checkpoint. Results come back as normal tool results;
+`view` returns the images themselves plus an automatic QA verdict (PASS / LOOKS BROKEN).
+"""
+import base64, hashlib, json, os, re, subprocess, sys, tempfile, threading, time
+
+TOOLS = '/opt/tools'
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+IMG = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
+VID = ('.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi')
+CACHE = '/workspace/runs/view-cache'
+HARD_CAP = 12
+# API keys the CLIs need. The agent's own terminal inherits them from the agent server; an MCP stdio child only gets
+# a minimal environment, so take exactly these names from the parent (the agent server). Values are never printed.
+INHERIT = ('GEMINI_API_KEY', 'GOOGLE_API_KEY', 'DEEPSEEK_API_KEY', 'ELEVENLABS_API_KEY', 'DEEPGRAM_API_KEY', 'TZ', 'BOT_ID',
+           'LANG', 'LC_ALL', 'SEARXNG_URL', 'LOOK_MODEL', 'LOOK_DS_MODEL', 'SEARCH_FALLBACK_MODEL')
+
+def inherit_env():
+    try:
+        raw = open(f'/proc/{os.getppid()}/environ', 'rb').read().split(b'\0')
+    except OSError:
+        return
+    for item in raw:
+        k, _, v = item.decode('utf-8', 'replace').partition('=')
+        if k in INHERIT and k not in os.environ:
+            os.environ[k] = v
+    os.environ['PATH'] = '/workspace/tools/bin:/opt/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+
+JOB = None
+
+def job_dir():
+    return JOB if JOB and os.path.isdir(JOB) else None
+
+def abspath(p):
+    p = os.path.expanduser(str(p).strip())
+    if os.path.isabs(p):
+        return os.path.realpath(p)
+    if job_dir():
+        return os.path.realpath(os.path.join(job_dir(), p))
+    raise ToolError(f'"{p}" is a relative path and this conversation has no known job folder; give the absolute path '
+                    '(your job folder is named in your session context, /workspace/jobs/<conversation id>/...).')
+
+class ToolError(Exception):
+    pass
+
+def run(cmd, timeout=280, cwd=None):
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=cwd or job_dir() or '/tmp')
+    out = (r.stdout or '').strip()
+    err = (r.stderr or '').strip()
+    return r.returncode, out, err
+
+def text(s):
+    return {'type': 'text', 'text': s}
+
+# ---------------- view ----------------
+def prep(src, outdir, i):
+    dst = os.path.join(outdir, f'{i:02d}_{re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(src))[:60]}.jpg')
+    code, _, err = run(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-frames:v', '1', '-vf',
+                        "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))'", '-q:v', '3', dst], timeout=120)
+    if code or not os.path.exists(dst):
+        raise ToolError(f'could not read image {src}: {err[:200]}')
+    return dst
+
+def sample(files, k):
+    if len(files) <= k:
+        return files
+    return [files[round(i * (len(files) - 1) / (k - 1))] for i in range(k)] if k > 1 else files[:1]
+
+def secs(t):
+    if not t:
+        return 0.0
+    v = 0.0
+    for part in str(t).split(':'):
+        v = v * 60 + float(part)
+    return v
+
+def collect(paths, fps, start, end, k, outdir):
+    srcs, notes = [], []
+    for p in paths:
+        p = abspath(p)
+        low = p.lower()
+        if os.path.isdir(p):
+            fs = sorted(os.path.join(p, f) for f in os.listdir(p) if f.lower().endswith(IMG))
+            if len(fs) > k:
+                notes.append(f'{len(fs)} images in {p}; showing {k} evenly spaced.')
+            srcs += [(f, None) for f in sample(fs, k)]
+        elif low.endswith(VID):
+            fd = os.path.join(outdir, 'frames'); os.makedirs(fd, exist_ok=True)
+            cmd = ['ffmpeg', '-loglevel', 'error', '-y']
+            if start: cmd += ['-ss', str(start)]
+            if end: cmd += ['-to', str(end)]
+            cmd += ['-i', p, '-vf', f'fps={fps or 1}', os.path.join(fd, f'{len(srcs):02d}_f_%04d.png')]
+            code, _, err = run(cmd, timeout=240)
+            fs = sorted(os.path.join(fd, f) for f in os.listdir(fd))
+            if code or not fs:
+                raise ToolError(f'could not extract frames from {p}: {err[:200]}')
+            if len(fs) > k:
+                notes.append(f'{len(fs)} frames at {fps or 1} fps; showing {k} evenly spaced (narrow with start/end or a lower fps).')
+            t0 = secs(start)
+            for f in sample(fs, k):
+                n = int(re.search(r'_(\d+)\.png$', f).group(1))
+                srcs.append((f, f'{os.path.basename(p)} @ {t0 + (n - 1) / float(fps or 1):.2f}s'))
+        elif os.path.isfile(p) and low.endswith(IMG):
+            srcs.append((p, None))
+        elif not os.path.exists(p):
+            raise ToolError(f'not found: {p}')
+        else:
+            raise ToolError(f'not an image, folder of images or video: {p}')
+    if len(srcs) > k:
+        notes.append(f'{len(srcs)} images given; showing the first {k} (max {HARD_CAP} per call).')
+        srcs = srcs[:k]
+    if not srcs:
+        raise ToolError('no images found')
+    return srcs, notes
+
+OUTPUT_DIRS = re.compile(r'(^|/)(out|deliver|delivery|render|renders|qa|final|export|exports)(/|$)')
+
+
+def opus_verdict(images, labels, question, workdir):
+    """Short Opus call on just these frames (no conversation history). Returns (verdict_dict, err)."""
+    argv = [f'{TOOLS}/opus-step', '--purpose', 'judge', '--json']
+    q = (question or '').strip() or (
+        'Is anything wrong with these images? Check: covered or cropped faces; cut-off or overlapping text; '
+        'typography unreadable at 480p; headings overlapping the picture; bad crops; pillarboxing or letterboxing; '
+        'watermarks that should have been cropped; lower-thirds covering faces; blank, frozen or black frames; '
+        'choppy or misaligned captions; anything that looks unfinished or sloppy.'
+    )
+    argv += ['--question', q]
+    for lab, f in zip(labels, images):
+        argv += ['--image', f, '--label', str(lab)]
+    try:
+        code, out, err = run(argv, timeout=200, cwd=workdir or job_dir() or '/')
+    except subprocess.TimeoutExpired:
+        return None, 'Opus visual judge timed out'
+    if code:
+        return None, ((err or out) or 'Opus visual judge unavailable')[:300]
+    report, cost = out, None
+    try:
+        data = json.loads(out)
+        report = data.get('text') or out
+        cost = data.get('cost_usd')
+    except Exception:
+        data = {}
+    m = re.search(r'VERDICT:\s*(PASS|LOOKS BROKEN)\b\s*[-:]?\s*(.*)', report, re.I)
+    if not m:
+        return None, 'Opus visual judge returned no VERDICT line'
+    broken = m.group(1).upper() == 'LOOKS BROKEN'
+    return {'broken': broken, 'reason': (m.group(2) or '').strip(), 'report': report,
+            'source': 'opus', 'cost_usd': cost}, None
+
+
+def log_step_failure(detail, kind='verify'):
+    job = job_dir()
+    if not job:
+        return
+    rec = {'ts': time.time(), 'kind': kind, 'detail': str(detail)[:500], 'status': 'FAIL'}
+    path = os.path.join(job, 'log', 'step-failures.jsonl')
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, 'a').write(json.dumps(rec) + '\n')
+    except Exception:
+        pass
+
+
+def want_verdict(args, paths):
+    """The second-model QA verdict exists for main models that cannot see images: the look report is their eyes.
+    Models that see images judge them natively, so no second model runs and nothing waits, unless qa=true asks
+    for a second opinion explicitly. Capability comes from the runner's per-conversation status (follows model switches)."""
+    if not images_via_user_message()[2]:
+        return True  # text-only model: the look report is its eyes
+    return bool(args.get('qa'))
+
+
+def verdict(images, question, workdir):
+    """Automatic QA pass over exactly the images shown (look's strict checklist, DeepSeek vision then Gemini)."""
+    d = os.path.join(workdir, 'qa'); os.makedirs(d, exist_ok=True)
+    for i, f in enumerate(images):
+        os.symlink(f, os.path.join(d, f'{i:02d}_{os.path.basename(f)}'))
+    q = question or 'Is anything wrong with these images (cut-off or overlapping text, bad crops, blank/frozen frames, glitches, junk)?'
+    try:
+        code, out, err = run([f'{TOOLS}/look', d, q, '--second-opinion'], timeout=200, cwd=workdir)
+    except subprocess.TimeoutExpired:
+        return None, 'QA check timed out'
+    if code or 'LOOKS BROKEN' not in out:
+        return None, (err or out)[:300] or 'QA check unavailable'
+    m = re.search(r'LOOKS BROKEN:\s*(yes|no)\b\s*[-:]?\s*(.*)', out, re.I)
+    broken = bool(m and m.group(1).lower() == 'yes')
+    return {'broken': broken, 'reason': (m.group(2).strip() if m else ''), 'report': out}, None
+
+def view(args):
+    paths = args.get('paths') or ([args['path']] if args.get('path') else [])
+    if isinstance(paths, str):
+        paths = [paths]
+    if not paths:
+        raise ToolError('give `paths`: one or more images, a folder of frames, or a video (with fps)')
+    k = max(1, min(int(args.get('max') or 8), HARD_CAP))
+    question = str(args.get('question') or '').strip()[:500]
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    base = os.path.join(job_dir(), 'log', 'view') if job_dir() else '/tmp/agent-view'
+    outdir = os.path.join(base, f'{stamp}-{os.getpid()}-{threading.get_ident() % 10000}')
+    os.makedirs(outdir, exist_ok=True)
+    srcs, notes = collect(paths, args.get('fps'), args.get('start'), args.get('end'), k, outdir)
+    sent = [prep(s, outdir, i) for i, (s, _) in enumerate(srcs, 1)]
+    labels = [lab or (os.path.relpath(s, job_dir()) if job_dir() and s.startswith(job_dir() + '/') else s) for s, lab in srcs]
+    # Facts the harness keeps per conversation, so finished looks are not repeated:
+    #  - verdicts are keyed by the exact pixels (not the wording of the question): the same pixels always get the
+    #    same recorded verdict, PASS or LOOKS BROKEN, until they change or recheck=true asks for a fresh one;
+    #  - images already delivered to the model since its last summary are not sent again.
+    digests = [hashlib.sha256(open(f, 'rb').read()).hexdigest() for f in sent]
+    scope = str(args.get('_scope') or '')  # verify passes its criterion id: one recorded verdict per criterion and pixels
+    key = hashlib.sha256(((JOB or 'nojob') + '\0' + scope + '\0' + '\0'.join(sorted(digests))).encode()).hexdigest()[:32]
+    cache = os.path.join(CACHE, key + '.json')
+    recheck = bool(args.get('recheck'))
+    prior = None
+    try:
+        prior = json.load(open(cache))
+    except Exception:
+        pass
+    via_user, model, sees = images_via_user_message()
+    seen_at = already_delivered(digests) if (sees and not recheck) else None
+    v, why, recorded = None, None, None
+    on_opus = any(k in (model or '').lower() for k in ('opus', 'fable'))
+    try:  # the Opus judge for Haiku views was retired 2026-11-24 (visual work is owned by the Opus visual owner)
+        import runlib as _R
+        opus_judge = bool(_R.owner_config().get('legacy_opus_judge_for_haiku'))
+    except Exception:
+        opus_judge = False
+    if prior and not recheck and 'broken' in prior and (prior.get('source') == 'opus' or on_opus):
+        v, recorded = {'broken': prior['broken'], 'reason': prior.get('reason', ''), 'report': prior.get('report', ''),
+                       'question': prior.get('question', ''), 'source': prior.get('source')}, prior.get('at')
+    elif not on_opus and opus_judge:
+        v, why = opus_verdict(sent, labels, question, outdir)
+        if v is None and want_verdict(args, paths):
+            # fallback only if the Opus judge is down
+            fv, fy = verdict(sent, question, outdir)
+            if fv:
+                v, why = fv, why  # keep the Opus error in why? prefer fallback verdict
+                v['source'] = 'look-fallback'
+            else:
+                why = (why or fy or 'Opus visual judge unavailable')
+        elif v is None:
+            why = why or 'Opus visual judge unavailable'
+    elif want_verdict(args, paths):
+        v, why = verdict(sent, question, outdir)
+        if v:
+            v['source'] = 'look'
+    else:
+        why = 'main model is Opus; it judges the attached images itself'
+    if v and not recorded:
+        os.makedirs(CACHE, exist_ok=True)
+        tmp = cache + f'.{os.getpid()}'
+        json.dump({'at': time.time(), 'broken': v['broken'], 'reason': v['reason'], 'report': (v.get('report') or '')[:4000],
+                   'labels': labels, 'question': question, 'source': v.get('source')}, open(tmp, 'w'))
+        os.replace(tmp, cache)
+    head = [f'{len(sent)} image(s): ' + ', '.join(labels)] + notes
+    when = (f' (recorded {et_clock(recorded)} for these exact pixels' + (f', asked: "{v.get("question")}"' if v.get('question') else '')
+            + '; recheck=true runs a fresh review)') if recorded else ''
+    src = (v or {}).get('source') or ''
+    if v and src == 'opus':
+        if v['broken']:
+            head.append('OPUS VERDICT: LOOKS BROKEN - ' + (v['reason'] or 'see findings') + when +
+                        '. This verdict is authoritative (Opus judged these exact frames). Fix the issues before shipping.')
+        else:
+            head.append('OPUS VERDICT: PASS' + (f' - {v["reason"]}' if v.get('reason') else '') + when +
+                        '. This verdict is authoritative (Opus judged these exact frames). Still fix any minor issues listed.')
+        head.append('VERDICT: ' + ('LOOKS BROKEN - ' + (v['reason'] or 'see findings') if v['broken'] else 'PASS') + '.')
+    elif v and not v['broken']:
+        head.append('VERDICT: PASS - automatic QA found nothing broken' + (f' ({v["reason"]})' if v['reason'] else '') + when + '.')
+    elif v:
+        head.append('VERDICT: LOOKS BROKEN - ' + (v['reason'] or 'see the QA report') + when +
+                    '. This is a second model\'s review; your own eyes on the images decide.')
+    else:
+        head.append(f'VERDICT: none ({why}).')
+    via = False
+    if not sees:
+        head.append(f'Your model ({model}) has vision turned off in this conversation, so no pictures are attached; the QA '
+                    'report below is what the look model (a second model\'s eyes) saw in these exact images. Treat it as your eyes.')
+    elif seen_at:
+        head.append(f'These exact images are already in your context: they were delivered in the [view] message at {seen_at} '
+                    'and are unchanged since, so they are not attached again (recheck=true re-sends them).')
+        via = True
+    elif via_user:
+        qname = queue_images(sent, labels, question)
+        if qname and wait_delivery(qname):
+            head.append(f'The images are in the [view] message placed directly after this result ({model} receives images '
+                        'only in user-role messages).')
+            mark_delivered(digests)
+            via = True
+        else:
+            head.append('The images could not be attached (the delivery service did not confirm). Use look for a description.')
+            via = True
+    content = [text('\n'.join(head))]
+    for lab, f in ([] if (via or not sees) else zip(labels, sent)):
+        content.append(text(lab))
+        content.append({'type': 'image', 'data': base64.b64encode(open(f, 'rb').read()).decode(), 'mimeType': 'image/jpeg'})
+    if not via and sees:
+        mark_delivered(digests)
+    if v and v.get('report') and not recorded:
+        content += blocks('QA report:\n' + v['report'])
+    log_image_check(labels, 'PASS' if v and not v['broken'] else 'LOOKS BROKEN' if v else 'n/a',
+                    'look-report' if not sees else 'already-in-context' if seen_at else 'user-attachment' if via else 'tool-result')
+    return content
+
+def et_clock(ts):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(ts or 0, ZoneInfo('America/New_York')).strftime('%-I:%M %p ET')
+
+def summary_epoch():
+    """How many times this conversation's history has been summarized (the runner logs each one in log/context-log.md).
+    Images delivered before the latest summary are no longer in the model's context."""
+    try:
+        return open(os.path.join(job_dir(), 'log', 'context-log.md')).read().count('\n## Condensation at ')
+    except Exception:
+        return 0
+
+def _delivered_path():
+    return os.path.join(job_dir(), 'log', 'view', 'delivered.json') if job_dir() else None
+
+def already_delivered(digests):
+    p = _delivered_path()
+    if not p or not digests:
+        return None
+    try:
+        d = json.load(open(p))
+    except Exception:
+        return None
+    ep = summary_epoch()
+    rows = [d.get(x) for x in digests]
+    if all(r and r.get('epoch') == ep for r in rows):
+        return et_clock(max(r['at'] for r in rows))
+    return None
+
+def mark_delivered(digests):
+    p = _delivered_path()
+    if not p:
+        return
+    try:
+        d = json.load(open(p))
+    except Exception:
+        d = {}
+    ep, now = summary_epoch(), time.time()
+    for x in digests:
+        d[x] = {'at': now, 'epoch': ep}
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    tmp = p + f'.{os.getpid()}'
+    json.dump(d, open(tmp, 'w'))
+    os.replace(tmp, p)
+
+def wait_delivery(qname, timeout=20):
+    """Wait until the runner has put the attachment POST on the wire (view-queue/sent/<name>). The server holds this
+    conversation's state lock while this tool runs, so that POST lands right after this result and before the model's
+    next call. Returns False if the runner reports it did not send (or never answers)."""
+    ackf = os.path.join('/workspace/runs/view-queue/sent', qname)
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        if os.path.exists(ackf):
+            try:
+                note = open(ackf).read().strip()
+            except OSError:
+                note = ''
+            time.sleep(0.15)  # let the request reach the server and queue on the lock
+            return note != 'not sent'
+        time.sleep(0.05)
+    return False
+
+# Providers whose API route forwards images only in user-role messages (LiteLLM's DeepSeek adapter collapses tool-message
+# content to text, and the SDK then refuses the request). For these the images are delivered by the runner as an
+# attachment message right after the tool result. Override with VIEW_USER_IMAGE_PROVIDERS (comma list).
+USER_IMAGE_PROVIDERS = [x.strip() for x in os.environ.get('VIEW_USER_IMAGE_PROVIDERS', 'deepseek').split(',') if x.strip()]
+
+def conversation_id():
+    ids = re.findall(UUID, JOB or '')
+    return ids[-1] if ids else None
+
+def images_via_user_message():
+    cid = conversation_id()
+    st = {}
+    # The runner writes this status within one tick (5 s) of a conversation appearing or switching model; a view in the
+    # very first seconds waits for it, otherwise images could go inline where some providers drop them.
+    for _ in range(40):
+        try:
+            st = json.load(open(f'/workspace/runs/vision/{cid}.json')) if cid else {}
+            break
+        except Exception:
+            if not cid:
+                break
+            time.sleep(0.25)
+    model = str(st.get('model') or '')
+    provider = model.split('/', 1)[0].lower() if '/' in model else ('deepseek' if 'deepseek' in model.lower() else '')
+    sees = st.get('vision') is not False  # unknown -> assume it can see
+    return provider in USER_IMAGE_PROVIDERS, model or 'this model', sees
+
+def queue_images(sent, labels, note):
+    cid = conversation_id()
+    if not cid:
+        return False
+    q = '/workspace/runs/view-queue'
+    os.makedirs(q, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=q, prefix='.tmp-')
+    with os.fdopen(fd, 'w') as f:
+        json.dump({'conversation_id': cid, 'images': sent, 'labels': labels, 'note': note[:500], 'created': time.time(),
+                   'source': 'agent_view'}, f)
+    os.chmod(tmp, 0o644)
+    name = f'{cid}-{time.strftime("%Y%m%d-%H%M%S")}-{os.getpid()}-{threading.get_ident() % 10000}-{int(time.time() * 1000) % 100000}.json'
+    os.rename(tmp, os.path.join(q, name))
+    return name
+
+# ---------------- thin wrappers over the existing CLIs ----------------
+def cli(name, argv, timeout=280):
+    try:
+        code, out, err = run([f'{TOOLS}/{name}'] + argv, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        raise ToolError(f'{name} timed out after {timeout}s')
+    msg = out + (('\n' + err) if err else '')
+    if code:
+        raise ToolError(msg.strip() or f'{name} failed (exit {code})')
+    return [text(msg.strip() or '(no output)')]
+
+def search(a):
+    argv = [str(a.get('query') or '')]
+    if not argv[0].strip(): raise ToolError('query is required')
+    if a.get('n'): argv += ['-n', str(int(a['n']))]
+    if a.get('videos'): argv += ['--videos']
+    if a.get('time'): argv += ['--time', str(a['time'])]
+    if a.get('engines'): argv += ['--engines', str(a['engines'])]
+    return cli('search', argv, timeout=150)
+
+def remember(a):
+    argv = []
+    if a.get('type'): argv += ['--type', str(a['type'])]
+    if a.get('shared'): argv += ['--shared']
+    if a.get('replace'): argv += ['--replace', str(a['replace'])]
+    t = str(a.get('text') or '').strip()
+    if not t: raise ToolError('text is required')
+    return cli('remember', argv + [t], timeout=60)
+
+def recall(a):
+    argv = []
+    if a.get('all'): argv = ['--all']
+    else:
+        q = str(a.get('query') or '').strip()
+        if not q: raise ToolError('query is required (or all=true)')
+        argv = [q]
+        if a.get('n'): argv += ['-n', str(int(a['n']))]
+    if a.get('type'): argv += ['--type', str(a['type'])]
+    return cli('recall', argv, timeout=60)
+
+def checkpoint(a):
+    note = str(a.get('note') or '').strip()
+    if not note: raise ToolError('note is required')
+    if not job_dir(): raise ToolError('no job folder known for this conversation; run `checkpoint "..."` in the terminal instead')
+    return cli('checkpoint', [note], timeout=30)
+
+def look(a):
+    p = abspath(a.get('path') or '')
+    argv = [p, str(a.get('question') or 'Describe briefly what you see.')]
+    if a.get('frames'): argv += ['--frames', str(int(a['frames']))]
+    if a.get('second_opinion'): argv += ['--second-opinion']
+    return cli('look', argv, timeout=290)
+
+
+# ---------------- MCP servers on demand: find in the official registry, connect through the runner ----------------
+REGISTRY = 'https://registry.modelcontextprotocol.io/v0/servers'
+MCP_DIR = '/workspace/runs/mcp'
+
+def http_json(url, timeout=30):
+    import urllib.request
+    req = urllib.request.Request(url, headers={'Accept': 'application/json', 'User-Agent': 'agent-lab-mcp/1.0'})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.load(r)
+
+def mcp_find(a):
+    import urllib.parse
+    q = str(a.get('query') or '').strip()
+    if not q: raise ToolError('query is required (a service or capability, e.g. "github", "postgres", "weather")')
+    n = max(1, min(int(a.get('n') or 8), 20))
+    try:
+        d = http_json(f'{REGISTRY}?search={urllib.parse.quote(q)}&version=latest&limit=50')
+    except Exception as e:
+        raise ToolError(f'registry unavailable ({type(e).__name__}: {str(e)[:150]}); search npm/PyPI/GitHub with agent_search instead')
+    seen, rows = set(), []
+    for item in d.get('servers') or []:
+        sv = item.get('server') or {}
+        meta = ((item.get('_meta') or {}).get('io.modelcontextprotocol.registry/official') or {})
+        if meta.get('status') not in (None, 'active') or sv.get('name') in seen:
+            continue
+        seen.add(sv.get('name'))
+        lines = [f"- {sv.get('name')} v{sv.get('version')}: {(sv.get('description') or '').strip()[:220]}"]
+        repo = (sv.get('repository') or {}).get('url')
+        if repo: lines.append(f'    repo: {repo}')
+        for pk in sv.get('packages') or []:
+            envs = pk.get('environmentVariables') or []
+            need = [f"{e.get('name')}{' (secret)' if e.get('isSecret') else ''}{'' if e.get('isRequired') else ' optional'}" for e in envs]
+            lines.append(f"    package: {pk.get('registryType')} {pk.get('identifier')}@{pk.get('version')} "
+                         f"({(pk.get('transport') or {}).get('type', 'stdio')})" + (f"; env: {', '.join(need)}" if need else '; no keys needed'))
+        for rm in sv.get('remotes') or []:
+            hs = [h.get('name') for h in (rm.get('headers') or [])]
+            lines.append(f"    remote: {rm.get('type')} {rm.get('url')}" + (f"; headers: {', '.join(hs)}" if hs else ''))
+        rows.append('\n'.join(lines))
+        if len(rows) >= n:
+            break
+    if not rows:
+        return [text(f'No registry servers match "{q}". Try other words, or agent_search for "<service> MCP server" '
+                     '(prefer the vendor\'s own GitHub/npm/PyPI package).')]
+    return [text(f'Official MCP registry results for "{q}" (registry-listed; prefer the service vendor\'s own server):\n'
+                 + '\n'.join(rows) + '\n\nConnect one with agent_mcp_connect (registry_name=..., or package/url).')]
+
+def runner_call(op, payload, timeout=170):
+    """Ask the run daemon (outside this container, holds the server token) to change MCP settings."""
+    import uuid
+    rid = uuid.uuid4().hex
+    req_dir, res_dir = f'{MCP_DIR}/requests', f'{MCP_DIR}/responses'
+    os.makedirs(req_dir, exist_ok=True)
+    body = {'id': rid, 'op': op, 'conversation_id': conversation_id(), 'job': JOB, 'created': time.time(), **payload}
+    fd, tmp = tempfile.mkstemp(dir=req_dir, prefix='.tmp-')
+    with os.fdopen(fd, 'w') as f:
+        json.dump(body, f)
+    os.chmod(tmp, 0o664)
+    os.rename(tmp, f'{req_dir}/{rid}.json')
+    deadline = time.time() + timeout
+    out = f'{res_dir}/{rid}.json'
+    while time.time() < deadline:
+        if os.path.exists(out):
+            time.sleep(0.2)
+            r = json.load(open(out))
+            try: os.unlink(out)
+            except OSError: pass
+            if not r.get('ok'):
+                raise ToolError(r.get('message') or 'failed')
+            return [text(r.get('message') or 'done')]
+        time.sleep(1)
+    raise ToolError('the Agent Lab runner did not answer in time; try again in a minute')
+
+def mcp_connect(a):
+    keys = ('name', 'registry_name', 'package', 'registry_type', 'version', 'url', 'transport', 'args', 'env', 'secrets', 'description')
+    payload = {k: a.get(k) for k in keys if a.get(k) not in (None, '', [])}
+    # name alone loads a server already in the Agent Lab library (see agent_mcp_list)
+    return runner_call('connect', payload)
+
+def mcp_list(a):
+    return runner_call('list', {}, timeout=60)
+
+def mcp_remove(a):
+    if not a.get('name'): raise ToolError('name is required')
+    return runner_call('remove', {'name': a['name']}, timeout=60)
+
+
+def load_browser(a):
+    """Add this job's browser tools to THIS conversation mid-run (they then stay loaded)."""
+    return runner_call('load_browser', {}, timeout=60)
+
+
+# ---------------- skills: catalog in the tool description, full SKILL.md and helper files on demand ----------------
+sys.path.insert(0, TOOLS)
+BLOCK = 40000  # the SDK cuts any single text block over 50,000 chars; long files go out as several blocks, nothing dropped
+
+def blocks(body):
+    return [text(body[i:i + BLOCK]) for i in range(0, max(len(body), 1), BLOCK)]
+
+def skills():
+    import skilllib
+    return skilllib.all_skills()
+
+def skill_catalog():
+    try:
+        sk = skills()
+    except Exception as e:
+        return f'(skills unavailable: {e})'
+    return '\n'.join(f'- {k}: {v["description"]}' for k, v in sk.items()) or '(no skills installed)'
+
+def manifest(kind, skill_name, rel, path, chars):
+    """Read manifest: every skill load and helper-file read, per conversation (log/read-manifest.jsonl) and globally."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    row = {'at': datetime.now(ZoneInfo('America/New_York')).isoformat(timespec='seconds'), 'kind': kind, 'skill': skill_name,
+           'file': rel, 'path': path, 'chars': chars, 'conversation_id': conversation_id()}
+    for target in ([os.path.join(job_dir(), 'log', 'read-manifest.jsonl')] if job_dir() else []) + ['/workspace/runs/skill-reads.jsonl']:
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            with open(target, 'a') as f:
+                f.write(json.dumps(row) + '\n')
+        except OSError:
+            pass
+
+def log_image_check(labels, verdict_text, delivery):
+    """Context manifest row for every image check: which images, the verdict, and how they reached the model."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    if not job_dir():
+        return
+    row = {'at': datetime.now(ZoneInfo('America/New_York')).isoformat(timespec='seconds'), 'kind': 'image-check',
+           'images': labels, 'verdict': verdict_text, 'delivery': delivery}
+    try:
+        os.makedirs(os.path.join(job_dir(), 'log'), exist_ok=True)
+        with open(os.path.join(job_dir(), 'log', 'read-manifest.jsonl'), 'a') as f:
+            f.write(json.dumps(row) + '\n')
+    except OSError:
+        pass
+
+def find_skill(name):
+    sk = skills()
+    key = str(name or '').strip()
+    if key in sk:
+        return key, sk[key]
+    for k, v in sk.items():  # also accept the display name from frontmatter
+        if v.get('name', '').lower() == key.lower():
+            return k, v
+    raise ToolError(f'no skill "{key}". Installed: {", ".join(sk) or "none"}')
+
+def helper_files(d):
+    out = []
+    for root, dirs, files in os.walk(d):
+        dirs[:] = sorted(x for x in dirs if not x.startswith('.') and x not in ('node_modules', '__pycache__'))
+        for f in sorted(files):
+            rel = os.path.relpath(os.path.join(root, f), d)
+            if rel != 'SKILL.md' and not f.startswith('.'):
+                out.append((rel, os.path.getsize(os.path.join(root, f))))
+    return out
+
+def skill(a):
+    slug, v = find_skill(a.get('name'))
+    d = v['path']
+    body = open(os.path.join(d, 'SKILL.md'), encoding='utf-8', errors='replace').read()
+    manifest('skill', slug, 'SKILL.md', os.path.join(d, 'SKILL.md'), len(body))
+    files = helper_files(d)
+    top = [f for f in files if '/' not in f[0] or f[0].count('/') == 1 and not f[0].startswith(('producer_handoff_kit/', 'scripts/'))]
+    rest = len(files) - len(top)
+    listing = '\n'.join(f'  {rel} ({size:,} bytes)' for rel, size in top)
+    tail = (f'\n\n---\nSkill directory: {d}\nHelper files (open the ones SKILL.md tells you to, in full, with '
+            f'skill_file name="{slug}" path="<file>"; nothing is summarized or cut):\n{listing}'
+            + (f'\n  (+{rest} more files in deeper folders such as scripts/ and producer_handoff_kit/; list them with ls)' if rest else ''))
+    return [text(f'# Skill: {slug}\n')] + blocks(body) + [text(tail)]
+
+def skill_file(a):
+    slug, v = find_skill(a.get('name'))
+    d = os.path.realpath(v['path'])
+    rel = str(a.get('path') or '').strip()
+    p = os.path.realpath(rel if os.path.isabs(rel) else os.path.join(d, rel))
+    if not p.startswith(d + os.sep) or not os.path.isfile(p):
+        raise ToolError(f'no file "{rel}" in skill {slug} (paths are relative to {d})')
+    body = open(p, encoding='utf-8', errors='replace').read()
+    manifest('file', slug, os.path.relpath(p, d), p, len(body))
+    return [text(f'# {slug}/{os.path.relpath(p, d)} ({len(body):,} chars, complete)\n')] + blocks(body)
+
+
+# ---------------- shared task record + standard verification (PASS / FAIL / UNABLE_TO_VERIFY) ----------------
+def tasklib():
+    import tasklib as T
+    return T
+
+def need_job():
+    if not job_dir():
+        raise ToolError('no job folder known for this conversation')
+    return job_dir()
+
+def skills_loaded():
+    out = []
+    try:
+        for line in open(os.path.join(job_dir(), 'log', 'read-manifest.jsonl')):
+            r = json.loads(line)
+            if r.get('kind') in ('skill', 'file'):
+                k = f"{r.get('skill')}/{r.get('file')}"
+                if k not in out:
+                    out.append(k)
+    except (OSError, ValueError, TypeError):
+        pass
+    return out
+
+def task_reply(rec, head=''):
+    T = tasklib()
+    tail = ''
+    if T.all_pass(rec):
+        tail = ('\n\nALL CRITERIA PASS. The record is now in the deliver phase: the request is met. Call finish and write your final report to Rick now '
+                '(deliverable paths, what each check measured). Do not gather more sources or re-check or polish passing work.')
+    return [text((head + '\n\n' if head else '') + T.render(rec, skills_loaded()) + tail)]
+
+def task_start(a):
+    T, job = tasklib(), need_job()
+    rec = T.load(job)
+    if rec and not a.get('replace'):
+        return task_reply(rec, 'A task record already exists (log/task.json); change it with task_update.')
+    crit = [str(c) for c in (a.get('criteria') or []) if str(c).strip()]
+    size = str(a.get('size') or ('big' if len(a.get('milestones') or []) > 4 else 'medium'))
+    rec = T.new(str(a.get('goal') or '').strip() or '(goal not given)', size, crit, a.get('milestones') or [], str(a.get('notes') or ''))
+    T.save(job, rec)
+    return task_reply(rec, 'Task record created at log/task.json. Criteria change status only through `verify`.')
+
+def task_update(a):
+    T, job = tasklib(), need_job()
+    rec = T.load(job)
+    if not rec:
+        raise ToolError('no task record yet; call task_start first')
+    for c in a.get('add_criteria') or []:
+        rec['criteria'].append({'id': f"C{len(rec['criteria']) + 1}", 'text': str(c), 'status': 'pending', 'evidence': '',
+                                'findings': '', 'checked_at': None, 'check': None, 'fingerprint': None})
+    for m in a.get('add_milestones') or []:
+        rec['milestones'].append(T.milestone(len(rec['milestones']), m))
+    if a.get('milestone'):
+        key = str(a['milestone']).upper()
+        m = next((x for x in rec['milestones'] if x['id'].upper() == key), None)
+        if not m:
+            raise ToolError(f"no milestone {a['milestone']}")
+        m['status'] = str(a.get('status') or 'done')
+        if m['status'] == 'done':
+            m['done_at'] = T.now_et()
+            rec['completed'].append(f"{m['id']} {m['text']}")
+            try:
+                cli('checkpoint', [f"{m['id']} done: {m['text']}" + (f" ({a['note']})" if a.get('note') else '')], timeout=30)
+            except Exception:
+                pass
+    if a.get('completed'):
+        rec['completed'].append(str(a['completed']))
+    if a.get('notes'):
+        rec['notes'] = str(a['notes'])
+    T.save(job, rec)
+    return task_reply(rec, 'Updated.')
+
+def task_status(a):
+    rec = tasklib().load(need_job())
+    return task_reply(rec) if rec else [text('No task record yet. For a medium or big task, call task_start (goal, criteria, milestones).')]
+
+def fingerprint(paths):
+    import hashlib
+    h = hashlib.sha256()
+    for p in paths:
+        try:
+            st = os.stat(abspath(p)); h.update(f'{abspath(p)}:{st.st_size}:{st.st_mtime_ns}'.encode())
+        except OSError:
+            h.update(f'{p}:missing'.encode())
+    return h.hexdigest()[:16]
+
+def ffprobe_json(p):
+    code, out, err = run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration:stream=codec_type,width,height',
+                          '-of', 'json', abspath(p)], timeout=60)
+    if code:
+        raise ToolError(f'ffprobe failed: {(err or out)[:200]}')
+    return json.loads(out)
+
+def check_media(a):
+    p = a.get('path') or ''
+    d = ffprobe_json(p)
+    dur = float((d.get('format') or {}).get('duration') or 0)
+    v = next((x for x in d.get('streams') or [] if x.get('codec_type') == 'video'), {})
+    has_audio = any(x.get('codec_type') == 'audio' for x in d.get('streams') or [])
+    found, ev = [], [f'{os.path.basename(p)}: {dur:.2f}s, {v.get("width")}x{v.get("height")}, audio={"yes" if has_audio else "no"}']
+    if a.get('duration') is not None:
+        tol = float(a.get('tolerance') if a.get('tolerance') is not None else 1.0)
+        if abs(dur - float(a['duration'])) > tol:
+            found.append(f'duration {dur:.2f}s, expected {a["duration"]}s ±{tol}')
+    if a.get('height') and int(v.get('height') or 0) != int(a['height']):
+        found.append(f'height {v.get("height")}, expected {a["height"]}')
+    if a.get('width') and int(v.get('width') or 0) != int(a['width']):
+        found.append(f'width {v.get("width")}, expected {a["width"]}')
+    if a.get('audio') and not has_audio:
+        found.append('no audio stream')
+    if a.get('lufs') is not None and has_audio:
+        code, out, err = run(['ffmpeg', '-nostats', '-i', abspath(p), '-af', 'ebur128', '-f', 'null', '-'], timeout=300)
+        m = re.findall(r'I:\s+(-?[\d.]+) LUFS', err or '')
+        if m:
+            lu = float(m[-1]); ev.append(f'loudness {lu} LUFS')
+            if abs(lu - float(a['lufs'])) > 2:
+                found.append(f'loudness {lu} LUFS, expected {a["lufs"]} ±2')
+    return ('FAIL' if found else 'PASS'), '; '.join(ev), '; '.join(found), [p]
+
+def check_file(a):
+    p = abspath(a.get('path') or '')
+    if not os.path.isfile(p):
+        return 'FAIL', '', f'{a.get("path")} does not exist', [p]
+    size = os.path.getsize(p); found = []
+    if size < int(a.get('min_bytes') or 1):
+        found.append(f'only {size} bytes')
+    if a.get('contains'):
+        body = open(p, encoding='utf-8', errors='replace').read()
+        if not re.search(a['contains'], body, re.M):
+            found.append(f'pattern {a["contains"]!r} not found')
+    return ('FAIL' if found else 'PASS'), f'{a.get("path")}: {size:,} bytes', '; '.join(found), [p]
+
+def check_command(a):
+    cmd = str(a.get('command') or '')
+    if not cmd:
+        raise ToolError('command is required')
+    job = need_job(); os.makedirs(os.path.join(job, 'log', 'verify'), exist_ok=True)
+    outp = os.path.join(job, 'log', 'verify', f'{int(time.time())}.txt')
+    try:
+        r = subprocess.run([f'{TOOLS}/job-sandbox', '--root', job, '--', 'bash', '-lc', cmd], cwd=job, capture_output=True, text=True, timeout=int(a.get('timeout') or 1800))
+    except subprocess.TimeoutExpired:
+        return 'UNABLE_TO_VERIFY', '', 'the check command did not finish', a.get('inputs') or []
+    full = (r.stdout or '') + (r.stderr or '')
+    open(outp, 'w').write(full)
+    tail = full.strip()[-1500:]
+    ev = f'exit {r.returncode}; full output {os.path.relpath(outp, job)}' + (f'; last lines: {tail}' if tail else '')
+    return ('PASS' if r.returncode == 0 else 'FAIL'), ev, ('' if r.returncode == 0 else 'command failed, see output'), a.get('inputs') or []
+
+def check_urls(a):
+    import urllib.request
+    bad, ok = [], []
+    for u in a.get('urls') or []:
+        try:
+            req = urllib.request.Request(u, method='GET', headers={'User-Agent': 'Mozilla/5.0 agent-lab-verify'})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                ok.append(f'{r.status} {u}')
+        except Exception as e:
+            bad.append(f'{u}: {str(e)[:80]}')
+    if not ok and not bad:
+        raise ToolError('urls is required')
+    return ('FAIL' if bad else 'PASS'), '; '.join(ok), '; '.join(bad), []
+
+def verify(a):
+    """Run one check for one criterion and record PASS / FAIL / UNABLE_TO_VERIFY with evidence in log/task.json."""
+    T, job = tasklib(), need_job()
+    rec = T.load(job)
+    if not rec:
+        raise ToolError('no task record yet; call task_start with your success criteria first')
+    try:
+        c = T.find(rec, a.get('criterion'))
+    except KeyError as e:
+        raise ToolError(str(e))
+    kind = str(a.get('kind') or '')
+    extra = []
+    paths = [x for x in ([a.get('path')] + list(a.get('paths') or []) + list(a.get('inputs') or [])) if x]
+    fp = fingerprint(paths) + ':' + kind + ':' + json.dumps({k: a.get(k) for k in sorted(a) if k != 'criterion'}, sort_keys=True)[:400]
+    if c['status'] == 'PASS' and c.get('fingerprint') == fp and not a.get('recheck'):
+        return task_reply(rec, f"ALREADY PASSED: {c['id']} passed at {c['checked_at'][11:16]} ET on these exact inputs. Nothing to re-check.")
+    try:
+        if kind == 'media':
+            status, ev, found, _ = check_media(a)
+        elif kind == 'file':
+            status, ev, found, _ = check_file(a)
+        elif kind == 'command':
+            status, ev, found, _ = check_command(a)
+        elif kind == 'urls':
+            status, ev, found, _ = check_urls(a)
+        elif kind == 'images':
+            res = view({**{k: a[k] for k in ('paths', 'fps', 'start', 'end', 'max', 'question') if a.get(k) is not None},
+                        'paths': a.get('paths') or [a.get('path')], 'qa': not images_via_user_message()[2], 'recheck': bool(a.get('recheck')), '_scope': c['id']})
+            head = res[0]['text'] if res and res[0].get('type') == 'text' else ''
+            status = ('FAIL' if 'OPUS VERDICT: LOOKS BROKEN' in head or 'VERDICT: LOOKS BROKEN' in head else 'PASS' if 'OPUS VERDICT: PASS' in head or 'VERDICT: PASS' in head else 'UNABLE_TO_VERIFY')
+            if status == 'UNABLE_TO_VERIFY' and images_via_user_message()[2] and 'OPUS VERDICT' not in head:
+                own = str(a.get('status') or '').upper()
+                if own in ('PASS', 'FAIL') and a.get('self_check'):
+                    status = own
+                    head = f"VERDICT: {'PASS' if own == 'PASS' else 'LOOKS BROKEN'} (your own judgment: {a['self_check']})\n" + head
+                else:
+                    head = ('VERDICT: none yet. You can see these images yourself: look at them, then call verify again for this '
+                            'criterion with status PASS or FAIL and self_check describing what you saw.\n') + head
+            m = re.search(r'VERDICT: [^\n]*', head)
+            ev, found = (m.group(0) if m else head[:300]), ('' if status == 'PASS' else (m.group(0) if m else 'no verdict'))
+            extra = res
+            if status == 'PASS' and a.get('self_check'):
+                ev += f"; your own judgment: {a['self_check']}"
+        elif kind == 'manual':
+            status = str(a.get('status') or '').upper()
+            if status not in ('PASS', 'FAIL', 'UNABLE_TO_VERIFY') or not a.get('evidence'):
+                raise ToolError('manual needs status (PASS/FAIL/UNABLE_TO_VERIFY) and evidence (what you measured or saw, with paths)')
+            ev, found = f"(self-assessed) {a['evidence']}", str(a.get('findings') or '')
+        else:
+            raise ToolError('kind must be one of: media, images, file, command, urls, manual')
+    except ToolError as e:
+        if kind not in ('media', 'images', 'file', 'command', 'urls', 'manual') or 'manual needs' in str(e):
+            raise
+        status, ev, found = 'UNABLE_TO_VERIFY', '', str(e)
+    c.update(status=status, evidence=ev, findings=found, checked_at=T.now_et(), check=kind,
+             fingerprint=fp if status == 'PASS' else None)
+    rec['history'].append({'at': c['checked_at'], 'criterion': c['id'], 'status': status, 'kind': kind})
+    if a.get('milestone'):
+        mk = str(a['milestone']).upper()
+        for m in rec.get('milestones') or []:
+            if m['id'].upper() == mk and c['id'].upper() not in [x.upper() for x in m.get('criteria') or []]:
+                m.setdefault('criteria', []).append(c['id'])
+    done_ms = T.auto_milestones(rec) if status == 'PASS' else []
+    if T.all_pass(rec):
+        rec['phase'] = 'deliver'
+    T.save(job, rec)
+    for m in done_ms:
+        try:
+            cli('checkpoint', [f"{m['id']} done (verified): {m['text']}"], timeout=30)
+        except Exception:
+            pass
+    if status == 'PASS':
+        try:
+            cli('checkpoint', [f"{c['id']} PASS ({kind}): {c['text']}"], timeout=30)
+        except Exception:
+            pass
+    head = {'PASS': f"{c['id']} PASS." + (' Milestone ' + ', '.join(m['id'] for m in done_ms) + ' marked done (verified).' if done_ms else ''), 'FAIL': f"{c['id']} FAIL: {found}. Only {c['id']} is open from this check; criteria already PASS keep their recorded result.",
+            'UNABLE_TO_VERIFY': f"{c['id']} UNABLE_TO_VERIFY: {found}. Use another check kind, or report it as unverified."}[status]
+    if status == 'FAIL':
+        log_step_failure(f"{c['id']}: {found or ev}", kind=kind)
+    out = task_reply(rec, head)
+    return out + [x for x in extra[1:]] if extra else out
+
+S = lambda **p: {'type': 'object', 'properties': p}
+STR, INT, BOOL, NUM = {'type': 'string'}, {'type': 'integer'}, {'type': 'boolean'}, {'type': 'number'}
+SPEC = [
+    ('view', view, 'See images with your own eyes. Returns the images themselves as this tool\'s result, plus an automatic '
+     'OPUS VERDICT (PASS / LOOKS BROKEN) on exactly those images (authoritative; the runner has Opus judge the frames on Haiku runs). Use it for renders, frames, stills, attachments and screenshots. '
+     'A video needs fps (frames per second to sample) and optionally start/end. Up to 12 images per call (default 8). '
+     'The verdict is recorded per exact pixels: unchanged images get the same recorded verdict, and images already in your '
+     'context since the last summary are not sent again (recheck=true forces both). '
+     'If your model cannot see images, use look instead.',
+     {**S(paths={'type': 'array', 'items': STR, 'description': 'Image files, a folder of frames, or a video. Absolute paths, or relative to your job folder.'},
+          fps={**NUM, 'description': 'For a video: frames per second to sample (e.g. 1).'},
+          start={**STR, 'description': 'For a video: start time (seconds or hh:mm:ss).'},
+          end={**STR, 'description': 'For a video: end time.'},
+          max={**INT, 'description': 'Max images (default 8, max 12).'},
+          question={**STR, 'description': 'What you are checking; the QA verdict answers it.'},
+          recheck={**BOOL, 'description': 'Re-send the images and run a fresh QA verdict even though these exact pixels were already seen.'},
+          qa={**BOOL, 'description': 'Automatic QA verdict (a second model reviews the images). Default: on for your own output (out/, deliver/, render/, qa/, final/, export/) and for text-only models, off for source footage and references. true/false to force.'}), 'required': ['paths']}),
+    ('look', look, 'Ask a vision model about an image, folder of images or video frames (for text-only models, or as an explicit '
+     'second opinion). Prints the answer plus a QA checklist and LOOKS BROKEN yes/no. For whole video+audio, run watch-media in the terminal.',
+     {**S(path={**STR, 'description': 'Image, folder of images, or video.'}, question=STR, frames={**INT, 'description': 'Frames to sample from a video (default 8).'},
+          second_opinion={**BOOL, 'description': 'Required when your own model can see images.'}), 'required': ['path', 'question']}),
+    ('search', search, 'Web search (local SearXNG, with Gemini Google-Search fallback that lists cited source URLs). '
+     'Returns titles, URLs and snippets; open the pages with readpage or the browser before relying on them. videos=true gives YouTube results.',
+     {**S(query=STR, n={**INT, 'description': 'Number of results (default 10).'}, videos=BOOL,
+          time={**STR, 'enum': ['day', 'week', 'month', 'year']}, engines={**STR, 'description': 'Comma list, e.g. bing,brave'}), 'required': ['query']}),
+    ('remember', remember, 'Save a long-term fact to memory (Rick\'s rules, preferences, decisions). One clear self-contained sentence.',
+     {**S(text=STR, type={**STR, 'enum': ['rule', 'person', 'project', 'preference', 'fact']}, shared={**BOOL, 'description': 'Visible to every Transovo bot.'},
+          replace={**INT, 'description': 'ID of the fact this one supersedes.'}), 'required': ['text']}),
+    ('recall', recall, 'Search long-term memory (keywords + meaning).',
+     {**S(query=STR, n=INT, type=STR, all={**BOOL, 'description': 'List every active fact.'})}),
+    ('checkpoint', checkpoint, 'Save progress for this run: what is done (with file paths), what is next. Used to resume after a crash or step limit.',
+     {**S(note=STR), 'required': ['note']}),
+    ('mcp_find', mcp_find, 'Find MCP servers (extra tools for services, APIs, databases, docs) in the official MCP registry. '
+     'Shows each server\'s npm/PyPI package or remote URL and which env vars / keys it needs.',
+     {**S(query={**STR, 'description': 'Service or capability, e.g. "github", "postgres", "weather", "pdf"'}, n=INT), 'required': ['query']}),
+    ('mcp_connect', mcp_connect, 'Install and connect an MCP server: tests that it lists its tools, saves it for future conversations, '
+     'and adds it to THIS conversation (its tools appear as <name>_<tool> from your next step); it reports discovery, authentication and permissions separately. '
+     'Prefer registry_name from agent_mcp_find; name alone loads a server already in the library (agent_mcp_list). '
+     'Keys: list the vault names in `secrets` and map them with env (e.g. env={"GITHUB_TOKEN":"${GITHUB_TOKEN}"}); a key missing '
+     'from the vault is requested from Rick and the call says so. Never put a key value in env.',
+     {**S(name={**STR, 'description': 'Short local name, lowercase letters/digits/_ (becomes the tool prefix).'},
+          registry_name={**STR, 'description': 'Registry name, e.g. io.github.owner/server'},
+          package={**STR, 'description': 'npm or PyPI package (when not using registry_name)'},
+          registry_type={**STR, 'enum': ['npm', 'pypi']}, version=STR,
+          url={**STR, 'description': 'Remote MCP endpoint (streamable-http or sse)'},
+          transport={**STR, 'enum': ['stdio', 'streamable-http', 'http', 'sse']},
+          args={'type': 'array', 'items': STR, 'description': 'Extra command-line args for the server'},
+          env={'type': 'object', 'additionalProperties': STR, 'description': 'Env vars; secret values only as ${VAULT_NAME}'},
+          secrets={'type': 'array', 'items': STR, 'description': 'Vault names this server needs'},
+          description=STR), 'required': ['name']}),
+    ('mcp_list', mcp_list, 'List the MCP servers connected to Agent Lab (and which are in this conversation).', S()),
+    ('mcp_remove', mcp_remove, 'Remove an MCP server from Agent Lab settings (future conversations).', {**S(name=STR), 'required': ['name']}),
+    ('load_browser', load_browser, 'Load the full browser control tools when you need to open or operate a web page; fetch_fetch is enough to just read a URL.', S()),
+    ('skill', skill, 'SKILL_DESCRIPTION', {**S(name={**STR, 'description': 'Skill name (slug) from the catalog'}), 'required': ['name']}),
+    ('skill_file', skill_file, 'Open one helper file of a skill in full (e.g. craft/editing.md). Use it for every file the skill\'s SKILL.md '
+     'tells you to read for your situation. Returns the complete file; logged to your read manifest.',
+     {**S(name={**STR, 'description': 'Skill name (slug)'}, path={**STR, 'description': 'File path relative to the skill directory'}),
+      'required': ['name', 'path']}),
+    ('task_start', task_start, 'Create the shared task record (log/task.json) for a medium or big task: the goal, size (medium|big), '
+     'measurable success criteria and the plan milestones. Skip it for trivial tasks. The record survives summaries, crashes, '
+     'model switches and helpers, and is the authority on what is done.',
+     {**S(goal=STR, size={**STR, 'enum': ['medium', 'big']}, criteria={'type': 'array', 'items': STR}, milestones={'type': 'array', 'items': STR},
+          notes=STR, replace=BOOL), 'required': ['goal', 'criteria']}),
+    ('task_update', task_update, 'Update the task record: mark a milestone doing/done (done writes a checkpoint), add criteria or milestones, '
+     'note completed work. Criterion status cannot be set here: only `verify` sets it.',
+     S(milestone=STR, status={**STR, 'enum': ['todo', 'doing', 'done']}, note=STR, add_criteria={'type': 'array', 'items': STR},
+       add_milestones={'type': 'array', 'items': STR}, completed=STR, notes=STR)),
+    ('task_status', task_status, 'Show the task record: goal, criteria with PASS/FAIL/UNABLE_TO_VERIFY and evidence, plan, completed work.', S()),
+    ('verify', verify, 'Check one success criterion and record the result (PASS / FAIL / UNABLE_TO_VERIFY with evidence and findings) in the '
+     'task record. kind: media (path + duration/tolerance/width/height/audio/lufs), images (paths of stills/frames or a video with fps; '
+     'second-model QA verdict, images shown to you), file (path, min_bytes, contains regex), command (a test or script; exit 0 = PASS, '
+     'e.g. run tests, compare spreadsheet totals, check a document), urls (sources reachable), manual (status + evidence, labelled self-assessed). '
+     'A criterion that passed on unchanged inputs is not re-run. When every criterion passes, deliver.',
+     {**S(criterion={**STR, 'description': 'Criterion id, e.g. C2'}, milestone={**STR, 'description': 'Optional: the milestone this check proves (e.g. M2); it is marked done automatically once all its criteria PASS'}, kind={**STR, 'enum': ['media', 'images', 'file', 'command', 'urls', 'manual']},
+          path=STR, paths={'type': 'array', 'items': STR}, inputs={'type': 'array', 'items': STR}, duration=NUM, tolerance=NUM,
+          width=INT, height=INT, audio=BOOL, lufs=NUM, fps=NUM, start=NUM, end=NUM, max=INT, question=STR, self_check=STR,
+          min_bytes=INT, contains=STR, command=STR, timeout=INT, urls={'type': 'array', 'items': STR},
+          status={**STR, 'enum': ['PASS', 'FAIL', 'UNABLE_TO_VERIFY']}, evidence=STR, findings=STR, recheck=BOOL),
+      'required': ['criterion', 'kind']}),
+]
+HANDLERS = {n: f for n, f, _, _ in SPEC}
+
+# ---------------- MCP stdio plumbing ----------------
+OUT = threading.Lock()
+
+def send(msg):
+    data = json.dumps(msg, ensure_ascii=False)
+    with OUT:
+        sys.stdout.write(data + '\n'); sys.stdout.flush()
+
+def call(mid, name, args):
+    try:
+        if name not in HANDLERS:
+            raise ToolError(f'unknown tool {name}')
+        content, err = HANDLERS[name](args or {}), False
+    except ToolError as e:
+        content, err = [text(str(e))], True
+    except subprocess.TimeoutExpired as e:
+        content, err = [text(f'timed out: {e}')], True
+    except Exception as e:
+        content, err = [text(f'{name} failed: {type(e).__name__}: {str(e)[:300]}')], True
+    send({'jsonrpc': '2.0', 'id': mid, 'result': {'content': content, 'isError': err}})
+
+def main():
+    global JOB
+    a = sys.argv[1:]
+    def _resolve_job(j):
+        if not j or j in ('auto', 'cwd'):
+            j = os.environ.get('OPENHANDS_PROJECT_DIR') or os.environ.get('JOB') or os.getcwd()
+        return (j or '').rstrip('/')
+    if '--job' in a and a.index('--job') + 1 < len(a):
+        j = _resolve_job(a[a.index('--job') + 1])
+        if re.match(rf'^/workspace/jobs/{UUID}(/helpers/{UUID})*$', j):
+            JOB = j
+            os.makedirs(JOB, exist_ok=True)
+            os.chdir(JOB)
+    if JOB is None:
+        j = _resolve_job(None)
+        if re.match(rf'^/workspace/jobs/{UUID}(/helpers/{UUID})*$', j):
+            JOB = j
+            os.makedirs(JOB, exist_ok=True)
+            os.chdir(JOB)
+    inherit_env()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        mid, method = msg.get('id'), msg.get('method')
+        if method == 'initialize':
+            pv = (msg.get('params') or {}).get('protocolVersion') or '2025-06-18'
+            send({'jsonrpc': '2.0', 'id': mid, 'result': {
+                'protocolVersion': pv, 'capabilities': {'tools': {'listChanged': False}},
+                'serverInfo': {'name': 'agent', 'version': '1.0.0'},
+                'instructions': 'Agent Lab tools. view returns images as its result with a QA verdict.'}})
+        elif method == 'tools/list':
+            desc = ('Load a skill: returns its full SKILL.md (never cut), its directory and the list of its helper files. '
+                    'The runner already attaches the skills your task needs to your first message; load another one only '
+                    'when AGENTS.md or a skill names it (list them with `ls /workspace/skills`). Then read the helper files '
+                    'its SKILL.md names for your situation with skill_file.')
+            send({'jsonrpc': '2.0', 'id': mid, 'result': {'tools': [
+                {'name': n, 'description': desc if d == 'SKILL_DESCRIPTION' else d, 'inputSchema': s} for n, _, d, s in SPEC]}})
+        elif method == 'tools/call':
+            p = msg.get('params') or {}
+            threading.Thread(target=call, args=(mid, p.get('name'), p.get('arguments')), daemon=True).start()
+        elif method == 'ping':
+            send({'jsonrpc': '2.0', 'id': mid, 'result': {}})
+        elif mid is not None:
+            send({'jsonrpc': '2.0', 'id': mid, 'error': {'code': -32601, 'message': f'method not found: {method}'}})
+
+if __name__ == '__main__':
+    main()

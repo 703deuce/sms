@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""usage: print today's and per-job / per-conversation cost totals, with a per-model (Haiku vs Opus) table.
+
+usage: usage [--refresh] [--json] [--days N]
+       usage --conversation [ID]   whole cost of one conversation (LLM + helpers + media); default: this job. Quote its TOTAL.
+  --refresh  also pull OpenHands conversation metrics from the agent-server
+             (needs AGENT_LAB_TOKEN and the API on localhost:8000; the host
+             collector /opt/agent/ops/collect-usage does the same)
+  --json     print the summary JSON
+  --days N   include the last N America/New_York days (default: today only for the text view)
+Reads /workspace/usage/summary.json and /workspace/usage/usage.jsonl.
+"""
+import json, os, sys
+from collections import defaultdict
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _usage import usage_dir, usage_log_path, now_iso, ET
+
+
+def die(msg):
+    print(f"usage: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_json(path, default):
+    try:
+        with open(path) as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return default
+    except Exception as e:
+        die(f"could not read {path}: {e}")
+
+
+def load_jsonl(path):
+    rows = []
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        pass
+    return rows
+
+
+def day_of(ts):
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.astimezone(ET).date().isoformat()
+    except Exception:
+        return str(ts)[:10]
+
+
+def main():
+    args = sys.argv[1:]
+    if "--conversation" in args or "--here" in args:
+        rest = [a for a in args if a not in ("--conversation", "--here")]
+        os.execv("/opt/tools/conv-usage", ["conv-usage"] + rest)
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    refresh = "--refresh" in args
+    as_json = "--json" in args
+    days = 1
+    if "--days" in args:
+        days = int(args[args.index("--days") + 1])
+    if refresh:
+        # Prefer the host collector if we can see it; otherwise no-op with a note.
+        collector = "/opt/agent/ops/collect-usage"
+        alt = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "ops", "collect-usage")
+        if os.access(collector, os.X_OK) and os.path.exists("/opt/agent/.env"):
+            import subprocess
+            r = subprocess.run([collector], capture_output=True, text=True)
+            if r.returncode != 0:
+                print(f"(refresh failed: {r.stderr.strip() or r.stdout.strip() or r.returncode})", file=sys.stderr)
+        else:
+            # In-container: try a lightweight API pull if the token is already in the env (no printing).
+            try:
+                from collect_usage_lib import collect  # optional, not shipped in the container
+                collect()
+            except Exception:
+                pass
+
+    def _usage_paths():
+        d = usage_dir()
+        host = "/opt/agent/workspace/usage"
+        if not os.path.exists(os.path.join(d, "summary.json")) and os.path.exists(os.path.join(host, "summary.json")):
+            d = host
+        return os.path.join(d, "summary.json"), os.path.join(d, "usage.jsonl")
+
+    summary_path, log_path = _usage_paths()
+    summary = load_json(summary_path, {})
+    media = load_jsonl(log_path if os.path.exists(log_path) else usage_log_path())
+
+    today = datetime.now(ET).date()
+    window = {(today - timedelta(days=i)).isoformat() for i in range(max(1, days))}
+
+    convos = summary.get("conversations") or []
+    per_day = summary.get("days") or {}
+
+    # Media costs by day / job / conversation, always from the live log
+    media_today = 0.0
+    media_by_job = defaultdict(float)
+    media_by_convo = defaultdict(float)
+    media_by_tool = defaultdict(float)
+    media_day_total = defaultdict(float)
+    for row in media:
+        d = day_of(row.get("ts"))
+        cost = float(row.get("estimated_cost_usd") or 0)
+        if d:
+            media_day_total[d] += cost
+        if d in window:
+            media_today += cost
+            media_by_tool[row.get("tool") or "unknown"] += cost
+            if row.get("job"):
+                media_by_job[row["job"]] += cost
+            if row.get("conversation_id"):
+                media_by_convo[row["conversation_id"]] += cost
+
+    llm_today = 0.0
+    by_model = defaultdict(float)
+    for d, rec in per_day.items():
+        if d in window:
+            llm_today += float((rec or {}).get("llm_cost_usd") or 0)
+            for m, c in ((rec or {}).get("cost_by_model") or {}).items():
+                by_model[m] += float(c or 0)
+    if not by_model:
+        for c in convos:
+            if day_of(c.get("updated_at") or c.get("created_at")) in window:
+                for m, v in (c.get("cost_by_model") or {}).items():
+                    by_model[m] += float(v or 0)
+
+    if as_json:
+        print(json.dumps({
+            "generated_at": summary.get("generated_at") or now_iso(),
+            "today": today.isoformat(),
+            "timezone": "America/New_York",
+            "llm_cost_usd": round(llm_today, 6),
+            "media_cost_usd": round(media_today, 6),
+            "total_usd": round(llm_today + media_today, 6),
+            "cost_by_model": {k: round(v, 6) for k, v in sorted(by_model.items(), key=lambda kv: -kv[1])},
+            "conversations": convos,
+            "media_by_tool": {k: round(v, 6) for k, v in media_by_tool.items()},
+            "media_by_job": {k: round(v, 6) for k, v in media_by_job.items()},
+            "days": per_day,
+        }, indent=2))
+        return
+
+    tzlabel = "America/New_York"
+    print(f"Usage for {today.isoformat()} ({tzlabel})")
+    if not summary and not media:
+        print("No usage recorded yet. Run /opt/agent/ops/collect-usage on the host, or use a media CLI.")
+        return
+    if summary.get("generated_at"):
+        print(f"Summary last updated: {summary['generated_at']}")
+    print(f"  LLM (OpenHands conversations):  ${llm_today:.4f}")
+    if by_model:
+        print("  By model (LLM):")
+        for m, c in sorted(by_model.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f"    {m}: ${c:.4f}")
+    print(f"  Media CLIs:                     ${media_today:.4f}")
+    if media_by_tool:
+        for t, c in sorted(media_by_tool.items()):
+            print(f"    {t}: ${c:.4f}")
+    print(f"  TOTAL:                          ${llm_today + media_today:.4f}")
+    print()
+    print("Per conversation / job:")
+    shown = False
+    # Merge API conversations with media-only jobs
+    rows = []
+    for c in convos:
+        rows.append((
+            c.get("title") or "(untitled)",
+            c.get("id") or "",
+            float(c.get("cost_usd") or 0),
+            day_of(c.get("updated_at") or c.get("created_at")),
+            "conversation",
+        ))
+    for job, cost in media_by_job.items():
+        rows.append((job, "", cost, today.isoformat(), "media-job"))
+    if not rows:
+        print("  (none)")
+    else:
+        # show conversations updated in the window first, then others with cost
+        def sort_key(r):
+            in_win = 0 if r[3] in window else 1
+            return (in_win, -(r[2] or 0), r[0] or "")
+        for title, cid, cost, day, kind in sorted(rows, key=sort_key):
+            extra = f"  {cid}" if cid else ""
+            when = f"  {day}" if day else ""
+            print(f"  ${cost:.4f}  {title}{extra}{when}")
+            shown = True
+        if media_by_convo:
+            print("  Media attributed to a conversation:")
+            for cid, cost in media_by_convo.items():
+                print(f"    ${cost:.4f}  {cid}")
+
+
+if __name__ == "__main__":
+    main()

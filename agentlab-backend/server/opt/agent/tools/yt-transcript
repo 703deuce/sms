@@ -1,0 +1,207 @@
+#!/usr/bin/env python3
+"""yt-transcript: fetch a YouTube transcript through the AgentLab egress gateway (tier 1).
+
+usage: yt-transcript URL_OR_ID [-o FILE] [--lang en] [--job ID]
+Prints the transcript (timestamped) and writes a .vtt / .json under -o or
+/workspace/usage/ytdl-cache/<id>/. Uses youtube-transcript-api first (cheaper),
+falls back to yt-dlp --write-auto-subs --skip-download. Retries with a new
+sticky session on IP blocks, up to 5 times.
+"""
+from __future__ import annotations
+
+import json, os, re, sys, time
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+GATEWAY = os.environ.get("EGRESS_PROXY", "http://127.0.0.1:18080")
+CACHE = Path(os.environ.get("YTDL_CACHE", "/workspace/usage/ytdl-cache"))
+VENV_PY = os.environ.get("YTDLP_PY", "/workspace/usage/ytdlp-venv/bin/python")
+MAX_TRIES = 5
+ID_RE = re.compile(r"(?:v=|/shorts/|/live/|/embed/|youtu\.be/)([A-Za-z0-9_-]{11})")
+
+
+def die(msg, code=1):
+    print(f"yt-transcript: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def video_id(url: str):
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", url or ""):
+        return url
+    m = ID_RE.search(url or "")
+    if m:
+        return m.group(1)
+    q = parse_qs(urlparse(url or "").query)
+    v = (q.get("v") or [None])[0]
+    return v if v and re.fullmatch(r"[A-Za-z0-9_-]{11}", v) else None
+
+
+def job_id(explicit=None):
+    if explicit:
+        return explicit
+    env = os.environ.get("AGENT_JOB_ID") or os.environ.get("JOB_ID")
+    if env:
+        return env
+    cwd = os.getcwd()
+    m = re.search(r"/workspace/jobs/([0-9a-fA-F-]{36})", cwd)
+    if m:
+        return m.group(1)
+    return "default"
+
+
+def parse(argv):
+    lang, job, out, url = "en", None, None, None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-h", "--help"):
+            print(__doc__); sys.exit(0)
+        elif a in ("-o", "--output"):
+            i += 1; out = argv[i]
+        elif a == "--lang":
+            i += 1; lang = argv[i]
+        elif a == "--job":
+            i += 1; job = argv[i]
+        elif a.startswith("-"):
+            die(f"unknown flag {a}")
+        else:
+            url = a
+        i += 1
+    if not url:
+        die("need a YouTube URL or video id")
+    return url, lang, job_id(job), out
+
+
+def to_vtt(snippets, vid):
+    lines = ["WEBVTT", ""]
+    for i, s in enumerate(snippets, 1):
+        start = float(s["start"])
+        dur = float(s.get("duration") or 0)
+        end = start + dur
+        def ts(t):
+            h = int(t // 3600); m = int((t % 3600) // 60); sec = t % 60
+            return f"{h:02d}:{m:02d}:{sec:06.3f}"
+        lines.append(f"{ts(start)} --> {ts(end)}")
+        lines.append(s["text"].strip())
+        lines.append("")
+    return "\n".join(lines) + "\n"
+
+
+def fetch_api(vid, lang, proxy):
+    # run inside the venv so youtube-transcript-api is available
+    script = r"""
+import json, os, sys
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.proxies import GenericProxyConfig
+from youtube_transcript_api._errors import RequestBlocked, IpBlocked, TranscriptsDisabled, NoTranscriptFound
+vid, lang, proxy = sys.argv[1], sys.argv[2], sys.argv[3]
+cfg = GenericProxyConfig(http_url=proxy, https_url=proxy)
+api = YouTubeTranscriptApi(proxy_config=cfg)
+langs = [lang, f"{lang}-US", f"{lang}-GB", "en", "en-US", "en-GB"] if lang else ["en"]
+# unique, preserve order
+seen=set(); langs=[x for x in langs if not (x in seen or seen.add(x))]
+try:
+    t = api.fetch(vid, languages=langs)
+except (RequestBlocked, IpBlocked) as e:
+    print("BLOCKED", type(e).__name__, file=sys.stderr); sys.exit(2)
+except TranscriptsDisabled:
+    print("DISABLED", file=sys.stderr); sys.exit(3)
+except NoTranscriptFound:
+    # try generated / any
+    try:
+        listing = api.list(vid)
+        t = next(iter(listing)).fetch()
+    except (RequestBlocked, IpBlocked):
+        print("BLOCKED", file=sys.stderr); sys.exit(2)
+    except Exception as e:
+        print("ERROR", type(e).__name__, file=sys.stderr); sys.exit(1)
+except Exception as e:
+    print("ERROR", type(e).__name__, file=sys.stderr); sys.exit(1)
+snips=[{"start":float(s.start),"duration":float(s.duration),"text":s.text} for s in t.snippets]
+json.dump({"id":vid,"lang":getattr(t,"language_code",lang),"snippets":snips}, sys.stdout)
+"""
+    import subprocess
+    p = subprocess.run([VENV_PY, "-c", script, vid, lang, proxy], capture_output=True, text=True)
+    return p.returncode, p.stdout, p.stderr
+
+
+def fetch_ytdlp(url, vid, lang, job, attempt, dest_dir: Path):
+    import subprocess
+    yt = "/workspace/usage/ytdlp-venv/bin/yt-dlp"
+    proxy = f"http://{job}-tr{attempt}:x@{GATEWAY.split('://', 1)[-1]}"
+    cmd = [yt, "--proxy", proxy, "--js-runtimes", f"deno:/usr/local/bin/deno",
+           "--write-auto-subs", "--write-subs", "--sub-langs", f"{lang}.*",
+           "--skip-download", "-o", str(dest_dir / "subs.%(ext)s"), url]
+    env = os.environ.copy()
+    for k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        env.pop(k, None)
+    p = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    sys.stderr.write(re.sub(r"http://[^@\s]+@", "http://<job>@", p.stderr or ""))
+    blocked = "Sign in to confirm" in (p.stderr or "") or "not a bot" in (p.stderr or "")
+    vtts = list(dest_dir.glob("subs*.vtt")) + list(dest_dir.glob("*.vtt"))
+    return (0 if vtts else (2 if blocked else p.returncode)), vtts
+
+
+def main():
+    url, lang, job, out = parse(sys.argv[1:])
+    vid = video_id(url)
+    if not vid:
+        die("could not parse a YouTube video id")
+    url = f"https://www.youtube.com/watch?v={vid}"
+    cdir = CACHE / vid
+    cdir.mkdir(parents=True, exist_ok=True)
+    cached_json = cdir / "transcript.json"
+    cached_vtt = cdir / "transcript.en.vtt"
+    if cached_json.exists() and cached_json.stat().st_size > 20:
+        data = json.loads(cached_json.read_text())
+        print(f"yt-transcript: cache hit {cached_json}")
+        for s in data.get("snippets") or []:
+            print(f"[{float(s['start']):7.1f}] {s['text']}")
+        if out:
+            Path(out).write_text(cached_vtt.read_text() if cached_vtt.exists() else json.dumps(data, indent=2))
+        return
+
+    last_err = ""
+    for attempt in range(1, MAX_TRIES + 1):
+        proxy = f"http://{job}-t{attempt}:x@{GATEWAY.split('://', 1)[-1]}"
+        rc, stdout, stderr = fetch_api(vid, lang, proxy)
+        if rc == 0 and stdout.strip():
+            data = json.loads(stdout)
+            cached_json.write_text(json.dumps(data, indent=2))
+            vtt = to_vtt(data["snippets"], vid)
+            cached_vtt.write_text(vtt)
+            if out:
+                dest = Path(out)
+                if dest.suffix.lower() == ".json":
+                    dest.write_text(json.dumps(data, indent=2))
+                else:
+                    dest.write_text(vtt)
+            for s in data["snippets"]:
+                print(f"[{float(s['start']):7.1f}] {s['text']}")
+            print(f"yt-transcript: {len(data['snippets'])} snippets, saved {cached_vtt}", file=sys.stderr)
+            return
+        last_err = (stderr or "").strip().splitlines()[-1] if stderr else f"rc={rc}"
+        if rc == 3:
+            die("transcripts are disabled on this video")
+        if rc == 2:
+            print(f"yt-transcript: IP blocked, switching session (try {attempt}/{MAX_TRIES})", file=sys.stderr)
+            continue
+        # other error: try yt-dlp fallback once this session, then retry
+        print(f"yt-transcript: api failed ({last_err}), trying yt-dlp subs", file=sys.stderr)
+        rc2, vtts = fetch_ytdlp(url, vid, lang, job, attempt, cdir)
+        if vtts:
+            text = vtts[0].read_text(errors="replace")
+            cached_vtt.write_text(text)
+            if out:
+                Path(out).write_text(text)
+            print(text)
+            print(f"yt-transcript: saved {vtts[0]}", file=sys.stderr)
+            return
+        if rc2 == 2:
+            print(f"yt-transcript: yt-dlp bot check, switching session (try {attempt}/{MAX_TRIES})", file=sys.stderr)
+            continue
+    die(f"failed after {MAX_TRIES} sessions ({last_err})")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,11 @@
+---
+name: lab-stock-and-sfx
+description: Stock stills/video (stock-search) and sound effects (sfx)
+---
+
+# Stock media and sound effects
+
+(Moved word for word from AGENTS.md lines 84-85. These are still your rules; they just load on demand.)
+
+  - **Stock stills and video:** `stock-search "query" [--type video|image|all] [--download]`. Pixabay Content License is recorded on each result. Needs `PIXABAY_API_KEY`. Load `pixabay-stock`. Pixabay has no music API.
+  - **Sound effects:** `sfx gen "description" -o out.mp3` (ElevenLabs, paid) or `sfx search "query"` (Freesound, needs `FREESOUND_API_KEY`). Load the `sfx` skill. `sfx --check` shows which backends are configured.

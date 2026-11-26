@@ -1,0 +1,167 @@
+[
+ {
+  "id": 0,
+  "name": "delta-0",
+  "city": "Zürich",
+  "score": -977.827,
+  "active": false,
+  "delta": 937636872066,
+  "note": null,
+  "tags": [
+   "z",
+   "z",
+   "x"
+  ]
+ },
+ {
+  "id": 1,
+  "name": "delta-1",
+  "city": "Montréal",
+  "score": -498.722,
+  "active": true,
+  "delta": -387364228399,
+  "tags": [
+   "x",
+   "y",
+   "x",
+   "x"
+  ]
+ },
+ {
+  "id": 2,
+  "name": "beta-2",
+  "city": "Montréal",
+  "score": -381.642,
+  "active": true,
+  "delta": 954460732987,
+  "tags": [
+   "y",
+   "ünï"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    1,
+    false,
+    null
+   ]
+  }
+ },
+ {
+  "id": 3,
+  "name": "delta-3",
+  "city": "Lagos",
+  "score": -49.811,
+  "active": true,
+  "delta": -689835989699,
+  "note": null,
+  "tags": [
+   "y"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    1,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 4,
+  "name": "beta-4",
+  "city": "Reykjavík",
+  "score": -8.968,
+  "active": true,
+  "delta": 544180634189,
+  "tags": [],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    5,
+    false,
+    null
+   ]
+  }
+ },
+ {
+  "id": 5,
+  "name": "gamma-5",
+  "city": "Austin",
+  "score": -677.81,
+  "active": false,
+  "delta": -283559887450,
+  "tags": [
+   "z",
+   "y"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    0
+   ]
+  }
+ },
+ {
+  "id": 6,
+  "name": "delta-6",
+  "city": "Zürich",
+  "score": 209.198,
+  "active": true,
+  "delta": -286444610115,
+  "tags": [
+   "ünï",
+   "z",
+   "z"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    -5,
+    false
+   ]
+  }
+ },
+ {
+  "id": 7,
+  "name": "beta-7",
+  "city": "Tōkyō",
+  "score": -862.608,
+  "active": false,
+  "delta": 75077251610,
+  "tags": [
+   "x",
+   "z"
+  ]
+ },
+ {
+  "id": 8,
+  "name": "alpha-8",
+  "city": "Lagos",
+  "score": 354.46,
+  "active": true,
+  "delta": 252686713976,
+  "tags": [],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    1,
+    false,
+    null,
+    0.033018
+   ]
+  }
+ },
+ {
+  "id": 9,
+  "name": "beta-9",
+  "city": "São Paulo",
+  "score": 679.502,
+  "active": true,
+  "delta": 66456677962,
+  "tags": [
+   "x",
+   "ünï"
+  ]
+ }
+]

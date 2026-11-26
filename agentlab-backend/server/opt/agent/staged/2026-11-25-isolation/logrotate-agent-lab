@@ -1,0 +1,34 @@
+# Agent Lab 2026-11-25: keep Agent Lab's own logs bounded (daily check by logrotate.timer).
+# copytruncate: the writers (cron jobs, chrome-keeper, x11vnc, job-browser) keep their files open.
+/var/log/agent-lab-*.log {
+    su root syslog
+    weekly
+    maxsize 20M
+    rotate 4
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
+/opt/agent/desktop/*.log {
+    weekly
+    maxsize 20M
+    rotate 4
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}
+/opt/agent/workspace/desktop/*.log /opt/agent/workspace/desktop/jobs/*.log {
+    su agentlab agentlab
+    weekly
+    maxsize 20M
+    rotate 4
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

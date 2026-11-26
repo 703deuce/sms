@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""plan-check: planning-stage check. Run after writing log/plan.md and BEFORE any scene building.
+
+plan.md must hold a table with one row per scene and these columns: scene/time, what is on screen, engine(s), why (the reason
+this engine fits the scene). The check passes when there are at least 2 scene rows and every row names its engine(s) and gives a
+reason of 4+ words. The first failing run is sent back (exit 1) with what to fix; a second failing run is flagged and let through.
+Usage: plan-check [path/to/plan.md]   (default log/plan.md in the current job folder)"""
+import json, os, re, sys, time
+
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+JOB_RE = re.compile(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)')
+EMPTY = {'', '-', '--', '—', '?', 'tbd', 'n/a', 'na', 'none', 'todo', '...'}
+
+
+def job_dir():
+    m = JOB_RE.match(os.getcwd())
+    return m.group(1) if m else os.getcwd()
+
+
+def cells(line):
+    return [c.strip() for c in line.strip().strip('|').split('|')]
+
+
+def tables(text):
+    L, out, i = text.split('\n'), [], 0
+    while i < len(L):
+        if L[i].lstrip().startswith('|') and i + 1 < len(L) and re.match(r'^\s*\|[\s:\-|]+\|\s*$', L[i + 1]):
+            head, rows = cells(L[i]), []
+            i += 2
+            while i < len(L) and L[i].lstrip().startswith('|'):
+                rows.append(cells(L[i]))
+                i += 1
+            out.append((head, rows))
+        else:
+            i += 1
+    return out
+
+
+def evaluate(text):
+    probs, rows_ok, engines = [], 0, set()
+    for head, rows in tables(text):
+        low = [h.lower() for h in head]
+        ei = next((k for k, h in enumerate(low) if 'engine' in h), None)
+        wi = next((k for k, h in enumerate(low) if 'why' in h or 'reason' in h), None)
+        if ei is None:
+            continue
+        if wi is None:
+            probs.append('the scene table has an engine column but no "why" column (the reason that engine fits the scene)')
+            continue
+        for r in rows:
+            if len(r) <= max(ei, wi):
+                continue
+            label = r[0][:30] or '?'
+            eng, why = r[ei], r[wi]
+            if eng.lower() in EMPTY:
+                probs.append(f'scene {label}: no engine named')
+            elif len(why.split()) < 4 or why.lower() in EMPTY:
+                probs.append(f'scene {label}: reason is missing or too short (4+ words on why {eng[:30]} fits this scene)')
+            else:
+                rows_ok += 1
+                for e in re.split(r'[+,/&;]| and ', eng.lower()):
+                    if e.strip():
+                        engines.add(e.strip(' *`'))
+        break
+    else:
+        probs.append('no scene table found: add a markdown table with columns scene/time | on screen | engine(s) | why this engine')
+    if not probs and rows_ok < 2:
+        probs.append(f'only {rows_ok} scene row(s) with engine and reason; plan every scene')
+    return probs, rows_ok, sorted(engines)
+
+
+def main():
+    jd = job_dir()
+    path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(jd, 'log', 'plan.md')
+    state_p = os.path.join(jd, 'log', 'plan-check.json')
+    try:
+        st = json.load(open(state_p))
+    except Exception:
+        st = {'attempts': 0, 'history': []}
+    if not os.path.isfile(path):
+        probs, n, engs = [f'{path} does not exist: write it first'], 0, []
+    else:
+        probs, n, engs = evaluate(open(path, errors='replace').read())
+    st['attempts'] += 1
+    verdict = 'pass' if not probs else ('send_back' if st['attempts'] == 1 or not any(h['verdict'] == 'send_back' for h in st['history']) else 'flag')
+    st['history'].append({'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'verdict': verdict, 'scenes_ok': n, 'problems': probs, 'engines': engs})
+    st['verdict'] = 'pass' if verdict == 'pass' else ('flag' if verdict == 'flag' else 'send_back')
+    os.makedirs(os.path.dirname(state_p), exist_ok=True)
+    json.dump(st, open(state_p, 'w'), indent=1)
+    if verdict == 'pass':
+        print(f'PLAN OK: {n} scenes, engines: {", ".join(engs)}. Build may start.')
+        if len(engs) < 3:
+            print('Note: Rick\'s variety rule asks for at least 3 engines in a film (one the last film did not use); revisit if that does not fit this video.')
+    elif verdict == 'send_back':
+        print('[Plan check] SENT BACK. Fix log/plan.md, then run plan-check again BEFORE building anything:')
+        for p in probs:
+            print('- ' + p)
+        sys.exit(1)
+    else:
+        print('PLAN FLAGGED (still incomplete after the one send-back; recorded, build may start):')
+        for p in probs:
+            print('- ' + p)
+
+
+if __name__ == '__main__':
+    main()

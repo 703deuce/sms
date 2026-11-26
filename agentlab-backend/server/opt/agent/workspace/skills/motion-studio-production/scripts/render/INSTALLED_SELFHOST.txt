@@ -1,0 +1,3 @@
+Installed PR #1271 (feat/self-hosted-motion-render-20261120 @ 24360f195) render scripts on Fri Nov 20 09:35:35 EST 2026.
+Old Modal scripts: /workspace/motion_kit/modal.bak-modal-20261120
+Revert: rm -rf /workspace/motion_kit/modal && cp -a /workspace/motion_kit/modal.bak-modal-20261120 /workspace/motion_kit/modal

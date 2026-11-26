@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""gen-video: text-to-video or image-to-video through KIE (paid; never retried automatically).
+
+usage: gen-video "prompt" [--image FIRST_FRAME] [--last LAST_FRAME] [--ref IMG ...] [--duration 5] [--res 480P|720P|1080P]
+                 [--aspect 16:9] [--no-audio] [--seed N] [-o out.mp4] [--model wan/3-0-video] [--timeout 1200]
+       gen-video --task TASK_ID [-o out.mp4]       fetch a finished task again (no new charge)
+  --image   image-to-video: start from this frame (file or URL); --last optional end frame
+  --ref     reference images (call them Image1, Image2... in the prompt), repeatable
+  --duration seconds, 2-30 (billed per output second); --res 720P default (480P cheapest)
+  --aspect  16:9 (default), 9:16, 1:1, 4:3, 3:4, adaptive. Audio is on unless --no-audio.
+  default output: <job folder>/media/vid-<time>.mp4. Prints JSON: paths, task_id, credits_used, cost_usd.
+"""
+import argparse, sys
+sys.path.insert(0, '/opt/tools')
+import keyclient as K
+
+ap = argparse.ArgumentParser(add_help=False)
+ap.add_argument('prompt', nargs='?')
+ap.add_argument('--image')
+ap.add_argument('--last')
+ap.add_argument('--ref', action='append', default=[])
+ap.add_argument('--duration', type=int, default=5)
+ap.add_argument('--res', default='720P')
+ap.add_argument('--aspect', default='16:9')
+ap.add_argument('--no-audio', action='store_true')
+ap.add_argument('--seed', type=int)
+ap.add_argument('-o', '--out')
+ap.add_argument('--model', default='wan/3-0-video')
+ap.add_argument('--timeout', type=int, default=1200)
+ap.add_argument('--task')
+ap.add_argument('-h', '--help', action='store_true')
+a = ap.parse_args()
+if a.help or not (a.prompt or a.task):
+    print(__doc__); sys.exit(0)
+path = K.out_path(a.out, 'vid', 'mp4')
+before = K.credits()
+if a.task:
+    tid = a.task
+else:
+    inp = {'prompt': a.prompt, 'duration': a.duration, 'resolution': a.res.upper(), 'aspect_ratio': a.aspect,
+           'audio': not a.no_audio}
+    if a.image:
+        inp['first_frame_url'] = K.upload(a.image)
+    if a.last:
+        inp['last_frame_url'] = K.upload(a.last)
+    if a.ref:
+        inp['reference_image_urls'] = [K.upload(r) for r in a.ref]
+    if a.seed is not None:
+        inp['seed'] = a.seed
+    tid = K.create(a.model, inp)
+    print(f"task {tid} ({a.model}) submitted; videos take a few minutes", file=sys.stderr)
+rec = K.wait(tid, a.timeout)
+K.finish('gen-video', a.model, tid, rec, None if a.task else before, path,
+         {'duration': a.duration, 'res': a.res, 'mode': 'i2v' if a.image else 't2v'})

@@ -1,0 +1,109 @@
+{
+ "projects": {
+  "Atlas": {
+   "owner": "Priya Shah",
+   "budget": 781000,
+   "deadline": "2026-10-22",
+   "status": "active",
+   "deadline_slips": 0
+  },
+  "Beacon": {
+   "owner": "Priya Shah",
+   "budget": 581000,
+   "deadline": "2026-11-24",
+   "status": "cancelled",
+   "deadline_slips": 2
+  },
+  "Cobalt": {
+   "owner": "Marcus Hill",
+   "budget": 1047000,
+   "deadline": "2026-08-29",
+   "status": "cancelled",
+   "deadline_slips": 0
+  },
+  "Delta": {
+   "owner": "Tom Becker",
+   "budget": 381000,
+   "deadline": "2027-02-18",
+   "status": "active",
+   "deadline_slips": 3
+  },
+  "Ember": {
+   "owner": "Sam Rivera",
+   "budget": 1049000,
+   "deadline": "2026-08-20",
+   "status": "on hold",
+   "deadline_slips": 2
+  },
+  "Falcon": {
+   "owner": "Priya Shah",
+   "budget": 131000,
+   "deadline": "2026-09-28",
+   "status": "active",
+   "deadline_slips": 0
+  },
+  "Garnet": {
+   "owner": "Nadia Petrova",
+   "budget": 685000,
+   "deadline": "2027-02-22",
+   "status": "active",
+   "deadline_slips": 1
+  },
+  "Harbor": {
+   "owner": "Jordan Blake",
+   "budget": 850000,
+   "deadline": "2026-06-16",
+   "status": "cancelled",
+   "deadline_slips": 0
+  },
+  "Iris": {
+   "owner": "Priya Shah",
+   "budget": 616000,
+   "deadline": "2026-06-05",
+   "status": "active",
+   "deadline_slips": 1
+  },
+  "Juniper": {
+   "owner": "Priya Shah",
+   "budget": 346000,
+   "deadline": "2027-03-30",
+   "status": "active",
+   "deadline_slips": 2
+  },
+  "Kestrel": {
+   "owner": "Elena Rossi",
+   "budget": 1131000,
+   "deadline": "2026-06-18",
+   "status": "on hold",
+   "deadline_slips": 0
+  },
+  "Lumen": {
+   "owner": "Lena Ortiz",
+   "budget": 403000,
+   "deadline": "2027-02-18",
+   "status": "active",
+   "deadline_slips": 2
+  },
+  "Meridian": {
+   "owner": "Priya Shah",
+   "budget": 351000,
+   "deadline": "2026-07-22",
+   "status": "active",
+   "deadline_slips": 1
+  },
+  "Nimbus": {
+   "owner": "Elena Rossi",
+   "budget": 147000,
+   "deadline": "2026-08-16",
+   "status": "completed",
+   "deadline_slips": 0
+  }
+ },
+ "total_budget_active_usd": 3694000,
+ "n_cancelled": 3,
+ "most_deadline_slips": "Delta",
+ "projects_owned_by_most_common_owner": null,
+ "top_owner": "Priya Shah",
+ "top_owner_count": 6,
+ "latest_deadline_project": "Juniper"
+}

@@ -1,0 +1,66 @@
+[
+ {
+  "id": 0,
+  "name": "beta-0",
+  "city": "Montréal",
+  "score": -108.808,
+  "active": true,
+  "delta": -224
+ },
+ {
+  "id": 1,
+  "name": "alpha-1",
+  "city": "Montréal",
+  "score": 824.507,
+  "active": true,
+  "delta": -102
+ },
+ {
+  "id": 2,
+  "name": "alpha-2",
+  "city": "São Paulo",
+  "score": 383.918,
+  "active": false,
+  "delta": -394
+ },
+ {
+  "id": 3,
+  "name": "alpha-3",
+  "city": "Austin",
+  "score": -425.669,
+  "active": true,
+  "delta": 145
+ },
+ {
+  "id": 4,
+  "name": "beta-4",
+  "city": "Lagos",
+  "score": 2.294,
+  "active": false,
+  "delta": 341
+ },
+ {
+  "id": 5,
+  "name": "alpha-5",
+  "city": "Austin",
+  "score": 219.261,
+  "active": true,
+  "delta": -422
+ },
+ {
+  "id": 6,
+  "name": "gamma-6",
+  "city": "Montréal",
+  "score": -811.481,
+  "active": true,
+  "delta": -489
+ },
+ {
+  "id": 7,
+  "name": "beta-7",
+  "city": "Reykjavík",
+  "score": -823.089,
+  "active": true,
+  "delta": 474
+ }
+]

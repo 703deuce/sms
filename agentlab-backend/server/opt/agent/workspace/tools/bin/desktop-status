@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""desktop-status: show whether the virtual desktop and any sign-in handoff are up."""
+import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import api, die
+
+def main():
+    if sys.argv[1:] and sys.argv[1] in ("-h", "--help"):
+        print(__doc__); return
+    try:
+        rec, _, _ = api("GET", "/status")
+    except Exception as e:
+        die("desktop-status", str(e))
+    rec = {k: v for k, v in rec.items() if k not in ("view_url", "pin")}  # Rick uses the page's Live screen
+    print(json.dumps(rec, indent=2))
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""view: put images straight into YOUR OWN context (for vision-capable main models).
+
+  view IMAGE [IMAGE ...]           one or more images (png/jpg/webp/gif/bmp)
+  view DIR                         a folder of frames (sampled evenly, sorted by name)
+  view VIDEO --fps N               frames from a video at N per second (--start S --end E to limit, seconds or hh:mm:ss)
+  options: --max K (images per call, default 8, hard cap 12)   --note "what you are checking"
+
+The images arrive as the next message in your context (marked "[view]"), right after this
+command finishes. Do not call finish in the same step; look at them on your next step.
+Text-only models can't see them: `view` says so and you use `look` / `watch-media` instead.
+"""
+import argparse, json, os, re, subprocess, sys, tempfile, time
+
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+IMG = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp')
+VID = ('.mp4', '.mov', '.m4v', '.webm', '.mkv', '.avi')
+QUEUE = '/workspace/runs/view-queue'
+STATUS = '/workspace/runs/vision'
+HARD_CAP = 12
+
+
+def job_root(path):
+    """Innermost /workspace/jobs/<uuid>(/helpers/<uuid>)* that contains path; its last uuid is the conversation id."""
+    m = re.match(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)', os.path.realpath(path))
+    return m.group(1) if m else None
+
+
+def die(msg, code=2):
+    print(msg, file=sys.stderr)
+    sys.exit(code)
+
+
+def vision_status(cid):
+    try:
+        return json.load(open(os.path.join(STATUS, cid + '.json')))
+    except Exception:
+        return None
+
+
+def prep(src, outdir, i):
+    """Downscale to <=1280 px on the long side, JPEG, inside the job folder."""
+    dst = os.path.join(outdir, f'{i:02d}_{re.sub(r"[^A-Za-z0-9._-]", "_", os.path.basename(src))[:60]}.jpg')
+    r = subprocess.run(['ffmpeg', '-loglevel', 'error', '-y', '-i', src, '-frames:v', '1',
+                        '-vf', "scale='if(gt(iw,ih),min(1280,iw),-2)':'if(gt(iw,ih),-2,min(1280,ih))'", '-q:v', '3', dst],
+                       capture_output=True, text=True)
+    if r.returncode or not os.path.exists(dst):
+        die(f'view: could not read image {src}: {r.stderr.strip()[:200]}')
+    return dst
+
+
+def main():
+    if any(a in ('-h', '--help') for a in sys.argv[1:]):
+        print(__doc__.strip()); return
+    ap = argparse.ArgumentParser(add_help=False)
+    ap.add_argument('paths', nargs='+')
+    ap.add_argument('--fps', type=float)
+    ap.add_argument('--start'); ap.add_argument('--end')
+    ap.add_argument('--max', type=int, default=8)
+    ap.add_argument('--note', default='')
+    a = ap.parse_args()
+    k = max(1, min(a.max, HARD_CAP))
+
+    root = job_root(os.getcwd())
+    if not root:
+        die('view: run this from inside your job folder (/workspace/jobs/<conversation id>/...).')
+    cid = re.findall(UUID, root)[-1]
+    st = vision_status(cid)
+    if st and not st.get('vision'):
+        die(f"view: your model ({st.get('model')}) can't see images in this conversation ({st.get('reason')}). "
+            'Use `look` for images/frames and `watch-media` for whole video/audio instead.', 3)
+
+    stamp = time.strftime('%Y%m%d-%H%M%S')
+    outdir = os.path.join(root, 'log', 'view', stamp)
+    os.makedirs(outdir, exist_ok=True)
+    srcs = []
+    for p in a.paths:
+        p = os.path.abspath(p)
+        if os.path.isdir(p):
+            fs = sorted(os.path.join(p, f) for f in os.listdir(p) if f.lower().endswith(IMG))
+            if len(fs) > k:  # even sample across the folder
+                fs = [fs[round(i * (len(fs) - 1) / (k - 1))] if k > 1 else fs[0] for i in range(k)]
+            srcs += fs
+        elif p.lower().endswith(VID):
+            if not a.fps:
+                die('view: for a video give --fps N (e.g. --fps 1), optionally --start/--end. For whole-video judgments with sound use watch-media.')
+            fd = os.path.join(outdir, 'frames'); os.makedirs(fd, exist_ok=True)
+            cmd = ['ffmpeg', '-loglevel', 'error', '-y']
+            if a.start: cmd += ['-ss', a.start]
+            if a.end: cmd += ['-to', a.end]
+            cmd += ['-i', p, '-vf', f'fps={a.fps}', os.path.join(fd, 'f_%04d.png')]
+            r = subprocess.run(cmd, capture_output=True, text=True)
+            fs = sorted(os.path.join(fd, f) for f in os.listdir(fd))
+            if r.returncode or not fs:
+                die(f'view: could not extract frames from {p}: {r.stderr.strip()[:200]}')
+            if len(fs) > k:
+                print(f'view: {len(fs)} frames at {a.fps} fps; sending {k} evenly spaced (use --start/--end or a lower --fps to choose).')
+                fs = [fs[round(i * (len(fs) - 1) / (k - 1))] if k > 1 else fs[0] for i in range(k)]
+            srcs += fs
+        elif os.path.isfile(p) and p.lower().endswith(IMG):
+            srcs.append(p)
+        else:
+            die(f'view: not an image, frames folder or video: {p}')
+    if not srcs:
+        die('view: no images found.')
+    if len(srcs) > k:
+        print(f'view: {len(srcs)} images given; sending the first {k} (cap {HARD_CAP} per call).')
+        srcs = srcs[:k]
+    sent = [prep(s, outdir, i) for i, s in enumerate(srcs, 1)]
+    labels = [os.path.relpath(s, root) if s.startswith(root) else s for s in srcs]
+    req = {'conversation_id': cid, 'images': sent, 'labels': labels, 'note': a.note[:500], 'created': time.time()}
+    os.makedirs(QUEUE, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=QUEUE, prefix='.tmp-')
+    with os.fdopen(fd, 'w') as f:
+        json.dump(req, f)
+    os.chmod(tmp, 0o644)
+    os.rename(tmp, os.path.join(QUEUE, f'{cid}-{stamp}-{os.getpid()}.json'))
+    print(f'Queued {len(sent)} image(s) for your own eyes: ' + ', '.join(labels))
+    print('They arrive as the next message in your context (starts with "[view]", from this tool, not from Rick), '
+          'right after this command finishes. Do not finish in this step; look at them next.')
+    if not st:
+        print('(Vision status for this conversation is not known yet; if no images arrive, your model is text-only: use look.)')
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,44 @@
+---
+name: lab-video-minimal
+description: Minimal video brief and the motion engines on this box
+when_to_use: Any job whose deliverable is a video: a film or documentary made from scratch, an edit of supplied footage, clips, motion graphics, captions, sound, render, or a revision of one. Not for still images, charts, web pages or documents.
+---
+
+# Making a video
+
+You are the producer. Decide what the best version of this specific video is and make it. Story, look, number of scenes, which engine fits which scene (mix several; do not use one engine for everything), all of it is your call. The request and its brief win over anything here.
+
+## The job
+1. Read the request and its sources. Write the facts you will use (each with its source), a script if there is narration, and `log/plan.md`: scenes with timing, what is on screen, and the engine(s) for each scene.
+2. Voiceover with `tts "text" -o out.mp3 [--voice id]` (ElevenLabs flash). Word timings with `transcribe file -o out.json`. Both CLIs already hold their keys (env names ELEVENLABS_API_KEY, DEEPGRAM_API_KEY; never print env values).
+3. Prepare footage with ffmpeg, build the scenes with the engines below, render.
+4. Check what you made: step through stills across the whole video with `agent_view` (text readable, nothing over faces, no overflow, no black frames), `ffprobe` for duration, size and codecs, ffmpeg `ebur128` for loudness. Fix only what fails.
+5. Deliver into `out/` of your job folder. Defaults unless the request says otherwise: `out/final.mp4`, H.264 + AAC, 854x480, 30 fps, -14 LUFS integrated (`loudnorm`), exactly the requested length, `-movflags +faststart`; only the requested files in `out/`. Final reply: what you made, the path, engines actually used, measured duration/size/LUFS, and `usage --conversation` TOTAL.
+
+## Box facts
+- 4 CPU cores, no GPU: renders are slow, so look at stills before rendering the whole film.
+- Your job folder is your working dir (`/workspace/jobs/...`). Use the footage the request gives you.
+- JS engines share one project at `/opt/engines/js` (use `NODE_PATH=/opt/engines/js/node_modules` or symlink its node_modules).
+- Browser-based engines (anything in a web page): open the page with puppeteer (`require('/opt/engines/js/node_modules/puppeteer')`, `executablePath: '/usr/bin/chromium'`, args `--no-sandbox`), set the time yourself, screenshot each frame, encode with ffmpeg.
+- Fonts: `fc-list`; display fonts in `/usr/share/fonts/truetype/transovo` (Anton, Montserrat Black, Rubik, Gabarito, DM Serif Display and more).
+
+## Engines (best at | where and how)
+- **FFmpeg** (`ffmpeg`): trims, crops, blurred-fill for vertical footage, grade, grain, speed ramps, sidechain ducking, loudnorm, final mux and encode.
+- **Remotion** (React to mp4, version 4.0.528): kinetic type, springs, lower thirds, beat-synced promos. `npx remotion render src/index.tsx Comp out.mp4 --browser-executable=/usr/bin/chromium`.
+- **HyperFrames** (HTML/CSS + GSAP to mp4): editorial motion graphics, infographics, data cards. `env -u PUPPETEER_EXECUTABLE_PATH -u CHROME_BIN npx --prefix /opt/engines/js hyperframes render DIR -o out.mp4`; source and manual in `/opt/engines/repos/hyperframes`.
+- **Cinematic Skill** (Python, skia + moderngl): narrated documentaries, one camera moving over a designed world of photos, documents, maps, evidence boards, tickers; word-anchored timing. Scripts in `/opt/engines/repos/cinematic-skill/skills/cinematic-film/scripts` (`new_project.py`, `prep_assets.py`, `render.py --project P --size WxH --out F`); read its `skills/cinematic-film/SKILL.md` first.
+- **Dolly** (Remotion kit): product, launch and app-demo videos, screen recordings floating in 3D, camera moves. `/opt/engines/repos/dolly`.
+- **Claude Remotion Skill**: promos, beat-synced edits, motion typography, grain. `/opt/engines/repos/claude-remotion-skill`.
+- **Open 3D Skills** (three.js): cinematic 3D scenes, landmarks, product reveals, exploded views. `/opt/engines/repos/open-3d-skills`.
+- **three.js + Theatre.js**: 3D type and photo cards in space, camera choreography, depth of field, bloom. In `/opt/engines/js`.
+- **GSAP + SVG**: per-character/word/line text reveals, scramble, stroke draw-on, shape morphs, lower thirds. In `/opt/engines/js`.
+- **PixiJS 8**: particles, glow, displacement, glitch, CRT/film filters, shatter effects. In `/opt/engines/js`.
+- **p5.js**: generative backgrounds, halftone/dither, noise fields, hand-drawn wobble. In `/opt/engines/js`.
+- **D3**: real data as graphics (bar races, line charts, networks, timelines). In `/opt/engines/js`; compute each frame from t, no timers.
+- **MapLibre GL JS + deck.gl**: real maps, 3D camera flights, arcs, route lines. In `/opt/engines/js`.
+- **Motion Canvas** and **Revideo**: programmatic vector/diagram scenes (Revideo renders headless from Node). In `/opt/engines/js`.
+- **Rive**, **Lottie/dotLottie**: designer-made animated icons, accents, bursts. In `/opt/engines/js`.
+- **Skia (CanvasKit in JS, skia-python in Python)**: shaped text with any font, variable-font motion, SkSL shaders, procedural backgrounds.
+- **Manim** (Python): math and logic explainers, growing graphs, morphing equations.
+- **rembg** (Python `from rembg import remove`) and **mediapipe**: cut a person out of a frame so type can sit behind them; **OpenCV** (Python): tracking, stabilizing, optical flow; **scenedetect**: shot detection.
+- Not installed: SAM2, Natron.

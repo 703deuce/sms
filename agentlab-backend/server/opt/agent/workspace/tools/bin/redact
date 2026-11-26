@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""redact: strip API keys and known secret values from text.
+
+usage: redact                 # filter stdin to stdout
+       redact FILE...         # rewrite each file in place (keeps a .bak next to it)
+       redact --stdout FILE   # print the redacted file to stdout
+
+Never prints the secret values themselves.
+"""
+import os, sys, shutil
+
+# Prefer the host ops copy, then the same directory (if shipped together).
+for p in ("/opt/agent/ops", os.path.dirname(os.path.abspath(__file__))):
+    if os.path.isfile(os.path.join(p, "redactlib.py")):
+        sys.path.insert(0, p)
+        break
+
+try:
+    from redactlib import redact_text
+except ImportError:
+    # Minimal fallback if ops is not mounted in the container: pattern-only.
+    import re
+    def redact_text(text):
+        text = re.sub(r"sk-[A-Za-z0-9_-]{16,}", "***REDACTED***", text)
+        text = re.sub(r"AIza[0-9A-Za-z_-]{20,}", "***REDACTED***", text)
+        text = re.sub(r"(?i)(api[_-]?key|token|secret|bearer)(['\"]?\s*[:=]\s*['\"]?)[A-Za-z0-9_\-.]{16,}",
+                      r"\1***REDACTED***", text)
+        return text
+
+
+def die(msg):
+    print(f"redact: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    stdout_one = False
+    if args and args[0] == "--stdout":
+        stdout_one = True
+        args = args[1:]
+    if not args:
+        text = sys.stdin.read()
+        sys.stdout.write(redact_text(text))
+        return
+    for path in args:
+        if not os.path.isfile(path):
+            die(f"not a file: {path}")
+        raw = open(path, encoding="utf-8", errors="replace").read()
+        new = redact_text(raw)
+        if stdout_one:
+            sys.stdout.write(new)
+            continue
+        if new == raw:
+            print(f"{path}: clean")
+            continue
+        bak = path + ".bak"
+        if not os.path.exists(bak):
+            shutil.copy2(path, bak)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+        print(f"{path}: redacted")
+
+
+if __name__ == "__main__":
+    main()

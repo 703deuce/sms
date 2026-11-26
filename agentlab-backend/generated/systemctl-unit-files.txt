@@ -1,0 +1,14 @@
+agent-lab-anthropic-shim.service enabled enabled
+agent-lab-browser-heal.service   static  -
+agent-lab-chrome.service         enabled enabled
+agent-lab-desktop.service        enabled enabled
+agent-lab-egress.service         enabled enabled
+agent-lab-embed.service          enabled enabled
+agent-lab-helper.service         enabled enabled
+agent-lab-jobbrowsers.service    enabled enabled
+agent-lab-keys.service           enabled enabled
+agent-lab-runner.service         enabled enabled
+agent-lab-telegram.service       enabled enabled
+agent-lab-vaultd.service         enabled enabled
+agentlab-connectors.service      enabled enabled
+agent-lab-browser-heal.timer     enabled enabled

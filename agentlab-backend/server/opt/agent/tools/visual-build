@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+"""Write visual / front-end source (Remotion, HyperFrames, pages, UI) via a short Opus call.
+
+Haiku must not write this code and must not create a draft. Call `visual-build "task"`
+from the job folder, or let agent-guard start it when a write is intercepted.
+Opus writes the files from scratch (plan, assets, VO/script timeline).
+The API key stays on the host key proxy.
+"""
+import argparse, json, os, re, sys, time, subprocess
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, '/opt/tools')
+try:
+    import runlib as R
+except Exception:
+    R = None
+
+TOOLS = os.path.dirname(os.path.realpath(__file__))
+STATE_NAME = 'visual-build.json'
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+JOB_RE = re.compile(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)')
+VISUAL_EXT = r'(?:tsx|jsx|ts|js|mjs|cjs|css|scss|sass|less|html|htm|vue|svelte)'
+MEDIA_EXT = {'.mp4', '.webm', '.mov', '.mkv', '.m4v', '.wav', '.mp3', '.aac', '.m4a', '.flac', '.ogg'}
+CONTEXT_DOCS = (
+    'log/opus-plan.md', 'log/goal.md', 'log/brief.md',
+    'research/script.txt', 'research/facts.md', 'research/timeline.md',
+    'audio/script.txt', 'audio/timeline.txt',
+)
+SKIP_WALK_DIRS = {'node_modules', '.git', 'compiled', '__pycache__'}
+
+SYSTEM = (
+    'You write visual and front-end source from scratch for a cheaper worker that will only run the render. '
+    'Write complete, production-ready files using the plan, the available assets, and the voiceover or script timeline. '
+    'Do not revise, critique, or complete a draft — there is no Haiku draft. Invent the composition yourself. '
+    'Do not write essays or explain changes. Output only one or more file blocks in this exact format:\n\n'
+    'FILE: relative/path/from/job/root.tsx\n'
+    '```\n'
+    '...full file contents...\n'
+    '```\n\n'
+    'Paths must be relative to the job folder. Overwrite each file completely. No tools, no shell, no preamble.'
+)
+
+RETRY_PREFIX = (
+    'Your previous reply was not in the required format. Re-output ONLY one or more file blocks, '
+    'no essay and no explanation, in this exact format:\n\n'
+    'FILE: relative/path/from/job/root\n'
+    '```\n'
+    '...full file contents...\n'
+    '```\n\n'
+)
+
+
+def die(msg, code=1):
+    print(f'visual-build: {msg}', file=sys.stderr)
+    sys.exit(code)
+
+
+def current_job_dir(explicit=None, cwd=None):
+    """Innermost job or helper folder. Never collapse a helper to its parent."""
+    def from_path(p):
+        if not p:
+            return None
+        path = os.path.realpath(p) + '/'
+        # container path
+        m = JOB_RE.match(path)
+        if m:
+            return m.group(1)
+        # host path /opt/agent/workspace/jobs/...
+        m = re.match(rf'^(/opt/agent/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)', path)
+        if m:
+            # tools inside the container want /workspace/...
+            return m.group(1).replace('/opt/agent/workspace/', '/workspace/', 1)
+        if R:
+            cid, job = R.job_from_cwd(p)
+            return job
+        return None
+
+    cwd = os.path.realpath(cwd or os.getcwd())
+    here = from_path(cwd)
+    exp = from_path(explicit) if explicit else None
+    if here and exp:
+        if here == exp or here.startswith(exp + '/'):
+            return here
+        if exp.startswith(here + '/'):
+            return exp
+    return here or exp
+
+
+def job_and_cid(explicit=None):
+    job = current_job_dir(explicit)
+    ids = re.findall(UUID, job or '')
+    return (ids[-1] if ids else None), job
+
+
+def writable_dir(job):
+    """Prefer <current job>/log; fall back to a tmp dir if that is not writable."""
+    cid = (re.findall(UUID, job or '') or ['unknown'])[-1]
+    candidates = []
+    if job:
+        candidates.append(os.path.join(job, 'log'))
+        host = job.replace('/workspace/', '/opt/agent/workspace/', 1)
+        if host != job:
+            candidates.append(os.path.join(host, 'log'))
+    candidates.append(os.path.join('/tmp', f'visual-build-{cid}'))
+    last_err = None
+    for d in candidates:
+        try:
+            os.makedirs(d, exist_ok=True)
+            probe = os.path.join(d, f'.w{os.getpid()}')
+            with open(probe, 'w') as f:
+                f.write('')
+            os.remove(probe)
+            return d
+        except Exception as e:
+            last_err = e
+            continue
+    die(f'no writable log dir (last error: {last_err})')
+
+
+def state_path(logdir):
+    return os.path.join(logdir, STATE_NAME)
+
+
+def read_state(logdir):
+    try:
+        return json.load(open(state_path(logdir)))
+    except Exception:
+        return {}
+
+
+def write_state(logdir, rec):
+    os.makedirs(logdir, exist_ok=True)
+    tmp = state_path(logdir) + f'.{os.getpid()}'
+    json.dump(rec, open(tmp, 'w'), indent=2)
+    os.replace(tmp, state_path(logdir))
+
+
+def clip(text, n):
+    text = text or ''
+    if len(text) <= n:
+        return text
+    return text[:n] + f'\n...[truncated, {len(text) - n} more chars]...'
+
+
+def probe_duration(path):
+    try:
+        r = subprocess.run(
+            ['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', path],
+            capture_output=True, text=True, timeout=8)
+        if r.returncode == 0 and r.stdout.strip():
+            return float(r.stdout.strip())
+    except Exception:
+        return None
+    return None
+
+
+def asset_inventory(job):
+    lines = []
+    if not job or not os.path.isdir(job):
+        return '(no job folder)'
+    for root, dirs, files in os.walk(job):
+        dirs[:] = [d for d in dirs if d not in SKIP_WALK_DIRS]
+        for fn in files:
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in MEDIA_EXT:
+                continue
+            full = os.path.join(root, fn)
+            try:
+                rel = os.path.relpath(full, job)
+                size = os.path.getsize(full)
+            except Exception:
+                continue
+            dur = probe_duration(full)
+            extra = f', {dur:.2f}s' if dur else ''
+            lines.append(f'- {rel} ({size} bytes{extra})')
+    lines.sort()
+    return '\n'.join(lines) if lines else '(no media assets found yet)'
+
+
+def gather_context(job, paths):
+    """Plan, brief, script/VO timeline, and asset inventory. Never a Haiku visual-source draft."""
+    parts = []
+    seen = set()
+    extra_docs = []
+    if job:
+        for dirn in ('research', 'audio', 'log', 'work'):
+            d = os.path.join(job, dirn)
+            if not os.path.isdir(d):
+                continue
+            for fn in os.listdir(d):
+                low = fn.lower()
+                if any(k in low for k in ('script', 'timeline', 'voiceover', 'vo.txt', 'narration')) and \
+                   os.path.splitext(fn)[1].lower() in {'.txt', '.md'}:
+                    extra_docs.append(f'{dirn}/{fn}')
+    for rel in list(CONTEXT_DOCS) + extra_docs:
+        if rel in seen:
+            continue
+        seen.add(rel)
+        p = os.path.join(job, rel) if job else None
+        if p and os.path.isfile(p):
+            limit = 8000 if 'plan' in rel else 4000
+            parts.append(f'### {rel}\n{clip(open(p, errors="replace").read(), limit)}')
+    inv = asset_inventory(job)
+    parts.append('### Media assets already in the job folder (use these paths; do not invent filenames)\n' + inv)
+    targets = [rel_from_job(job, p) for p in (paths or [])]
+    targets = [t for t in targets if t]
+    if targets:
+        parts.append('### Target file(s) to write from scratch\n' + '\n'.join(f'- {t}' for t in targets))
+    return '\n\n'.join(parts), targets
+
+
+def looks_like_source(text):
+    s = (text or '').strip()
+    if not s or len(s) < 20:
+        return False
+    t = s.lstrip().lower()
+    return (
+        t.startswith(('<!doctype', '<html', '<?xml', 'import ', 'export ', 'from "', "from '",
+                      'const ', 'function ', '/*', '//'))
+        or '<html' in t[:800]
+        or 'react' in t[:400]
+        or '@font-face' in t[:2000]
+        or 'createdom' in t[:2000]
+    )
+
+
+def parse_files(text, fallback_paths=None):
+    """Return [(relative_path, content), ...].
+
+    Accepts FILE: headers, a path mentioned anywhere before a fenced block,
+    a single fenced block for a known target path, or a whole-file source reply.
+    """
+    out, seen = [], set()
+    text = text or ''
+    fallback_paths = [p for p in (fallback_paths or []) if p]
+
+    def add(rel, body):
+        rel = (rel or '').strip().strip('`"\'')
+        if rel.lower().startswith('file:'):
+            rel = rel.split(':', 1)[1].strip()
+        body = body if body is not None else ''
+        if body.startswith('\n'):
+            body = body[1:] if False else body
+        if not rel or rel in seen:
+            return
+        if len(body.strip()) < 20:
+            return
+        out.append((rel, body))
+        seen.add(rel)
+
+    # 1. FILE: path then a fenced block
+    for m in re.finditer(r'FILE:\s*(\S+)\s*\n```[^\n]*\n(.*?)```', text, re.S):
+        add(m.group(1), m.group(2))
+    if out:
+        return out
+
+    # 2. FILE: path then raw body until the next FILE: or end
+    for m in re.finditer(r'FILE:\s*(\S+)\s*\n(.*?)(?=\nFILE:\s*\S|\Z)', text, re.S):
+        body = m.group(2).strip('\n')
+        if body.startswith('```'):
+            body = re.sub(r'^```[^\n]*\n', '', body)
+            body = re.sub(r'\n```\s*$', '', body)
+        add(m.group(1), body)
+    if out:
+        return out
+
+    # 3. Fenced blocks (including a trailing unclosed fence)
+    fences = list(re.finditer(r'```([a-zA-Z0-9_-]*)\r?\n(.*?)```', text, re.S))
+    rest_at = fences[-1].end() if fences else 0
+    m_open = re.search(r'```([a-zA-Z0-9_-]*)\r?\n(.*)\Z', text[rest_at:], re.S)
+    fence_spans = [(m.start(), m.group(2)) for m in fences]
+    if m_open and len((m_open.group(2) or '').strip()) >= 20:
+        fence_spans.append((rest_at + m_open.start(), m_open.group(2)))
+
+    for start, body in fence_spans:
+        pre = text[:start]
+        found = re.findall(r'([A-Za-z0-9_./-]+\.' + VISUAL_EXT + r')', pre)
+        rel = found[-1] if found else None
+        if not rel and fallback_paths:
+            rel = fallback_paths[0]
+        if rel:
+            add(rel, body)
+    if out:
+        return out
+
+    # 4. Whole-file reply aimed at a known target (or a lone fence already stripped)
+    body = text.strip()
+    if body.startswith('```'):
+        body = re.sub(r'^```[^\n]*\n', '', body)
+        body = re.sub(r'\n```\s*$', '', body)
+    if fallback_paths and looks_like_source(body):
+        add(fallback_paths[0], body)
+    return out
+
+
+def rel_from_job(job, rel):
+    rel = (rel or '').strip().strip('`"\'')
+    if not rel:
+        return None
+    if job:
+        job_real = os.path.realpath(job)
+        host = os.path.realpath(job.replace('/workspace/', '/opt/agent/workspace/', 1))
+        # also the other direction
+        cont = os.path.realpath(job.replace('/opt/agent/workspace/', '/workspace/', 1))
+        for root in (job, job_real, host, cont):
+            if not root:
+                continue
+            prefixes = (root, root.rstrip('/') + '/')
+            for prefix in prefixes:
+                if rel == prefix.rstrip('/') or rel.startswith(str(prefix)):
+                    out = rel[len(prefix):] if rel.startswith(str(prefix)) else ''
+                    out = out.lstrip('/')
+                    return os.path.normpath(out) if out else None
+            try:
+                full = os.path.realpath(rel) if rel.startswith('/') else None
+                if full:
+                    for r in (job_real, host, cont):
+                        if r and (full == r or full.startswith(r + os.sep)):
+                            return os.path.relpath(full, r)
+            except Exception:
+                pass
+    rel = os.path.normpath(rel.lstrip('/'))
+    if rel.startswith('..') or os.path.isabs(rel):
+        return None
+    # a leftover workspace/... path that is not under this job
+    if rel.startswith('workspace/') or rel.startswith('opt/'):
+        return None
+    return rel
+
+
+def safe_rel(job, rel):
+    rel = rel_from_job(job, rel)
+    if not rel:
+        die(f'refusing to write {rel!r}')
+    if rel.startswith('..') or os.path.isabs(rel):
+        die(f'refusing to write {rel}')
+    # Prefer a writable physical root (container /workspace or host /opt/agent/workspace)
+    roots = [job]
+    host = job.replace('/workspace/', '/opt/agent/workspace/', 1)
+    if host != job:
+        roots.append(host)
+    last_err = None
+    for root in roots:
+        full = os.path.realpath(os.path.join(root, rel))
+        root_real = os.path.realpath(root) if os.path.isdir(root) else root
+        if full != root_real and not full.startswith(root_real.rstrip('/') + os.sep):
+            last_err = f'outside {root}'
+            continue
+        parent = os.path.dirname(full) or root
+        try:
+            os.makedirs(parent, exist_ok=True)
+            return rel, full
+        except OSError as e:
+            last_err = e
+            continue
+    die(f'refusing to write {rel} ({last_err})')
+
+
+def call_opus(job, cid, user, logdir, max_tokens=8000):
+    bf = os.path.join(logdir, 'visual-build-request.txt')
+    with open(bf, 'w') as f:
+        f.write(user)
+    cmd = [os.path.join(TOOLS, 'opus-step'), '--purpose', 'step', '--brief-file', bf,
+           '--job', job, '--max-tokens', str(max_tokens), '--json',
+           '--system', SYSTEM]
+    if cid:
+        cmd += ['--conversation-id', cid]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=240)
+    if p.returncode != 0:
+        raise RuntimeError((p.stderr or p.stdout or 'opus-step failed')[-800:])
+    try:
+        data = json.loads(p.stdout)
+        text = data.get('text') or ''
+        cost = data.get('cost_usd')
+    except Exception:
+        data, text, cost = {}, p.stdout, None
+    return text, cost
+
+
+def run_build(job, cid, task, paths, logdir):
+    ctx, targets = gather_context(job, paths)
+    user = (
+        'Job folder: ' + job + '\n\n' + ctx + '\n\n'
+        '### Task\n' + task.strip() + '\n\n'
+        'Write the file(s) from scratch now. Output only FILE blocks.'
+    )
+    rec = {'status': 'running', 'started_at': time.time(), 'task': task[:500], 'pid': os.getpid(),
+           'job': job, 'targets': targets, 'log_dir': logdir}
+    write_state(logdir, rec)
+    try:
+        text, cost = call_opus(job, cid, user, logdir)
+    except Exception as e:
+        rec.update(status='failed', error=str(e)[-800:], finished_at=time.time())
+        write_state(logdir, rec)
+        die(str(e)[-800:])
+
+    files = parse_files(text, targets)
+    retried = False
+    costs = [cost] if cost is not None else []
+    if not files:
+        retried = True
+        retry_user = RETRY_PREFIX
+        if targets:
+            retry_user += 'The target file is: ' + targets[0] + '\n\n'
+        retry_user += 'Your previous reply was:\n' + clip(text, 20000)
+        try:
+            text2, cost2 = call_opus(job, cid, retry_user, logdir)
+        except Exception as e:
+            rec.update(status='failed', error='format miss, retry failed: ' + str(e)[-400:],
+                       raw=text[:20000], cost_usd=sum(c for c in costs if c is not None) or None,
+                       retried_format=True, finished_at=time.time())
+            write_state(logdir, rec)
+            open(os.path.join(logdir, 'visual-build-raw.txt'), 'w').write(text or '')
+            die('Opus returned no FILE blocks and the format retry failed: ' + str(e)[-400:])
+        if cost2 is not None:
+            costs.append(cost2)
+        files = parse_files(text2, targets)
+        if files:
+            text = text2
+        else:
+            # keep both raws
+            open(os.path.join(logdir, 'visual-build-raw.txt'), 'w').write(
+                (text or '') + '\n\n----- RETRY -----\n\n' + (text2 or ''))
+            rec.update(status='failed', error='Opus returned no FILE blocks (after one format retry)',
+                       raw=(text2 or text)[:20000],
+                       cost_usd=sum(costs) if costs else None,
+                       retried_format=True, finished_at=time.time())
+            write_state(logdir, rec)
+            die('Opus returned no FILE blocks after one format retry. Raw output (truncated):\n'
+                + (text2 or text or '')[:1500])
+
+    written = []
+    for rel, body in files:
+        rel, full = safe_rel(job, rel)
+        os.makedirs(os.path.dirname(full) or '.', exist_ok=True)
+        data = body if body.endswith('\n') else body + '\n'
+        with open(full, 'w') as f:
+            f.write(data)
+        rec_file = {'path': rel, 'bytes': len(data.encode('utf-8')), 'abs': full}
+        written.append(rec_file)
+    total_cost = sum(costs) if costs else None
+    rec.update(status='done', files=written, cost_usd=total_cost, finished_at=time.time(),
+               raw_chars=len(text or ''), retried_format=retried)
+    write_state(logdir, rec)
+    try:
+        with open(os.path.join(logdir, 'visual-build-written.jsonl'), 'a') as f:
+            f.write(json.dumps({'ts': time.time(), 'files': written, 'cost_usd': total_cost,
+                                'retried_format': retried, 'job': job}, ensure_ascii=False) + '\n')
+    except Exception:
+        pass
+    bits = [f"{w['path']} ({w['bytes']} bytes)" for w in written]
+    cost_s = f' (Opus ${total_cost:.4f})' if total_cost is not None else ''
+    retry_s = ' [format retry]' if retried else ''
+    print('visual-build: wrote ' + ', '.join(bits) + cost_s + retry_s)
+    return written, total_cost
+
+
+def resolve_logdir(job):
+    return writable_dir(job)
+
+
+def main():
+    p = argparse.ArgumentParser(prog='visual-build', description=__doc__)
+    p.add_argument('task', nargs='?')
+    p.add_argument('--path', action='append', default=[],
+                   help='target path Opus should write from scratch (not a draft to revise)')
+    p.add_argument('--draft-file', help=argparse.SUPPRESS)  # ignored: Opus writes from scratch
+    p.add_argument('--bg', action='store_true', help='start in the background and print the pid')
+    p.add_argument('--wait', type=int, nargs='?', const=180, help='wait for a running build (seconds)')
+    p.add_argument('--status', action='store_true')
+    p.add_argument('--job')
+    args = p.parse_args()
+    cid, job = job_and_cid(args.job)
+    if not job:
+        die('run this inside a job folder, or pass --job')
+    logdir = resolve_logdir(job)
+    if args.status or (args.wait and not args.task):
+        st = read_state(logdir)
+        if args.wait:
+            t0 = time.time()
+            while st.get('status') == 'running' and time.time() - t0 < (args.wait or 180):
+                time.sleep(2)
+                st = read_state(logdir)
+        print(json.dumps(st, indent=2) if st else 'visual-build: no build recorded yet')
+        if args.wait and st.get('status') not in ('done',):
+            sys.exit(1)
+        return
+    if not args.task:
+        die('give a task, e.g. visual-build "Write remotion/src/Film.tsx for the 30s film"')
+    if args.bg:
+        log = os.path.join(logdir, 'visual-build.log')
+        os.makedirs(os.path.dirname(log), exist_ok=True)
+        cmd = [sys.executable, os.path.realpath(__file__), args.task, '--job', job]
+        for pth in args.path:
+            cmd += ['--path', pth]
+        with open(log, 'ab') as f:
+            proc = subprocess.Popen(cmd, cwd=job if os.path.isdir(job) else '/tmp',
+                                    stdout=f, stderr=subprocess.STDOUT, start_new_session=True)
+        write_state(logdir, {'status': 'running', 'started_at': time.time(),
+                             'task': args.task[:500], 'pid': proc.pid, 'job': job, 'log_dir': logdir})
+        print(f'visual-build: started in the background (pid {proc.pid}). Wait with: visual-build --wait 180')
+        return
+    # Intentionally ignore --draft-file: Opus writes from scratch.
+    run_build(job, cid, args.task, args.path, logdir)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.exit(130)
+    except subprocess.TimeoutExpired:
+        die('Opus visual-build timed out')

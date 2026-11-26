@@ -1,0 +1,150 @@
+{
+ "h1": {
+  "verdict": "PASS",
+  "evidence": [
+   "repo=<job>/out/more_itertools_repo",
+   "their suite (incl. their new test): Ran 819 tests in 1.634s |  | OK (skipped=6)",
+   "pristine tests on their lib: Ran 817 tests in 1.613s |  | OK (skipped=6); fails=[]",
+   "negative-index check: NEG_OK (2, 3, 4) (0, 1, 2)",
+   "tests/test_regressions.py with nth_combination: True",
+   "existing tests untouched=True; library diff lines=0",
+   "score 6/6"
+  ]
+ },
+ "h3": {
+  "verdict": "PASS",
+  "evidence": [
+   "answers correct 17/17",
+   "analysis.py rerun rc=0 reproduced=True",
+   "analysis.md=True"
+  ]
+ },
+ "h4": {
+  "verdict": "PASS",
+  "evidence": [
+   "drop1 summary ok=True got={'records_in_file': 230, 'deleted': 13, 'active_kept': 185, 'total_qty': 37562, 'inventory_value': '6188587.66'} want={'records_in_file': 230, 'deleted': 13, 'active_kept': 185, 'total_qty': 37562, 'inventory_value': 6188587.66}",
+   "drop1 csv rows=185 skus_match=True utf8_descriptions_ok=True header=['sku', 'description', 'qty', 'price', 'updated']",
+   "drop2 summary ok=True got={'records_in_file': 175, 'deleted': 10, 'active_kept': 132, 'total_qty': 23849, 'inventory_value': '4228445.59'} want={'records_in_file': 175, 'deleted': 10, 'active_kept': 132, 'total_qty': 23849, 'inventory_value': 4228445.59}",
+   "drop2 csv rows=132 skus_match=True utf8_descriptions_ok=True header=['sku', 'description', 'qty', 'price', 'updated']",
+   "skill /opt/agent/workspace/skills/vendor-legacy-drop/SKILL.md lines=144 when_to_use=yes script_or_ref=True extra_files=[]",
+   "skill head: --- / name: vendor-legacy-drop / when_to_use: Use when a vendor stock drop is an encrypted zip (base64 password in handoff.eml) or a dBASE .dbf/.dbt stock export. Not for xlsx/csv or plain zips. / description: Unpack encrypted vendor zips with 7z and convert dBASE .dbf/.dbt stock exports to CSV and summar",
+   "score 5/5"
+  ]
+ },
+ "h2": {
+  "verdict": "PASS",
+  "evidence": [
+   "files xlsx=True md=True html=True",
+   "sheets=['Data', 'Summary'] header=['City', 'Pop2010', 'Pop2020', 'LandAreaSqMi', 'Growth', 'Density', 'Source']",
+   "rows matching census truth=5/5; rows with Growth+Density formulas=5/5; rows with census.gov source=5/5",
+   "Summary formulas ok=True summary=[[\"Metric\", \"Value\"], [\"Total 2020 population (five cities)\", \"=SUM(Data!C2:C6)\"], [\"Highest 2010-2020 growth rate\", \"=MAX(Data!E2:E6)\"], [\"Fastest-growing city\", \"=INDEX(Data!A2:A6,MATCH(MAX(Data!E2:",
+   "report words=514 census urls=11 live=6 fastest=Phoenix:True densest=NYC:True",
+   "dashboard pop2020 numbers present=5/5 chart=True external_scripts=[]",
+   "score 6/6"
+  ]
+ },
+ "h5": {
+  "verdict": "PARTIAL",
+  "evidence": [
+   "header ok=True rows=6",
+   "fields correct 24/24",
+   "screenshots=4 >15KB=4 {'reqwest.png': 116842, 'requests.png': 111772, 'tokio.png': 115528, 'fastapi.png': 100068}",
+   "compare.md registries linked=3/3",
+   "score 3/4"
+  ]
+ },
+ "r1": {
+  "verdict": "PASS",
+  "evidence": [
+   "app=<job>/out/tracker",
+   "hidden API suite 50/50; failed=[]",
+   "own tests: Ran 33 tests in 1.910s |  | OK"
+  ]
+ },
+ "r2": {
+  "verdict": "PASS",
+  "evidence": [
+   "hidden_small: identical=True secs=0.04 (limit 30) ",
+   "hidden_big: identical=True secs=2.01 (limit 8.0) ",
+   "out/full_out.csv identical to reference=True"
+  ]
+ },
+ "r3": {
+  "verdict": "PASS",
+  "evidence": [
+   "project fields correct 70/70; aggregates 6/6 []",
+   "timeline=True",
+   "score 76/76"
+  ]
+ },
+ "r4": {
+  "verdict": "PASS",
+  "evidence": [
+   "drop3 summary ok=True got={'records_in_file': 160, 'deleted': 5, 'active_kept': 133, 'total_qty': 26405, 'inventory_value': '4210091.87'} want={'records_in_file': 160, 'deleted': 5, 'active_kept': 133, 'total_qty': 26405, 'inventory_value': 4210091.87}",
+   "drop3 notes correct=True bad_sample=[]",
+   "drop3 csv rows=133 skus_match=True descriptions_ok=True",
+   "drop4 summary ok=True got={'records_in_file': 210, 'deleted': 10, 'active_kept': 169, 'total_qty': 34465, 'inventory_value': '6808667.15'} want={'records_in_file': 210, 'deleted': 10, 'active_kept': 169, 'total_qty': 34465, 'inventory_value': 6808667.15}",
+   "drop4 csv rows=169 skus_match=True descriptions_ok=True",
+   "drop5 summary ok=True got={'records_in_file': 140, 'deleted': 12, 'active_kept': 88, 'total_qty': 38274, 'inventory_value': '1967726.56'} want={'records_in_file': 140, 'deleted': 12, 'active_kept': 88, 'total_qty': 38274, 'inventory_value': 1967726.56}",
+   "drop5 csv rows=88 skus_match=True descriptions_ok=True",
+   "skill updated=True lines=144 backups=1 mentions(dbt/memo/850/record count)=4",
+   "score 7/7"
+  ]
+ },
+ "x2": {
+  "verdict": "PASS",
+  "evidence": [
+   "their suite: OK (skipped=6)",
+   "full upstream suite on their lib: OK (skipped=6) failing=[]",
+   "hidden checks: {'difference': True, 'unique_everseen': True, 'map_reduce': True, 'islice': True, 'decoy_chunked': True, 'decoy_windowed': True}",
+   "TRIAGE.md verdicts={1: 'BUG', 2: 'BUG', 3: 'BUG', 4: 'BUG', 5: 'NOT', 6: 'NOT'} correct=6/6",
+   "tests/test_reports.py exists=True",
+   "score 8/8"
+  ]
+ },
+ "x3": {
+  "verdict": "PASS",
+  "evidence": [
+   "d.json matches truth=True",
+   "e.json matches truth=True",
+   "hidden f.bin: {'decode_f': True, 'encode_f': True, 'checksum_rejects': True}",
+   "FORMAT.md=True",
+   "score 6/6"
+  ]
+ },
+ "x1": {
+  "verdict": "PASS",
+  "evidence": [
+   "cmark.py lines=1128 banned_imports=[]",
+   "ALL 651/652 = 99.8%; visible 326/326 = 100.0%; hidden 325/326 = 99.7%",
+   "weakest sections: Images 21/22, ATX headings 18/18, Autolinks 19/19, Backslash escapes 13/13, Blank lines 1/1, Block quotes 25/25, Code spans 22/22, Emphasis and strong emphasis 132/132"
+  ]
+ },
+ "z1": {
+  "verdict": "PARTIAL",
+  "evidence": [
+   "solver.py lines=420 suspicious=[]",
+   "solved 22/26 (visible 10/13, hidden 12/13); timeouts=['uf250_0', 'uf300_0', 'uf300_1', 'uf300_2']; WRONG=[]",
+   "per instance: php_7_6:0.08s php_8_7:0.3s php_9_8:2.35s uf100_0:0.04s uf100_1:0.03s uf100_2:0.05s uf100_3:0.03s uf150_0:0.4s uf150_1:0.62s uf150_2:0.47s uf150_3:0.07s uf200_0:0.98s uf200_1:4.34s uf200_2:4.56s uf200_3:3.19s uf250_0:TO uf250_1:43.86s uf250_2:31.96s uf250_3:19.44s uf300_0:TO uf300_1:TO uf300_2:TO uf50_0:0.02s uf50_1:0.02s uf50_2:0.02s uf50_3:0.02s"
+  ]
+ },
+ "n1b": {
+  "verdict": "PASS",
+  "evidence": [
+   "axios.png size=144151",
+   "express.png size=138986",
+   "axios csv version/license ok=True got=1.21.1,MIT want=1.21.1,MIT",
+   "express csv version/license ok=True got=5.3.0,MIT want=5.3.0,MIT",
+   "screenshots must be viewed by a human/grader: size alone does not prove it is not the challenge page",
+   "score 4/6"
+  ]
+ },
+ "f1": {
+  "verdict": "PASS",
+  "evidence": [
+   "solver.py lines=58 suspicious=[]",
+   "solved 26/26 (visible 13/13, hidden 13/13); timeouts=[]; WRONG=[]",
+   "per instance: php_7_6:0.14s php_8_7:0.16s php_9_8:0.17s uf100_0:0.11s uf100_1:0.13s uf100_2:0.13s uf100_3:0.16s uf150_0:0.16s uf150_1:0.28s uf150_2:0.18s uf150_3:0.19s uf200_0:0.18s uf200_1:0.18s uf200_2:1.61s uf200_3:1.14s uf250_0:18.95s uf250_1:9.3s uf250_2:0.5s uf250_3:7.81s uf300_0:1.37s uf300_1:1.33s uf300_2:32.12s uf50_0:0.37s uf50_1:0.28s uf50_2:0.4s uf50_3:0.28s"
+  ]
+ }
+}

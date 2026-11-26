@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""scroll: mouse-wheel scroll on the agent desktop at a point (the pointer moves there first).
+
+usage: scroll {up|down|left|right} [AMOUNT] [--at X Y] [--mods ctrl|shift] [--shot [OUT.png]] [--wait S]
+  AMOUNT = wheel notches (default 5; about 100-120 px each in Chromium). No upper limit.
+examples:
+  scroll down 10 --at 960 600          scroll the page under (960,600) down 10 notches
+  scroll up 3
+  scroll right 8 --at 960 600          horizontal scroll (wide tables, timelines)
+  scroll down 15 --shot after.png      then agent_view after.png
+"""
+import argparse, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import add_common, run, mods_list
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__); sys.exit(0)
+p = argparse.ArgumentParser(prog="scroll", usage=__doc__)
+p.add_argument("direction", choices=["up", "down", "left", "right"])
+p.add_argument("amount", nargs="?", type=int, default=5)
+p.add_argument("--at", nargs=2, type=int, metavar=("X", "Y"))
+p.add_argument("--mods", default="")
+add_common(p)
+a = p.parse_args()
+dy = {"up": -a.amount, "down": a.amount}.get(a.direction, 0)
+dx = {"left": -a.amount, "right": a.amount}.get(a.direction, 0)
+body = {"dy": dy, "dx": dx, "mods": mods_list(a.mods)}
+if a.at:
+    body.update(x=a.at[0], y=a.at[1])
+run("scroll", "/scroll", body, a, f"scrolled {a.direction} {a.amount}" + (f" at {a.at[0]},{a.at[1]}" if a.at else ""))

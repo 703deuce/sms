@@ -1,0 +1,8 @@
+<!doctype html><html><body style="font:28px sans-serif;margin:40px">
+<h1>Agent Lab drag / scroll test</h1>
+<input id="s" type="range" min="0" max="100" value="0" style="width:1200px;height:40px">
+<p>Slider value: <b id="v">0</b></p>
+<p id="t">SELECT THIS SENTENCE BY DRAGGING ACROSS IT</p>
+<script>s.oninput=()=>v.textContent=s.value;</script>
+<div style="height:6000px;background:linear-gradient(#fff,#36c)"><p style="margin-top:2500px">MIDDLE OF THE LONG PAGE</p></div>
+</body></html>

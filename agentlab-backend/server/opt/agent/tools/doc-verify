@@ -1,0 +1,124 @@
+#!/usr/bin/env python3
+"""doc-verify: check a .docx/.pptx/.xlsx/.pdf deliverable BEFORE handing it over.
+
+usage: doc-verify FILE [--pages 3] [--expect "phrase" ...]
+  - opens it with its own library (structure: paragraphs/headings/tables, slides, sheets/rows/formulas/charts)
+  - xlsx: recalculates every formula with LibreOffice headless and reports cells that evaluate to errors
+    (#REF!, #DIV/0!, #NAME?, #VALUE!, #N/A) or stay empty; lists charts per sheet
+  - renders to PDF (LibreOffice) and the first N pages to PNG in log/verify/ so you can look at them
+    (agent_view or `look`), and reports the page count
+  - --expect: phrases that must appear in the rendered text
+Exit 1 if anything failed. Off switch: /opt/tools/flags/DOC_VERIFY_OFF."""
+import glob, os, shutil, subprocess, sys, tempfile, zipfile
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+if os.path.exists('/opt/tools/flags/DOC_VERIFY_OFF'):
+    print('doc-verify is switched off.'); sys.exit(0)
+f, pages, expect = None, 3, []
+i = 0
+while i < len(a):
+    if a[i] == '--pages':
+        pages = int(a[i + 1]); i += 2
+    elif a[i] == '--expect':
+        expect.append(a[i + 1]); i += 2
+    else:
+        f = a[i]; i += 1
+f = os.path.abspath(f)
+if not os.path.isfile(f):
+    sys.exit(f'doc-verify: no such file {f}')
+ext = f.rsplit('.', 1)[-1].lower()
+problems, notes = [], []
+outdir = os.path.join(os.getcwd(), 'log', 'verify')
+os.makedirs(outdir, exist_ok=True)
+SOFFICE = ['env', '-u', 'LD_LIBRARY_PATH', '/usr/lib/libreoffice/program/soffice', '--headless', '--norestore']
+
+
+def soffice(args, cwd):
+    prof = tempfile.mkdtemp(prefix='lo-')
+    try:
+        return subprocess.run(SOFFICE + [f'-env:UserInstallation=file://{prof}'] + args, cwd=cwd, capture_output=True,
+                              text=True, timeout=180)
+    finally:
+        shutil.rmtree(prof, ignore_errors=True)
+
+
+try:
+    if ext == 'docx':
+        import docx
+        d = docx.Document(f)
+        heads = [p.text for p in d.paragraphs if p.style.name.lower().startswith(('heading', 'title')) and p.text.strip()]
+        words = sum(len(p.text.split()) for p in d.paragraphs)
+        notes.append(f'docx: {len(d.paragraphs)} paragraphs, {words} words, {len(heads)} headings, {len(d.tables)} tables, '
+                     f'{len(d.inline_shapes)} images')
+        if words == 0 and not d.tables:
+            problems.append('document is empty')
+    elif ext == 'pptx':
+        import pptx
+        pr = pptx.Presentation(f)
+        empty = [n + 1 for n, s in enumerate(pr.slides) if not any(sh.has_text_frame and sh.text_frame.text.strip() for sh in s.shapes)
+                 and not any(sh.shape_type == 13 for sh in s.shapes)]
+        notes.append(f'pptx: {len(pr.slides)} slides' + (f'; slides with no text or picture: {empty}' if empty else ''))
+        if empty:
+            problems.append(f'empty slides {empty}')
+    elif ext in ('xlsx', 'xlsm'):
+        import openpyxl
+        wb = openpyxl.load_workbook(f)
+        nform = 0
+        for ws in wb.worksheets:
+            fcells = [c for row in ws.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith('=')]
+            nform += len(fcells)
+            notes.append(f"sheet '{ws.title}': {ws.max_row} rows x {ws.max_column} cols, {len(fcells)} formulas, "
+                         f"{len(getattr(ws, '_charts', []))} charts")
+        if nform:
+            tmp = tempfile.mkdtemp(prefix='recalc-')
+            r = soffice(['--convert-to', 'xlsx:Calc MS Excel 2007 XML', '--outdir', tmp, f], tmp)
+            out = glob.glob(os.path.join(tmp, '*.xlsx'))
+            if not out:
+                problems.append('could not recalculate formulas (LibreOffice): ' + (r.stderr or r.stdout)[-200:])
+            else:
+                wv = openpyxl.load_workbook(out[0], data_only=True)
+                bad = []
+                for ws in wb.worksheets:
+                    for row in ws.iter_rows():
+                        for c in row:
+                            if isinstance(c.value, str) and c.value.startswith('='):
+                                v = wv[ws.title][c.coordinate].value
+                                if v is None or (isinstance(v, str) and v.startswith('#')):
+                                    bad.append(f"{ws.title}!{c.coordinate}={c.value[:40]} -> {v}")
+                notes.append(f'recalculated {nform} formulas: {nform - len(bad)} OK')
+                if bad:
+                    problems.append(f'{len(bad)} formulas give errors or blanks: ' + '; '.join(bad[:8]))
+            shutil.rmtree(tmp, ignore_errors=True)
+    elif ext != 'pdf':
+        sys.exit('doc-verify: supports docx, pptx, xlsx, pdf')
+except Exception as e:
+    problems.append(f'could not open with its library: {type(e).__name__}: {str(e)[:200]}')
+
+pdf = f
+if ext != 'pdf':
+    tmp = tempfile.mkdtemp(prefix='pdf-')
+    soffice(['--convert-to', 'pdf', '--outdir', tmp, f], tmp)
+    got = glob.glob(os.path.join(tmp, '*.pdf'))
+    pdf = os.path.join(outdir, os.path.basename(f).rsplit('.', 1)[0] + '.pdf') if got else None
+    if got:
+        shutil.move(got[0], pdf)
+    else:
+        problems.append('did not render to PDF')
+    shutil.rmtree(tmp, ignore_errors=True)
+if pdf:
+    info = subprocess.run(['pdfinfo', pdf], capture_output=True, text=True).stdout
+    np = next((l.split()[-1] for l in info.splitlines() if l.startswith('Pages:')), '?')
+    base = os.path.join(outdir, os.path.basename(f).rsplit('.', 1)[0])
+    subprocess.run(['pdftoppm', '-png', '-r', '60', '-f', '1', '-l', str(pages), pdf, base], capture_output=True)
+    pngs = sorted(glob.glob(base + '*.png'))
+    notes.append(f'rendered: {np} pages; previews: ' + ', '.join(os.path.relpath(p) for p in pngs[:pages]))
+    txt = subprocess.run(['pdftotext', '-layout', pdf, '-'], capture_output=True, text=True).stdout
+    for ph in expect:
+        if ph.lower() not in txt.lower():
+            problems.append(f'expected text not found: "{ph}"')
+print('\n'.join(notes))
+if problems:
+    print('PROBLEMS:\n- ' + '\n- '.join(problems)); sys.exit(1)
+print('doc-verify: PASS. Look at the preview images before handing over.')

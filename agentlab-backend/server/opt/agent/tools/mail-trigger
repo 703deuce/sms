@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+"""mail-trigger: start an agent run when a matching email arrives in the agent inbox.
+
+usage: mail-trigger add NAME --from REGEX [--subject REGEX] "prompt to run"
+       mail-trigger list | rm NAME | test      (test = show what would fire now, starts nothing)
+A host poller checks the inbox every 2 minutes. --from is REQUIRED (only listed senders can trigger a run).
+The email body is passed to the run as untrusted data, never as instructions.
+Rules live in /workspace/runs/mail-triggers.json.
+"""
+import json, os, re, subprocess, sys
+RULES = "/workspace/runs/mail-triggers.json"
+
+def load():
+    try: return json.load(open(RULES))
+    except Exception: return []
+
+def save(r):
+    tmp = RULES + ".tmp"; json.dump(r, open(tmp, "w"), indent=1); os.replace(tmp, RULES)
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"): print(__doc__); return
+    c = a[0]
+    if c == "list":
+        for r in load(): print(f"{r['name']}: from~{r['from']} subject~{r.get('subject') or '*'} -> {r['prompt'][:100]}")
+        return
+    if c == "rm":
+        r = [x for x in load() if x["name"] != a[1]]; save(r); print("removed", a[1]); return
+    if c == "test":
+        sys.exit(subprocess.call(["curl", "-s", "-m", "5", "-o", "/dev/null", "http://127.0.0.1:6071/mail/address"]) or
+                 print("rules:", len(load()), "(the host poller does the matching; see /workspace/runs/mail-trigger.log)"))
+    if c == "add":
+        name = a[1]; frm = sbj = None; prompt = []
+        i = 2
+        while i < len(a):
+            if a[i] == "--from": frm = a[i+1]; i += 2
+            elif a[i] == "--subject": sbj = a[i+1]; i += 2
+            else: prompt.append(a[i]); i += 1
+        if not frm or not prompt: sys.exit("need --from REGEX and a prompt")
+        re.compile(frm); sbj and re.compile(sbj)
+        r = [x for x in load() if x["name"] != name]
+        r.append({"name": name, "from": frm, "subject": sbj, "prompt": " ".join(prompt)}); save(r)
+        print(f"rule {name} saved; fires on mail from /{frm}/ within ~2 minutes of arrival"); return
+    sys.exit("unknown command")
+main()

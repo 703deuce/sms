@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""stock-search: Pixabay stock images, videos, and (when the API allows) music.
+
+usage:
+  stock-search "query" [--type video|image|music|all] [-n 8] [--download] [-o DIR]
+
+Each result includes a license record (Pixabay Content License). Never prints the API key.
+Needs PIXABAY_API_KEY in the environment or in /workspace/secrets/pixabay.env
+(or /opt/agent/secrets/pixabay.env on the host).
+"""
+from __future__ import annotations
+import argparse, json, os, sys, urllib.error, urllib.parse, urllib.request
+from pathlib import Path
+
+LICENSE_NAME = "Pixabay Content License"
+LICENSE_URL = "https://pixabay.com/service/license/"
+IMG_API = "https://pixabay.com/api/"
+VID_API = "https://pixabay.com/api/videos/"
+KEY_NAMES = ("PIXABAY_API_KEY", "PIXABAY_KEY")
+KEY_FILES = (
+    "/workspace/secrets/pixabay.env",
+    "/opt/agent/secrets/pixabay.env",
+)
+
+
+def die(msg, code=1):
+    print(f"stock-search: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load_key():
+    for n in KEY_NAMES:
+        v = (os.environ.get(n) or "").strip()
+        if v:
+            return v
+    for path in KEY_FILES:
+        try:
+            for line in open(path):
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, val = line.split("=", 1)
+                if k.strip() in KEY_NAMES:
+                    val = val.strip().strip('"').strip("'")
+                    if val:
+                        return val
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+    return None
+
+
+def api(url, params):
+    q = urllib.parse.urlencode(params)
+    req = urllib.request.Request(f"{url}?{q}", headers={"User-Agent": "Transovo-AgentLab/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return json.load(r)
+
+
+def record_image(h):
+    w, hgt = h.get("webformatWidth") or h.get("imageWidth"), h.get("webformatHeight") or h.get("imageHeight")
+    return {
+        "kind": "image",
+        "id": h.get("id"),
+        "page_url": h.get("pageURL"),
+        "preview_url": h.get("previewURL") or h.get("webformatURL"),
+        "url": h.get("largeImageURL") or h.get("webformatURL"),
+        "width": w, "height": hgt,
+        "tags": h.get("tags"),
+        "user": h.get("user"),
+        "license": LICENSE_NAME,
+        "license_url": LICENSE_URL,
+        "source": "pixabay",
+        "attribution": f"Image by {h.get('user') or 'Pixabay contributor'} on Pixabay",
+    }
+
+
+def record_video(h):
+    videos = h.get("videos") or {}
+    # smallest first for 'frames' style previews; include all sizes
+    sizes = []
+    for name in ("tiny", "small", "medium", "large"):
+        v = videos.get(name)
+        if v and v.get("url"):
+            sizes.append({"name": name, "url": v.get("url"), "width": v.get("width"), "height": v.get("height"),
+                          "size": v.get("size")})
+    pick = sizes[0] if sizes else {}
+    return {
+        "kind": "video",
+        "id": h.get("id"),
+        "page_url": h.get("pageURL"),
+        "preview_url": h.get("picture_id") or (pick.get("url") if pick else None),
+        "url": pick.get("url"),
+        "sizes": sizes,
+        "width": pick.get("width"), "height": pick.get("height"),
+        "duration": h.get("duration"),
+        "tags": h.get("tags"),
+        "user": h.get("user"),
+        "license": LICENSE_NAME,
+        "license_url": LICENSE_URL,
+        "source": "pixabay",
+        "attribution": f"Video by {h.get('user') or 'Pixabay contributor'} on Pixabay",
+    }
+
+
+def search(kind, query, n, key):
+    params = {"key": key, "q": query, "per_page": max(3, min(n, 50)), "safesearch": "true"}
+    if kind == "image":
+        data = api(IMG_API, params)
+        return [record_image(h) for h in (data.get("hits") or [])][:n]
+    if kind == "video":
+        data = api(VID_API, params)
+        return [record_video(h) for h in (data.get("hits") or [])][:n]
+    return []
+
+
+def main():
+    p = argparse.ArgumentParser(prog="stock-search", add_help=True, description=__doc__)
+    p.add_argument("query")
+    p.add_argument("--type", choices=("video", "image", "music", "all"), default="all")
+    p.add_argument("-n", type=int, default=8)
+    p.add_argument("--download", action="store_true", help="download chosen files into -o (default: job media/ or cwd)")
+    p.add_argument("-o", default=None)
+    args = p.parse_args()
+    key = load_key()
+    if not key:
+        die("PIXABAY_API_KEY is not set. Add it to /workspace/secrets/pixabay.env "
+            "(PIXABAY_API_KEY=...) or /opt/agent/secrets/pixabay.env, or to the environment. "
+            "Do not paste the key into chat. I looked on this server by name only and did not find a set key.")
+    kinds = ["image", "video"] if args.type == "all" else [args.type]
+    results = []
+    notes = []
+    for kind in kinds:
+        if kind == "music":
+            notes.append("Pixabay's public API has no music/audio endpoint (images and videos only). "
+                         "For music use ElevenLabs Music (`scripts/gen_music.py`); for SFX use `sfx`.")
+            continue
+        try:
+            results.extend(search(kind, args.query, args.n, key))
+        except urllib.error.HTTPError as e:
+            die(f"Pixabay {kind} search failed: HTTP {e.code}")
+        except Exception as e:
+            die(f"Pixabay {kind} search failed: {e}")
+    if args.type == "music" and not results:
+        die(notes[-1] if notes else "no music API")
+    out = {"query": args.query, "count": len(results), "results": results, "notes": notes}
+    if args.download and results:
+        dest = Path(args.o or (os.environ.get("JOB") and f"{os.environ['JOB']}/media") or "media")
+        dest.mkdir(parents=True, exist_ok=True)
+        saved = []
+        for i, rec in enumerate(results, 1):
+            url = rec.get("url")
+            if not url:
+                continue
+            ext = ".mp4" if rec["kind"] == "video" else ".jpg"
+            path = dest / f"pixabay-{rec['kind']}-{rec.get('id') or i}{ext}"
+            try:
+                urllib.request.urlretrieve(url, path)
+                rec["file"] = str(path)
+                saved.append(str(path))
+            except Exception as e:
+                rec["download_error"] = str(e)[:200]
+        out["saved"] = saved
+        # sidecar license file
+        lic = dest / "licenses.jsonl"
+        with open(lic, "a") as f:
+            for rec in results:
+                f.write(json.dumps({k: rec.get(k) for k in
+                    ("kind","id","page_url","file","license","license_url","attribution","source","user","tags")}) + "\n")
+        out["license_log"] = str(lic)
+    print(json.dumps(out, indent=2))
+
+
+if __name__ == "__main__":
+    main()

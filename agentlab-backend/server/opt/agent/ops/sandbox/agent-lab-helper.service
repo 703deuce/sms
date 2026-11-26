@@ -1,0 +1,15 @@
+[Unit]
+Description=Transovo Agent Lab memory/skill/job helper
+After=network.target
+# Independent of agent-lab. Safe to start without restarting the agent.
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/agent/ops/sandbox/helperd.py
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=/opt/agent/ops/sandbox
+# Secrets are not passed via Environment=.
+
+[Install]
+WantedBy=multi-user.target

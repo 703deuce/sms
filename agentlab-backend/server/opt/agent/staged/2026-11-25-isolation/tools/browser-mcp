@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+"""browser-mcp: the `browser_*` tools for runs and helpers, driving the job's OWN Chromium.
+
+Started by the agent server for each run conversation (mcp server "browser", args --job <job folder>).
+It answers initialize/tools/list itself (cached list of Playwright MCP tools, names without the
+"browser_" prefix, so the agent sees browser_navigate, browser_snapshot, browser_click, ...), and only on
+the first real tool call asks the job-browser daemon for this job's browser (starting it), then runs
+Playwright MCP (/opt/tools/pylib/pwmcp) against that browser's CDP port and relays the calls.
+The Node process is stopped after 15 idle minutes (restarted on the next call); this relay exits when
+its stdin closes or 6 h after its run has ended, so finished conversations do not leave processes behind.
+"""
+import json, os, queue, subprocess, sys, threading, time
+
+sys.path.insert(0, "/opt/tools")
+import jobbrowser as jb
+
+PW = "/opt/tools/pylib/pwmcp"
+CLI = f"{PW}/node_modules/@playwright/mcp/cli.js"
+TOOLS = json.load(open(f"{PW}/tools.json"))
+HIDE = {"browser_close", "browser_resize", "browser_run_code_unsafe", "browser_install"}
+CHILD_IDLE = 15 * 60
+EXIT_AFTER_END = 6 * 3600
+ENDED = ("done", "failed", "stopped", "cancelled", "canceled", "error")
+
+args = sys.argv[1:]
+JOB = args[args.index("--job") + 1] if "--job" in args else os.getcwd()
+JID = jb.job_id(JOB)
+out_lock = threading.Lock()
+state = {"child": None, "epoch": None, "cdp": None, "last": time.time(), "note": None, "pending": set()}
+child_lock = threading.Lock()
+relay_q = queue.Queue()
+LOGDIR = f"/workspace/desktop/jobs/{JID}" if JID else "/tmp"
+
+
+def log(msg):
+    try:
+        os.makedirs(LOGDIR, exist_ok=True)
+        with open(os.path.join(LOGDIR, "browser-mcp.log"), "a") as f:
+            f.write(time.strftime("%H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def emit(obj):
+    with out_lock:
+        sys.stdout.write(json.dumps(obj) + "\n")
+        sys.stdout.flush()
+
+
+def tool_list():
+    out = []
+    for t in TOOLS["tools"]:
+        if t["name"] in HIDE:
+            continue
+        t = dict(t)
+        t["name"] = t["name"][len("browser_"):] if t["name"].startswith("browser_") else t["name"]
+        if t["name"] == "take_screenshot":
+            t["description"] = (t.get("description", "") + " The image is saved to a file in the job folder (.browser/) "
+                                "and NOT shown to you: open that file with agent_view (or look).")
+        out.append(t)
+    return out
+
+
+def child_reader(p):
+    for line in p.stdout:
+        try:
+            msg = json.loads(line)
+        except Exception:
+            continue
+        mid = msg.get("id")
+        if msg.get("method") == "notifications/tools/list_changed":
+            continue  # our tool list is fixed (WebMCP page tools are off)
+        if isinstance(mid, str) and mid.startswith("relay-"):
+            relay_q.put(msg)
+            continue
+        if mid is not None and ("result" in msg or "error" in msg):
+            state["pending"].discard(mid)
+            note = state.get("note")
+            if note and isinstance(msg.get("result"), dict) and isinstance(msg["result"].get("content"), list):
+                msg["result"]["content"].append({"type": "text", "text": note})
+                state["note"] = None
+        elif "method" in msg and mid is not None:
+            # server->client request (roots, sampling): we advertise none; answer so it does not hang
+            p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": mid, "result": {"roots": []}}) + "\n"); p.stdin.flush()
+            continue
+        emit(msg)
+    # child ended: fail whatever was in flight so the agent is not left waiting
+    for mid in list(state["pending"]):
+        emit({"jsonrpc": "2.0", "id": mid, "result": {"isError": True, "content": [
+            {"type": "text", "text": "The browser tool restarted while this action ran. Run it again."}]}})
+    state["pending"].clear()
+
+
+def stop_child(why):
+    p = state["child"]
+    state["child"] = None
+    if p and p.poll() is None:
+        log(f"stopping Playwright MCP: {why}")
+        try:
+            p.terminate(); p.wait(5)
+        except Exception:
+            p.kill()
+
+
+def register():
+    if JID:
+        try:
+            jb._call("/register", {"job": JID}, timeout=5)
+        except Exception as e:
+            log(f"register failed: {e}")
+
+
+def ensure_child():
+    with child_lock:
+        register()
+        info = jb.ensure(True, JID) if JID else dict(jb.SHARED, reason="no job id")
+        cdp, ep = info.get("cdp") or jb.SHARED["cdp"], info.get("epoch")
+        p = state["child"]
+        if p and p.poll() is None and cdp == state["cdp"] and ep == state["epoch"]:
+            return
+        stop_child("browser changed" if p else "start")
+        if info.get("mode") != "job":
+            state["note"] = (f"(Note: this action ran in the SHARED desktop browser, not your own: {info.get('reason')}. "
+                             "Other conversations may use it; work in your own tab.)")
+        outdir = os.path.join(JOB, ".browser")
+        try:
+            os.makedirs(outdir, exist_ok=True)
+            cwd = JOB
+        except OSError:
+            outdir = f"/tmp/browser-mcp-{JID or os.getpid()}"
+            os.makedirs(outdir, exist_ok=True)
+            cwd = outdir
+        cmd = ["node", CLI, "--cdp-endpoint", cdp, "--image-responses", "omit", "--output-dir", outdir,
+               "--timeout-navigation", "60000", "--timeout-action", "15000", "--no-webmcp",
+               "--output-max-size", str(200 * 1024 * 1024)]
+        err = open(os.path.join(LOGDIR, "browser-mcp.stderr"), "ab") if os.path.isdir(LOGDIR) else subprocess.DEVNULL
+        p = subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, text=True, bufsize=1)
+        threading.Thread(target=child_reader, args=(p,), daemon=True).start()
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "id": "relay-init", "method": "initialize", "params": {
+            "protocolVersion": TOOLS["initialize"].get("protocolVersion", "2025-06-18"), "capabilities": {},
+            "clientInfo": {"name": "agent-lab-browser-relay", "version": "1"}}}) + "\n")
+        p.stdin.flush()
+        try:
+            relay_q.get(timeout=60)
+        except queue.Empty:
+            p.kill()
+            raise RuntimeError("Playwright MCP did not start")
+        p.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "notifications/initialized"}) + "\n"); p.stdin.flush()
+        state.update(child=p, cdp=cdp, epoch=ep)
+        log(f"Playwright MCP on {cdp} ({info.get('mode')}, display {info.get('display')})")
+
+
+def watchdog():
+    ended_since = None
+    while True:
+        time.sleep(60)
+        idle = time.time() - state["last"]
+        if state["child"] and idle > CHILD_IDLE and not state["pending"]:
+            with child_lock:
+                stop_child(f"idle {int(idle)} s")
+        if JID and int(time.time()) % 300 < 60:
+            st = jb.ensure(False, JID).get("run_status")
+            ended_since = (ended_since or time.time()) if st in ENDED else None
+            if ended_since and time.time() - ended_since > EXIT_AFTER_END and idle > EXIT_AFTER_END:
+                log("run ended long ago; exiting")
+                stop_child("exit")
+                os._exit(0)
+
+
+def handle(msg):
+    mid, method = msg.get("id"), msg.get("method")
+    if method == "initialize":
+        register()
+        res = dict(TOOLS["initialize"])
+        res["capabilities"] = {"tools": {"listChanged": False}}
+        want = (msg.get("params") or {}).get("protocolVersion")
+        if want:
+            res["protocolVersion"] = want
+        res["serverInfo"] = {"name": "agent-lab-job-browser", "version": "1"}
+        return emit({"jsonrpc": "2.0", "id": mid, "result": res})
+    if method == "tools/list":
+        return emit({"jsonrpc": "2.0", "id": mid, "result": {"tools": tool_list()}})
+    if method == "ping":
+        return emit({"jsonrpc": "2.0", "id": mid, "result": {}})
+    if method in ("resources/list", "prompts/list", "resources/templates/list"):
+        key = {"resources/list": "resources", "prompts/list": "prompts", "resources/templates/list": "resourceTemplates"}[method]
+        return emit({"jsonrpc": "2.0", "id": mid, "result": {key: []}})
+    if method == "tools/call":
+        state["last"] = time.time()
+        params = dict(msg.get("params") or {})
+        name = str(params.get("name") or "")
+        real = name if name.startswith("browser_") else "browser_" + name
+        if real in HIDE:
+            return emit({"jsonrpc": "2.0", "id": mid, "result": {"isError": True, "content": [
+                {"type": "text", "text": f"{name} is not available here."}]}})
+        params["name"] = real
+        try:
+            ensure_child()
+        except Exception as e:
+            return emit({"jsonrpc": "2.0", "id": mid, "result": {"isError": True, "content": [
+                {"type": "text", "text": f"Browser could not start: {e}. Try again in a minute, or use readpage/browser-shot --url."}]}})
+        state["pending"].add(mid)
+        p = state["child"]
+        p.stdin.write(json.dumps(dict(msg, params=params)) + "\n"); p.stdin.flush()
+        return
+    if method and method.startswith("notifications/"):
+        p = state["child"]
+        if method == "notifications/cancelled" and p and p.poll() is None:
+            p.stdin.write(json.dumps(msg) + "\n"); p.stdin.flush()
+        return
+    if mid is not None:
+        emit({"jsonrpc": "2.0", "id": mid, "error": {"code": -32601, "message": f"method not found: {method}"}})
+
+
+def main():
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    threading.Thread(target=watchdog, daemon=True).start()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except Exception:
+            continue
+        try:
+            handle(msg)
+        except Exception as e:
+            log(f"error: {e}")
+            if msg.get("id") is not None:
+                emit({"jsonrpc": "2.0", "id": msg["id"], "result": {"isError": True, "content": [
+                    {"type": "text", "text": f"browser relay error: {str(e)[:200]}"}]}})
+    stop_child("stdin closed")
+
+
+if __name__ == "__main__":
+    main()

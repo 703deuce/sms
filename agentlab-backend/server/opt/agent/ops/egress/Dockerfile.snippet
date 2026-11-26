@@ -1,0 +1,4 @@
+# 2026-11-24: YouTube n-challenge needs yt-dlp >= 2026.11.23. The live wrapper
+# uses the bind-mounted venv at /workspace/usage/ytdlp-venv (survives rebuilds). This
+# layer is the image fallback for `python -m yt_dlp` after a future rebuild.
+RUN pip install --no-cache-dir -U "yt-dlp[default]>=2026.11.23" yt-dlp-ejs youtube-transcript-api

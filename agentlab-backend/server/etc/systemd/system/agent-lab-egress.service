@@ -1,0 +1,15 @@
+[Unit]
+Description=Agent Lab egress gateway (direct first, then DataImpulse residential/mobile)
+After=network.target
+Before=agent-lab-chrome.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/agent/ops/egress/gateway.py
+Restart=always
+RestartSec=3
+WorkingDirectory=/opt/agent/ops/egress
+# Secrets are read from /opt/agent/secrets/dataimpulse_proxy.env, never via Environment=.
+
+[Install]
+WantedBy=multi-user.target
