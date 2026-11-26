@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, attachmentNote, conversationSettings, jobDir, readMessageRequest, redactSecrets, saveAttachments, userMessage, vaultSecretRefs } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, attachmentNote, readMessageRequest, redactSecrets, runnerJson, saveAttachments } from '@/lib/server/agent-lab'
 export const dynamic = 'force-dynamic'
 
 type ConvInfo = {
@@ -32,38 +32,25 @@ export async function GET() {
 }
 
 /**
- * Start a conversation with the agent server's saved settings (model, instructions, skills).
- * Each conversation gets its own job folder (/workspace/jobs/<id>) and the server's hooks
- * (memory + skills auto-load, delete guard).
+ * Start a conversation through the run daemon's normal start path (POST /runs on the runner), the same one server
+ * jobs use: per-run settings and role trim, skill router + attached skills, vault refs, hooks, job folder marker,
+ * run record (goal judge, skill gate, cost, learning, watchdog). The page picks the id first so attachments can be
+ * uploaded into /workspace/jobs/<id>/inputs before the agent starts. `wait` returns once the run has started, so the
+ * conversation exists when the page opens it.
  */
 export async function POST(request: Request) {
   try {
     const { message: text, files } = await readMessageRequest(request)
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
-    const hooks = await agentLabJson<{ hook_config?: unknown }>('/api/hooks', {
-      method: 'POST',
-      body: JSON.stringify({ load_user_hooks: true, load_project_hooks: false }),
-    })
     const id = crypto.randomUUID()
-    const [settings, secrets] = await Promise.all([conversationSettings(id), vaultSecretRefs()])
     const saved = files.length ? await saveAttachments(id, files) : []
     const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
-    const conv = await agentLabJson<{ id: string }>('/api/conversations', {
+    const run = await runnerJson<{ conversation_id: string; run_id: string; status?: string }>('/runs', {
       method: 'POST',
-      body: JSON.stringify({
-        conversation_id: id,
-        agent_settings: settings.agentSettings,
-        secrets,
-        secrets_encrypted: true,
-        hook_config: hooks.hook_config ?? null,
-        workspace: { working_dir: jobDir(id) },
-        max_iterations: settings.maxIterations,
-        initial_message: userMessage(message),
-        tags: { source: 'transovo-agent-lab' },
-      }),
-      timeoutMs: 60_000,
+      body: JSON.stringify({ prompt: message, source: 'user', conversation_id: id, created_by: 'transovo-page', wait: 120 }),
+      timeoutMs: 150_000,
     })
-    return Response.json({ id: conv.id })
+    return Response.json({ id: run.conversation_id, runId: run.run_id })
   } catch (err) {
     return agentLabErrorResponse(err)
   }
