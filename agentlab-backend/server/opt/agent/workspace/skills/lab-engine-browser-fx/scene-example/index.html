@@ -1,0 +1,15 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0d0f14;font-family:sans-serif}
+#t{position:absolute;left:8%;top:38%;color:#f3efe6;font-size:48px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+#bar{position:absolute;left:8%;top:56%;height:8px;width:0;background:#e8b04a}</style></head>
+<body><div id="t">1969: 600 MILLION WATCHED</div><div id="bar"></div>
+<script src="lib/gsap.min.js"></script>
+<script>
+// GSAP timeline, paused; time comes only from seek(t). lib/gsap.min.js is copied from /opt/engines/js/node_modules/gsap/dist/.
+const tl = gsap.timeline({ paused: true });
+tl.from('#t', { y: 40, opacity: 0, duration: 0.6, ease: 'power3.out' })
+  .to('#bar', { width: '60%', duration: 1.0, ease: 'power2.inOut' }, 0.3)
+  .to('#t', { scale: 1.06, duration: 1.4, ease: 'sine.inOut' }, 0.6);
+window.__scene = { fps: 30, duration: 2.0, seek: async t => { tl.seek(t, false); } };
+window.__ready = true;
+</script></body></html>

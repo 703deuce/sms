@@ -1,0 +1,38 @@
+{
+ "intake": [
+  "lab-video-brief",
+  "@type"
+ ],
+ "research": [
+  "lab-video-research",
+  "lab-video-story"
+ ],
+ "direction": [
+  "lab-video-variety",
+  "lab-video-engines"
+ ],
+ "media": [
+  "lab-video-media"
+ ],
+ "voice": [
+  "lab-video-voice"
+ ],
+ "design": [
+  "lab-video-build",
+  "lab-video-motion",
+  "lab-video-text"
+ ],
+ "build": [
+  "@engines"
+ ],
+ "sound": [
+  "lab-video-sound"
+ ],
+ "review": [
+  "lab-video-review"
+ ],
+ "finish": [
+  "lab-video-edit",
+  "lab-video-look"
+ ]
+}

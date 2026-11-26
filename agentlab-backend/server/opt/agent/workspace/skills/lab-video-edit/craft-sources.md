@@ -1,0 +1,67 @@
+# Craft standards: source URLs (labels used in the craft reference pages)
+
+## Source URLs (labels used above)
+- [MURCH] https://stavry.github.io/docs/in-the-blink-of-an-eye.pdf (Murch, *In the Blink of an Eye*, Rule of Six section)
+- [DMYT] https://www.nyfa.edu/student-resources/what-you-can-learn-from-edward-dmytryks-7-rules-of-cutting/ · https://www.provideocoalition.com/seven_rules_for_film_and_video_editors/
+- [CUTTING] https://jordandelong.com/pubs/2011/QuickerFasterDarker.pdf (Cutting, DeLong & Brunick, *Quicker, faster, darker*, i-Perception 2011)
+- [HSM-3] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-3-cuts-transitions-and-timecode
+- [HSM-4] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-4-continuity-editing-in-practice
+- [HSM-5] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-5-rhythm-pacing-and-timing
+- [HSM-6] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-6-editing-dialogue-scenes
+- [HSM-7] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-7-montage-parallel-action-and-non-linear-structure
+- [HSM-8] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-8-editing-documentary-and-unscripted-material
+- [HSM-9] https://www.hsmuniversity.org/us/course/film-220-film-editing/lesson-9-sound-editing-for-picture-editors
+- [HSM-CINE] https://hsmuniversity.org/us/course/cine-202-exposure-dynamic-range-and-image-pipelines/lesson-3-waveforms-histograms-and-vectorscopes
+- [JAP-FRAME] https://jeffapierson.com/journal_tools/training/09-video-production/05-framing-and-coverage.html
+- [JAP-EDIT] https://jeffapierson.com/journal_tools/training/09-video-production/06-editing-on-a-timeline.html
+- [JAP-SPEECH] https://jeffapierson.com/journal_tools/training/08-audio-production/03-editing-speech.html
+- [JAP-DUCK] https://jeffapierson.com/journal_tools/training/08-audio-production/05-music-beds-and-ducking.html
+- [ADOBE-180] https://www.adobe.com/creativecloud/video/discover/what-is-the-180-degree-rule.html
+- [ADOBE-JL] https://www.adobe.com/creativecloud/video/post-production/cuts-in-film/l-and-j-cut.html
+- [WIKI-30] https://en.wikipedia.org/wiki/30-degree_rule
+- [BBC-BITE] https://www.bbc.co.uk/bitesize/guides/zxdmmnb/revision/1
+- [ITU-1359] https://www.itu.int/rec/R-REC-BT.1359-1-199811-I/en
+- [NFX-G] https://partnerhelp.netflixstudios.com/hc/en-us/articles/215758617-Timed-Text-Style-Guide-General-Requirements
+- [NFX-EN] https://partnerhelp.netflixstudios.com/hc/en-us/articles/217350977-English-USA-Timed-Text-Style-Guide
+- [NFX-T] https://partnerhelp.netflixstudios.com/hc/en-us/articles/360051554394-Timed-Text-Style-Guide-Subtitle-Timing-Guidelines
+- [BBC] https://www.bbc.co.uk/accessibility/forproducts/guides/subtitles/ (Subtitle Guidelines v1.2.5)
+- [FCC] https://www.fcc.gov/consumers/guides/closed-captioning-television
+- [DCMP] https://dcmp.org/learn/599-captioning-key---elements-of-quality-captioning
+- [WCAG] https://www.w3.org/TR/WCAG22/ · https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html
+- [TT-SZ] https://ads.tiktok.com/help/article/tiktok-auction-in-feed-ads?lang=en (In-Feed Standard safe-zone PNG, measured by us)
+- [TT-SPEC] same page (specs, caption length moves the safe zone)
+- [TT-CBP] https://ads.tiktok.com/help/article/creative-best-practices?lang=en
+- [TT-CA1] https://www.tiktok.com/creator-academy/en/article/captivating-content-with-great-storytelling
+- [TT-CA2] https://www.tiktok.com/creator-academy/article/Understanding-and-engaging-with-your-audience
+- [TT-SPEC-SEC] https://www.tt123.com/adshelp/BWbJqYof (secondary mirror of TikTok ads help)
+- [META-RG] https://www.facebook.com/business/ads-guide/update/image/instagram-reels
+- [META-SZ] https://tl-ph.facebook.com/business/help/980593475366490
+- [IG-RANK] https://about.instagram.com/blog/announcements/instagram-ranking-explained
+- [IG-3MIN] https://creators.instagram.com/blog/the-latest-with-instagram?locale=en_US
+- [GADS-V] https://support.google.com/google-ads/answer/9128498?hl=en
+- [YT-SH] https://support.google.com/youtube/answer/10059070
+- [YT-AN] https://support.google.com/youtube/answer/12220281
+- [YT-ENC] https://support.google.com/youtube/answer/1722171
+- [ABCD] https://services.google.com/fh/files/misc/youtube_google_abcd_reference_guide_en.pdf
+- [AES] https://aes.org/wp-content/uploads/2026/10/20210924_TD1008_v3.13.pdf
+- [EBU-R128] https://tech.ebu.ch/docs/tech/tech3343v4_1.pdf
+- [EBU-R103] https://tech.ebu.ch/files/live/sites/tech/files/shared/r/r103v2_0.pdf
+- [APPLE-POD] https://podcasters.apple.com/support/893-audio-requirements
+- [SPOT] https://support.spotify.com/us/artists/article/loudness-normalization/
+- [AUTOFLIP] https://opensource.googleblog.com/2020/02/autoflip-open-source-framework-for.html
+- [OPUS-LAYOUT] https://help.opus.pro/docs/article/layout-and-reframing
+- [OPUS-BLOG] https://www.opus.pro/blog/how-to-edit-podcast-shorts-like-a-pro-using-opus-clip-pc-mac
+- [RIV] https://riverside.com/blog/podcast-clips
+- [DESC-CLIPS] https://www.descript.com/blog/article/how-to-choose-clips-for-social-media
+- [DESC-EDIT] https://www.descript.com/blog/article/podcast-editing-tips
+- [DESC-GAPS] https://help.descript.com/script-editing/shorten-word-gaps
+- [SUBMAGIC] https://www.submagic.co/blog/best-font-for-subtitle
+- [SOM-L3] https://schoolofmotion.com/blog/sports-lower-thirds
+- [REUTERS-V] https://reutersagency.com/vertical-video
+- [NBCU] https://nbcuacademy.com/tiktok-social-media/
+- [WISTIA] https://wistia.com/blog/optimal-video-length
+- [VARIETY-NFL] https://variety.com/2020/tv/news/nfl-crowd-sounds-tv-football-espn-1234779352/
+- [SMPTE-SEC] https://postproduction.studio/en/tools/safe-areas (secondary summary of SMPTE ST 2046-1)
+- [CADENUS] https://cadenus.io/resources/blog/instagram-safe-zone/ (secondary measure of Meta's template)
+- [SOCIALYNC] https://www.socialync.io/tools/safe-zones/youtube-shorts (secondary reading of Google's diagram)
+- [KREATLI] https://kreatli.com/safe-zone-checker/youtube-safe-zone-checker (secondary; organic Shorts UI)
