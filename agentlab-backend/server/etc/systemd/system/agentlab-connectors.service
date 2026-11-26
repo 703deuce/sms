@@ -1,0 +1,8 @@
+[Unit]
+Description=AgentLab connector broker (OAuth tokens host-only)
+After=network.target
+[Service]
+ExecStart=/usr/bin/python3 /opt/agent/connectors/broker.py
+Restart=always
+[Install]
+WantedBy=multi-user.target

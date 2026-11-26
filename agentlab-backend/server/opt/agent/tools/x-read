@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""x-read: read public X/Twitter posts without the API or a login.
+usage: x-read TWEET_URL_OR_ID        one post: text, author, date, counts, media URLs (video = best mp4)
+       x-read @handle [N]            recent public posts of a profile (best effort; often limited without login)
+If this returns nothing useful, use the browser (skill x-reads): desktop-open the URL and read the page.
+"""
+import json, math, re, subprocess, sys, urllib.request, urllib.error
+
+UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0 Safari/537.36"
+
+DIG = "0123456789abcdefghijklmnopqrstuvwxyz"
+
+def b36(x):
+    ip = int(x); fp = x - ip; s = ""
+    while ip: s = DIG[ip % 36] + s; ip //= 36
+    s = (s or "0") + "."
+    for _ in range(12):
+        fp *= 36; d = int(fp); s += DIG[d]; fp -= d
+        if fp <= 0: break
+    return s
+
+def token(tid):
+    return re.sub(r"(0+|\.)", "", b36((int(tid) / 1e15) * math.pi))
+
+def get(url, proxy=False):
+    h = {"User-Agent": UA, "Accept-Language": "en-US,en;q=0.9"}
+    op = urllib.request.build_opener(urllib.request.ProxyHandler({"https": "http://127.0.0.1:18080", "http": "http://127.0.0.1:18080"})) if proxy else urllib.request.build_opener()
+    with op.open(urllib.request.Request(url, headers=h), timeout=25) as r:
+        return r.read().decode("utf-8", "replace")
+
+def one(tid):
+    url = f"https://cdn.syndication.twimg.com/tweet-result?id={tid}&lang=en&token={token(tid)}"
+    try: d = json.loads(get(url))
+    except urllib.error.HTTPError as e:
+        sys.exit(f"x-read: syndication returned HTTP {e.code} (deleted, protected, or sensitive post). Use the browser skill x-reads.")
+    if not d or d.get("__typename") == "TweetTombstone":
+        sys.exit("x-read: post unavailable (tombstone). Use the browser skill x-reads.")
+    media = []
+    for m in d.get("mediaDetails") or []:
+        if m.get("type") in ("video", "animated_gif"):
+            vs = [v for v in (m.get("video_info") or {}).get("variants", []) if v.get("content_type") == "video/mp4"]
+            vs.sort(key=lambda v: v.get("bitrate", 0), reverse=True)
+            media.append({"type": m["type"], "url": vs[0]["url"] if vs else None})
+        else:
+            media.append({"type": "photo", "url": m.get("media_url_https")})
+    out = {"id": d.get("id_str"), "author": (d.get("user") or {}).get("screen_name"), "name": (d.get("user") or {}).get("name"),
+           "created_at": d.get("created_at"), "text": d.get("text"), "likes": d.get("favorite_count"),
+           "replies": d.get("conversation_count"), "media": media,
+           "quoted": (d.get("quoted_tweet") or {}).get("text")}
+    print(json.dumps(out, indent=1, ensure_ascii=False))
+
+def profile(handle, n):
+    html = get(f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{handle}")
+    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.S)
+    if not m: sys.exit("x-read: profile timeline not available without login. Use the browser skill x-reads.")
+    d = json.loads(m.group(1))
+    ents = d.get("props", {}).get("pageProps", {}).get("timeline", {}).get("entries", [])
+    out = []
+    for e in ents:
+        t = (e.get("content") or {}).get("tweet")
+        if t: out.append({"id": t.get("id_str"), "created_at": t.get("created_at"), "text": t.get("full_text") or t.get("text")})
+    if not out: sys.exit("x-read: no posts returned (rate-limited or login wall). Use the browser skill x-reads.")
+    print(json.dumps(out[:n], indent=1, ensure_ascii=False))
+
+a = sys.argv[1:]
+if not a or a[0] in ("-h", "--help"): print(__doc__); sys.exit(0)
+t = a[0]
+m = re.search(r"status(?:es)?/(\d+)", t) or re.fullmatch(r"(\d{6,})", t)
+if m: one(m.group(1))
+else: profile(t.lstrip("@").split("/")[-1], int(a[1]) if len(a) > 1 else 10)

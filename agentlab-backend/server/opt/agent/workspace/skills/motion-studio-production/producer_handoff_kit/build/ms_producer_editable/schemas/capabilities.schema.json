@@ -1,0 +1,70 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/capabilities.schema.json",
+ "title": "Capability declaration of a scene bundle or worker",
+ "type": "object",
+ "required": [
+  "livePreview",
+  "requires"
+ ],
+ "properties": {
+  "livePreview": {
+   "enum": [
+    "live",
+    "live_degraded",
+    "render_only"
+   ]
+  },
+  "fallback": {
+   "type": "object"
+  },
+  "editable": {
+   "type": "boolean"
+  },
+  "themeAware": {
+   "type": "boolean"
+  },
+  "requires": {
+   "type": "object",
+   "description": "what a worker must have to render this bundle",
+   "properties": {
+    "chrome": {
+     "type": "string"
+    },
+    "webgl": {
+     "type": "string"
+    },
+    "python": {
+     "type": "string"
+    },
+    "pythonPackages": {
+     "type": "object"
+    },
+    "ffmpeg": {
+     "type": "string"
+    },
+    "fontEngine": {
+     "type": "string"
+    },
+    "node": {
+     "type": "string"
+    }
+   }
+  },
+  "deterministic": {
+   "type": "object",
+   "properties": {
+    "level": {
+     "enum": [
+      "bit_exact",
+      "visual",
+      "none"
+     ]
+    },
+    "note": {
+     "type": "string"
+    }
+   }
+  }
+ }
+}

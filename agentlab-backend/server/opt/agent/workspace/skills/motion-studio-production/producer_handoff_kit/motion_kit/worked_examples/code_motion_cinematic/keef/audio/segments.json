@@ -1,0 +1,88 @@
+{
+ "segments": [
+  {
+   "id": 1,
+   "scene": "T01_house_arrest",
+   "caption": "2011. Chicago's South Side.",
+   "vo": "Twenty eleven. Chicago's South Side.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 2,
+   "scene": "T01_house_arrest",
+   "caption": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+   "vo": "A sixteen-year-old named Keith Cozart is on house arrest at his grandmother's place.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 3,
+   "scene": "T01_house_arrest",
+   "caption": "So he films music videos. Right there.",
+   "vo": "So he films music videos. Right there.",
+   "gap_after": 1.0
+  },
+  {
+   "id": 4,
+   "scene": "T02_blowup",
+   "caption": "2012. 'I Don't Like' hits YouTube.",
+   "vo": "Twenty twelve. I Don't Like hits YouTube.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 5,
+   "scene": "T02_blowup",
+   "caption": "Kanye hears it, and remixes it.",
+   "vo": "Kanye hears it, and remixes it.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 6,
+   "scene": "T02_blowup",
+   "caption": "Interscope signs him. A reported six-million-dollar deal.",
+   "vo": "Interscope signs him. A reported six million dollar deal.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 7,
+   "scene": "T02_blowup",
+   "caption": "'Love Sosa' goes everywhere.",
+   "vo": "Love Sosa goes everywhere.",
+   "gap_after": 0.8
+  },
+  {
+   "id": 8,
+   "scene": "T03_drill",
+   "caption": "And the world learns its name. Drill.",
+   "vo": "And the world learns its name. Drill.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 9,
+   "scene": "T03_drill",
+   "caption": "Dark. Slow. Raw.",
+   "vo": "Dark. Slow. Raw.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 10,
+   "scene": "T03_drill",
+   "caption": "Built on the streets of Chicago.",
+   "vo": "Built on the streets of Chicago.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 11,
+   "scene": "T03_drill",
+   "caption": "And it spreads. London. Brooklyn. Around the world.",
+   "vo": "And it spreads. London. Brooklyn. Around the world.",
+   "gap_after": 0.4
+  },
+  {
+   "id": 12,
+   "scene": "T03_drill",
+   "caption": "All from a kid with a camera, at his grandma's house.",
+   "vo": "All from a kid with a camera, at his grandma's house.",
+   "gap_after": 1.0
+  }
+ ]
+}

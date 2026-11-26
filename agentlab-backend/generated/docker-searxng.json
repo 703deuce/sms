@@ -1,0 +1,68 @@
+{
+  "Name": "/searxng",
+  "Image": "sha256:fc1d81d7e9d04d3c8b3e23c7162feddf5c3d6aecd32e67a56eaabcb8d8747f79",
+  "ImageID": "sha256:fc1d81d7e9d04d3c8b3e23c7162feddf5c3d6aecd32e67a56eaabcb8d8747f79",
+  "Cmd": null,
+  "Entrypoint": [
+    "/usr/local/searxng/entrypoint.sh"
+  ],
+  "EnvNamesOnly": [
+    "PATH",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "HISTFILE",
+    "__SEARXNG_CONFIG_PATH",
+    "__SEARXNG_DATA_PATH",
+    "__SEARXNG_VERSION",
+    "__SEARXNG_SETTINGS_PATH",
+    "GRANIAN_PROCESS_NAME",
+    "GRANIAN_INTERFACE",
+    "GRANIAN_HOST",
+    "GRANIAN_PORT",
+    "GRANIAN_WEBSOCKETS",
+    "GRANIAN_BLOCKING_THREADS",
+    "GRANIAN_WORKERS_KILL_TIMEOUT",
+    "GRANIAN_BLOCKING_THREADS_IDLE_TIMEOUT"
+  ],
+  "User": "",
+  "WorkingDir": "/usr/local/searxng",
+  "Mounts": [
+    {
+      "Source": "/var/lib/docker/volumes/2e0b6d76c0ca654453a5b6ad527fc5b4ce80ecb09945db6b8c060a428082b1ce/_data",
+      "Destination": "/var/cache/searxng",
+      "Mode": "z",
+      "RW": true
+    },
+    {
+      "Source": "/opt/agent/searxng",
+      "Destination": "/etc/searxng",
+      "Mode": "",
+      "RW": true
+    }
+  ],
+  "NetworkMode": "bridge",
+  "RestartPolicy": {
+    "Name": "unless-stopped",
+    "MaximumRetryCount": 0
+  },
+  "ShmSize": 67108864,
+  "GroupAdd": null,
+  "LogConfig": {
+    "Type": "json-file",
+    "Config": {
+      "max-file": "3",
+      "max-size": "10m"
+    }
+  },
+  "Memory": 0,
+  "Devices": [],
+  "PortBindings": {
+    "8080/tcp": [
+      {
+        "HostIp": "127.0.0.1",
+        "HostPort": "8888"
+      }
+    ]
+  },
+  "Privileged": false
+}

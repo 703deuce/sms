@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Stop hook: completion check against the shared task record (log/task.json).
+
+If the job has a task record and some success criteria are still pending or FAIL, the first attempt to finish is turned
+back with the list (the agent either verifies/fixes them or reports them). The same open set never blocks twice, so this
+is a completion check, not a loop or a time limit. UNABLE_TO_VERIFY never blocks; it must be named in the report.
+No record (trivial tasks) or every criterion PASS: finishing is allowed.
+"""
+import json, os, sys
+sys.path.insert(0, '/opt/tools')
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    job = payload.get('working_dir') or os.environ.get('OPENHANDS_PROJECT_DIR', '')
+    if not str(job).startswith('/workspace/jobs/'):
+        return
+    import tasklib as T
+    rec = T.load(job)
+    if not rec or not rec.get('criteria'):
+        return
+    blocking = [c for c in rec['criteria'] if c['status'] in ('pending', 'FAIL')]
+    unable = [c for c in rec['criteria'] if c['status'] == 'UNABLE_TO_VERIFY']
+    sig = ','.join(f"{c['id']}:{c['status']}" for c in blocking)
+    if not blocking or rec.get('stop_checked') == sig:
+        if unable:
+            print(json.dumps({'additionalContext': 'Unverified criteria to name in your report: ' +
+                              '; '.join(f"{c['id']} {c['text']} ({c['findings']})" for c in unable)}))
+        return
+    rec['stop_checked'] = sig
+    rec['history'].append({'at': T.now_et(), 'event': 'stop-check', 'open': sig})
+    T.save(job, rec)
+    lines = '\n'.join(f"- {c['id']} [{c['status']}] {c['text']}" + (f" ({c['findings']})" if c.get('findings') else '')
+                      for c in blocking)
+    print(json.dumps({'decision': 'deny', 'reason': 'success criteria not yet verified',
+                      'additionalContext': '[Completion check] Your task record (log/task.json) still has criteria that are '
+                      'not verified as PASS:\n' + lines + '\nVerify each with the `verify` tool (fix only what FAILs), or, if one '
+                      'truly cannot be met or checked, say so explicitly in your final report. This check will not repeat for '
+                      'the same open items.'}))
+
+if __name__ == '__main__':
+    main()

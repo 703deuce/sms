@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "AgentLab block images on proxied CDNs",
+  "description": "Blocks product images and thumbnails on Amazon/YouTube CDNs. Toggle with egress-images. HTML/JS/CSS stay allowed.",
+  "version": "1.1.0",
+  "permissions": ["declarativeNetRequest", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": [
+    "*://*.ytimg.com/*",
+    "*://ytimg.com/*",
+    "*://*.media-amazon.com/*",
+    "*://*.images-amazon.com/*",
+    "*://*.ssl-images-amazon.com/*"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "block_images",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  }
+}

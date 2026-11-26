@@ -1,0 +1,21 @@
+[Unit]
+Description=Agent Lab key proxy (KIE, AgentMail, Anthropic Opus sub-calls) on 127.0.0.1:6071
+After=network-online.target
+
+[Service]
+DynamicUser=yes
+Environment=TZ=America/New_York
+StateDirectory=agent-lab-keys
+StateDirectoryMode=0755
+EnvironmentFile=/opt/agent/secrets/kie.env
+EnvironmentFile=/opt/agent/secrets/agentmail.env
+EnvironmentFile=/opt/agent/secrets/anthropic.env
+ExecStart=/usr/bin/python3 /opt/agent/ops/keyproxy.py
+Restart=on-failure
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,28 @@
+#!/usr/bin/env python3
+"""drag: press, move (in small steps) and release the mouse on the agent desktop.
+For sliders, drag-and-drop, moving windows, drawing, and selecting text.
+
+usage: drag X1 Y1 X2 Y2 [--steps 20] [--hold-ms 150] [--button 1] [--mods shift]
+                        [--shot [OUT.png]] [--wait S]
+examples:
+  drag 300 400 900 400                 drag a slider handle or select text from x=300 to x=900
+  drag 200 300 1200 500 --steps 40     slower drag-and-drop (more intermediate moves)
+  drag 300 400 900 400 --mods alt      alt+drag (block select in editors)
+  drag 300 400 900 400 --shot          screenshot after so you can check where it landed
+"""
+import argparse, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import add_common, run, mods_list
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__); sys.exit(0)
+p = argparse.ArgumentParser(prog="drag", usage=__doc__)
+for n in ("x1", "y1", "x2", "y2"):
+    p.add_argument(n, type=int)
+p.add_argument("--steps", type=int, default=20); p.add_argument("--hold-ms", type=int, default=150)
+p.add_argument("--button", type=int, default=1); p.add_argument("--mods", default="")
+add_common(p)
+a = p.parse_args()
+run("drag", "/drag", {"x1": a.x1, "y1": a.y1, "x2": a.x2, "y2": a.y2, "steps": a.steps, "hold_ms": a.hold_ms,
+                      "button": a.button, "mods": mods_list(a.mods)}, a,
+    f"dragged {a.x1},{a.y1} -> {a.x2},{a.y2} in {a.steps} steps")

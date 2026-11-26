@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""browser-run: run ONE short Playwright script against THIS job's own browser (the one browser_* tools drive) in a
+single step: open pages, wait, extract, click, loop over a list. Only what you print() comes back.
+Borrowed idea: Hermes browser_cdp / browser-use batched procedures (MIT).
+
+usage: browser-run script.py [--timeout 180] [--max-output 8000]
+  Your script gets ready-made globals:
+      page      the active tab (Playwright sync Page; same cookies and logins as your browser)
+      context   its browser context (context.new_page() for more tabs)
+      shot(label)            save an evidence screenshot to evidence/ (returns the path)
+      save(name, text)       write text to out/<name> (returns the path)
+  Example:
+      for url in ["https://example.com/a", "https://example.com/b"]:
+          page.goto(url, wait_until="domcontentloaded"); print(url, page.title())
+      shot("after-extract")
+  Rules: no page.close() on the last tab; keep it read-mostly; never type passwords or card numbers (use the sign-in
+  handoff). A final evidence screenshot is saved automatically. Off switch: /opt/tools/flags/BROWSER_RUN_OFF."""
+import os, sys, time, subprocess
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+if os.path.exists('/opt/tools/flags/BROWSER_RUN_OFF'):
+    sys.exit('browser-run is switched off; use the browser_* tools.')
+
+if a[0] == '--child':
+    script, cap = a[1], int(a[2])
+    sys.path.insert(0, '/opt/tools')
+    import jobbrowser, evidencelib
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        jid = jobbrowser.job_id()
+        if jid:
+            try:  # same registration browser-mcp does: this run gets its own browser (shared by its browser_* tools)
+                jobbrowser._call('/register', {'job': jid}, timeout=5)
+            except Exception:
+                pass
+        info = jobbrowser.ensure(True, jid)
+        try:
+            b = p.chromium.connect_over_cdp(info.get('cdp') or jobbrowser.SHARED['cdp'], timeout=30000)
+        except Exception as e:
+            sys.exit(f'browser-run: no browser reachable ({info.get("reason") or info.get("mode")}): {str(e)[:160]}. '
+                     'Open a page once with browser_navigate (or agent_load_browser), then retry.')
+        ctx = b.contexts[0] if b.contexts else b.new_context()
+        pages = [pg for pg in ctx.pages if not pg.url.startswith(('chrome:', 'devtools:'))]
+        page = pages[-1] if pages else ctx.new_page()
+
+        def shot(label='step'):
+            return evidencelib.save_page(page, label)
+
+        def save(name, text):
+            d = os.path.join(evidencelib.job_root() or os.getcwd(), 'out')
+            os.makedirs(d, exist_ok=True)
+            fp = os.path.join(d, os.path.basename(name))
+            open(fp, 'w').write(text if isinstance(text, str) else str(text))
+            return fp
+        g = {'page': page, 'context': ctx, 'shot': shot, 'save': save, '__name__': '__browser_run__'}
+        try:
+            exec(compile(open(script).read(), script, 'exec'), g)
+        finally:
+            try:
+                print('[evidence]', shot('browser-run-end'))
+            except Exception as e:
+                print('[evidence] not saved:', str(e)[:120])
+    sys.exit(0)
+
+script, timeout, cap = None, 180, 8000
+i = 0
+while i < len(a):
+    if a[i] == '--timeout':
+        timeout = max(10, min(int(a[i + 1]), 600)); i += 2
+    elif a[i] == '--max-output':
+        cap = max(500, min(int(a[i + 1]), 30000)); i += 2
+    else:
+        script = a[i]; i += 1
+if not script or not os.path.isfile(script):
+    sys.exit(f'browser-run: no such script: {script}')
+t0 = time.time()
+try:
+    p = subprocess.run([sys.executable, '-u', os.path.realpath(__file__), '--child', os.path.abspath(script), str(cap)],
+                       capture_output=True, text=True, timeout=timeout)
+    out, rc = p.stdout + p.stderr, p.returncode
+except subprocess.TimeoutExpired as e:
+    out = (e.stdout or b'').decode('utf-8', 'replace') if isinstance(e.stdout, bytes) else (e.stdout or '')
+    rc = 124
+if len(out) > cap:
+    out = out[:cap * 2 // 3] + f'\n... [{len(out) - cap} chars cut] ...\n' + out[-cap // 3:]
+sys.stdout.write(out)
+print(f'\n[browser-run] exit {rc}' + (' (timed out)' if rc == 124 else '') + f' in {round(time.time() - t0, 1)}s')
+sys.exit(rc)

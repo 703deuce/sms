@@ -1,0 +1,7 @@
+Linux ubuntu-8gb-hel1-1 7.0.0-42-generic #42-Ubuntu SMP PREEMPT_DYNAMIC Thu Oct 15 08:06:44 UTC 2026 x86_64 GNU/Linux
+Description:	Ubuntu 26.04.1 LTS
+Python 3.14.4
+Docker version 29.1.3, build 29.1.3-0ubuntu4.1
+/dev/sda1       150G   54G   90G  38% /
+               total        used        free      shared  buff/cache   available
+Mem:            7740        5776         126         225        2370        1963

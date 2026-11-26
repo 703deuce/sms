@@ -1,0 +1,327 @@
+{
+ "S1": {
+  "name": "Schedule Reminder for Rick's Weekly Status",
+  "before": {
+   "cost": 0.0058,
+   "tokens": {
+    "input": 234,
+    "cache_write": 41114,
+    "cache_read": 40414,
+    "output": 522
+   },
+   "minutes": 0.1,
+   "start_tokens": 40418,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I set up a one-off reminder, `rm_36058e6351`, for tomorrow, Wednesday, November 25, 2026 at 9:00 AM ET. It is scheduled in the system (about 16 hours from now), not just written down.\n\nWhen it fires, it posts a notification to you with the text \"Send Rick's weekly Agent Lab status report.\" It does not start an agent run, so the report itself still has to be written. If you want the agent to draft the report automatically at that time, I can schedule it with `--run` instead."
+  },
+  "after": {
+   "cost": 0.0063,
+   "tokens": {
+    "input": 10,
+    "cache_write": 43964,
+    "cache_read": 42473,
+    "output": 683
+   },
+   "minutes": 0.4,
+   "start_tokens": 42477,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "The reminder is scheduled. It will fire **Thursday, November 26, 2026 at 9:00 AM ET** (EST, America/New_York). The reminder ID is `rm_8d74b00f45`.\n\nThe tool confirmed the time: it is 1 day 6 hours 27 minutes from now. The reminder only posts a notification saying \"Send Rick's weekly Agent Lab status.\" It does not write the status itself. If you want an agent run to prepare the status at 9:00 AM, I can schedule that version with `--run` instead."
+  }
+ },
+ "S3": {
+  "name": "Fill httpbin post form and report submitted data",
+  "before": {
+   "cost": 0.0132,
+   "tokens": {
+    "input": 281,
+    "cache_write": 49430,
+    "cache_read": 537137,
+    "output": 3210
+   },
+   "minutes": 0.5,
+   "start_tokens": 40249,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "The form posted successfully. httpbin returned the submitted values as JSON at `https://httpbin.org/post`:\n\n- **Customer name:** Rick James\n- **Telephone:** 555-0100\n- **E-mail:** rick@transovo.ai\n- **Pizza size:** medium\n- **Toppings:** bacon, onion\n- **Delivery time:** 12:00 (I entered it as 12:00 PM)\n- **Comments:** Agent Lab form test\n\nI chose the telephone, email, size, toppings and delivery time myself since you left those open. Those are placeholder values, not real contact details. The first try to load the page came back blank, so I reloaded it. Before submitting I took a screenshot and checked that every field held the intended value.\n\nChecks: pass/fail is **PASS**. The result page shows every field I filled with the value I entered. Quality is good: the posted values match the form. Cost is about $0 (browser only, no paid tools used).\n\nScreenshot of the filled form before submit: `/workspace/jobs/3b595bf4-ceca-4d63-b843-413872fb6133/form_before.png`"
+  },
+  "after": {
+   "cost": 0.0209,
+   "tokens": {
+    "input": 44,
+    "cache_write": 107803,
+    "cache_read": 567888,
+    "output": 3452
+   },
+   "minutes": 2.1,
+   "start_tokens": 43136,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "I've handed the httpbin form test to a background job. I'll send you what the result page shows once it finishes."
+  }
+ },
+ "S4": {
+  "name": "Slugify CSV Dates CLI With Strict Mode",
+  "before": {
+   "cost": 0.0085,
+   "tokens": {
+    "input": 368,
+    "cache_write": 43951,
+    "cache_read": 124434,
+    "output": 3375
+   },
+   "minutes": 0.2,
+   "start_tokens": 40383,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "I wrote `out/slugify-dates.py` and `out/README.md`, and ran a 4-row sample through the script in normal and strict modes. All four dates parse correctly, and the one bad date behaves as specified.\n\nSample input (the CSV is `title,date`, with the `Nov 22, 2026` field quoted):\n```\n\"Launch Day: Caf\u00e9 & Cr\u00e8me!\",11/22/26\nHello World,2026-11-22\n\"Q4 Recap \u2014 Final\",\"Nov 22, 2026\"\nBroken Date,2026-13-45\n```\n\nNormal mode (`python3 slugify-dates.py < sample.csv`), exit code 1:\n```\nslug,iso_date\nlaunch-day-cafe-creme,2026-11-22\nhello-world,2026-11-22\nq4-recap-final,2026-11-22\nerror: bad date '2026-13-45' for title 'Broken Date'\nbroken-date,\n```\n\nStrict mode (`--strict`), exit code 2:\n```\nslug,iso_date\nlaunch-day-cafe-creme,2026-11-22\nhello-world,2026-11-22\nq4-recap-final,2026-11-22\nerror: bad date '2026-13-45' for title 'Broken Date'\n```\n\nWhat I checked:\n- Slugs are lowercase ASCII with hyphens; accents are stripped (Caf\u00e9 \u2192 cafe) and punctuation collapses to single hyphens.\n- All three date formats and the `11/22/26` short year produce `YYYY-MM-DD`.\n- A bad date gives exit 2 in strict mode and stops at that row. In normal mode it prints an empty `iso_date`, writes a message to stderr, and exits 1.\n- No network install was used.\n\nDecisions to note:\n- The spec didn't say what non-strict mode should do with a bad date, so I print an empty `iso_date` and exit 1. Tell me if you want a different behaviour.\n- Dates containing a comma, such as `Nov 22, 2026`, must be quoted in the CSV. The first "
+  },
+  "after": {
+   "cost": 0.0114,
+   "tokens": {
+    "input": 20,
+    "cache_write": 53913,
+    "cache_read": 235747,
+    "output": 4524
+   },
+   "minutes": 0.6,
+   "start_tokens": 44181,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "The task is complete and nothing new from Rick is pending. The script is at `out/slugify-dates.py` and its usage notes are at `out/README.md`. The sample run showed the expected output in normal and strict modes. I didn't hand the work to a background job, because it was already finished when the front-desk notice arrived."
+  }
+ },
+ "S7": {
+  "name": "Save Rick's Agent Lab test recap preferences",
+  "before": {
+   "cost": 0.0053,
+   "tokens": {
+    "input": 218,
+    "cache_write": 40095,
+    "cache_read": 0,
+    "output": 450
+   },
+   "minutes": 0.1,
+   "start_tokens": 40099,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "It's already in long-term memory, so I didn't add a duplicate. Three shared entries cover it:\n\n- **#23** (preference, Nov 24): Agent Lab test recaps lead with pass/fail, then quality, then cost.\n- **#12** (rule): the same order, stated as a rule.\n- **#11** (preference, Nov 23): the same order again.\n\nFrom now on I'll lead Agent Lab test recaps with pass/fail, then quality, then cost, and I'll quote the cost total from `usage --conversation` when I state a cost."
+  },
+  "after": {
+   "cost": 0.0054,
+   "tokens": {
+    "input": 218,
+    "cache_write": 41658,
+    "cache_read": 0,
+    "output": 385
+   },
+   "minutes": 0.3,
+   "start_tokens": 41662,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Got it. This is already in long-term memory as a shared preference (#23, with duplicates #11 and #12), so I didn't add another copy:\n\n**Agent Lab test recaps lead with pass/fail, then quality, then cost.**\n\nIf you want the wording changed, or the duplicates merged, tell me and I'll update the entries."
+  }
+ },
+ "S12": {
+  "name": "Agent Lab Test Recap Page Publishing",
+  "before": {
+   "cost": 0.0093,
+   "tokens": {
+    "input": 266,
+    "cache_write": 47583,
+    "cache_read": 217325,
+    "output": 2295
+   },
+   "minutes": 0.3,
+   "start_tokens": 40176,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "The recap is published. It leads with how we score, then the example table, then notes.\n\n- **Slug:** `agent-lab-test-recap-nov24`\n- **URL:** https://transovo.ai/app/agent-lab/pages/agent-lab-test-recap-nov24\n\n**Checks:**\n- The page loads in the browser at 5:00 PM ET on Nov 24, with the title, the \"How we score\" section and the scoring order (pass/fail, quality 1\u20135, time, cost).\n- The source file has the three-row example table (Pass/Fail, Quality, Time, Cost, Note) with made-up results. The table sits below the first screen, so I confirmed its rows in the source rather than in the screenshot.\n\nI reused the wording from the Nov 22 recap (`agent-lab-test-recap-scoring`) and did not write new content. The 15-task list is described there only in summary, so if you want the task list itself in the page, tell me which tasks to include."
+  },
+  "after": {
+   "cost": 0.0087,
+   "tokens": {
+    "input": 16,
+    "cache_write": 46458,
+    "cache_read": 171714,
+    "output": 2374
+   },
+   "minutes": 0.5,
+   "start_tokens": 40899,
+   "runs": [
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "The recap is published. Its slug is **`agent-lab-test-recap-3`**, and the URL is https://transovo.ai/app/agent-lab/pages/agent-lab-test-recap-3\n\nThe slug has a `-3` suffix because `agent-lab-test-recap` and `-2` were already taken, so the publisher added a suffix.\n\nThe page leads with how we score (quality 0-5, time, cost, plus pass/fail), then the three-row example table, then notes. I rendered it in a browser and the title, scoring section, and table display correctly.\n\nThings to check:\n- **The example table is made up**, as the page labels it. The three setups (A, B, C) and their numbers are illustrative only.\n- **The description of the 15-task set is generic.** I don't have the actual task list in this job, so I described the set as covering research, writing, code and video. If you send the real list, I'll make the page name the tasks."
+  }
+ },
+ "S13": {
+  "name": "Browser Research: 6 Wikipedia Pages Summary",
+  "before": {
+   "cost": 0.0382,
+   "tokens": {
+    "input": 561,
+    "cache_write": 141086,
+    "cache_read": 1386653,
+    "output": 13250
+   },
+   "minutes": 1.8,
+   "start_tokens": 40785,
+   "runs": [
+    "agent:None:done"
+   ],
+   "status": "done",
+   "result": "All six pages are done. The two files are:\n\n- `/workspace/jobs/b0f3d1df-2395-4a39-9b7d-6fe6d58ebff5/notes.md`\n- `/workspace/jobs/b0f3d1df-2395-4a39-9b7d-6fe6d58ebff5/summary.md`\n\n**What I checked**\n- Each page was opened in the browser, its full text was read, and a screenshot was taken (shot1\u2013shot6.png). I viewed shot5 and shot6 with `agent_view`. Shot5 confirmed the Motion graphics page. Shot6 confirmed the Documentary film page.\n- I did not view shots 1\u20134 again in this pass. Shot4 was viewed earlier.\n- Page 5's screenshot was taken earlier, but I had written its notes before confirming the file, so I checked it now.\n- Notes for all six pages are in `notes.md`. The summary has 10 bullets. I corrected one bullet that claimed a link between pages 2 and 3 that I had not verified.\n\n**Caveat**\n- The task did not name an output format, so `summary.md` is plain bullets. Tell me if you want it in a different form.\n\nNo cost was incurred: the browser and the screenshots are free local tools, and no paid media calls were made."
+  },
+  "after": {
+   "cost": 0.0366,
+   "tokens": {
+    "input": 547,
+    "cache_write": 129792,
+    "cache_read": 1312257,
+    "output": 14345
+   },
+   "minutes": 2.5,
+   "start_tokens": 40873,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done"
+   ],
+   "status": "done",
+   "result": "Page 1 of 6 (Prompt engineering) is done and recorded in `notes.md`. The other five pages are running in a background job, and I'll send the two file paths when it finishes."
+  }
+ },
+ "R3": {
+  "name": "rt3 landing page",
+  "before": {
+   "cost": 0.463,
+   "tokens": {
+    "input": 389,
+    "cache_write": 108360,
+    "cache_read": 307262,
+    "output": 5111
+   },
+   "minutes": 1.1,
+   "start_tokens": 48872,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "On it: the Lumen Mug landing page is running in the background, and I'll send it over when it's done."
+  },
+  "after": {
+   "cost": 0.3423,
+   "tokens": {
+    "input": 385,
+    "cache_write": 88362,
+    "cache_read": 155482,
+    "output": 4797
+   },
+   "minutes": 1.0,
+   "start_tokens": 39685,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the Lumen Mug landing page is running in the background, and I'll send you the result when it's done."
+  }
+ },
+ "R4": {
+  "name": "rt4 title card",
+  "before": {
+   "cost": 0.5164,
+   "tokens": {
+    "input": 381,
+    "cache_write": 171333,
+    "cache_read": 678471,
+    "output": 8066
+   },
+   "minutes": 1.6,
+   "start_tokens": 48740,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I've started the background job for the 5-second title card (1920x1080, 30 fps, silent H.264 MP4 at `out/title.mp4`). I'll send the result when it's ready."
+  },
+  "after": {
+   "cost": 2.1197,
+   "tokens": {
+    "input": 397,
+    "cache_write": 380685,
+    "cache_read": 1494091,
+    "output": 14993
+   },
+   "minutes": 4.6,
+   "start_tokens": 39561,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "The title card is ready and the measured properties match your request. I checked the file myself with ffprobe:\n\n- **Length:** 5.000 s (150 frames)\n- **Resolution:** 1920x1080\n- **Frame rate:** 30 fps\n- **Codec:** H.264 MP4\n- **Audio:** none, so it's silent\n\nThe file is at `helpers/6336c735-a559-40ec-a5c8-07a84887cd67/out/title.mp4` inside this job folder. It is not in `out/`, and I haven't copied it. The sender's summary says the title reads \"TRANSOVO CLIPS presents / THE FEUD\" on a dark background with a bold reveal. I haven't looked at the frames myself, so I can't confirm that from my side.\n\nThe file is 51.6 MB for 5 seconds, which is large for a title card. I can make a 480p preview or re-encode it smaller if you want."
+  }
+ },
+ "R5": {
+  "name": "rt5 sales chart",
+  "before": {
+   "cost": 0.51,
+   "tokens": {
+    "input": 376,
+    "cache_write": 110119,
+    "cache_read": 413440,
+    "output": 4964
+   },
+   "minutes": 1.2,
+   "start_tokens": 48883,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the Lumen Mug sales bar chart is running in the background, and I'll send it here when it's done."
+  },
+  "after": {
+   "cost": 0.2647,
+   "tokens": {
+    "input": 368,
+    "cache_write": 83155,
+    "cache_read": 150598,
+    "output": 1990
+   },
+   "minutes": 0.8,
+   "start_tokens": 39694,
+   "runs": [
+    "agent:lab-anthropic:done",
+    "visual-owner:lab-opus:done"
+   ],
+   "status": "done",
+   "result": "I'm on it: the Lumen Mug sales bar chart is running in the background, and I'll send it to you when it's done."
+  }
+ }
+}

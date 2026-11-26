@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""key: press a key or combo on the agent desktop (xdotool key names).
+
+usage: key COMBO [--hold-ms MS] [--shot [OUT.png]] [--wait S]
+examples:
+  key Return
+  key ctrl+l              focus the address bar
+  key ctrl+a ; key ctrl+c select all, copy
+  key alt+F4
+  key ctrl+shift+Tab
+  key Right --hold-ms 2000   hold the Right arrow for 2 s (games, long-press, key repeat)
+  key shift --hold-ms 500
+Modifier+click: click X Y --mods ctrl.  Modifier+drag: drag ... --mods shift.
+"""
+import argparse, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import add_common, run
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__); sys.exit(0)
+p = argparse.ArgumentParser(prog="key", usage=__doc__)
+p.add_argument("combo", nargs="+")
+p.add_argument("--hold-ms", type=int)
+add_common(p)
+a = p.parse_args()
+combo = "+".join(a.combo)
+body = {"key": combo}
+if a.hold_ms:
+    body["hold_ms"] = a.hold_ms
+run("key", "/key", body, a, f"pressed {combo}" + (f" (held {a.hold_ms} ms)" if a.hold_ms else ""))

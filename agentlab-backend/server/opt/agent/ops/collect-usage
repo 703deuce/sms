@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""Pull OpenHands conversation metrics from localhost:8000 and write /workspace/usage/summary.json.
+
+Reads AGENT_LAB_TOKEN from /opt/agent/.env inside this script and never prints it
+or any other secret. Also folds media CLI costs from /workspace/usage/usage.jsonl.
+Safe to run from cron.
+"""
+import json, os, sys, urllib.error, urllib.parse, urllib.request
+from collections import defaultdict
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+ET = ZoneInfo("America/New_York")
+ENV_PATH = os.environ.get("AGENT_LAB_ENV", "/opt/agent/.env")
+API = os.environ.get("AGENT_LAB_API", "http://127.0.0.1:8000")
+WORKSPACE = os.environ.get("AGENT_WORKSPACE", "/opt/agent/workspace")
+# When running inside the container with the workspace mount:
+if os.path.isdir("/workspace") and not os.path.isdir(os.path.join(WORKSPACE, "usage")) and os.path.isdir("/workspace"):
+    if os.path.exists("/workspace/usage") or os.path.isdir("/workspace"):
+        # Prefer /workspace if that's where the volume is mounted
+        if os.path.ismount("/workspace") or os.path.isdir("/workspace/conversations"):
+            WORKSPACE = "/workspace"
+
+
+def die(msg):
+    print(f"collect-usage: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def load_named_env(path, names):
+    """Return a dict of requested keys from a KEY=VALUE env file. Values are not logged."""
+    wanted = set(names)
+    found = {}
+    try:
+        with open(path, "r") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                if k in wanted:
+                    found[k] = v.strip().strip("'").strip('"')
+    except FileNotFoundError:
+        die(f"env file not found: {path}")
+    return found
+
+
+def api_get(path, token, params=None):
+    url = API.rstrip("/") + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params, doseq=True)
+    req = urllib.request.Request(url, headers={"X-Session-API-Key": token, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return json.load(r)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", "replace")[:300]
+        raise RuntimeError(f"HTTP {e.code} {path}: {body}") from e
+
+
+def day_of(ts):
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return dt.astimezone(ET).date().isoformat()
+    except Exception:
+        return str(ts)[:10]
+
+
+def tokens_from(usage):
+    usage = usage or {}
+    return {
+        "prompt_tokens": int(usage.get("prompt_tokens") or 0),
+        "completion_tokens": int(usage.get("completion_tokens") or 0),
+        "cache_read_tokens": int(usage.get("cache_read_tokens") or 0),
+        "cache_write_tokens": int(usage.get("cache_write_tokens") or 0),
+        "reasoning_tokens": int(usage.get("reasoning_tokens") or 0),
+    }
+
+
+def add_tokens(a, b):
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = int(out.get(k) or 0) + int(v or 0)
+    return out
+
+
+def convo_cost_and_tokens(info):
+    """Prefer stats.usage_to_metrics (full ledger); fall back to metrics snapshot.
+
+    Returns (cost, tokens, models, cost_by_model). cost_by_model aggregates by model name
+    so agent + condenser calls on the same model are one row (Haiku vs Opus split).
+    """
+    cost = 0.0
+    tokens = tokens_from({})
+    models = []
+    cost_by_model = {}
+    stats = info.get("stats") or {}
+    usage_map = stats.get("usage_to_metrics") or {}
+
+    def add_model(model, role, piece):
+        name = model or role
+        if not name:
+            return
+        if name not in models:
+            models.append(name)
+        cost_by_model[name] = cost_by_model.get(name, 0.0) + piece
+
+    if usage_map:
+        for role, metrics in usage_map.items():
+            metrics = metrics or {}
+            piece = float(metrics.get("accumulated_cost") or 0)
+            cost += piece
+            tokens = add_tokens(tokens, tokens_from(metrics.get("accumulated_token_usage") or {}))
+            model = metrics.get("model_name") or (metrics.get("accumulated_token_usage") or {}).get("model")
+            add_model(model, role, piece)
+    else:
+        metrics = info.get("metrics") or {}
+        if metrics:
+            piece = float(metrics.get("accumulated_cost") or 0)
+            cost += piece
+            tokens = add_tokens(tokens, tokens_from(metrics.get("accumulated_token_usage") or {}))
+            model = metrics.get("model_name") or (metrics.get("accumulated_token_usage") or {}).get("model")
+            add_model(model, None, piece)
+    return cost, tokens, models, {k: round(v, 6) for k, v in cost_by_model.items()}
+
+
+def list_conversations(token):
+    items, page_id = [], None
+    for _ in range(50):
+        params = {"limit": 100}
+        if page_id:
+            params["page_id"] = page_id
+        data = api_get("/api/conversations/search", token, params)
+        batch = data.get("items") or data.get("conversations") or []
+        items.extend(batch)
+        page_id = data.get("next_page_id")
+        if not page_id or not batch:
+            break
+    return items
+
+
+def load_media(path):
+    rows = []
+    try:
+        with open(path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rows.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
+    except FileNotFoundError:
+        pass
+    return rows
+
+
+def main():
+    secrets = load_named_env(ENV_PATH, ["AGENT_LAB_TOKEN"])
+    token = secrets.get("AGENT_LAB_TOKEN")
+    if not token:
+        die("AGENT_LAB_TOKEN missing from env file")
+
+    try:
+        items = list_conversations(token)
+    except Exception as e:
+        die(f"API error: {e}")
+
+    conversations = []
+    days = defaultdict(lambda: {
+        "llm_cost_usd": 0.0,
+        "media_cost_usd": 0.0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "conversations": 0,
+        "media_calls": 0,
+        "cost_by_model": {},
+    })
+    llm_total = 0.0
+    cost_by_model_total = {}
+    for info in items:
+        cost, tokens, models, cost_by_model = convo_cost_and_tokens(info)
+        created = info.get("created_at")
+        updated = info.get("updated_at") or created
+        day = day_of(updated) or day_of(created)
+        rec = {
+            "id": info.get("id"),
+            "title": info.get("title"),
+            "status": info.get("execution_status"),
+            "created_at": created,
+            "updated_at": updated,
+            "cost_usd": round(cost, 6),
+            "tokens": tokens,
+            "models": models,
+            "cost_by_model": cost_by_model,
+        }
+        conversations.append(rec)
+        llm_total += cost
+        for m, c in cost_by_model.items():
+            cost_by_model_total[m] = cost_by_model_total.get(m, 0.0) + c
+        if day:
+            days[day]["llm_cost_usd"] += cost
+            days[day]["prompt_tokens"] += tokens["prompt_tokens"]
+            days[day]["completion_tokens"] += tokens["completion_tokens"]
+            days[day]["conversations"] += 1
+            for m, c in cost_by_model.items():
+                days[day]["cost_by_model"][m] = days[day]["cost_by_model"].get(m, 0.0) + c
+
+    usage_dir = os.path.join(WORKSPACE, "usage")
+    os.makedirs(usage_dir, mode=0o775, exist_ok=True)
+    media_rows = load_media(os.path.join(usage_dir, "usage.jsonl"))
+    media_total = 0.0
+    opus_step_total = 0.0
+    by_cid = {c["id"]: c for c in conversations}
+    for row in media_rows:
+        cost = float(row.get("estimated_cost_usd") or 0)
+        day = day_of(row.get("ts"))
+        if row.get("tool") == "opus-step":
+            opus_step_total += cost
+            llm_total += cost
+            model = row.get("model") or "anthropic/claude-opus-5-5"
+            cost_by_model_total[model] = cost_by_model_total.get(model, 0.0) + cost
+            cid = row.get("conversation_id")
+            if cid and cid in by_cid:
+                rec = by_cid[cid]
+                rec["cost_usd"] = round(float(rec.get("cost_usd") or 0) + cost, 6)
+                rec.setdefault("cost_by_model", {})
+                rec["cost_by_model"][model] = round(float(rec["cost_by_model"].get(model) or 0) + cost, 6)
+                if model not in (rec.get("models") or []):
+                    rec.setdefault("models", []).append(model)
+            if day:
+                days[day]["llm_cost_usd"] += cost
+                days[day]["cost_by_model"][model] = days[day]["cost_by_model"].get(model, 0.0) + cost
+            continue
+        media_total += cost
+        if day:
+            days[day]["media_cost_usd"] += cost
+            days[day]["media_calls"] += 1
+
+    days_out = {}
+    for d, rec in sorted(days.items()):
+        days_out[d] = {
+            "llm_cost_usd": round(rec["llm_cost_usd"], 6),
+            "media_cost_usd": round(rec["media_cost_usd"], 6),
+            "total_usd": round(rec["llm_cost_usd"] + rec["media_cost_usd"], 6),
+            "prompt_tokens": rec["prompt_tokens"],
+            "completion_tokens": rec["completion_tokens"],
+            "conversations": rec["conversations"],
+            "media_calls": rec["media_calls"],
+            "cost_by_model": {k: round(v, 6) for k, v in (rec.get("cost_by_model") or {}).items()},
+        }
+
+    conversations.sort(key=lambda c: c.get("updated_at") or c.get("created_at") or "", reverse=True)
+    summary = {
+        "generated_at": datetime.now(ET).isoformat(timespec="seconds"),
+        "timezone": "America/New_York",
+        "source": f"{API}/api/conversations/search",
+        "conversation_count": len(conversations),
+        "llm_cost_usd": round(llm_total, 6),
+        "opus_step_usd": round(opus_step_total, 6),
+        "media_cost_usd": round(media_total, 6),
+        "total_usd": round(llm_total + media_total, 6),
+        "days": days_out,
+        "conversations": conversations,
+        "cost_by_model": {k: round(v, 6) for k, v in cost_by_model_total.items()},
+    }
+    out = os.path.join(usage_dir, "summary.json")
+    tmp = out + ".tmp"
+    with open(tmp, "w") as f:
+        json.dump(summary, f, indent=2)
+        f.write("\n")
+    os.replace(tmp, out)
+    try:
+        os.chmod(out, 0o664)
+    except OSError:
+        pass
+    print(
+        f"collect-usage: {len(conversations)} conversations, "
+        f"LLM ${summary['llm_cost_usd']:.4f}, media ${summary['media_cost_usd']:.4f}, "
+        f"total ${summary['total_usd']:.4f} -> {out}"
+    )
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+"""curl wrapper: try direct first, then the lab egress gateway (residential, then mobile).
+
+Falls through to /usr/bin/curl unchanged when a proxy is already set, the URL is
+local, or EGRESS_OFF=1. Status and challenge-page detection uses the response,
+never the user's text.
+"""
+import os, sys, re, subprocess, tempfile
+
+sys.path.insert(0, "/opt/tools/egress")
+sys.path.insert(0, "/opt/agent/tools/egress")
+sys.path.insert(0, "/opt/agent/ops/egress")
+
+REAL = os.environ.get("EGRESS_REAL_CURL", "/usr/bin/curl")
+
+
+def has_proxy_flag(args):
+    for i, a in enumerate(args):
+        if a in ("-x", "--proxy", "--preproxy", "--proxy1.0", "--proxytunnel") or a.startswith("--proxy=") or a.startswith("-x"):
+            if a in ("-x", "--proxy", "--preproxy", "--proxy1.0") or a.startswith("--proxy=") or a == "--proxytunnel":
+                return True
+            if a.startswith("-x") and a != "-x":
+                return True
+    return False
+
+
+def urls_of(args):
+    out = []
+    skip = 0
+    takes_val = {
+        "-o","-O","-w","-d","-F","-H","-A","-e","-b","-c","-D","-T","-u","-U","-x","-Y","-y","-z",
+        "--output","--write-out","--data","--data-raw","--data-binary","--header","--user-agent",
+        "--proxy","--connect-timeout","--max-time","--retry","--url","--form","--user","--referer",
+        "--cookie","--cookie-jar","--dump-header","--cert","--key","--cacert","--capath","--interface",
+        "--resolve","--connect-to","--max-redirs","--retry-delay","--output-dir",
+    }
+    for i, a in enumerate(args):
+        if skip:
+            skip -= 1
+            continue
+        if a == "--":
+            out.extend(args[i+1:])
+            break
+        if a.startswith("-"):
+            name = a.split("=", 1)[0]
+            if name in takes_val and "=" not in a and i + 1 < len(args):
+                skip = 1
+            continue
+        if "://" in a or a.startswith("www."):
+            out.append(a)
+    return out
+
+
+def is_local(url):
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except Exception:
+        return False
+    if not host or host == "localhost" or host.endswith(".local"):
+        return True
+    if host.startswith("127.") or host.startswith("10.") or host.startswith("192.168."):
+        return True
+    if re.match(r"172\.(1[6-9]|2[0-9]|3[0-1])\.", host):
+        return True
+    return False
+
+
+def main():
+    args = sys.argv[1:]
+    if os.environ.get("EGRESS_OFF", "").strip() in ("1", "true", "yes") or has_proxy_flag(args):
+        os.execv(REAL, [REAL] + args)
+    urls = urls_of(args)
+    if not urls or all(is_local(u) for u in urls):
+        os.execv(REAL, [REAL] + args)
+    # Help/version should not go through the fallback.
+    if any(a in ("-h", "--help", "-V", "--version") for a in args):
+        os.execv(REAL, [REAL] + args)
+
+    try:
+        import egresslib as E
+    except Exception:
+        os.execv(REAL, [REAL] + args)
+
+    # For a single URL: do 3-tier internally, then replay the successful tier
+    # with the user's exact flags so -o/-w/-I/stdout stay correct.
+    url = urls[0]
+    job = E.job_from_cwd()
+    force = (os.environ.get("EGRESS_FORCE_TIER") or "").strip().lower() or None
+    def wants_head(argv):
+        for a in argv:
+            if a in ("-I", "--head") or a.startswith("--head"):
+                return True
+            # Combined short options such as -sI / -sIL, used by curl -sI checks.
+            if a.startswith("-") and not a.startswith("--") and "I" in a:
+                return True
+        return False
+    head_only = wants_head(args)
+    probe = E.fetch(url, job=job, force_tier=force, head_only=head_only)
+    # Always tell the agent what was tried, on stderr (does not break -w output).
+    sys.stderr.write("egress: " + probe.report() + "\n")
+    if not probe.ok and probe.blocked and probe.final_tier is None:
+        # Still run curl on the last attempted paid/direct path so the user sees
+        # the same body/status; append the blocked report.
+        tier = None
+        for t in reversed(probe.tiers_tried):
+            if t.get("reason") != "mobile_disabled":
+                tier = t["tier"]
+                break
+        tier = tier or "direct"
+        env = os.environ.copy()
+        cmd = [REAL] + args
+        if tier in ("residential", "mobile"):
+            cmd = [REAL, "-x", E.GATEWAY, "--proxy-user", f"{job}__tier.{tier}:"] + args
+        return subprocess.call(cmd, env=env)
+
+    tier = probe.final_tier or "direct"
+    cmd = [REAL] + args
+    if tier in ("residential", "mobile"):
+        cmd = [REAL, "-x", E.GATEWAY, "--proxy-user", f"{job}__tier.{tier}:"] + args
+    return subprocess.call(cmd)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main() or 0)
+    except KeyboardInterrupt:
+        sys.exit(130)

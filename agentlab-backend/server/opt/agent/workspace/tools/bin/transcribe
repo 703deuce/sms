@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""transcribe: transcribe audio/video with Deepgram Nova-3 (word timestamps + diarization).
+
+usage: transcribe <file> -o out.json [--model nova-3]
+  -o         output JSON path (required)
+Needs DEEPGRAM_API_KEY. Appends a usage line to /workspace/usage/usage.jsonl.
+"""
+import json, os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _usage import append_usage, transcribe_cost, _as_dict
+
+DEFAULT_MODEL = "nova-3"
+
+
+def die(msg):
+    print(f"transcribe: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def _pick(d, *keys, default=None):
+    for k in keys:
+        if isinstance(d, dict) and k in d and d[k] is not None:
+            return d[k]
+        if not isinstance(d, dict) and hasattr(d, k):
+            v = getattr(d, k)
+            if v is not None:
+                return v
+    return default
+
+
+def normalize(resp):
+    data = _as_dict(resp)
+    results = _pick(data, "results") or {}
+    if not isinstance(results, dict):
+        results = _as_dict(results)
+    channels = results.get("channels") or []
+    alt = {}
+    if channels:
+        ch0 = _as_dict(channels[0])
+        alts = ch0.get("alternatives") or []
+        if alts:
+            alt = _as_dict(alts[0])
+    md = _as_dict(_pick(data, "metadata") or {})
+    duration = md.get("duration")
+    words_out = []
+    for w in alt.get("words") or []:
+        ww = _as_dict(w)
+        words_out.append({
+            "word": ww.get("word") or ww.get("punctuated_word") or "",
+            "punctuated_word": ww.get("punctuated_word"),
+            "start": ww.get("start"),
+            "end": ww.get("end"),
+            "confidence": ww.get("confidence"),
+            "speaker": ww.get("speaker"),
+            "speaker_confidence": ww.get("speaker_confidence"),
+        })
+    utterances = []
+    for u in results.get("utterances") or []:
+        uu = _as_dict(u)
+        utterances.append({
+            "speaker": uu.get("speaker"),
+            "start": uu.get("start"),
+            "end": uu.get("end"),
+            "transcript": uu.get("transcript"),
+            "confidence": uu.get("confidence"),
+        })
+    return {
+        "transcript": alt.get("transcript") or "",
+        "confidence": alt.get("confidence"),
+        "words": words_out,
+        "utterances": utterances,
+        "duration_seconds": duration,
+        "channels": md.get("channels") or md.get("channel_count"),
+        "model_info": _as_dict(md.get("model_info") or {}),
+        "metadata": {k: md.get(k) for k in ("duration", "channels", "created", "request_id", "models", "sha256") if k in md},
+    }
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    files, out, model = [], None, DEFAULT_MODEL
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-o", "--out"):
+            out = args[i + 1]; i += 2
+        elif a == "--model":
+            model = args[i + 1]; i += 2
+        elif a.startswith("-"):
+            die(f"unknown option {a}")
+        else:
+            files.append(a); i += 1
+    if len(files) != 1:
+        die("exactly one input file is required")
+    path = files[0]
+    if not os.path.exists(path):
+        die(f"not found: {path}")
+    if not out:
+        die("-o out.json is required")
+    key = os.environ.get("DEEPGRAM_API_KEY")
+    if not key:
+        die("DEEPGRAM_API_KEY not set")
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+    with open(path, "rb") as f:
+        audio = f.read()
+    from deepgram import DeepgramClient
+    client = DeepgramClient(api_key=key)
+    try:
+        # diarize_model enables diarization; do not also set diarize= (rejected if both set).
+        # Word timestamps are returned by default.
+        resp = client.listen.v1.media.transcribe_file(
+            request=audio,
+            model=model,
+            smart_format=True,
+            punctuate=True,
+            utterances=True,
+            diarize_model="latest",
+        )
+    except Exception as e:
+        die(f"Deepgram request failed: {e}")
+    result = normalize(resp)
+    result["source"] = os.path.basename(path)
+    result["model"] = model
+    def jsonable(o):
+        if o is None or isinstance(o, (str, int, float, bool)):
+            return o
+        if isinstance(o, dict):
+            return {k: jsonable(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [jsonable(v) for v in o]
+        iso = getattr(o, "isoformat", None)
+        if callable(iso):
+            return iso()
+        return str(o)
+
+    result = jsonable(result)
+    with open(out, "w") as f:
+        json.dump(result, f, indent=2)
+        f.write("\n")
+    dur = result.get("duration_seconds") or 0
+    cost, units = transcribe_cost(dur)
+    units["words"] = len(result.get("words") or [])
+    rec = append_usage("transcribe", units, cost, model=model, out=out, source=os.path.basename(path))
+    preview = (result.get("transcript") or "")[:200]
+    print(f"wrote {out}  {units['seconds']}s  {units['words']} words  estimated ${rec['estimated_cost_usd']:.4f}")
+    if preview:
+        print(preview)
+
+
+if __name__ == "__main__":
+    main()

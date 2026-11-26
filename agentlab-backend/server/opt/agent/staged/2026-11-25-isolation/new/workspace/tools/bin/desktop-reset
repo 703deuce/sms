@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""desktop-reset: close the shared desktop browser's tabs and leave one blank tab (logins are kept).
+The browser itself keeps running, because other conversations and the browser_* tools share it.
+  desktop-reset          close all tabs, open one about:blank
+  desktop-reset --hard   restart the browser process (only if it is stuck); chrome-keeper relaunches it in seconds"""
+import json, os, sys, urllib.request
+CDP = 'http://127.0.0.1:9222'
+a = sys.argv[1:]
+if a and a[0] in ('-h', '--help'):
+    print(__doc__ + "\n  In a run or helper with its own browser (job-browser) both act on that browser only;\n"
+          "  --shared acts on the shared desktop browser."); sys.exit(0)
+if '--shared' in a:
+    a = [x for x in a if x != '--shared']
+else:
+    try:
+        sys.path.insert(0, '/opt/tools')
+        import jobbrowser as _jb
+        _info = _jb.ensure(False)
+    except Exception:
+        _info = {}
+    if _info.get('mode') == 'job':
+        if a and a[0] == '--hard':
+            _jb._call('/stop', {'job': _jb.job_id()})
+            print('closed this job\'s browser; it restarts (logins from the shared profile) on next use'); sys.exit(0)
+        if not _info.get('running'):
+            print('this job\'s browser is not running; nothing to reset'); sys.exit(0)
+        _pages = _jb.pages(_info['port'])
+        _jb.http_json(_info['port'], '/json/new?about:blank', method='PUT')
+        for t in _pages:
+            _jb.http_json(_info['port'], '/json/close/' + t['id'])
+        print(f'closed {len(_pages)} tab(s) in this job\'s browser; one blank tab left'); sys.exit(0)
+if a and a[0] == '--hard':
+    req = urllib.request.Request('http://127.0.0.1:6070/browser/reset', data=b'{}', method='POST',
+                                 headers={'Content-Type': 'application/json'})
+    print(urllib.request.urlopen(req, timeout=30).read().decode()); sys.exit(0)
+def cdp(p, m='GET'):
+    with urllib.request.urlopen(urllib.request.Request(CDP + p, method=m), timeout=10) as r:
+        raw = r.read()
+    try: return json.loads(raw)
+    except ValueError: return raw
+try:
+    pages = [t for t in cdp('/json') if t.get('type') == 'page']
+except Exception as e:
+    print(f'desktop-reset: shared browser not reachable ({e}); try desktop-reset --hard', file=sys.stderr); sys.exit(1)
+cdp('/json/new?about:blank', 'PUT')
+for t in pages:
+    cdp('/json/close/' + t['id'])
+print(f'closed {len(pages)} tab(s); one blank tab left; logins kept')

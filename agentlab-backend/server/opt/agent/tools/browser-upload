@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""browser-upload: attach files to a web page's file input in the shared Chromium, no handoff needed.
+
+usage: browser-upload FILE [FILE ...] [--selector 'input[type=file]'] [--click 'css of the button']
+                      [--url-contains STR]
+  Default: sets the files on the first file input (hidden ones included) of the current page.
+  --click  for sites that open a file chooser from a button/drop zone: clicks it and answers the chooser.
+  --url-contains  pick the tab whose URL contains STR (default: the most recent non-blank tab).
+After uploading, take a screenshot (browser-shot) and check the page accepted the file.
+"""
+import argparse, json, os, sys
+
+sys.path.insert(0, "/opt/tools")
+def _cdp():
+    """This job's own browser when it has one (job-browser), else the shared desktop browser."""
+    try:
+        import jobbrowser
+        return jobbrowser.cdp_url()
+    except Exception:
+        return "http://127.0.0.1:9222"
+
+def main():
+    ap = argparse.ArgumentParser(add_help=True, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("files", nargs="+")
+    ap.add_argument("--selector", default="input[type=file]")
+    ap.add_argument("--click")
+    ap.add_argument("--url-contains")
+    ap.add_argument("--timeout", type=float, default=15)
+    a = ap.parse_args()
+    files = [os.path.abspath(f) for f in a.files]
+    for f in files:
+        if not os.path.isfile(f) or os.path.getsize(f) == 0:
+            sys.exit(f"browser-upload: file missing or empty: {f}")
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as p:
+        b = p.chromium.connect_over_cdp(_cdp())
+        pages = [pg for c in b.contexts for pg in c.pages if pg.url and not pg.url.startswith(("chrome", "devtools"))]
+        if a.url_contains:
+            pages = [pg for pg in pages if a.url_contains in pg.url]
+        if not pages:
+            sys.exit("browser-upload: no matching tab; open the page first (desktop-open URL)")
+        ms = int(a.timeout * 1000)
+        want = a.click or a.selector   # prefer the newest tab that actually has the target element
+        pg = next((x for x in reversed(pages) if x.locator(want).count() > 0), pages[-1])
+        if a.click:
+            with pg.expect_file_chooser(timeout=ms) as fc:
+                pg.click(a.click, timeout=ms)
+            fc.value.set_files(files)
+            how = f"file chooser via click {a.click!r}"
+        else:
+            loc = pg.locator(a.selector)
+            n = loc.count()
+            if n == 0:
+                sys.exit(f"browser-upload: no element matches {a.selector!r} on {pg.url}. "
+                         "Try --click 'selector-of-the-upload-button' (file chooser), or another --selector.")
+            loc.first.set_input_files(files, timeout=ms)
+            how = f"input {a.selector!r} ({n} match{'es' if n != 1 else ''})"
+        got = None
+        try:
+            got = pg.evaluate("(sel)=>{const i=document.querySelector(sel);return i&&i.files?[...i.files].map(f=>f.name+':'+f.size):null}",
+                              a.selector) if not a.click else None
+        except Exception:
+            pass
+        print(json.dumps({"ok": True, "page": pg.url.split("?")[0], "via": how,
+                          "files": [os.path.basename(f) for f in files], "input_files": got}))
+        b.close()
+
+if __name__ == "__main__":
+    main()

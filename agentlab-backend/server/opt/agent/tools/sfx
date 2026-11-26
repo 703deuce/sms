@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""sfx: sound effects for a job.
+
+usage:
+  sfx search "query" [-n 8]          search Freesound (needs FREESOUND_API_KEY)
+  sfx gen "description" -o out.mp3   generate with ElevenLabs Sound Effects (needs ELEVENLABS_API_KEY)
+  sfx --check                        report which backends are configured (no paid calls)
+
+Never prints keys. Prefer `sfx gen` when ElevenLabs is configured; use `sfx search`
+for a library of existing, licensed recordings.
+"""
+from __future__ import annotations
+import argparse, json, os, sys, urllib.error, urllib.parse, urllib.request
+from pathlib import Path
+
+EL_SFX = "https://api.elevenlabs.io/v1/sound-generation"
+FS_SEARCH = "https://freesound.org/apiv2/search/text/"
+KEY_FILES_FS = ("/workspace/secrets/freesound.env", "/opt/agent/secrets/freesound.env")
+KEY_FILES_EL = ()  # already in container env
+
+
+def die(msg, code=1):
+    print(f"sfx: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load_named(names, files):
+    for n in names:
+        v = (os.environ.get(n) or "").strip()
+        if v:
+            return v
+    for path in files:
+        try:
+            for line in open(path):
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, val = line.split("=", 1)
+                if k.strip() in names:
+                    val = val.strip().strip('"').strip("'")
+                    if val:
+                        return val
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+    return None
+
+
+def el_key():
+    return load_named(("ELEVENLABS_API_KEY", "ELEVENLABS_KEY"), KEY_FILES_EL)
+
+
+def fs_key():
+    return load_named(("FREESOUND_API_KEY", "FREESOUND_TOKEN", "FREESOUND_CLIENT_SECRET"), KEY_FILES_FS)
+
+
+def cmd_check():
+    print(json.dumps({
+        "elevenlabs_sfx": bool(el_key()),
+        "freesound": bool(fs_key()),
+        "notes": [
+            "ElevenLabs Sound Effects uses ELEVENLABS_API_KEY (already used for TTS/music). `sfx gen` will bill.",
+            "Freesound needs a free API token from https://freesound.org/apiv2/apply/ — add FREESOUND_API_KEY to /workspace/secrets/freesound.env.",
+        ],
+    }, indent=2))
+
+
+def cmd_search(query, n):
+    key = fs_key()
+    if not key:
+        die("FREESOUND_API_KEY is not set. Create a free token at https://freesound.org/apiv2/apply/ "
+            "and put FREESOUND_API_KEY=... in /workspace/secrets/freesound.env (do not paste it in chat). "
+            "If you only need a generated effect, use: sfx gen \"description\" -o out.mp3")
+    params = {
+        "query": query, "page_size": max(1, min(n, 20)),
+        "fields": "id,name,url,previews,license,username,tags,duration,license",
+        "token": key,
+    }
+    req = urllib.request.Request(FS_SEARCH + "?" + urllib.parse.urlencode(params),
+                                 headers={"User-Agent": "Transovo-AgentLab/1.0"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        data = json.load(r)
+    results = []
+    for h in data.get("results") or []:
+        pre = h.get("previews") or {}
+        results.append({
+            "kind": "sfx",
+            "id": h.get("id"),
+            "name": h.get("name"),
+            "page_url": h.get("url"),
+            "preview_url": pre.get("preview-hq-mp3") or pre.get("preview-lq-mp3"),
+            "duration": h.get("duration"),
+            "tags": h.get("tags"),
+            "user": h.get("username"),
+            "license": h.get("license") or "See Freesound page",
+            "license_url": h.get("license"),
+            "source": "freesound",
+            "attribution": f"\"{h.get('name')}\" by {h.get('username')} on Freesound",
+        })
+    print(json.dumps({"query": query, "count": len(results), "results": results}, indent=2))
+
+
+def cmd_gen(text, out, duration):
+    key = el_key()
+    if not key:
+        die("ELEVENLABS_API_KEY is not set; cannot generate sound effects.")
+    out = Path(out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    body = {"text": text}
+    if duration:
+        body["duration_seconds"] = float(duration)
+    req = urllib.request.Request(EL_SFX, data=json.dumps(body).encode(), method="POST",
+                                 headers={"Content-Type": "application/json", "xi-api-key": key,
+                                          "Accept": "audio/mpeg"})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = r.read()
+    except urllib.error.HTTPError as e:
+        err = e.read()[:300].decode("utf-8", "replace")
+        die(f"ElevenLabs SFX failed: HTTP {e.code} {err}")
+    if len(data) < 100:
+        die("ElevenLabs SFX returned an empty or tiny file")
+    out.write_bytes(data)
+    print(json.dumps({
+        "ok": True, "file": str(out), "bytes": len(data),
+        "source": "elevenlabs", "kind": "generated_sfx",
+        "prompt": text,
+        "license": "ElevenLabs generated output; check your ElevenLabs plan terms",
+        "license_url": "https://elevenlabs.io/terms",
+    }, indent=2))
+
+
+def main():
+    p = argparse.ArgumentParser(prog="sfx", description=__doc__)
+    sub = p.add_subparsers(dest="cmd")
+    s = sub.add_parser("search")
+    s.add_argument("query")
+    s.add_argument("-n", type=int, default=8)
+    g = sub.add_parser("gen")
+    g.add_argument("text")
+    g.add_argument("-o", required=True)
+    g.add_argument("--duration", type=float, default=None)
+    p.add_argument("--check", action="store_true")
+    args = p.parse_args()
+    if args.check:
+        cmd_check(); return
+    if args.cmd is None:
+        p.print_help(); print(); cmd_check(); return
+    if args.cmd == "search":
+        cmd_search(args.query, args.n)
+    elif args.cmd == "gen":
+        cmd_gen(args.text, args.o, args.duration)
+    else:
+        p.print_help(); cmd_check()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,121 @@
+#!/usr/bin/env python3
+"""Scrub known secrets out of Agent Lab log files. Safe to run from cron.
+
+Never prints secret values. Skips binaries and files above 50 MB.
+Does not modify /opt/agent/.env.
+"""
+from __future__ import annotations
+
+import os, sys
+from pathlib import Path
+
+sys.path.insert(0, "/opt/agent/ops")
+from redactlib import redact_bytes, redact_text, load_secret_values, REPLACEMENT
+
+# OpenHands keeps each conversation's LLM key ENCRYPTED (Fernet, "gAAAA...") in base_state.json and reads it back
+# when the conversation runs again. The keyed regex patterns used to replace that ciphertext with ***REDACTED***,
+# which broke every later turn of that chat with LLMAuthenticationError (root cause of the customer22 lost replies,
+# 2026-11-25). In these files only exact plaintext secret values from .env are redacted.
+STATE_FILES = {"base_state.json"}
+
+
+def redact_values_only(data: bytes):
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data, False
+    new = text
+    for v in load_secret_values():
+        if v and v in new:
+            new = new.replace(v, REPLACEMENT)
+    return (new.encode("utf-8"), True) if new != text else (data, False)
+
+MAX = 50 * 1024 * 1024
+ROOTS = [
+    Path("/var/log/agent-lab-usage.log"),
+    Path("/var/log/agent-lab-backup.log"),
+    Path("/opt/agent/desktop"),
+    Path("/opt/agent/workspace/usage"),
+    Path("/opt/agent/workspace/desktop"),
+    Path("/opt/agent/workspace/conversations"),
+]
+# Also scrub docker json logs for agent-lab if present.
+SKIP_NAMES = {".env", "Xauthority", "live.jpg", ".png", ".jpg", ".jpeg", ".mp3",
+              ".mp4", ".webm", ".wav", ".lock", ".sqlite", ".db", ".bin"}
+TEXT_SUFFIX = {".log", ".json", ".jsonl", ".txt", ".md", ".csv", ".html", ".yml", ".yaml"}
+
+
+def want(path: Path) -> bool:
+    name = path.name
+    if name in (".env", "Xauthority") or name.startswith("."):
+        return False
+    if path.suffix.lower() in {".png", ".jpg", ".jpeg", ".gif", ".mp3", ".mp4",
+                               ".webm", ".wav", ".lock", ".sqlite", ".db", ".bin",
+                               ".woff", ".woff2", ".pyc"}:
+        return False
+    if path.suffix.lower() in TEXT_SUFFIX or name.endswith("-json.log") or name.endswith(".log"):
+        return True
+    # conversation events are .json
+    return path.suffix.lower() == ".json"
+
+
+def scrub_file(path: Path) -> bool:
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    if st.st_size == 0 or st.st_size > MAX:
+        return False
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return False
+    new, changed = redact_values_only(data) if path.name in STATE_FILES else redact_bytes(data)
+    if not changed:
+        return False
+    tmp = path.with_name(path.name + ".redact-tmp")
+    try:
+        tmp.write_bytes(new)
+        os.chmod(tmp, st.st_mode & 0o777)
+        os.chown(tmp, st.st_uid, st.st_gid)
+        tmp.replace(path)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def iter_paths():
+    for root in ROOTS:
+        if root.is_file():
+            yield root
+            continue
+        if not root.is_dir():
+            continue
+        for dirpath, dirnames, filenames in os.walk(root):
+            # do not descend into bulky media/job trees if any sneak in
+            dirnames[:] = [d for d in dirnames if d not in {"node_modules", ".git", "chrome-profile", "__pycache__"}]
+            for fn in filenames:
+                yield Path(dirpath) / fn
+    # docker container logs
+    docker = Path("/var/lib/docker/containers")
+    if docker.is_dir():
+        for p in docker.glob("*/*-json.log"):
+            yield p
+
+
+def main():
+    n = 0
+    for p in iter_paths():
+        if not want(p):
+            continue
+        if scrub_file(p):
+            n += 1
+    print(f"scrub-logs: redacted {n} file(s)")
+
+
+if __name__ == "__main__":
+    main()

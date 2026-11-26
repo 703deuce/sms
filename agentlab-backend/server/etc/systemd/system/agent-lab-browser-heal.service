@@ -1,0 +1,5 @@
+[Unit]
+Description=Reconnect Agent Lab browser tools after a Chromium restart (only when idle)
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/agent/ops/browser-heal

@@ -1,0 +1,139 @@
+customer_id,name,email,region,signup
+C0047,Cara Nguyen,cara.nguyen47@example.com,East,2025-12-21
+C0089,Cara Garcia,cara.garcia89@example.com,East,2025-03-18
+C0077,Omar Kim,omar.kim77@example.com,East,2025-12-22
+C0512, Max Kim,  MAX.KIM95@EXAMPLE.COM,North,2025-03-05
+C0051,Pia Smith,pia.smith51@example.com,West,2025-02-21
+C0062,Ben Nguyen,ben.nguyen62@example.com,North,2025-10-21
+C0048,Gus Garcia,gus.garcia48@example.com,West,2025-03-22
+C0096,Nia Lee,nia.lee96@example.com,North,2025-01-07
+C0118,Ben Patel,ben.patel118@example.com,West,2025-09-09
+C0100,Fay Lee,fay.lee100@example.com,West,2025-02-26
+C0038,Eli Lopez,eli.lopez38@example.com,East,2025-06-02
+C0082,Tara Smith,tara.smith82@example.com,West,2025-09-10
+C0004,Ben Ito,ben.ito4@example.com,East,2025-11-28
+C0050,Eli Patel,eli.patel50@example.com,West,2025-12-20
+C0032,Omar Nguyen,omar.nguyen32@example.com,North,2025-11-20
+C0049,Gus Brown,gus.brown49@example.com,North,2025-09-13
+C0002,Ben Khan,ben.khan2@example.com,West,2025-03-22
+C0090,Max Ito,max.ito90@example.com,South,2025-05-06
+C0014,Rosa Kim,rosa.kim14@example.com,East,2025-10-23
+C0055,Nia Lopez,nia.lopez55@example.com,East,2025-09-07
+C0066,Max Kim,max.kim66@example.com,West,2025-04-02
+C0073,Ivan Nguyen,ivan.nguyen73@example.com,North,2025-11-16
+C0039,Max Ito,max.ito39@example.com,South,2025-08-27
+C0001,Ana Nguyen,ana.nguyen1@example.com,West,2025-09-08
+C0022,Sam Nguyen,sam.nguyen22@example.com,North,2025-01-14
+C0507,DEV LOPEZ,  DEV.LOPEZ10@EXAMPLE.COM,South,2025-04-14
+C0511,PIA NGUYEN,  PIA.NGUYEN61@EXAMPLE.COM,north,2025-10-06
+C0016,Ana Lee,ana.lee16@example.com,South,2025-02-11
+C0065,Kai Lopez,kai.lopez65@example.com,South,2025-11-08
+C0119,Dev Ito,dev.ito119@example.com,North,2025-01-18
+C0018,Nia Brown,nia.brown18@example.com,North,2025-04-23
+C0020,Tara Lee,tara.lee20@example.com,North,2025-09-04
+C0074,Rosa Khan,rosa.khan74@example.com,East,2025-09-21
+C0107,Max Smith,max.smith107@example.com,West,2025-12-16
+C0034,Lena Ito,lena.ito34@example.com,North,2025-07-19
+C0099,Dev Kim,dev.kim99@example.com,West,2025-11-12
+C0120,Max Lopez,max.lopez120@example.com,East,2025-03-09
+C0013,Dev Khan,dev.khan13@example.com,West,2025-12-27
+C0098,Pia Ito,pia.ito98@example.com,East,2025-11-05
+C0086,Rosa Khan,rosa.khan86@example.com,East,2025-04-25
+C0061,Pia Nguyen,pia.nguyen61@example.com,North,2025-10-06
+C0027,Gus Garcia,gus.garcia27@example.com,East,2025-10-12
+C0501, Sam Kim,Sam.Kim21@Example.Com,SOUTH ,2025-08-09
+C0093,Max Ito,max.ito93@example.com,North,2025-01-12
+C0008,Ivan Ito,ivan.ito8@example.com,East,2025-01-26
+C0080,Nia Garcia,nia.garcia80@example.com,West,2025-11-13
+C0041,Sam Smith,sam.smith41@example.com,East,2025-01-11
+C0504,HANA ITO,Hana.Ito87@Example.Com,west,2025-08-12
+C0517, Omar Smith,omar.smith15@example.com  ,west,2025-10-10
+C0057,Nia Kim,nia.kim57@example.com,North,2025-10-03
+C0117,Sam Ito,sam.ito117@example.com,South,2025-11-04
+C0101,Pia Brown,pia.brown101@example.com,North,2025-07-24
+C0058,Ben Nguyen,ben.nguyen58@example.com,South,2025-01-26
+C0085,Omar Lee,omar.lee85@example.com,East,2025-03-04
+C0037,Sam Kim,sam.kim37@example.com,South,2025-09-17
+C0105,Ana Khan,ana.khan105@example.com,West,2025-12-19
+C0510,CARA GARCIA,cara.garcia89@example.com  ,EAST ,2025-03-18
+C0031,Max Brown,max.brown31@example.com,West,2025-08-14
+C0045,Eli Lee,eli.lee45@example.com,East,2025-08-24
+C0088,Ben Lee,ben.lee88@example.com,North,2025-11-17
+C0069,Ben Garcia,ben.garcia69@example.com,East,2025-03-20
+C0054,Ivan Khan,ivan.khan54@example.com,North,2025-05-24
+C0023,Tara Smith,tara.smith23@example.com,South,2025-04-02
+C0505, Max Brown,  MAX.BROWN31@EXAMPLE.COM,WEST ,2025-08-14
+C0084,Ben Garcia,ben.garcia84@example.com,South,2025-04-10
+C0044,Jo Patel,jo.patel44@example.com,West,2025-09-02
+C0108,Kai Garcia,kai.garcia108@example.com,East,2025-03-09
+C0010,Dev Lopez,dev.lopez10@example.com,South,2025-04-14
+C0026,Dev Lee,dev.lee26@example.com,North,2025-11-10
+C0506,DEV PATEL,Dev.Patel53@Example.Com,SOUTH ,2025-06-16
+C0017,Dev Garcia,dev.garcia17@example.com,East,2025-05-26
+C0005,Ben Lee,ben.lee5@example.com,East,2025-12-21
+C0067,Tara Brown,tara.brown67@example.com,East,2025-06-06
+C0095,Max Kim,max.kim95@example.com,North,2025-03-05
+C0012,Gus Garcia,gus.garcia12@example.com,West,2025-02-04
+C0063,Kai Patel,kai.patel63@example.com,North,2025-09-12
+C0513, Max Ito,Max.Ito39@Example.Com,SOUTH ,2025-08-27
+C0035,Omar Khan,omar.khan35@example.com,South,2025-07-06
+C0115,Fay Kim,fay.kim115@example.com,South,2025-11-16
+C0040,Omar Brown,omar.brown40@example.com,East,2025-08-21
+C0106,Quin Ito,quin.ito106@example.com,North,2025-11-02
+C0516,KAI GARCIA,  KAI.GARCIA108@EXAMPLE.COM,East,2025-03-09
+C0509, Ben Ito,Ben.Ito4@Example.Com,east,2025-11-28
+C0011,Omar Smith,omar.smith11@example.com,West,2025-01-20
+C0024,Kai Ito,kai.ito24@example.com,North,2025-10-02
+C0053,Dev Patel,dev.patel53@example.com,South,2025-06-16
+C0076,Max Garcia,max.garcia76@example.com,West,2025-11-06
+C0110,Ivan Nguyen,ivan.nguyen110@example.com,East,2025-01-24
+C0515,NIA KIM,  NIA.KIM57@EXAMPLE.COM,NORTH ,2025-10-03
+C0068,Ben Brown,ben.brown68@example.com,South,2025-08-09
+C0502,DEV KIM,Dev.Kim99@Example.Com,West,2025-11-12
+C0042,Omar Lee,omar.lee42@example.com,North,2025-09-23
+C0097,Fay Nguyen,fay.nguyen97@example.com,West,2025-05-15
+C0116,Dev Patel,dev.patel116@example.com,East,2025-08-11
+C0518, Ivan Khan,  IVAN.KHAN54@EXAMPLE.COM,North,2025-05-24
+C0052,Eli Smith,eli.smith52@example.com,South,2025-06-07
+C0514,ANA LEE,Ana.Lee25@Example.Com,West,2025-08-18
+C0087,Hana Ito,hana.ito87@example.com,West,2025-08-12
+C0072,Lena Ito,lena.ito72@example.com,West,2025-02-01
+C0112,Ivan Khan,ivan.khan112@example.com,North,2025-06-16
+C0092,Max Nguyen,max.nguyen92@example.com,South,2025-12-13
+C0079,Kai Kim,kai.kim79@example.com,South,2025-02-24
+C0030,Tara Nguyen,tara.nguyen30@example.com,West,2025-09-27
+C0009,Kai Ito,kai.ito9@example.com,West,2025-07-15
+C0033,Dev Nguyen,dev.nguyen33@example.com,North,2025-01-22
+C0104,Gus Smith,gus.smith104@example.com,North,2025-05-05
+C0028,Kai Patel,kai.patel28@example.com,North,2025-12-07
+C0508, Pia Smith,pia.smith70@example.com  ,SOUTH ,2025-03-16
+C0091,Rosa Smith,rosa.smith91@example.com,East,2025-08-21
+C0003,Pia Patel,pia.patel3@example.com,East,2025-10-15
+C0081,Omar Nguyen,omar.nguyen81@example.com,West,2025-06-28
+C0111,Cara Brown,cara.brown111@example.com,South,2025-11-14
+C0078,Ana Nguyen,ana.nguyen78@example.com,West,2025-03-12
+C0056,Cara Garcia,cara.garcia56@example.com,East,2025-09-12
+C0059,Hana Nguyen,hana.nguyen59@example.com,North,2025-11-09
+C0036,Rosa Brown,rosa.brown36@example.com,East,2025-06-22
+C0070,Pia Smith,pia.smith70@example.com,South,2025-03-16
+C0503, Lena Nguyen,  LENA.NGUYEN46@EXAMPLE.COM,north,2025-10-20
+C0109,Lena Lopez,lena.lopez109@example.com,North,2025-03-10
+C0019,Hana Nguyen,hana.nguyen19@example.com,West,2025-08-16
+C0075,Pia Garcia,pia.garcia75@example.com,East,2025-01-12
+C0029,Omar Brown,omar.brown29@example.com,South,2025-04-17
+C0114,Ben Lopez,ben.lopez114@example.com,West,2025-01-24
+C0064,Dev Khan,dev.khan64@example.com,West,2025-04-21
+C0102,Dev Ito,dev.ito102@example.com,East,2025-07-02
+C0103,Ivan Lopez,ivan.lopez103@example.com,East,2025-05-12
+C0083,Dev Lee,dev.lee83@example.com,East,2025-11-09
+C0071,Max Lopez,max.lopez71@example.com,East,2025-04-14
+C0043,Eli Ito,eli.ito43@example.com,East,2025-08-24
+C0113,Ivan Lee,ivan.lee113@example.com,South,2025-04-05
+C0021,Sam Kim,sam.kim21@example.com,South,2025-08-09
+C0060,Ana Ito,ana.ito60@example.com,East,2025-04-15
+C0007,Nia Nguyen,nia.nguyen7@example.com,South,2025-06-12
+C0046,Lena Nguyen,lena.nguyen46@example.com,North,2025-10-20
+C0015,Omar Smith,omar.smith15@example.com,West,2025-10-10
+C0025,Ana Lee,ana.lee25@example.com,West,2025-08-18
+C0006,Sam Kim,sam.kim6@example.com,North,2025-04-09
+C0094,Kai Patel,kai.patel94@example.com,East,2025-11-08

@@ -1,0 +1,78 @@
+{
+  "Name": "/agentlab-phone",
+  "Image": "agentlab-phone:43",
+  "ImageID": "sha256:8ac8822fca3a2edebf442efd812cb4a28525931894201b1ad8e36d62d1d394d3",
+  "Cmd": [
+    "python",
+    "-u",
+    "-m",
+    "worker.main",
+    "start"
+  ],
+  "Entrypoint": null,
+  "EnvNamesOnly": [
+    "LIVEKIT_API_KEY",
+    "MICROSOFT_CLIENT_SECRET",
+    "MICROSOFT_CLIENT_ID",
+    "TELNYX_SIP_OUTBOUND_USERNAME",
+    "LIVEKIT_URL",
+    "SALESFORCE_CLIENT_SECRET",
+    "TELNYX_SIP_OUTBOUND_PASSWORD",
+    "LIVEKIT_API_SECRET",
+    "ZOHO_CLIENT_SECRET",
+    "CALENDLY_CLIENT_SECRET",
+    "SALESFORCE_CLIENT_ID",
+    "MICROSOFT_TENANT_ID",
+    "CALENDLY_CLIENT_ID",
+    "TELNYX_API_KEY",
+    "ZOHO_CLIENT_ID",
+    "AGENTLAB_SIP_USER",
+    "AGENTLAB_SIP_PASS",
+    "AGENTLAB_SIP_CONNECTION_ID",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "BOT_ID",
+    "PHONE_VAD",
+    "HOME",
+    "PHONE_OUTBOUND_TRUNK_ID",
+    "PHONE_AGENT_NAME",
+    "PHONE_WORKER_HTTP_PORT",
+    "RUNS_DB",
+    "PATH",
+    "LANG",
+    "GPG_KEY",
+    "PYTHON_VERSION",
+    "PYTHON_SHA256"
+  ],
+  "User": "10001:10001",
+  "WorkingDir": "/app",
+  "Mounts": [
+    {
+      "Source": "/opt/agent/workspace/runs",
+      "Destination": "/workspace/runs",
+      "Mode": "",
+      "RW": true
+    },
+    {
+      "Source": "/opt/agent/tools",
+      "Destination": "/opt/tools",
+      "Mode": "ro",
+      "RW": false
+    }
+  ],
+  "NetworkMode": "host",
+  "RestartPolicy": {
+    "Name": "unless-stopped",
+    "MaximumRetryCount": 0
+  },
+  "ShmSize": 67108864,
+  "GroupAdd": null,
+  "LogConfig": {
+    "Type": "json-file",
+    "Config": {}
+  },
+  "Memory": 1572864000,
+  "Devices": [],
+  "PortBindings": {},
+  "Privileged": false
+}

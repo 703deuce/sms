@@ -1,0 +1,147 @@
+#!/workspace/usage/stealthvenv/bin/python3
+"""stealth-fetch: open ONE page in a patched, de-fingerprinted Chromium (patchright) and return its text.
+
+usage: stealth-fetch URL [--tier direct|residential|mobile] [--solve-captcha] [--out FILE.html] [--json] [--wait 4]
+  --tier       network path: direct (free) or the lab egress gateway (residential/mobile; paid per MB)
+  --solve-captcha  if the page still shows a captcha widget, solve it with the ALREADY-PAID CapSolver key
+                   (/workspace/secrets/captcha.env, never printed), inject the token and submit. Capped at
+                   3 solves per job and 15 per day.
+  --json       machine output for egresslib (writes HTML to a temp file, prints {ok,status,reason,html_path,captcha})
+Normal use is automatic: readpage / egress-fetch call this after every other route failed. Use it by hand for a
+single hard page. It is slower (10-40 s) than readpage. Block decisions use HTTP status, headers and page bytes only.
+"""
+import json, os, re, subprocess, sys, tempfile, time, urllib.request
+
+sys.path.insert(0, "/opt/tools/egress"); sys.path.insert(0, "/opt/agent/tools/egress")
+from blockdetect import detect_block
+
+GATEWAY = os.environ.get("EGRESS_PROXY", "http://127.0.0.1:18080")
+CHROME = os.environ.get("STEALTH_CHROME") or os.environ.get("CHROME_BIN") or "/usr/lib/chromium/chromium"
+ENV = "/workspace/secrets/captcha.env"
+SOLVES = "/workspace/usage/captcha-solves.jsonl"
+PER_JOB, PER_DAY = 3, 15
+
+DETECT = """()=>{const o=[];document.querySelectorAll('[data-sitekey]').forEach(e=>o.push({sitekey:e.getAttribute('data-sitekey'),
+ type:(e.className||'').includes('h-captcha')?'hcaptcha':(e.className||'').includes('cf-turnstile')?'turnstile':'recaptcha2'}));
+ document.querySelectorAll('iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"]').forEach(f=>{
+ const m=f.src.match(/[?&](?:k|sitekey)=([^&]+)/);if(m)o.push({sitekey:m[1],type:f.src.includes('hcaptcha')?'hcaptcha':f.src.includes('turnstile')?'turnstile':'recaptcha2'})});
+ return {url:location.href,found:o}}"""
+INJECT = """(t)=>{let n=0;for(const s of ['[name=g-recaptcha-response]','[name=h-captcha-response]','[name=cf-turnstile-response]','#g-recaptcha-response']){
+ document.querySelectorAll(s).forEach(e=>{n++;e.value=t;e.innerHTML=t;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))})}
+ const f=document.querySelector('[name*=captcha-response],[name=cf-turnstile-response]');const form=f&&f.closest('form');
+ if(form){const b=form.querySelector('[type=submit],button');if(b)b.click();else form.submit();return n+':submitted'}return n+':no-form'}"""
+
+
+def job_id():
+    m = re.search(r"/jobs/([0-9a-f-]{36})", os.getcwd())
+    return m.group(1) if m else "chrome"
+
+
+def solves_today_and_job(job):
+    day = time.strftime("%Y-%m-%d"); d = j = 0
+    try:
+        for l in open(SOLVES):
+            r = json.loads(l)
+            if r.get("day") == day: d += 1
+            if r.get("job") == job: j += 1
+    except Exception:
+        pass
+    return d, j
+
+
+def solve_captcha(page, url, job):
+    """Detect a widget, buy ONE token from CapSolver (already paid), inject, submit. Returns a dict for the report."""
+    info = page.evaluate(DETECT)
+    found = info.get("found") or []
+    if not found:
+        return {"tried": False, "why": "no_widget"}
+    d, j = solves_today_and_job(job)
+    if d >= PER_DAY or j >= PER_JOB:
+        return {"tried": False, "why": "cap_reached"}
+    w = found[0]
+    cmd = ["captcha-solve", "--type", w["type"], "--sitekey", w["sitekey"], "--url", page.url]
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=150)
+    tok = (p.stdout or "").strip()
+    with open(SOLVES, "a") as f:  # cost note: roughly $0.001 per token (about $1 per 1,000)
+        f.write(json.dumps({"day": time.strftime("%Y-%m-%d"), "t": time.strftime("%H:%M:%S"), "job": job, "type": w["type"],
+                            "host": re.sub(r"^https?://([^/]+).*", r"\1", page.url), "ok": bool(tok) and p.returncode == 0}) + "\n")
+    if p.returncode != 0 or not tok:
+        return {"tried": True, "ok": False, "why": (p.stderr or "")[-120:].replace(os.environ.get("HOME", "~"), "~")}
+    res = page.evaluate(INJECT, tok)
+    page.wait_for_timeout(4000)
+    return {"tried": True, "ok": True, "type": w["type"], "inject": res}
+
+
+def run(url, tier, want_solve, wait):
+    from patchright.sync_api import sync_playwright
+    job = job_id()
+    out = {"ok": False, "status": None, "reason": None, "captcha": None, "html": ""}
+    args = ["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled", "--lang=en-US"]
+    kw = {}
+    if tier in ("residential", "mobile"):
+        kw["proxy"] = {"server": GATEWAY, "username": f"{job}__tier.{tier}", "password": ""}
+    with sync_playwright() as pw:
+        b = pw.chromium.launch(executable_path=CHROME, headless=True, args=args, **kw)
+        ver = b.version
+        ctx = b.new_context(user_agent=f"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/{ver} Safari/537.36",
+                            locale="en-US", timezone_id="America/New_York", viewport={"width": 1366, "height": 800})
+        pg = ctx.new_page()
+        resp = None
+        try:
+            resp = pg.goto(url, wait_until="domcontentloaded", timeout=45000)
+            try: pg.wait_for_load_state("networkidle", timeout=8000)
+            except Exception: pass
+            pg.wait_for_timeout(int(wait * 1000))
+        except Exception as e:
+            out["reason"] = "goto_error:" + str(e)[:100]
+        status = resp.status if resp else None
+        headers = dict((k.lower(), v) for k, v in (resp.headers.items() if resp else []))
+        html = pg.content() if not out["reason"] else ""
+        blocked, reason = detect_block(status, headers, html.encode("utf-8", "replace"))
+        if blocked and want_solve and html:
+            try:
+                out["captcha"] = solve_captcha(pg, url, job)
+                if out["captcha"].get("ok"):
+                    html = pg.content()
+                    status = status if status and status < 400 else 200
+                    blocked, reason = detect_block(200, {}, html.encode("utf-8", "replace"))
+            except Exception as e:
+                out["captcha"] = {"tried": True, "ok": False, "why": str(e)[:100]}
+        b.close()
+    out.update(status=status, html=html)
+    if not out["reason"]:
+        out["reason"] = reason if blocked else None
+    out["ok"] = bool(html) and not blocked and (status is None or 200 <= status < 400)
+    return out
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__); return
+    tier = a[a.index("--tier") + 1] if "--tier" in a else "direct"
+    wait = float(a[a.index("--wait") + 1]) if "--wait" in a else 3
+    outp = a[a.index("--out") + 1] if "--out" in a else None
+    skip = {tier, str(wait), outp}
+    url = next(x for x in a if x.startswith("http"))
+    o = run(url, tier, "--solve-captcha" in a, wait)
+    if "--json" in a:
+        path = None
+        if o["html"]:
+            f = tempfile.NamedTemporaryFile(prefix="stealth-", suffix=".html", delete=False); f.write(o["html"].encode()); f.close(); path = f.name
+        print(json.dumps({"ok": o["ok"], "status": o["status"], "reason": o["reason"], "captcha": o["captcha"], "html_path": path}))
+        return
+    if outp:
+        open(outp, "w").write(o["html"])
+    try:
+        import trafilatura
+        txt = trafilatura.extract(o["html"], url=url, output_format="markdown") or ""
+    except Exception:
+        txt = ""
+    print(f"stealth-fetch: ok={o['ok']} status={o['status']} reason={o['reason']} captcha={o['captcha']}", file=sys.stderr)
+    print(txt[:20000] if txt else o["html"][:20000])
+    sys.exit(0 if o["ok"] else 2)
+
+
+if __name__ == "__main__":
+    main()

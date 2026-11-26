@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Minimal Opus sub-call for model routing: a plan, a visual judge, or one stuck step.
+
+The API key never enters this process. The host key proxy (127.0.0.1:6071) holds it.
+Costs are appended to /workspace/usage/usage.jsonl and, when a job folder is known,
+to log/opus-steps.jsonl so usage --conversation can attribute them to Opus.
+"""
+import argparse, json, os, sys, time, urllib.error, urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, '/opt/tools')
+try:
+    from keyclient import PROXY, job_dir as _job_dir
+except Exception:
+    PROXY = os.environ.get('KEY_PROXY', 'http://127.0.0.1:6071')
+
+    def _job_dir():
+        import re
+        m = re.match(r'^(/workspace/jobs/[0-9a-f-]{36}(?:/helpers/[0-9a-f-]{36})*)(?:/|$)',
+                     os.path.realpath(os.getcwd()) + '/')
+        return m.group(1) if m else None
+
+# Claude Opus 5.5 list prices (USD / token), Claude API standard, as of 2026-10-22.
+PRICES = {
+    'input': 4.00 / 1_000_000,
+    'output': 20.00 / 1_000_000,
+    'cache_write_5m': 5.00 / 1_000_000,
+    'cache_read': 0.20 / 1_000_000,
+}
+MODEL = 'claude-opus-5-5'
+MODEL_LABEL = 'anthropic/claude-opus-5-5'
+
+JUDGE_SYSTEM = (
+    'You are reviewing stills or frames for a job in progress. Judge only what you see. '
+    'Be strict and specific (which frame, what is wrong). '
+    'Reply in this exact format, then a short bullet list of findings:\n'
+    'VERDICT: PASS\n'
+    'or\n'
+    'VERDICT: LOOKS BROKEN - <one-line reason>\n'
+    'If PASS, still list minor issues worth fixing. No preamble.'
+)
+DEFAULT_QUESTION = (
+    'Is anything wrong with these images? Check: covered or cropped faces; cut-off or overlapping text; '
+    'typography unreadable at 480p; headings overlapping the picture; bad crops; pillarboxing or letterboxing; '
+    'watermarks that should have been cropped; lower-thirds covering faces; blank, frozen or black frames; '
+    'choppy or misaligned captions; anything that looks unfinished or sloppy.'
+)
+PLAN_SYSTEM = (
+    'You are planning a job for a cheaper worker (Haiku) that will execute your plan. '
+    'Write a short, concrete plan only. No code, no essay, no tools. '
+    'The worker will handle mechanical steps (search, downloads, ffmpeg, forms). '
+    'The worker must not write motion-graphics, Remotion, HyperFrames, page or UI source, and must not draft those files. '
+    'A separate Opus visual-build writes that code from scratch later. Put the visual quality bar in the plan. '
+    'Visual reviews of frames will be judged by you later in a separate short call. '
+    'Return exactly these sections:\n'
+    '1. Goal and definition of done (checklist)\n'
+    '2. Ordered steps (what to do, what "done" looks like for each)\n'
+    '3. Visual / design / quality bar (composition, typography, what to watch for)\n'
+    '4. Risks and non-goals\n'
+    'Be terse.'
+)
+STEP_SYSTEM = (
+    'You are solving one failed or difficult step for a cheaper worker that will apply your result. '
+    'Solve only this step. Be concrete. If you need to specify edits, give exact changes. No tools.'
+)
+
+
+def die(msg, code=1):
+    print(f'opus-step: {msg}', file=sys.stderr)
+    sys.exit(code)
+
+
+def cost_of(usage):
+    usage = usage or {}
+    inp = int(usage.get('input_tokens') or 0)
+    out = int(usage.get('output_tokens') or 0)
+    cw = int(usage.get('cache_creation_input_tokens') or 0)
+    cr = int(usage.get('cache_read_input_tokens') or 0)
+    return round(inp * PRICES['input'] + out * PRICES['output']
+                 + cw * PRICES['cache_write_5m'] + cr * PRICES['cache_read'], 6)
+
+
+def conversation_id(job):
+    import re
+    ids = re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', job or '')
+    return ids[-1] if ids else None
+
+
+def workspace_root():
+    # The host machine has a leftover /workspace/usage that is NOT the Agent Lab workspace.
+    # Only treat /workspace as the workspace when job folders are mounted there (container).
+    if os.path.isdir('/workspace/jobs') or os.path.isdir('/workspace/conversations'):
+        return '/workspace'
+    return '/opt/agent/workspace'
+
+
+def append_jsonl(path, rec):
+    os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+    with open(path, 'a') as f:
+        f.write(json.dumps(rec, ensure_ascii=False) + '\n')
+
+
+def log_usage(purpose, usage, cost, job, cid, extra):
+    rec = {
+        'ts': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'tool': 'opus-step',
+        'purpose': purpose,
+        'model': MODEL_LABEL,
+        'units': usage or {},
+        'estimated_cost_usd': cost,
+    }
+    if cid:
+        rec['conversation_id'] = cid
+    if job:
+        rec['job'] = job
+    rec.update({k: v for k, v in extra.items() if v is not None})
+    usage_log = os.environ.get('USAGE_LOG') or os.path.join(workspace_root(), 'usage', 'usage.jsonl')
+    try:
+        append_jsonl(usage_log, rec)
+    except Exception as e:
+        print(f'opus-step: could not write usage log: {e}', file=sys.stderr)
+    if job:
+        try:
+            append_jsonl(os.path.join(job, 'log', 'opus-steps.jsonl'), rec)
+        except Exception:
+            try:
+                host = job.replace('/workspace/', '/opt/agent/workspace/', 1)
+                append_jsonl(os.path.join(host, 'log', 'opus-steps.jsonl'), rec)
+            except Exception:
+                pass
+    return rec
+
+
+def b64_image(path):
+    import base64, mimetypes
+    mime = mimetypes.guess_type(path)[0] or 'image/jpeg'
+    if mime not in ('image/jpeg', 'image/png', 'image/gif', 'image/webp'):
+        mime = 'image/jpeg'
+    with open(path, 'rb') as f:
+        data = base64.b64encode(f.read()).decode()
+    return {'type': 'image', 'source': {'type': 'base64', 'media_type': mime, 'data': data}}
+
+
+def build_messages(purpose, args):
+    content = []
+    if purpose == 'judge':
+        if not args.image:
+            die('judge requires --image')
+        labels = list(args.label or [])
+        for i, p in enumerate(args.image):
+            if not os.path.isfile(p):
+                die(f'not a file: {p}')
+            lab = labels[i] if i < len(labels) else os.path.basename(p)
+            content.append({'type': 'text', 'text': f'Frame {i + 1}: {lab}'})
+            content.append(b64_image(p))
+        q = (args.question or DEFAULT_QUESTION).strip()
+        content.append({'type': 'text', 'text': 'Question: ' + q})
+        system = JUDGE_SYSTEM
+        max_tokens = args.max_tokens or 800
+    elif purpose == 'plan':
+        brief = args.brief or (sys.stdin.read() if not sys.stdin.isatty() else '')
+        if args.brief_file:
+            brief = open(args.brief_file).read()
+        brief = (brief or '').strip()
+        if not brief:
+            die('plan requires --brief, --brief-file, or stdin')
+        content.append({'type': 'text', 'text': 'User brief:\n\n' + brief[:24000]})
+        system = PLAN_SYSTEM
+        max_tokens = args.max_tokens or 1600
+    else:
+        task = (args.task or args.question or args.brief or '').strip()
+        if args.brief_file and not task:
+            task = open(args.brief_file).read()
+        if not task:
+            die('step requires --task')
+        if args.image:
+            labels = list(args.label or [])
+            for i, p in enumerate(args.image):
+                lab = labels[i] if i < len(labels) else os.path.basename(p)
+                content.append({'type': 'text', 'text': f'Image {i + 1}: {lab}'})
+                content.append(b64_image(p))
+        content.append({'type': 'text', 'text': task[:60000]})
+        system = STEP_SYSTEM
+        max_tokens = args.max_tokens or 1200
+    if getattr(args, 'system', None):
+        system = args.system
+    return system, content, max_tokens
+
+
+def proxy_call(body, timeout=120):
+    data = json.dumps(body).encode()
+    req = urllib.request.Request(PROXY.rstrip('/') + '/anthropic/messages', data=data, method='POST',
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, json.loads(r.read() or b'{}')
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b'{}')
+        except Exception:
+            return e.code, {'error': 'key proxy HTTP %s' % e.code}
+    except urllib.error.URLError as e:
+        die(f'key proxy not reachable ({e.reason}); ask Rick to check agent-lab-keys.service')
+
+
+def main():
+    p = argparse.ArgumentParser(prog='opus-step', description=__doc__)
+    p.add_argument('--purpose', choices=('plan', 'judge', 'step'), required=True)
+    p.add_argument('--question')
+    p.add_argument('--brief')
+    p.add_argument('--brief-file')
+    p.add_argument('--task')
+    p.add_argument('--image', action='append', default=[])
+    p.add_argument('--label', action='append', default=[])
+    p.add_argument('--job')
+    p.add_argument('--conversation-id')
+    p.add_argument('--max-tokens', type=int)
+    p.add_argument('--json', action='store_true')
+    p.add_argument('--system', help='override the default system prompt')
+    args = p.parse_args()
+    system, content, max_tokens = build_messages(args.purpose, args)
+    job = args.job or _job_dir()
+    cid = args.conversation_id or conversation_id(job) or os.environ.get('CONVERSATION_ID') or os.environ.get('OH_CONVERSATION_ID')
+    code, res = proxy_call({
+        'model': MODEL,
+        'max_tokens': max_tokens,
+        'system': system,
+        'messages': [{'role': 'user', 'content': content}],
+        'purpose': args.purpose,
+        'conversation_id': cid,
+        'job': job,
+    }, timeout=180)
+    if code != 200 or not res.get('text'):
+        err = res.get('error') or res
+        die(f'Opus call failed ({code}): {err}'[:500])
+    text = res['text'].strip()
+    usage = res.get('usage') or {}
+    cost = float(res.get('cost_usd') or cost_of(usage))
+    log_usage(args.purpose, usage, cost, job, cid, {'n_images': len(args.image or [])})
+    if args.json:
+        print(json.dumps({'text': text, 'usage': usage, 'cost_usd': cost, 'model': MODEL_LABEL, 'purpose': args.purpose},
+                         ensure_ascii=False, indent=2))
+    else:
+        print(text)
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

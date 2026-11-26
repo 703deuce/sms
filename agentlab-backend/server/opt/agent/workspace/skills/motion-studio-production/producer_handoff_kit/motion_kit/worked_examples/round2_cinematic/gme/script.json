@@ -1,0 +1,94 @@
+{
+ "title": "I Like The Stock",
+ "takes": [
+  {
+   "take": "VO",
+   "lines": [
+    {
+     "id": 1,
+     "text": "January, 2021.",
+     "spoken": "January, 2021.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 2,
+     "text": "GameStop is a struggling mall chain.",
+     "spoken": "GameStop is a struggling mall chain.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 3,
+     "text": "And Wall Street is betting it fails.",
+     "spoken": "And Wall Street is betting it fails.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 4,
+     "text": "About a hundred and forty percent of its public shares... are sold short.",
+     "spoken": "About a hundred and forty percent of its public shares... are sold short.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 5,
+     "text": "On Reddit, a forum called WallStreetBets sees the trap.",
+     "spoken": "On Reddit, a forum called WallStreetBets sees the trap.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 6,
+     "text": "Its loudest voice... a YouTuber called Roaring Kitty.",
+     "spoken": "Its loudest voice... a YouTuber called Roaring Kitty.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 7,
+     "text": "They buy. And they hold.",
+     "spoken": "They buy. And they hold.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 8,
+     "text": "Seventeen dollars... becomes four hundred and eighty-three.",
+     "spoken": "Seventeen dollars... becomes four hundred and eighty-three.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 9,
+     "text": "The hedge fund Melvin Capital takes a two-point-seven-five-billion-dollar rescue.",
+     "spoken": "The hedge fund Melvin Capital takes a two-point-seven-five-billion-dollar rescue.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 10,
+     "text": "Then, on January twenty-eighth... Robinhood turns off the buy button.",
+     "spoken": "Then, on January twenty-eighth... Robinhood turns off the buy button.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 11,
+     "text": "Congress calls a hearing.",
+     "spoken": "Congress calls a hearing.",
+     "hero": "",
+     "typed": ""
+    },
+    {
+     "id": 12,
+     "text": "And Keith Gill... tells them... I like the stock.",
+     "spoken": "And Keith Gill... tells them... I like the stock.",
+     "hero": "",
+     "typed": ""
+    }
+   ]
+  }
+ ]
+}

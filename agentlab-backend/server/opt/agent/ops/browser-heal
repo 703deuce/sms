@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""browser-heal (host, systemd timer agent-lab-browser-heal): keep the OpenHands browser_* tools attached to the
+shared Chromium. The agent server holds ONE process-wide CDP connection to it; if Chromium restarts (crash,
+desktop restart, desktop-reset --hard) that connection goes stale ("no close frame received or sent") and the
+SDK only self-heals after timeouts. When the Chromium is newer than the agent server and NO conversation is
+running, restart the agent-lab container so the browser tools reconnect. Never touches a running conversation.
+Logs to /opt/agent/workspace/desktop/browser-heal.log."""
+import json, subprocess, time, urllib.request, datetime
+LOG = "/opt/agent/workspace/desktop/browser-heal.log"
+def log(m):
+    open(LOG, "a").write(time.strftime("%Y-%m-%d %H:%M:%S ") + m + "\n")
+def sh(*a):
+    return subprocess.run(a, capture_output=True, text=True, timeout=60).stdout.strip()
+def start_epoch(pid):
+    return float(sh("ps", "-o", "lstart=", "-p", str(pid)) and
+                 datetime.datetime.strptime(sh("ps", "-o", "lstart=", "-p", str(pid)), "%a %b %d %H:%M:%S %Y").timestamp())
+def main():
+    tok = next(l.split("=", 1)[1].strip() for l in open("/opt/agent/.env") if l.startswith("AGENT_LAB_TOKEN="))
+    try:
+        st = json.load(urllib.request.urlopen("http://127.0.0.1:9222/json/version", timeout=5))
+    except Exception:
+        return  # chrome-keeper is (re)starting it
+    chrome = sh("pgrep", "-of", "remote-debugging-port=9222")
+    server = sh("pgrep", "-of", "openhands-agent-server --host")
+    if not chrome or not server:
+        return
+    if start_epoch(chrome) - start_epoch(server) < 90:
+        return  # browser started with the server: connection is fresh
+    marker = "/opt/agent/workspace/desktop/.browser-heal-chrome"
+    try:
+        if open(marker).read().strip() == chrome:
+            return  # already healed for this Chromium (or decided to leave it)
+    except OSError:
+        pass
+    req = urllib.request.Request("http://127.0.0.1:8000/api/conversations/search?limit=50", headers={"X-Session-API-Key": tok})
+    items = json.load(urllib.request.urlopen(req, timeout=30))["items"]
+    busy = [c["id"][:8] for c in items if c.get("execution_status") in ("running", "starting", "queued")]
+    if busy:
+        log(f"Chromium {chrome} is newer than the agent server; waiting, conversations running: {busy}")
+        return
+    log(f"Chromium {chrome} restarted after the agent server; nothing running -> restarting agent-lab so browser tools reconnect")
+    open(marker, "w").write(chrome)
+    sh("docker", "restart", "agent-lab")
+main()

@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""readfile: read a text file in numbered pages, so nothing is silently cut.
+
+usage: readfile FILE [--offset N] [--limit N] [--grep REGEX]
+  --offset N   first line to show (1-based; negative counts from the end)   default 1
+  --limit N    lines per page                                                default 400
+  --grep RE    show only matching lines (with their line numbers)
+Each page stays under ~24,000 characters (terminal output over 30,000 is clipped in the middle without warning
+you where), and ends with the exact command for the next page. Use it for long docs, skill files, logs,
+transcripts and readpage dumps (`readpage URL > page.txt; readfile page.txt`).
+"""
+import os, re, sys
+
+BUDGET = 24000
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'):
+        print(__doc__.strip()); return
+    path, off, lim, grep = a[0], 1, 400, None
+    i = 1
+    while i < len(a):
+        if a[i] in ('--offset', '-o') and i + 1 < len(a):
+            off = int(a[i + 1]); i += 2
+        elif a[i] in ('--limit', '-n') and i + 1 < len(a):
+            lim = max(1, int(a[i + 1])); i += 2
+        elif a[i] in ('--grep', '-g') and i + 1 < len(a):
+            grep = re.compile(a[i + 1], re.I); i += 2
+        else:
+            sys.exit(f'readfile: unknown option {a[i]}')
+    if not os.path.isfile(path):
+        sys.exit(f'readfile: no such file {path}')
+    with open(path, 'rb') as fh:
+        raw = fh.read()
+    if b'\0' in raw[:4096]:
+        sys.exit(f'readfile: {path} looks binary ({len(raw)} bytes); use the right tool for its type')
+    lines = raw.decode('utf-8', errors='replace').splitlines()
+    total = len(lines)
+    if grep:
+        hits = [(n, l) for n, l in enumerate(lines, 1) if grep.search(l)]
+        start = 0
+        if off > 1:
+            start = next((k for k, (n, _) in enumerate(hits) if n >= off), len(hits))
+        sel = hits[start:]
+        label = f'{len(hits)} matching lines'
+    else:
+        if off < 0:
+            off = max(1, total + off + 1)
+        off = max(1, off)
+        sel = list(enumerate(lines, 1))[off - 1:]
+        label = f'{total} lines'
+    out, used, shown = [], 0, 0
+    for n, l in sel:
+        if shown >= lim:
+            break
+        if len(l) > 3000:
+            l = l[:3000] + f' ...[line {n} is {len(l)} chars; cut here]'
+        row = f'{n:6}\t{l}'
+        if used + len(row) + 1 > BUDGET and shown:
+            break
+        out.append(row); used += len(row) + 1; shown += 1
+    print('\n'.join(out))
+    if not sel:
+        print(f'[readfile] nothing to show ({label} in {path}).'); return
+    first, last = sel[0][0], sel[shown - 1][0]
+    more = shown < len(sel)
+    tail = f'[readfile] {path}: showed lines {first}-{last} of {label}' + (f' ({total} lines total)' if grep else '') + '.'
+    if more:
+        nxt = sel[shown][0]
+        tail += f' More follows: readfile {path} --offset {nxt}' + (f' --limit {lim}' if lim != 400 else '') + \
+                (f' --grep {grep.pattern!r}' if grep else '')
+    else:
+        tail += ' End of file.' if not grep else ' No more matches.'
+    print(tail)
+
+
+if __name__ == '__main__':
+    main()

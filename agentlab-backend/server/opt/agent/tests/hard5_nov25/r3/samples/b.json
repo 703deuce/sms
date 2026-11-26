@@ -1,0 +1,101 @@
+[
+ {
+  "id": 0,
+  "name": "alpha-0",
+  "city": "Reykjavík",
+  "score": 772.657,
+  "active": false,
+  "delta": -187,
+  "note": null
+ },
+ {
+  "id": 1,
+  "name": "alpha-1",
+  "city": "Kraków",
+  "score": -752.226,
+  "active": false,
+  "delta": -466,
+  "note": null
+ },
+ {
+  "id": 2,
+  "name": "delta-2",
+  "city": "Lagos",
+  "score": 294.446,
+  "active": false,
+  "delta": -328
+ },
+ {
+  "id": 3,
+  "name": "delta-3",
+  "city": "Reykjavík",
+  "score": -750.378,
+  "active": true,
+  "delta": 336
+ },
+ {
+  "id": 4,
+  "name": "delta-4",
+  "city": "Montréal",
+  "score": -313.672,
+  "active": true,
+  "delta": 143
+ },
+ {
+  "id": 5,
+  "name": "alpha-5",
+  "city": "Zürich",
+  "score": 770.749,
+  "active": true,
+  "delta": 421
+ },
+ {
+  "id": 6,
+  "name": "delta-6",
+  "city": "Kraków",
+  "score": 356.972,
+  "active": false,
+  "delta": 1
+ },
+ {
+  "id": 7,
+  "name": "delta-7",
+  "city": "Zürich",
+  "score": 725.781,
+  "active": true,
+  "delta": 28
+ },
+ {
+  "id": 8,
+  "name": "beta-8",
+  "city": "Kraków",
+  "score": -350.696,
+  "active": false,
+  "delta": -227
+ },
+ {
+  "id": 9,
+  "name": "beta-9",
+  "city": "Montréal",
+  "score": 136.977,
+  "active": true,
+  "delta": 291,
+  "note": null
+ },
+ {
+  "id": 10,
+  "name": "alpha-10",
+  "city": "Reykjavík",
+  "score": 857.559,
+  "active": true,
+  "delta": -294
+ },
+ {
+  "id": 11,
+  "name": "alpha-11",
+  "city": "Lagos",
+  "score": -74.513,
+  "active": true,
+  "delta": 52
+ }
+]

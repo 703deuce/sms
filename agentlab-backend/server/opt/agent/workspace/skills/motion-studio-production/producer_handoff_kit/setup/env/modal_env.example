@@ -1,0 +1,4 @@
+# /workspace/render_bench/.modal_env  (mode 600). Modal API token for the Transovo workspace that hosts the deployed app
+# "transovo-motion-render". Used only by /workspace/motion_kit/modal/submit.sh and status checks. From Chief of Staff / Rick.
+export MODAL_TOKEN_ID=
+export MODAL_TOKEN_SECRET=

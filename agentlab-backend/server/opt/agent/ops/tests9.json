@@ -1,0 +1,65 @@
+[
+ {
+  "id": "S1",
+  "name": "Schedule Reminder for Rick's Weekly Status",
+  "before_run": "run_c9ba36404c",
+  "mode": "raw",
+  "prompt": "Remind me tomorrow at 9:00 AM America/New_York to send Rick's weekly Agent Lab status. The reminder should actually be scheduled, not just written down. Tell me what you set up and when it will fire."
+ },
+ {
+  "id": "S3",
+  "name": "Fill httpbin post form and report submitted data",
+  "before_run": "run_c0a6ee6853",
+  "mode": "raw",
+  "prompt": "Open https://httpbin.org/forms/post in the browser, fill the form with name \"Rick James\", a comment \"Agent Lab form test\", and a reasonable choice for the other fields, submit it, and tell me what the result page shows was posted. If the text view is unclear, take a screenshot and look at it."
+ },
+ {
+  "id": "S4",
+  "name": "Slugify CSV Dates CLI With Strict Mode",
+  "before_run": "run_6f2a237188",
+  "mode": "raw",
+  "prompt": "Write a small Python CLI `out/slugify-dates.py` that reads a CSV from stdin with columns `title,date` and prints `slug,iso_date`. Slugs are lowercase hyphenated ASCII; dates may be like `11/22/26`, `2026-11-22`, or `Nov 22, 2026`, and must be emitted as `YYYY-MM-DD`. Include a `--strict` flag that exits 2 on a bad date. Add a short `out/README.md` with usage. Don't use a network install. Then run a 4-row sample through it, including one bad date in strict mode, and show me the output."
+ },
+ {
+  "id": "S7",
+  "name": "Save Rick's Agent Lab test recap preferences",
+  "before_run": "run_c94039439e",
+  "mode": "raw",
+  "prompt": "Remember this as a preference: Rick wants Agent Lab test recaps to lead with pass/fail, then quality, then cost. Don't just agree \u2014 save it to long-term memory."
+ },
+ {
+  "id": "S12",
+  "name": "Agent Lab Test Recap Page Publishing",
+  "before_run": "run_affaa6c766",
+  "mode": "raw",
+  "prompt": "Write a one-page recap of the Agent Lab test idea (what the 15-task set is for, how we score quality/time/cost, and a small example table of three made-up results). Publish it as a page I can open on the web and give me the slug and the URL. The recap should lead with how we score, then the table, then notes."
+ },
+ {
+  "id": "S13",
+  "name": "Browser Research: 6 Wikipedia Pages Summary",
+  "before_run": "run_cddd613335",
+  "mode": "raw",
+  "prompt": "Context-budget test of a long task. Use the browser for each of these 6 pages, one at a time, in order: https://en.wikipedia.org/wiki/Prompt_engineering , https://en.wikipedia.org/wiki/Large_language_model , https://en.wikipedia.org/wiki/Transformer_(deep_learning) , https://en.wikipedia.org/wiki/Video_editing , https://en.wikipedia.org/wiki/Motion_graphics , https://en.wikipedia.org/wiki/Documentary_film . For each page: open it, read the full page text with browser_get_content, take one screenshot of the page and look at it with agent_view, then append to notes.md in your job folder: the page title, 3 key facts from the text, and one sentence about what the screenshot shows. After each page, save a checkpoint saying 'page N of 6 done'. When all six are done, write summary.md comparing the six pages in 10 bullet points and reply with the two file paths. Do not load any skills."
+ },
+ {
+  "id": "R3",
+  "name": "rt3 landing page",
+  "before_run": "run_e2efa30bdc",
+  "mode": "job",
+  "prompt": "Make a quick single-page landing page for a fictional product, Lumen Mug (a self-heating smart coffee mug): hero with headline and call-to-action button, three feature cards, a pricing section with one price, and a footer. One self-contained file out/index.html in your job folder (inline CSS, no external images, fonts or scripts), designed to look polished at 1280x800 desktop. Keep it quick."
+ },
+ {
+  "id": "R4",
+  "name": "rt4 title card",
+  "before_run": "run_1c2bed1535",
+  "mode": "job",
+  "prompt": "Make a 5-second animated title card video: 1920x1080, 30 fps, silent, H.264 MP4 at out/title.mp4 in your job folder. Text: TRANSOVO CLIPS presents / THE FEUD, with a short bold animated reveal on a dark background. Keep it quick."
+ },
+ {
+  "id": "R5",
+  "name": "rt5 sales chart",
+  "before_run": "run_dae472187f",
+  "mode": "job",
+  "prompt": "Make one designed bar chart graphic, 1600x900 PNG at out/chart.png in your job folder, titled Lumen Mug sales 2026, showing fictional quarterly sales in thousands of dollars: Q1 120, Q2 165, Q3 140, Q4 210, with value labels and clean modern styling. Keep it quick."
+ }
+]

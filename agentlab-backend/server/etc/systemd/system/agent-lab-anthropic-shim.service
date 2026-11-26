@@ -1,0 +1,12 @@
+[Unit]
+Description=Agent Lab Anthropic pass-through for thinking-block binding (127.0.0.1:6074, no secrets)
+After=network-online.target
+
+[Service]
+User=agentlab
+ExecStart=/usr/bin/python3 /opt/agent/ops/anthropic_shim.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

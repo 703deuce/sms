@@ -1,0 +1,158 @@
+{
+ "uf50_0": {
+  "sat": false,
+  "vars": 50,
+  "clauses": 213,
+  "cadical_secs": 0.0
+ },
+ "uf50_1": {
+  "sat": true,
+  "vars": 50,
+  "clauses": 213,
+  "cadical_secs": 0.0
+ },
+ "uf50_2": {
+  "sat": true,
+  "vars": 50,
+  "clauses": 213,
+  "cadical_secs": 0.0
+ },
+ "uf50_3": {
+  "sat": true,
+  "vars": 50,
+  "clauses": 213,
+  "cadical_secs": 0.0
+ },
+ "uf100_0": {
+  "sat": true,
+  "vars": 100,
+  "clauses": 426,
+  "cadical_secs": 0.001
+ },
+ "uf100_1": {
+  "sat": true,
+  "vars": 100,
+  "clauses": 426,
+  "cadical_secs": 0.0
+ },
+ "uf100_2": {
+  "sat": false,
+  "vars": 100,
+  "clauses": 426,
+  "cadical_secs": 0.003
+ },
+ "uf100_3": {
+  "sat": true,
+  "vars": 100,
+  "clauses": 426,
+  "cadical_secs": 0.002
+ },
+ "uf150_0": {
+  "sat": true,
+  "vars": 150,
+  "clauses": 639,
+  "cadical_secs": 0.018
+ },
+ "uf150_1": {
+  "sat": false,
+  "vars": 150,
+  "clauses": 639,
+  "cadical_secs": 0.061
+ },
+ "uf150_2": {
+  "sat": false,
+  "vars": 150,
+  "clauses": 639,
+  "cadical_secs": 0.058
+ },
+ "uf150_3": {
+  "sat": true,
+  "vars": 150,
+  "clauses": 639,
+  "cadical_secs": 0.002
+ },
+ "uf200_0": {
+  "sat": true,
+  "vars": 200,
+  "clauses": 852,
+  "cadical_secs": 0.059
+ },
+ "uf200_1": {
+  "sat": true,
+  "vars": 200,
+  "clauses": 852,
+  "cadical_secs": 0.101
+ },
+ "uf200_2": {
+  "sat": false,
+  "vars": 200,
+  "clauses": 852,
+  "cadical_secs": 0.507
+ },
+ "uf200_3": {
+  "sat": false,
+  "vars": 200,
+  "clauses": 852,
+  "cadical_secs": 0.256
+ },
+ "uf250_0": {
+  "sat": false,
+  "vars": 250,
+  "clauses": 1065,
+  "cadical_secs": 12.91
+ },
+ "uf250_1": {
+  "sat": false,
+  "vars": 250,
+  "clauses": 1065,
+  "cadical_secs": 2.868
+ },
+ "uf250_2": {
+  "sat": true,
+  "vars": 250,
+  "clauses": 1065,
+  "cadical_secs": 0.662
+ },
+ "uf250_3": {
+  "sat": false,
+  "vars": 250,
+  "clauses": 1065,
+  "cadical_secs": 1.728
+ },
+ "uf300_0": {
+  "sat": true,
+  "vars": 300,
+  "clauses": 1278,
+  "cadical_secs": 0.294
+ },
+ "uf300_1": {
+  "sat": true,
+  "vars": 300,
+  "clauses": 1278,
+  "cadical_secs": 0.286
+ },
+ "uf300_2": {
+  "sat": false,
+  "vars": 300,
+  "clauses": 1278,
+  "cadical_secs": 44.474
+ },
+ "php_7_6": {
+  "sat": false,
+  "vars": 42,
+  "clauses": 133,
+  "cadical_secs": 0.004
+ },
+ "php_8_7": {
+  "sat": false,
+  "vars": 56,
+  "clauses": 204,
+  "cadical_secs": 0.036
+ },
+ "php_9_8": {
+  "sat": false,
+  "vars": 72,
+  "clauses": 297,
+  "cadical_secs": 0.273
+ }
+}

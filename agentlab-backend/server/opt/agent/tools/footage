@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""footage: fetch a clip from TikTok, Instagram, X, Vimeo, or a public Drive/Dropbox link.
+
+usage:
+  footage [--tier transcript|frames|full] [--job ID] URL [extra yt-dlp/gallery-dl args...]
+
+Tiers (smallest that does the job — same rule as ytdl):
+  transcript  captions/description only, no video. Prefer this to understand a clip.
+  frames      240p (or the smallest available). For looking at pictures.
+  full        edit quality. Only when a clip will go into an edit.
+
+Tries a direct connection first. If the site blocks this server, retries through
+the AgentLab egress gateway (http://127.0.0.1:18080) when the host is allowlisted.
+Do not set HTTP_PROXY globally. For YouTube use `ytdl` / `yt-transcript` instead.
+"""
+from __future__ import annotations
+import json, os, re, shlex, subprocess, sys, urllib.parse
+from pathlib import Path
+
+GATEWAY = os.environ.get("EGRESS_PROXY", "http://127.0.0.1:18080")
+VENV = Path(os.environ.get("YTDLP_PY", "/workspace/usage/ytdlp-venv/bin"))
+YT = os.environ.get("YTDLP_BIN", str(VENV / "yt-dlp"))
+GDL = os.environ.get("GALLERY_DL", str(VENV / "gallery-dl"))
+CACHE = Path(os.environ.get("FOOTAGE_CACHE", "/workspace/usage/footage-cache"))
+BOT = re.compile(
+    r"sign in to confirm you.re not a bot|"
+    r"your IP address is blocked|"
+    r"IP address is blocked|"
+    r"HTTP Error 403|"
+    r"HTTP Error 429|"
+    r"unusual traffic|"
+    r"access denied from your (IP|region)",
+    re.I,
+)
+YT_RE = re.compile(r"(?:youtube\.com|youtu\.be)/", re.I)
+
+FRAMES_FORMAT = "bv*[height<=240]/bv*[height<=144]/bv*[height<=360]/worst[height<=360]/worst"
+SITE_RE = {
+    "tiktok": re.compile(r"(?:^|\.)tiktok\.com$|(?:^|\.)tiktokcdn", re.I),
+    "instagram": re.compile(r"(?:^|\.)instagram\.com$|(?:^|\.)cdninstagram\.com$|(?:^|\.)ig\.me$", re.I),
+    "x": re.compile(r"(?:^|\.)(?:x|twitter)\.com$|(?:^|\.)twimg\.com$|(?:^|\.)t\.co$", re.I),
+    "vimeo": re.compile(r"(?:^|\.)vimeo\.com$|(?:^|\.)vimeocdn\.com$", re.I),
+    "drive": re.compile(r"(?:^|\.)drive\.google\.com$|(?:^|\.)docs\.google\.com$|(?:^|\.)googleusercontent\.com$", re.I),
+    "dropbox": re.compile(r"(?:^|\.)dropbox\.com$|(?:^|\.)dropboxusercontent\.com$", re.I),
+}
+
+
+def die(msg, code=1):
+    print(f"footage: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def host_of(url: str) -> str:
+    return (urllib.parse.urlparse(url).hostname or "").lower()
+
+
+def site_of(url: str) -> str:
+    h = host_of(url)
+    for name, rx in SITE_RE.items():
+        if rx.search(h):
+            return name
+    return "other"
+
+
+def job_dir():
+    cwd = Path.cwd()
+    for p in (cwd, *cwd.parents):
+        if p.name and (p / "log").is_dir() or re.search(r"/jobs/[0-9a-f-]{36}$", str(p)):
+            return p
+    return cwd
+
+
+def run(cmd, env=None):
+    e = os.environ.copy()
+    if env:
+        e.update(env)
+    # never leak proxy user:pass in printed command
+    shown = []
+    for a in cmd:
+        if "://" in a and "@" in a:
+            shown.append("[proxy]")
+        else:
+            shown.append(a)
+    print("footage: run", " ".join(shlex.quote(x) for x in shown), flush=True)
+    return subprocess.run(cmd, env=e, capture_output=True, text=True)
+
+
+def blocked(text: str) -> bool:
+    if not text:
+        return False
+    return bool(BOT.search(text)) or "HTTP Error 403" in text or "HTTP Error 429" in text
+
+
+def yt_cmd(url, tier, outdir, extra, proxy=None):
+    cmd = [YT, "--no-warnings", "--no-progress", "-P", str(outdir)]
+    if proxy:
+        cmd += ["--proxy", proxy]
+    if tier == "transcript":
+        cmd += ["--skip-download", "--write-auto-subs", "--write-subs", "--write-description",
+                "--sub-lang", "en.*,en", "--convert-subs", "vtt"]
+    elif tier == "frames":
+        cmd += ["-f", FRAMES_FORMAT, "--no-playlist"]
+    else:
+        cmd += ["-f", "bv*+ba/b", "--no-playlist"]
+    profile = os.environ.get("CHROME_PROFILE", "/workspace/desktop/chrome-profile")
+    if Path(profile).is_dir():
+        cmd += ["--cookies-from-browser", f"chrome:{profile}"]
+    cmd += extra + [url]
+    return cmd
+
+
+def gdl_cmd(url, tier, outdir, extra, proxy=None):
+    cmd = [GDL, "--no-mtime", "-D", str(outdir)]
+    if proxy:
+        cmd += ["--proxy", proxy]
+    if tier == "transcript":
+        # metadata only
+        cmd += ["--simulate", "--write-metadata"]
+    elif tier == "frames":
+        # smallest: gallery-dl range first item; format filters vary by site
+        cmd += ["--range", "1", "-o", "image-format=worst", "-o", "video-format=worst"]
+    profile = os.environ.get("CHROME_PROFILE", "/workspace/desktop/chrome-profile")
+    if Path(profile).is_dir() and Path(profile, "Default").exists() or Path(profile, "Cookies").exists() or Path(profile).is_dir():
+        cmd += ["--cookies-from-browser", "chrome:" + profile]
+    cmd += extra + [url]
+    return cmd
+
+
+def prefer_gdl(site: str) -> bool:
+    return site in ("instagram", "tiktok", "x") and Path(GDL).is_file()
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        sys.exit(0)
+    tier = "frames"
+    extra, url, job = [], None, None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--tier" and i + 1 < len(args):
+            tier = args[i + 1]; i += 2
+            if tier not in ("transcript", "frames", "full"):
+                die("tier must be transcript, frames, or full")
+        elif a == "--job" and i + 1 < len(args):
+            job = args[i + 1]; i += 2
+        elif a.startswith("-") and url is None and a not in ("--",):
+            # remainder are passed through once we have the URL; collect later
+            extra.append(a); i += 1
+            # if this option takes a value that doesn't start with -, keep it
+            if i < len(args) and not args[i].startswith("-") and not re.match(r"https?://", args[i] or ""):
+                extra.append(args[i]); i += 1
+        elif re.match(r"https?://", a) or (url is None and ":" not in a and "/" in a):
+            url = a; i += 1
+            extra += args[i:]; break
+        else:
+            extra.append(a); i += 1
+    if not url:
+        die("give a URL")
+    if YT_RE.search(url):
+        die("this looks like YouTube — use `yt-transcript URL` or `ytdl --tier %s URL`" % tier)
+    site = site_of(url)
+    outdir = job_dir() / "src" / "footage"
+    outdir.mkdir(parents=True, exist_ok=True)
+    CACHE.mkdir(parents=True, exist_ok=True)
+
+    use_gdl = prefer_gdl(site)
+    makers = []
+    if use_gdl:
+        makers.append(("gallery-dl", gdl_cmd))
+        makers.append(("yt-dlp", yt_cmd))
+    else:
+        makers.append(("yt-dlp", yt_cmd))
+        if Path(GDL).is_file():
+            makers.append(("gallery-dl", gdl_cmd))
+
+    last = None
+    for name, maker in makers:
+        for proxy in (None, GATEWAY):
+            label = "direct" if proxy is None else "egress"
+            cmd = maker(url, tier, outdir, extra, proxy=proxy)
+            if name == "gallery-dl" and not Path(GDL).is_file():
+                continue
+            if name == "yt-dlp" and not Path(YT).is_file():
+                die(f"yt-dlp not found at {YT}")
+            r = run(cmd)
+            out = (r.stdout or "") + "\n" + (r.stderr or "")
+            last = out
+            if r.returncode == 0:
+                print(f"footage: ok via {name} ({label}), tier={tier}, site={site}")
+                if r.stdout.strip():
+                    print(r.stdout.strip()[-2000:])
+                return
+            if proxy is None and (blocked(out) or r.returncode != 0):
+                # try next path
+                if blocked(out):
+                    print(f"footage: {name} direct looked blocked; will retry"
+                          + (" through the egress gateway" if proxy is None else ""), flush=True)
+                else:
+                    print(f"footage: {name} direct failed; trying "
+                          + ("egress" if True else ""), flush=True)
+                continue
+            if proxy and "not on the egress allowlist" in out:
+                print("footage: the egress gateway refused this host (not on the allowlist). "
+                      "If the site is blocked from this server, ask to add it to "
+                      "/opt/agent/ops/egress/config.json.", file=sys.stderr)
+        # next tool
+    tail = (last or "")[-1500:]
+    die(f"could not fetch {url} (site={site}, tier={tier}). Last output:\n{tail}")
+
+
+if __name__ == "__main__":
+    main()

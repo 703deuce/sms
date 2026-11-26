@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""handoff: pause and let Rick use the live desktop (sign-in, 2FA, file picker).
+
+usage: handoff "Please sign in to YouTube" [--timeout 1800]
+       handoff --done
+       handoff --status
+
+Shows Rick a notice with an "I'm done" button on the Agent Lab page; he works on the desktop through the page's Live screen panel.
+Then waits until he clicks "I'm done" on the live view, or the timeout hits.
+Do not send Rick any :6080 address or PIN (that port is closed); point him to the page. Do not print API keys.
+"""
+LIVE_URL = "https://transovo.ai/app/agent-lab"
+import os, sys, time
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import api, die
+
+def _own_browser_page():
+    """A run with its own browser: open its current page on the shared desktop, where Rick works."""
+    try:
+        sys.path.insert(0, "/opt/tools")
+        import jobbrowser as jb
+        info = jb.ensure(False)
+        if info.get("mode") != "job" or not info.get("running"):
+            return None
+        url = jb.active_page(info["port"]).get("url") or ""
+        if url.startswith("http"):
+            from urllib.parse import quote
+            tab = jb.http_json(jb.SHARED_PORT, "/json/new?" + quote(url, safe=":/?&=%#@+,;~"), method="PUT")
+            if isinstance(tab, dict) and tab.get("id"):
+                jb.http_json(jb.SHARED_PORT, "/json/activate/" + tab["id"])
+            print(f"Your own browser is private, so {url} was opened on the shared desktop for Rick.")
+        return info
+    except Exception as e:
+        print(f"handoff: could not open your page on the shared desktop ({e}); open it with desktop-open --shared URL")
+        return None
+
+
+def _sync_back(info):
+    if not info:
+        return
+    try:
+        import jobbrowser as jb
+        r = jb._call("/sync", {"job": info["job"]}, timeout=150)
+        t = jb.active_page(info["port"])
+        c = jb.CDP(t["webSocketDebuggerUrl"])
+        try:
+            c.call("Page.reload", {})
+        finally:
+            c.close()
+        print(f"Copied the shared browser's logins into your own browser ({r.get('cookies')} cookies) and reloaded your tab.")
+    except Exception as e:
+        print(f"handoff: run `job-browser sync` to copy the new login into your own browser ({e})")
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__); return
+    if args[0] == "--done":
+        rec, _, _ = api("POST", "/handoff/done")
+        print("handoff marked done")
+        return
+    if args[0] == "--status":
+        rec, _, _ = api("GET", "/handoff")
+        print(f"status={rec.get('status')} kind={rec.get('kind')} expires={rec.get('expires_at')}")
+        if rec.get("message"):
+            print(rec["message"])
+        return
+    timeout, message_parts = 1800, []
+    i = 0
+    while i < len(args):
+        if args[i] == "--timeout":
+            timeout = int(args[i+1]); i += 2
+        elif args[i].startswith("-"):
+            die("handoff", f"unknown option {args[i]}")
+        else:
+            message_parts.append(args[i]); i += 1
+    message = " ".join(message_parts) or "Rick, please finish on the live desktop, then click I'm done."
+    own = _own_browser_page()
+    try:
+        rec, _, _ = api("POST", "/handoff", {"message": message, "timeout": timeout, "kind": "handoff"})
+    except Exception as e:
+        die("handoff", str(e))
+    print(f"HANDOFF started.")
+    print(f"Tell Rick: open {LIVE_URL} , click \"Live screen\" to use the desktop, then press \"I'm done\" in the notice.")
+    print(f"Message shown to him: {message}")
+    print(f"Waiting up to {timeout} seconds for him to click I'm done...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        time.sleep(2)
+        try:
+            st, _, _ = api("GET", "/handoff")
+        except Exception:
+            continue
+        if st.get("status") == "done":
+            print("HANDOFF complete. Continue the task.")
+            _sync_back(own)
+            return
+        if st.get("status") == "expired":
+            die("handoff", "timed out (handoff expired). Run handoff again if Rick still needs to finish.")
+    try:
+        api("POST", "/handoff/done")
+    except Exception:
+        pass
+    die("handoff", f"timed out after {timeout}s waiting for Rick. The handoff was released so it cannot stick. Run handoff again if he still needs to finish.")
+
+if __name__ == "__main__":
+    main()

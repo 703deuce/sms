@@ -1,0 +1,32 @@
+---
+name: footage-gathering
+description: Download or inspect clips from TikTok, Instagram, X, Vimeo, or public Google Drive / Dropbox links. Use when gathering source footage that is not YouTube.
+---
+
+# Footage gathering (non-YouTube)
+
+Load this skill before downloading from TikTok, Instagram, X (Twitter), Vimeo, or a public Drive/Dropbox link.
+
+## Size tiers (hard rule)
+
+Use only as much media as the job needs:
+
+1. **Understand / check a clip:** `footage --tier transcript URL` (captions or description only; no video).
+2. **Need to see frames:** `footage --tier frames URL` (240p or the smallest available). Then `look` / `agent_view`.
+3. **A clip will go into an edit:** `footage --tier full URL`.
+
+For **YouTube** do not use this tool: `yt-transcript URL` or `ytdl --tier transcript|frames|full URL`.
+
+## How the tool works
+
+`footage` uses `gallery-dl` and `yt-dlp` (the venv at `/workspace/usage/ytdlp-venv`). It tries a direct connection first and, if the site blocks this server, retries through the AgentLab egress gateway. Do not set `HTTP_PROXY`/`HTTPS_PROXY` globally. Do not call `python -m yt_dlp` or raw `curl` for these sites.
+
+Cookies from the shared Chromium profile are tried when present. If a site still demands a login, open it on the desktop and `handoff` to Rick — never ask for passwords in chat.
+
+## Site notes
+
+- **TikTok / Instagram / X:** often block datacenter IPs; the gateway is used when needed. Some posts are login-gated.
+- **Vimeo:** many public videos work direct; passworded albums need a handoff.
+- **Public Google Drive / Dropbox:** share links must be "anyone with the link". Dropbox: a `?dl=1` style link is fine. Drive: a standard file share URL.
+
+Write a license or source line next to every saved file (URL, account if known, and that it is a third-party clip). Put files in `src/footage/`.

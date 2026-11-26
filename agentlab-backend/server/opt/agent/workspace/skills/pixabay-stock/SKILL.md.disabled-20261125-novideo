@@ -1,0 +1,14 @@
+---
+name: pixabay-stock
+description: Search and download royalty-free stock images and videos from Pixabay, with a license recorded on each result. Use when a job needs stock footage, stills, or B-roll and Pixabay is enough.
+---
+
+# Pixabay stock
+
+Use `stock-search "query" [--type video|image|all] [-n 8] [--download -o DIR]` for royalty-free stills and video from Pixabay.
+
+- Every result includes `license` (Pixabay Content License), `license_url`, `page_url`, `attribution`, and `user`. When you `--download`, a `licenses.jsonl` sidecar is appended in the output folder. Keep that record with the project.
+- Prefer `--type video` for B-roll and `--type image` for stills. Default `all` searches both.
+- Pixabay's public API does **not** offer music. For a score use ElevenLabs Music (`scripts/gen_music.py` in the motion-studio skill). For sound effects use `sfx`.
+- Needs `PIXABAY_API_KEY` in `/workspace/secrets/pixabay.env` (or the environment). If the tool says the key is missing, stop and tell Rick — do not sign up yourself and do not ask him to paste the key into chat.
+- Do not mass-download. Cache and reuse files already in the job folder. Follow Pixabay's content license (https://pixabay.com/service/license/).

@@ -1,0 +1,94 @@
+[
+ {
+  "id": "h1-before-1",
+  "status": "done",
+  "runs": 2,
+  "minutes": 2.2,
+  "cost_usd": 0.0217,
+  "llm_calls": 22,
+  "peak_prompt": 56103,
+  "prompt_tokens": 836084,
+  "cache_read": 776799,
+  "cache_write": 59231,
+  "completion": 13083,
+  "files_opened": 0,
+  "tools": {
+   "terminal": 16,
+   "file_editor": 2
+  },
+  "cmds": {
+   "grep": 16
+  },
+  "autocheck_blocks": 0,
+  "grade": "PASS (score 6/6)"
+ },
+ {
+  "id": "h1-before-2",
+  "status": "done",
+  "runs": 2,
+  "minutes": 2.5,
+  "cost_usd": 0.0236,
+  "llm_calls": 22,
+  "peak_prompt": 52021,
+  "prompt_tokens": 859808,
+  "cache_read": 801630,
+  "cache_write": 58122,
+  "completion": 16555,
+  "files_opened": 0,
+  "tools": {
+   "terminal": 19,
+   "file_editor": 1
+  },
+  "cmds": {
+   "grep": 15
+  },
+  "autocheck_blocks": 0,
+  "grade": "FAIL (score 1/6)"
+ },
+ {
+  "id": "h1-after-1",
+  "status": "done",
+  "runs": 2,
+  "minutes": 2.1,
+  "cost_usd": 0.022,
+  "llm_calls": 19,
+  "peak_prompt": 53101,
+  "prompt_tokens": 703690,
+  "cache_read": 623867,
+  "cache_write": 79775,
+  "completion": 11575,
+  "files_opened": 1,
+  "tools": {
+   "terminal": 16,
+   "file_editor": 1
+  },
+  "cmds": {
+   "grep": 20
+  },
+  "autocheck_blocks": 0,
+  "grade": "PASS (score 6/6)"
+ },
+ {
+  "id": "h1-after-2",
+  "status": "done",
+  "runs": 1,
+  "minutes": 0.9,
+  "cost_usd": 0.01,
+  "llm_calls": 7,
+  "peak_prompt": 57168,
+  "prompt_tokens": 280952,
+  "cache_read": 249310,
+  "cache_write": 31624,
+  "completion": 7186,
+  "files_opened": 0,
+  "tools": {
+   "terminal": 6,
+   "file_editor": 1
+  },
+  "cmds": {
+   "grep": 7
+  },
+  "autocheck_blocks": 0,
+  "grade": "PASS (score 6/6)"
+ }
+]

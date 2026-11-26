@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""codesearch: find code by meaning OR by name in the repo you are working on (hybrid: keywords + local embeddings + rerank,
+like Cursor's semantic search; free, runs on this machine). Returns file, line range, symbol and a short snippet, so you
+open only those lines.
+
+  codesearch "where are negative indexes handled in nth_combination" [PATH] [-k 8]
+  codesearch "retry backoff delay" ~/jobs/.../out/myrepo
+PATH defaults to the project you are in (nearest folder with pyproject/package.json/go.mod/Cargo.toml/.git ...), or every
+project inside the current job folder. The repo is indexed on first use and only changed files are re-embedded later,
+so results follow your edits. Use rg -n for an exact string; use this for a question or a concept."""
+import json, os, re, sys, urllib.request
+
+SERVICE = os.environ.get('SEARCH_SERVICE', 'http://127.0.0.1:6075')
+MARKERS = ('pyproject.toml', 'setup.py', 'setup.cfg', 'package.json', 'go.mod', 'Cargo.toml', 'pom.xml', 'build.gradle',
+           'Gemfile', 'composer.json', 'CMakeLists.txt', 'Makefile', 'tsconfig.json', 'requirements.txt', '.git')
+JOBROOT = re.compile(r'^/workspace/jobs/[0-9a-f-]{36}(/helpers/[0-9a-f-]{36})*$')
+SKIP = {'node_modules', 'log', 'venv', '.venv', '__pycache__', 'dist', 'build', 'frames', '.git'}
+
+
+def call(path, body, timeout):
+    req = urllib.request.Request(SERVICE + path, data=json.dumps(body).encode(), method='POST', headers={'content-type': 'application/json'})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def project_up(p):
+    d = p if os.path.isdir(p) else os.path.dirname(p)
+    while d and d != '/' and d.startswith('/workspace/'):
+        if JOBROOT.match(d):
+            return None
+        if any(os.path.exists(os.path.join(d, m)) for m in MARKERS):
+            return d
+        d = os.path.dirname(d)
+    return None
+
+
+def projects_below(d):
+    out = []
+    for dp, dn, fn in os.walk(d):
+        depth = dp[len(d):].count('/')
+        dn[:] = [x for x in dn if x not in SKIP and not x.startswith('.')]
+        if depth >= 3:
+            dn[:] = []
+        if dp != d and any(m in fn or m in os.listdir(dp) for m in MARKERS):
+            out.append(dp); dn[:] = []
+    return out
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'):
+        print(__doc__); return
+    k, path, words = 8, None, []
+    i = 0
+    while i < len(a):
+        if a[i] == '-k' and i + 1 < len(a):
+            k = int(a[i + 1]); i += 2
+        elif os.path.exists(a[i]) and path is None and (a[i].startswith(('/', '.', '~')) or os.path.isdir(a[i])):
+            path = a[i]; i += 1
+        else:
+            words.append(a[i]); i += 1
+    q = ' '.join(words).strip()
+    if not q:
+        sys.exit('codesearch: give a question or words to search for')
+    target = os.path.abspath(os.path.expanduser(path or os.getcwd()))
+    proj = project_up(target)
+    if proj:
+        roots, scope = [proj], (target if path and os.path.isdir(target) and target.startswith(proj) else proj)
+    else:
+        roots = projects_below(target) + ([target] if not target.startswith('/workspace/jobs/') or not projects_below(target) else [])
+        scope = target
+    if not target.startswith('/workspace/'):
+        sys.exit('codesearch: the repo must be inside /workspace (your job folder); use rg -n elsewhere')
+    new = 0
+    try:
+        for r in roots:
+            res = call('/reindex', {'root': r}, timeout=900)
+            new += int(res.get('reindexed') or 0)
+        res = call('/search', {'q': q, 'scope': scope, 'k': k}, timeout=120)
+    except Exception as e:
+        sys.exit(f'codesearch: search service unavailable ({type(e).__name__}); use rg -n "<word>" {scope}')
+    rs = res.get('results') or []
+    cwd = os.getcwd()
+    rel = lambda p: os.path.relpath(p, cwd) if p.startswith(cwd + '/') else p
+    print(f'codesearch "{q}" in {rel(scope)}: {res.get("how")}' + (f', {new} file(s) (re)indexed now' if new else ''))
+    if not rs:
+        print('no results (try other words, or rg -n for an exact name)'); return
+    for n, r in enumerate(rs, 1):
+        p = rel(r['path'])
+        print(f'{n}. {p}:{r["a"]}-{r["b"]}  [{r["heading"][:70]}]')
+        print(f'   {r["snippet"][:160]}')
+    print(f'Open only what you need: read_section FILE --lines A:B (or the editor view with view_range [A, B]).')
+
+
+if __name__ == '__main__':
+    main()

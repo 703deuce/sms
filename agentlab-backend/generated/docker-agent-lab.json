@@ -1,0 +1,104 @@
+{
+  "Name": "/agent-lab",
+  "Image": "transovo-agent:1.63.1-full",
+  "ImageID": "sha256:99865204bb446e53f3b07feedf404f0b82086c3105336c39eba2e81c6a7a6bb8",
+  "Cmd": [
+    "--host",
+    "0.0.0.0",
+    "--port",
+    "8000"
+  ],
+  "Entrypoint": [
+    "tini",
+    "--",
+    "/usr/local/bin/openhands-agent-server"
+  ],
+  "EnvNamesOnly": [
+    "VISION_ACTOR_MODEL",
+    "VISION_ACTOR_FALLBACK",
+    "OH_SESSION_API_KEYS_0",
+    "OPENHANDS_SUPPRESS_BANNER",
+    "DEEPSEEK_API_KEY",
+    "OH_SECRET_KEY",
+    "OH_ENABLE_VSCODE",
+    "BOT_ID",
+    "TZ",
+    "PATH",
+    "GEMINI_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "DEEPGRAM_API_KEY",
+    "OPENHANDS_BUILD_GIT_SHA",
+    "OPENHANDS_BUILD_GIT_REF",
+    "ACP_NODE_DIR",
+    "LC_ALL",
+    "LANG",
+    "LOG_JSON",
+    "OH_ACP_SKILL_SOURCING",
+    "EDITOR",
+    "VISUAL",
+    "GIT_EDITOR",
+    "CODE_SERVER_ROOT",
+    "CHROME_BIN",
+    "PUPPETEER_EXECUTABLE_PATH",
+    "CHROMIUM_FLAGS",
+    "LD_LIBRARY_PATH",
+    "DEBIAN_FRONTEND",
+    "PLAYWRIGHT_BROWSERS_PATH",
+    "DENO_INSTALL",
+    "PIP_BREAK_SYSTEM_PACKAGES"
+  ],
+  "User": "openhands",
+  "WorkingDir": "/",
+  "Mounts": [
+    {
+      "Source": "/opt/agent/ops/sandbox/bash.bashrc",
+      "Destination": "/etc/bash.bashrc",
+      "Mode": "ro",
+      "RW": false
+    },
+    {
+      "Source": "/opt/agent/ops/sandbox/job-exec",
+      "Destination": "/usr/local/bin/job-exec",
+      "Mode": "ro",
+      "RW": false
+    },
+    {
+      "Source": "/opt/agent/workspace",
+      "Destination": "/workspace",
+      "Mode": "",
+      "RW": true
+    },
+    {
+      "Source": "/opt/agent/oh-home",
+      "Destination": "/home/openhands/.openhands",
+      "Mode": "",
+      "RW": true
+    },
+    {
+      "Source": "/opt/agent/tools",
+      "Destination": "/opt/tools",
+      "Mode": "ro",
+      "RW": false
+    }
+  ],
+  "NetworkMode": "host",
+  "RestartPolicy": {
+    "Name": "unless-stopped",
+    "MaximumRetryCount": 0
+  },
+  "ShmSize": 1073741824,
+  "GroupAdd": [
+    "19998"
+  ],
+  "LogConfig": {
+    "Type": "json-file",
+    "Config": {
+      "max-file": "5",
+      "max-size": "20m"
+    }
+  },
+  "Memory": 0,
+  "Devices": [],
+  "PortBindings": {},
+  "Privileged": false
+}

@@ -1,0 +1,11 @@
+[Unit]
+Description=Agent Lab login vault service on 127.0.0.1:6072 (types stored website logins, never returns them)
+After=docker.service agent-lab-runner.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/agent/ops/vaultd.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Hook (PreToolUse/PostToolUse on terminal): refuses rm/mv/etc. that touch paths outside the
+conversation's job folder, /tmp and tool caches. PostToolUse records the terminal's current directory
+so relative paths are judged against where the shell really is."""
+import json, os, re, shlex, sys
+
+HOME = '/home/openhands'
+SAFE_EXTRA = ['/tmp', f'{HOME}/.cache', f'{HOME}/.npm', f'{HOME}/.local', f'{HOME}/.config', f'{HOME}/.deno',
+              f'{HOME}/.cache/ms-playwright', '/var/tmp']
+DESTRUCTIVE = {'rm', 'rmdir', 'unlink', 'shred', 'mv', 'truncate', 'srm', 'wipe'}
+STATE = '/tmp/agent-guard'
+
+
+def deny(reason):
+    print(json.dumps({'decision': 'deny', 'reason': reason}))
+    sys.exit(2)
+
+
+def allowed_roots(job):
+    roots = [job] + SAFE_EXTRA if job else SAFE_EXTRA
+    return [os.path.realpath(r) for r in roots]
+
+
+def inside(path, roots):
+    p = os.path.realpath(path)
+    return any(p == r or p.startswith(r.rstrip('/') + '/') for r in roots)
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        return
+    event = payload.get('event_type') or os.environ.get('OPENHANDS_EVENT_TYPE')
+    sid = str(payload.get('session_id') or os.environ.get('OPENHANDS_SESSION_ID') or 'x')
+    job = payload.get('working_dir') or os.environ.get('OPENHANDS_PROJECT_DIR') or ''
+    os.makedirs(STATE, exist_ok=True)
+    state_file = os.path.join(STATE, re.sub(r'[^\w\-]', '', sid))
+    if event == 'PostToolUse':
+        resp = payload.get('tool_response') or {}
+        cwd = None
+        if isinstance(resp, dict):
+            cwd = (resp.get('metadata') or {}).get('working_dir') or resp.get('working_dir')
+        if cwd:
+            open(state_file, 'w').write(cwd)
+        return
+    if event == 'PreToolUse' and payload.get('tool_name') in ('file_editor', 'str_replace_editor', 'edit_file'):
+        check_editor(payload.get('tool_input') or {}, job)
+        return
+    if event != 'PreToolUse' or (payload.get('tool_name') not in ('terminal', 'bash', 'execute_bash')):
+        return
+    cmd = str((payload.get('tool_input') or {}).get('command') or '')
+    if not cmd.strip():
+        return
+    roots = allowed_roots(job)
+    cwd = open(state_file).read().strip() if os.path.exists(state_file) else (job or '/')
+    check_cmd(cmd, cwd, job, roots, 0)
+
+
+EDITOR_WRITES = {'create', 'str_replace', 'insert', 'undo_edit', 'write', 'edit'}
+
+
+def check_editor(ti, job):
+    """The file editor runs inside the agent server, outside the terminal sandbox: it may only change files in
+    this conversation's job folder (or /tmp). Viewing anything is fine."""
+    cmd = str(ti.get('command') or '')
+    if cmd == 'view' and os.path.splitext(str(ti.get('path') or ''))[1].lower() in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'):
+        deny('Images opened with the file editor may not reach you (with DeepSeek they are dropped before the model sees them). '
+             'Run `view <image>` in the terminal to see it yourself (vision models), or `look <image> "question"` if '
+             '`view` says your model is text-only.')
+    if cmd not in EDITOR_WRITES:
+        return
+    path = str(ti.get('path') or '')
+    if not path:
+        return
+    full = path if os.path.isabs(path) else os.path.join(job or '/', path)
+    roots = [os.path.realpath(r) for r in ([job] if job else []) + ['/tmp', '/var/tmp']]
+    if not inside(full, roots):
+        deny(f'The file editor may only change files inside your job folder ({job or "none"}) or /tmp, not {path}. '
+             'Shared areas (memory, skills, other jobs) change only through their tools.')
+
+
+def check_cmd(cmd, cwd, job, roots, depth):
+    cwd_known = True
+    try:
+        lex = shlex.shlex(cmd, posix=True, punctuation_chars=';&|()')
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:
+        if any(re.search(rf'(^|[\s;&|(]){d}\s', cmd) for d in DESTRUCTIVE):
+            deny('Could not parse this command safely. Split it into simpler commands with literal paths.')
+        return
+    segs, cur = [], []
+    for t in tokens:
+        if t and set(t) <= set(';&|()'):
+            if cur: segs.append(cur); cur = []
+        else:
+            cur.append(t)
+    if cur: segs.append(cur)
+    for seg in segs:
+        while seg and (seg[0] in ('sudo', 'command', 'builtin', 'nohup', 'time', 'env', 'xargs') or re.match(r'^\w+=', seg[0]) or seg[0].startswith('-') and seg[0] != '-'):
+            seg = seg[1:]
+        if not seg:
+            continue
+        prog = os.path.basename(seg[0])
+        args = seg[1:]
+        if prog in ('bash', 'sh', 'zsh', 'dash') and '-c' in args and depth < 3:
+            i = args.index('-c')
+            if i + 1 < len(args):
+                check_cmd(args[i + 1], cwd, job, roots, depth + 1)
+            continue
+        if prog in ('cd', 'pushd'):
+            target = args[0] if args else HOME
+            if re.search(r'[$`*?]', target):
+                cwd_known = False
+            else:
+                cwd = os.path.normpath(os.path.join(cwd, os.path.expanduser(target)))
+            continue
+        paths = []
+        if prog in DESTRUCTIVE:
+            paths = [x for x in args if not x.startswith('-')]
+        elif prog == 'find' and any(x in ('-delete',) for x in args) or (prog == 'find' and '-exec' in args and any(x in ('rm', 'mv', 'shred') for x in args)):
+            paths = [x for x in args[:next((i for i, x in enumerate(args) if x.startswith('-')), len(args))]] or ['.']
+        elif prog == 'rsync' and any(x.startswith('--delete') or x.startswith('--remove-source') for x in args):
+            paths = [x for x in args if not x.startswith('-')]
+        elif prog == 'git' and args[:1] == ['clean']:
+            paths = ['.']
+        elif prog in ('dd',):
+            paths = [x[3:] for x in args if x.startswith('of=')]
+        if not paths:
+            continue
+        for raw in paths:
+            if re.search(r'[$`]', raw):
+                deny(f'"{prog}" with a variable path ({raw}) is blocked: use a literal path inside your job folder {job}.')
+            if not raw.startswith('/') and not raw.startswith('~') and not cwd_known:
+                deny(f'"{prog}" with a relative path after an unknown cd is blocked. Use an absolute path inside {job}.')
+            p = os.path.normpath(os.path.join(cwd, os.path.expanduser(raw)))
+            base = re.split(r'[*?\[]', p)[0] or '/'
+            if base != p:
+                base = base if base.endswith('/') else os.path.dirname(base) + '/'
+            check = base.rstrip('/') or '/'
+            if not inside(check, roots):
+                deny(f'BLOCKED: "{prog}" on {p} is outside your job folder ({job}). You may only delete, move or '
+                     f'overwrite files inside your own job folder or /tmp. If this is really needed, ask Rick.')
+            if os.path.realpath(p) in [os.path.realpath(job)] and prog in ('rm', 'rmdir', 'shred'):
+                deny(f'BLOCKED: refusing to delete the job folder itself ({job}). Delete specific files inside it instead.')
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""job-init: create /workspace/jobs/<id> owned by a unique per-job unix user.
+
+usage: job-init <job-id>
+Used by the host at the start of a conversation. The agent does not need to
+run this itself once track A wires it into session start.
+"""
+import os, sys
+sys.path.insert(0, "/opt/agent/ops/sandbox")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from helper_client import call, available
+
+def main():
+    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
+        print(__doc__); return
+    job_id = sys.argv[1]
+    if not available():
+        print("job-init: helper is not running", file=sys.stderr)
+        sys.exit(1)
+    rec = call("init_job", job_id=job_id)
+    if not rec.get("ok"):
+        print("job-init:", rec.get("error") or rec, file=sys.stderr)
+        sys.exit(1)
+    print(f"job {rec['job_id']} uid={rec['uid']} path={rec['path']}")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""captcha-solve: get a solved token from a paid solver (CapSolver or 2Captcha). Idle until a key exists.
+usage: captcha-solve --check
+       captcha-solve --type recaptcha2|recaptcha3|hcaptcha|turnstile --sitekey KEY --url PAGE_URL [--action A] [--inject]
+       captcha-solve --detect        look in the current browser tab for a sitekey
+Key file (never print it): /workspace/secrets/captcha.env with
+   CAPTCHA_PROVIDER=capsolver|2captcha   and   CAPSOLVER_API_KEY=...  or  TWOCAPTCHA_API_KEY=...
+Cost ~ $1 per 1,000 solves, so use it only after a captcha actually blocks the task and a human handoff is not wanted.
+--inject writes the token into the page's response field (g-recaptcha-response / h-captcha-response / cf-turnstile-response); then click Submit.
+"""
+import argparse, json, os, sys, time, urllib.request
+
+sys.path.insert(0, "/opt/tools")
+def _cdp():
+    """This job's own browser when it has one (job-browser), else the shared desktop browser."""
+    try:
+        import jobbrowser
+        return jobbrowser.cdp_url()
+    except Exception:
+        return "http://127.0.0.1:9222"
+
+ENV = "/workspace/secrets/captcha.env"
+
+def load():
+    d = {}
+    try:
+        for l in open(ENV):
+            if "=" in l and not l.startswith("#"):
+                k, v = l.strip().split("=", 1); d[k] = v.strip().strip('"\'')
+    except FileNotFoundError:
+        pass
+    return d
+
+def post(url, body):
+    r = urllib.request.Request(url, json.dumps(body).encode(), {"Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(r, timeout=30))
+
+def cfg():
+    d = load()
+    prov = d.get("CAPTCHA_PROVIDER") or ("capsolver" if d.get("CAPSOLVER_API_KEY") else "2captcha" if d.get("TWOCAPTCHA_API_KEY") else None)
+    key = d.get("CAPSOLVER_API_KEY") if prov == "capsolver" else d.get("TWOCAPTCHA_API_KEY")
+    return prov, key
+
+def capsolver(key, a):
+    t = {"recaptcha2": "ReCaptchaV2TaskProxyLess", "recaptcha3": "ReCaptchaV3TaskProxyLess",
+         "hcaptcha": "HCaptchaTaskProxyLess", "turnstile": "AntiTurnstileTaskProxyLess"}[a.type]
+    task = {"type": t, "websiteURL": a.url, "websiteKey": a.sitekey}
+    if a.action: task["pageAction"] = a.action
+    r = post("https://api.capsolver.com/createTask", {"clientKey": key, "task": task})
+    if r.get("errorId"): sys.exit("captcha-solve: " + str(r.get("errorDescription")))
+    tid = r["taskId"]
+    for _ in range(40):
+        time.sleep(3)
+        r = post("https://api.capsolver.com/getTaskResult", {"clientKey": key, "taskId": tid})
+        if r.get("status") == "ready":
+            s = r["solution"]; return s.get("gRecaptchaResponse") or s.get("token")
+        if r.get("errorId"): sys.exit("captcha-solve: " + str(r.get("errorDescription")))
+    sys.exit("captcha-solve: timed out")
+
+def twocaptcha(key, a):
+    t = {"recaptcha2": "RecaptchaV2TaskProxyless", "recaptcha3": "RecaptchaV3TaskProxyless",
+         "hcaptcha": "HCaptchaTaskProxyless", "turnstile": "TurnstileTaskProxyless"}[a.type]
+    task = {"type": t, "websiteURL": a.url, "websiteKey": a.sitekey}
+    if a.action: task["pageAction"] = a.action
+    r = post("https://api.2captcha.com/createTask", {"clientKey": key, "task": task})
+    if r.get("errorId"): sys.exit("captcha-solve: " + str(r.get("errorDescription")))
+    tid = r["taskId"]
+    for _ in range(40):
+        time.sleep(4)
+        r = post("https://api.2captcha.com/getTaskResult", {"clientKey": key, "taskId": tid})
+        if r.get("status") == "ready":
+            s = r["solution"]; return s.get("gRecaptchaResponse") or s.get("token")
+        if r.get("errorId"): sys.exit("captcha-solve: " + str(r.get("errorDescription")))
+    sys.exit("captcha-solve: timed out")
+
+DETECT = """()=>{const o=[];document.querySelectorAll('[data-sitekey]').forEach(e=>o.push({sitekey:e.getAttribute('data-sitekey'),
+ type:e.className.includes('h-captcha')?'hcaptcha':e.className.includes('cf-turnstile')?'turnstile':'recaptcha2'}));
+ document.querySelectorAll('iframe[src*="recaptcha"],iframe[src*="hcaptcha"],iframe[src*="turnstile"]').forEach(f=>{
+ const m=f.src.match(/[?&](?:k|sitekey)=([^&]+)/);if(m)o.push({sitekey:m[1],type:f.src.includes('hcaptcha')?'hcaptcha':f.src.includes('turnstile')?'turnstile':'recaptcha2'})});
+ return {url:location.href,found:o}}"""
+
+INJECT = """(t)=>{for(const s of ['[name=g-recaptcha-response]','[name=h-captcha-response]','[name=cf-turnstile-response]','#g-recaptcha-response']){
+ document.querySelectorAll(s).forEach(e=>{e.value=t;e.innerHTML=t;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}))})}
+ return document.querySelectorAll('[name*=captcha-response],[name=cf-turnstile-response]').length}"""
+
+def page():
+    from playwright.sync_api import sync_playwright
+    p = sync_playwright().start(); b = p.chromium.connect_over_cdp(_cdp())
+    pgs = [x for c in b.contexts for x in c.pages if x.url and not x.url.startswith("chrome")]
+    return p, b, pgs[-1]
+
+ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+ap.add_argument("--check", action="store_true"); ap.add_argument("--detect", action="store_true")
+ap.add_argument("--type", choices=["recaptcha2", "recaptcha3", "hcaptcha", "turnstile"])
+ap.add_argument("--sitekey"); ap.add_argument("--url"); ap.add_argument("--action"); ap.add_argument("--inject", action="store_true")
+a = ap.parse_args()
+prov, key = cfg()
+if a.check:
+    print(json.dumps({"provider": prov, "key_present": bool(key), "ready": bool(key and prov),
+                      "note": None if key else f"needs a solver key in {ENV} (CAPTCHA_PROVIDER + CAPSOLVER_API_KEY or TWOCAPTCHA_API_KEY)"})); sys.exit(0)
+if a.detect:
+    p, b, pg = page(); print(json.dumps(pg.evaluate(DETECT))); b.close(); p.stop(); sys.exit(0)
+if not key: sys.exit(f"captcha-solve: no solver key configured ({ENV}). Ask the user, or hand off with `handoff`.")
+if not (a.type and a.sitekey and a.url): sys.exit("need --type --sitekey --url (use --detect to find them)")
+tok = capsolver(key, a) if prov == "capsolver" else twocaptcha(key, a)
+if a.inject:
+    p, b, pg = page(); n = pg.evaluate(INJECT, tok); b.close(); p.stop()
+    print(json.dumps({"ok": True, "injected_fields": n, "token_len": len(tok)}))
+else:
+    print(tok)

@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""research-coverage: a ledger that tracks how much of the ask is covered, so research does not stop early.
+Stored in <job>/log/coverage.json; the goal judge and the deep-research gate read it.
+
+usage:
+  research-coverage init --target 25 [--criterion "currently open" ...] [--min-sources 2]
+  research-coverage add "Item name" --source URL [--source URL ...] [--fact "key=value" ...]
+  research-coverage reject "Item name" --why "closed in 2025 (source URL)"
+  research-coverage gap "honest reason the target cannot be met, and what was tried"
+  research-coverage status        coverage vs target, single-source items to cross-check
+  research-coverage check         exit 1 while below target or items lack 2 independent sources (unless a gap is recorded)
+Sources count as independent only when they are on different domains. Off: /opt/tools/flags/DEEP_RESEARCH_OFF."""
+import json, os, re, sys, time, urllib.parse
+
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+
+def root():
+    m = re.match(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)', os.path.realpath(os.getcwd()))
+    return m.group(1) if m else os.getcwd()
+
+
+P = os.path.join(root(), 'log', 'coverage.json')
+
+
+def load():
+    try:
+        return json.load(open(P))
+    except Exception:
+        return None
+
+
+def save(d):
+    os.makedirs(os.path.dirname(P), exist_ok=True)
+    d['updated'] = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+    json.dump(d, open(P + '.tmp', 'w'), indent=1)
+    os.replace(P + '.tmp', P)
+
+
+def dom(u):
+    return urllib.parse.urlsplit(u).netloc.lower().removeprefix('www.')
+
+
+def summary(d):
+    acc = {k: v for k, v in d['items'].items() if v.get('status') != 'rejected'}
+    ms = d.get('min_sources', 2)
+    weak = [k for k, v in acc.items() if len({dom(s) for s in v.get('sources', [])}) < ms]
+    rej = [k for k, v in d['items'].items() if v.get('status') == 'rejected']
+    return acc, weak, rej
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'):
+        print(__doc__); return 0
+    if os.path.exists('/opt/tools/flags/DEEP_RESEARCH_OFF'):
+        print('research-coverage is switched off.'); return 0
+    cmd, rest = a[0].lstrip('-'), a[1:]
+    d = load()
+    if cmd == 'init':
+        d = {'target': None, 'criteria': [], 'min_sources': 2, 'items': {}, 'gap': None}
+        i = 0
+        while i < len(rest):
+            if rest[i] == '--target':
+                d['target'] = int(rest[i + 1]); i += 2
+            elif rest[i] == '--criterion':
+                d['criteria'].append(rest[i + 1]); i += 2
+            elif rest[i] == '--min-sources':
+                d['min_sources'] = max(1, int(rest[i + 1])); i += 2
+            else:
+                i += 1
+        save(d); print(f'coverage ledger ready: target {d["target"]}, criteria {d["criteria"]}'); return 0
+    if d is None:
+        if cmd == 'check':
+            print('no coverage ledger (not a tracked research job)'); return 0
+        print('no ledger yet: run `research-coverage init --target N` first'); return 1
+    if cmd in ('add', 'reject'):
+        name = rest[0].strip()
+        it = d['items'].setdefault(name, {'sources': [], 'facts': {}, 'status': 'ok'})
+        i = 1
+        while i < len(rest):
+            if rest[i] == '--source':
+                if rest[i + 1] not in it['sources']:
+                    it['sources'].append(rest[i + 1])
+                i += 2
+            elif rest[i] == '--fact':
+                k, _, v = rest[i + 1].partition('='); it['facts'][k.strip()] = v.strip(); i += 2
+            elif rest[i] == '--why':
+                it['why'] = rest[i + 1]; i += 2
+            else:
+                i += 1
+        if cmd == 'reject':
+            it['status'] = 'rejected'
+        save(d)
+    elif cmd == 'gap':
+        d['gap'] = ' '.join(rest)[:1000]; save(d)
+    acc, weak, rej = summary(d)
+    t = d.get('target')
+    print(f"coverage: {len(acc)}" + (f"/{t}" if t else '') + f" accepted, {len(weak)} need a 2nd independent source, "
+          f"{len(rej)} rejected" + (f"; gap noted: {d['gap'][:120]}" if d.get('gap') else ''))
+    if weak and cmd in ('status', 'check'):
+        print('cross-check these: ' + ', '.join(weak[:15]))
+    if cmd == 'check':
+        short = t is not None and len(acc) < t
+        if (short or weak) and not d.get('gap'):
+            print('NOT DONE: ' + (f'{t - len(acc)} more items needed. ' if short else '') +
+                  ('Some items have only one source. ' if weak else '') +
+                  'Keep researching (new queries, other source types), or record an honest `research-coverage gap "..."`.')
+            return 1
+    return 0
+
+
+sys.exit(main())

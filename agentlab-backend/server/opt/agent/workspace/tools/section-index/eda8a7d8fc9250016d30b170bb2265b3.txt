@@ -1,0 +1,6 @@
+# Contract Terms
+General words here.
+## Termination Clause
+Either party may terminate with thirty days notice.
+## Payment Schedule
+Invoices are due net 45.

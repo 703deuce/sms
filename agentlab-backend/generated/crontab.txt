@@ -1,0 +1,11 @@
+# BEGIN agent-lab-ops
+*/15 * * * * /opt/agent/ops/collect-usage >> /var/log/agent-lab-usage.log 2>&1
+*/15 * * * * /opt/agent/ops/scrub-logs >> /var/log/agent-lab-usage.log 2>&1
+0 3 * * * /opt/agent/ops/backup.sh >> /var/log/agent-lab-backup.log 2>&1
+# END agent-lab-ops
+# mail-trigger-poll
+*/2 * * * * /usr/bin/python3 /opt/agent/ops/mail-trigger-poll.py >> /var/log/agent-lab-mailtrig.log 2>&1
+# BEGIN agent-lab-2026-11-25 (history index, weekly temp/log cleanup)
+*/5 * * * * nice -n 19 /opt/agent/tools/history-search --index >> /var/log/agent-lab-history.log 2>&1
+30 9 * * 0 /opt/agent/ops/weekly-cleanup >> /var/log/agent-lab-cleanup.log 2>&1
+# END agent-lab-2026-11-25

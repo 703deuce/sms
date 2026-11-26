@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""tts: speak text with ElevenLabs Flash v2.5 (eleven_flash_v2_5).
+
+usage: tts "text" -o out.mp3 [--voice id] [--model MODEL]
+  -o         output path (required)
+  --voice    ElevenLabs voice id (default: ELEVENLABS_VOICE_ID or Rachel 21m00Tcm4TlvDq8ikWAM)
+  --model    default eleven_flash_v2_5
+Needs ELEVENLABS_API_KEY. Appends a usage line to /workspace/usage/usage.jsonl.
+"""
+import os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _usage import append_usage, tts_cost
+
+DEFAULT_VOICE = os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+DEFAULT_MODEL = "eleven_flash_v2_5"
+
+
+def die(msg):
+    print(f"tts: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    text_parts, out, voice, model = [], None, DEFAULT_VOICE, DEFAULT_MODEL
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-o", "--out"):
+            out = args[i + 1]; i += 2
+        elif a == "--voice":
+            voice = args[i + 1]; i += 2
+        elif a == "--model":
+            model = args[i + 1]; i += 2
+        elif a.startswith("-"):
+            die(f"unknown option {a}")
+        else:
+            text_parts.append(a); i += 1
+    text = " ".join(text_parts)
+    if not text:
+        die("text is required")
+    if not out:
+        die("-o out.mp3 is required")
+    key = os.environ.get("ELEVENLABS_API_KEY")
+    if not key:
+        die("ELEVENLABS_API_KEY not set")
+    os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+    from elevenlabs import ElevenLabs
+    client = ElevenLabs(api_key=key)
+    try:
+        stream = client.text_to_speech.convert(
+            voice_id=voice,
+            text=text,
+            model_id=model,
+            output_format="mp3_44100_128",
+        )
+        with open(out, "wb") as f:
+            for chunk in stream:
+                if chunk:
+                    f.write(chunk)
+    except Exception as e:
+        die(f"ElevenLabs request failed: {e}")
+    if not os.path.exists(out) or os.path.getsize(out) == 0:
+        die("wrote no audio")
+    cost, units = tts_cost(len(text))
+    rec = append_usage("tts", units, cost, model=model, out=out, voice=voice)
+    print(f"wrote {out} ({os.path.getsize(out)} bytes, {units['characters']} chars)  estimated ${rec['estimated_cost_usd']:.4f}")
+
+
+if __name__ == "__main__":
+    main()

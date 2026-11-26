@@ -1,0 +1,37 @@
+#!/bin/bash
+# Agent Lab weekly cleanup (cron, Sundays 4:30 AM ET). Deletes only TEMP files and old LOG files.
+# Never touches job outputs (/opt/agent/workspace/jobs), conversations, memory, skills, pages, downloads or backups.
+#   weekly-cleanup            do it
+#   weekly-cleanup --dry-run  only list what would go
+set -u
+DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
+LOG=/var/log/agent-lab-cleanup.log
+say() { echo "$(date '+%Y-%m-%d %H:%M:%S %Z') $*" | tee -a "$LOG"; }
+del() {  # del <find args...> : delete (or list) matching files, report count and size
+  local n sz
+  n=$(find "$@" -print 2>/dev/null | wc -l)
+  sz=$(find "$@" -printf '%s\n' 2>/dev/null | awk '{s+=$1} END {printf "%.1f", s/1048576}')
+  if [ "$DRY" = 1 ]; then find "$@" -print 2>/dev/null | head -20; else find "$@" -delete 2>/dev/null; fi
+  say "  $n files, ${sz} MB: $*"
+}
+say "weekly cleanup start (dry-run=$DRY)"
+# 1. container /tmp: scratch files older than 7 days (X sockets, PyInstaller dirs of the live server excluded)
+if docker ps --format '{{.Names}}' | grep -qx agent-lab; then
+  if [ "$DRY" = 1 ]; then
+    docker exec -u root agent-lab find /tmp -mindepth 1 -maxdepth 1 -mtime +7 ! -name '_MEI*' ! -name '.X*' ! -name '.ICE-unix' ! -name 'agent-guard' -print 2>/dev/null | head -20
+  else
+    docker exec -u root agent-lab find /tmp -mindepth 1 -maxdepth 1 -mtime +7 ! -name '_MEI*' ! -name '.X*' ! -name '.ICE-unix' ! -name 'agent-guard' -exec rm -rf {} + 2>/dev/null
+  fi
+  say "  container /tmp entries older than 7 days removed"
+  docker exec -u root agent-lab find /home/openhands/.npm/_logs -type f -mtime +14 -delete 2>/dev/null
+fi
+# 2. host temp and old Agent Lab request/response scratch
+del /opt/agent/workspace/tmp -mindepth 1 -type f -mtime +7
+del /opt/agent/workspace/runs/mcp/requests /opt/agent/workspace/runs/mcp/responses -type f -mtime +7
+del /opt/agent/workspace/.stage -mindepth 1 -mtime +7
+del /tmp -maxdepth 1 -type f -mtime +7 -name 'tmp*'
+# 3. old rotated logs (logrotate keeps 4; this catches strays) and job-browser logs of long-gone jobs
+del /var/log /opt/agent/desktop /opt/agent/workspace/desktop -maxdepth 2 -type f \( -name '*.log.[0-9]*' -o -name '*.log.*.gz' \) -mtime +60
+# 4. journal older than a month
+[ "$DRY" = 1 ] || journalctl --vacuum-time=30d --vacuum-size=300M >/dev/null 2>&1
+say "weekly cleanup done; disk: $(df -h /opt/agent | awk 'NR==2 {print $3" used, "$4" free"}'); job folders (not touched): $(du -sh /opt/agent/workspace/jobs 2>/dev/null | cut -f1)"

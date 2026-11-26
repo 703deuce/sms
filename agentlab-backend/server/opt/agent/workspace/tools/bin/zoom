@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""zoom: zoom the focused app on the agent desktop.
+
+usage: zoom {in|out|reset} [TIMES] [--wheel --at X Y] [--shot [OUT.png]] [--wait S]
+  default: keyboard zoom (ctrl+plus / ctrl+minus / ctrl+0), e.g. browser page zoom
+  --wheel --at X Y: ctrl+mouse-wheel at a point (maps, image editors, canvases zoom around the pointer)
+examples:
+  zoom in 2           page zoom in two steps
+  zoom reset
+  zoom in 3 --wheel --at 960 540 --shot
+For a closer look at part of the screen without changing the app, take a desktop-shot and crop it.
+"""
+import argparse, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import add_common, run
+
+if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+    print(__doc__); sys.exit(0)
+p = argparse.ArgumentParser(prog="zoom", usage=__doc__)
+p.add_argument("mode", choices=["in", "out", "reset"])
+p.add_argument("times", nargs="?", type=int, default=1)
+p.add_argument("--wheel", action="store_true")
+p.add_argument("--at", nargs=2, type=int, metavar=("X", "Y"))
+add_common(p)
+a = p.parse_args()
+body = {"mode": a.mode, "times": a.times, "wheel": a.wheel}
+if a.at:
+    body.update(x=a.at[0], y=a.at[1])
+run("zoom", "/zoom", body, a, f"zoom {a.mode} x{a.times}" + (" (ctrl+wheel)" if a.wheel else ""))

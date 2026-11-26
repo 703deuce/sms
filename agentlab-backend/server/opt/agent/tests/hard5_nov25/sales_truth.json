@@ -1,0 +1,36 @@
+{
+ "unique_customers_total": 120,
+ "valid_orders": 386,
+ "net_revenue_usd": 34374.44,
+ "revenue_by_region_usd": {
+  "East": 10583.97,
+  "North": 9348.66,
+  "South": 6858.15,
+  "West": 7583.66
+ },
+ "top_region": "East",
+ "revenue_by_month_usd": {
+  "2026-01": 5613.11,
+  "2026-02": 6746.73,
+  "2026-03": 4990.39,
+  "2026-04": 3537.57,
+  "2026-05": 6785.11,
+  "2026-06": 6701.52
+ },
+ "best_mom_growth_month": "2026-05",
+ "best_mom_growth_pct": 91.8,
+ "buying_customers": 104,
+ "repeat_customers": 73,
+ "repeat_rate_pct": 70.19,
+ "median_order_net_usd": 76.95,
+ "top_customer_id": "C0010",
+ "top_customer_net_usd": 1277.88,
+ "cents_error_orders": [
+  "O10034",
+  "O10142",
+  "O10188",
+  "O10354"
+ ],
+ "duplicate_order_lines_removed": 12,
+ "test_orders_excluded": 11
+}

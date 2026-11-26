@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""job-sandbox: confine a shell or command to one job folder (kernel Landlock; inherited by every child).
+
+usage: job-sandbox [--root DIR] [--] command [args...]     run a command sandboxed
+       job-sandbox --shell                                 replace the current interactive shell (used by bash.bashrc)
+       job-sandbox --check                                 print the sandbox this shell is in
+Writes, creates, renames and deletes are allowed only in: the job folder (the innermost
+/workspace/jobs/<id>[/helpers/<id>] containing --root or the current directory), /tmp, /var/tmp, /dev,
+the home caches, and the shared areas /workspace/runs, /workspace/usage, /workspace/pages and /workspace/desktop (browser profile,
+downloads).
+Memory and skills are changed only through `remember`/`save-skill`/... (brokered outside the sandbox).
+TCP connects to the agent server (8000) and the run daemon (8010) are blocked; signals cannot reach
+processes outside the sandbox. Reads are not restricted.
+"""
+import os, re, subprocess, sys
+
+sys.path.insert(0, '/opt/tools')
+import landlocklib
+
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+JOB_RE = re.compile(rf'^(/workspace/jobs/{UUID}(?:/helpers/{UUID})*)(?:/|$)')
+def job_root(path):
+    m = JOB_RE.match(os.path.realpath(path or '') + '/')
+    return m.group(1) if m else None
+
+
+def tmux_start_dir():
+    if not os.environ.get('TMUX'):
+        return None
+    try:
+        return subprocess.run(['tmux', 'display-message', '-p', '#{pane_start_path}'], capture_output=True, text=True,
+                              timeout=5).stdout.strip() or None
+    except Exception:
+        return None
+
+
+def apply(root):
+    return landlocklib.confine_to_job(root)
+
+
+def main():
+    a = sys.argv[1:]
+    if a and a[0] in ('-h', '--help'):
+        print(__doc__); return
+    if a and a[0] == '--check':
+        print(f"sandbox: {os.environ.get('AGENT_SANDBOX', '(not sandboxed)')}"); return
+    root = None
+    if a and a[0] == '--root':
+        root = job_root(a[1]); a = a[2:]
+    if a and a[0] == '--':
+        a = a[1:]
+    if a and a[0] == '--shell':
+        root = job_root(os.getcwd()) or job_root(tmux_start_dir() or '')
+        if root and os.getcwd() != root and not os.getcwd().startswith(root + '/'):
+            os.chdir(root)  # e.g. a login shell that moved to $HOME
+        try:
+            apply(root)
+        except OSError as e:
+            # Fail closed: without the sandbox the shell would be unconfined.
+            print(f'job-sandbox: cannot confine this shell ({e}); refusing to start an unconfined shell.', file=sys.stderr)
+            os.execv('/bin/sh', ['/bin/sh', '-c', 'echo "terminal disabled: sandbox unavailable"; sleep infinity'])
+        os.execv('/bin/bash', ['/bin/bash', '-i'])
+    if not a:
+        sys.exit(__doc__)
+    root = root or job_root(os.getcwd())
+    apply(root)
+    os.execvp(a[0], a)
+
+
+if __name__ == '__main__':
+    main()

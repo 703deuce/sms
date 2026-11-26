@@ -1,0 +1,435 @@
+#!/usr/bin/env python3
+"""job-browser: each run and helper gets its OWN Chromium, like a separate desktop.
+
+  job-browser                 status of this job's browser (cwd decides the job)
+  job-browser start           start it now (it also starts by itself on first browser use)
+  job-browser stop            close it (logins in it are dropped unless saved; it restarts on next use)
+  job-browser sync            copy the shared browser's current logins (cookies) into this job's browser
+  job-browser save-logins DOMAIN   copy this job's cookies for DOMAIN (e.g. example.com) into the shared browser
+  job-browser shot [out.png]  screenshot this job's browser
+  job-browser --status-all    every job browser (for operators)
+  job-browser --daemon        the pool service (systemd agent-lab-jobbrowsers runs it in the container)
+
+How it works: on the first browser action of a run, the daemon copies the shared profile
+(/workspace/desktop/chrome-profile, minus caches) to /workspace/desktop/jobs/<id>/profile, starts a private
+1920x1080 display (Xvfb :151-:15N) and a kiosk Chromium on its own CDP port (9301-930N) through
+chrome-keeper (same PAC proxy, timezone/geolocation and image blocking as the shared browser), then copies
+the shared browser's live cookies in. The shared browser stays the source of truth for logins: nothing a job
+does flows back unless `save-logins` is used. Idle job browsers close after 15 minutes (the profile stays
+until the run ends, so it reopens signed in); browsers of finished runs are closed and deleted.
+At most JOB_BROWSER_CAP (3) run at once and none start below 900 MB free memory; then the
+caller waits up to 90 s and falls back to the shared browser.
+Conversations that are not runs keep using the shared browser (127.0.0.1:9222).
+"""
+import json, os, re, shutil, signal, sqlite3, subprocess, sys, threading, time, urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+sys.path.insert(0, "/opt/tools")
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import jobbrowser as jb
+
+HOST, PORT = "127.0.0.1", 6073
+ROOT = os.environ.get("JOB_BROWSER_ROOT", "/workspace/desktop/jobs")
+MAIN_PROFILE = "/workspace/desktop/chrome-profile"
+RUNS_DB = os.environ.get("RUNS_DB_CONTAINER", "/workspace/runs/runs.db")
+DISABLED = os.path.join(ROOT, "DISABLED")          # touch this file to send every job to the shared browser
+CAP = int(os.environ.get("JOB_BROWSER_CAP", "3"))
+MIN_FREE_MB = int(os.environ.get("JOB_BROWSER_MIN_FREE_MB", "900"))
+IDLE_STOP = int(os.environ.get("JOB_BROWSER_IDLE_STOP", str(15 * 60)))
+DONE_GRACE = 180            # a finished run's browser closes after 3 min without use
+DELETE_AFTER = 2 * 3600     # a finished run's profile is deleted after 2 h without use
+BASE_CDP, BASE_DISPLAY = 9300, 150   # displays :151.. (clear of xvfb-run, which starts at :99)
+ENDED = ("done", "failed", "stopped", "cancelled", "canceled", "error")
+SKIP_COPY = {"Cache", "Code Cache", "GPUCache", "DawnCache", "DawnGraphiteCache", "DawnWebGPUCache", "GrShaderCache",
+             "ShaderCache", "GraphiteDawnCache", "Crash Reports", "CacheStorage", "ScriptCache", "component_crx_cache",
+             "SingletonLock", "SingletonSocket", "SingletonCookie", "BrowserMetrics", "Safe Browsing", "optimization_guide_model_store"}
+LOG = os.path.join(ROOT, "job-browser.log")
+
+lock = threading.RLock()
+live = {}       # job id -> dict(slot, port, display, xvfb, keeper, started, used, epoch)
+last_used = {}  # job id -> last use (also for stopped browsers whose profile is kept)
+epoch = [int(time.time())]
+
+
+def log(msg):
+    try:
+        os.makedirs(ROOT, exist_ok=True)
+        with open(LOG, "a") as f:
+            f.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except OSError:
+        pass
+
+
+def run_status(jid):
+    """Status of the run whose conversation is this job, or None when the job is not a run."""
+    try:
+        db = sqlite3.connect(f"file:{RUNS_DB}?mode=ro", uri=True, timeout=10)
+        try:
+            row = db.execute("SELECT status FROM runs WHERE conversation_id=?", (jid,)).fetchone()
+        finally:
+            db.close()
+        return row[0] if row else None
+    except Exception as e:
+        log(f"runs.db read failed: {e}")
+        return "unknown"
+
+
+def mem_free_mb():
+    try:
+        for line in open("/proc/meminfo"):
+            if line.startswith("MemAvailable:"):
+                return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return 99999
+
+
+def chrome_pids(profile):
+    out = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        cmd = [c.decode(errors="replace") for c in cmd if c]
+        if cmd and "chrom" in os.path.basename(cmd[0]) and any(c == f"--user-data-dir={profile}" for c in cmd):
+            out.append(int(pid))
+    return out
+
+
+def kill_pids(pids, sig=signal.SIGTERM):
+    for p in pids:
+        try:
+            os.kill(p, sig)
+        except OSError:
+            pass
+
+
+def seed_profile(jid):
+    d = os.path.join(ROOT, jid)
+    prof = os.path.join(d, "profile")
+    os.makedirs(os.path.join(d, "downloads"), exist_ok=True)
+    if os.path.isdir(os.path.join(prof, "Default")):
+        return prof
+
+    def ignore(_dir, names):
+        return [n for n in names if n in SKIP_COPY or n.endswith((".lock", "-journal.tmp"))]
+    t = time.time()
+    try:
+        shutil.copytree(MAIN_PROFILE, prof, ignore=ignore, symlinks=True, dirs_exist_ok=True,
+                        ignore_dangling_symlinks=True)
+    except shutil.Error as e:  # files changing while the shared browser runs: keep what copied
+        log(f"{jid[:8]} profile copy partial ({len(e.args[0]) if e.args else '?'} files skipped)")
+    log(f"{jid[:8]} seeded profile from the shared one in {time.time() - t:.1f}s")
+    return prof
+
+
+def free_slot():
+    used = {b["slot"] for b in live.values()}
+    for s in range(1, CAP + 1):
+        if s not in used:
+            return s
+    return None
+
+
+def evict_idle(min_idle=120):
+    """Close the least recently used job browser that has been idle at least min_idle seconds."""
+    cands = sorted((b["used"], j) for j, b in live.items() if time.time() - b["used"] >= min_idle)
+    if cands:
+        stop(cands[0][1], reason=f"making room (idle {int(time.time() - cands[0][0])} s)")
+        return True
+    return False
+
+
+def start(jid):
+    slot = free_slot()
+    if slot is None and not evict_idle():
+        return None, f"all {CAP} job browsers are in use"
+    if mem_free_mb() < MIN_FREE_MB and not evict_idle(60):
+        return None, f"only {mem_free_mb()} MB memory free"
+    slot = free_slot()
+    if slot is None:
+        return None, f"all {CAP} job browsers are in use"
+    prof = seed_profile(jid)
+    d = os.path.join(ROOT, jid)
+    disp, port = BASE_DISPLAY + slot, BASE_CDP + slot
+    kill_pids(chrome_pids(prof))
+    # stale X server on our display number (previous daemon or crash)
+    for pid in subprocess.run(["pgrep", "-f", f"^Xvfb :{disp} .*-dpi 96"], capture_output=True, text=True).stdout.split():
+        kill_pids([int(pid)], signal.SIGKILL)
+    for f in (f"/tmp/.X{disp}-lock", f"/tmp/.X11-unix/X{disp}"):
+        try:
+            os.remove(f)
+        except OSError:
+            pass
+    xlog = open(os.path.join(d, "xvfb.log"), "ab")
+    xvfb = subprocess.Popen(["Xvfb", f":{disp}", "-screen", "0", "1920x1080x24", "-nolisten", "tcp", "-dpi", "96"],
+                            stdout=xlog, stderr=xlog, start_new_session=True)
+    for _ in range(50):
+        if os.path.exists(f"/tmp/.X11-unix/X{disp}"):
+            break
+        time.sleep(0.1)
+    env = dict(os.environ, DESKTOP_CHROME_PROFILE=prof, CHROME_DOWNLOADS=os.path.join(d, "downloads"),
+               DESKTOP_DISPLAY=f":{disp}", DESKTOP_XAUTHORITY="", CHROME_CDP_PORT=str(port),
+               CHROME_KEEPER_LOG=os.path.join(d, "keeper.log"), CHROME_KEEPER_LOCK=os.path.join(d, ".keeper.lock"),
+               CHROME_LOG=os.path.join(d, "chrome.log"), CHROME_KIOSK="1")
+    klog = open(os.path.join(d, "keeper.out"), "ab")
+    keeper = subprocess.Popen([sys.executable, "/opt/tools/chrome-keeper"], env=env, stdout=klog, stderr=klog,
+                              start_new_session=True)
+    up = False
+    for _ in range(120):
+        try:
+            jb.http_json(port, "/json/version", timeout=1)
+            up = True
+            break
+        except Exception:
+            time.sleep(0.25)
+    if not up:
+        kill_pids([keeper.pid, xvfb.pid]); kill_pids(chrome_pids(prof), signal.SIGKILL)
+        return None, "Chromium did not start (see " + os.path.join(d, "chrome.log") + ")"
+    epoch[0] += 1
+    live[jid] = dict(slot=slot, port=port, display=f":{disp}", xvfb=xvfb, keeper=keeper, started=time.time(),
+                     used=time.time(), epoch=epoch[0], profile=prof)
+    try:
+        n = jb.set_cookies(port, jb.cookies(jb.SHARED_PORT))
+        log(f"{jid[:8]} started slot {slot} CDP {port} display :{disp}; copied {n} live cookies from the shared browser")
+    except Exception as e:
+        log(f"{jid[:8]} started slot {slot} CDP {port} display :{disp}; cookie copy failed: {e}")
+    return live[jid], None
+
+
+def stop(jid, delete=False, reason=""):
+    b = live.pop(jid, None)
+    prof = os.path.join(ROOT, jid, "profile")
+    if b:
+        kill_pids([b["keeper"].pid])
+        try:
+            b["keeper"].wait(5)
+        except Exception:
+            kill_pids([b["keeper"].pid], signal.SIGKILL)
+    pids = chrome_pids(prof)
+    kill_pids(pids)
+    for _ in range(20):
+        if not chrome_pids(prof):
+            break
+        time.sleep(0.25)
+    kill_pids(chrome_pids(prof), signal.SIGKILL)
+    if b:
+        kill_pids([b["xvfb"].pid])
+        for p in (b["keeper"], b["xvfb"]):
+            try:
+                p.wait(3)
+            except Exception:
+                pass
+    if delete:
+        shutil.rmtree(os.path.join(ROOT, jid), ignore_errors=True)
+        last_used.pop(jid, None)
+    if b or delete:
+        log(f"{jid[:8]} stopped{' and deleted' if delete else ''}: {reason}")
+
+
+def info(jid, b):
+    return {"mode": "job", "job": jid, "running": True, "port": b["port"], "cdp": f"http://127.0.0.1:{b['port']}",
+            "display": b["display"], "epoch": b["epoch"], "downloads": os.path.join(ROOT, jid, "downloads"),
+            "profile": b["profile"]}
+
+
+def ensure(jid, want_start=True):
+    if not re.fullmatch(jb.UUID, jid or ""):
+        return dict(jb.SHARED, reason="bad job id")
+    if os.path.exists(DISABLED):
+        return dict(jb.SHARED, reason="job browsers are switched off (DISABLED flag)")
+    st = run_status(jid)
+    if st is None:
+        return dict(jb.SHARED, reason="not a run; conversations outside the run daemon use the shared browser")
+    if not os.path.exists(os.path.join(ROOT, jid, ".registered")):
+        # only conversations created with the `browser` MCP server (browser-mcp registers them) get their own
+        # browser, so a conversation started before this feature keeps ALL its browser tools on the shared one
+        return dict(jb.SHARED, reason="this conversation uses the shared browser (started without its own)")
+    deadline = time.time() + 90
+    while True:
+        with lock:
+            b = live.get(jid)
+            if b and b["keeper"].poll() is None:
+                b["used"] = last_used[jid] = time.time()
+                return dict(info(jid, b), run_status=st)
+            if b:
+                stop(jid, reason="keeper exited")
+            if not want_start:
+                return {"mode": "job", "job": jid, "running": False, "run_status": st}
+            b, err = start(jid)
+            if b:
+                last_used[jid] = time.time()
+                return dict(info(jid, b), run_status=st)
+        if time.time() > deadline:
+            log(f"{jid[:8]} fell back to the shared browser: {err}")
+            return dict(jb.SHARED, reason=f"{err}; using the shared browser for now")
+        time.sleep(5)
+
+
+def reaper():
+    while True:
+        time.sleep(20)
+        try:
+            with lock:
+                now = time.time()
+                for jid in list(live):
+                    st = run_status(jid)
+                    idle = now - live[jid]["used"]
+                    if st in ENDED and idle > DONE_GRACE:
+                        stop(jid, reason=f"run {st}")
+                    elif idle > IDLE_STOP:
+                        stop(jid, reason=f"idle {int(idle)} s (profile kept; reopens on next use)")
+                if not os.path.isdir(ROOT):
+                    continue
+                for jid in os.listdir(ROOT):
+                    if jid in live or not re.fullmatch(jb.UUID, jid):
+                        continue
+                    st = run_status(jid)
+                    used = last_used.get(jid) or os.path.getmtime(os.path.join(ROOT, jid))
+                    if (st in ENDED or st is None) and now - used > DELETE_AFTER:
+                        stop(jid, delete=True, reason=f"run {st or 'gone'}, unused {int((now - used) / 60)} min")
+        except Exception as e:
+            log(f"reaper error: {e}")
+
+
+def cleanup_stale():
+    """At daemon start nothing is live: close job Chromiums/displays left by a previous daemon."""
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            cmd = open(f"/proc/{pid}/cmdline", "rb").read().split(b"\0")
+        except OSError:
+            continue
+        cmd = [c.decode(errors="replace") for c in cmd if c]
+        if not cmd:
+            continue
+        if any(c.startswith(f"--user-data-dir={ROOT}/") for c in cmd) or \
+                (os.path.basename(cmd[0]) == "Xvfb" and len(cmd) > 1 and re.fullmatch(r":15\d", cmd[1]) and "96" in cmd) or \
+                (len(cmd) > 1 and cmd[1] == "/opt/tools/chrome-keeper" and _is_job_keeper(int(pid))):
+            kill_pids([int(pid)], signal.SIGKILL)
+
+
+def _is_job_keeper(pid):
+    try:
+        env = open(f"/proc/{pid}/environ", "rb").read().split(b"\0")
+    except OSError:
+        return False
+    return any(e.startswith(b"CHROME_KEEPER_LOCK=" + ROOT.encode()) for e in env)
+
+
+class H(BaseHTTPRequestHandler):
+    def log_message(self, *a):
+        pass
+
+    def _send(self, code, obj=None, raw=None, ctype="application/json"):
+        data = raw if raw is not None else json.dumps(obj).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
+    def do_GET(self):
+        if self.path.startswith("/status"):
+            with lock:
+                rows = [{"job": j, "slot": b["slot"], "port": b["port"], "display": b["display"],
+                         "idle_s": int(time.time() - b["used"]), "up_s": int(time.time() - b["started"])}
+                        for j, b in live.items()]
+            return self._send(200, {"cap": CAP, "live": rows, "mem_free_mb": mem_free_mb(),
+                                    "disabled": os.path.exists(DISABLED)})
+        self._send(404, {"error": "not found"})
+
+    def do_POST(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+            body = json.loads(self.rfile.read(n) or b"{}") if n else {}
+        except Exception:
+            body = {}
+        jid = str(body.get("job") or "")
+        try:
+            if self.path == "/ensure":
+                return self._send(200, ensure(jid, body.get("start", True)))
+            if self.path == "/register":
+                if not re.fullmatch(jb.UUID, jid):
+                    return self._send(400, {"error": "bad job id"})
+                os.makedirs(os.path.join(ROOT, jid), exist_ok=True)
+                open(os.path.join(ROOT, jid, ".registered"), "w").write(str(time.time()))
+                return self._send(200, {"ok": True})
+            if self.path == "/stop":
+                with lock:
+                    stop(jid, delete=bool(body.get("delete")), reason="asked")
+                return self._send(200, {"ok": True})
+            if self.path == "/sync":   # shared -> job (after a handoff)
+                r = ensure(jid, True)
+                if r.get("mode") != "job":
+                    return self._send(200, {"ok": False, "error": r.get("reason")})
+                n = jb.set_cookies(r["port"], jb.cookies(jb.SHARED_PORT))
+                return self._send(200, {"ok": True, "cookies": n})
+            if self.path == "/save-logins":   # job -> shared, one site
+                dom = str(body.get("domain") or "").lower().lstrip(".")
+                if not re.fullmatch(r"[a-z0-9.-]+\.[a-z]{2,}", dom):
+                    return self._send(200, {"ok": False, "error": "give a domain like example.com"})
+                r = ensure(jid, False)
+                if not r.get("running"):
+                    return self._send(200, {"ok": False, "error": "this job's browser is not running"})
+                cks = [c for c in jb.cookies(r["port"])
+                       if c.get("domain", "").lower().lstrip(".") == dom or c.get("domain", "").lower().endswith("." + dom)]
+                n = jb.set_cookies(jb.SHARED_PORT, cks) if cks else 0
+                log(f"{jid[:8]} saved {n} cookies for {dom} into the shared browser")
+                return self._send(200, {"ok": True, "cookies": n, "domain": dom})
+            self._send(404, {"error": "not found"})
+        except Exception as e:
+            log(f"{self.path} {jid[:8]} error: {e}")
+            self._send(500, {"error": str(e)[:300]})
+
+
+def daemon():
+    os.makedirs(ROOT, exist_ok=True)
+    cleanup_stale()
+    log(f"daemon started (cap {CAP}, idle stop {IDLE_STOP}s, min free {MIN_FREE_MB} MB)")
+    threading.Thread(target=reaper, daemon=True).start()
+    srv = ThreadingHTTPServer((HOST, PORT), H)
+    srv.daemon_threads = True
+    srv.serve_forever()
+
+
+def cli():
+    a = sys.argv[1:]
+    if a and a[0] in ("-h", "--help"):
+        print(__doc__); return
+    if a and a[0] == "--daemon":
+        return daemon()
+    if a and a[0] == "--status-all":
+        print(json.dumps(json.load(urllib.request.urlopen(jb.DAEMON + "/status", timeout=10)), indent=1)); return
+    jid = jb.job_id()
+    if not jid:
+        sys.exit("job-browser: run this inside a job folder (/workspace/jobs/<id>/...)")
+    cmd = a[0] if a else "status"
+    if cmd == "status":
+        r = jb.ensure(False, jid)
+    elif cmd == "start":
+        r = jb.ensure(True, jid)
+    elif cmd == "stop":
+        r = jb._call("/stop", {"job": jid})
+    elif cmd == "sync":
+        r = jb._call("/sync", {"job": jid}, timeout=150)
+    elif cmd == "save-logins" and len(a) > 1:
+        r = jb._call("/save-logins", {"job": jid, "domain": a[1]}, timeout=60)
+    elif cmd == "shot":
+        r = jb.ensure(True, jid)
+        out = a[1] if len(a) > 1 else "job-browser.png"
+        if r.get("mode") != "job":
+            sys.exit(f"job-browser: no own browser ({r.get('reason')}); use desktop-shot")
+        open(out, "wb").write(jb.Desk(r).shot())
+        print(f"wrote {out}"); return
+    else:
+        print(__doc__); sys.exit(1)
+    print(json.dumps(r, indent=1))
+
+
+if __name__ == "__main__":
+    cli()

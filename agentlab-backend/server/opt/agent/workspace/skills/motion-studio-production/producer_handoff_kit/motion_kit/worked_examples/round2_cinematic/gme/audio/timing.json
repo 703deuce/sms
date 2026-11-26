@@ -1,0 +1,116 @@
+{
+ "total_duration": 52.744,
+ "lead_in": 0.6,
+ "tail_out": 3.4,
+ "tempo": 1.0,
+ "segments": [
+  {
+   "id": 1,
+   "scene": "vo",
+   "caption": "January, 2021.",
+   "vo": "January, 2021.",
+   "start": 0.6,
+   "end": 2.597,
+   "duration": 1.997
+  },
+  {
+   "id": 2,
+   "scene": "vo",
+   "caption": "GameStop is a struggling mall chain.",
+   "vo": "GameStop is a struggling mall chain.",
+   "start": 3.201,
+   "end": 5.604,
+   "duration": 2.403
+  },
+  {
+   "id": 3,
+   "scene": "vo",
+   "caption": "And Wall Street is betting it fails.",
+   "vo": "And Wall Street is betting it fails.",
+   "start": 6.196,
+   "end": 8.286,
+   "duration": 2.09
+  },
+  {
+   "id": 4,
+   "scene": "vo",
+   "caption": "About a hundred and forty percent of its public shares... are sold short.",
+   "vo": "About a hundred and forty percent of its public shares... are sold short.",
+   "start": 8.866,
+   "end": 13.023,
+   "duration": 4.157
+  },
+  {
+   "id": 5,
+   "scene": "vo",
+   "caption": "On Reddit, a forum called WallStreetBets sees the trap.",
+   "vo": "On Reddit, a forum called WallStreetBets sees the trap.",
+   "start": 13.65,
+   "end": 17.33,
+   "duration": 3.68
+  },
+  {
+   "id": 6,
+   "scene": "vo",
+   "caption": "Its loudest voice... a YouTuber called Roaring Kitty.",
+   "vo": "Its loudest voice... a YouTuber called Roaring Kitty.",
+   "start": 17.933,
+   "end": 22.148,
+   "duration": 4.215
+  },
+  {
+   "id": 7,
+   "scene": "vo",
+   "caption": "They buy. And they hold.",
+   "vo": "They buy. And they hold.",
+   "start": 22.786,
+   "end": 25.364,
+   "duration": 2.578
+  },
+  {
+   "id": 8,
+   "scene": "vo",
+   "caption": "Seventeen dollars... becomes four hundred and eighty-three.",
+   "vo": "Seventeen dollars... becomes four hundred and eighty-three.",
+   "start": 25.979,
+   "end": 30.321,
+   "duration": 4.342
+  },
+  {
+   "id": 9,
+   "scene": "vo",
+   "caption": "The hedge fund Melvin Capital takes a two-point-seven-five-billion-dollar rescue.",
+   "vo": "The hedge fund Melvin Capital takes a two-point-seven-five-billion-dollar rescue.",
+   "start": 30.913,
+   "end": 36.115,
+   "duration": 5.202
+  },
+  {
+   "id": 10,
+   "scene": "vo",
+   "caption": "Then, on January twenty-eighth... Robinhood turns off the buy button.",
+   "vo": "Then, on January twenty-eighth... Robinhood turns off the buy button.",
+   "start": 36.718,
+   "end": 41.351,
+   "duration": 4.633
+  },
+  {
+   "id": 11,
+   "scene": "vo",
+   "caption": "Congress calls a hearing.",
+   "vo": "Congress calls a hearing.",
+   "start": 41.989,
+   "end": 43.684,
+   "duration": 1.695
+  },
+  {
+   "id": 12,
+   "scene": "vo",
+   "caption": "And Keith Gill... tells them... I like the stock.",
+   "vo": "And Keith Gill... tells them... I like the stock.",
+   "start": 44.381,
+   "end": 49.315,
+   "duration": 4.934
+  }
+ ]
+}

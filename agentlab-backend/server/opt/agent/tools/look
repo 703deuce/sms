@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""look: ask Gemini (vision) about an image or a video.
+
+usage: look <image|video|audio|pdf|dir-of-images> ["question"] [--frames N] [--whole] [--model M] [--second-opinion]
+  (vision-capable main models must use the agent_view tool for images/frames; look refuses unless --second-opinion)
+       watch-media <video|audio|pdf> ["question"]    (same as look --whole)
+  image: jpg/png/webp/gif sent as-is
+  video: N frames (default 8) sampled evenly with ffmpeg, labelled with timestamps
+         --whole: upload the WHOLE video (picture + sound, ~1 fps) via the Gemini Files API
+  audio: (mp3/wav/m4a/aac/ogg/flac/opus) always sent whole via the Files API
+  pdf:   always sent whole via the Files API (text, tables, images, layout)
+  dir:   every image in it (max 16), in name order
+Images/frames go to DeepSeek vision (deepseek-flash) first, Gemini if that fails; --gemini forces Gemini.
+Whole-file mode prints ANSWER plus TIMESTAMPS (MM:SS or page numbers) for what it cites.
+Gemini timestamps are approximate (about +-1 s); for exact word timings use a transcript (Deepgram).
+Prints Gemini's answer to your question PLUS a built-in QA checklist for every
+image/frame (cut-off/overlapping text, black/frozen frames, bad crops, captions,
+contrast, glitches, watermarks/UI junk) and an overall LOOKS BROKEN yes/no. Needs GEMINI_API_KEY in the environment.
+"""
+import base64, json, re, mimetypes, os, subprocess, sys, tempfile, time, urllib.request, urllib.error, glob
+
+PROMPT = """You are a strict video QA reviewer. Look at every image above (each is labelled).
+
+PART 1 - ANSWER: answer this question directly and concisely:
+{question}
+
+PART 2 - QA CHECKLIST: for EACH image, check all of these and report only real findings (write "ok" when clean):
+1. text: cut off at an edge, overlapping other text/graphics, or unreadable
+2. blank: black, blank, frozen/duplicate or fully washed-out frame
+3. framing: subject off-center or awkwardly cropped (heads, chins, foreheads or faces cut by the edge or by graphics)
+4. captions: captions/subtitles mismatched, misspelled, cut off or unreadable
+5. contrast: low-contrast text that is hard to read on its background
+6. glitches: compression artifacts, tearing, stretching/wrong aspect ratio, green/pink frames, rendering errors
+7. junk: watermarks, logos of other services, player/browser/UI chrome, debug text, timecodes
+
+Reply in exactly this format:
+ANSWER: <your answer to part 1>
+QA:
+- <image label>: text=<ok|issue>; blank=<ok|issue>; framing=<ok|issue>; captions=<ok|n/a|issue>; contrast=<ok|issue>; glitches=<ok|issue>; junk=<ok|issue>
+LOOKS BROKEN: <yes|no> - <one-line reason>
+"""
+
+IMG = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
+AUDIO = {'.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg',
+         '.oga': 'audio/ogg', '.flac': 'audio/flac', '.opus': 'audio/ogg', '.aiff': 'audio/aiff', '.weba': 'audio/webm'}
+VIDEO = {'.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+         '.avi': 'video/x-msvideo', '.m4v': 'video/mp4', '.mpeg': 'video/mpeg', '.mpg': 'video/mpeg', '.3gp': 'video/3gpp',
+         '.flv': 'video/x-flv', '.wmv': 'video/x-ms-wmv'}
+API = "https://generativelanguage.googleapis.com"
+DS_MODEL = os.environ.get('LOOK_DS_MODEL', 'deepseek-flash')
+
+WHOLE_PROMPT = """You are given a whole {kind} file ({name}{dur}). Use all of it ({senses}).
+
+Question: {question}
+
+Reply in exactly this format:
+ANSWER: <direct, concise answer to the question; say plainly if the file does not contain the answer>
+TIMESTAMPS:
+- <{loc}> <what happens / is said / is shown there that supports the answer>
+(list every moment you relied on, in order; write "none" if not applicable)
+CONFIDENCE: <high|medium|low> - <one line on anything unclear, inaudible or unreadable>
+"""
+
+def die(msg):
+    print(f"look: {msg}", file=sys.stderr); sys.exit(1)
+
+def probe_duration(path):
+    try:
+        out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path],
+                             capture_output=True, text=True, timeout=60).stdout.strip()
+        return float(out)
+    except Exception:
+        return 0.0
+
+def video_frames(path, n, tmp):
+    dur = probe_duration(path)
+    if dur <= 0: die(f"could not read duration of {path}")
+    frames = []
+    for i in range(n):
+        t = dur * (i + 0.5) / n
+        out = os.path.join(tmp, f"f{i:03d}.jpg")
+        subprocess.run(['ffmpeg', '-v', 'error', '-y', '-ss', f'{t:.3f}', '-i', path, '-frames:v', '1',
+                        '-vf', 'scale=768:-2', '-q:v', '4', out], timeout=120)
+        if os.path.exists(out): frames.append((f"frame at {t:.2f}s of {dur:.2f}s", out))
+    return frames
+
+def gemini_req(method, url, key, body=None, headers=None, timeout=300):
+    h = {'x-goog-api-key': key}
+    h.update(headers or {})
+    req = urllib.request.Request(url, data=body, headers=h, method=method)
+    try:
+        return urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        die(f"Gemini HTTP {e.code}: {e.read().decode(errors='replace')[:500]}")
+
+def upload_file(path, mime, key):
+    size = os.path.getsize(path)
+    if size > 2 * 1024**3: die("file is over the 2 GB Files API limit; cut it with ffmpeg first")
+    start = json.dumps({'file': {'display_name': os.path.basename(path)[:100]}}).encode()
+    with gemini_req('POST', f"{API}/upload/v1beta/files", key, start, {
+            'X-Goog-Upload-Protocol': 'resumable', 'X-Goog-Upload-Command': 'start',
+            'X-Goog-Upload-Header-Content-Length': str(size), 'X-Goog-Upload-Header-Content-Type': mime,
+            'Content-Type': 'application/json'}) as r:
+        up = r.headers.get('x-goog-upload-url')
+    if not up: die("Files API did not return an upload URL")
+    with open(path, 'rb') as fh:
+        req = urllib.request.Request(up, data=fh, method='POST', headers={
+            'Content-Length': str(size), 'X-Goog-Upload-Offset': '0', 'X-Goog-Upload-Command': 'upload, finalize'})
+        try:
+            with urllib.request.urlopen(req, timeout=1800) as r:
+                f = json.load(r)['file']
+        except urllib.error.HTTPError as e:
+            die(f"upload HTTP {e.code}: {e.read().decode(errors='replace')[:300]}")
+    deadline = time.time() + 900
+    while f.get('state') == 'PROCESSING' and time.time() < deadline:
+        time.sleep(3)
+        with gemini_req('GET', f"{API}/v1beta/{f['name']}", key) as r:
+            f = json.load(r)
+    if f.get('state') != 'ACTIVE':
+        delete_file(f.get('name'), key)
+        die(f"uploaded file not usable (state={f.get('state')})")
+    return f
+
+def delete_file(name, key):
+    if not name: return
+    try:
+        urllib.request.urlopen(urllib.request.Request(f"{API}/v1beta/{name}", method='DELETE',
+                                                      headers={'x-goog-api-key': key}), timeout=60).close()
+    except Exception:
+        pass
+
+def whole_file(target, question, model, key, mime, kind):
+    dur = probe_duration(target) if kind != 'pdf' else 0
+    d = f", {int(dur)//60}:{int(dur)%60:02d} long" if dur > 0 else ""
+    senses = {'video': 'the picture AND the soundtrack', 'audio': 'speech, music and other sounds',
+              'pdf': 'text, tables, figures and layout on every page'}[kind]
+    loc = 'page N' if kind == 'pdf' else 'MM:SS or MM:SS-MM:SS'
+    f = upload_file(target, mime, key)
+    try:
+        parts = [{'file_data': {'mime_type': f.get('mimeType', mime), 'file_uri': f['uri']}},
+                 {'text': WHOLE_PROMPT.format(kind=kind, name=os.path.basename(target), dur=d, senses=senses,
+                                              question=question, loc=loc)}]
+        body = json.dumps({'contents': [{'role': 'user', 'parts': parts}]}).encode()
+        with gemini_req('POST', f"{API}/v1beta/models/{model}:generateContent", key, body,
+                        {'Content-Type': 'application/json'}, timeout=900) as r:
+            data = json.load(r)
+    finally:
+        delete_file(f.get('name'), key)
+    meter(model, data, source=os.path.abspath(target), mode='whole', kind=kind, media_seconds=round(dur, 1))
+    return data
+
+def deepseek_vision(items, prompt, key):
+    """Ask deepseek-flash about images. Returns (text, usage) or (None, reason)."""
+    content = []
+    for label, f in items:
+        mime = mimetypes.guess_type(f)[0] or 'image/jpeg'
+        if mime == 'image/gif':
+            return None, 'gif not supported'
+        with open(f, 'rb') as fh:
+            content.append({'type': 'text', 'text': label})
+            content.append({'type': 'image_url', 'image_url': {'url': f"data:{mime};base64,{base64.b64encode(fh.read()).decode()}"}})
+    content.append({'type': 'text', 'text': prompt})
+    # No output cap: a capped answer was cut off mid-thought (8000 tokens of reasoning, no ANSWER), which forced a second,
+    # sequential Gemini round trip. Describing images needs little deliberation, so thinking effort defaults to low
+    # (DeepSeek's documented reasoning_effort low|high|max); LOOK_REASONING_EFFORT overrides it.
+    body = json.dumps({'model': DS_MODEL, 'reasoning_effort': os.environ.get('LOOK_REASONING_EFFORT', 'low'),
+                       'messages': [{'role': 'user', 'content': content}]}).encode()
+    req = urllib.request.Request('https://api.deepseek.com/chat/completions', data=body, method='POST',
+                                 headers={'Content-Type': 'application/json', 'Authorization': f'Bearer {key}'})
+    try:
+        with urllib.request.urlopen(req, timeout=240) as r:
+            d = json.load(r)
+    except urllib.error.HTTPError as e:
+        return None, f'HTTP {e.code}'
+    except Exception as e:
+        return None, type(e).__name__
+    usage = d.get('usage') or {}
+    try:
+        sys.path.insert(0, '/opt/tools')
+        from usagelib import log_deepseek
+        log_deepseek('look', DS_MODEL, usage, images=len(items), mode='vision')
+    except Exception:
+        pass
+    text = ((d.get('choices') or [{}])[0].get('message') or {}).get('content') or ''
+    if not text.strip() or 'ANSWER' not in text:
+        return None, 'empty or malformed answer'
+    return text.strip(), usage
+
+def meter(model, data, **extra):
+    try:
+        sys.path.insert(0, '/opt/tools')
+        from usagelib import log_gemini
+        log_gemini('look', model, data.get('usageMetadata'), **extra)
+    except Exception:
+        pass
+
+def show(data):
+    try:
+        print(''.join(p.get('text', '') for p in data['candidates'][0]['content']['parts']).strip())
+    except Exception:
+        die("unexpected response: " + json.dumps(data)[:500])
+
+def own_model_sees():
+    """True when this conversation's main model is vision-capable (status written by the runner)."""
+    ids = re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', os.path.realpath(os.getcwd()))
+    if not ids or not os.getcwd().startswith('/workspace/jobs/'):
+        return False
+    try:
+        return bool(json.load(open(f'/workspace/runs/vision/{ids[-1]}.json')).get('vision'))
+    except Exception:
+        return False
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or any(x in ('-h', '--help') for x in args): print(__doc__); return
+    n, model = 8, os.environ.get('LOOK_MODEL', 'gemini-flash-latest')
+    rest = []
+    whole = os.path.basename(sys.argv[0]) in ('watch', 'watch-media')
+    force_gemini = model_given = second = False
+    i = 0
+    while i < len(args):
+        if args[i] == '--frames': n = max(1, min(32, int(args[i+1]))); i += 2
+        elif args[i] == '--model': model = args[i+1]; model_given = True; i += 2
+        elif args[i] == '--whole': whole = True; i += 1
+        elif args[i] == '--gemini': force_gemini = True; i += 1
+        elif args[i] == '--second-opinion': second = True; i += 1
+        else: rest.append(args[i]); i += 1
+    target = rest[0]
+    question = rest[1] if len(rest) > 1 else "Describe briefly what you see."
+    key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    if not key: die("GEMINI_API_KEY not set")
+    if not os.path.exists(target): die(f"not found: {target}")
+    ext = os.path.splitext(target)[1].lower()
+    if not os.path.isdir(target):
+        if ext == '.pdf':
+            return show(whole_file(target, question, model, key, 'application/pdf', 'pdf'))
+        if ext in AUDIO:
+            return show(whole_file(target, question, model, key, AUDIO[ext], 'audio'))
+        if whole and ext not in IMG:
+            return show(whole_file(target, question, model, key, VIDEO.get(ext, mimetypes.guess_type(target)[0] or 'video/mp4'), 'video'))
+    if not second and own_model_sees():
+        die("your own model can see images: call the `agent_view` tool with paths=[\"" + os.path.abspath(target) + "\"]"
+            + ("" if os.path.isdir(target) or ext in IMG else " fps=1")
+            + " and judge it yourself (it also gives a PASS / LOOKS BROKEN verdict). Use `look ... --second-opinion` only "
+            "when you explicitly want a second opinion, and `watch-media` for whole video+audio.")
+    with tempfile.TemporaryDirectory() as tmp:
+        if os.path.isdir(target):
+            files = sorted(f for f in glob.glob(os.path.join(target, '*')) if os.path.splitext(f)[1].lower() in IMG)[:16]
+            items = [(os.path.basename(f), f) for f in files]
+        elif os.path.splitext(target)[1].lower() in IMG:
+            items = [(os.path.basename(target), target)]
+        else:
+            items = video_frames(target, n, tmp)
+        if not items: die("no images to send")
+        ds_key = os.environ.get('DEEPSEEK_API_KEY')
+        if ds_key and not force_gemini and not model_given:
+            text, why = deepseek_vision(items, PROMPT.format(question=question), ds_key)
+            if text:
+                print(text); return
+            print(f"look: DeepSeek vision unavailable ({why}); using Gemini", file=sys.stderr)
+        parts = []
+        for label, f in items:
+            mime = mimetypes.guess_type(f)[0] or 'image/jpeg'
+            with open(f, 'rb') as fh:
+                parts.append({'text': label})
+                parts.append({'inline_data': {'mime_type': mime, 'data': base64.b64encode(fh.read()).decode()}})
+        parts.append({'text': PROMPT.format(question=question)})
+        body = json.dumps({'contents': [{'role': 'user', 'parts': parts}]}).encode()
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        req = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/json', 'x-goog-api-key': key})
+        try:
+            with urllib.request.urlopen(req, timeout=180) as r:
+                data = json.load(r)
+        except urllib.error.HTTPError as e:
+            die(f"Gemini HTTP {e.code}: {e.read().decode(errors='replace')[:500]}")
+        meter(model, data, images=len(items), mode='frames', source=os.path.abspath(target))
+        show(data)
+
+if __name__ == '__main__':
+    main()

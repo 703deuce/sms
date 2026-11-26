@@ -1,0 +1,107 @@
+{
+ "t": "2026-11-26T10:42:55+0000",
+ "ok": true,
+ "failed": [],
+ "checks": [
+  {
+   "name": "service:agent-lab-runner",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-chrome",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-desktop",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-egress",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-keys",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-helper",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:agent-lab-vaultd",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "service:cron",
+   "ok": true,
+   "detail": "active"
+  },
+  {
+   "name": "container:agent-lab",
+   "ok": true,
+   "detail": "true 0"
+  },
+  {
+   "name": "runner:/health",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "name": "agent-server:/health",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "name": "chromium:cdp",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "name": "egress-gateway",
+   "ok": true,
+   "detail": "200"
+  },
+  {
+   "name": "searxng",
+   "ok": true,
+   "detail": "33 results"
+  },
+  {
+   "name": "disk:/",
+   "ok": true,
+   "detail": "35% used"
+  },
+  {
+   "name": "disk:/opt/agent/workspace",
+   "ok": true,
+   "detail": "35% used"
+  },
+  {
+   "name": "memory",
+   "ok": true,
+   "detail": "2051 MB available"
+  },
+  {
+   "name": "backup:fresh",
+   "ok": true,
+   "detail": "8 h old"
+  },
+  {
+   "name": "orphans:mcp-fetch",
+   "ok": true,
+   "detail": "0 processes"
+  },
+  {
+   "name": "fetch:direct",
+   "ok": true,
+   "detail": "egress: ok via direct (tried: direct=ok)"
+  }
+ ]
+}

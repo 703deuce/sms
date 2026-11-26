@@ -1,0 +1,93 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/render-job.schema.json",
+ "title": "Job input (transovo.motion-job/1) carried in job.input",
+ "type": "object",
+ "required": [
+  "schema",
+  "mode",
+  "projectId"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.motion-job/1"
+  },
+  "mode": {
+   "enum": [
+    "deterministic_render",
+    "creative_production"
+   ]
+  },
+  "projectId": {
+   "type": "string"
+  },
+  "baseVersion": {
+   "type": "integer"
+  },
+  "edits": {
+   "$ref": "edit-patch.schema.json"
+  },
+  "assetIds": {
+   "type": "array",
+   "items": {
+    "$ref": "common.schema.json#/$defs/anyAsset"
+   }
+  },
+  "scenes": {
+   "type": "array",
+   "items": {
+    "$ref": "common.schema.json#/$defs/sceneId"
+   },
+   "description": "optional restriction; dependency analysis decides what re-renders"
+  },
+  "output": {
+   "type": "object",
+   "properties": {
+    "master": {
+     "type": "boolean",
+     "default": true
+    },
+    "previews": {
+     "type": "boolean",
+     "default": true
+    },
+    "stillOnly": {
+     "type": "object",
+     "description": "preview job: validate + render one still per changed scene; nothing is published",
+     "properties": {
+      "t": {
+       "type": "number",
+       "minimum": 0
+      },
+      "frame": {
+       "type": "integer",
+       "minimum": 0
+      }
+     },
+     "additionalProperties": false
+    },
+    "encode": {
+     "type": "object",
+     "properties": {
+      "codec": {
+       "const": "h264"
+      },
+      "level": {
+       "const": "4.2"
+      },
+      "crf": {
+       "type": "number"
+      }
+     }
+    }
+   }
+  },
+  "brief": {
+   "type": "string",
+   "description": "creative_production only; untrusted customer text"
+  },
+  "dryRun": {
+   "type": "boolean"
+  }
+ }
+}

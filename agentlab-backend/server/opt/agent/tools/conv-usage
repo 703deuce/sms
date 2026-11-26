@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""usage --conversation [ID]: the whole cost of one conversation, measured, not estimated.
+
+Default ID: the conversation whose job (or helper) folder you are in. Adds up
+  - LLM cost of the conversation (live snapshot from the run daemon, else the DB, else the host summary)
+  - LLM cost of every background helper it started (recursively)
+  - Opus sub-steps (planning / visual judge / one-step calls metered in usage.jsonl as tool=opus-step)
+  - every other media/tool call metered in /workspace/usage/usage.jsonl (look, tts, image-gen, ...)
+The by-model table includes Haiku, Opus (including sub-steps), and helpers, and is built so the
+rows add up to the LLM + Opus-sub-step total. Quote the TOTAL line when you tell Rick what something cost.
+"""
+import json, os, sys
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+sys.path.insert(0, '/opt/tools')
+import runlib as R
+
+TZ = ZoneInfo('America/New_York')
+COST_DIR_CANDIDATES = (
+    '/workspace/runs/cost',
+    '/opt/agent/workspace/runs/cost',
+)
+
+
+def load_cost_snapshot(cid):
+    for root in COST_DIR_CANDIDATES:
+        p = os.path.join(root, f'{cid}.json')
+        try:
+            return json.load(open(p))
+        except Exception:
+            continue
+    return {}
+
+
+def main():
+    a = sys.argv[1:]
+    if any(x in ('-h', '--help') for x in a):
+        print(__doc__); return
+    cid = next((x for x in a if not x.startswith('-')), None)
+    as_json = '--json' in a
+    job = None
+    if not cid:
+        cid, job = R.job_from_cwd()
+        if not cid:
+            sys.exit('usage --conversation: run it inside your job folder, or pass the conversation id')
+    db = R.connect()
+    me = db.execute('SELECT * FROM runs WHERE conversation_id=?', (cid,)).fetchone()
+    if not job:
+        job = (me['working_dir'] if me and me['working_dir'] else f'/workspace/jobs/{cid}')
+    ids, frontier, helpers = {cid}, [cid], []
+    while frontier:
+        nxt = []
+        for p in frontier:
+            for r in db.execute('SELECT * FROM runs WHERE parent_conversation_id=?', (p,)).fetchall():
+                if r['conversation_id'] not in ids:
+                    ids.add(r['conversation_id']); nxt.append(r['conversation_id']); helpers.append(r)
+        frontier = nxt
+    summary = {}
+    summary_by_model = {}
+    try:
+        for c in json.load(open('/workspace/usage/summary.json')).get('conversations') or []:
+            summary[c['id']] = float(c.get('cost_usd') or 0)
+            if c['id'] in ids:
+                for m, v in (c.get('cost_by_model') or {}).items():
+                    summary_by_model[m] = summary_by_model.get(m, 0.0) + float(v or 0)
+    except Exception:
+        pass
+
+    def convo_llm(run_row, convo_id):
+        snap = load_cost_snapshot(convo_id)
+        snap_cost = float(snap.get('llm_usd') or 0) if snap else 0.0
+        db_cost = float(run_row['cost'] or 0) if run_row else 0.0
+        sum_cost = summary.get(convo_id, 0.0)
+        cost = max(snap_cost, db_cost, sum_cost)
+        by = dict(snap.get('cost_by_model') or {}) if snap else {}
+        if not by:
+            by = {}
+        return cost, by, snap.get('model') if snap else None
+
+    llm_main, by_main, model_main = convo_llm(me, cid)
+    llm_helpers = 0.0
+    by_model = dict(by_main)
+    if me and 'model' in me.keys() and me['model'] and not model_main:
+        model_main = me['model']
+    for r in helpers:
+        if (r['kind'] if 'kind' in r.keys() else 'agent') == 'vision':
+            continue
+        cost, by, _ = convo_llm(r, r['conversation_id'])
+        llm_helpers += cost
+        for m, v in by.items():
+            by_model[m] = by_model.get(m, 0.0) + v
+    # If snapshots/summary under-count relative to the live DB cost, attribute the
+    # remainder to the conversation's model so the table adds up.
+    llm_all = llm_main + llm_helpers
+    attributed = sum(by_model.values())
+    if llm_all - attributed > 0.0005:
+        # Prefer the snapshot/summary names; otherwise the run's model alias.
+        fallback = None
+        if by_model:
+            fallback = max(by_model, key=by_model.get)
+        if not fallback:
+            fallback = model_main or (me['model'] if me and 'model' in me.keys() and me['model'] else None)
+        if fallback and fallback in ('lab-anthropic', 'haiku'):
+            fallback = 'anthropic/claude-haiku-5-5'
+        elif fallback and fallback in ('lab-opus', 'opus'):
+            fallback = 'anthropic/claude-opus-5-5'
+        fallback = fallback or 'anthropic/claude-haiku-5-5'
+        by_model[fallback] = by_model.get(fallback, 0.0) + (llm_all - attributed)
+    elif attributed - llm_all > 0.0005:
+        # Snapshot newer than an old summary: trust the larger attributed total for LLM.
+        llm_all = attributed
+        # Keep llm_main as the conversation portion; put the rest on helpers if needed.
+        if llm_main + llm_helpers < llm_all:
+            llm_main = max(llm_main, min(llm_all, llm_main + (llm_all - llm_main - llm_helpers)))
+
+    job_dirs = [job] + [r['working_dir'] for r in helpers if r['working_dir']]
+    opus_sub, opus_by_purpose, opus_n = R.opus_step_costs(ids, job_dirs)
+    media, by_tool = 0.0, {}
+    try:
+        with open('/workspace/usage/usage.jsonl') as f:
+            for line in f:
+                try:
+                    d = json.loads(line)
+                except Exception:
+                    continue
+                j = str(d.get('job') or d.get('source') or '')
+                if d.get('conversation_id') in ids or j == job or j.startswith(job.rstrip('/') + '/'):
+                    if d.get('tool') == 'opus-step':
+                        continue  # already in opus_sub / by-model
+                    c = float(d.get('estimated_cost_usd') or 0)
+                    media += c
+                    by_tool[d.get('tool', '?')] = by_tool.get(d.get('tool', '?'), 0.0) + c
+    except FileNotFoundError:
+        pass
+    if opus_sub:
+        by_model['anthropic/claude-opus-5-5'] = by_model.get('anthropic/claude-opus-5-5', 0.0) + opus_sub
+    total = llm_main + llm_helpers + opus_sub + media
+    # Final add-up check: by-model should equal llm + opus sub-steps.
+    model_sum = sum(by_model.values())
+    expected = llm_main + llm_helpers + opus_sub
+    if abs(model_sum - expected) > 0.0005 and expected >= 0:
+        # last-resort: scale is wrong; add/subtract a reconciliation row only if needed.
+        delta = expected - model_sum
+        if by_model:
+            k = max(by_model, key=by_model.get)
+            by_model[k] = by_model.get(k, 0.0) + delta
+        elif delta:
+            by_model['anthropic/claude-haiku-5-5'] = delta
+    now = datetime.now(TZ).strftime('%a %b %-d %-I:%M %p %Z')
+    out = {'conversation_id': cid, 'llm_usd': round(llm_main, 4), 'helpers_llm_usd': round(llm_helpers, 4),
+           'helpers': len(helpers), 'opus_step_usd': round(opus_sub, 4),
+           'opus_step_by_purpose': {k: round(v, 4) for k, v in opus_by_purpose.items()},
+           'opus_step_calls': opus_n,
+           'media_usd': round(media, 4), 'media_by_tool': {k: round(v, 4) for k, v in by_tool.items()},
+           'cost_by_model': {k: round(v, 4) for k, v in by_model.items()},
+           'total_usd': round(total, 4), 'as_of': now, 'llm_recorded': bool(me) or cid in summary}
+    if as_json:
+        print(json.dumps(out, indent=2)); return
+    print(f'Conversation {cid} (as of {now})')
+    print(f'  LLM (this conversation): ${llm_main:.4f}' + ('' if out['llm_recorded'] else '  (not recorded yet; try again in a few seconds)'))
+    if helpers:
+        print(f'  LLM (background helpers, {len(helpers)}): ${llm_helpers:.4f}')
+    if opus_sub:
+        parts = ', '.join(f'{k} ${v:.4f}' for k, v in sorted(opus_by_purpose.items()))
+        print(f'  Opus sub-steps ({opus_n} planning/judge/step calls): ${opus_sub:.4f}' + (f' ({parts})' if parts else ''))
+    if by_model:
+        print('  By model (LLM + Opus sub-steps, this conversation + helpers):')
+        for m, v in sorted(by_model.items(), key=lambda kv: (-kv[1], kv[0])):
+            print(f'    {m}: ${v:.4f}')
+        print(f'    (sums to ${sum(by_model.values()):.4f})')
+    print(f'  Media/tools: ${media:.4f}' + (' (' + ', '.join(f'{k} ${v:.4f}' for k, v in sorted(by_tool.items(), key=lambda x: -x[1])) + ')' if by_tool else ''))
+    print(f'TOTAL: ${total:.4f}  (measured; the LLM call that is answering right now is not included yet)')
+
+
+if __name__ == '__main__':
+    main()

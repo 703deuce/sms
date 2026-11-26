@@ -1,0 +1,128 @@
+[
+ {
+  "id": "S1",
+  "name": "Schedule Reminder for Rick's Weekly Status",
+  "before_run": "run_c9ba36404c",
+  "mode": "raw",
+  "prompt": "Remind me tomorrow at 9:00 AM America/New_York to send Rick's weekly Agent Lab status. The reminder should actually be scheduled, not just written down. Tell me what you set up and when it will fire."
+ },
+ {
+  "id": "S2",
+  "name": "Extract Invoice Line Items from PDF to Markdown",
+  "before_run": "run_4bb94e6242",
+  "mode": "raw",
+  "prompt": "I dropped a PDF at `/workspace/testdata/suite_nov25/invoice.pdf`. Extract every line item (description, qty, unit price, amount), the vendor, invoice date, invoice number, and total. Give me a clean markdown table and a one-line check that the line items add up to the total \u2014 or tell me the difference."
+ },
+ {
+  "id": "S3",
+  "name": "Fill httpbin post form and report submitted data",
+  "before_run": "run_c0a6ee6853",
+  "mode": "raw",
+  "prompt": "Open https://httpbin.org/forms/post in the browser, fill the form with name \"Rick James\", a comment \"Agent Lab form test\", and a reasonable choice for the other fields, submit it, and tell me what the result page shows was posted. If the text view is unclear, take a screenshot and look at it."
+ },
+ {
+  "id": "S4",
+  "name": "Slugify CSV Dates CLI With Strict Mode",
+  "before_run": "run_6f2a237188",
+  "mode": "raw",
+  "prompt": "Write a small Python CLI `out/slugify-dates.py` that reads a CSV from stdin with columns `title,date` and prints `slug,iso_date`. Slugs are lowercase hyphenated ASCII; dates may be like `11/22/26`, `2026-11-22`, or `Nov 22, 2026`, and must be emitted as `YYYY-MM-DD`. Include a `--strict` flag that exits 2 on a bad date. Add a short `out/README.md` with usage. Don't use a network install. Then run a 4-row sample through it, including one bad date in strict mode, and show me the output."
+ },
+ {
+  "id": "S5",
+  "name": "Q1 Marketing Budget Excel Workbook with Formulas",
+  "before_run": "run_9e024de15c",
+  "mode": "raw",
+  "prompt": "Create an Excel workbook at `out/q1-budget.xlsx` with two sheets: \"Actuals\" (month, category, amount \u2014 invent a realistic 3-month marketing budget for a small video studio, 12+ rows) and \"Summary\" (pivot-style totals by category and by month, plus a grand total). The Summary sheet must use formulas that reference Actuals, not pasted numbers. Then tell me the grand total."
+ },
+ {
+  "id": "S6",
+  "name": "Gemini Nano Banana model ID and 1K image pricing",
+  "before_run": "run_94f1c0c927",
+  "mode": "raw",
+  "prompt": "What is the current official Gemini model id for Nano Banana image generation, and what does a single 1K image cost on the paid Gemini API? Search the web, then open and read the actual pages. Give me a short answer plus the source URLs you read."
+ },
+ {
+  "id": "S7",
+  "name": "Save Rick's Agent Lab test recap preferences",
+  "before_run": "run_c94039439e",
+  "mode": "raw",
+  "prompt": "Remember this as a preference: Rick wants Agent Lab test recaps to lead with pass/fail, then quality, then cost. Don't just agree \u2014 save it to long-term memory."
+ },
+ {
+  "id": "S8",
+  "name": "Parallel Transcription and Title Card Generation",
+  "before_run": "run_7e6bcf96ad",
+  "mode": "raw",
+  "prompt": "I need two things at once: (1) transcribe `/workspace/testdata/suite_nov25/talk.mp3` to `out/talk.json` with word timestamps, and (2) generate a simple 1K title card image for the words \"Weekly Status\" at `out/title.png`. Start the slow work so I am not stuck waiting in a single queue if you can run them in parallel, then give me both outputs and the combined cost."
+ },
+ {
+  "id": "S9",
+  "name": "Trim, Scale, and Add Title Card to Video",
+  "before_run": "run_81b7e7328f",
+  "mode": "raw",
+  "prompt": "Take `/workspace/testdata/suite_nov25/clip.mp4`, trim the first 3 seconds, scale to 1920x1080 if needed, add the title card `out/weekly-status.png` (or `/workspace/testdata/suite_nov25/title.png` if I provide one) for the first 1.0 second, and write `out/open.mp4` plus a 480p preview `out/open_480p.mp4`. Extract a few frames, run `look` on them, and fix any obvious problem (title cropped, black frame, wrong duration) before you say it's done."
+ },
+ {
+  "id": "S10",
+  "name": "Weekly Status Title Card Image Generation and QA",
+  "before_run": "run_7391720e06",
+  "mode": "raw",
+  "prompt": "Generate a 1K image of a simple, typographic title card on a dark background with the words \"WEEKLY STATUS\" in clean sans-serif type, no photos, no watermarks. Save it to `out/weekly-status.png` and then use `look` to QA it. If the text is wrong, cropped, or unreadable, fix it and QA again. Show me the final path and the `look` QA lines."
+ },
+ {
+  "id": "S11",
+  "name": "Rick's Skill: Burned-In Captions Rules Check",
+  "before_run": "run_1d0a05165e",
+  "mode": "raw",
+  "prompt": "Load Rick's video production skill and, using only those rules, tell me whether burned-in captions are acceptable for a customer-facing social clip, and where in the skill that is stated. Do not skip loading the skill."
+ },
+ {
+  "id": "S12",
+  "name": "Agent Lab Test Recap Page Publishing",
+  "before_run": "run_affaa6c766",
+  "mode": "raw",
+  "prompt": "Write a one-page recap of the Agent Lab test idea (what the 15-task set is for, how we score quality/time/cost, and a small example table of three made-up results). Publish it as a page I can open on the web and give me the slug and the URL. The recap should lead with how we score, then the table, then notes."
+ },
+ {
+  "id": "S13",
+  "name": "Browser Research: 6 Wikipedia Pages Summary",
+  "before_run": "run_cddd613335",
+  "mode": "raw",
+  "prompt": "Context-budget test of a long task. Use the browser for each of these 6 pages, one at a time, in order: https://en.wikipedia.org/wiki/Prompt_engineering , https://en.wikipedia.org/wiki/Large_language_model , https://en.wikipedia.org/wiki/Transformer_(deep_learning) , https://en.wikipedia.org/wiki/Video_editing , https://en.wikipedia.org/wiki/Motion_graphics , https://en.wikipedia.org/wiki/Documentary_film . For each page: open it, read the full page text with browser_get_content, take one screenshot of the page and look at it with agent_view, then append to notes.md in your job folder: the page title, 3 key facts from the text, and one sentence about what the screenshot shows. After each page, save a checkpoint saying 'page N of 6 done'. When all six are done, write summary.md comparing the six pages in 10 bullet points and reply with the two file paths. Do not load any skills."
+ },
+ {
+  "id": "R1",
+  "name": "rt1 trim clip",
+  "before_run": "run_6384b07345",
+  "mode": "job",
+  "prompt": "Trim the first 5 seconds of /workspace/testdata/deen_rayj_clips_nov24/tt_7697003346175003934.mp4, scale it to 1280x720 H.264 with its audio as AAC, and save it as out/clip5s_720p.mp4 in your job folder. Verify with ffprobe and report the duration, resolution and codecs. Mechanical task: no design work."
+ },
+ {
+  "id": "R2",
+  "name": "rt2 file report",
+  "before_run": "run_ca1858a8fb",
+  "mode": "job",
+  "prompt": "In /workspace/testdata/deen_rayj_clips_nov24/ list every file and write out/report.md in your job folder: a table with each file name, size in MB (2 decimals) and, for the .mp4 files, duration in seconds from ffprobe; then count how many lines of tmz.txt contain the text Ray J (case-insensitive) and add that count. Mechanical task: no design work."
+ },
+ {
+  "id": "R3",
+  "name": "rt3 landing page",
+  "before_run": "run_e2efa30bdc",
+  "mode": "job",
+  "prompt": "Make a quick single-page landing page for a fictional product, Lumen Mug (a self-heating smart coffee mug): hero with headline and call-to-action button, three feature cards, a pricing section with one price, and a footer. One self-contained file out/index.html in your job folder (inline CSS, no external images, fonts or scripts), designed to look polished at 1280x800 desktop. Keep it quick."
+ },
+ {
+  "id": "R4",
+  "name": "rt4 title card",
+  "before_run": "run_1c2bed1535",
+  "mode": "job",
+  "prompt": "Make a 5-second animated title card video: 1920x1080, 30 fps, silent, H.264 MP4 at out/title.mp4 in your job folder. Text: TRANSOVO CLIPS presents / THE FEUD, with a short bold animated reveal on a dark background. Keep it quick."
+ },
+ {
+  "id": "R5",
+  "name": "rt5 sales chart",
+  "before_run": "run_dae472187f",
+  "mode": "job",
+  "prompt": "Make one designed bar chart graphic, 1600x900 PNG at out/chart.png in your job folder, titled Lumen Mug sales 2026, showing fictional quarterly sales in thousands of dollars: Q1 120, Q2 165, Q3 140, Q4 210, with value labels and clean modern styling. Keep it quick."
+ }
+]

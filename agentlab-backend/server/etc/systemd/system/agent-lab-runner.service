@@ -1,0 +1,17 @@
+[Unit]
+Description=Agent Lab run daemon (queue, routines, watchdog, notifications)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+User=agentlab
+Group=agentlab
+EnvironmentFile=/opt/agent/.env
+Environment=RUNS_DB=/opt/agent/workspace/runs/runs.db
+ExecStart=/usr/bin/python3 /opt/agent/runner/agentd.py
+Restart=always
+RestartSec=5
+UMask=0002
+
+[Install]
+WantedBy=multi-user.target

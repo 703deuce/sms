@@ -1,0 +1,11 @@
+---
+name: sfx
+description: Get sound effects for a video — generate with ElevenLabs or search Freesound. Use when a cut needs a hit, whoosh, ambience, or other SFX.
+---
+
+# Sound effects
+
+- **Generate** (preferred when it fits): `sfx gen "short description of the sound" -o work/sfx/name.mp3`. Uses the existing ElevenLabs key. This is a paid call — one attempt, then stop. Record the cost in usage if a wrapper logs it; otherwise mention it in the report.
+- **Library search** (existing recordings, with a license field): `sfx search "query"`. Needs a free Freesound API token in `/workspace/secrets/freesound.env`. If the key is missing, say so and use `sfx gen` instead, or skip.
+- `sfx --check` shows which backends are configured (no paid calls).
+- Keep SFX ducked under speech. Put files in `work/sfx/` and note source + license next to them.

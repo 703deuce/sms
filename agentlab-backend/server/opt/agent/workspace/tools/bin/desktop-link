@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""desktop-link: tell Rick where to watch the live desktop.
+
+usage: desktop-link [--hours 12]
+Prints the Agent Lab page link; Rick opens its Live screen panel. (The old :6080 viewer is closed.)
+"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _desktop import api, die
+
+def main():
+    args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    hours = 12
+    if "--hours" in args:
+        hours = float(args[args.index("--hours") + 1])
+    timeout = int(max(1, hours) * 3600)
+    try:
+        rec, _, _ = api("POST", "/handoff", {
+            "message": "Live view of the Agent Lab desktop.",
+            "timeout": timeout,
+            "kind": "view",
+        })
+    except Exception as e:
+        die("desktop-link", str(e))
+    print("Live desktop: open https://transovo.ai/app/agent-lab and click \"Live screen\" (watch, click and type there).")
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,23 @@
+[
+ {
+  "id": "x1",
+  "level": "EXTREME",
+  "category": "coding / spec-compliance (CommonMark 0.31.2, 652 examples)",
+  "name": "Write a CommonMark Markdown-to-HTML converter from scratch; scored on all 652 official spec examples (326 visible)",
+  "prompt": "Write a CommonMark (spec version 0.31.2) Markdown-to-HTML converter from scratch in pure Python, as out/cmark/cmark.py, exposing a function to_html(markdown_text) -> str and a CLI (python cmark.py < input.md prints HTML). Rules: Python standard library only (html, re, etc. are fine). Do NOT import, vendor, copy or download any existing Markdown library or its source (markdown-it-py happens to be installed on this machine: you must not use it or read its source, and no pip/npm installs). The spec itself is public at https://spec.commonmark.org/0.31.2/ and you may read it.\n\n/workspace/testdata/hard5_nov25/r3/commonmark/examples_visible.json has 326 of the 652 official spec examples (fields markdown, html, example, section). Your converter will be scored on ALL 652 examples (the other half are hidden), comparing your HTML to the expected HTML exactly (after stripping trailing whitespace). Aim for the highest pass rate you can: block structure (paragraphs, headings, thematic breaks, code blocks, block quotes, lists with correct tight/loose handling, HTML blocks, link reference definitions) first, then inlines (code spans, emphasis with the delimiter algorithm, links and images, autolinks, raw HTML, entities, escapes, hard breaks).\n\nWrite out/cmark/run_examples.py that prints the pass count per section and in total for the visible file. Keep working and improving until you either pass at least 95% of the visible examples or genuinely run out of ideas. Final reply: your visible pass rate overall and per section, and the sections you know are weak."
+ },
+ {
+  "id": "x2",
+  "level": "VERY HARD",
+  "category": "coding / triage vague user bug reports in a real repo (no failing tests to guide)",
+  "name": "Triage 6 user bug reports on a more-itertools fork: 4 real bugs hidden from the suite, 2 decoys that are documented behaviour",
+  "prompt": "/workspace/testdata/hard5_nov25/r3/fork is a fork of more-itertools. Its test suite currently passes, but users filed the reports in BUG_REPORTS.md. Copy the repo to out/fork and work there. Do not download or compare against any upstream copy of more-itertools; work from the code, docstrings and tests in the fork.\n\nFor each report decide whether it is a real bug or documented, intended behaviour. For each real bug: fix the library with the smallest correct change and add a regression test in tests/test_reports.py. For each non-bug: do not change the behaviour; explain why, citing the documentation. Do not weaken or delete existing tests. At the end the full suite (python -m unittest discover -s tests -t .) must pass.\n\nWrite out/TRIAGE.md with one section per report: verdict (BUG or NOT A BUG), the root cause (file, function, line) for bugs, and the fix or the explanation. Final reply: the six verdicts and the final test run summary."
+ },
+ {
+  "id": "x3",
+  "level": "EXTREME",
+  "category": "reasoning / reverse-engineer an undocumented binary format",
+  "name": "Reverse-engineer the undocumented NWB1 binary format from 3 bin/json pairs; decode 2 unknown files; byte-identical encoder; hidden 6th file",
+  "prompt": "/workspace/testdata/hard5_nov25/r3/nwb/ contains files in an undocumented binary format (magic bytes NWB1). For a.bin, b.bin and c.bin you also have the JSON they decode to (a.json, b.json, c.json). d.bin and e.bin have no JSON. There is no documentation; work the format out from the bytes.\n\nDeliver:\n1. out/nwb/FORMAT.md: a precise description of the format (header, every field and type encoding, any compression, any checksum).\n2. out/nwb/decode.py: python decode.py IN.bin OUT.json writes the JSON (a list of records; keep key order). It must verify the checksum if there is one.\n3. out/nwb/encode.py: python encode.py IN.json OUT.bin [--compress] writes a file in the same format. For each of a-e, encoding the decoded JSON (with --compress exactly when the original file was compressed) must reproduce the original file byte for byte.\n4. out/nwb/d.json and out/nwb/e.json decoded with your decoder.\n5. out/nwb/check.py that proves the byte-identical round trip for all five files.\nYour decoder and encoder will also be tested on another hidden file of the same format. Final reply: a summary of the format, and the round-trip check output."
+ }
+]

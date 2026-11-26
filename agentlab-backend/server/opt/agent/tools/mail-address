@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""mail-address: print your email address (AgentMail) and who you may send to."""
+import json, sys
+sys.path.insert(0, '/opt/tools')
+import keyclient as K
+code, r = K.req('GET', '/mail/address')
+print(r.get('address')) if '--json' not in sys.argv else print(json.dumps(r, indent=1))
+if '--json' not in sys.argv:
+    print(f"new emails only to: {', '.join(r.get('send_allowed_to') or [])}; replies: to messages in this inbox", file=sys.stderr)

@@ -1,0 +1,6 @@
+title = "agentlab-backend scan config"
+[extend]
+useDefault = true
+[allowlist]
+description = "encrypted bundle and redaction log are not scanned"
+paths = ['''secrets\.tar\.age''', '''REDACTIONS\.json''']

@@ -1,0 +1,306 @@
+#!/usr/bin/env python3
+"""sonnet-assist: a minimal Sonnet 5.5 helper. Haiku stays in charge of the job.
+
+Use only when it actually makes the difference, and send only the slice needed to solve
+that one problem. Modes:
+
+  code    stuck after ~2 real fix attempts: files + failing output → SEARCH/REPLACE + short NOTE
+  visual  your own look is unsure, or a final design/page/video-edit check matters:
+          images + one question → VERDICT + concrete fixes
+  plan    large, fuzzy multi-step work where a bad plan would waste the job:
+          request + constraints → numbered plan (≤ ~15 steps)
+  math    a multi-step calculation (incl. finance) where your answer is uncertain or checks disagree:
+          problem + data → ANSWER + brief STEPS
+  legal   contracts, legal-ish, or customer-facing text where an error is costly:
+          draft + purpose → REVISED (or SEARCH/REPLACE) + ≤5 NOTES
+
+  sonnet-assist --mode code --goal "..." --file src/mod.py:120-200 --error /tmp/fail.txt --apply
+  sonnet-assist --mode visual --goal "Is the headline readable?" --image shot.png
+  sonnet-assist --mode plan --goal "the request and key constraints"
+  sonnet-assist --mode math --goal "the problem" --file figures.csv:1-30
+  sonnet-assist --mode legal --goal "purpose and audience" --file draft.md
+
+`code-rescue` is a backward-compatible alias for `--mode code`.
+Context limit: about 22k input tokens / 60k text chars, 8k output tokens; visual allows up to 4 small images.
+There is no per-job or daily call cap; plan usage is the only limit. Each call is logged with mode, tokens and cost.
+The API key never enters this process.
+"""
+import argparse, base64, io, json, os, re, sys, time
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, '/opt/tools')
+try:
+    import importlib.util as _u
+    from importlib.machinery import SourceFileLoader
+    _spec = _u.spec_from_loader('opus_step', SourceFileLoader(
+        'opus_step', os.path.join(os.path.dirname(os.path.realpath(__file__)), 'opus-step')))
+    O = _u.module_from_spec(_spec)
+    _spec.loader.exec_module(O)
+except Exception as e:
+    print(f'sonnet-assist: setup failed: {e}', file=sys.stderr)
+    sys.exit(1)
+
+MODEL = 'claude-sonnet-5-5'
+MODEL_LABEL = 'anthropic/claude-sonnet-5-5'
+MODES = ('code', 'visual', 'plan', 'math', 'legal')
+MAX_OUT = {'code': 6000, 'visual': 1000, 'plan': 1400, 'math': 1000, 'legal': 2000}
+MAX_CTX_CHARS = 60000
+MAX_ERR_CHARS = 8000
+MAX_GOAL = 2500
+MAX_IMAGES = 4
+MAX_IMAGE_EDGE = 1280
+MAX_IMAGE_BYTES = 1_200_000
+MAX_IMAGES_TOTAL = 4_000_000
+
+SYSTEMS = {
+    'code': (
+        'You fix code for a cheaper worker that is stuck. You get a goal, relevant code and the failing output. '
+        'Find the root cause and reply with the exact edits, nothing else. Format each edit as:\n'
+        '<<<<<<< SEARCH path/to/file\n<exact existing lines, copied verbatim>\n=======\n<replacement lines>\n>>>>>>> REPLACE\n'
+        'SEARCH text must match the file exactly and appear once (include enough surrounding lines). '
+        'To create a file, use an empty SEARCH. After the edits, add at most 3 short lines starting with "NOTE:" '
+        '(root cause, and anything the worker must re-check). No preamble, no explanation, no restating the code, '
+        'no markdown outside the edit blocks. If the code you were given is not enough, reply with exactly one line '
+        '"NEED: <the specific file or range>" and no edits.'
+    ),
+    'visual': (
+        'You are judging images for a cheaper worker. Look only at what you were sent. '
+        'Reply in this exact format, no preamble:\n'
+        'VERDICT: PASS\n'
+        'or\n'
+        'VERDICT: NEEDS WORK\n'
+        'then a short bullet list of concrete fixes (what to change, and where in the image). '
+        'If you cannot tell from the images, reply VERDICT: UNSURE and one line on what is missing. No essays.'
+    ),
+    'plan': (
+        'You are writing a short plan for a cheaper worker that will execute it. '
+        'Plan only this request. No code, no essay. Reply in this exact format, no preamble:\n'
+        'PLAN:\n1. ...\n2. ...\n'
+        'At most 15 concrete steps. After the steps, at most 3 lines starting with NOTE: (risks or assumptions).'
+    ),
+    'math': (
+        'You are solving one calculation for a cheaper worker. Show brief working and the answer. '
+        'Reply in this exact format, no preamble:\n'
+        'ANSWER: <the result>\n'
+        'STEPS:\n1. ...\n'
+        'Keep steps short. If a needed figure is missing, reply ANSWER: NEED and what is missing. No essays.'
+    ),
+    'legal': (
+        'You are reviewing high-stakes or legal writing for a cheaper worker that will apply your edits. '
+        'This is not formal legal advice; improve accuracy, clarity, and risk in the draft you were sent. '
+        'Reply in this exact format, no preamble:\n'
+        'REVISED:\n<the edited text>\n'
+        'NOTES:\n1. ...\n'
+        'At most 5 short notes (why a change matters, or a remaining risk). '
+        'If the draft is already fine, say so in NOTES and repeat it under REVISED. No essays.'
+    ),
+}
+
+BLOCK = re.compile(r'<<<<<<< SEARCH[ \t]*(\S*)\n(.*?)\n?=======\n(.*?)\n?>>>>>>> REPLACE', re.S)
+
+
+def die(msg, code=1):
+    print(f'sonnet-assist: {msg}', file=sys.stderr)
+    sys.exit(code)
+
+
+def read_file(spec):
+    m = re.match(r'^(.*?):(\d+)-(\d+)$', spec)
+    path, a, b = (m.group(1), int(m.group(2)), int(m.group(3))) if m else (spec, None, None)
+    if not os.path.isfile(path):
+        die(f'not a file: {path}')
+    with open(path, errors='replace') as f:
+        lines = f.read().split('\n')
+    if a:
+        return path, f'{path} (lines {a}-{b})', '\n'.join(lines[a - 1:b])
+    return path, path, '\n'.join(lines)
+
+
+def prepare_image(path):
+    if not os.path.isfile(path):
+        die(f'not a file: {path}')
+    try:
+        from PIL import Image
+    except Exception:
+        die('Pillow is required to send images')
+    im = Image.open(path)
+    if im.mode != 'RGB':
+        im = im.convert('RGB')
+    w, h = im.size
+    if max(w, h) > MAX_IMAGE_EDGE:
+        scale = MAX_IMAGE_EDGE / max(w, h)
+        im = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+    q = 85
+    data = b''
+    while q >= 40:
+        buf = io.BytesIO()
+        im.save(buf, format='JPEG', quality=q, optimize=True)
+        data = buf.getvalue()
+        if len(data) <= MAX_IMAGE_BYTES:
+            break
+        q -= 10
+    if len(data) > MAX_IMAGE_BYTES:
+        die(f'image too large after shrink: {path}')
+    return path, 'image/jpeg', data
+
+
+def apply_edits(text):
+    ok = bad = 0
+    for m in BLOCK.finditer(text):
+        path, old, new = m.group(1), m.group(2), m.group(3)
+        if not path:
+            print('apply: edit without a path, skipped', file=sys.stderr); bad += 1; continue
+        try:
+            cur = open(path).read() if os.path.exists(path) else None
+        except Exception as e:
+            print(f'apply: cannot read {path}: {e}', file=sys.stderr); bad += 1; continue
+        if cur is None or old.strip() == '':
+            if cur is None:
+                os.makedirs(os.path.dirname(path) or '.', exist_ok=True)
+                open(path, 'w').write(new + ('\n' if not new.endswith('\n') else ''))
+                ok += 1
+            else:
+                print(f'apply: {path} exists and SEARCH is empty, skipped', file=sys.stderr); bad += 1
+            continue
+        n = cur.count(old)
+        if n != 1:
+            print(f'apply: {path}: SEARCH matched {n} times (need exactly 1), not applied', file=sys.stderr); bad += 1
+            continue
+        open(path, 'w').write(cur.replace(old, new, 1)); ok += 1
+    return ok, bad
+
+
+def build_user(mode, args):
+    goal = (args.goal or '').strip()
+    if not goal:
+        die('--goal is required (one short paragraph, not the job history)')
+    if len(goal) > MAX_GOAL:
+        die('--goal is too long: one short paragraph, not the job history')
+    parts, total = [], 0
+    for spec in args.file or []:
+        path, label, text = read_file(spec)
+        total += len(text)
+        parts.append(f'### {label}\n```\n{text}\n```')
+    err = ''
+    if args.error:
+        err = (sys.stdin.read() if args.error == '-' else open(args.error, errors='replace').read())
+        err = err[-MAX_ERR_CHARS:]
+        total += len(err)
+    if total > MAX_CTX_CHARS:
+        die(f'context is {total} chars (limit {MAX_CTX_CHARS}). Send only the relevant slice.')
+
+    images = []
+    img_bytes = 0
+    for p in args.image or []:
+        path, mime, data = prepare_image(p)
+        img_bytes += len(data)
+        images.append((os.path.basename(path), mime, data))
+    if len(images) > MAX_IMAGES:
+        die(f'too many images (max {MAX_IMAGES})')
+    if img_bytes > MAX_IMAGES_TOTAL:
+        die(f'images total {img_bytes} bytes (limit {MAX_IMAGES_TOTAL})')
+    if mode == 'visual' and not images:
+        die('visual mode needs at least one --image')
+    if mode != 'visual' and images:
+        die('images are only for --mode visual')
+    if mode == 'code' and not (args.file or []):
+        die('code mode needs at least one --file (the relevant code, ideally a line range)')
+
+    header = {
+        'code': 'GOAL:\n',
+        'visual': 'QUESTION:\n',
+        'plan': 'REQUEST AND CONSTRAINTS:\n',
+        'math': 'PROBLEM:\n',
+        'legal': 'PURPOSE:\n',
+    }[mode]
+    text = header + goal
+    if parts:
+        text += '\n\nFILES:\n' + '\n\n'.join(parts)
+    if err:
+        text += '\n\nFAILING OUTPUT (tail):\n```\n' + err + '\n```'
+
+    if not images:
+        return text, total, 0
+
+    content = []
+    for i, (name, mime, data) in enumerate(images, 1):
+        content.append({'type': 'text', 'text': f'Image {i}: {name}'})
+        content.append({'type': 'image', 'source': {'type': 'base64', 'media_type': mime, 'data': base64.b64encode(data).decode()}})
+    content.append({'type': 'text', 'text': text})
+    return content, total, len(images)
+
+
+def main():
+    p = argparse.ArgumentParser(prog='sonnet-assist', description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument('--mode', required=True, choices=MODES)
+    p.add_argument('--goal', required=True, help='one short paragraph: the question, problem, or purpose')
+    p.add_argument('--file', action='append', default=[], help='PATH or PATH:START-END (repeatable)')
+    p.add_argument('--error', help='file with failing test/build output, or - for stdin (code mode)')
+    p.add_argument('--image', action='append', default=[], help='image path (visual mode, max 4)')
+    p.add_argument('--apply', action='store_true', help='apply SEARCH/REPLACE edits (code mode)')
+    p.add_argument('--effort', choices=('low', 'medium', 'high'), default='medium')
+    p.add_argument('--job')
+    p.add_argument('--json', action='store_true')
+    args = p.parse_args()
+    mode = args.mode
+    if args.apply and mode != 'code':
+        die('--apply is only for --mode code')
+
+    content, total, n_images = build_user(mode, args)
+    job = args.job or O._job_dir()
+    cid = O.conversation_id(job) or os.environ.get('CONVERSATION_ID') or os.environ.get('OH_CONVERSATION_ID')
+    t0 = time.time()
+    messages = [{'role': 'user', 'content': content}]
+    code, res = O.proxy_call({
+        'model': MODEL, 'max_tokens': MAX_OUT[mode], 'system': SYSTEMS[mode],
+        'messages': messages, 'purpose': f'sonnet-assist:{mode}', 'effort': args.effort,
+        'conversation_id': cid, 'job': job,
+    }, timeout=240)
+    if code != 200 or not res.get('text'):
+        e = res.get('error') or res
+        die(f'not available ({code}): {e}'[:400])
+    text = res['text'].strip()
+    usage = res.get('usage') or {}
+    cost = float(res.get('cost_usd') or 0)
+    rec = {
+        'ts': time.strftime('%Y-%m-%dT%H:%M:%S%z'), 'tool': 'sonnet-assist',
+        'purpose': f'sonnet-assist:{mode}', 'mode': mode, 'model': MODEL_LABEL,
+        'units': usage, 'estimated_cost_usd': cost, 'ctx_chars': total,
+        'n_images': n_images, 'files': [os.path.basename(x.split(':')[0]) for x in (args.file or [])],
+        'secs': round(time.time() - t0, 1),
+    }
+    if cid:
+        rec['conversation_id'] = cid
+    if job:
+        rec['job'] = job
+    try:
+        O.append_jsonl(os.environ.get('USAGE_LOG') or os.path.join(O.workspace_root(), 'usage', 'usage.jsonl'), rec)
+    except Exception as e:
+        print(f'sonnet-assist: could not write usage log: {e}', file=sys.stderr)
+    if job:
+        for base in (job, job.replace('/workspace/', '/opt/agent/workspace/', 1)):
+            try:
+                O.append_jsonl(os.path.join(base, 'log', 'sonnet-assist.jsonl'), rec)
+                if mode == 'code':
+                    O.append_jsonl(os.path.join(base, 'log', 'code-rescues.jsonl'), dict(rec, tool='code-rescue'))
+                break
+            except Exception:
+                continue
+    applied = None
+    if args.apply:
+        applied = apply_edits(text)
+    if args.json:
+        print(json.dumps({'text': text, 'usage': usage, 'cost_usd': cost, 'model': MODEL_LABEL,
+                          'mode': mode, 'applied': applied}, indent=2))
+    else:
+        print(text)
+        if applied is not None:
+            print(f'\n[apply] {applied[0]} edit(s) applied, {applied[1]} failed. Re-run the tests yourself.')
+        print(f'[sonnet-assist:{mode}] {MODEL_LABEL}: {usage.get("input_tokens", 0)} in / {usage.get("output_tokens", 0)} out, ${cost:.4f}',
+              file=sys.stderr)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

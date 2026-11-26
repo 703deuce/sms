@@ -1,0 +1,22 @@
+{
+ "STORE": {
+  "w": 3200,
+  "h": 2016,
+  "kind": "photo"
+ },
+ "KITTY": {
+  "w": 1280,
+  "h": 720,
+  "kind": "photo"
+ },
+ "GILL": {
+  "w": 640,
+  "h": 720,
+  "kind": "photo"
+ },
+ "CAPITOL": {
+  "w": 2919,
+  "h": 1927,
+  "kind": "photo"
+ }
+}

@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""readpage: fetch a web page and print clean readable text (markdown-ish).
+
+usage: readpage <url> [--max 20000] [--js] [--links] [--html] [--no-cache]
+  --js     render with headless Chromium first (for JS-heavy pages); used automatically
+           when the plain fetch gives too little text
+  --links  also list the page's links at the end
+  --html   print raw HTML instead
+Also works on PDFs (extracts text with pdftotext).
+
+Plain fetches try the site directly first, then Chrome-TLS, then the lab egress gateway
+(residential, then mobile if enabled) when the response is blocked; after that a stealth browser (with the already-paid
+captcha solver if a captcha widget shows), a Wayback copy, and a list of other pages with the same content.
+Output is wrapped as untrusted web content; long pages are saved in full under log/web/ and paged with readfile.
+Pages are cached for 20 minutes (--no-cache to refetch).
+"""
+import os, subprocess, sys, tempfile, urllib.request
+
+sys.path.insert(0, "/opt/tools/egress")
+sys.path.insert(0, "/opt/agent/tools/egress")
+sys.path.insert(0, "/opt/agent/ops/egress")
+
+UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36'
+
+LAST_ALT = None
+
+def alt_message(r):
+    """Plain text about what the alternate routes found and what to do next."""
+    alt = getattr(r, "alt", None) or {}
+    lines = []
+    if alt.get("candidates"):
+        lines.append("Other pages that may carry the same content (read one with readpage):")
+        lines += [f"  - {c['url']}  {c['title']}" for c in alt["candidates"]]
+    if alt.get("next"):
+        lines.append("NEXT: " + alt["next"])
+    return "\n".join(lines)
+
+def fetch(url):
+    global LAST_ALT
+    try:
+        import egresslib as E
+    except Exception:
+        E = None
+    if E is not None:
+        r = E.fetch(url, rescue=True)
+        print(f"egress: {r.report()}", file=sys.stderr)
+        if r.ok and r.final_tier == "wayback":
+            ts = (getattr(r, "alt", None) or {}).get("archived_at")
+            print(f"NOTE: the live page blocked every route; this is the Wayback copy from {ts}. Say so in your answer.", file=sys.stderr)
+        if not r.ok and (r.blocked or not r.body):
+            LAST_ALT = alt_message(r)
+            raise RuntimeError(r.report())
+        ctype = (r.headers.get("content-type") or "")
+        return r.body, ctype, r.url or url
+    req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept-Language': 'en-US,en;q=0.9'})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read(), (resp.headers.get('Content-Type') or ''), resp.geturl()
+
+def render(url):
+    # Headless Chromium; PAC/gateway applies the same direct-then-proxy policy
+    # for the headed/job browsers. This helper is a short-lived browser.
+    from playwright.sync_api import sync_playwright
+    proxy = None
+    # After a blocked plain fetch, egresslib may have already recorded a working
+    # paid tier; render() stays direct unless EGRESS_FORCE_TIER is set.
+    force = (os.environ.get("EGRESS_FORCE_TIER") or "").strip().lower()
+    launch_args = ['--no-sandbox', '--disable-dev-shm-usage']
+    if force in ("residential", "mobile"):
+        launch_args.append("--proxy-server=127.0.0.1:18080")
+        # Playwright has no custom header hook here; the gateway default is
+        # direct. Set force via a one-shot /force call.
+        try:
+            import urllib.request as u, json
+            from urllib.parse import urlparse
+            host = urlparse(url).hostname
+            req = u.Request("http://127.0.0.1:18081/force",
+                            data=json.dumps({"host": host, "tier": force, "job": "readpage"}).encode(),
+                            headers={"Content-Type": "application/json"}, method="POST")
+            u.urlopen(req, timeout=3).read()
+        except Exception:
+            pass
+    with sync_playwright() as p:
+        b = p.chromium.launch(args=launch_args)
+        pg = b.new_page(user_agent=UA)
+        pg.goto(url, wait_until='domcontentloaded', timeout=45000)
+        try: pg.wait_for_load_state('networkidle', timeout=10000)
+        except Exception: pass
+        html = pg.content(); final = pg.url; b.close()
+        return html, final
+
+def extract(html, url, links):
+    import trafilatura
+    txt = trafilatura.extract(html, url=url, output_format='markdown', include_links=links,
+                              include_tables=True, include_comments=False, favor_recall=True) or ''
+    if len(txt) < 200:
+        try:
+            from readability import Document
+            from markdownify import markdownify
+            doc = Document(html)
+            alt = f"# {doc.short_title()}\n\n" + markdownify(doc.summary(), heading_style='ATX')
+            if len(alt) > len(txt): txt = alt
+        except Exception:
+            pass
+    return txt.strip()
+
+def emit(text, source, mx, extra=""):
+    """Print fenced page text; when it is longer than --max, save the full text to the job folder and say where."""
+    try:
+        import fence
+    except Exception:
+        fence = None
+    total = len(text)
+    footer = ""
+    if total > mx:
+        path = None
+        try:
+            import altroutes, hashlib
+            d = altroutes.job_dir() or "/tmp"
+            os.makedirs(d + "/log/web", exist_ok=True)
+            path = f"{d}/log/web/{hashlib.sha1(source.encode()).hexdigest()[:10]}.txt"
+            open(path, "w").write(text)
+        except Exception:
+            pass
+        footer = f"\n\n... (truncated: showing {mx} of {total} characters"
+        footer += (f"; full text saved to {path}: read the rest with `readfile {path} --offset N`, or `--max {total}`)" if path
+                   else "; use --max)")
+        text = text[:mx]
+    body = f"SOURCE: {source}\n\n{text}{footer}{extra}"
+    print(fence.fence(body, source) if fence else body)
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'): print(__doc__); return
+    url = next(x for x in a if not x.startswith('--') and not x.isdigit())
+    mx = int(a[a.index('--max') + 1]) if '--max' in a else 20000
+    if '--no-cache' in a: os.environ['EGRESS_NOCACHE'] = '1'
+    js, links, raw = '--js' in a, '--links' in a, '--html' in a
+    html, final = '', url
+    if not js:
+        try:
+            body, ctype, final = fetch(url)
+            if 'pdf' in ctype or url.lower().endswith('.pdf'):
+                with tempfile.NamedTemporaryFile(suffix='.pdf') as f:
+                    f.write(body); f.flush()
+                    out = subprocess.run(['pdftotext', '-layout', f.name, '-'], capture_output=True, text=True).stdout
+                emit(out, final, mx); return
+            html = body.decode('utf-8', errors='replace') if isinstance(body, bytes) else body
+        except Exception as e:
+            print(f"(plain fetch failed: {e}; rendering with Chromium)", file=sys.stderr)
+    text = extract(html, final, links) if html else ''
+    if js or len(text) < 400:
+        try:
+            html, final = render(url)
+            t2 = extract(html, final, links)
+            if len(t2) > len(text): text = t2
+        except Exception as e:
+            if not text:
+                print(f"read: could not load {url}: {e}", file=sys.stderr)
+                if LAST_ALT: print(LAST_ALT, file=sys.stderr)
+                sys.exit(1)
+    if raw: print(html[:mx]); return
+    extra = ''
+    if links:
+        import re
+        hrefs = sorted(set(re.findall(r'href="(https?://[^"#]+)"', html)))[:150]
+        extra = "\n\nLINKS:\n" + '\n'.join(hrefs)
+    emit(text, final, mx, extra)
+
+if __name__ == '__main__':
+    main()

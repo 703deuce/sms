@@ -1,0 +1,37 @@
+use_default_settings:
+  engines:
+    keep_only: [google, bing, duckduckgo, brave, youtube, wikipedia, mojeek, qwant, startpage, yahoo, github, stackoverflow, pypi, npm, mdn]
+general:
+  instance_name: agent-search
+server:
+  secret_key: "<REDACTED>"
+  limiter: false
+  image_proxy: false
+  bind_address: "0.0.0.0"
+search:
+  safe_search: 0
+  default_lang: "en-US"  # the server is in Germany; without this bing/yahoo answer in German
+  formats: [html, json]
+
+# Web engines that answer from this server (checked 2026-11-23): yahoo, brave (rate-limited at times), mojeek.
+# bing answers but only matches the first word of the query ("best pizza in new york" -> best.at), so it is off.
+# duckduckgo returns a CAPTCHA and google/qwant return access denied from this IP, so they are off by default
+# (still usable with engines=...). With only duckduckgo on, every plain search came back empty.
+engines:
+  - name: bing
+    disabled: true
+  - name: yahoo
+    disabled: false
+  - name: brave
+    disabled: false
+  - name: mojeek
+    disabled: false
+    inactive: false
+  - name: wikipedia
+    disabled: false
+  - name: duckduckgo
+    disabled: true
+  - name: google
+    disabled: true
+  - name: qwant
+    disabled: true

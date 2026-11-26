@@ -1,0 +1,459 @@
+{
+ "S1": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_6acfdcd77f",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S2": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_8f99fd2874",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S3": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_fd9249c2a6",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_f0af82d1a3",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-email(full)",
+     "lab-own-browser(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   }
+  ]
+ },
+ "S4": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_0feaae1810",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S5": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_1456ef7c14",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S6": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_42d8b86494",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S7": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_3a5c754e49",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S8": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_74c76fb66f",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S9": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_f7d3b9781e",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S10": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_5442626f99",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S11": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_39fb57ca8c",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   }
+  ]
+ },
+ "S12": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_9ec1dcdcd9",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_c0e6c881ed",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-publish-pages(full)",
+     "lab-motion-engines(full)",
+     "lab-video-loop(full)",
+     "lab-look-and-watch-media(full)",
+     "lab-voiceover-transcription(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   }
+  ]
+ },
+ "S13": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_eb1b16da7c",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_2609c10639",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-look-and-watch-media(full)",
+     "lab-own-browser(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   }
+  ]
+ },
+ "R1": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_468dcf1c32",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_75a5e382f7",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-video-loop(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   }
+  ]
+ },
+ "R2": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_e268bea41c",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_7ad6a38292",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-video-loop(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   }
+  ]
+ },
+ "R3": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_dbe76689bc",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-desktop-control(full)",
+     "lab-publish-pages(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   },
+   {
+    "id": "run_48ec394f70",
+    "status": "done",
+    "kind": "visual-owner",
+    "source": "helper",
+    "model": "lab-opus",
+    "skills": [
+     "lab-video-loop(full)",
+     "lab-voiceover-transcription(full)",
+     "motion-studio-production(core, must 7)",
+     "lab-look-and-watch-media(listed)",
+     "lab-motion-engines(listed)",
+     "lab-desktop-control(listed)",
+     "lab-publish-pages(listed)"
+    ],
+    "read": {
+     "motion-studio-production/RULES_FROM_RICK.md": true,
+     "motion-studio-production/craft/design-and-motion.md": true,
+     "motion-studio-production/producer_handoff_kit/ledgers/STYLE_LEDGER.md": true,
+     "motion-studio-production/producer_handoff_kit/motion_kit/first_right/README.md": true,
+     "motion-studio-production/engines.md": true,
+     "motion-studio-production/engine-library.md": true,
+     "motion-studio-production/qa.md": true
+    },
+    "missing": [],
+    "deliver_failed": [],
+    "gate": "pass",
+    "sent_back": true,
+    "engines": [
+     "gsap",
+     "hyperframes"
+    ]
+   }
+  ]
+ },
+ "R4": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_a360c43c4d",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-motion-engines(full)",
+     "lab-video-loop(full)",
+     "lab-image-video-gen(full)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   },
+   {
+    "id": "run_917c05fee1",
+    "status": "done",
+    "kind": "agent",
+    "source": "helper",
+    "model": "lab-anthropic",
+    "skills": [
+     "lab-motion-engines(full)",
+     "lab-video-loop(full)",
+     "lab-image-video-gen(full)",
+     "lab-look-and-watch-media(listed)",
+     "lab-voiceover-transcription(listed)"
+    ],
+    "read": null,
+    "missing": null,
+    "deliver_failed": null,
+    "gate": "pass",
+    "sent_back": false,
+    "engines": null
+   },
+   {
+    "id": "run_a96276ff01",
+    "status": "done",
+    "kind": "visual-owner",
+    "source": "helper",
+    "model": "lab-opus",
+    "skills": [
+     "lab-look-and-watch-media(full)",
+     "lab-video-loop(full)",
+     "lab-voiceover-transcription(full)",
+     "motion-studio-production(listed, must 7)",
+     "lab-motion-engines(listed)",
+     "footage-gathering(listed)"
+    ],
+    "read": {
+     "motion-studio-production/RULES_FROM_RICK.md": true,
+     "motion-studio-production/craft/design-and-motion.md": true,
+     "motion-studio-production/producer_handoff_kit/ledgers/STYLE_LEDGER.md": true,
+     "motion-studio-production/producer_handoff_kit/motion_kit/first_right/README.md": true,
+     "motion-studio-production/engines.md": true,
+     "motion-studio-production/engine-library.md": true,
+     "motion-studio-production/qa.md": true
+    },
+    "missing": [],
+    "deliver_failed": [],
+    "gate": "pass",
+    "sent_back": false,
+    "engines": [
+     "ffmpeg",
+     "skia",
+     "three.js"
+    ]
+   }
+  ]
+ },
+ "R5": {
+  "done": true,
+  "capped": null,
+  "runs": [
+   {
+    "id": "run_0d7acf2df8",
+    "status": "done",
+    "kind": "agent",
+    "source": "user",
+    "model": "lab-anthropic"
+   },
+   {
+    "id": "run_ec9adaac61",
+    "status": "done",
+    "kind": "visual-owner",
+    "source": "helper",
+    "model": "lab-opus",
+    "skills": [
+     "lab-video-loop(full)",
+     "lab-voiceover-transcription(full)",
+     "motion-studio-production(core, must 7)",
+     "lab-look-and-watch-media(listed)",
+     "lab-motion-engines(listed)"
+    ],
+    "read": {
+     "motion-studio-production/RULES_FROM_RICK.md": true,
+     "motion-studio-production/craft/design-and-motion.md": true,
+     "motion-studio-production/producer_handoff_kit/ledgers/STYLE_LEDGER.md": true,
+     "motion-studio-production/producer_handoff_kit/motion_kit/first_right/README.md": true,
+     "motion-studio-production/engines.md": true,
+     "motion-studio-production/engine-library.md": true,
+     "motion-studio-production/qa.md": true
+    },
+    "missing": [],
+    "deliver_failed": [],
+    "gate": "pass",
+    "sent_back": true,
+    "engines": [
+     "d3"
+    ]
+   }
+  ]
+ }
+}

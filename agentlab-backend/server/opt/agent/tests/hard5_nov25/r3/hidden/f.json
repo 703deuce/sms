@@ -1,0 +1,998 @@
+[
+ {
+  "id": 0,
+  "name": "beta-0",
+  "city": "Tōkyō",
+  "score": -594.772,
+  "active": true,
+  "delta": 473360531280,
+  "tags": [
+   "ünï",
+   "x"
+  ],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    3,
+    false,
+    null,
+    0.514412
+   ]
+  }
+ },
+ {
+  "id": 1,
+  "name": "beta-1",
+  "city": "Tōkyō",
+  "score": 897.809,
+  "active": true,
+  "delta": 340658513911,
+  "note": null,
+  "tags": [
+   "y",
+   "y",
+   "y"
+  ]
+ },
+ {
+  "id": 2,
+  "name": "delta-2",
+  "city": "Kraków",
+  "score": 199.778,
+  "active": true,
+  "delta": 330459076379,
+  "tags": [
+   "z",
+   "ünï"
+  ]
+ },
+ {
+  "id": 3,
+  "name": "alpha-3",
+  "city": "Austin",
+  "score": -764.652,
+  "active": true,
+  "delta": 266723554630,
+  "tags": [
+   "y",
+   "y"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    4,
+    false,
+    null,
+    0.106609
+   ]
+  }
+ },
+ {
+  "id": 4,
+  "name": "alpha-4",
+  "city": "Reykjavík",
+  "score": -832.915,
+  "active": false,
+  "delta": -858214277468,
+  "tags": [],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    3,
+    false,
+    null,
+    0.898243
+   ]
+  }
+ },
+ {
+  "id": 5,
+  "name": "alpha-5",
+  "city": "Reykjavík",
+  "score": 77.457,
+  "active": true,
+  "delta": -245812826659,
+  "note": null,
+  "tags": [
+   "x",
+   "z",
+   "ünï"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    4,
+    false,
+    null,
+    0.856933,
+    {
+     "k": "São Paulo"
+    }
+   ]
+  }
+ },
+ {
+  "id": 6,
+  "name": "beta-6",
+  "city": "Tōkyō",
+  "score": 434.975,
+  "active": true,
+  "delta": -639814994911,
+  "note": null,
+  "tags": [
+   "y",
+   "z"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    3,
+    false,
+    null
+   ]
+  }
+ },
+ {
+  "id": 7,
+  "name": "beta-7",
+  "city": "Austin",
+  "score": -967.832,
+  "active": false,
+  "delta": -657394238697,
+  "tags": [],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    3,
+    false
+   ]
+  }
+ },
+ {
+  "id": 8,
+  "name": "gamma-8",
+  "city": "Kraków",
+  "score": -713.031,
+  "active": true,
+  "delta": 373367981270,
+  "tags": [
+   "ünï"
+  ]
+ },
+ {
+  "id": 9,
+  "name": "beta-9",
+  "city": "Montréal",
+  "score": 478.461,
+  "active": true,
+  "delta": 15722216198,
+  "tags": [
+   "y"
+  ]
+ },
+ {
+  "id": 10,
+  "name": "delta-10",
+  "city": "Zürich",
+  "score": 243.364,
+  "active": true,
+  "delta": 141085805107,
+  "tags": [
+   "x"
+  ],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    -5
+   ]
+  }
+ },
+ {
+  "id": 11,
+  "name": "alpha-11",
+  "city": "Zürich",
+  "score": 408.076,
+  "active": true,
+  "delta": -746898472534,
+  "tags": [
+   "ünï",
+   "y"
+  ]
+ },
+ {
+  "id": 12,
+  "name": "delta-12",
+  "city": "São Paulo",
+  "score": -852.01,
+  "active": true,
+  "delta": 506586459292,
+  "note": null,
+  "tags": []
+ },
+ {
+  "id": 13,
+  "name": "gamma-13",
+  "city": "Kraków",
+  "score": -246.98,
+  "active": false,
+  "delta": 722558206951,
+  "note": null,
+  "tags": [
+   "y",
+   "x"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    0,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 14,
+  "name": "alpha-14",
+  "city": "Reykjavík",
+  "score": 560.894,
+  "active": true,
+  "delta": -958989064577,
+  "note": null,
+  "tags": [
+   "z",
+   "x",
+   "z"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    3,
+    false,
+    null,
+    0.329913
+   ]
+  }
+ },
+ {
+  "id": 15,
+  "name": "beta-15",
+  "city": "São Paulo",
+  "score": 195.662,
+  "active": true,
+  "delta": 718803659101,
+  "tags": [
+   "x",
+   "z"
+  ]
+ },
+ {
+  "id": 16,
+  "name": "alpha-16",
+  "city": "Kraków",
+  "score": -643.536,
+  "active": true,
+  "delta": -676773136644,
+  "note": null,
+  "tags": [
+   "z",
+   "x",
+   "x",
+   "z"
+  ],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    -2,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 17,
+  "name": "delta-17",
+  "city": "São Paulo",
+  "score": 613.592,
+  "active": true,
+  "delta": -351949399138,
+  "tags": [
+   "x",
+   "y"
+  ]
+ },
+ {
+  "id": 18,
+  "name": "beta-18",
+  "city": "Tōkyō",
+  "score": -169.073,
+  "active": true,
+  "delta": -688714858794,
+  "note": null,
+  "tags": []
+ },
+ {
+  "id": 19,
+  "name": "alpha-19",
+  "city": "Kraków",
+  "score": -694.591,
+  "active": true,
+  "delta": 286858692576,
+  "tags": [
+   "x",
+   "y",
+   "ünï"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    0,
+    true,
+    null,
+    0.992384,
+    {
+     "k": "Austin"
+    }
+   ]
+  }
+ },
+ {
+  "id": 20,
+  "name": "beta-20",
+  "city": "Lagos",
+  "score": -641.451,
+  "active": true,
+  "delta": -144775624396,
+  "note": null,
+  "tags": []
+ },
+ {
+  "id": 21,
+  "name": "beta-21",
+  "city": "Tōkyō",
+  "score": -46.133,
+  "active": true,
+  "delta": -71133697366,
+  "tags": [
+   "z",
+   "ünï",
+   "z",
+   "z"
+  ]
+ },
+ {
+  "id": 22,
+  "name": "gamma-22",
+  "city": "Austin",
+  "score": 824.37,
+  "active": true,
+  "delta": -897180156434,
+  "note": null,
+  "tags": [
+   "y"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    1,
+    false,
+    null,
+    0.602288
+   ]
+  }
+ },
+ {
+  "id": 23,
+  "name": "alpha-23",
+  "city": "Tōkyō",
+  "score": -804.312,
+  "active": true,
+  "delta": 535793177464,
+  "tags": [
+   "z",
+   "z",
+   "ünï",
+   "x"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    -3,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 24,
+  "name": "delta-24",
+  "city": "São Paulo",
+  "score": -143.125,
+  "active": true,
+  "delta": -977901672939,
+  "note": null,
+  "tags": []
+ },
+ {
+  "id": 25,
+  "name": "alpha-25",
+  "city": "Lagos",
+  "score": -742.634,
+  "active": false,
+  "delta": 397770529779,
+  "tags": [],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    2
+   ]
+  }
+ },
+ {
+  "id": 26,
+  "name": "delta-26",
+  "city": "Tōkyō",
+  "score": 952.35,
+  "active": true,
+  "delta": 374866151941,
+  "note": null,
+  "tags": [
+   "ünï"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    5
+   ]
+  }
+ },
+ {
+  "id": 27,
+  "name": "beta-27",
+  "city": "Reykjavík",
+  "score": -813.533,
+  "active": true,
+  "delta": -209413593736,
+  "note": null,
+  "tags": [
+   "z",
+   "y"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    5,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 28,
+  "name": "beta-28",
+  "city": "São Paulo",
+  "score": -499.782,
+  "active": false,
+  "delta": -714397418528,
+  "tags": [
+   "ünï"
+  ]
+ },
+ {
+  "id": 29,
+  "name": "beta-29",
+  "city": "Reykjavík",
+  "score": -487.107,
+  "active": true,
+  "delta": -216195238623,
+  "tags": [
+   "ünï",
+   "z"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    3,
+    false,
+    null
+   ]
+  }
+ },
+ {
+  "id": 30,
+  "name": "gamma-30",
+  "city": "Zürich",
+  "score": -722.669,
+  "active": true,
+  "delta": 289966490123,
+  "note": null,
+  "tags": [],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    0,
+    true,
+    null,
+    0.192112,
+    {
+     "k": "Austin"
+    }
+   ]
+  }
+ },
+ {
+  "id": 31,
+  "name": "delta-31",
+  "city": "Tōkyō",
+  "score": -438.442,
+  "active": true,
+  "delta": -212024843767,
+  "tags": [
+   "x"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    -4
+   ]
+  }
+ },
+ {
+  "id": 32,
+  "name": "gamma-32",
+  "city": "Montréal",
+  "score": 640.778,
+  "active": false,
+  "delta": -5136955323,
+  "note": null,
+  "tags": [
+   "x"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    4,
+    true,
+    null
+   ]
+  }
+ },
+ {
+  "id": 33,
+  "name": "beta-33",
+  "city": "Austin",
+  "score": -675.395,
+  "active": true,
+  "delta": 465856141365,
+  "tags": [
+   "y",
+   "y"
+  ]
+ },
+ {
+  "id": 34,
+  "name": "delta-34",
+  "city": "Tōkyō",
+  "score": 595.157,
+  "active": true,
+  "delta": -736966606037,
+  "tags": [
+   "x",
+   "y",
+   "x"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    4,
+    false,
+    null,
+    0.302456
+   ]
+  }
+ },
+ {
+  "id": 35,
+  "name": "gamma-35",
+  "city": "São Paulo",
+  "score": -282.264,
+  "active": false,
+  "delta": -238569611526,
+  "tags": []
+ },
+ {
+  "id": 36,
+  "name": "beta-36",
+  "city": "Kraków",
+  "score": -994.981,
+  "active": false,
+  "delta": 106768837714,
+  "tags": [
+   "z",
+   "y"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    2,
+    true
+   ]
+  }
+ },
+ {
+  "id": 37,
+  "name": "delta-37",
+  "city": "Reykjavík",
+  "score": -237.203,
+  "active": false,
+  "delta": -564642961780,
+  "tags": [
+   "x",
+   "x",
+   "y",
+   "x"
+  ]
+ },
+ {
+  "id": 38,
+  "name": "alpha-38",
+  "city": "São Paulo",
+  "score": -155.961,
+  "active": true,
+  "delta": 415274121684,
+  "note": null,
+  "tags": [
+   "y",
+   "y",
+   "ünï"
+  ]
+ },
+ {
+  "id": 39,
+  "name": "gamma-39",
+  "city": "Kraków",
+  "score": 157.993,
+  "active": false,
+  "delta": 430201563485,
+  "tags": [
+   "z",
+   "x",
+   "x"
+  ],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    0
+   ]
+  }
+ },
+ {
+  "id": 40,
+  "name": "alpha-40",
+  "city": "Tōkyō",
+  "score": 893.585,
+  "active": true,
+  "delta": 498397563341,
+  "note": null,
+  "tags": [
+   "x",
+   "z",
+   "z",
+   "x"
+  ]
+ },
+ {
+  "id": 41,
+  "name": "beta-41",
+  "city": "Zürich",
+  "score": 367.021,
+  "active": false,
+  "delta": 945101474018,
+  "tags": [],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    2,
+    false,
+    null
+   ]
+  }
+ },
+ {
+  "id": 42,
+  "name": "beta-42",
+  "city": "Kraków",
+  "score": -53.323,
+  "active": true,
+  "delta": 190466894597,
+  "note": null,
+  "tags": [
+   "y",
+   "y",
+   "z"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    1
+   ]
+  }
+ },
+ {
+  "id": 43,
+  "name": "beta-43",
+  "city": "São Paulo",
+  "score": 734.159,
+  "active": false,
+  "delta": 653120689865,
+  "tags": [],
+  "meta": {
+   "owner": "ana",
+   "history": [
+    2,
+    false,
+    null,
+    0.646475,
+    {
+     "k": "Zürich"
+    }
+   ]
+  }
+ },
+ {
+  "id": 44,
+  "name": "alpha-44",
+  "city": "Kraków",
+  "score": -186.143,
+  "active": true,
+  "delta": 946860466318,
+  "tags": []
+ },
+ {
+  "id": 45,
+  "name": "alpha-45",
+  "city": "Austin",
+  "score": 874.232,
+  "active": false,
+  "delta": 683322985143,
+  "tags": [
+   "z",
+   "z",
+   "ünï"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    5,
+    false,
+    null,
+    0.752165,
+    {
+     "k": "Lagos"
+    }
+   ]
+  }
+ },
+ {
+  "id": 46,
+  "name": "gamma-46",
+  "city": "Kraków",
+  "score": -727.581,
+  "active": false,
+  "delta": 244889984049,
+  "note": null,
+  "tags": [],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    -1
+   ]
+  }
+ },
+ {
+  "id": 47,
+  "name": "beta-47",
+  "city": "São Paulo",
+  "score": 57.044,
+  "active": true,
+  "delta": 894390636181,
+  "tags": [
+   "x",
+   "y",
+   "y"
+  ]
+ },
+ {
+  "id": 48,
+  "name": "beta-48",
+  "city": "Tōkyō",
+  "score": -267.828,
+  "active": false,
+  "delta": 864021705598,
+  "tags": [
+   "x",
+   "y",
+   "x",
+   "z"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    5,
+    true
+   ]
+  }
+ },
+ {
+  "id": 49,
+  "name": "alpha-49",
+  "city": "Zürich",
+  "score": -760.782,
+  "active": true,
+  "delta": 600369179031,
+  "tags": [
+   "y",
+   "x",
+   "ünï",
+   "z"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    -2,
+    false
+   ]
+  }
+ },
+ {
+  "id": 50,
+  "name": "alpha-50",
+  "city": "São Paulo",
+  "score": -863.632,
+  "active": true,
+  "delta": -804295734630,
+  "tags": [
+   "ünï",
+   "z"
+  ],
+  "meta": {
+   "owner": "cy",
+   "history": [
+    0,
+    true,
+    null,
+    0.910182
+   ]
+  }
+ },
+ {
+  "id": 51,
+  "name": "beta-51",
+  "city": "Austin",
+  "score": -276.732,
+  "active": false,
+  "delta": -702552937513,
+  "tags": [
+   "y",
+   "ünï"
+  ]
+ },
+ {
+  "id": 52,
+  "name": "delta-52",
+  "city": "Austin",
+  "score": -529.437,
+  "active": true,
+  "delta": 343432068376,
+  "tags": [
+   "ünï",
+   "x",
+   "ünï"
+  ]
+ },
+ {
+  "id": 53,
+  "name": "alpha-53",
+  "city": "Lagos",
+  "score": -423.554,
+  "active": false,
+  "delta": 199831913110,
+  "tags": [
+   "z",
+   "z"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    2,
+    true,
+    null,
+    0.966279
+   ]
+  }
+ },
+ {
+  "id": 54,
+  "name": "beta-54",
+  "city": "Reykjavík",
+  "score": 852.242,
+  "active": false,
+  "delta": 726701729890,
+  "tags": []
+ },
+ {
+  "id": 55,
+  "name": "beta-55",
+  "city": "Lagos",
+  "score": -174.751,
+  "active": false,
+  "delta": 129788500722,
+  "note": null,
+  "tags": [
+   "ünï",
+   "ünï"
+  ],
+  "meta": {
+   "owner": "bo",
+   "history": [
+    5,
+    true,
+    null,
+    0.563861
+   ]
+  }
+ },
+ {
+  "id": 56,
+  "name": "beta-56",
+  "city": "Tōkyō",
+  "score": -827.02,
+  "active": true,
+  "delta": 119808864693,
+  "tags": [
+   "ünï",
+   "ünï",
+   "z",
+   "y"
+  ]
+ },
+ {
+  "id": 57,
+  "name": "gamma-57",
+  "city": "São Paulo",
+  "score": -277.306,
+  "active": true,
+  "delta": 138044305793,
+  "note": null,
+  "tags": [
+   "y",
+   "y"
+  ]
+ },
+ {
+  "id": 58,
+  "name": "beta-58",
+  "city": "Kraków",
+  "score": 654.367,
+  "active": true,
+  "delta": 653208097476,
+  "tags": [
+   "x",
+   "x"
+  ]
+ },
+ {
+  "id": 59,
+  "name": "gamma-59",
+  "city": "Tōkyō",
+  "score": 67.537,
+  "active": true,
+  "delta": 199645698240,
+  "note": null,
+  "tags": [
+   "y",
+   "ünï",
+   "z",
+   "y"
+  ]
+ }
+]

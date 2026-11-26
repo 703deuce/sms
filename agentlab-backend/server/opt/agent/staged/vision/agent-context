@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Hook: injects memory + skills into the conversation.
+SessionStart  -> job folder, all shared facts and rules, a few recent facts, project list, skills index.
+UserPromptSubmit -> facts relevant to the user's message (hybrid recall)."""
+import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+
+def now_line():
+    from datetime import datetime, timedelta
+    from zoneinfo import ZoneInfo
+    tz = 'America/New_York'
+    n = datetime.now(ZoneInfo(tz))
+    t = n + timedelta(days=1)
+    return (f"[Clock] Now: {n.strftime('%A, %B %-d, %Y, %-I:%M %p %Z')} ({tz}). Today is {n.strftime('%A %b %-d')}; "
+            f"tomorrow is {t.strftime('%A %b %-d')}. Read every relative date or time (today, tonight, tomorrow, Monday, "
+            "next week) in this zone, and state all times to Rick in ET unless he asks otherwise.")
+
+
+def vision_line(job):
+    """Tell the agent whether its own model can see images (status written by the runner per conversation)."""
+    import re
+    ids = re.findall(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', job or '')
+    st = None
+    if ids:
+        try:
+            st = json.load(open(f'/workspace/runs/vision/{ids[-1]}.json'))
+        except Exception:
+            st = None
+    if st and st.get('vision'):
+        return (f"[Vision] Your model ({st.get('model')}) can see images. Look at images, frames and screenshots yourself with "
+                "`view <image|frames-dir|video --fps N>`; use `look` only as a second opinion, and `watch-media` for whole video+audio.")
+    if st:
+        return (f"[Vision] Your model ({st.get('model')}) is text-only here: use `look` for images/frames and `watch-media` "
+                "for whole video/audio.")
+    return ('[Vision] Run `view <image>` to see images yourself; if it says your model is text-only, use `look` / `watch-media`.')
+
+
+def main():
+    try:
+        payload = json.load(sys.stdin)
+    except Exception:
+        payload = {}
+    event = payload.get('event_type') or os.environ.get('OPENHANDS_EVENT_TYPE', '')
+    job = payload.get('working_dir') or os.environ.get('OPENHANDS_PROJECT_DIR', '')
+    out = [now_line(), vision_line(job)] if event in ('SessionStart', 'UserPromptSubmit') else []
+    try:
+        import memlib as m
+        db = m.connect()
+    except Exception as e:
+        db = None
+        out.append(f'(memory unavailable: {e})')
+    if event == 'SessionStart':
+        out.append(f'# Session context (auto-loaded)\nYour job folder for this conversation is `{job}`. Work only inside it '
+                   '(plus /tmp). Never delete or move anything outside it.')
+        if db is not None:
+            rows = db.execute(f'''SELECT id, bot_id, type, text, created_at FROM facts f WHERE {m.active_clause()}
+                                  AND (bot_id='shared' OR type='rule') ORDER BY type, id DESC LIMIT 40''', m.scopes()).fetchall()
+            seen = {r[0] for r in rows}
+            recent = [r for r in db.execute(f'''SELECT id, bot_id, type, text, created_at FROM facts f WHERE {m.active_clause()}
+                                  ORDER BY id DESC LIMIT 15''', m.scopes()).fetchall() if r[0] not in seen][:8]
+            facts = rows + recent
+            out.append('\n## Long-term memory (rules, shared facts, recent facts)\n' +
+                       ('\n'.join(m.fmt(r) for r in facts) if facts else '(no facts saved yet)') +
+                       '\nMore: `recall "query"`. Save new ones with `remember`.')
+        pdir = '/workspace/memory/projects'
+        if os.path.isdir(pdir):
+            projs = sorted(f[:-3] for f in os.listdir(pdir) if f.endswith('.md'))
+            if projs:
+                out.append('\n## Project notes\n' + ', '.join(projs) + '  (read with `project-note <slug>`)')
+        try:
+            import skilllib as s
+            sk = s.all_skills()
+            out.append('\n## Skills (load the full text with `skill <slug>` when the task matches)\n' +
+                       ('\n'.join(f'- {k}: {v["description"][:240]}' for k, v in sk.items()) or '(none)'))
+        except Exception as e:
+            out.append(f'(skills unavailable: {e})')
+    elif event == 'UserPromptSubmit' and db is not None:
+        msg = str(payload.get('message') or '')[:2000]
+        try:  # pin the original goal: the first message of the conversation is saved to log/goal.md
+            if job.startswith('/workspace/jobs/') and msg.strip() and not os.path.exists(f'{job}/log/goal.md'):
+                os.makedirs(f'{job}/log', exist_ok=True)
+                with open(f'{job}/log/goal.md', 'w') as f:
+                    f.write('# Original goal (first message of this conversation)\n\n' + str(payload.get('message') or '') + '\n')
+        except Exception:
+            pass
+        if msg.strip():
+            rows = m.search(db, msg, 8)
+            if rows:
+                out.append('[Memory: facts that may be relevant to this message]\n' + '\n'.join(m.fmt(r) for r in rows))
+    if out:
+        print(json.dumps({'additionalContext': '\n'.join(out)}))
+
+if __name__ == '__main__':
+    main()

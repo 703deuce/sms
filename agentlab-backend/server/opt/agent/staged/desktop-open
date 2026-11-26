@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""desktop-open: open a URL (or a blank window) in Chromium on the agent desktop.
+
+usage: desktop-open [url] [--fresh]
+Uses the container Chromium so the live view shows the same browser. Profile:
+/workspace/desktop/chrome-profile (cookies and logins persist across chats).
+The browser always starts clean (no "Restore pages?"), and the first desktop-open from a different job
+closes the previous job's browser first (logins are kept). --fresh forces that reset.
+Downloads land in /workspace/desktop/downloads; copy what you need into your job folder.
+"""
+import json, os, re, shutil, subprocess, sys, time, urllib.request
+
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+sys.path.insert(0, '/opt/tools')
+import chromeclean
+
+WS_DESKTOP = "/workspace/desktop" if os.path.isdir("/workspace") else "/opt/agent/workspace/desktop"
+DISPLAY = os.environ.get("DESKTOP_DISPLAY", "127.0.0.1:99")
+AUTH = os.environ.get("XAUTHORITY") or f"{WS_DESKTOP}/Xauthority"
+PROFILE = os.environ.get("DESKTOP_CHROME_PROFILE", f"{WS_DESKTOP}/chrome-profile")
+DOWNLOADS = f"{WS_DESKTOP}/downloads"
+OWNER = f"{WS_DESKTOP}/owner.json"
+CONTROL = os.environ.get("DESKTOP_CONTROL", "http://127.0.0.1:6070")
+UUID = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
+
+def die(msg):
+    print(f"desktop-open: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def my_job():
+    m = re.match(rf'^(/workspace/jobs/{UUID})', os.path.realpath(os.getcwd()))
+    return m.group(1) if m else os.environ.get('AGENT_SANDBOX') or 'none'
+
+
+def browser_running():
+    for pid in os.listdir('/proc'):
+        if pid.isdigit():
+            try:
+                cmd = open(f'/proc/{pid}/cmdline', 'rb').read().replace(b'\0', b' ').decode(errors='replace')
+            except OSError:
+                continue
+            if 'chrom' in cmd and f'--user-data-dir={PROFILE}' in cmd and '--type=' not in cmd:
+                return True
+    return False
+
+
+def reset_browser():
+    """Ask the desktop service (outside every job sandbox) to close the browser and clean the profile."""
+    req = urllib.request.Request(f"{CONTROL}/browser/reset", data=b'{}', method='POST',
+                                 headers={'Content-Type': 'application/json'})
+    try:
+        urllib.request.urlopen(req, timeout=30).read()
+    except Exception as e:
+        print(f"desktop-open: could not reset the previous browser ({e}); opening in it anyway", file=sys.stderr)
+        return
+    for _ in range(20):
+        if not browser_running():
+            return
+        time.sleep(0.5)
+
+
+def main():
+    args = [a for a in sys.argv[1:]]
+    if args and args[0] in ("-h", "--help"):
+        print(__doc__); return
+    fresh = '--fresh' in args
+    args = [a for a in args if a != '--fresh']
+    url = args[0] if args else "about:blank"
+    chrome = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
+    if not chrome:
+        die("chromium is not installed in this environment")
+    if not os.path.exists(AUTH):
+        die(f"Xauthority not found at {AUTH}. Is the desktop service running?")
+    job = my_job()
+    try:
+        owner = json.load(open(OWNER)).get('job')
+    except Exception:
+        owner = None
+    if browser_running() and (fresh or owner != job):
+        reset_browser()
+    if not browser_running():
+        os.makedirs(PROFILE, exist_ok=True)
+        chromeclean.clean_profile(PROFILE, DOWNLOADS)
+    try:
+        with open(OWNER, 'w') as f:
+            json.dump({'job': job, 'at': time.time()}, f)
+    except OSError:
+        pass
+    env = os.environ.copy()
+    env["DISPLAY"] = DISPLAY
+    env["XAUTHORITY"] = AUTH
+    # --no-sandbox is required inside the agent container; do not log env.
+    cmd = [
+        chrome, "--no-sandbox", "--disable-dev-shm-usage", "--test-type",
+        "--ozone-platform=x11", "--use-gl=angle", "--use-angle=swiftshader",
+        "--no-first-run", "--no-default-browser-check",
+        "--hide-crash-restore-bubble", "--disable-session-crashed-bubble", "--noerrdialogs",
+        f"--user-data-dir={PROFILE}",
+        "--start-maximized",
+        url,
+    ]
+    subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    time.sleep(0.8)
+    print(f"opened {url} on the agent desktop")
+
+
+if __name__ == "__main__":
+    main()

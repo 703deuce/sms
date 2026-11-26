@@ -1,0 +1,777 @@
+[
+ {
+  "id": "h1",
+  "run": "run_9f6560423e",
+  "cid": "281e314b-4943-4a84-90fc-fa1e52bd9f5a",
+  "job": "/workspace/jobs/281e314b-4943-4a84-90fc-fa1e52bd9f5a",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.27,
+  "cost_usd": 0.0244,
+  "cost_snapshot_usd": 0.0244,
+  "peak_prompt_tokens": 57395,
+  "ncalls": 19,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_9f6560423e role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000425 secs=1.8",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 14,
+   "file_editor": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_bb15ca3921",
+    "status": "done",
+    "title": "more-itertools regression test",
+    "model": "lab-anthropic",
+    "result": "The regression test is added and the suite ends OK, but I did the work in a copy, not in `out/`. The repo lives in the front desk's job folder, and my rules keep me inside my own folder.\n\n**Copy with the work:** `/workspace/jobs/281e314b-4943-4a84-90fc-fa1e52bd9f5a/helpers/acfc5f88-83cc-4e98-8722-104cc503fb23/more_itertools_repo`. Its only difference from `out/more_itertools_repo` is the new `test"
+   }
+  ],
+  "started_at": "2026-11-25T16:22:24Z",
+  "finished_at": "2026-11-25T16:24:40Z",
+  "error": ""
+ },
+ {
+  "id": "h2",
+  "run": "run_84ea167c65",
+  "cid": "cb7c254c-a78a-4c24-8aea-7cbe38bb227b",
+  "job": "/workspace/jobs/cb7c254c-a78a-4c24-8aea-7cbe38bb227b",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 7.0,
+  "cost_usd": 0.0606,
+  "cost_snapshot_usd": 0.0606,
+  "peak_prompt_tokens": 66522,
+  "ncalls": 42,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_84ea167c65 role=front picks=['lab-documents-spreadsheets', 'lab-pages-dashboards', 'lab-own-browser'] cost=$0.000632 secs=3.4",
+  "router_picks": [
+   "lab-documents-spreadsheets",
+   "lab-pages-dashboards",
+   "lab-own-browser"
+  ],
+  "tool_counts": {
+   "terminal": 31,
+   "fetch_fetch": 1,
+   "file_editor": 5,
+   "view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 2,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_e58610b4d3",
+    "status": "done",
+    "title": "Census five-city workbook",
+    "model": "lab-anthropic",
+    "result": "All three files are in place. Here's the result.\n\n**Census five-city workbook: done.** The deliverables are in my helper folder, not the requested `out/`. The sandbox denies writes to the parent `out/` from this helper, so I did not work around that. Files are in `/workspace/jobs/cb7c254c-a78a-4c24-8aea-7cbe38bb227b/helpers/73db0d26-c891-4011-b487-63cc75427f38/out/`. Someone with write access need"
+   },
+   {
+    "id": "run_452ef9aa7c",
+    "status": "done",
+    "title": "census-dashboard",
+    "model": "lab-anthropic",
+    "result": "The dashboard is built at `/workspace/jobs/cb7c254c-a78a-4c24-8aea-7cbe38bb227b/helpers/73db0d26-c891-4011-b487-63cc75427f38/helpers/e36f4b07-bbc9-458b-b244-35198e31786f/out/dashboard.html`.\n\n**What it contains**\n- A table with City, Pop 2010, Pop 2020, Land area (sq mi), Growth 2010\u20132020 and Density (2020 people per sq mi). All values come from `work/data.json`.\n- A 2020 population bar chart draw"
+   }
+  ],
+  "started_at": "2026-11-25T16:22:29Z",
+  "finished_at": "2026-11-25T16:29:29Z",
+  "error": ""
+ },
+ {
+  "id": "h3",
+  "run": "run_0a68793006",
+  "cid": "c53c371d-5aec-4ce9-9aeb-6de8ab9ba1ba",
+  "job": "/workspace/jobs/c53c371d-5aec-4ce9-9aeb-6de8ab9ba1ba",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 1.92,
+  "cost_usd": 0.0169,
+  "cost_snapshot_usd": 0.0169,
+  "peak_prompt_tokens": 51806,
+  "ncalls": 11,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_0a68793006 role=front picks=['lab-data-analysis', 'agent-lab-working-method'] cost=$0.000484 secs=2.0",
+  "router_picks": [
+   "lab-data-analysis",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 6,
+   "file_editor": 3
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T16:22:33Z",
+  "finished_at": "2026-11-25T16:24:28Z",
+  "error": ""
+ },
+ {
+  "id": "h4",
+  "run": "run_57f7113973",
+  "cid": "a30aa6d9-1a61-49ed-a0db-1a0fe8a1c2c2",
+  "job": "/workspace/jobs/a30aa6d9-1a61-49ed-a0db-1a0fe8a1c2c2",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 1.87,
+  "cost_usd": 0.0264,
+  "cost_snapshot_usd": 0.0252,
+  "peak_prompt_tokens": 46580,
+  "ncalls": 23,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_57f7113973 role=front picks=['lab-data-analysis', 'lab-unblock-another-way', 'lab-skill-authoring'] cost=$0.000596 secs=3.1",
+  "router_picks": [
+   "lab-data-analysis",
+   "lab-unblock-another-way",
+   "lab-skill-authoring"
+  ],
+  "tool_counts": {
+   "terminal": 16,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 3,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_2d33ff7295",
+    "status": "done",
+    "title": "vendor stock drops",
+    "model": "lab-anthropic",
+    "result": "Both drops are processed, the script and summaries are verified, and the skill is saved as `vendor-legacy-drop`.\n\n**Results (measured, ET, Nov 25 2026)**\n\n| | drop1 (inventory_2026Q3.dbf) | drop2 (tailspin_stock_q4.dbf) |\n|---|---|---|\n| records_in_file | 230 | 175 |\n| deleted | 13 | 10 |\n| active_kept | 185 | 132 |\n| total_qty | 37,562 | 23,849 |\n| inventory_value | 6,188,587.66 | 4,228,445.59 |\n"
+   }
+  ],
+  "started_at": "2026-11-25T16:22:37Z",
+  "finished_at": "2026-11-25T16:24:19Z",
+  "error": ""
+ },
+ {
+  "id": "h5",
+  "run": "run_52f069c7f3",
+  "cid": "bf5c0cd9-2440-405f-bd06-50f0a34b8760",
+  "job": "/workspace/jobs/bf5c0cd9-2440-405f-bd06-50f0a34b8760",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 6.6,
+  "cost_usd": 0.0396,
+  "cost_snapshot_usd": 0.0383,
+  "peak_prompt_tokens": 61866,
+  "ncalls": 23,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_52f069c7f3 role=front picks=['lab-own-browser', 'agent-lab-working-method'] cost=$0.000507 secs=2.6",
+  "router_picks": [
+   "lab-own-browser",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "agent_load_browser": 2,
+   "terminal": 14,
+   "browser_navigate": 4,
+   "file_editor": 4,
+   "browser_wait_for": 1,
+   "browser_take_screenshot": 1,
+   "agent_view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 2
+  },
+  "helpers": [
+   {
+    "id": "run_bc5d11f119",
+    "status": "done",
+    "title": "registry comparison finish",
+    "model": "lab-anthropic",
+    "result": "The registry comparison is mostly done. Five of the six rows are complete, but the axios and express screenshots are missing because npmjs.com blocks the browser.\n\n**Files (in my helper folder, `/workspace/jobs/bf5c0cd9-2440-405f-bd06-50f0a34b8760/helpers/b0c3cce6-c4c0-470b-b142-b90f7def683c/`):**\n- `out/packages.csv`: 6 rows, columns in the requested order.\n- `out/compare.md`: comparison with lin"
+   }
+  ],
+  "started_at": "2026-11-25T16:22:47Z",
+  "finished_at": "2026-11-25T16:25:36Z",
+  "error": ""
+ },
+ {
+  "id": "r1",
+  "run": "run_06714fcdde",
+  "cid": "eddb302b-130b-48b5-90df-b9581513a8e9",
+  "job": "/workspace/jobs/eddb302b-130b-48b5-90df-b9581513a8e9",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.63,
+  "cost_usd": 0.0494,
+  "cost_snapshot_usd": 0.0478,
+  "peak_prompt_tokens": 76831,
+  "ncalls": 26,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_06714fcdde role=front picks=['agent-lab-working-method', 'lab-coding-repos'] cost=$0.000428 secs=1.8",
+  "router_picks": [
+   "agent-lab-working-method",
+   "lab-coding-repos"
+  ],
+  "tool_counts": {
+   "terminal": 15,
+   "file_editor": 6,
+   "agent_task_start": 1,
+   "agent_verify": 4,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_558c1ae96c",
+    "status": "stopped",
+    "title": "tracker live verify",
+    "model": "lab-anthropic",
+    "result": "(helper stopped by its parent)"
+   }
+  ],
+  "started_at": "2026-11-25T16:35:26Z",
+  "finished_at": "2026-11-25T16:38:04Z",
+  "error": ""
+ },
+ {
+  "id": "r2",
+  "run": "run_7c7fe23439",
+  "cid": "997606a9-c09c-4961-9d05-a9e63722cb4b",
+  "job": "/workspace/jobs/997606a9-c09c-4961-9d05-a9e63722cb4b",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 1.25,
+  "cost_usd": 0.0127,
+  "cost_snapshot_usd": 0.0127,
+  "peak_prompt_tokens": 43612,
+  "ncalls": 9,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_7c7fe23439 role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000456 secs=1.8",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 4,
+   "file_editor": 3
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T16:35:30Z",
+  "finished_at": "2026-11-25T16:36:45Z",
+  "error": ""
+ },
+ {
+  "id": "r3",
+  "run": "run_dfa53a720a",
+  "cid": "3558f640-bbac-4b1b-b203-db7ee9688cb9",
+  "job": "/workspace/jobs/3558f640-bbac-4b1b-b203-db7ee9688cb9",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.42,
+  "cost_usd": 0.0395,
+  "cost_snapshot_usd": 0.0395,
+  "peak_prompt_tokens": 74072,
+  "ncalls": 23,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_dfa53a720a role=front picks=['lab-data-analysis', 'agent-lab-working-method'] cost=$0.000481 secs=1.9",
+  "router_picks": [
+   "lab-data-analysis",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 17,
+   "file_editor": 4
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_20be7f2f6e",
+    "status": "done",
+    "title": "project notes analysis",
+    "model": "lab-anthropic",
+    "result": "The project-notes analysis is done. The parser's results hold up under a second, independent computation, and I found no same-date conflicts that change any value.\n\n**Files (in my job folder):**\n- `out/projects.json`\n- `out/projects_timeline.md` (per project, every approved decision applied, with date and file name)\n- Scripts: `make_out.py` (writes the outputs, reuses the parser's event logic) and"
+   }
+  ],
+  "started_at": "2026-11-25T16:35:33Z",
+  "finished_at": "2026-11-25T16:37:58Z",
+  "error": ""
+ },
+ {
+  "id": "r4",
+  "run": "run_5313c66c5e",
+  "cid": "2ede6570-ae51-420d-8eff-99ecea2033cf",
+  "job": "/workspace/jobs/2ede6570-ae51-420d-8eff-99ecea2033cf",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.37,
+  "cost_usd": 0.0331,
+  "cost_snapshot_usd": 0.0331,
+  "peak_prompt_tokens": 55895,
+  "ncalls": 24,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_5313c66c5e role=front picks=['vendor-legacy-drop', 'lab-skill-authoring', 'agent-lab-working-method'] cost=$0.000493 secs=2.1",
+  "router_picks": [
+   "vendor-legacy-drop",
+   "lab-skill-authoring",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 17,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 3,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_5269c6a2a3",
+    "status": "done",
+    "title": "vendor drops 3-5",
+    "model": "lab-anthropic",
+    "result": "All three drops are processed and verified. Outputs are in my helper folder, not the parent job's `out/` as the brief said: I kept writes inside my own folder, so copy them over if you want them in the parent `out/`.\n\n**Summaries**\n\n| Drop | records_in_file | deleted | active_kept | total_qty | inventory_value |\n|---|---|---|---|---|---|\n| 3 (stock_q4_memo) | 160 | 5 | 133 | 26405 | 4210091.87 |\n|"
+   }
+  ],
+  "started_at": "2026-11-25T16:35:37Z",
+  "finished_at": "2026-11-25T16:37:59Z",
+  "error": ""
+ },
+ {
+  "id": "x1",
+  "run": "run_c6a39cbc6b",
+  "cid": "950ab3f6-ae7e-458c-9e4e-843437bf89eb",
+  "job": "/workspace/jobs/950ab3f6-ae7e-458c-9e4e-843437bf89eb",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 6.77,
+  "cost_usd": 0.0941,
+  "cost_snapshot_usd": 0.0866,
+  "peak_prompt_tokens": 84419,
+  "ncalls": 35,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_c6a39cbc6b role=front picks=['agent-lab-working-method', 'lab-coding-repos'] cost=$0.000494 secs=2.1",
+  "router_picks": [
+   "agent-lab-working-method",
+   "lab-coding-repos"
+  ],
+  "tool_counts": {
+   "terminal": 24,
+   "job": 1,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_9904d50433",
+    "status": "done",
+    "title": "cmark converter",
+    "model": "lab-anthropic",
+    "result": "**Pass.** The converter passes all 326 visible examples (100.0%).\n\n**Quality**\n- Per section, all pass: HTML blocks 22/22, Link reference definitions 13/13, List items 24/24, Lists 13/13, Links 45/45, Images 11/11. Every other visible section also passes in full (I only printed the sections above, plus the TOTAL line).\n- This session fixed three bugs. The HTML tag regexes were missing the leading "
+   }
+  ],
+  "started_at": "2026-11-25T16:43:51Z",
+  "finished_at": "2026-11-25T16:45:35Z",
+  "error": ""
+ },
+ {
+  "id": "x2",
+  "run": "run_d41595ef15",
+  "cid": "b5e78d19-86e0-40ec-8cbc-4153a814b2ac",
+  "job": "/workspace/jobs/b5e78d19-86e0-40ec-8cbc-4153a814b2ac",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 1.18,
+  "cost_usd": 0.0188,
+  "cost_snapshot_usd": 0.0188,
+  "peak_prompt_tokens": 54789,
+  "ncalls": 15,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_d41595ef15 role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000419 secs=1.6",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 8,
+   "file_editor": 5
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T16:43:54Z",
+  "finished_at": "2026-11-25T16:45:05Z",
+  "error": ""
+ },
+ {
+  "id": "x3",
+  "run": "run_ac3e14c857",
+  "cid": "65d094c3-860f-4410-8170-2c9d3c99fd4d",
+  "job": "/workspace/jobs/65d094c3-860f-4410-8170-2c9d3c99fd4d",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 3.22,
+  "cost_usd": 0.0437,
+  "cost_snapshot_usd": 0.0437,
+  "peak_prompt_tokens": 71002,
+  "ncalls": 24,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_ac3e14c857 role=front picks=['agent-lab-working-method', 'lab-coding-repos'] cost=$0.00049 secs=2.1",
+  "router_picks": [
+   "agent-lab-working-method",
+   "lab-coding-repos"
+  ],
+  "tool_counts": {
+   "terminal": 13,
+   "file_editor": 5,
+   "agent_checkpoint": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_9cbc9c5f8f",
+    "status": "done",
+    "title": "NWB1 codec",
+    "model": "lab-anthropic",
+    "result": "The NWB1 codec is done and all five files round-trip byte-for-byte. Files are in `/workspace/jobs/65d094c3-860f-4410-8170-2c9d3c99fd4d/helpers/07221b13-460f-4979-8e0f-d0114b3ec68c/out/nwb/`.\n\n**Format summary** (details in `FORMAT.md`)\n- Header: magic `NWB1`, version `0x01`, flags (bit0 = zlib), byte 6 = extension length E (0 in all samples; the decoder skips E bytes).\n- Body: plain payload, or `v"
+   }
+  ],
+  "started_at": "2026-11-25T16:43:58Z",
+  "finished_at": "2026-11-25T16:47:11Z",
+  "error": ""
+ },
+ {
+  "id": "z1",
+  "run": "run_ba8c36a220",
+  "cid": "bd1b2fcf-866c-4e82-ac1f-83b21432759b",
+  "job": "/workspace/jobs/bd1b2fcf-866c-4e82-ac1f-83b21432759b",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 23.27,
+  "cost_usd": 0.0778,
+  "cost_snapshot_usd": 0.0778,
+  "peak_prompt_tokens": 77605,
+  "ncalls": 39,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_ba8c36a220 role=front picks=['agent-lab-working-method', 'lab-coding-repos'] cost=$0.000479 secs=2.0",
+  "router_picks": [
+   "agent-lab-working-method",
+   "lab-coding-repos"
+  ],
+  "tool_counts": {
+   "terminal": 28,
+   "agent_task_start": 1,
+   "file_editor": 4,
+   "agent_verify": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_8471177ee2",
+    "status": "done",
+    "title": "Finish a pure-Python CDCL SAT solver and its benchmark. Job ",
+    "model": "lab-anthropic",
+    "result": "**Result: the solver works and is correct on everything I could check, but it does not meet the 60 s target.** 10 of 13 visible instances finish within 60 s. The three uf250/uf300 instances hit the limit.\n\n**Benchmark (bench3, `out/sat/bench.py`, 60 s limit each, total 237 s):**\n\n| instance | status | verified | time_s |\n|---|---|---|---|\n| php_7_6.cnf | UNSAT | n/a | 0.07 |\n| uf50_0.cnf | UNSAT |"
+   }
+  ],
+  "started_at": "2026-11-25T16:56:15Z",
+  "finished_at": "2026-11-25T17:19:31Z",
+  "error": ""
+ },
+ {
+  "id": "n1",
+  "run": "run_1903e7c93d",
+  "cid": "e848b740-b6ab-492f-bb30-fc6dad105bf5",
+  "job": "/workspace/jobs/e848b740-b6ab-492f-bb30-fc6dad105bf5",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 7.88,
+  "cost_usd": 0.0361,
+  "cost_snapshot_usd": 0.0299,
+  "peak_prompt_tokens": 53017,
+  "ncalls": 18,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_1903e7c93d role=front picks=['lab-own-browser'] cost=$0.000388 secs=1.6",
+  "router_picks": [
+   "lab-own-browser"
+  ],
+  "tool_counts": {
+   "agent_load_browser": 2,
+   "terminal": 12,
+   "browser_navigate": 2,
+   "file_editor": 1,
+   "agent_view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 2
+  },
+  "helpers": [
+   {
+    "id": "run_398fb72f1e",
+    "status": "done",
+    "title": "npm package screenshots and CSV",
+    "model": "lab-anthropic",
+    "result": "The CSV is written, but the npm package-page screenshots failed: npm blocked the browser with a Cloudflare \"Verify you are human\" challenge.\n\n**What I tried for the screenshots**\n- Headless Chromium with `domcontentloaded` (the `browser-shot` default waits for networkidle and timed out): both pages showed \"Performing security verification\" instead of the package page.\n- The job's own desktop brows"
+   }
+  ],
+  "started_at": "2026-11-25T17:38:16Z",
+  "finished_at": "2026-11-25T17:40:29Z",
+  "error": ""
+ },
+ {
+  "id": "f1",
+  "run": "run_da89f1cd36",
+  "cid": "60eacc6f-e41f-456e-839a-ab1a956cfaec",
+  "job": "/workspace/jobs/60eacc6f-e41f-456e-839a-ab1a956cfaec",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 20.38,
+  "cost_usd": 0.048,
+  "cost_snapshot_usd": 0.048,
+  "peak_prompt_tokens": 61231,
+  "ncalls": 29,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_da89f1cd36 role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000481 secs=2.1",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 20,
+   "file_editor": 10
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 1,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_8b6868f4cc",
+    "status": "done",
+    "title": "SAT solver tuning",
+    "model": "lab-anthropic",
+    "result": "The SAT solver is finished, but I could not write it to the requested location. `/workspace/jobs/60eacc6f-e41f-456e-839a-ab1a956cfaec/out/sat/` is owned by the parent job and returned \"Permission denied\". Helper jobs may only write in their own folder, so I did not work around that. The final files are in my folder instead.\n\n**Files (copy into `out/sat/` of the parent job):**\n- `/workspace/jobs/60"
+   }
+  ],
+  "started_at": "2026-11-25T17:38:20Z",
+  "finished_at": "2026-11-25T17:58:43Z",
+  "error": ""
+ },
+ {
+  "id": "n1b",
+  "run": "run_387599ea55",
+  "cid": "b3760573-6836-4c3f-ac8a-0eb16d48059b",
+  "job": "/workspace/jobs/b3760573-6836-4c3f-ac8a-0eb16d48059b",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.0,
+  "cost_usd": 0.0366,
+  "cost_snapshot_usd": 0.0366,
+  "peak_prompt_tokens": 63604,
+  "ncalls": 25,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_387599ea55 role=front picks=['lab-own-browser'] cost=$0.000407 secs=1.6",
+  "router_picks": [
+   "lab-own-browser"
+  ],
+  "tool_counts": {
+   "agent_load_browser": 3,
+   "fetch_fetch": 2,
+   "terminal": 9,
+   "browser_navigate": 6,
+   "agent_view": 4,
+   "browser_take_screenshot": 3,
+   "browser_find": 1,
+   "browser_evaluate": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 1,
+   "agent_load_browser": 3
+  },
+  "helpers": [
+   {
+    "id": "run_53ad2b0851",
+    "status": "done",
+    "title": "npm pages screenshots and CSV",
+    "model": "lab-anthropic",
+    "result": "The npm pages were read in the browser and both screenshots show the real package pages. The CSV is written, but to my helper folder, not the requested `out/`.\n\n**Blocker:** `/workspace/jobs/b3760573-6836-4c3f-ac8a-0eb16d48059b/out/` is not writable from this helper (`Permission denied`). I did not work around it. The deliverables are here instead:\n\n- `/workspace/jobs/b3760573-6836-4c3f-ac8a-0eb16"
+   }
+  ],
+  "started_at": "2026-11-25T17:53:40Z",
+  "finished_at": "2026-11-25T17:55:40Z",
+  "error": ""
+ }
+]

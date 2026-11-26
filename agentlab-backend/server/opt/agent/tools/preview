@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""preview: publish a page/site/dashboard right away and verify it like a user would, in one step.
+
+usage: preview FILE.html|FILE.md [--title "Title"] [--slug slug] [--wait 2]
+  1. publishes with `publish` (re-running with the same --slug updates the same URL) and prints the live URL
+     https://transovo.ai/app/agent-lab/pages/<slug>
+  2. opens that URL in a headless browser (1366x900): HTTP status, page errors, console errors, failed requests,
+     visible text size, number of charts/canvases/tables/images, and saves a full-page screenshot to evidence/
+  Exit 1 if the page fails to load or shows errors. Look at the screenshot before saying done.
+Off switch: /opt/tools/flags/PREVIEW_OFF (then use publish + browser-shot)."""
+import os, re, subprocess, sys, time
+sys.path.insert(0, '/opt/tools')
+
+a = sys.argv[1:]
+if not a or a[0] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+if os.path.exists('/opt/tools/flags/PREVIEW_OFF'):
+    sys.exit('preview is switched off; use publish and browser-shot --url.')
+wait = 2.0
+pub = []
+i = 0
+while i < len(a):
+    if a[i] == '--wait':
+        wait = float(a[i + 1]); i += 2
+    else:
+        pub.append(a[i]); i += 1
+p = subprocess.run(['/workspace/tools/bin/publish'] + pub, capture_output=True, text=True, timeout=120)
+if p.returncode != 0:
+    sys.exit('preview: publish failed: ' + (p.stderr or p.stdout)[-400:])
+slug = (p.stdout.strip().splitlines() or [''])[-1].strip()
+url = f'https://transovo.ai/app/agent-lab/pages/{slug}'
+print(f'Live preview: {url}')
+import evidencelib
+from playwright.sync_api import sync_playwright
+errs, cons, failed = [], [], []
+with sync_playwright() as pw:
+    b = pw.chromium.launch(args=['--no-sandbox', '--disable-dev-shm-usage'])
+    pg = b.new_page(viewport={'width': 1366, 'height': 900})
+    pg.on('pageerror', lambda e: errs.append(str(e)[:200]))
+    pg.on('console', lambda m: cons.append(m.text[:200]) if m.type == 'error' else None)
+    pg.on('requestfailed', lambda r: failed.append(r.url[:120]))
+    status = None
+    for attempt in range(3):
+        try:
+            resp = pg.goto(url, wait_until='networkidle', timeout=45000)
+            status = resp.status if resp else None
+            if status == 200:
+                break
+        except Exception as e:
+            errs.append(f'load: {str(e)[:160]}')
+        time.sleep(2)
+    time.sleep(wait)
+    stats = pg.evaluate("""() => ({text: document.body ? document.body.innerText.length : 0,
+        charts: document.querySelectorAll('canvas, svg.chart, .chart, [id*=chart]').length,
+        tables: document.querySelectorAll('table').length, images: document.querySelectorAll('img').length,
+        broken_images: [...document.querySelectorAll('img')].filter(i => i.complete && i.naturalWidth === 0).length,
+        title: document.title})""")
+    root = evidencelib.job_root() or os.getcwd()
+    d = os.path.join(root, 'evidence')
+    os.makedirs(d, exist_ok=True)
+    shot = os.path.join(d, f'preview-{slug}.png')
+    pg.screenshot(path=shot, full_page=True)
+    b.close()
+print(f"HTTP {status}; title '{stats['title']}'; {stats['text']} chars of text; {stats['charts']} charts, {stats['tables']} tables, "
+      f"{stats['images']} images ({stats['broken_images']} broken)")
+print(f'screenshot: {shot}')
+bad = []
+if status != 200:
+    bad.append(f'HTTP status {status}')
+if errs:
+    bad.append('page errors: ' + ' | '.join(errs[:4]))
+if cons:
+    bad.append('console errors: ' + ' | '.join(cons[:4]))
+if stats['broken_images']:
+    bad.append(f"{stats['broken_images']} broken images")
+if stats['text'] < 50 and not stats['charts']:
+    bad.append('page looks empty')
+if failed:
+    print('failed requests (check if they matter): ' + ', '.join(failed[:5]))
+if bad:
+    print('PROBLEMS:\n- ' + '\n- '.join(bad)); sys.exit(1)
+print('preview: PASS. Look at the screenshot, then send Rick the link.')

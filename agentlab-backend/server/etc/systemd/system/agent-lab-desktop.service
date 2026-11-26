@@ -1,0 +1,19 @@
+[Unit]
+Description=Transovo Agent Lab virtual desktop (Xvfb, Openbox, live view)
+After=network.target
+# Do not order against agent-lab; this service is independent.
+
+[Service]
+Type=simple
+Environment=DISPLAY=:99
+Environment=XAUTHORITY=/opt/agent/desktop/Xauthority
+Environment=DESKTOP_SERVICE_EXEC=1
+# Secrets are read from /opt/agent/.env inside the process, not listed here.
+ExecStart=/opt/agent/ops/desktop/start.sh
+ExecStop=/opt/agent/ops/desktop/stop.sh
+Restart=on-failure
+RestartSec=3
+WorkingDirectory=/opt/agent/ops/desktop
+
+[Install]
+WantedBy=multi-user.target

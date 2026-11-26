@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""forget: permanently delete a fact from long-term memory.   usage: forget <id> [<id> ...]"""
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
+import memlib as m
+
+if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+db = m.connect()
+for raw in sys.argv[1:]:
+    fid = int(raw.lstrip('#'))
+    r = db.execute('SELECT id, bot_id, type, text, created_at FROM facts WHERE id=?', (fid,)).fetchone()
+    if not r: print(f'#{fid}: not found'); continue
+    if r[1] not in m.scopes(): print(f'#{fid}: belongs to another bot; not deleted'); continue
+    db.execute('DELETE FROM facts_vec WHERE rowid=?', (fid,))
+    db.execute('UPDATE facts SET replaced_by=NULL WHERE replaced_by=?', (fid,))
+    db.execute('DELETE FROM facts WHERE id=?', (fid,))
+    print('Forgot', m.fmt(r))
+db.commit()

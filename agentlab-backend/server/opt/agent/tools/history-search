@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""history-search: search and read your own PAST CONVERSATIONS (what Rick asked, what you answered, what you ran).
+
+usage: history-search "query words" [-n 10] [--since DATE] [--until DATE] [--role user|agent|action|summary]
+                                    [--conv ID] [--or]
+       history-search --open CONV_ID [--at SEQ] [-C 8] [--full]   read the conversation around a match
+       history-search --list [--since DATE] [-n 30]                recent conversations with their first request
+DATE: 2026-11-24, today, yesterday, or 7d (= last 7 days). Times are Eastern (ET).
+Every hit prints `conv <id> #<seq>`; pass them to --open to read the messages around it.
+Roles: user = Rick's messages, agent = your replies, action = tool calls (commands, URLs, files),
+summary = context-condensation summaries. Tool OUTPUT is not indexed (too noisy); open the job folder for files.
+Words are matched as keywords (all words must appear; --or for any word). "quoted phrases" work.
+Recent turns appear within about 5 minutes (index refreshed by cron). Secrets are redacted in the index.
+For saved facts and rules use `recall`; this tool is for what was said and done.
+(Operators: history-search --index rebuilds/updates the index; it runs as root from cron.)
+"""
+import glob, json, os, re, sqlite3, sys, time
+from datetime import datetime, timedelta
+
+WS = "/workspace" if os.path.isdir("/workspace/conversations") else "/opt/agent/workspace"
+DB = os.environ.get("AGENT_HISTORY_DB", f"{WS}/memory/history.db")
+CONV = f"{WS}/conversations"
+RUNS_DB = f"{WS}/runs/runs.db"
+UUID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+MAX_TEXT = 20000
+MAX_ACTION = 800
+SKIP_PREFIXES = ("[Clock]", "# Session context")
+
+
+def dash(cid):
+    c = cid.replace("-", "")
+    return f"{c[:8]}-{c[8:12]}-{c[12:16]}-{c[16:20]}-{c[20:]}" if len(c) == 32 else cid
+
+
+def connect(write=False):
+    if write:
+        os.makedirs(os.path.dirname(DB), exist_ok=True)
+        db = sqlite3.connect(DB, timeout=60)
+        db.execute("PRAGMA journal_mode=DELETE")  # readers (the helper, uid 10001) need no write access
+        db.executescript("""
+        CREATE TABLE IF NOT EXISTS files(path TEXT PRIMARY KEY, size INTEGER, mtime REAL);
+        CREATE TABLE IF NOT EXISTS convs(cid TEXT PRIMARY KEY, created TEXT, updated TEXT, working_dir TEXT,
+            run_id TEXT, title TEXT, source TEXT, parent TEXT, first_user TEXT, n INTEGER DEFAULT 0);
+        CREATE TABLE IF NOT EXISTS msgs(id INTEGER PRIMARY KEY, cid TEXT, seq INTEGER, ts TEXT, role TEXT, tool TEXT,
+            text TEXT, UNIQUE(cid, seq));
+        CREATE INDEX IF NOT EXISTS msgs_cid_seq ON msgs(cid, seq);
+        CREATE INDEX IF NOT EXISTS msgs_ts ON msgs(ts);
+        CREATE VIRTUAL TABLE IF NOT EXISTS msgs_fts USING fts5(text, content='msgs', content_rowid='id',
+            tokenize='porter unicode61');
+        CREATE TRIGGER IF NOT EXISTS msgs_ai AFTER INSERT ON msgs BEGIN
+            INSERT INTO msgs_fts(rowid, text) VALUES (new.id, new.text); END;
+        CREATE TRIGGER IF NOT EXISTS msgs_ad AFTER DELETE ON msgs BEGIN
+            INSERT INTO msgs_fts(msgs_fts, rowid, text) VALUES ('delete', old.id, old.text); END;
+        """)
+        return db
+    if not os.path.exists(DB):
+        sys.exit("history-search: the index does not exist yet (it is built by cron every 5 minutes)")
+    return sqlite3.connect(f"file:{DB}?mode=ro", uri=True, timeout=30)
+
+
+# ---------------- indexing (root, cron) ----------------
+def _texts(content):
+    out = []
+    for c in content or []:
+        if isinstance(c, dict) and c.get("type") == "text" and c.get("text"):
+            out.append(c["text"])
+        elif isinstance(c, str):
+            out.append(c)
+    return "\n".join(out)
+
+
+def extract(e):
+    """(role, tool, text) for the events worth searching, else None."""
+    kind, src = e.get("kind"), e.get("source")
+    if kind == "MessageEvent":
+        if src not in ("user", "agent"):
+            return None  # environment messages are the auto-injected session context
+        text = _texts((e.get("llm_message") or {}).get("content"))
+        if not text.strip() or text.lstrip().startswith(SKIP_PREFIXES):
+            return None
+        return ("user" if src == "user" else "agent", None, text[:MAX_TEXT])
+    if kind == "ActionEvent":
+        tool = e.get("tool_name") or ""
+        a = e.get("action") or {}
+        parts = []
+        for k in ("command", "path", "url", "query", "message", "text", "goal", "task", "prompt", "name", "content"):
+            v = a.get(k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v if k != "message" else v[:MAX_TEXT])
+        if tool.startswith(("agent_", "browser_")) or not parts:
+            args = {k: v for k, v in a.items() if k not in ("kind", "file_text", "new_str", "old_str")}
+            if args and not parts:
+                parts.append(json.dumps(args, ensure_ascii=False)[:MAX_ACTION])
+        summ = e.get("summary")
+        if isinstance(summ, str) and summ.strip():
+            parts.insert(0, summ.strip())
+        if not parts:
+            return None
+        text = "\n".join(parts)
+        return ("agent" if tool == "finish" else "action", tool, text[:MAX_TEXT if tool == "finish" else MAX_ACTION])
+    if kind == "Condensation":
+        s = e.get("summary")
+        return ("summary", None, s[:MAX_TEXT]) if isinstance(s, str) and s.strip() else None
+    return None
+
+
+def run_rows():
+    try:
+        db = sqlite3.connect(f"file:{RUNS_DB}?mode=ro", uri=True, timeout=10)
+        rows = db.execute("SELECT conversation_id, id, title, prompt, source, parent_conversation_id FROM runs").fetchall()
+        db.close()
+        return {r[0]: r for r in rows if r[0]}
+    except Exception:
+        return {}
+
+
+def index():
+    sys.path.insert(0, "/opt/agent/ops")
+    try:
+        import redactlib
+        from pathlib import Path
+        secrets = set()
+        for f in ["/opt/agent/.env"] + glob.glob("/opt/agent/secrets/*") + glob.glob("/opt/agent/workspace/secrets/*"):
+            try:
+                lines = open(f).read().splitlines()
+            except OSError:
+                continue
+            for line in lines:
+                k, _, v = line.strip().partition("=")
+                v = v.strip().strip("'\"")
+                if len(v) < 8 or k.startswith("#"):
+                    continue
+                # secret-looking keys, or random-looking values; plain settings (model names, zones) stay searchable
+                if re.search(r"KEY|TOKEN|SECRET|PASS|PWD|AUTH|PROXY|CRED|TOTP|SID|USER", k.upper()) or \
+                        (len(v) >= 16 and re.search(r"\d", v) and re.search(r"[A-Za-z]", v) and " " not in v):
+                    secrets.add(v)
+        secrets = sorted(secrets, key=len, reverse=True)
+
+        def red(t):
+            return _red(t)
+
+        def _red(t):
+            for v in secrets:
+                if v in t:
+                    t = t.replace(v, redactlib.REPLACEMENT)
+            for pat in redactlib.PATTERNS:
+                if pat.groups >= 3:
+                    t = pat.sub(lambda m: m.group(1) + redactlib.REPLACEMENT, t)
+                else:
+                    t = pat.sub(redactlib.REPLACEMENT, t)
+            return t
+    except Exception as ex:
+        print(f"history-search: redactlib unavailable ({ex}); pattern redaction only", file=sys.stderr)
+
+        def red(t):
+            return re.sub(r"(sk-[A-Za-z0-9_-]{16,}|AIza[0-9A-Za-z_-]{20,}|ghp_[A-Za-z0-9]{20,})", "***REDACTED***", t)
+    t0 = time.time()
+    db = connect(write=True)
+    known = {p: (s, m) for p, s, m in db.execute("SELECT path, size, mtime FROM files")}
+    runs = run_rows()
+    added = changed_convs = 0
+    for d in sorted(glob.glob(f"{CONV}/*/")):
+        name = os.path.basename(d.rstrip("/"))
+        cid = dash(name)
+        if not re.fullmatch(UUID, cid):
+            continue
+        evs = glob.glob(f"{d}events/event-*.json")
+        todo = []
+        for f in evs:
+            try:
+                st = os.stat(f)
+            except OSError:
+                continue
+            if known.get(f) != (st.st_size, st.st_mtime):
+                todo.append((f, st))
+        if not todo:
+            continue
+        changed_convs += 1
+        for f, st in sorted(todo):
+            m = re.search(r"event-(\d+)-", os.path.basename(f))
+            seq = int(m.group(1)) if m else 0
+            try:
+                e = json.load(open(f))
+            except Exception:
+                continue
+            got = extract(e)
+            db.execute("DELETE FROM msgs WHERE cid=? AND seq=?", (cid, seq))
+            if got:
+                role, tool, text = got
+                db.execute("INSERT INTO msgs(cid, seq, ts, role, tool, text) VALUES (?,?,?,?,?,?)",
+                           (cid, seq, (e.get("timestamp") or "")[:19], role, tool, red(text)))
+                added += 1
+            db.execute("INSERT OR REPLACE INTO files(path, size, mtime) VALUES (?,?,?)", (f, st.st_size, st.st_mtime))
+        meta = {}
+        try:
+            meta = json.load(open(f"{d}meta.json"))
+        except Exception:
+            pass
+        r = runs.get(cid)
+        span = db.execute("SELECT MIN(ts), MAX(ts), COUNT(*) FROM msgs WHERE cid=?", (cid,)).fetchone()
+        first = db.execute("SELECT text FROM msgs WHERE cid=? AND role='user' ORDER BY seq LIMIT 1", (cid,)).fetchone()
+        db.execute("INSERT OR REPLACE INTO convs(cid, created, updated, working_dir, run_id, title, source, parent, first_user, n)"
+                   " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                   (cid, span[0], span[1], (meta.get("workspace") or {}).get("working_dir"), r[1] if r else None,
+                    red((r[2] or "") if r else ""), r[4] if r else "chat", (r[5] if r else meta.get("parent_conversation_id")),
+                    red((first[0] if first else ((r[3] or "") if r else ""))[:400]), span[2]))
+        db.commit()
+    db.execute("INSERT INTO msgs_fts(msgs_fts) VALUES ('optimize')") if added > 5000 else None
+    db.commit()
+    os.chmod(DB, 0o644)
+    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} history index: {added} messages from {changed_convs} conversations "
+          f"in {time.time() - t0:.1f}s")
+
+
+# ---------------- search / read ----------------
+def parse_date(s, end=False):
+    s = s.strip().lower()
+    now = datetime.now()
+    if s == "today":
+        d = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    elif s == "yesterday":
+        d = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    elif re.fullmatch(r"\d+d", s):
+        d = now - timedelta(days=int(s[:-1]))
+    elif re.fullmatch(r"\d+h", s):
+        d = now - timedelta(hours=int(s[:-1]))
+    else:
+        d = datetime.fromisoformat(s)
+    if end and re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        d += timedelta(days=1)
+    return d.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def et(ts):
+    try:
+        d = datetime.fromisoformat(ts)
+        return d.strftime("%a %b %d %Y %I:%M %p ET").replace(" 0", " ")
+    except Exception:
+        return ts or "?"
+
+
+def fts_query(q, any_word=False):
+    phrases = re.findall(r'"([^"]+)"', q)
+    rest = re.sub(r'"[^"]+"', " ", q)
+    words = [w for w in re.findall(r"[\w'-]+", rest, re.UNICODE) if len(w) > 1]
+    terms = [f'"{p}"' for p in phrases] + ['"' + w.replace('"', "") + '"' for w in words]
+    return (" OR " if any_word else " AND ").join(terms)
+
+
+def label(db, cid):
+    r = db.execute("SELECT title, run_id, source FROM convs WHERE cid=?", (cid,)).fetchone()
+    if not r:
+        return ""
+    bits = [b for b in (r[1], r[2]) if b]
+    t = (r[0] or "").strip().replace("\n", " ")[:70]
+    return f"({', '.join(bits)}{': ' + t if t else ''})"
+
+
+def search(a):
+    n, since, until, role, conv, any_word, q = 10, None, None, None, None, False, []
+    i = 0
+    while i < len(a):
+        x = a[i]
+        if x == "-n": n = int(a[i + 1]); i += 2
+        elif x == "--since": since = parse_date(a[i + 1]); i += 2
+        elif x == "--until": until = parse_date(a[i + 1], end=True); i += 2
+        elif x == "--role": role = a[i + 1]; i += 2
+        elif x == "--conv": conv = a[i + 1].replace("-", ""); i += 2
+        elif x == "--or": any_word = True; i += 1
+        else: q.append(x); i += 1
+    fq = fts_query(" ".join(q), any_word)
+    if not fq:
+        sys.exit("history-search: give some words to search for")
+    db = connect()
+    where, args = ["msgs_fts MATCH ?"], [fq]
+    if since: where.append("m.ts >= ?"); args.append(since)
+    if until: where.append("m.ts < ?"); args.append(until)
+    if role: where.append("m.role = ?"); args.append(role)
+    if conv: where.append("replace(m.cid,'-','') LIKE ?"); args.append(conv + "%")
+    sql = (f"SELECT m.cid, m.seq, m.ts, m.role, m.tool, snippet(msgs_fts, 0, '[', ']', ' ... ', 40) FROM msgs_fts "
+           f"JOIN msgs m ON m.id = msgs_fts.rowid WHERE {' AND '.join(where)} ORDER BY bm25(msgs_fts) * (CASE m.role WHEN 'action' THEN 0.6 ELSE 1.0 END), m.ts DESC LIMIT ?")
+    rows = db.execute(sql, args + [n]).fetchall()
+    if not rows and not any_word and len(q) > 1:
+        print("(no message has all the words; showing messages with any of them)")
+        args[0] = fts_query(" ".join(q), True)
+        rows = db.execute(sql, args + [n]).fetchall()
+    if not rows:
+        print("No matching past messages."); return
+    for cid, seq, ts, r, tool, snip in rows:
+        who = {"user": "Rick", "agent": "you", "action": f"you ran {tool}", "summary": "summary"}.get(r, r)
+        print(f"- {et(ts)}  conv {cid} #{seq}  {label(db, cid)}\n  {who}: {' '.join(snip.split())}")
+    print("\nRead around a hit: history-search --open <conv> --at <seq>")
+
+
+def open_conv(a):
+    cid = a[a.index("--open") + 1].replace("-", "")
+    at = int(a[a.index("--at") + 1].lstrip("#")) if "--at" in a else None
+    ctx = int(a[a.index("-C") + 1]) if "-C" in a else 8
+    full = "--full" in a
+    db = connect()
+    row = db.execute("SELECT cid, created, updated, working_dir FROM convs WHERE replace(cid,'-','') LIKE ?",
+                     (cid + "%",)).fetchone()
+    if not row:
+        sys.exit(f"history-search: no indexed conversation {cid}")
+    cid = row[0]
+    print(f"conv {cid} {label(db, cid)}\n  {et(row[1])} -> {et(row[2])}   job folder: {row[3]}")
+    if at is None:
+        rows = db.execute("SELECT seq, ts, role, tool, text FROM msgs WHERE cid=? ORDER BY seq LIMIT ?", (cid, ctx * 2)).fetchall()
+    else:
+        before = db.execute("SELECT seq, ts, role, tool, text FROM msgs WHERE cid=? AND seq<? ORDER BY seq DESC LIMIT ?",
+                            (cid, at, ctx)).fetchall()[::-1]
+        after = db.execute("SELECT seq, ts, role, tool, text FROM msgs WHERE cid=? AND seq>=? ORDER BY seq LIMIT ?",
+                           (cid, at, ctx + 1)).fetchall()
+        rows = before + after
+    for seq, ts, r, tool, text in rows:
+        who = {"user": "RICK", "agent": "YOU", "action": f"ACTION {tool}", "summary": "SUMMARY"}.get(r, r.upper())
+        t = text if full else (text[:1500] + (" ...[cut; --full shows all]" if len(text) > 1500 else ""))
+        mark = ">>" if at is not None and seq == at else "  "
+        print(f"\n{mark} #{seq} {et(ts)} {who}:\n{t}")
+
+
+def list_convs(a):
+    n = int(a[a.index("-n") + 1]) if "-n" in a else 30
+    since = parse_date(a[a.index("--since") + 1]) if "--since" in a else None
+    db = connect()
+    sql = "SELECT cid, created, updated, source, run_id, title, first_user, n FROM convs"
+    args = []
+    if since:
+        sql += " WHERE updated >= ?"; args.append(since)
+    for cid, c, u, src, rid, title, first, cnt in db.execute(sql + " ORDER BY updated DESC LIMIT ?", args + [n]):
+        t = (title or first or "").strip().replace("\n", " ")[:110]
+        print(f"- {et(u)}  conv {cid}  [{src or 'chat'}{' ' + rid if rid else ''}, {cnt} msgs]  {t}")
+
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ("-h", "--help"):
+        print(__doc__); return
+    if a[0] == "--index":
+        return index()
+    if "--open" in a:
+        return open_conv(a)
+    if "--list" in a:
+        return list_convs(a)
+    search(a)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,16 @@
+---
+name: web-lookups
+description: Look up prices, hotels, maps/directions/places, and flights in the browser (no APIs). Load for price comparison, hotel search, route/place questions, or flight fares.
+---
+# Browser lookups (use the headed browser; desktop-open URL, then browser-shot/read the page)
+Images are blocked and traffic goes through the residential proxy; keep pages few. Cite the URL you read each number from, and say when it was read.
+
+**Prices:** search the product on 2-3 stores with URLs like `https://www.amazon.com/s?k=QUERY`, `https://www.bestbuy.com/site/searchpage.jsp?st=QUERY`, `https://www.walmart.com/search?q=QUERY`, `https://www.ebay.com/sch/i.html?_nkw=QUERY&LH_BIN=1`. Compare total price (shipping, tax note), condition, seller. Price history: `https://camelcamelcamel.com/search?sq=QUERY`.
+
+**Hotels:** `https://www.google.com/travel/hotels/CITY?q=hotels%20in%20CITY&qs=CAESBA...` is fragile; prefer `https://www.booking.com/searchresults.html?ss=CITY&checkin=YYYY-MM-DD&checkout=YYYY-MM-DD&group_adults=2&no_rooms=1` and `https://www.expedia.com/Hotel-Search?destination=CITY&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&adults=2`. Report nightly price, total with taxes if shown, cancellation, rating and review count, distance to the target spot.
+
+**Maps/places:** `https://www.google.com/maps/dir/ORIGIN/DESTINATION/` (add `/data=!4m2!4m1!3e0` for driving, `!3e3` transit); `https://www.google.com/maps/search/QUERY+near+PLACE`. Read distance and time from the left panel text. Hours and ratings are in the place panel.
+
+**Flights:** `https://www.google.com/travel/flights?q=Flights%20from%20JFK%20to%20LAX%20on%202026-12-20%20returning%202026-12-27`. Read the cheapest and best lists; open Price graph / date grid when dates are flexible. Never book; give the user the airline, times, stops, price, and the link.
+
+If a page shows a captcha or consent wall, accept cookies if simple; otherwise see `browser-extras` (captcha) or `handoff`.

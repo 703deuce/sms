@@ -1,0 +1,30 @@
+{
+ "$schema": "https://json-schema.org/draft/2020-12/schema",
+ "$id": "https://transovo.example/schemas/font-catalog.schema.json",
+ "title": "Per-engine font catalog (only fonts that engine really rendered)",
+ "type": "object",
+ "required": [
+  "schema",
+  "engine",
+  "fonts"
+ ],
+ "properties": {
+  "schema": {
+   "const": "transovo.font-catalog/1"
+  },
+  "engine": {
+   "type": "string"
+  },
+  "fonts": {
+   "type": "array",
+   "items": {
+    "type": "object",
+    "required": [
+     "fontId",
+     "assetId",
+     "sha256"
+    ]
+   }
+  }
+ }
+}

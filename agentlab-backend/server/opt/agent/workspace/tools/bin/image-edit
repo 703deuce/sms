@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""image-edit: edit an image with Gemini Nano Banana (gemini-nano-banana-2.1).
+
+usage: image-edit <image> "prompt" [-o out.png] [--ref img] [--size 1K|2K|4K] [--aspect 1:1] [--model MODEL]
+  <image>    the image to edit (required)
+  --ref      extra reference image (repeatable)
+  -o         output path (default: <image-stem>_edit.png)
+Needs GEMINI_API_KEY. Appends a usage line to /workspace/usage/usage.jsonl.
+"""
+import os, sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _image import generate, DEFAULT_MODEL, die
+
+
+def main():
+    args = sys.argv[1:]
+    if not args or args[0] in ("-h", "--help"):
+        print(__doc__)
+        return
+    prompt_parts, refs, out, size, aspect, model, image = [], [], None, "1K", "1:1", DEFAULT_MODEL, None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a in ("-o", "--out"):
+            out = args[i + 1]; i += 2
+        elif a == "--ref":
+            refs.append(args[i + 1]); i += 2
+        elif a == "--size":
+            size = args[i + 1]; i += 2
+        elif a == "--aspect":
+            aspect = args[i + 1]; i += 2
+        elif a == "--model":
+            model = args[i + 1]; i += 2
+        elif a.startswith("-"):
+            die(f"unknown option {a}", "image-edit")
+        elif image is None:
+            image = a; i += 1
+        else:
+            prompt_parts.append(a); i += 1
+    if not image:
+        die("image path is required", "image-edit")
+    if not os.path.exists(image):
+        die(f"not found: {image}", "image-edit")
+    for r in refs:
+        if not os.path.exists(r):
+            die(f"reference not found: {r}", "image-edit")
+    if not out:
+        stem, ext = os.path.splitext(image)
+        out = f"{stem}_edit{ext or '.png'}"
+    generate(" ".join(prompt_parts) or "Edit this image as requested.", [image] + refs, out,
+             size=size, aspect=aspect, model=model, tool="image-edit")
+
+
+if __name__ == "__main__":
+    main()

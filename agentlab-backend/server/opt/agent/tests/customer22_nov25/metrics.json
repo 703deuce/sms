@@ -1,0 +1,1056 @@
+[
+ {
+  "id": "M1",
+  "run": "run_94d39d740c",
+  "cid": "ad99cd46-660e-4f00-b174-8cd139ddaef0",
+  "job": "/workspace/jobs/ad99cd46-660e-4f00-b174-8cd139ddaef0",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 30.58,
+  "cost_usd": 0.0682,
+  "cost_snapshot_usd": 0.0682,
+  "peak_prompt_tokens": 67378,
+  "ncalls": 37,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_94d39d740c role=front picks=['lab-slides-decks', 'lab-orders-subscriptions'] cost=$0.000419 secs=1.9",
+  "router_picks": [
+   "lab-slides-decks",
+   "lab-orders-subscriptions"
+  ],
+  "tool_counts": {
+   "terminal": 28,
+   "fetch_fetch": 2,
+   "agent_view": 1,
+   "file_editor": 4,
+   "view": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_05f9124122",
+    "status": "done",
+    "title": "competitor deck",
+    "model": "lab-anthropic",
+    "result": "The competitor deck is in `out/competitor_deck.pptx`: 7 slides, 16:9 (13.33 \u00d7 7.5 in). I reopened it with python-pptx and rendered every slide to check the layout.\n\n**Slide titles**\n1. AI meeting-notes competitors for small law firms\n2. Why small law firms are a target\n3. General tools: cheap, broad, not built for law\n4. Legal-specific tools: price and integration\n5. What isn't on the price tag\n6."
+   },
+   {
+    "id": "run_4ed72f5897",
+    "status": "done",
+    "title": "competitor-deck",
+    "model": "lab-anthropic",
+    "result": "The competitor deck is built: 7 slides, 16:9 (13.333 \u00d7 7.5 in), saved as `/workspace/jobs/ad99cd46-660e-4f00-b174-8cd139ddaef0/helpers/9d221e72-c544-474b-90e0-02dd57550661/helpers/382e0fe4-cc9b-4690-a363-eda0a336fd01/out/competitor_deck.pptx`.\n\nI placed the file in my own `out/` folder rather than the path in the brief (`.../9d221e72.../out/`), because the visual-owner rules keep output inside my "
+   }
+  ],
+  "started_at": "2026-11-25T18:24:28Z",
+  "finished_at": "2026-11-25T18:55:03Z",
+  "error": ""
+ },
+ {
+  "id": "M2",
+  "run": "run_101832ccaf",
+  "cid": "952fc009-c636-4fb3-9adc-cebc34a3c71f",
+  "job": "/workspace/jobs/952fc009-c636-4fb3-9adc-cebc34a3c71f",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 28.47,
+  "cost_usd": 0.0834,
+  "cost_snapshot_usd": 0.0834,
+  "peak_prompt_tokens": 78342,
+  "ncalls": 51,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_101832ccaf role=front picks=['lab-travel-planning', 'lab-site-lookups', 'lab-local-recommendations'] cost=$0.000433 secs=1.7",
+  "router_picks": [
+   "lab-travel-planning",
+   "lab-site-lookups",
+   "lab-local-recommendations"
+  ],
+  "tool_counts": {
+   "terminal": 36,
+   "file_editor": 5,
+   "view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_a3637d3bd6",
+    "status": "done",
+    "title": "Lisbon trip plan",
+    "model": "lab-anthropic",
+    "result": "This was created by an AI agent (OpenHands) on behalf of Rick James.\n\nThe visual owner has built the phone-friendly HTML page. I've put its file into `out/itinerary.html` unchanged, so the hash now matches the owner's output (`4d84b4a0\u2026`). Its content was not re-checked against `itinerary.md` by me.\n\n**Files:**\n- `/workspace/jobs/952fc009-c636-4fb3-9adc-cebc34a3c71f/helpers/6a711cfa-1a5f-41a7-bb11"
+   },
+   {
+    "id": "run_5696f0b954",
+    "status": "done",
+    "title": "lisbon-itinerary-html",
+    "model": "lab-anthropic",
+    "result": "The mobile-friendly itinerary page is built and saved.\n\n**File:** `/workspace/jobs/952fc009-c636-4fb3-9adc-cebc34a3c71f/helpers/6a711cfa-1a5f-41a7-bb11-39c478a72323/helpers/e0b85dbc-eb00-4337-8fc5-4f1006315536/out/itinerary.html`\n**sha256:** `4d84b4a0aa63cc56dbcf9638e5aa22fe96f06ea6ec03807b08dc3303c9a1ad87` (11,009 bytes)\n\n**What it is:**\n- A single self-contained HTML file with inline CSS only. N"
+   }
+  ],
+  "started_at": "2026-11-25T18:24:31Z",
+  "finished_at": "2026-11-25T18:24:44Z",
+  "error": ""
+ },
+ {
+  "id": "M3",
+  "run": "run_575b4d5211",
+  "cid": "39305be5-2c4c-4557-abc0-96ec0d0a7960",
+  "job": "/workspace/jobs/39305be5-2c4c-4557-abc0-96ec0d0a7960",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 21.72,
+  "cost_usd": 0.0355,
+  "cost_snapshot_usd": 0.0343,
+  "peak_prompt_tokens": 81323,
+  "ncalls": 21,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_575b4d5211 role=front picks=['lab-documents-spreadsheets'] cost=$0.000514 secs=2.6",
+  "router_picks": [
+   "lab-documents-spreadsheets"
+  ],
+  "tool_counts": {
+   "terminal": 15,
+   "file_editor": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_c26c8f9b41",
+    "status": "done",
+    "title": "portland breweries lead list",
+    "model": "lab-anthropic",
+    "result": "The lead list is saved as a 25-row CSV, but it is thin. Most breweries are missing phone, address or taproom data, because their sites blocked the fetches.\n\n**File:** `/workspace/jobs/39305be5-2c4c-4557-abc0-96ec0d0a7960/helpers/a0116b93-ce9d-4304-a763-e496c7a3e008/out/portland_craft_breweries.csv`\n\nI could not write to the path you gave (`.../39305be5-.../out/`), because that folder is outside th"
+   }
+  ],
+  "started_at": "2026-11-25T18:24:35Z",
+  "finished_at": "2026-11-25T18:24:44Z",
+  "error": ""
+ },
+ {
+  "id": "M4",
+  "run": "run_c8f56a1297",
+  "cid": "6603738f-ab01-4e49-844a-c0f41fa93bef",
+  "job": "/workspace/jobs/6603738f-ab01-4e49-844a-c0f41fa93bef",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 5.68,
+  "cost_usd": 0.0402,
+  "cost_snapshot_usd": 0.0356,
+  "peak_prompt_tokens": 73088,
+  "ncalls": 23,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_c8f56a1297 role=front picks=['lab-shopping-research'] cost=$0.000331 secs=1.0",
+  "router_picks": [
+   "lab-shopping-research"
+  ],
+  "tool_counts": {
+   "terminal": 16,
+   "file_editor": 3,
+   "agent_load_browser": 1,
+   "browser_navigate": 1,
+   "fetch_fetch": 5
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 1
+  },
+  "helpers": [
+   {
+    "id": "run_83988c46bf",
+    "status": "done",
+    "title": "robot vacuum comparison",
+    "model": "lab-anthropic",
+    "result": "Research is saved to `out/result.md`, but it is incomplete. Only one of the five candidates has a confirmed price, so I can't give a full cost comparison.\n\n**1. Link checks (HTTP status)**\n- Pass (200): the Amazon listings for the Tapo RV30 Max Plus, Roomba 205 DustCompactor and roborock Q5 Pro+, plus the SharkNinja AV2511AE page, the iRobot Roomba 205 page and the PCMag roundup.\n- Rate-limited (4"
+   }
+  ],
+  "started_at": "2026-11-25T18:24:38Z",
+  "finished_at": "2026-11-25T18:25:06Z",
+  "error": ""
+ },
+ {
+  "id": "M5",
+  "run": "run_27f41e7618",
+  "cid": "4b3b8aac-f23d-4c4e-8ab7-434cff8ad0f1",
+  "job": "/workspace/jobs/4b3b8aac-f23d-4c4e-8ab7-434cff8ad0f1",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 2.68,
+  "cost_usd": 0.0192,
+  "cost_snapshot_usd": 0.0182,
+  "peak_prompt_tokens": 45685,
+  "ncalls": 11,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_27f41e7618 role=front picks=['lab-pages-dashboards', 'lab-publish-pages'] cost=$0.000455 secs=2.5",
+  "router_picks": [
+   "lab-pages-dashboards",
+   "lab-publish-pages"
+  ],
+  "tool_counts": {
+   "terminal": 4,
+   "file_editor": 1,
+   "view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_2dde8dbdc1",
+    "status": "done",
+    "title": "Paws on Pine website",
+    "model": "lab-anthropic",
+    "result": "The Paws on Pine one-page site is built and serving, but it is not in the path you asked for. My sandbox cannot write to `/workspace/jobs/4b3b8aac-f23d-4c4e-8ab7-434cff8ad0f1/out/` (permission denied), so the file is in my helper folder instead.\n\n**Files**\n- Site: `/workspace/jobs/4b3b8aac-f23d-4c4e-8ab7-434cff8ad0f1/helpers/a7f8b1aa-d093-4879-91fe-1d225272d29b/out/index.html` (14.8 KB, single fil"
+   }
+  ],
+  "started_at": "2026-11-25T18:24:48Z",
+  "finished_at": "2026-11-25T18:25:06Z",
+  "error": ""
+ },
+ {
+  "id": "M6",
+  "run": "run_ca0f6f64d8",
+  "cid": "a1ed3a1a-48e6-49fc-a95c-261bdce058d5",
+  "job": "/workspace/jobs/a1ed3a1a-48e6-49fc-a95c-261bdce058d5",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.82,
+  "cost_usd": 0.0109,
+  "cost_snapshot_usd": 0.0109,
+  "peak_prompt_tokens": 40818,
+  "ncalls": 8,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_ca0f6f64d8 role=front picks=['lab-pages-dashboards', 'lab-data-analysis'] cost=$0.000414 secs=1.7",
+  "router_picks": [
+   "lab-pages-dashboards",
+   "lab-data-analysis"
+  ],
+  "tool_counts": {
+   "terminal": 4,
+   "file_editor": 1,
+   "agent_view": 1,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:24:52Z",
+  "finished_at": "2026-11-25T18:25:41Z",
+  "error": ""
+ },
+ {
+  "id": "M7",
+  "run": "run_99e26b5648",
+  "cid": "6360d816-a368-41fd-b259-5bf7f031da54",
+  "job": "/workspace/jobs/6360d816-a368-41fd-b259-5bf7f031da54",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 21.4,
+  "cost_usd": 0.0596,
+  "cost_snapshot_usd": 0.0596,
+  "peak_prompt_tokens": 88898,
+  "ncalls": 27,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_99e26b5648 role=front picks=['lab-documents-spreadsheets', 'lab-writing-editing'] cost=$0.000499 secs=2.3",
+  "router_picks": [
+   "lab-documents-spreadsheets",
+   "lab-writing-editing"
+  ],
+  "tool_counts": {
+   "terminal": 17,
+   "agent_task_start": 1,
+   "agent_checkpoint": 2,
+   "file_editor": 4,
+   "agent_verify": 5,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_85a4801ceb",
+    "status": "done",
+    "title": "Austin coffee trailer business plan",
+    "model": "lab-anthropic",
+    "result": "Austin coffee trailer business plan is done. All four success criteria now PASS in the task record.\n\n**Key numbers (conservative case, assumptions flagged in the files):**\n- Startup total: **$89,845**\n- Loan: $60,000 at 11% over 84 months, payment **$1,027.35/month** (a $50,000 microloan alone would be $856.12)\n- Monthly break-even:\n  - Before loan payment: **1,126 cups / $6,193 sales** (about 47 "
+   }
+  ],
+  "started_at": "2026-11-25T18:24:56Z",
+  "finished_at": "2026-11-25T18:25:06Z",
+  "error": ""
+ },
+ {
+  "id": "M8",
+  "run": "run_72b30d9913",
+  "cid": "ac7ccc8e-51c5-4648-a6de-27bf011ce1aa",
+  "job": "/workspace/jobs/ac7ccc8e-51c5-4648-a6de-27bf011ce1aa",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 21.38,
+  "cost_usd": 0.0238,
+  "cost_snapshot_usd": 0.0185,
+  "peak_prompt_tokens": 45331,
+  "ncalls": 15,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_72b30d9913 role=front picks=['lab-data-analysis'] cost=$0.000436 secs=2.2",
+  "router_picks": [
+   "lab-data-analysis"
+  ],
+  "tool_counts": {
+   "terminal": 7,
+   "agent_checkpoint": 3,
+   "file_editor": 3,
+   "agent_view": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_26925bb261",
+    "status": "done",
+    "title": "NVDA AMD INTC 12-month stock comparison",
+    "model": "lab-anthropic",
+    "result": "The NVDA, AMD and INTC 12-month comparison is done. Files are in my job folder:\n\n- `/workspace/jobs/ac7ccc8e-51c5-4648-a6de-27bf011ce1aa/helpers/161b7487-d728-4374-bf79-4e0c84efd03d/out/analysis.md`\n- `/workspace/jobs/ac7ccc8e-51c5-4648-a6de-27bf011ce1aa/helpers/161b7487-d728-4374-bf79-4e0c84efd03d/out/stock_12m_chart.png`\n\nAlso in `out/`: `prices_12m.csv` (prices) and `key_numbers.csv` (key numbe"
+   }
+  ],
+  "started_at": "2026-11-25T18:24:59Z",
+  "finished_at": "2026-11-25T18:25:24Z",
+  "error": ""
+ },
+ {
+  "id": "M9",
+  "run": "run_4611854845",
+  "cid": "99d6e4a4-1482-4f86-8341-e5e03bd5a0e7",
+  "job": "/workspace/jobs/99d6e4a4-1482-4f86-8341-e5e03bd5a0e7",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 23.87,
+  "cost_usd": 0.0325,
+  "cost_snapshot_usd": 0.0275,
+  "peak_prompt_tokens": 63645,
+  "ncalls": 21,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_4611854845 role=front picks=['lab-job-search', 'lab-documents-spreadsheets'] cost=$0.000357 secs=1.3",
+  "router_picks": [
+   "lab-job-search",
+   "lab-documents-spreadsheets"
+  ],
+  "tool_counts": {
+   "terminal": 16,
+   "agent_search": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_79cd816e22",
+    "status": "done",
+    "title": "remote data engineer jobs",
+    "model": "lab-anthropic",
+    "result": "I found only 6 postings that fit, not 10. The workbook is at `out/data_engineer_remote_jobs.xlsx` (sheet \"Jobs\", 6 data rows). I re-opened it and checked the headers, row count and formulas.\n\n**Jobs (all links returned HTTP 200 on my curl check, read at about 1:46\u20131:48 PM ET on Nov 25):**\n\n1. **Senior Data Engineer, Ads**, Discord. Remote (U.S.). Listed base $196,000\u2013$245,000 USD. Meets 170k: Yes."
+   }
+  ],
+  "started_at": "2026-11-25T18:25:09Z",
+  "finished_at": "2026-11-25T18:25:24Z",
+  "error": ""
+ },
+ {
+  "id": "M10",
+  "run": "run_be2b5b4517",
+  "cid": "707d1eb1-79ad-4680-a100-00c160dfba06",
+  "job": "/workspace/jobs/707d1eb1-79ad-4680-a100-00c160dfba06",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 23.83,
+  "cost_usd": 0.0578,
+  "cost_snapshot_usd": 0.0526,
+  "peak_prompt_tokens": 82734,
+  "ncalls": 31,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_be2b5b4517 role=front picks=['lab-site-lookups'] cost=$0.000352 secs=1.1",
+  "router_picks": [
+   "lab-site-lookups"
+  ],
+  "tool_counts": {
+   "agent_skill_file": 2,
+   "terminal": 16,
+   "finish": 1,
+   "agent_search": 4,
+   "agent_load_browser": 1,
+   "browser_navigate": 1,
+   "fetch_fetch": 3,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 1
+  },
+  "helpers": [
+   {
+    "id": "run_f2561595db",
+    "status": "done",
+    "title": "Columbus home shortlist",
+    "model": "lab-anthropic",
+    "result": "I couldn't finish this to spec. I have 10 verified listings, but no per-listing school notes and no verified school ratings for Worthington or Columbus, and the tradeoff comparison is incomplete.\n\n**Public listing snapshot, checked Wed Nov 25, 2026 about 1:45\u20131:50 PM ET.** This is not advice, and it is not an offer. Each URL was fetched read-only and returned its listing page with status FOR_SALE."
+   }
+  ],
+  "started_at": "2026-11-25T18:25:11Z",
+  "finished_at": "2026-11-25T18:25:24Z",
+  "error": ""
+ },
+ {
+  "id": "C1",
+  "run": "run_4b2caddf24",
+  "cid": "004499ab-0189-427e-a952-a6830587037c",
+  "job": "/workspace/jobs/004499ab-0189-427e-a952-a6830587037c",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.17,
+  "cost_usd": 0.0046,
+  "cost_snapshot_usd": 0.0046,
+  "peak_prompt_tokens": 30310,
+  "ncalls": 3,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_4b2caddf24 role=front picks=['lab-writing-editing'] cost=$0.000368 secs=1.3",
+  "router_picks": [
+   "lab-writing-editing"
+  ],
+  "tool_counts": {
+   "terminal": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:14Z",
+  "finished_at": "2026-11-25T18:25:24Z",
+  "error": ""
+ },
+ {
+  "id": "C2",
+  "run": "run_a096f66a32",
+  "cid": "9d49ceef-8d6a-4d86-970c-29b9744c4410",
+  "job": "/workspace/jobs/9d49ceef-8d6a-4d86-970c-29b9744c4410",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 1.02,
+  "cost_usd": 0.0132,
+  "cost_snapshot_usd": 0.0132,
+  "peak_prompt_tokens": 46422,
+  "ncalls": 11,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_a096f66a32 role=front picks=['lab-data-analysis', 'lab-documents-spreadsheets'] cost=$0.00047 secs=2.0",
+  "router_picks": [
+   "lab-data-analysis",
+   "lab-documents-spreadsheets"
+  ],
+  "tool_counts": {
+   "terminal": 6,
+   "file_editor": 2,
+   "agent_view": 1,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:18Z",
+  "finished_at": "2026-11-25T18:26:19Z",
+  "error": ""
+ },
+ {
+  "id": "C3",
+  "run": "run_f8d199ca23",
+  "cid": "ea76394f-ced0-41f1-98e4-2f342ba592c8",
+  "job": "/workspace/jobs/ea76394f-ced0-41f1-98e4-2f342ba592c8",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 25.05,
+  "cost_usd": 0.0326,
+  "cost_snapshot_usd": 0.0249,
+  "peak_prompt_tokens": 58380,
+  "ncalls": 18,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_f8d199ca23 role=front picks=['lab-attachments'] cost=$0.000487 secs=2.2",
+  "router_picks": [
+   "lab-attachments"
+  ],
+  "tool_counts": {
+   "terminal": 13,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 1,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_7e8a7aed53",
+    "status": "done",
+    "title": "NIST briefing file",
+    "model": "lab-anthropic",
+    "result": "The briefing is written, but not to the path you asked for. The sandbox blocked writes to the front desk's `out/` folder (\"Permission denied\"), so I saved it in my own job folder instead.\n\n**Saved file:** `/workspace/jobs/ea76394f-ced0-41f1-98e4-2f342ba592c8/helpers/cd25512b-b701-4758-87bb-ccda7e496de3/out/nist_ai_rmf_briefing.md` (3,402 bytes, 539 words, non-empty)\n\n**Summary:** One-page NIST AI "
+   }
+  ],
+  "started_at": "2026-11-25T18:25:28Z",
+  "finished_at": "2026-11-25T18:26:19Z",
+  "error": ""
+ },
+ {
+  "id": "C4",
+  "run": "run_1ef9125f80",
+  "cid": "051aa958-db37-4892-8e63-cf3dc8f6eaa9",
+  "job": "/workspace/jobs/051aa958-db37-4892-8e63-cf3dc8f6eaa9",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.5,
+  "cost_usd": 0.0062,
+  "cost_snapshot_usd": 0.0062,
+  "peak_prompt_tokens": 29324,
+  "ncalls": 2,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_1ef9125f80 role=front picks=[] cost=$0.000324 secs=1.0",
+  "router_picks": [],
+  "tool_counts": {},
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:30Z",
+  "finished_at": "2026-11-25T18:26:00Z",
+  "error": ""
+ },
+ {
+  "id": "C5",
+  "run": "run_f763d2810d",
+  "cid": "8f457a8e-456a-49c9-a1c4-e00fa6aeca5a",
+  "job": "/workspace/jobs/8f457a8e-456a-49c9-a1c4-e00fa6aeca5a",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.45,
+  "cost_usd": 0.0073,
+  "cost_snapshot_usd": 0.0073,
+  "peak_prompt_tokens": 34955,
+  "ncalls": 6,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_f763d2810d role=front picks=['lab-coding-repos'] cost=$0.000347 secs=1.2",
+  "router_picks": [
+   "lab-coding-repos"
+  ],
+  "tool_counts": {
+   "terminal": 4
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:33Z",
+  "finished_at": "2026-11-25T18:26:00Z",
+  "error": ""
+ },
+ {
+  "id": "C6",
+  "run": "run_4af48ca7e2",
+  "cid": "39c07fcf-da96-4661-8d1c-7765dca5e34e",
+  "job": "/workspace/jobs/39c07fcf-da96-4661-8d1c-7765dca5e34e",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.72,
+  "cost_usd": 0.0078,
+  "cost_snapshot_usd": 0.0078,
+  "peak_prompt_tokens": 36441,
+  "ncalls": 8,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_4af48ca7e2 role=front picks=['lab-documents-spreadsheets'] cost=$0.000377 secs=1.4",
+  "router_picks": [
+   "lab-documents-spreadsheets"
+  ],
+  "tool_counts": {
+   "terminal": 4,
+   "agent_view": 2,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:36Z",
+  "finished_at": "2026-11-25T18:26:19Z",
+  "error": ""
+ },
+ {
+  "id": "C7",
+  "run": "run_0de4265d05",
+  "cid": "7ae1f5c7-0a83-4f2b-b4f1-7e6d24936f53",
+  "job": "/workspace/jobs/7ae1f5c7-0a83-4f2b-b4f1-7e6d24936f53",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 24.18,
+  "cost_usd": 0.0229,
+  "cost_snapshot_usd": 0.0182,
+  "peak_prompt_tokens": 43078,
+  "ncalls": 13,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_0de4265d05 role=front picks=['lab-documents-spreadsheets', 'lab-writing-editing'] cost=$0.000417 secs=1.8",
+  "router_picks": [
+   "lab-documents-spreadsheets",
+   "lab-writing-editing"
+  ],
+  "tool_counts": {
+   "terminal": 7,
+   "file_editor": 3
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_cead0ddabc",
+    "status": "done",
+    "title": "resume and cover letter",
+    "model": "lab-anthropic",
+    "result": "Both Word files are ready in my job folder, and every check passed.\n\n**Files**\n- `/workspace/jobs/7ae1f5c7-0a83-4f2b-b4f1-7e6d24936f53/helpers/0d0d903b-8624-4a0c-af51-c659fd00d6ac/out/Resume_Tailored.docx`\n- `/workspace/jobs/7ae1f5c7-0a83-4f2b-b4f1-7e6d24936f53/helpers/0d0d903b-8624-4a0c-af51-c659fd00d6ac/out/Cover_Letter.docx`\n\n**Resume changes (facts only from the original)**\n- Summary rewritten"
+   }
+  ],
+  "started_at": "2026-11-25T18:25:45Z",
+  "finished_at": "2026-11-25T18:26:01Z",
+  "error": ""
+ },
+ {
+  "id": "C8",
+  "run": "run_3c38dd97f1",
+  "cid": "25c3bdd9-17b4-4ae0-ae2e-9ff285b29583",
+  "job": "/workspace/jobs/25c3bdd9-17b4-4ae0-ae2e-9ff285b29583",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.8,
+  "cost_usd": 0.0109,
+  "cost_snapshot_usd": 0.0109,
+  "peak_prompt_tokens": 40176,
+  "ncalls": 6,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_3c38dd97f1 role=front picks=['lab-writing-editing', 'lab-documents-spreadsheets'] cost=$0.000387 secs=1.5",
+  "router_picks": [
+   "lab-writing-editing",
+   "lab-documents-spreadsheets"
+  ],
+  "tool_counts": {
+   "file_editor": 2,
+   "terminal": 4,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:48Z",
+  "finished_at": "2026-11-25T18:26:36Z",
+  "error": ""
+ },
+ {
+  "id": "C9",
+  "run": "run_7c5c468815",
+  "cid": "5dca8d4c-57c5-47c4-b179-80df3e1543ab",
+  "job": "/workspace/jobs/5dca8d4c-57c5-47c4-b179-80df3e1543ab",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.48,
+  "cost_usd": 0.0048,
+  "cost_snapshot_usd": 0.0048,
+  "peak_prompt_tokens": 30286,
+  "ncalls": 3,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_7c5c468815 role=front picks=[] cost=$0.000349 secs=1.1",
+  "router_picks": [],
+  "tool_counts": {
+   "terminal": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:50Z",
+  "finished_at": "2026-11-25T18:26:19Z",
+  "error": ""
+ },
+ {
+  "id": "C10",
+  "run": "run_f8186a687a",
+  "cid": "da7c19bf-8d92-4119-a0ed-6ca5b29b22b3",
+  "job": "/workspace/jobs/da7c19bf-8d92-4119-a0ed-6ca5b29b22b3",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 0.43,
+  "cost_usd": 0.0076,
+  "cost_snapshot_usd": 0.0076,
+  "peak_prompt_tokens": 35387,
+  "ncalls": 5,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_f8186a687a role=front picks=['lab-writing-editing'] cost=$0.000414 secs=1.7",
+  "router_picks": [
+   "lab-writing-editing"
+  ],
+  "tool_counts": {
+   "terminal": 1,
+   "file_editor": 2,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [],
+  "started_at": "2026-11-25T18:25:53Z",
+  "finished_at": "2026-11-25T18:26:19Z",
+  "error": ""
+ },
+ {
+  "id": "K1",
+  "run": "run_c67ba47036",
+  "cid": "09edfabe-5a89-4d3a-aa19-4d6ef6f439a8",
+  "job": "/workspace/jobs/09edfabe-5a89-4d3a-aa19-4d6ef6f439a8",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 24.92,
+  "cost_usd": 0.026,
+  "cost_snapshot_usd": 0.026,
+  "peak_prompt_tokens": 49268,
+  "ncalls": 16,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_c67ba47036 role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000404 secs=1.8",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 10,
+   "file_editor": 2,
+   "finish": 1
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_735dedc170",
+    "status": "done",
+    "title": "humanize conjunction",
+    "model": "lab-anthropic",
+    "result": "The `conjunction` option for `natural_list` is done and committed on a local branch. Nothing was pushed and no PR was opened.\n\n**Location**\n- Clone: `/workspace/jobs/09edfabe-5a89-4d3a-aa19-4d6ef6f439a8/helpers/30ce658b-394d-4d7a-a60d-a0011ad35234/repo`\n- Branch `topic/natural-list-conjunction`, commit `7cb304c` on top of `main` (`a950045`).\n- Diff: `/workspace/jobs/09edfabe-5a89-4d3a-aa19-4d6ef6f"
+   }
+  ],
+  "started_at": "2026-11-25T18:26:04Z",
+  "finished_at": "2026-11-25T18:50:59Z",
+  "error": ""
+ },
+ {
+  "id": "K2",
+  "run": "run_05153c3850",
+  "cid": "e2016e4e-3d42-42b8-92e4-131009ca0a29",
+  "job": "/workspace/jobs/e2016e4e-3d42-42b8-92e4-131009ca0a29",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 25.57,
+  "cost_usd": 0.038,
+  "cost_snapshot_usd": 0.0302,
+  "peak_prompt_tokens": 57950,
+  "ncalls": 21,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_05153c3850 role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000304 secs=0.8",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 16
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 1,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_080bb991d3",
+    "status": "done",
+    "title": "humanize fixes",
+    "model": "lab-anthropic",
+    "result": "Both fixes are done and the full suite passes (773 passed, 146 skipped, exit 0). The fixes are uncommitted, as asked, but I made them in a copy of the repo, not the original.\n\n**Where the work is:** the original repo at `/workspace/jobs/e2016e4e-3d42-42b8-92e4-131009ca0a29/repo` is read-only for this worker (`Permission denied` on write). I copied it into my own job folder and made all edits there"
+   }
+  ],
+  "started_at": "2026-11-25T18:26:06Z",
+  "finished_at": "2026-11-25T18:27:40Z",
+  "error": ""
+ },
+ {
+  "id": "K3",
+  "run": "run_33e1427e3f",
+  "cid": "7bab2e20-1950-40fc-a983-8daf835156e8",
+  "job": "/workspace/jobs/7bab2e20-1950-40fc-a983-8daf835156e8",
+  "status": "done",
+  "front_status": "done",
+  "minutes": 26.58,
+  "cost_usd": 0.0479,
+  "cost_snapshot_usd": 0.0407,
+  "peak_prompt_tokens": 65313,
+  "ncalls": 34,
+  "models": [
+   "anthropic/claude-haiku-5-5"
+  ],
+  "router_raw": "run_33e1427e3f role=front picks=['lab-coding-repos', 'agent-lab-working-method'] cost=$0.000308 secs=0.8",
+  "router_picks": [
+   "lab-coding-repos",
+   "agent-lab-working-method"
+  ],
+  "tool_counts": {
+   "terminal": 30,
+   "agent_checkpoint": 1,
+   "file_editor": 2
+  },
+  "new_tools": {
+   "read_section": 0,
+   "--find": 0,
+   "qrun": 0,
+   "--digest": 0,
+   "gitckpt": 0,
+   "plan-check": 0,
+   "save-skill": 0,
+   "helper ": 0,
+   "agent_load_browser": 0
+  },
+  "helpers": [
+   {
+    "id": "run_ae9fa56656",
+    "status": "done",
+    "title": "tabulate issues fix",
+    "model": "lab-anthropic",
+    "result": "All three issues are fixed and committed, but not in the repo you named. The clone at `/workspace/jobs/7bab2e20-1950-40fc-a983-8daf835156e8/repo` is outside my helper folder and returned \"Permission denied\" on write, so I made a fresh clone at `/workspace/jobs/7bab2e20-1950-40fc-a983-8daf835156e8/helpers/0f5e4419-5468-46bb-b0da-d2ef75968365/tabulate-fix` instead. Nothing was pushed.\n\n**Test result"
+   }
+  ],
+  "started_at": "2026-11-25T18:26:09Z",
+  "finished_at": "2026-11-25T18:27:03Z",
+  "error": ""
+ }
+]

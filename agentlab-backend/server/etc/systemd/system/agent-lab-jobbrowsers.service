@@ -1,0 +1,14 @@
+[Unit]
+Description=Agent Lab per-job browsers (job-browser daemon on 127.0.0.1:6073: a private Chromium per run/helper)
+After=docker.service agent-lab-desktop.service agent-lab-egress.service agent-lab-chrome.service
+Wants=agent-lab-egress.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/docker exec agent-lab python3 /opt/tools/job-browser --daemon
+ExecStopPost=-/usr/bin/docker exec agent-lab pkill -f "/opt/tools/job-browser --daemon"
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

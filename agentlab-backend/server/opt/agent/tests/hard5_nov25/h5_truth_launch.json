@@ -1,0 +1,50 @@
+{
+ "reqwest": {
+  "ecosystem": "crates",
+  "version": "0.13.5",
+  "license": "MIT OR Apache-2.0",
+  "repository": "https://github.com/seanmonstar/reqwest",
+  "date": "2026-09-08"
+ },
+ "tokio": {
+  "ecosystem": "crates",
+  "version": "1.54.1",
+  "license": "MIT",
+  "repository": "https://github.com/tokio-rs/tokio",
+  "date": "2026-10-21"
+ },
+ "axios": {
+  "ecosystem": "npm",
+  "version": "1.21.1",
+  "license": "MIT",
+  "repository": "git+https://github.com/axios/axios.git",
+  "date": "2026-11-09"
+ },
+ "express": {
+  "ecosystem": "npm",
+  "version": "5.3.0",
+  "license": "MIT",
+  "repository": "git+https://github.com/expressjs/express.git",
+  "date": "2026-10-09"
+ },
+ "requests": {
+  "ecosystem": "pypi",
+  "version": "2.34.2",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/psf/requests",
+  "date": "2026-05-14",
+  "classifiers": [
+   "License :: OSI Approved :: Apache Software License"
+  ],
+  "license_expression": null
+ },
+ "fastapi": {
+  "ecosystem": "pypi",
+  "version": "0.165.0",
+  "license": "MIT",
+  "repository": "https://github.com/fastapi/fastapi",
+  "date": "2026-11-18",
+  "classifiers": [],
+  "license_expression": "MIT"
+ }
+}

@@ -1,0 +1,142 @@
+#!/usr/bin/env python3
+"""search: free web search through the local SearXNG (bing, brave, google, duckduckgo, wikipedia, youtube).
+
+usage: search "query" [-n 10] [--videos] [--json] [--engines bing,brave] [--time day|week|month|year]
+  --videos   YouTube results (title, url, length, channel) - pass the url to yt-dlp
+  --json     raw JSON results
+If SearXNG errors, is rate-limited or finds nothing, it falls back to Gemini with Google Search
+grounding and prints the cited source URLs (open and read those pages yourself).
+"""
+import json, os, re, sys, urllib.error, urllib.parse, urllib.request
+
+def resolve(url):
+    """Grounding links are redirects; follow them to the real page URL."""
+    try:
+        req = urllib.request.Request(url, method='HEAD', headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=8) as r:
+            return r.geturl()
+    except urllib.error.HTTPError as e:
+        return e.headers.get('Location') or e.geturl() or url
+    except Exception:
+        return url
+
+def gemini_fallback(query, videos, n, why):
+    key = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+    if not key:
+        print(f"No results ({why}) and no GEMINI_API_KEY for fallback."); return
+    ask = (f"Find YouTube videos for: {query}. List each with title and full URL." if videos
+           else f"Search the web for: {query}. Give a short factual summary and name the most relevant pages.")
+    body = json.dumps({'contents': [{'role': 'user', 'parts': [{'text': ask}]}], 'tools': [{'google_search': {}}]}).encode()
+    model = os.environ.get('SEARCH_FALLBACK_MODEL', 'gemini-flash-latest')
+    req = urllib.request.Request(f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                                 data=body, headers={'Content-Type': 'application/json', 'x-goog-api-key': key})
+    try:
+        with urllib.request.urlopen(req, timeout=90) as r:
+            d = json.load(r)
+    except Exception as e:
+        print(f"search: SearXNG gave nothing ({why}) and Gemini fallback failed: {e}", file=sys.stderr); sys.exit(1)
+    try:
+        sys.path.insert(0, '/opt/tools')
+        from usagelib import log_gemini
+        log_gemini('search-fallback', model, d.get('usageMetadata'), grounded=True)
+    except Exception:
+        pass
+    cand = (d.get('candidates') or [{}])[0]
+    text = ''.join(p.get('text', '') for p in cand.get('content', {}).get('parts', []))
+    chunks = cand.get('groundingMetadata', {}).get('groundingChunks', [])
+    print(f"[fallback: Gemini Google Search, because SearXNG {why}]")
+    print("SOURCES (open and read these pages yourself; the summary below may be incomplete):")
+    for k, c in enumerate(chunks[:n], 1):
+        w = c.get('web', {})
+        print(f"{k}. {w.get('title','')}\n   {resolve(w.get('uri',''))}")
+    if not chunks: print("   (no cited sources)")
+    print("SUMMARY:", text.strip()[:2000])
+
+BASE = os.environ.get('SEARXNG_URL', 'http://127.0.0.1:8888')
+
+DOCS_WORDS = set('docs documentation doc api reference manual sdk cli flag flags option options parameter parameters '
+                 'function method class install installation error exception config configuration syntax example '
+                 'examples tutorial guide changelog release version filter command library package module'.split())
+OFFICIAL = ('docs.python.org', 'developer.mozilla.org', 'nodejs.org', 'ffmpeg.org', 'trac.ffmpeg.org', 'docs.github.com',
+            'github.com', 'stackoverflow.com', 'superuser.com', 'unix.stackexchange.com', 'pypi.org', 'npmjs.com',
+            'readthedocs.io', 'readthedocs.org', 'man7.org', 'kernel.org', 'wikipedia.org', 'learn.microsoft.com',
+            'cloud.google.com', 'ai.google.dev', 'developers.google.com', 'docs.aws.amazon.com', 'remotion.dev',
+            'nextjs.org', 'react.dev', 'typescriptlang.org', 'postgresql.org', 'sqlite.org', 'docker.com',
+            'docs.docker.com', 'openai.com', 'anthropic.com', 'apple.com', 'w3.org')
+LOW = ('pinterest.', 'quora.com', 'facebook.com', 'tiktok.com', 'instagram.com', 'scribd.com', 'coursehero.com')
+
+
+def is_docs_query(q):
+    words = set(re.findall(r'[a-z]+', q.lower()))
+    return bool(words & DOCS_WORDS)
+
+
+def rerank(q, results):
+    """Stable re-rank: official/project domains and docs-looking URLs first, content farms last."""
+    words = [w for w in re.findall(r'[a-z0-9]+', q.lower()) if len(w) >= 4]
+    docs = is_docs_query(q)
+    def score(item):
+        i, r = item
+        u = urllib.parse.urlparse(r.get('url') or '')
+        host = u.netloc.lower().split(':')[0]
+        host = host[4:] if host.startswith('www.') else host
+        s = 0.0
+        if any(host == d or host.endswith('.' + d) for d in OFFICIAL):
+            s += 2 if docs else 1
+        label = host.split('.')[-2] if host.count('.') >= 1 else host
+        if any(w in label for w in words):
+            s += 2  # the project's own site (remotion.dev for "remotion ...")
+        if docs and (host.startswith(('docs.', 'developer.', 'developers.', 'api.', 'learn.', 'wiki.'))
+                     or re.search(r'/(docs?|documentation|reference|manual|api|wiki)(/|$)', u.path.lower())):
+            s += 1
+        if any(b in host for b in LOW):
+            s -= 3
+        return (-s, i)
+    return [r for _, r in sorted(enumerate(results), key=score)]
+
+def main():
+    a = sys.argv[1:]
+    if not a or a[0] in ('-h', '--help'): print(__doc__); return
+    n, videos, raw, engines, trange, q = 10, False, False, None, None, []
+    i = 0
+    while i < len(a):
+        if a[i] == '-n': n = int(a[i+1]); i += 2
+        elif a[i] == '--videos': videos = True; i += 1
+        elif a[i] == '--json': raw = True; i += 1
+        elif a[i] == '--engines': engines = a[i+1]; i += 2
+        elif a[i] == '--time': trange = a[i+1]; i += 2
+        else: q.append(a[i]); i += 1
+    params = {'q': ' '.join(q), 'format': 'json'}
+    if videos:
+        params.update(categories='videos', engines=engines or 'youtube')
+    else:
+        docs = is_docs_query(params['q'])
+        params['engines'] = engines or ('bing,yahoo,brave,github,stackoverflow' if docs else 'bing,yahoo,brave')
+    if trange: params['time_range'] = trange
+    try:
+        with urllib.request.urlopen(f"{BASE}/search?{urllib.parse.urlencode(params)}", timeout=30) as r:
+            d = json.load(r)
+    except Exception as e:
+        return gemini_fallback(params['q'], videos, n, f"errored ({e})")
+    # drop results whose URL is broken (e.g. relative redirect links some engines return)
+    res = [r for r in d.get('results', []) if urllib.parse.urlparse(r.get('url') or '').netloc]
+    if not videos:
+        res = rerank(params['q'], res)
+    res = res[:n]
+    if not res:
+        why = 'returned no results' + (f" (blocked: {d.get('unresponsive_engines')})" if d.get('unresponsive_engines') else '')
+        return gemini_fallback(params['q'], videos, n, why)
+    if raw: print(json.dumps(res, indent=1)); return
+    for k, r in enumerate(res, 1):
+        extra = ''
+        if videos:
+            bits = [str(r.get(x)) for x in ('length', 'author', 'publishedDate') if r.get(x)]
+            extra = f"  [{' | '.join(bits)}]" if bits else ''
+        print(f"{k}. {r.get('title','').strip()}{extra}\n   {r.get('url')}")
+        snip = (r.get('content') or '').strip().replace('\n', ' ')
+        if snip: print(f"   {snip[:300]}")
+    for ans in d.get('answers', [])[:2]:
+        print(f"Answer: {ans if isinstance(ans, str) else ans.get('answer', '')}")
+
+if __name__ == '__main__':
+    main()

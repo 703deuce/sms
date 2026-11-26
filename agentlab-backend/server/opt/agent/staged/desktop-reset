@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""desktop-reset: close the desktop browser and clear its open tabs/session (logins are kept).
+Use it when you are done with the desktop, or to start a task from a clean screen."""
+import sys, urllib.request
+if sys.argv[1:] and sys.argv[1] in ('-h', '--help'):
+    print(__doc__); sys.exit(0)
+req = urllib.request.Request('http://127.0.0.1:6070/browser/reset', data=b'{}', method='POST',
+                             headers={'Content-Type': 'application/json'})
+print(urllib.request.urlopen(req, timeout=30).read().decode())
