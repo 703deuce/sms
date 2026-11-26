@@ -178,7 +178,10 @@ export async function saveAttachments(conversationId: string, files: File[]): Pr
 /** The note appended to Rick's message so the agent knows where the files are. */
 export function attachmentNote(paths: string[]): string {
   if (!paths.length) return ''
-  const lines = paths.map((p) => `- ${p}${IMAGE_EXT.test(p) ? ' (image: inspect it with `look`)' : ''}`)
+  const lines = paths.map(
+    (p) =>
+      `- ${p}${IMAGE_EXT.test(p) ? ' (image: inspect it with `look`)' : /voice-memo-[^/]*\.(webm|m4a|ogg)$/i.test(p) ? ' (voice memo from Rick: run `transcribe` on it and treat the words as his message)' : ''}`,
+  )
   return `\n\n[Rick attached ${paths.length === 1 ? 'a file' : `${paths.length} files`}, saved in your job folder]\n${lines.join('\n')}`
 }
 
