@@ -98,21 +98,39 @@ function JobsStrip({ jobs }: { jobs: BackgroundJob[] }) {
   )
 }
 
+function fmtTime(ts: string) {
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+}
+
 function ChatMessage({ item }: { item: Item }) {
   const mine = item.role === 'user'
+  const time = fmtTime(item.ts)
   return (
-    <div className={cn('flex gap-2', mine && 'flex-row-reverse')}>
-      <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
-        {mine ? <User className="size-4" /> : <Bot className="size-4" />}
+    <div className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')} data-role={mine ? 'user' : 'agent'}>
+      {mine ? null : (
+        <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <Bot className="size-4" />
+        </div>
+      )}
+      <div className={cn('flex min-w-0 max-w-[80%] flex-col', mine ? 'items-end' : 'items-start')}>
+        <div
+          className={cn(
+            'min-w-0 max-w-full break-words px-4 py-2.5 text-sm shadow-sm',
+            mine
+              ? 'agent-bubble-user whitespace-pre-wrap rounded-2xl rounded-br-md bg-primary text-primary-foreground'
+              : 'agent-bubble-agent rounded-2xl rounded-bl-md border border-border bg-background text-foreground',
+          )}
+        >
+          {mine ? item.text : <AgentMarkdown text={item.text} />}
+        </div>
+        {time ? <span className="mt-1 px-1 text-[10px] text-muted-foreground">{mine ? 'You' : 'Agent'} · {time}</span> : null}
       </div>
-      <div
-        className={cn(
-          'max-w-[85%] break-words rounded-2xl px-3.5 py-2 text-sm',
-          mine ? 'whitespace-pre-wrap bg-primary text-primary-foreground' : 'bg-muted',
-        )}
-      >
-        {mine ? item.text : <AgentMarkdown text={item.text} />}
-      </div>
+      {mine ? (
+        <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
+          <User className="size-4" />
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -121,14 +139,14 @@ function ToolRow({ title, text, isError, defaultOpen }: { title: string; text?: 
   const body = text?.trim()
   if (!body) {
     return (
-      <div className={cn('ml-9 flex items-center gap-1.5 py-0.5 text-xs text-muted-foreground', isError && 'text-destructive')}>
+      <div className={cn('flex items-center gap-1.5 py-0.5 text-xs text-muted-foreground', isError && 'text-destructive')}>
         <Terminal className="size-3 shrink-0" />
         <span className="truncate">{title}</span>
       </div>
     )
   }
   return (
-    <details className="group ml-9 text-xs" open={defaultOpen}>
+    <details className="group text-xs" open={defaultOpen}>
       <summary
         className={cn(
           'flex cursor-pointer list-none items-center gap-1.5 py-0.5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden',
@@ -144,8 +162,48 @@ function ToolRow({ title, text, isError, defaultOpen }: { title: string; text?: 
   )
 }
 
-function ChatThread({ items }: { items: Item[] }) {
-  const nodes: ReactNode[] = []
+function ActivityGroup({ steps, errors, last, live, children }: { steps: number; errors: number; last: string; live: boolean; children: ReactNode }) {
+  return (
+    <details className="group/act ml-9 max-w-[80%] rounded-xl border border-dashed border-border bg-muted/30 px-3 py-1.5 text-xs" open={live}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-muted-foreground select-none [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="size-3 shrink-0 transition-transform group-open/act:rotate-90" />
+        <Terminal className="size-3 shrink-0" />
+        <span className="shrink-0 font-medium">
+          {live ? 'Working' : 'Worked'} · {steps} step{steps === 1 ? '' : 's'}
+        </span>
+        {errors ? <span className="shrink-0 text-destructive">· {errors} error{errors === 1 ? '' : 's'}</span> : null}
+        {last ? <span className="min-w-0 truncate opacity-80">· {last}</span> : null}
+      </summary>
+      <div className="mt-1.5 flex flex-col gap-0.5 border-l border-border pl-2">{children}</div>
+    </details>
+  )
+}
+
+function ChatThread({ items, live = false }: { items: Item[]; live?: boolean }) {
+  const out: ReactNode[] = []
+  let group: { key: string; rows: ReactNode[]; errors: number; last: string } | null = null
+  const flush = (isLast: boolean) => {
+    if (!group) return
+    out.push(
+      <ActivityGroup key={`act-${group.key}`} steps={group.rows.length} errors={group.errors} last={group.last} live={live && isLast}>
+        {group.rows}
+      </ActivityGroup>,
+    )
+    group = null
+  }
+  const nodes = {
+    push(node: ReactNode, meta?: { tool: boolean; title?: string; error?: boolean; key: string }) {
+      if (meta?.tool) {
+        if (!group) group = { key: meta.key, rows: [], errors: 0, last: '' }
+        group.rows.push(node)
+        if (meta.error) group.errors += 1
+        if (meta.title) group.last = meta.title
+        return
+      }
+      flush(false)
+      out.push(node)
+    },
+  }
   for (let i = 0; i < items.length; i++) {
     const item = items[i]
     if (item.type === 'message') {
@@ -164,11 +222,17 @@ function ChatThread({ items }: { items: Item[] }) {
         const text = [item.text, next.text].filter((s) => s && s.trim()).join('\n\n')
         nodes.push(
           <ToolRow key={item.id} title={title} text={text} isError={next.isError} defaultOpen={item.tool === 'helper' || next.tool === 'helper'} />,
+          { tool: true, title, error: next.isError, key: item.id },
         )
         i += 1
         continue
       }
-      nodes.push(<ToolRow key={item.id} title={item.title || item.tool || 'Tool'} text={item.text} isError={item.isError} />)
+      nodes.push(<ToolRow key={item.id} title={item.title || item.tool || 'Tool'} text={item.text} isError={item.isError} />, {
+        tool: true,
+        title: item.title || item.tool || 'Tool',
+        error: item.isError,
+        key: item.id,
+      })
       continue
     }
     if (item.type === 'observation') {
@@ -181,14 +245,19 @@ function ChatThread({ items }: { items: Item[] }) {
           isError={item.isError}
           defaultOpen={item.tool === 'helper'}
         />,
+        { tool: true, title: item.title ?? 'Output', error: item.isError, key: item.id },
       )
       continue
     }
-    nodes.push(
-      <ToolRow key={item.id} title={item.title || 'Error'} text={item.text} isError />,
-    )
+    nodes.push(<ToolRow key={item.id} title={item.title || 'Error'} text={item.text} isError />, {
+      tool: true,
+      title: item.title || 'Error',
+      error: true,
+      key: item.id,
+    })
   }
-  return <>{nodes}</>
+  flush(true)
+  return <>{out}</>
 }
 
 type TaskCriterion = { id: string; text: string; status: string }
@@ -638,13 +707,13 @@ export function AgentLabChat() {
             </div>
           </div>
           <JobsStrip jobs={jobs} />
-          <div className="flex flex-1 flex-col gap-3 overflow-auto p-4" style={{ maxHeight: '62vh' }}>
+          <div className="flex flex-1 flex-col gap-4 overflow-auto px-4 py-5 sm:px-6" style={{ maxHeight: '62vh' }}>
             {items.length === 0 ? (
               <p className="m-auto max-w-md text-center text-sm text-muted-foreground">
                 {activeId ? 'Loading…' : 'Ask for anything: “Find a 20 second clip of a lighthouse at sunset and make it vertical with a slow push-in.”'}
               </p>
             ) : (
-              <ChatThread items={items} />
+              <ChatThread items={items} live={running} />
             )}
             {running ? (
               <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground">
