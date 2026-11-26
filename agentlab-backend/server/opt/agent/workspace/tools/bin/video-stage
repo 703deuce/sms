@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""video-stage: print the stage pages of a film from scratch, at the stage that needs them, and log the read.
+
+  video-stage <stage> [--job DIR] [--dry]     stages: intake research direction media voice design build sound review finish
+  video-stage build --scene S03 [--again]     only that scene's engine pages + its refs sections, each printed once
+  video-stage --verify [--job DIR]            exit 1 if a film skipped a stage, a plan-picked engine page or refs section
+  video-stage --list                          the stage map
+
+The map is /workspace/skills/lab-video-film/stages.json. "@engines" = the engine pages named in scenes/plan.json
+(scenes[].engine and scenes[].layers[].engine, exact page slugs) plus lab-engine-browser-contract when any of them is a
+browser engine (its page says browser_engine: true). "@type" = plan.json "type" (the type playbook page).
+Structured fields only; no text matching on the brief."""
+import json, os, sys, time
+
+SK = os.environ.get('LAB_SKILLS', '/workspace/skills')
+
+
+def fm_body(slug):
+    p = os.path.join(SK, slug, 'SKILL.md')
+    if not os.path.isfile(p):
+        return None, None
+    t = open(p, encoding='utf-8', errors='replace').read()
+    meta, body = {}, t
+    if t.startswith('---\n'):
+        head, _, body = t[4:].partition('\n---\n')
+        for ln in head.splitlines():
+            k, _, v = ln.partition(':')
+            meta[k.strip()] = v.strip()
+    return meta, body.strip()
+
+
+def job_root(d):
+    d = os.path.abspath(d)
+    cur = d
+    while cur != '/':
+        if os.path.isdir(os.path.join(cur, 'log')) or os.path.isfile(os.path.join(cur, 'scenes', 'plan.json')):
+            return cur
+        cur = os.path.dirname(cur)
+    return d
+
+
+def plan(job):
+    p = os.path.join(job, 'scenes', 'plan.json')
+    try:
+        return json.load(open(p))
+    except Exception:
+        return None
+
+
+def engines(pl, scene=None):
+    out = []
+    for sc in (pl or {}).get('scenes') or []:
+        if not isinstance(sc, dict) or (scene and str(sc.get('id')) != scene):
+            continue
+        for e in [sc.get('engine')] + [l.get('engine') for l in (sc.get('layers') or []) if isinstance(l, dict)]:
+            if isinstance(e, str) and e.startswith('lab-engine-') and e not in out:
+                out.append(e)
+    if any((fm_body(e)[0] or {}).get('browser_engine') == 'true' for e in out):
+        out.append('lab-engine-browser-contract')
+    return out
+
+
+def refs(pl):
+    """Reference sections the plan picked: plan.json "refs": ["lab-engine-x/reference.md#Heading", ...] (exact paths)."""
+    out = []
+    for x in (pl or {}).get('refs') or []:
+        if isinstance(x, str) and '/' in x and x.split('/', 1)[0].startswith(('lab-engine-', 'lab-video-')) and x not in out:
+            out.append(x)
+    return out
+
+
+def ref_text(spec):
+    path, _, sec = spec.partition('#')
+    p = os.path.join(SK, path)
+    if not os.path.isfile(p) or '..' in path:
+        return None
+    t = open(p, encoding='utf-8', errors='replace').read()
+    if not sec:
+        return t.strip() if len(t) <= 8000 else None  # whole reference files only when small; otherwise name a section
+    lines, keep, lvl = t.split('\n'), [], None
+    for ln in lines:
+        h = len(ln) - len(ln.lstrip('#')) if ln.startswith('#') else 0
+        if lvl is None:
+            if h and ln.lstrip('#').strip().lower().startswith(sec.strip().lower()):
+                lvl = h
+                keep.append(ln)
+        else:
+            if h and h <= lvl:
+                break
+            keep.append(ln)
+    return '\n'.join(keep).strip() or None
+
+
+def opened(job, stage):
+    got = set()
+    try:
+        for ln in open(os.path.join(job, 'log', 'read-manifest.jsonl')):
+            try:
+                x = json.loads(ln)
+            except Exception:
+                continue
+            if x.get('via') == 'video-stage' and x.get('stage') == stage:
+                got.add(x.get('skill') if x.get('file') == 'SKILL.md' else f"{x.get('skill')}/{x.get('file')}")
+    except OSError:
+        pass
+    return got
+
+
+def pages(stage, job, scene=None):
+    m = json.load(open(os.path.join(SK, 'lab-video-film', 'stages.json')))
+    if stage not in m:
+        sys.exit(f'video-stage: unknown stage {stage!r}; stages: {", ".join(m)}')
+    pl = plan(job)
+    res, notes = [], []
+    for x in m[stage]:
+        if x == '@engines':
+            es = engines(pl, scene)
+            if scene and not es:
+                notes.append(f'scene {scene!r} has no lab-engine-* engines in scenes/plan.json')
+            elif not es:
+                notes.append('No engines found in scenes/plan.json (scenes[].engine / layers[].engine as lab-engine-* slugs): '
+                             'write the plan first (video-stage direction), then rerun.')
+            res += es
+        elif x == '@type':
+            t = (pl or {}).get('type')
+            if isinstance(t, str) and t.startswith('lab-video-types-'):
+                res.append(t)
+            elif stage != 'intake':
+                notes.append('No "type" in scenes/plan.json: add "type": "lab-video-types-<kind>" (the playbook attached at intake).')
+        else:
+            res.append(x)
+    seen = []
+    return [p for p in res if not (p in seen or seen.append(p))], notes
+
+
+def log(job, stage, rows):
+    f = os.path.join(job, 'log', 'read-manifest.jsonl')
+    os.makedirs(os.path.dirname(f), exist_ok=True)
+    at = time.strftime('%Y-%m-%dT%H:%M:%S%z')
+    with open(f, 'a') as fh:
+        for slug, n in rows:
+            fh.write(json.dumps({'at': at, 'kind': 'stage', 'skill': slug.split('/')[0],
+                                 'file': (slug.split('/', 1)[1] if '/' in slug else 'SKILL.md'),
+                                 'path': f'{SK}/{slug}' if '/' in slug else f'{SK}/{slug}/SKILL.md', 'chars': n,
+                                 'via': 'video-stage', 'stage': stage}) + '\n')
+    try:
+        json.dump({'stage': stage, 'at': at, 'pages': [x for x, _ in rows]}, open(os.path.join(job, 'log', 'stage.json'), 'w'))
+    except OSError:
+        pass
+
+
+def main(a):
+    job = job_root(a[a.index('--job') + 1] if '--job' in a else os.getcwd())
+    if '--list' in a:
+        print(open(os.path.join(SK, 'lab-video-film', 'stages.json')).read())
+        return 0
+    if '--verify' in a:
+        if not plan(job):
+            return 0
+        f = os.path.join(job, 'log', 'read-manifest.jsonl')
+        done = set()
+        try:
+            for ln in open(f):
+                try:
+                    x = json.loads(ln)
+                except Exception:
+                    continue
+                if x.get('via') == 'video-stage':
+                    done.add(x.get('stage'))
+        except OSError:
+            pass
+        got = set()
+        for ln in open(f) if os.path.isfile(f) else []:
+            try:
+                x = json.loads(ln)
+            except Exception:
+                continue
+            if x.get('via') == 'video-stage':
+                got.add(x.get('skill') if x.get('file') == 'SKILL.md' else f"{x.get('skill')}/{x.get('file')}")
+        pl = plan(job)
+        miss = [s for s in ('design', 'build', 'review', 'finish') if s not in done]
+        miss += [f'{e} (engine page)' for e in engines(pl) if e not in got]
+        bad = [r for r in refs(pl) if ref_text(r) is None]
+        miss += [f'{r} (reference section)' for r in refs(pl) if r not in bad and r.partition('#')[0] not in got and r not in got]
+        miss += [f'{r} (no such section: fix the name in scenes/plan.json refs, see the list `video-stage direction` printed)' for r in bad]
+        if miss:
+            print('Film stages or plan-picked pages never opened: ' + ', '.join(miss) + '. Run `video-stage <stage>` for each, '
+                  'apply what it says (review before render), then deliver.')
+            return 1
+        return 0
+    skip = {a[a.index(f) + 1] for f in ('--job', '--scene') if f in a and a.index(f) + 1 < len(a)}
+    st = [x for x in a if not x.startswith('--') and x not in skip]
+    if not st:
+        print(__doc__)
+        return 2
+    stage = st[0]
+    scene = a[a.index('--scene') + 1] if '--scene' in a and a.index('--scene') + 1 < len(a) else None
+    ps, notes = pages(stage, job, scene)
+    out, rows = [], []
+    before = opened(job, stage) if (scene and '--again' not in a) else set()
+    for p in ps:
+        if p in before:
+            notes.append(f'{p} was already printed for an earlier scene (it is above; `--again` reprints it)')
+            continue
+        p, _, sec = p.partition('#')  # "slug#Heading": only from that heading on (a re-check at a later stage)
+        meta, body = fm_body(p)
+        if body is not None and sec:
+            i = body.find('\n## ' + sec)
+            body = body[i + 1:] if i >= 0 else body
+        if body is None:
+            notes.append(f'page {p} not found in {SK}')
+            continue
+        out.append(f'#### Stage page `{p}` (folder {SK}/{p}/; reference files via agent_skill_file)\n{body}\n')
+        rows.append((p, len(body)))
+    if stage == 'direction':
+        idx = []
+        for d in sorted(os.listdir(SK)):
+            rp = os.path.join(SK, d, 'reference.md')
+            if d.startswith('lab-engine-') and os.path.isfile(os.path.join(SK, d, 'SKILL.md')) and os.path.isfile(rp):
+                hs = [ln.lstrip('#').strip()[:48] for ln in open(rp, encoding='utf-8', errors='replace')
+                      if ln.startswith('## ')]
+                if hs:
+                    idx.append(f'- {d}/reference.md: ' + ' | '.join(hs))
+        if idx:
+            out.append('#### Reference sections you can name in scenes/plan.json "refs" (heading start after #)\n'
+                       + '\n'.join(idx) + '\n')
+    if stage == 'build':
+        for spec in refs(plan(job)):
+            if scene and (spec.split('/', 1)[0] not in ps or spec in before):
+                continue
+            t = ref_text(spec)
+            if t is None:
+                notes.append(f'reference section {spec!r} not found (use "<page>/reference.md#<heading start>")')
+                continue
+            out.append(f'#### Reference section `{spec}` (picked in scenes/plan.json)\n{t}\n')
+            rows.append((spec, len(t)))
+    txt = f'## Stage `{stage}`: {len(rows)} page(s)\n\n' + '\n'.join(out) + ''.join(f'\nNote: {n}\n' for n in notes)
+    txt += ('\nApply these now. Before leaving this stage add one line per page to log/stages.md: '
+            f'`{stage} | <page> | what you applied`. After a "[Context restored]" message, run `video-stage {stage}` again.'
+            + (' At build, run `video-stage build --scene <id>` as you start each scene: only that scene\'s engine pages '
+               'and sections, each printed once.' if stage == 'build' and not scene else ''))
+    print(txt)
+    print(f'(video-stage: {stage} printed {sum(n for _, n in rows)} chars of pages: {", ".join(p for p, _ in rows)})')
+    if '--dry' not in a and rows:
+        log(job, stage, rows)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))
