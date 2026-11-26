@@ -14,7 +14,7 @@ type ConvInfo = {
 
 export async function GET() {
   try {
-    const page = await agentLabJson<{ items: ConvInfo[] }>('/api/conversations/search?limit=120&sort_order=CREATED_AT_DESC')
+    const page = await agentLabJson<{ items: ConvInfo[] }>('/api/conversations/search?limit=100&sort_order=CREATED_AT_DESC')
     const conversations = page.items
       .filter((c) => String(c.tags?.source ?? '') !== 'runner-helper')
       .slice(0, 50)
