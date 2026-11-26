@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bell, Bot, ChevronRight, FileText, Flag, KeyRound, Loader2, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { Bell, Bot, ChevronRight, FileText, Flag, KeyRound, Loader2, Mic, Monitor, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
 import {
   HandoffNotice,
@@ -132,6 +132,49 @@ function ChatMessage({ item }: { item: Item }) {
         </div>
       ) : null}
     </div>
+  )
+}
+
+function VoiceButton({ onRecorded, disabled }: { onRecorded: (file: File) => void; disabled?: boolean }) {
+  const [rec, setRec] = useState<MediaRecorder | null>(null)
+  const [secs, setSecs] = useState(0)
+  useEffect(() => {
+    if (!rec) return
+    const t = setInterval(() => setSecs((n) => n + 1), 1000)
+    return () => clearInterval(t)
+  }, [rec])
+  const start = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const type = ['audio/webm', 'audio/mp4', 'audio/ogg'].find((t) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(t)) ?? ''
+      const mr = new MediaRecorder(stream, type ? { mimeType: type } : undefined)
+      const chunks: Blob[] = []
+      mr.ondataavailable = (e) => {
+        if (e.data.size) chunks.push(e.data)
+      }
+      mr.onstop = () => {
+        stream.getTracks().forEach((tr) => tr.stop())
+        const mime = mr.mimeType || type || 'audio/webm'
+        const ext = mime.includes('mp4') ? 'm4a' : mime.includes('ogg') ? 'ogg' : 'webm'
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+        if (chunks.length) onRecorded(new File(chunks, `voice-memo-${stamp}.${ext}`, { type: mime }))
+        setRec(null)
+      }
+      mr.start()
+      setSecs(0)
+      setRec(mr)
+    } catch {
+      alert('Microphone permission is needed to record a voice memo.')
+    }
+  }
+  return rec ? (
+    <Button size="icon" variant="destructive" onClick={() => rec.stop()} aria-label="Stop recording" title="Stop and attach the voice memo">
+      <span className="text-[10px] tabular-nums">{secs}s</span>
+    </Button>
+  ) : (
+    <Button size="icon" variant="ghost" disabled={disabled} onClick={() => void start()} aria-label="Record a voice memo" title="Record a voice memo">
+      <Mic />
+    </Button>
   )
 }
 
@@ -751,6 +794,7 @@ export function AgentLabChat() {
             <Button size="icon" variant="ghost" onClick={() => fileInput.current?.click()} aria-label="Attach files" title="Attach files or images">
               <Paperclip />
             </Button>
+            <VoiceButton disabled={sending} onRecorded={(f) => setAttachments((a) => [...a, f].slice(0, 20))} />
             <Textarea
               onPaste={(e) => {
                 const pasted = Array.from(e.clipboardData.files ?? [])
