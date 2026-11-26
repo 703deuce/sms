@@ -110,3 +110,12 @@
 .agent-md .hljs-class .hljs-title { color: color-mix(in oklab, #26c 50%, currentColor); }
 .dark .agent-md .hljs-type,
 .dark .agent-md .hljs-class .hljs-title { color: color-mix(in oklab, #8af 50%, currentColor); }
+
+/* Chat bubbles (Nov 26): readable markdown inside agent bubbles */
+.agent-bubble-agent .agent-md strong { font-weight: 650; }
+.agent-bubble-agent .agent-md a { font-weight: 500; }
+.agent-bubble-agent .agent-md th { background: color-mix(in oklab, currentColor 6%, transparent); }
+.agent-bubble-agent .agent-md pre { margin-left: -0.25rem; margin-right: -0.25rem; }
+.agent-bubble-agent .agent-md h1,
+.agent-bubble-agent .agent-md h2,
+.agent-bubble-agent .agent-md h3 { margin-top: 0.9em; }
