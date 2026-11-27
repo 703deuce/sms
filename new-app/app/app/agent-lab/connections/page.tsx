@@ -10,7 +10,7 @@ export default function AgentLabConnectionsPage() {
       <PageHeader
         icon={Plug}
         title="Connections"
-        description="Tell the agent to use any of these apps and it'll send you a secure link to connect."
+        description="Connect an app here and the agent can use it in chat. One-click apps open a sign-in tab; API-key apps ask for the key on this page."
         breadcrumbs={[
           { label: 'Agent Lab', href: '/app/agent-lab' },
           { label: 'Connections' },
