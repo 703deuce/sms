@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -54,6 +54,10 @@ type AuthField = {
 type ConnectedMap = Record<string, { status?: string; connected_at?: string | null }>
 
 const DATA = catalog as Catalog
+const PAGE_SIZE = 60
+const OAUTH_BANNER_MS = 90_000
+/** Third-party catalog logos 404 / fail SSL often and spam the console. Only auto-load hosts we trust. */
+const LOGO_HOSTS = new Set(['logos.composio.dev', 'cdn.jsdelivr.net'])
 
 const TYPE_FILTERS: { id: 'all' | 'one_click' | 'api_key' | 'no_auth' | 'connected'; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -63,14 +67,9 @@ const TYPE_FILTERS: { id: 'all' | 'one_click' | 'api_key' | 'no_auth' | 'connect
   { id: 'connected', label: 'Connected' },
 ]
 
-function matchesType(
-  app: CatalogApp,
-  filter: (typeof TYPE_FILTERS)[number]['id'],
-  connected: ConnectedMap,
-) {
-  if (filter === 'all') return true
+function matchesType(app: CatalogApp, filter: (typeof TYPE_FILTERS)[number]['id']) {
+  if (filter === 'all' || filter === 'connected') return true
   if (filter === 'one_click') return app.connect === 'one_click' || app.connect === 'native'
-  if (filter === 'connected') return Boolean(connected[app.slug])
   return app.connect === filter
 }
 
@@ -78,6 +77,24 @@ function labelVariant(kind: ConnectKind): 'default' | 'secondary' | 'outline' | 
   if (kind === 'one_click' || kind === 'native') return 'default'
   if (kind === 'api_key') return 'secondary'
   return 'outline'
+}
+
+function safeLogo(url?: string): string | undefined {
+  if (!url || !url.startsWith('https://')) return undefined
+  try {
+    const host = new URL(url).hostname
+    if (LOGO_HOSTS.has(host)) return url
+  } catch {
+    return undefined
+  }
+  return undefined
+}
+
+function sameConnected(a: ConnectedMap, b: ConnectedMap) {
+  const ak = Object.keys(a)
+  const bk = Object.keys(b)
+  if (ak.length !== bk.length) return false
+  return ak.every((k) => a[k]?.status === b[k]?.status)
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -91,10 +108,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data
 }
 
-function Logo({ app }: { app: CatalogApp }) {
+const Logo = memo(function Logo({ name, slug, logo }: { name: string; slug: string; logo?: string }) {
   const [failed, setFailed] = useState(false)
-  const letter = (app.name || app.slug || '?').trim().charAt(0).toUpperCase()
-  if (!app.logo || failed) {
+  const src = safeLogo(logo)
+  const letter = (name || slug || '?').trim().charAt(0).toUpperCase()
+  if (!src || failed) {
     return (
       <div
         aria-hidden
@@ -105,30 +123,91 @@ function Logo({ app }: { app: CatalogApp }) {
     )
   }
   return (
-    // CSP allows https: images; logos come from logos.composio.dev
+    // CSP allows https: images; we only request trusted logo hosts (see LOGO_HOSTS).
     // eslint-disable-next-line @next/next/no-img-element
     <img
-      src={app.logo}
+      src={src}
       alt=""
       width={40}
       height={40}
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
       className="size-10 shrink-0 rounded-lg bg-muted object-contain"
       onError={() => setFailed(true)}
     />
   )
-}
+})
+
+const AppCard = memo(function AppCard({
+  app,
+  ready,
+  on,
+  busy,
+  onConnect,
+  onDisconnect,
+}: {
+  app: CatalogApp
+  ready: boolean
+  on: boolean
+  busy: boolean
+  onConnect: (app: CatalogApp) => void
+  onDisconnect: (app: CatalogApp) => void
+}) {
+  return (
+    <li className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <Logo name={app.name} slug={app.slug} logo={app.logo} />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="truncate text-sm font-semibold">{app.name}</h3>
+            <Badge variant={labelVariant(app.connect)}>{app.label}</Badge>
+            {app.source === 'native' ? <Badge variant="outline">Built-in</Badge> : null}
+          </div>
+          {app.description ? (
+            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{app.description}</p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {ready ? (
+              <Badge variant="outline">Ready, no setup needed</Badge>
+            ) : on ? (
+              <>
+                <Badge variant="default">Connected</Badge>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onDisconnect(app)}>
+                  {busy ? 'Working…' : 'Disconnect'}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Badge variant="outline">Not connected</Badge>
+                <Button type="button" size="sm" disabled={busy} onClick={() => onConnect(app)}>
+                  {busy ? 'Working…' : 'Connect'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </li>
+  )
+})
 
 export function AgentLabConnections() {
   const [q, setQ] = useState('')
   const [type, setType] = useState<(typeof TYPE_FILTERS)[number]['id']>('all')
   const [category, setCategory] = useState('all')
+  const [visible, setVisible] = useState(PAGE_SIZE)
   const [connected, setConnected] = useState<ConnectedMap>({})
-  const [noAuth, setNoAuth] = useState<Set<string>>(new Set())
+  const [noAuth, setNoAuth] = useState<Set<string>>(() => new Set())
   const [statusError, setStatusError] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [oauthNote, setOauthNote] = useState<string | null>(null)
+  const oauthSlug = useRef<string | null>(null)
+  const oauthTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const oauthPoll = useRef<ReturnType<typeof setInterval> | null>(null)
+  const lastStatusAt = useRef(0)
 
   const [modalApp, setModalApp] = useState<CatalogApp | null>(null)
   const [modalFields, setModalFields] = useState<AuthField[]>([])
@@ -138,14 +217,35 @@ export function AgentLabConnections() {
   const [modalLoading, setModalLoading] = useState(false)
   const [modalSubmitting, setModalSubmitting] = useState(false)
 
-  const refreshStatus = useCallback(async () => {
+  const clearOauthBanner = useCallback(() => {
+    setOauthNote(null)
+    oauthSlug.current = null
+    if (oauthTimer.current) {
+      clearTimeout(oauthTimer.current)
+      oauthTimer.current = null
+    }
+    if (oauthPoll.current) {
+      clearInterval(oauthPoll.current)
+      oauthPoll.current = null
+    }
+  }, [])
+
+  const refreshStatus = useCallback(async (opts?: { force?: boolean }) => {
+    const now = Date.now()
+    if (!opts?.force && now - lastStatusAt.current < 4000) return
+    lastStatusAt.current = now
     try {
       const data = await api<{
         connected?: ConnectedMap
         no_auth_toolkits?: string[]
       }>('/api/agent-lab/connections/connected')
-      setConnected(data.connected || {})
-      setNoAuth(new Set((data.no_auth_toolkits || []).map((s) => s.toLowerCase())))
+      const next = data.connected || {}
+      setConnected((prev) => (sameConnected(prev, next) ? prev : next))
+      const nextNoAuth = data.no_auth_toolkits || []
+      setNoAuth((prev) => {
+        if (prev.size === nextNoAuth.length && nextNoAuth.every((s) => prev.has(s.toLowerCase()))) return prev
+        return new Set(nextNoAuth.map((s) => s.toLowerCase()))
+      })
       setStatusError(null)
     } catch (err) {
       setStatusError(err instanceof Error ? err.message : 'Could not load connection status')
@@ -155,20 +255,31 @@ export function AgentLabConnections() {
   }, [])
 
   useEffect(() => {
-    void refreshStatus()
+    void refreshStatus({ force: true })
     const onFocus = () => {
-      void refreshStatus()
+      void (async () => {
+        await refreshStatus({ force: true })
+        // If the popup is still open, keep the banner. If they came back from a
+        // closed tab (or a _blank tab we cannot watch), clear it.
+        if (oauthSlug.current && !oauthPoll.current) clearOauthBanner()
+      })()
     }
     const onVis = () => {
-      if (document.visibilityState === 'visible') void refreshStatus()
+      if (document.visibilityState === 'visible') onFocus()
     }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
     return () => {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVis)
+      if (oauthTimer.current) clearTimeout(oauthTimer.current)
+      if (oauthPoll.current) clearInterval(oauthPoll.current)
     }
-  }, [refreshStatus])
+  }, [refreshStatus, clearOauthBanner])
+
+  useEffect(() => {
+    setVisible(PAGE_SIZE)
+  }, [q, type, category])
 
   const categories = useMemo(() => {
     const set = new Set<string>()
@@ -180,20 +291,25 @@ export function AgentLabConnections() {
     return [...set].sort((a, b) => a.localeCompare(b))
   }, [])
 
+  // Search/type/category run over the full catalog. `connected` is only a dep when that filter is on,
+  // so a status poll does not rebuild the All / type / category views.
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     return DATA.apps.filter((app) => {
-      if (!matchesType(app, type, connected)) return false
+      if (!matchesType(app, type)) return false
+      if (type === 'connected' && !connected[app.slug]) return false
       if (category !== 'all' && !(app.categories || []).includes(category)) return false
       if (!needle) return true
       const hay = [app.name, app.slug, app.description, ...(app.categories || [])].join(' ').toLowerCase()
       return hay.includes(needle)
     })
-  }, [q, type, category, connected])
+  }, [q, type, category, type === 'connected' ? connected : null])
+
+  const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible])
 
   const grouped = useMemo(() => {
     const map = new Map<string, CatalogApp[]>()
-    for (const app of filtered) {
+    for (const app of shown) {
       const keys = (app.categories || []).filter(Boolean)
       const key = keys[0] || 'Uncategorized'
       const list = map.get(key) || []
@@ -206,80 +322,118 @@ export function AgentLabConnections() {
       return a.localeCompare(b)
     })
     return names.map((name) => ({ name, apps: map.get(name)! }))
-  }, [filtered])
+  }, [shown])
 
   const oneClick = (DATA.counts.one_click || 0) + (DATA.counts.native || 0)
   const connectedCount = Object.keys(connected).length
+  const hasMore = visible < filtered.length
 
-  const isNoAuth = (app: CatalogApp) => app.connect === 'no_auth' || noAuth.has(app.slug)
-  const isConnected = (app: CatalogApp) => Boolean(connected[app.slug])
+  const isNoAuth = useCallback(
+    (app: CatalogApp) => app.connect === 'no_auth' || noAuth.has(app.slug),
+    [noAuth],
+  )
 
-  async function onConnect(app: CatalogApp) {
-    setActionError(null)
-    setOauthNote(null)
-    if (isNoAuth(app)) return
-    if (app.connect === 'api_key') {
-      setModalApp(app)
-      setModalFields([])
-      setModalGuide(null)
-      setModalValues({})
-      setModalError(null)
-      setModalLoading(true)
-      try {
-        const data = await api<{
-          fields?: AuthField[]
-          auth_guide_url?: string | null
-          hint_url?: string | null
-          kind?: string
-        }>(`/api/agent-lab/connections/auth-fields?toolkit=${encodeURIComponent(app.slug)}`)
-        if (data.kind && data.kind !== 'api_key') {
-          setModalApp(null)
-          setActionError('This app does not use an API key. Try Connect again as a one-click sign-in.')
-          return
+  const onConnect = useCallback(
+    async (app: CatalogApp) => {
+      setActionError(null)
+      clearOauthBanner()
+      if (isNoAuth(app)) return
+      if (app.connect === 'api_key') {
+        setModalApp(app)
+        setModalFields([])
+        setModalGuide(null)
+        setModalValues({})
+        setModalError(null)
+        setModalLoading(true)
+        try {
+          const data = await api<{
+            fields?: AuthField[]
+            auth_guide_url?: string | null
+            hint_url?: string | null
+            kind?: string
+          }>(`/api/agent-lab/connections/auth-fields?toolkit=${encodeURIComponent(app.slug)}`)
+          if (data.kind && data.kind !== 'api_key') {
+            setModalApp(null)
+            setActionError('This app does not use an API key. Try Connect again as a one-click sign-in.')
+            return
+          }
+          setModalFields(data.fields || [])
+          setModalGuide(data.auth_guide_url || data.hint_url || null)
+        } catch (err) {
+          setModalError(err instanceof Error ? err.message : 'Could not load sign-in fields')
+        } finally {
+          setModalLoading(false)
         }
-        setModalFields(data.fields || [])
-        setModalGuide(data.auth_guide_url || data.hint_url || null)
-      } catch (err) {
-        setModalError(err instanceof Error ? err.message : 'Could not load sign-in fields')
-      } finally {
-        setModalLoading(false)
+        return
       }
-      return
-    }
-    setBusy(app.slug)
-    try {
-      const data = await api<{ url: string }>('/api/agent-lab/connections/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toolkit: app.slug }),
-      })
-      const popup = window.open(data.url, 'agentlab-connect', 'noopener,noreferrer,width=640,height=720')
-      if (!popup) window.open(data.url, '_blank', 'noopener,noreferrer')
-      setOauthNote(`Finish signing in to ${app.name} in the new tab. This page will update when you come back. You'll see Composio on the sign-in screen — Composio is our secure connection partner.`)
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not start connect')
-    } finally {
-      setBusy(null)
-    }
-  }
+      setBusy(app.slug)
+      try {
+        const data = await api<{ url: string }>('/api/agent-lab/connections/link', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toolkit: app.slug }),
+        })
+        // Don't put noopener in the feature string: that makes the window reference null, so we
+        // couldn't tell when the tab was closed, and a fallback would open a second tab.
+        const popup = window.open(data.url, 'agentlab-connect', 'width=640,height=720')
+        if (!popup) {
+          window.open(data.url, '_blank', 'noopener,noreferrer')
+        } else {
+          try {
+            popup.opener = null
+          } catch {
+            /* ignore */
+          }
+          oauthPoll.current = setInterval(() => {
+            let closed = false
+            try {
+              closed = popup.closed
+            } catch {
+              closed = true
+            }
+            if (closed) {
+              if (oauthPoll.current) {
+                clearInterval(oauthPoll.current)
+                oauthPoll.current = null
+              }
+              void refreshStatus({ force: true }).finally(() => clearOauthBanner())
+            }
+          }, 700)
+        }
+        oauthSlug.current = app.slug
+        setOauthNote(
+          `Finish signing in to ${app.name} in the new tab. This page will update when you come back. You'll see Composio on the sign-in screen — Composio is our secure connection partner.`,
+        )
+        oauthTimer.current = setTimeout(() => clearOauthBanner(), OAUTH_BANNER_MS)
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Could not start connect')
+      } finally {
+        setBusy(null)
+      }
+    },
+    [clearOauthBanner, isNoAuth, refreshStatus],
+  )
 
-  async function onDisconnect(app: CatalogApp) {
-    if (!window.confirm(`Disconnect ${app.name}? The agent will not be able to use it until you connect again.`)) return
-    setActionError(null)
-    setBusy(app.slug)
-    try {
-      await api('/api/agent-lab/connections/disconnect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toolkit: app.slug }),
-      })
-      await refreshStatus()
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Could not disconnect')
-    } finally {
-      setBusy(null)
-    }
-  }
+  const onDisconnect = useCallback(
+    async (app: CatalogApp) => {
+      if (!window.confirm(`Disconnect ${app.name}? The agent will not be able to use it until you connect again.`)) return
+      setActionError(null)
+      setBusy(app.slug)
+      try {
+        await api('/api/agent-lab/connections/disconnect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ toolkit: app.slug }),
+        })
+        await refreshStatus({ force: true })
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Could not disconnect')
+      } finally {
+        setBusy(null)
+      }
+    },
+    [refreshStatus],
+  )
 
   async function submitApiKey() {
     if (!modalApp) return
@@ -302,13 +456,27 @@ export function AgentLabConnections() {
       })
       setModalValues({})
       setModalApp(null)
-      await refreshStatus()
+      await refreshStatus({ force: true })
     } catch (err) {
       setModalError(err instanceof Error ? err.message : 'Could not connect')
     } finally {
       setModalSubmitting(false)
     }
   }
+
+  const moreRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = moreRef.current
+    if (!el || !hasMore) return
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setVisible((n) => n + PAGE_SIZE)
+      },
+      { rootMargin: '400px' },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [hasMore, shown.length])
 
   return (
     <div className="flex flex-col gap-6">
@@ -331,7 +499,7 @@ export function AgentLabConnections() {
       {statusError ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           Could not load connection status: {statusError}{' '}
-          <button type="button" className="underline" onClick={() => void refreshStatus()}>
+          <button type="button" className="underline" onClick={() => void refreshStatus({ force: true })}>
             Retry
           </button>
         </p>
@@ -342,7 +510,12 @@ export function AgentLabConnections() {
         </p>
       ) : null}
       {oauthNote ? (
-        <p className="rounded-lg border bg-muted/50 px-3 py-2 text-sm text-foreground">{oauthNote}</p>
+        <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-foreground">
+          <p>{oauthNote}</p>
+          <button type="button" className="shrink-0 text-xs underline" onClick={clearOauthBanner}>
+            Dismiss
+          </button>
+        </div>
       ) : null}
 
       <div className="flex flex-col gap-3">
@@ -394,7 +567,8 @@ export function AgentLabConnections() {
           </label>
         </div>
         <p className="text-xs text-muted-foreground">
-          Showing {filtered.length.toLocaleString()} of {DATA.included.toLocaleString()} apps
+          Showing {shown.length.toLocaleString()} of {filtered.length.toLocaleString()}
+          {filtered.length !== DATA.included ? ` (filtered from ${DATA.included.toLocaleString()})` : ''} apps
         </p>
       </div>
 
@@ -406,60 +580,27 @@ export function AgentLabConnections() {
             <section key={group.name} className="flex flex-col gap-3">
               <h2 className="text-section-title font-semibold capitalize">{group.name}</h2>
               <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {group.apps.map((app) => {
-                  const ready = isNoAuth(app)
-                  const on = isConnected(app)
-                  return (
-                    <li key={`${app.source}-${app.slug}`} className="rounded-xl border bg-card p-4 shadow-sm">
-                      <div className="flex items-start gap-3">
-                        <Logo app={app} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <h3 className="truncate text-sm font-semibold">{app.name}</h3>
-                            <Badge variant={labelVariant(app.connect)}>{app.label}</Badge>
-                            {app.source === 'native' ? <Badge variant="outline">Built-in</Badge> : null}
-                          </div>
-                          {app.description ? (
-                            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{app.description}</p>
-                          ) : null}
-                          <div className="mt-3 flex flex-wrap items-center gap-2">
-                            {ready ? (
-                              <Badge variant="outline">Ready, no setup needed</Badge>
-                            ) : on ? (
-                              <>
-                                <Badge variant="default">Connected</Badge>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  disabled={busy === app.slug}
-                                  onClick={() => void onDisconnect(app)}
-                                >
-                                  {busy === app.slug ? 'Working…' : 'Disconnect'}
-                                </Button>
-                              </>
-                            ) : (
-                              <>
-                                <Badge variant="outline">Not connected</Badge>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  disabled={busy === app.slug}
-                                  onClick={() => void onConnect(app)}
-                                >
-                                  {busy === app.slug ? 'Working…' : 'Connect'}
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  )
-                })}
+                {group.apps.map((app) => (
+                  <AppCard
+                    key={`${app.source}-${app.slug}`}
+                    app={app}
+                    ready={isNoAuth(app)}
+                    on={Boolean(connected[app.slug])}
+                    busy={busy === app.slug}
+                    onConnect={onConnect}
+                    onDisconnect={onDisconnect}
+                  />
+                ))}
               </ul>
             </section>
           ))}
+          {hasMore ? (
+            <div ref={moreRef} className="flex justify-center">
+              <Button type="button" variant="outline" onClick={() => setVisible((n) => n + PAGE_SIZE)}>
+                Show more ({(filtered.length - visible).toLocaleString()} left)
+              </Button>
+            </div>
+          ) : null}
         </div>
       )}
 
