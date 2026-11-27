@@ -9,7 +9,7 @@ export default function IntegrationsPage() {
     <Page>
       <PageHeader
         title="Integrations"
-        description="Connect calendars, CRMs and payment providers. Credentials are stored encrypted and never shown here."
+        description="Connect calendars, CRMs and payment providers. Credentials are stored encrypted and never shown here. Connections securely handled by Composio. You'll see Composio on the sign-in screen."
       />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Loading integrations…</p>}>
         <IntegrationsCatalog />

@@ -625,6 +625,9 @@ export function AgentLabChat() {
         <Button size="sm" variant={showVault ? 'default' : 'outline'} onClick={() => setShowVault((v) => !v)}>
           <KeyRound /> Vault
         </Button>
+        <a className="text-sm text-muted-foreground underline" href="/app/agent-lab/connections">
+          Connections
+        </a>
         <a className="text-sm text-muted-foreground underline" href="/app/agent-lab/pages" target="_blank" rel="noreferrer">
           Pages
         </a>
