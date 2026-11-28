@@ -124,9 +124,9 @@ export function TeamPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <p className="truncate font-semibold">{a.name}</p>
-                    {a.is_default ? <Pill tone="neutral">Main</Pill> : null}
+                    {a.is_default ? <Pill tone="neutral">Default</Pill> : null}
                   </div>
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{a.role || (a.is_default ? 'Your main agent. Handles anything and coordinates the team.' : 'No role yet')}</p>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{a.role || 'No role yet'}</p>
                 </div>
                 <Pill tone={a.running ? 'success' : 'muted'}>{a.running ? 'Working' : 'Idle'}</Pill>
               </div>
@@ -288,9 +288,7 @@ function AgentDrawer({ id, onClose, onChanged }: { id: string | null; onClose: (
       footer={
         a ? (
           <div className="flex w-full items-center justify-between gap-2">
-            {a.is_default ? (
-              <span className="text-xs text-muted-foreground">Your main agent can't be removed.</span>
-            ) : (
+            <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
                 className="text-destructive"
@@ -301,7 +299,12 @@ function AgentDrawer({ id, onClose, onChanged }: { id: string | null; onClose: (
               >
                 <Trash2 className="size-4" /> Remove agent
               </Button>
-            )}
+              {!a.is_default ? (
+                <Button variant="ghost" disabled={busy} title="Chats, calls and routines not tied to another agent go to the default agent" onClick={() => void run(() => gbPost('team/default', { agent_id: a.id }), 'Default agent changed')}>
+                  Make default
+                </Button>
+              ) : null}
+            </div>
             <Link href={agentHref(a.id)} className={cn(buttonVariants(), 'gap-1.5')}>
               <MessageSquare className="size-4" /> Open chat
             </Link>
