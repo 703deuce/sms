@@ -303,7 +303,9 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
           break
         }
         if (isRunnerInjectedUserMessage(e, text)) {
-          out.push({ ...base, type: 'message', systemNote: true, text: clip(text, 6000) })
+          // Runner-injected mid-run lines (front-desk nudge, job status, helper marks). Hidden on the page;
+          // the agent still sees them in the conversation. Tagged <runner-context> messages already
+          // stripped to empty above and were skipped.
           break
         }
         out.push({ ...base, type: 'message', role: e.source === 'user' ? 'user' : 'agent', text })
@@ -372,8 +374,8 @@ export async function listConversationEvents(id: string, sinceTs?: string | null
   return events
 }
 
-export function userMessage(text: string) {
-  return { role: 'user', content: [{ type: 'text', text }], run: true }
+export function userMessage(text: string, run = true) {
+  return { role: 'user', content: [{ type: 'text', text }], run }
 }
 
 // ---- Conversation settings: saved agent settings + this conversation's job folder for the Agent Lab MCP tools + vault refs ----

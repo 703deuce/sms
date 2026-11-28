@@ -421,6 +421,11 @@ export function AgentLabConnections() {
   const oneClick = (DATA.counts.one_click || 0) + (DATA.counts.native || 0)
   const connectedCount = Object.keys(connected).length
   const hasMore = visible < filtered.length
+  const connectedApps = useMemo(
+    () => DATA.apps.filter((app) => Boolean(connected[app.slug])),
+    [connected],
+  )
+
 
   const isNoAuth = useCallback(
     (app: CatalogApp) => app.connect === 'no_auth' || noAuth.has(app.slug),
@@ -773,9 +778,36 @@ export function AgentLabConnections() {
         </p>
       </div>
 
-      {filtered.length === 0 ? (
+      {type === 'all' && (statusLoading || connectedApps.length) ? (
+        <section className="flex flex-col gap-3" aria-label="Connected apps">
+          <h2 className="text-section-title font-semibold">Connected</h2>
+          {statusLoading && !connectedApps.length ? (
+            <p className="text-sm text-muted-foreground">Loading status…</p>
+          ) : (
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {connectedApps.map((app) => (
+                <AppCard
+                  key={`connected-${app.source}-${app.slug}`}
+                  app={app}
+                  ready={isNoAuth(app)}
+                  on={Boolean(connected[app.slug]) && connected[app.slug]?.status !== 'EXPIRED'}
+                  busy={busy === app.slug}
+                  expired={connected[app.slug]?.status === 'EXPIRED'}
+                  triggers={triggersBy.get(app.slug) || NO_TRIGGERS}
+                  busyTrigger={busyTrigger}
+                  onConnect={onConnect}
+                  onDisconnect={onDisconnect}
+                  onToggleTrigger={onToggleTrigger}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : null}
+
+      {filtered.length === 0 && !(type === 'all' && connectedApps.length) ? (
         <p className="text-sm text-muted-foreground">No apps match those filters.</p>
-      ) : (
+      ) : filtered.length === 0 ? null : (
         <div className="flex flex-col gap-8">
           {grouped.map((group) => (
             <section key={group.name} className="flex flex-col gap-3">

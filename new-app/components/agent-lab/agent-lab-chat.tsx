@@ -539,17 +539,43 @@ export function AgentLabChat() {
   }, [items.length])
 
   /** Quick steering while the agent works: sent as a normal message, read before its next step. */
+  async function recoverAfterSend(id: string, message: string): Promise<boolean> {
+    try {
+      const data = await api<{ items: Item[]; status: string; lastTs: string | null }>(
+        `/api/agent-lab/conversations/${id}`,
+      )
+      lastTs.current = data.lastTs
+      setStatus(data.status)
+      setItems((prev) => {
+        const seen = new Set(prev.map((i) => i.id))
+        const fresh = data.items.filter((i) => !seen.has(i.id))
+        return fresh.length ? [...prev, ...fresh] : prev
+      })
+      const needle = message.trim()
+      return data.items.some(
+        (i) => i.type === 'message' && i.role === 'user' && (i.text === needle || (needle && i.text.startsWith(needle))),
+      )
+    } catch {
+      return false
+    }
+  }
+
   async function steer(text: string) {
     if (!activeId || sending) return
+    const id = activeId
     setSending(true)
     setError(null)
     try {
       const form = new FormData()
       form.append('message', text)
       form.append('timezone', browserTimeZone())
-      await postForm(`/api/agent-lab/conversations/${activeId}/messages`, form)
+      await postForm(`/api/agent-lab/conversations/${id}/messages`, form)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (await recoverAfterSend(id, text)) {
+        setError(null)
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setSending(false)
     }
@@ -558,6 +584,7 @@ export function AgentLabChat() {
   async function send() {
     const message = draft.trim()
     if ((!message && !attachments.length) || sending) return
+    const id = activeId
     setSending(true)
     setError(null)
     try {
@@ -565,19 +592,26 @@ export function AgentLabChat() {
       form.append('message', message)
       form.append('timezone', browserTimeZone())
       for (const f of attachments) form.append('files', f, f.name)
-      if (!activeId) {
-        const { id } = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
-        setActiveId(id)
+      if (!id) {
+        const started = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
+        setActiveId(started.id)
         void loadConversations()
       } else {
-        await postForm(`/api/agent-lab/conversations/${activeId}/messages`, form)
+        await postForm(`/api/agent-lab/conversations/${id}/messages`, form)
         setStatus('running')
       }
       setDraft('')
       setAttachments([])
       if (fileInput.current) fileInput.current.value = ''
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (id && (await recoverAfterSend(id, message))) {
+        setDraft('')
+        setAttachments([])
+        if (fileInput.current) fileInput.current.value = ''
+        setError(null)
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setSending(false)
     }
