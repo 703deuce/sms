@@ -163,6 +163,9 @@ const Logo = memo(function Logo({ name, slug, logo }: { name: string; slug: stri
   )
 })
 
+/** Platform plumbing, not apps a customer uses: the agent's own list leaves them out, so the page does too. */
+const INTERNAL_APPS = new Set(['composio', 'test_app'])
+
 const NO_MISSING: string[] = []
 
 const AppCard = memo(function AppCard({
@@ -424,7 +427,11 @@ export function AgentLabConnections() {
 
   // The app list customers see: the catalog minus apps the host cannot connect. A connected app always stays visible.
   const apps = useMemo(
-    () => DATA.apps.filter((app) => !unavailable.has(app.slug.toLowerCase()) || Boolean(connected[app.slug])),
+    () =>
+      DATA.apps.filter(
+        (app) =>
+          !INTERNAL_APPS.has(app.slug.toLowerCase()) && (!unavailable.has(app.slug.toLowerCase()) || Boolean(connected[app.slug])),
+      ),
     [unavailable, connected],
   )
 
