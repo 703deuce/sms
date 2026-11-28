@@ -180,7 +180,8 @@ export function CallsPage() {
   const { data, error, loading, reload } = usePolled<CallsDoc>(gbUrl(`calls?kind=all&limit=${CALLS_LIMIT}`), 30_000)
   const [open, setOpen] = useState<string | null>(null)
   const [filter, setFilter] = useState<CallFilter>('all')
-  const items = data?.items ?? []
+  const scope = useAgentScope()
+  const items = (data?.items ?? []).filter((c) => inAgentScope(c, scope.agentId))
   const incoming = items.filter((c) => callDirection(c) === 'incoming')
   const outgoing = items.filter((c) => callDirection(c) === 'outgoing')
   const shown = filter === 'incoming' ? incoming : filter === 'outgoing' ? outgoing : items
@@ -213,7 +214,7 @@ export function CallsPage() {
   const avg = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0
 
   return (
-    <OpsPage icon={Phone} title="Calls" description="Incoming calls to your AI receptionist and outgoing calls your agent placed: who called, when, how long, a summary or transcript, and how each one ended.">
+    <OpsPage agentScoped icon={Phone} title="Calls" description="Incoming calls to your AI receptionist and outgoing calls your agent placed: who called, when, how long, a summary or transcript, and how each one ended.">
       {loading && !data ? (
         <OpsLoading />
       ) : items.length === 0 ? (
@@ -943,7 +944,9 @@ export function FilesPage() {
 export function MemoryPage() {
   const knowledge = usePolled<{ total?: number; items: KnowledgeItem[] }>(gbUrl('knowledge?limit=100'), 60_000)
   const skills = usePolled<{ items: Skill[] }>(gbUrl('skills'), 60_000)
-  const mem = knowledge.data?.items ?? []
+  const scope = useAgentScope()
+  // An agent's memory view is its own facts plus the ones shared by every agent.
+  const mem = (knowledge.data?.items ?? []).filter((k) => k.agent_id === 'shared' || inAgentScope(k, scope.agentId))
   const sk = skills.data?.items ?? []
   const memUnavailable = !knowledge.data && !!knowledge.error
   const skUnavailable = !skills.data && !!skills.error
@@ -957,6 +960,7 @@ export function MemoryPage() {
 
   return (
     <OpsPage
+      agentScoped
       icon={Brain}
       title="Memory & skills"
       description="What your agent remembers about you, and the skills it can use. Change either one by asking in chat — this page doesn't rename or overwrite what's stored."

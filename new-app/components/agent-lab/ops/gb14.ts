@@ -84,6 +84,9 @@ export type Call = {
   texts_sent?: number | null
   booked?: boolean | null
   needs_you?: boolean | null
+  /** GB-18: the agent that took or placed the call (additive). */
+  agent_id?: string | null
+  agent_name?: string | null
 }
 
 export type CallsDoc = {
@@ -98,6 +101,9 @@ export type KnowledgeItem = {
   text: string
   source?: string | null
   created_at?: number
+  /** GB-18: whose memory this is: an agent id, or 'shared' for facts every agent sees (additive). */
+  agent_id?: string | null
+  agent_name?: string | null
 }
 
 export type Skill = {
