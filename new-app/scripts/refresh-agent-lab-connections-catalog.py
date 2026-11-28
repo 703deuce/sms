@@ -83,6 +83,10 @@ def classify(it):
         return 'no_auth'
     if set(schemes) & KEY_SCHEMES:
         return 'api_key'
+    if 'DCR_OAUTH' in schemes:
+        return 'one_click'   # GB-8: Composio registers the OAuth client dynamically; the user just signs in
+    if 'S2S_OAUTH2' in schemes:
+        return 'api_key'     # GB-8: client ID and secret (and any instance field) pasted by the customer
     return 'excluded'
 
 
@@ -143,9 +147,9 @@ def main():
         'counts': counts,
         'excluded_scheme_groups': excluded_kinds,
         'notes': (
-            'Included: Composio-managed OAuth (one_click), unmanaged API_KEY/BEARER_TOKEN/BASIC (api_key), '
+            'Included: Composio-managed OAuth and DCR OAuth (one_click), API_KEY/BEARER_TOKEN/BASIC and S2S client-credentials (api_key), '
             'no-auth toolkits, and AgentLab native connectors. '
-            'Excluded: unmanaged OAuth/DCR/SAML toolkits that would need our own app registration. '
+            'Excluded: OAuth-only or SAML toolkits with no Composio sign-in app and no key option. '
             'Native slugs that also exist in Composio (calendly, salesforce, zoho) are listed once as native.'
         ),
         'apps': apps,

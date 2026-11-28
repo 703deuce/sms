@@ -704,9 +704,9 @@ export function AgentLabConnections() {
           sent to the agent host and never shown in the address bar. Apps that need no setup are marked Ready.
         </p>
         <p>
-          {DATA.included.toLocaleString()} apps from a live catalog of {DATA.catalog_total.toLocaleString()} toolkits
+          {DATA.included.toLocaleString()} apps available
           ({oneClick.toLocaleString()} one-click, including {DATA.counts.native} built-in;{' '}
-          {(DATA.counts.api_key || 0).toLocaleString()} API key; {DATA.counts.no_auth || 0} no sign-in).{' '}
+          {(DATA.counts.api_key || 0).toLocaleString()} API key or client credentials; {DATA.counts.no_auth || 0} no sign-in).{' '}
           {statusLoading ? ' Loading status…' : connectedCount ? ` ${connectedCount} connected.` : ''}
         </p>
       </div>
