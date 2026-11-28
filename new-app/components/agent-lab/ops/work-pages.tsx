@@ -14,6 +14,7 @@ import {
   Repeat,
   TriangleAlert,
   Zap,
+  Phone,
   CalendarDays,
   ChevronDown,
   ChevronLeft,
@@ -48,8 +49,8 @@ import {
 import { cn } from '@/lib/utils'
 import { fromUnix, gbPost, gbUrl, type Approval, type PendingChange, type Version } from './gb14'
 import { AgentTag, inAgentScope, useAgentScope } from './agent-scope'
-import { Dot, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, TONE_BAR, Toolbar, dayHeading, isVideoWork, plainError, plainSummary } from './ops-kit'
-import { useWeekStats, type CalItem } from './use-week'
+import { Dot, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, TONE_BAR, Toolbar, dayHeading, plainError, plainSummary } from './ops-kit'
+import { useRunFlags, useWeekStats, type CalItem } from './use-week'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { useOverview, usePolled } from './use-ops-data'
 
@@ -231,7 +232,7 @@ function recentFailures(runs: OpsRun[]): OpsRun[] {
   return runs.filter((r) => !r.helper && runState(r.status) === 'failed' && new Date(r.finishedAt ?? r.createdAt).getTime() > cutoff)
 }
 
-type GbNeed = { id: string; kind: string; title: string; body?: string; created_at?: number; run_id?: string | null; conversation_id?: string | null }
+type GbNeed = { id: string; kind: string; title: string; body?: string; created_at?: number; run_id?: string | null; conversation_id?: string | null; agent_id?: string | null }
 
 export function NeedsYouPage() {
   const { data, error, loading, reload } = useOverview()
@@ -239,10 +240,14 @@ export function NeedsYouPage() {
   const changes = usePolled<{ items: PendingChange[] }>(gbUrl('permissions/pending-changes'), 30_000)
   const needs = usePolled<{ items: GbNeed[] }>(gbUrl('needs-you'), 30_000)
   const week = useWeekStats()
-  const approvals = (appr.data?.items ?? []).filter((a) => a.status === 'pending' || !a.status)
+  const flags = useRunFlags()
+  const scope = useAgentScope()
+  const ofRun = (runId?: string | null) => (runId ? flags.runAgent.get(runId) : undefined)
+  const mine = (runId?: string | null) => !scope.agentId || !ofRun(runId) || ofRun(runId) === scope.agentId
+  const approvals = (appr.data?.items ?? []).filter((a) => (a.status === 'pending' || !a.status) && mine((a as { run_id?: string | null }).run_id))
   const pendingChanges = (changes.data?.items ?? []).filter((c) => c.status === 'pending' || !c.status)
-  const questions = data?.questions ?? []
-  const local = recentFailures(data?.runs ?? [])
+  const questions = (data?.questions ?? []).filter((q) => mine(q.runId))
+  const local = recentFailures(data?.runs ?? []).filter((r) => !flags.hiddenRuns.has(r.id) && mine(r.id))
   // Problems: recent failed runs plus the server's own Needs-you failures and connection problems (deduplicated by run).
   const problems = useMemo(() => {
     const out: { id: string; title: string; body: string; at: string | null; conversationId: string | null }[] = local.map((r) => ({
@@ -254,6 +259,7 @@ export function NeedsYouPage() {
     }))
     for (const n of needs.data?.items ?? []) {
       if (n.kind !== 'failure' && n.kind !== 'connection') continue
+      if (scope.agentId && n.agent_id && n.agent_id !== scope.agentId) continue
       if (out.some((x) => x.id === n.run_id || x.id === n.id)) continue
       out.push({
         id: n.run_id || n.id,
@@ -264,11 +270,11 @@ export function NeedsYouPage() {
       })
     }
     return out
-  }, [local, needs.data])
+  }, [local, needs.data, scope.agentId])
   const total = questions.length + problems.length + approvals.length + pendingChanges.length
   const handled = week.stats ? week.stats.totals.done + week.stats.totals.warning : null
   return (
-    <OpsPage icon={Inbox} title="Needs you" description="Only what your agent can't decide or couldn't fix. Work you've already authorized never waits here.">
+    <OpsPage agentScoped icon={Inbox} title="Needs you" description="Only what your agent can't decide or couldn't fix. Work you've already authorized never waits here.">
       <KpiGrid cols={4}>
         <Kpi label="Approvals" value={approvals.length + pendingChanges.length} icon={ShieldCheck} tone={approvals.length + pendingChanges.length ? 'warning' : 'neutral'} sub={approvals.length + pendingChanges.length ? 'Waiting for your OK' : 'Nothing to approve'} loading={appr.loading && !appr.data} />
         <Kpi label="Questions" value={questions.length} icon={MessageCircleQuestion} tone={questions.length ? 'warning' : 'neutral'} sub={questions.length ? 'Your agent asked you' : 'None open'} loading={loading && !data} />
@@ -576,11 +582,13 @@ export function ResponsibilitiesPage() {
   const week = useWeekStats()
   const [filter, setFilter] = useState<StatusFilter>('all')
   const [q, setQ] = useState('')
+  const flags = useRunFlags()
+  const scope = useAgentScope()
   const runs = data?.runs ?? []
   const questions = data?.questions ?? []
   const rows = useMemo(
-    () => (data?.routines ?? []).map((r) => ({ r, status: responsibilityStatus(r, runs, questions), lastRun: runs.find((x) => x.routineId === r.id && !x.helper) })),
-    [data, runs, questions],
+    () => (data?.routines ?? []).filter((r) => !flags.hiddenRoutines.has(r.id) && (!scope.agentId || !flags.routineAgent.get(r.id) || flags.routineAgent.get(r.id) === scope.agentId)).map((r) => ({ r, status: responsibilityStatus(r, runs, questions), lastRun: runs.find((x) => x.routineId === r.id && !x.helper) })),
+    [data, runs, questions, flags, scope.agentId],
   )
   const count = (s: ResponsibilityStatus) => rows.filter((x) => x.status === s).length
   const needle = q.trim().toLowerCase()
@@ -600,6 +608,7 @@ export function ResponsibilitiesPage() {
     .sort((a, b) => String(a.r.nextRunAt).localeCompare(String(b.r.nextRunAt)))[0]
   return (
     <OpsPage
+      agentScoped
       icon={ListChecks}
       title="Responsibilities"
       description="The ongoing work your agent owns, written in plain English. Pause one here, change it in words, or ask in chat."
@@ -760,7 +769,7 @@ export function ActivityPage() {
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<GbActivity | null>(null)
   const scope = useAgentScope()
-  const items = (feed.data?.items ?? []).filter((i) => !isVideoWork(i.title) && inAgentScope(i, scope.agentId))
+  const items = (feed.data?.items ?? []).filter((i) => inAgentScope(i, scope.agentId))
   const needle = q.trim().toLowerCase()
   const shown = items.filter(
     (i) =>
@@ -913,62 +922,89 @@ function startOfWeek(d: Date): Date {
   return s
 }
 
-type CalRow = { at: number; title: string; kind: string; key: string; conversationId?: string | null }
+type CalRow = { at: number; title: string; kind: string; key: string; channel?: string | null; conversationId?: string | null }
 
 export function CalendarPage() {
   const { data } = useOverview()
   const [offset, setOffset] = useState(0)
-  const [view, setView] = useState<'week' | 'agenda'>('week')
+  const [view, setView] = useState<'week' | 'month' | 'agenda'>('week')
   const [expanded, setExpanded] = useState<string | null>(null)
-  const from = startOfWeek(new Date())
-  from.setDate(from.getDate() + offset * 7)
+  const [showCalls, setShowCalls] = useState(false)
+  const scope = useAgentScope()
+  const flags = useRunFlags()
+  const routineOk = (id: string) => !flags.hiddenRoutines.has(id) && (!scope.agentId || !flags.routineAgent.get(id) || flags.routineAgent.get(id) === scope.agentId)
+  const month = view === 'month'
+  const span = month ? 42 : 7
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth() + (month ? offset : 0), 1)
+  const from = month ? startOfWeek(monthStart) : startOfWeek(new Date())
+  if (!month) from.setDate(from.getDate() + offset * 7)
   const fromTs = Math.floor(from.getTime() / 1000)
-  const cal = usePolled<{ items: CalItem[] }>(gbUrl(`calendar?from=${fromTs}&to=${fromTs + 7 * 86400}&tasks=1`), 60_000)
-  const days = Array.from({ length: 7 }, (_, i) => {
+  const cal = usePolled<{ items: CalItem[] }>(gbUrl(`calendar?from=${fromTs}&to=${fromTs + span * 86400}&tasks=1`), 60_000)
+  const days = Array.from({ length: span }, (_, i) => {
     const d = new Date(from)
     d.setDate(from.getDate() + i)
     return d
   })
   const rows = useMemo<CalRow[]>(() => {
-    const out: CalRow[] = (cal.data?.items ?? []).filter((i) => !isVideoWork(i.title)).map((i, n) => ({ at: i.at, title: displayName(i.title) || 'Task', kind: i.kind, key: `${i.run_id ?? n}-${i.at}` }))
+    const out: CalRow[] = (cal.data?.items ?? [])
+      .filter((i) => inAgentScope(i, scope.agentId) && (showCalls || i.channel !== 'phone'))
+      .map((i, n) => ({ at: i.at, title: displayName(i.title) || 'Task', kind: i.kind, channel: i.channel, key: `${i.run_id ?? n}-${i.at}` }))
     // Upcoming runs of active responsibilities (the server list may not include them for future weeks).
     for (const r of data?.routines ?? []) {
-      if (r.paused || r.done || !r.nextRunAt) continue
+      if (r.paused || r.done || !r.nextRunAt || !routineOk(r.id)) continue
       const t = new Date(r.nextRunAt).getTime() / 1000
-      if (t < fromTs || t >= fromTs + 7 * 86400) continue
+      if (t < fromTs || t >= fromTs + span * 86400) continue
       if (out.some((x) => x.kind === 'upcoming' && Math.abs(x.at - t) < 60)) continue
       out.push({ at: t, title: displayName(r.name) || 'Responsibility', kind: 'upcoming', key: `up-${r.id}` })
     }
     return out.sort((a, b) => a.at - b.at)
-  }, [cal.data, data, fromTs])
+  }, [cal.data, data, fromTs, span, scope.agentId, showCalls, flags])
   const byDay = days.map((d) => rows.filter((r) => new Date(r.at * 1000).toDateString() === d.toDateString()))
   const max = Math.max(1, ...byDay.map((x) => x.length))
   const today = new Date().toDateString()
   const upcoming = (data?.routines ?? [])
-    .filter((r) => !r.paused && !r.done && r.nextRunAt)
+    .filter((r) => !r.paused && !r.done && r.nextRunAt && routineOk(r.id))
     .sort((a, b) => String(a.nextRunAt).localeCompare(String(b.nextRunAt)))
     .slice(0, 8)
   const totals = (k: string) => rows.filter((r) => r.kind === k).length
   const time = (t: number) => new Date(t * 1000).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   return (
-    <OpsPage icon={CalendarDays} title="Calendar" description="What your agent did and what's coming up. Completed runs are solid; upcoming runs are outlined.">
+    <OpsPage agentScoped icon={CalendarDays} title="Calendar" description="What your agent did and what's coming up. Completed runs are solid; upcoming runs are outlined.">
       <Toolbar>
         <div className="flex items-center gap-1.5">
-          <button type="button" aria-label="Previous week" onClick={() => setOffset(offset - 1)} className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}>
+          <button type="button" aria-label={month ? 'Previous month' : 'Previous week'} onClick={() => setOffset(offset - 1)} className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}>
             <ChevronLeft />
           </button>
           <button type="button" onClick={() => setOffset(0)} className={buttonVariants({ variant: 'outline', size: 'sm' })}>
             Today
           </button>
-          <button type="button" aria-label="Next week" onClick={() => setOffset(offset + 1)} className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}>
+          <button type="button" aria-label={month ? 'Next month' : 'Next week'} onClick={() => setOffset(offset + 1)} className={buttonVariants({ variant: 'outline', size: 'icon-sm' })}>
             <ChevronRight />
           </button>
           <span className="ml-2 text-base font-semibold">
-            {days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {days[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            {month
+              ? monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+              : `${days[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${days[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
           </span>
         </div>
-        <div className="ml-auto">
-          <Segmented value={view} onChange={setView} options={[{ value: 'week', label: 'Week' }, { value: 'agenda', label: 'Agenda' }]} />
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            aria-pressed={showCalls}
+            onClick={() => setShowCalls(!showCalls)}
+            className={cn('inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition', showCalls ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:text-foreground')}
+          >
+            <Phone className="size-3.5" />
+            Call follow-ups
+          </button>
+          <Segmented
+            value={view}
+            onChange={(v) => {
+              setView(v)
+              setOffset(0)
+            }}
+            options={[{ value: 'week', label: 'Week' }, { value: 'month', label: 'Month' }, { value: 'agenda', label: 'Agenda' }]}
+          />
         </div>
       </Toolbar>
       {cal.error && !cal.data && <OpsError message={cal.error} onRetry={cal.reload} />}
@@ -976,6 +1012,65 @@ export function CalendarPage() {
         <div className="min-w-0">
           {cal.loading && !cal.data ? (
             <OpsLoading rows={2} />
+          ) : month ? (
+            <div className="overflow-hidden rounded-card border border-border bg-card shadow-xs">
+              <div className="grid grid-cols-7 border-b border-border bg-muted/30 text-center text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+                {days.slice(0, 7).map((d) => (
+                  <div key={d.getDay()} className="py-1.5">
+                    {d.toLocaleDateString('en-US', { weekday: 'short' })}
+                  </div>
+                ))}
+              </div>
+              <div className="grid grid-cols-7">
+                {days.map((d, di) => {
+                  const mine = byDay[di]
+                  const key = d.toDateString()
+                  const inMonth = d.getMonth() === monthStart.getMonth()
+                  const isToday = key === today
+                  const failed = mine.filter((e) => e.kind === 'failed').length
+                  const warn = mine.filter((e) => e.kind === 'warning').length
+                  const todayWeek = startOfWeek(new Date()).getTime()
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      aria-label={`${d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}: ${mine.length} item${mine.length === 1 ? '' : 's'}. Open this week`}
+                      onClick={() => {
+                        setView('week')
+                        setOffset(Math.round((startOfWeek(d).getTime() - todayWeek) / (7 * 86400000)))
+                      }}
+                      className={cn('flex min-h-16 flex-col items-stretch gap-1 border-r border-b border-border p-1.5 text-left transition hover:bg-muted/40 sm:min-h-24', !inMonth && 'bg-muted/20 text-muted-foreground/60', isToday && 'bg-primary/[0.06]')}
+                    >
+                      <span className="flex items-center justify-between">
+                        <span className={cn('grid size-5 place-items-center rounded-full text-xs font-semibold tabular-nums', isToday && 'bg-primary text-primary-foreground')}>{d.getDate()}</span>
+                        {mine.length > 0 && <span className="text-[10px] font-medium text-muted-foreground tabular-nums">{mine.length}</span>}
+                      </span>
+                      {mine.length > 0 && (
+                        <span className="h-1 overflow-hidden rounded-full bg-secondary">
+                          <span className="block h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, (mine.length / max) * 100)}%` }} />
+                        </span>
+                      )}
+                      <span className="hidden flex-col gap-0.5 sm:flex">
+                        {mine.slice(0, 2).map((e) => {
+                          const st = CAL_STYLE[e.kind] ?? CAL_STYLE.completed
+                          return (
+                            <span key={e.key} className={cn('truncate rounded-sm border-l-2 px-1 text-[10px] leading-4', st.cls)}>
+                              {e.title}
+                            </span>
+                          )
+                        })}
+                      </span>
+                      {(failed > 0 || warn > 0) && (
+                        <span className="flex gap-1">
+                          {failed > 0 && <span className="rounded bg-destructive/15 px-1 text-[10px] font-medium text-destructive">{failed} failed</span>}
+                          {warn > 0 && <span className="rounded bg-warning/15 px-1 text-[10px] font-medium text-warning">{warn} warning</span>}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           ) : view === 'week' ? (
             <div className="overflow-x-auto rounded-card border border-border bg-card shadow-xs">
               <div className="grid min-w-[56rem] grid-cols-7 divide-x divide-border">
@@ -1046,7 +1141,7 @@ export function CalendarPage() {
           )}
         </div>
         <div className="flex flex-col gap-4">
-          <Panel title="This week">
+          <Panel title={month ? monthStart.toLocaleDateString('en-US', { month: 'long' }) : 'This week'}>
             <ul className="flex flex-col gap-2 text-sm">
               {(['completed', 'warning', 'failed', 'upcoming'] as const).map((k) => (
                 <li key={k} className="flex items-center gap-2">
@@ -1097,7 +1192,9 @@ function AssignmentCard({ r, onOpen }: { r: OpsRun; onOpen: () => void }) {
 export function AssignmentsPage() {
   const { data, error, loading, reload } = useOverview()
   const [open, setOpen] = useState<OpsRun | null>(null)
-  const list = assignments(data?.runs ?? [])
+  const flags = useRunFlags()
+  const scope = useAgentScope()
+  const list = assignments(data?.runs ?? []).filter((r) => !flags.hiddenRuns.has(r.id) && (!scope.agentId || !flags.runAgent.get(r.id) || flags.runAgent.get(r.id) === scope.agentId))
   const cols: { key: string; title: string; tone: Tone; rows: OpsRun[]; empty: string }[] = [
     { key: 'working', title: 'Working', tone: 'info', rows: list.filter((r) => runState(r.status) === 'working'), empty: 'Nothing running right now' },
     { key: 'waiting', title: 'Needs you', tone: 'warning', rows: list.filter((r) => runState(r.status) === 'waiting' || runState(r.status) === 'failed'), empty: 'Nothing waiting on you' },
@@ -1106,7 +1203,7 @@ export function AssignmentsPage() {
   ]
   const st = open ? RUN_STATE_LABEL[runState(open.status)] : null
   return (
-    <OpsPage icon={BriefcaseBusiness} title="Assignments" description="One-off jobs you've given your agent in chat, separate from its ongoing responsibilities.">
+    <OpsPage agentScoped icon={BriefcaseBusiness} title="Assignments" description="One-off jobs you've given your agent in chat, separate from its ongoing responsibilities.">
       {error && !data && <OpsError message={error} onRetry={reload} />}
       {loading && !data ? (
         <OpsLoading />

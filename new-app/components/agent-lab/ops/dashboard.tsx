@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   ArrowRight,
@@ -24,9 +24,9 @@ import { buttonVariants } from '@/components/ui/button'
 import { chatHref, dashboardSummary, displayName, formatWhen, runState, type OpsRun } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { gbUrl } from './gb14'
-import { Kpi, KpiGrid, Panel, isVideoWork, plainError, plainSummary } from './ops-kit'
+import { Kpi, KpiGrid, Panel, plainError, plainSummary } from './ops-kit'
 import { NotificationsBell, OpsError, OpsLoading, SectionHeading } from './ops-ui'
-import { useGbOverview, useWeekStats } from './use-week'
+import { useGbOverview, useRunFlags, useWeekStats } from './use-week'
 import { useOverview, usePolled } from './use-ops-data'
 
 type Conversation = { id: string; title: string; status: string; createdAt: string | null; updatedAt: string | null }
@@ -53,9 +53,15 @@ function browserTimeZone(): string | undefined {
   }
 }
 
-function greeting(): string {
-  const h = new Date().getHours()
+function greetingAt(h: number): string {
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
+}
+
+/** Time-of-day greeting from the visitor's own clock. Neutral during server render and the first client render, so the two match (React #418). */
+function useGreeting(): string {
+  const [text, setText] = useState('Welcome back')
+  useEffect(() => setText(greetingAt(new Date().getHours())), [])
+  return text
 }
 
 /** Big chat box: starts a new conversation through the same start path the chat page uses, then opens it. */
@@ -65,6 +71,7 @@ function StartChat() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const ref = useRef<HTMLTextAreaElement>(null)
+  const greet = useGreeting()
 
   async function start() {
     const message = draft.trim()
@@ -92,7 +99,7 @@ function StartChat() {
       <div className="relative px-4 pt-6 pb-4 sm:px-8 sm:pt-9">
         <p className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <Sparkles className="size-3.5 text-primary" />
-          {greeting()}
+          {greet}
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">What should your agent take care of?</h1>
         <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
@@ -195,13 +202,14 @@ export function AgentDashboard() {
   const changes = usePolled<{ items: unknown[] }>(gbUrl('permissions/pending-changes'), 60_000)
   const gb = useGbOverview()
   const week = useWeekStats()
+  const flags = useRunFlags()
 
   const o = overview.data
   const s = useMemo(() => (o ? dashboardSummary(o) : null), [o])
   const approvals = (appr.data?.items?.length ?? 0) + (changes.data?.items?.length ?? 0)
   const localNeeds = s ? s.openQuestions + s.failures.length + approvals : approvals
-  // The server's Needs-you list is the source of truth; never show fewer than it has.
-  const needsYou = Math.max(localNeeds, gb.data?.needs_you_count ?? 0)
+  // The server's Needs-you list is the source of truth (it already leaves out video and test runs); the local count is the fallback.
+  const needsYou = gb.data?.needs_you_count ?? localNeeds
   const unavailable = o && o.runs === null && o.routines === null
   const spark = week.stats ? week.stats.days.map((_, i) => week.stats!.done[i] + week.stats!.warning[i]) : undefined
   const completed = week.stats ? week.stats.totals.done + week.stats.totals.warning : gb.data?.completed_this_week
@@ -297,7 +305,7 @@ export function AgentDashboard() {
               </div>
             ) : (
               <ul className="grid gap-x-4 md:grid-cols-2">
-                {convs.data.conversations.filter((c) => !isVideoWork(c.title)).slice(0, 10).map((c) => (
+                {convs.data.conversations.filter((c) => !flags.hiddenConversations.has(c.id)).slice(0, 10).map((c) => (
                   <li key={c.id} className="border-b border-border/60 last:border-0 md:[&:nth-last-child(2):nth-child(odd)]:border-0">
                     <Link href={chatHref(c.id)} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60">
                       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -365,7 +373,7 @@ export function AgentDashboard() {
                 </p>
               ) : (
                 <ul className="divide-y divide-border/60">
-                  {s.recentResults.filter((r) => !isVideoWork(r.title)).map((r) => (
+                  {s.recentResults.filter((r) => !flags.hiddenRuns.has(r.id)).map((r) => (
                     <ResultRow key={r.id} run={r} />
                   ))}
                 </ul>

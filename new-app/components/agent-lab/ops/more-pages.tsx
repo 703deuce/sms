@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BookOpen, Brain, CalendarCheck, Clock, Download, FileText, Folder, ImageIcon, MessageSquareText, Monitor, Phone, PhoneIncoming, PhoneOutgoing, RefreshCw, Sheet, ShieldCheck } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -9,7 +9,7 @@ import { callDirection, callNumber, callOutcome, callParty, displayName, formatD
 import { cn } from '@/lib/utils'
 import { MODE_LABEL, fromUnix, gbPost, gbUrl, money, type Call, type CallsDoc, type HistoryRow, type KnowledgeItem, type Mode, type PermissionsDoc, type Skill, type SpendSummary } from './gb14'
 import { AgentTag, inAgentScope, useAgentScope } from './agent-scope'
-import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, isOpaqueId, isVideoWork, lastDays, mentionsMoney } from './ops-kit'
+import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, isOpaqueId, lastDays } from './ops-kit'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { usePolled } from './use-ops-data'
 
@@ -19,6 +19,19 @@ type CallFilter = 'all' | 'incoming' | 'outgoing'
 
 const CALLS_LIMIT = 200
 
+/** True when the viewport matches; false until mounted so server and first client render agree. */
+function useMediaQuery(query: string): boolean {
+  const [on, setOn] = useState(false)
+  useEffect(() => {
+    const m = window.matchMedia(query)
+    const f = () => setOn(m.matches)
+    f()
+    m.addEventListener('change', f)
+    return () => m.removeEventListener('change', f)
+  }, [query])
+  return on
+}
+
 function shortOutcome(label: string): string {
   const head = label.split(':')[0].trim()
   if (head.length >= 3 && head.length < label.length) return head
@@ -26,13 +39,13 @@ function shortOutcome(label: string): string {
 }
 
 
-function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () => void }) {
+/** Loads one call's full record (transcript included) and shows it. Used inline on phones and in the side pane on desktop. */
+function CallDetailBody({ c }: { c: Call }) {
   const [detail, setDetail] = useState<Call | null>(null)
   const [detailErr, setDetailErr] = useState<string | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
 
   useEffect(() => {
-    if (!open) return
     let cancelled = false
     setDetail(null)
     setDetailErr(null)
@@ -55,7 +68,7 @@ function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () =
     return () => {
       cancelled = true
     }
-  }, [open, c.id])
+  }, [c.id])
 
   const full = detail ? { ...c, ...detail } : c
   const dir = callDirection(full)
@@ -68,7 +81,69 @@ function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () =
   const line = incoming ? full.to : full.from
 
   return (
-    <li>
+      <div className="flex flex-col gap-3 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+          <div>
+            <dt className="text-muted-foreground">{incoming ? 'Caller' : 'Called'}</dt>
+            <dd className="mt-0.5 font-medium">
+              {callParty(full)}
+              {number ? <span className="block font-normal text-muted-foreground">{number}</span> : null}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Time</dt>
+            <dd className="mt-0.5 font-medium">
+              {when}
+              {ended && ended !== when ? <span className="block font-normal text-muted-foreground">Ended {ended}</span> : null}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Duration</dt>
+            <dd className="mt-0.5 font-medium">{dur || '—'}</dd>
+          </div>
+          <div>
+            <dt className="text-muted-foreground">Outcome</dt>
+            <dd className="mt-0.5 font-medium">{outcome?.label ?? '—'}</dd>
+          </div>
+        </dl>
+        {line && <p className="text-xs text-muted-foreground">{incoming ? 'Reached' : 'From'}: {displayName(line) || line}</p>}
+        {full.status && full.outcome && full.status.toLowerCase() !== full.outcome.toLowerCase() && (
+          <p className="text-xs text-muted-foreground">Status · {displayName(full.status) || full.status}</p>
+        )}
+        {full.goal && (
+          <p>
+            <span className="text-xs font-medium text-muted-foreground">Goal · </span>
+            {full.goal}
+          </p>
+        )}
+        {full.message && (
+          <blockquote className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap">{full.message}</blockquote>
+        )}
+        {full.summary && <p>{full.summary}</p>}
+        {loadingDetail && !full.transcript ? (
+          <p className="text-xs text-muted-foreground">Loading transcript…</p>
+        ) : full.transcript ? (
+          <pre className="max-h-80 overflow-auto rounded-lg bg-muted/40 p-3 font-sans text-xs whitespace-pre-wrap text-muted-foreground">{full.transcript}</pre>
+        ) : (
+          <p className="text-xs text-muted-foreground">{detailErr ? `${detailErr} The summary above is still from the list.` : 'No transcript for this call.'}</p>
+        )}
+      </div>
+  )
+}
+
+function CallRow({ c, open, onToggle, selected, inline }: { c: Call; open: boolean; onToggle: () => void; selected?: boolean; inline: boolean } ) {
+  const full = c
+  const dir = callDirection(full)
+  const incoming = dir === 'incoming'
+  const outcome = callOutcome(full)
+  const when = formatWhen(fromUnix(full.at))
+  const ended = formatWhen(fromUnix(full.ended_at))
+  const dur = formatDuration(full.duration_s, full.status ?? full.outcome)
+  const number = callNumber(full)
+  const line = incoming ? full.to : full.from
+
+  return (
+    <li className={cn(selected && 'bg-muted/50')}>
       <button type="button" onClick={onToggle} className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40">
         <div className="flex min-w-0 items-start gap-3">
           <span className={cn('mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg', incoming ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground')}>
@@ -92,53 +167,9 @@ function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () =
           {outcome ? <Pill tone={outcome.tone}>{shortOutcome(outcome.label)}</Pill> : null}
         </div>
       </button>
-      {open && (
-        <div className="flex flex-col gap-3 px-4 pb-4 text-sm">
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
-            <div>
-              <dt className="text-muted-foreground">{incoming ? 'Caller' : 'Called'}</dt>
-              <dd className="mt-0.5 font-medium">
-                {callParty(full)}
-                {number ? <span className="block font-normal text-muted-foreground">{number}</span> : null}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Time</dt>
-              <dd className="mt-0.5 font-medium">
-                {when}
-                {ended && ended !== when ? <span className="block font-normal text-muted-foreground">Ended {ended}</span> : null}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Duration</dt>
-              <dd className="mt-0.5 font-medium">{dur || '—'}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Outcome</dt>
-              <dd className="mt-0.5 font-medium">{outcome?.label ?? '—'}</dd>
-            </div>
-          </dl>
-          {line && <p className="text-xs text-muted-foreground">{incoming ? 'Reached' : 'From'}: {displayName(line) || line}</p>}
-          {full.status && full.outcome && full.status.toLowerCase() !== full.outcome.toLowerCase() && (
-            <p className="text-xs text-muted-foreground">Status · {displayName(full.status) || full.status}</p>
-          )}
-          {full.goal && (
-            <p>
-              <span className="text-xs font-medium text-muted-foreground">Goal · </span>
-              {full.goal}
-            </p>
-          )}
-          {full.message && (
-            <blockquote className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm whitespace-pre-wrap">{full.message}</blockquote>
-          )}
-          {full.summary && <p>{full.summary}</p>}
-          {loadingDetail && !full.transcript ? (
-            <p className="text-xs text-muted-foreground">Loading transcript…</p>
-          ) : full.transcript ? (
-            <pre className="max-h-80 overflow-auto rounded-lg bg-muted/40 p-3 font-sans text-xs whitespace-pre-wrap text-muted-foreground">{full.transcript}</pre>
-          ) : (
-            <p className="text-xs text-muted-foreground">{detailErr ? `${detailErr} The summary above is still from the list.` : 'No transcript for this call.'}</p>
-          )}
+      {open && inline && (
+        <div className="px-4 pb-4">
+          <CallDetailBody c={c} />
         </div>
       )}
     </li>
@@ -158,7 +189,9 @@ export function CallsPage() {
   const capped = items.length >= CALLS_LIMIT
   const [search, setSearch] = useState('')
   const needle = search.trim().toLowerCase()
+  const desktop = useMediaQuery('(min-width: 1024px)')
   const visible = needle ? shown.filter((c) => `${callParty(c)} ${c.summary ?? ''} ${c.outcome ?? ''} ${c.message ?? ''}`.toLowerCase().includes(needle)) : shown
+  const selected = desktop ? (visible.find((c) => c.id === open) ?? visible[0] ?? null) : null
   const days = lastDays(7)
   const perDay = days.map((d) => ({ in: incoming.filter((c) => c.at && dayKey(new Date(c.at * 1000)) === d.key).length, out: outgoing.filter((c) => c.at && dayKey(new Date(c.at * 1000)) === d.key).length }))
   const week = perDay.reduce((n, d) => n + d.in + d.out, 0)
@@ -250,13 +283,33 @@ export function CallsPage() {
           {visible.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">{needle ? 'No calls match.' : `No ${filter} calls yet.`}</p>
           ) : (
-            <OpsCard className="p-0">
-              <ul className="divide-y divide-border">
-                {visible.map((c) => (
-                  <CallRow key={c.id} c={c} open={open === c.id} onToggle={() => setOpen(open === c.id ? null : c.id)} />
-                ))}
-              </ul>
-            </OpsCard>
+            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+              <OpsCard className="p-0">
+                <ul className="max-h-[70vh] divide-y divide-border overflow-y-auto">
+                  {visible.map((c) => (
+                    <CallRow
+                      key={c.id}
+                      c={c}
+                      open={open === c.id}
+                      selected={desktop && selected?.id === c.id}
+                      inline={!desktop}
+                      onToggle={() => setOpen(open === c.id && !desktop ? null : c.id)}
+                    />
+                  ))}
+                </ul>
+              </OpsCard>
+              {desktop && selected && (
+                <OpsCard className="sticky top-4 flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-base font-semibold">{callParty(selected)}</h2>
+                    <span className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">{callDirection(selected) === 'incoming' ? 'Incoming' : 'Outgoing'}</span>
+                    {selected.after_hours ? <Pill tone="muted">After hours</Pill> : null}
+                    {selected.needs_you ? <Pill tone="warning">Needs you</Pill> : null}
+                  </div>
+                  <CallDetailBody key={selected.id} c={selected} />
+                </OpsCard>
+              )}
+            </div>
           )}
         </>
       )}
@@ -272,6 +325,15 @@ const MODE_HINT: Record<Mode, string> = {
   supervised: 'Direct asks run. Scheduled work asks before changing anything outside, and money or deleting always asks.',
   selective: 'Direct asks run. Scheduled work asks only before money or deleting.',
   full: 'Never asks. Only your own rules and spending limits apply.',
+}
+
+type RuleState = 'allow' | 'ask' | 'deny'
+const RULE_CYCLE: Record<RuleState | 'default', RuleState> = { default: 'ask', ask: 'allow', allow: 'deny', deny: 'ask' }
+const RULE_STYLE: Record<RuleState | 'default', { label: string; cls: string; dot: string }> = {
+  allow: { label: 'Allow', cls: 'border-success/40 bg-success/10 text-success', dot: 'bg-success' },
+  ask: { label: 'Ask', cls: 'border-warning/40 bg-warning/10 text-warning', dot: 'bg-warning' },
+  deny: { label: 'Never', cls: 'border-destructive/40 bg-destructive/10 text-destructive', dot: 'bg-destructive' },
+  default: { label: 'Default', cls: 'border-dashed border-border text-muted-foreground', dot: 'bg-muted-foreground/40' },
 }
 
 function ModePicker({ value, onChange, allowInherit, disabled }: { value: Mode | null; onChange: (m: Mode | '') => void; allowInherit?: boolean; disabled?: boolean }) {
@@ -342,9 +404,17 @@ function SpendCard({ s, onRevoke, busy }: { s: SpendSummary; onRevoke: () => voi
 export function PermissionsPage() {
   const perms = usePolled<PermissionsDoc>(gbUrl('permissions'), 30_000)
   const hist = usePolled<{ items: HistoryRow[] }>(gbUrl('permissions/history?limit=50'), 60_000)
+  const conn = usePolled<{ connected?: Record<string, { status?: string }> }>('/api/agent-lab/connections/connected', 60_000)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const d = perms.data
+  // One row per connected app (plus any app that already has a rule), with its policy if there is one.
+  const appRows = useMemo(() => {
+    const slugs = new Set<string>()
+    for (const [slug, v] of Object.entries(conn.data?.connected ?? {})) if ((v.status ?? 'ACTIVE').toUpperCase() === 'ACTIVE') slugs.add(slug.toLowerCase())
+    for (const a of d?.apps ?? []) if (a.app) slugs.add(a.app.toLowerCase())
+    return [...slugs].sort().map((app) => ({ app, policy: (d?.apps ?? []).find((p) => (p.app ?? '').toLowerCase() === app) ?? null }))
+  }, [conn.data, d])
 
   async function act(path: string, body: unknown) {
     setBusy(true)
@@ -424,23 +494,52 @@ export function PermissionsPage() {
                 })}
               </div>
             </div>
-            {d.apps.length > 0 && (
-              <OpsCard className="divide-y divide-border p-0">
-                {d.apps.map((a) => (
-                  <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{displayName(a.label || a.app)}</p>
-                      {a.summary && <p className="text-xs text-muted-foreground">{a.summary}</p>}
+            {appRows.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-semibold">App rules</p>
+                <p className="text-xs text-muted-foreground">Set how much your agent may do in each connected app. Tap a rule to cycle Ask, Allow and Never.</p>
+                <OpsCard className="divide-y divide-border p-0">
+                  {appRows.map(({ app, policy }) => (
+                    <div key={app} className="flex flex-col gap-2.5 px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">{displayName(policy?.label || app)}</p>
+                          {policy?.summary && <p className="text-xs text-muted-foreground">{policy.summary}</p>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <ModePicker allowInherit value={policy?.mode ?? null} disabled={busy} onChange={(m) => void act('permissions/set', { scope: 'app', app, mode: m })} />
+                          {policy && (
+                            <button type="button" disabled={busy} onClick={() => void act('permissions/revoke', { kind: 'policy', id: policy.id })} className={buttonVariants({ variant: 'ghost', size: 'xs' })}>
+                              Revoke
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5" role="group" aria-label={`${displayName(app)} rules`}>
+                        {(d.categories ?? []).map((c) => {
+                          const cur = policy?.rules?.[c.id] ?? null
+                          const next = RULE_CYCLE[cur ?? 'default']
+                          const st = cur ? RULE_STYLE[cur] : RULE_STYLE.default
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              disabled={busy}
+                              title={`${c.label}: ${st.label}. Tap to change to ${RULE_STYLE[next].label}.`}
+                              onClick={() => void act('permissions/set', { scope: 'app', app, rules: { [c.id]: next } })}
+                              className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:brightness-110 disabled:opacity-60', st.cls)}
+                            >
+                              <span className={cn('size-1.5 rounded-full', st.dot)} aria-hidden />
+                              {c.label}
+                              <span className="font-normal opacity-80">· {st.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <ModePicker allowInherit value={a.mode} disabled={busy} onChange={(m) => void act('permissions/set', { scope: 'app', app: a.app, mode: m })} />
-                      <button type="button" disabled={busy} onClick={() => void act('permissions/revoke', { kind: 'policy', id: a.id })} className={buttonVariants({ variant: 'ghost', size: 'xs' })}>
-                        Revoke
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </OpsCard>
+                  ))}
+                </OpsCard>
+              </div>
             )}
             {d.responsibilities.length > 0 && (
               <OpsCard className="divide-y divide-border p-0">
@@ -701,7 +800,7 @@ export function FilesPage() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState<GbFile | null>(null)
   const scope = useAgentScope()
-  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name) && !isVideoWork(f.name) && inAgentScope(f, scope.agentId))
+  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name) && inAgentScope(f, scope.agentId))
   const needle = search.trim().toLowerCase()
   const files = all.filter((f) => (kind === 'all' || fileKind(f.name) === kind) && (!needle || `${f.name} ${f.title ?? ''}`.toLowerCase().includes(needle)))
   const n = (k: FileKind) => all.filter((f) => fileKind(f.name) === k).length
@@ -844,8 +943,8 @@ export function FilesPage() {
 export function MemoryPage() {
   const knowledge = usePolled<{ total?: number; items: KnowledgeItem[] }>(gbUrl('knowledge?limit=100'), 60_000)
   const skills = usePolled<{ items: Skill[] }>(gbUrl('skills'), 60_000)
-  const mem = (knowledge.data?.items ?? []).filter((k) => !isVideoWork(k.text) && !mentionsMoney(k.text))
-  const sk = (skills.data?.items ?? []).filter((x) => !isVideoWork(`${x.name} ${x.description ?? ''}`) && !mentionsMoney(x.description))
+  const mem = knowledge.data?.items ?? []
+  const sk = skills.data?.items ?? []
   const memUnavailable = !knowledge.data && !!knowledge.error
   const skUnavailable = !skills.data && !!skills.error
   const types = [...new Set(mem.map((k) => k.type).filter(Boolean))] as string[]
