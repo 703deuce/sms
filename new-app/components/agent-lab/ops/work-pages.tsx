@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import {
   RESPONSIBILITY_STATUS,
   RUN_STATE_LABEL,
@@ -34,8 +35,9 @@ import {
   type ResponsibilityStatus,
 } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
+import { fromUnix, gbPost, gbUrl, type Approval, type PendingChange, type Version } from './gb14'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
-import { useOverview } from './use-ops-data'
+import { useOverview, usePolled } from './use-ops-data'
 
 const chatLink = cn(buttonVariants({ variant: 'outline', size: 'sm' }))
 
@@ -134,6 +136,105 @@ function QuestionCard({ q, onAnswered }: { q: OpsQuestion; onAnswered: () => voi
   )
 }
 
+function ApprovalCard({ a, onDone }: { a: Approval; onDone: () => void }) {
+  const [perAction, setPerAction] = useState(a.amount ? String(a.amount) : '')
+  const [perMonth, setPerMonth] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const money = a.category === 'financial' || typeof a.amount === 'number'
+  const choices = a.choices?.length ? a.choices : [
+    { id: 'once' as const, label: 'Allow once' },
+    { id: 'always' as const, label: 'Always allow within limits' },
+    { id: 'deny' as const, label: 'Deny' },
+  ]
+  async function decide(choice: 'once' | 'always' | 'deny') {
+    setBusy(true)
+    setErr(null)
+    try {
+      const body: Record<string, unknown> = { choice }
+      if (choice === 'always' && money) {
+        const pa = Number(perAction), pm = Number(perMonth)
+        if (!(pa > 0) || !(pm >= pa)) throw new Error('Set a per-action amount and a monthly cap at least that large.')
+        body.limits = { per_action_max: pa, period: 'month', period_max: pm }
+      }
+      await gbPost(`permissions/approvals/${encodeURIComponent(a.id)}/decide`, body)
+      onDone()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'That did not go through')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <OpsCard className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{a.title || 'Your agent needs your OK'}</p>
+          {a.consequence && <p className="mt-1 text-sm text-muted-foreground">{a.consequence}</p>}
+          {a.reason && <p className="mt-1 text-xs text-muted-foreground">{a.reason}</p>}
+        </div>
+        <Pill tone="warning">Approval</Pill>
+      </div>
+      {money && (
+        <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
+          <label className="text-xs text-muted-foreground">
+            Per action, USD
+            <input type="number" min="0" value={perAction} onChange={(e) => setPerAction(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm text-foreground" />
+          </label>
+          <label className="text-xs text-muted-foreground">
+            Per month, USD
+            <input type="number" min="0" value={perMonth} onChange={(e) => setPerMonth(e.target.value)} className="mt-1 h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm text-foreground" />
+          </label>
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {choices.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            disabled={busy}
+            onClick={() => void decide(c.id)}
+            className={buttonVariants({ variant: c.id === 'once' ? 'default' : c.id === 'deny' ? 'ghost' : 'outline', size: 'sm' })}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+      {err && <p className="text-xs text-destructive">{err}</p>}
+      {a.created_at ? <p className="text-[11px] text-muted-foreground">Asked {formatWhen(fromUnix(a.created_at))}</p> : null}
+    </OpsCard>
+  )
+}
+
+function ChangeCard({ c, onDone }: { c: PendingChange; onDone: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const go = async (what: 'confirm' | 'reject') => {
+    setBusy(true)
+    try {
+      await gbPost(`permissions/pending-changes/${encodeURIComponent(c.id)}/${what}`)
+      onDone()
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <OpsCard className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="min-w-0 text-sm font-medium">{c.summary}</p>
+        <Pill tone="warning">Permission change</Pill>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" disabled={busy} onClick={() => void go('confirm')} className={buttonVariants({ size: 'sm' })}>
+          Confirm
+        </button>
+        <button type="button" disabled={busy} onClick={() => void go('reject')} className={buttonVariants({ variant: 'ghost', size: 'sm' })}>
+          Keep as is
+        </button>
+      </div>
+    </OpsCard>
+  )
+}
+
 function recentFailures(runs: OpsRun[]): OpsRun[] {
   const cutoff = Date.now() - 72 * 3600 * 1000
   return runs.filter((r) => !r.helper && runState(r.status) === 'failed' && new Date(r.finishedAt ?? r.createdAt).getTime() > cutoff)
@@ -141,6 +242,10 @@ function recentFailures(runs: OpsRun[]): OpsRun[] {
 
 export function NeedsYouPage() {
   const { data, error, loading, reload } = useOverview()
+  const appr = usePolled<{ items: Approval[] }>(gbUrl('permissions/approvals?status=pending'), 15_000)
+  const changes = usePolled<{ items: PendingChange[] }>(gbUrl('permissions/pending-changes'), 30_000)
+  const approvals = (appr.data?.items ?? []).filter((a) => a.status === 'pending' || !a.status)
+  const pendingChanges = (changes.data?.items ?? []).filter((c) => c.status === 'pending' || !c.status)
   const questions = data?.questions ?? []
   const failures = recentFailures(data?.runs ?? [])
   return (
@@ -150,10 +255,26 @@ export function NeedsYouPage() {
         <OpsLoading />
       ) : data && data.questions === null && data.runs === null ? (
         <OpsError message="This list is temporarily unavailable." onRetry={reload} />
-      ) : questions.length === 0 && failures.length === 0 ? (
+      ) : questions.length === 0 && failures.length === 0 && approvals.length === 0 && pendingChanges.length === 0 ? (
         <OpsEmpty icon={Sparkles} title="Nothing needs you" description="Your agent is handling everything on its own. Questions and anything it couldn't finish will show up here." />
       ) : (
         <>
+          {approvals.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <SectionHeading title="Approvals" count={approvals.length} />
+              {approvals.map((a) => (
+                <ApprovalCard key={a.id} a={a} onDone={appr.reload} />
+              ))}
+            </section>
+          )}
+          {pendingChanges.length > 0 && (
+            <section className="flex flex-col gap-3">
+              <SectionHeading title="Permission changes from chat" count={pendingChanges.length} />
+              {pendingChanges.map((c) => (
+                <ChangeCard key={c.id} c={c} onDone={changes.reload} />
+              ))}
+            </section>
+          )}
           {questions.length > 0 && (
             <section className="flex flex-col gap-3">
               <SectionHeading title="Questions" count={questions.length} />
@@ -211,9 +332,36 @@ function NeedsYouStrip({ questions, failures }: { questions: number; failures: n
 
 type StatusFilter = 'all' | ResponsibilityStatus
 
-function ResponsibilityCard({ r, status, lastRun }: { r: OpsRoutine; status: ResponsibilityStatus; lastRun: OpsRun | undefined }) {
+type Preview = { preview_id: string; before?: { name?: string; when?: string; prompt?: string }; after?: { name?: string; when?: string; prompt?: string }; changes?: string[] }
+
+function ResponsibilityCard({ r, status, lastRun, onChanged }: { r: OpsRoutine; status: ResponsibilityStatus; lastRun: OpsRun | undefined; onChanged: () => void }) {
   const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const [preview, setPreview] = useState<Preview | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [versions, setVersions] = useState<Version[] | null>(null)
   const st = RESPONSIBILITY_STATUS[status]
+  const id = encodeURIComponent(r.id)
+
+  async function run<T>(fn: () => Promise<T>): Promise<T | null> {
+    setBusy(true)
+    setErr(null)
+    try {
+      return await fn()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'That did not go through')
+      return null
+    } finally {
+      setBusy(false)
+    }
+  }
+  async function loadVersions() {
+    const res = await fetch(gbUrl(`responsibilities/${id}/versions`), { cache: 'no-store' })
+    if (res.ok) setVersions(((await res.json()) as { items?: Version[] }).items ?? [])
+  }
+
   return (
     <OpsCard className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
@@ -230,15 +378,32 @@ function ResponsibilityCard({ r, status, lastRun }: { r: OpsRoutine; status: Res
           <dd className="mt-0.5 font-medium">{status === 'paused' || status === 'finished' ? '—' : formatWhen(r.nextRunAt)}</dd>
         </div>
       </dl>
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        className="flex items-center gap-1 self-start text-xs font-medium text-muted-foreground hover:text-foreground"
-      >
-        <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
-        {open ? 'Less' : 'More'}
-      </button>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(!open)
+            if (!open && versions === null) void loadVersions()
+          }}
+          aria-expanded={open}
+          className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ChevronDown className={cn('size-3.5 transition-transform', open && 'rotate-180')} />
+          {open ? 'Less' : 'More'}
+        </button>
+        {status !== 'finished' && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            {r.paused ? 'Paused' : 'On'}
+            <Switch
+              size="sm"
+              checked={!r.paused}
+              disabled={busy}
+              onCheckedChange={(v: boolean) => void run(() => gbPost(`responsibilities/${id}/${v ? 'resume' : 'pause'}`)).then((ok) => ok !== null && onChanged())}
+            />
+          </label>
+        )}
+      </div>
+      {err && <p className="text-xs text-destructive">{err}</p>}
       {open && (
         <div className="flex flex-col gap-3 border-t border-border pt-3 text-sm">
           {r.instruction && <p className="whitespace-pre-wrap text-muted-foreground">{r.instruction}</p>}
@@ -255,11 +420,104 @@ function ResponsibilityCard({ r, status, lastRun }: { r: OpsRoutine; status: Res
               'Not run yet'
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/app/agent-lab" className={chatLink}>
-              Change or pause in chat
-            </Link>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-muted-foreground" htmlFor={`edit-${r.id}`}>
+              Change it in words
+            </label>
+            <div className="flex gap-2">
+              <input
+                id={`edit-${r.id}`}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="make it 9am instead"
+                className="h-8 min-w-0 flex-1 rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+              />
+              <button
+                type="button"
+                disabled={busy || !draft.trim()}
+                onClick={() => void run(() => gbPost<Preview>(`responsibilities/${id}/preview`, { instruction: draft.trim() })).then((p) => p && setPreview(p))}
+                className={buttonVariants({ variant: 'outline', size: 'sm' })}
+              >
+                Preview
+              </button>
+            </div>
           </div>
+          {preview && (
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+              {(preview.changes ?? []).length > 0 ? (
+                <ul className="list-disc pl-4">
+                  {(preview.changes ?? []).map((c) => (
+                    <li key={c}>{c}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>
+                  {preview.before?.when} → {preview.after?.when}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void run(() => gbPost<{ ok: boolean; version: number }>(`responsibilities/${id}/apply`, { preview_id: preview.preview_id })).then((res) => {
+                      if (!res) return
+                      setPreview(null)
+                      setDraft('')
+                      setNote(`Saved as version ${res.version}.`)
+                      void loadVersions()
+                      onChanged()
+                    })
+                  }
+                  className={buttonVariants({ size: 'xs' })}
+                >
+                  Apply
+                </button>
+                <button type="button" onClick={() => setPreview(null)} className={buttonVariants({ variant: 'ghost', size: 'xs' })}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+          {note && <p className="text-xs text-muted-foreground">{note}</p>}
+          {versions && versions.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-muted-foreground">Version history</p>
+                {versions.length > 1 && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() => gbPost(`responsibilities/${id}/undo`)).then((ok) => {
+                        if (ok === null) return
+                        setNote('Restored the previous version.')
+                        void loadVersions()
+                        onChanged()
+                      })
+                    }
+                    className={buttonVariants({ variant: 'ghost', size: 'xs' })}
+                  >
+                    Undo last change
+                  </button>
+                )}
+              </div>
+              <ul className="flex flex-col gap-1 text-xs">
+                {versions.slice(0, 5).map((v, i) => (
+                  <li key={v.version} className="flex justify-between gap-3">
+                    <span className="truncate">
+                      v{v.version} · {v.name || r.name}
+                      {i === 0 ? ' · current' : ''}
+                    </span>
+                    <span className="shrink-0 text-muted-foreground">{formatWhen(fromUnix(v.at))}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <Link href="/app/agent-lab" className={cn(chatLink, 'self-start')}>
+            Talk it through in chat
+          </Link>
         </div>
       )}
     </OpsCard>
@@ -287,7 +545,7 @@ export function ResponsibilitiesPage() {
     <OpsPage
       icon={ListChecks}
       title="Responsibilities"
-      description="The ongoing work your agent owns, written in plain English. Ask in chat to add, change or pause one."
+      description="The ongoing work your agent owns, written in plain English. Pause one here, change it in words, or ask in chat."
       actions={<NewResponsibilityButton />}
     >
       {error && !data && <OpsError message={error} onRetry={reload} />}
@@ -308,7 +566,7 @@ export function ResponsibilitiesPage() {
           <Chips value={filter} options={options} onChange={setFilter} />
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {shown.map((x) => (
-              <ResponsibilityCard key={x.r.id} r={x.r} status={x.status} lastRun={x.lastRun} />
+              <ResponsibilityCard key={x.r.id} r={x.r} status={x.status} lastRun={x.lastRun} onChanged={reload} />
             ))}
           </div>
         </>

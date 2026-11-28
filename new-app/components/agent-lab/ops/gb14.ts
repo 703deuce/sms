@@ -1,0 +1,93 @@
+'use client'
+
+/** Client helpers for the GB-14 API (agentlab-takeover-kit/docs/GB14_API.md) via /api/agent-lab/gb14/<path>. */
+
+export type Mode = 'full' | 'selective' | 'supervised'
+export type Decision = 'allow' | 'ask' | 'deny'
+
+export type Policy = {
+  id: string
+  scope: 'agent' | 'app' | 'responsibility'
+  app?: string
+  label?: string
+  responsibility_id?: string
+  mode: Mode | null
+  rules: Record<string, Decision>
+  summary?: string
+  via?: string
+  updated_at?: number
+}
+
+export type SpendSummary = {
+  limit: { id: string; app: string; target: string; label?: string; currency?: string; per_action_max?: number | null; period?: string; period_max?: number | null }
+  period_key?: string
+  actual_spend: number | null
+  authorized_budget: number | null
+  agent_increases?: number | null
+  pending_changes?: number | null
+  used?: number | null
+  remaining?: number | null
+}
+
+export type PermissionsDoc = {
+  default_mode: Mode
+  agent: Policy | null
+  apps: Policy[]
+  responsibilities: Policy[]
+  limits: SpendSummary[]
+  standing_grants: { id: string; kind: string; app?: string; tool?: string; uses_left?: number }[]
+  pending_approvals: number
+  pending_changes: number
+  browser_terminal?: { enabled: boolean; label?: string; warning?: string }
+  categories?: { id: string; label: string }[]
+  modes?: { id: Mode; label: string; text?: string }[]
+  off?: boolean
+}
+
+export type Approval = {
+  id: string
+  status: string
+  app?: string
+  tool?: string
+  title?: string
+  category?: string
+  consequence?: string
+  reason?: string
+  amount?: number | null
+  created_at?: number
+  choices?: { id: 'once' | 'always' | 'deny'; label: string }[]
+}
+
+export type PendingChange = { id: string; status: string; summary: string; loosens?: boolean; proposed_at?: number }
+
+export type HistoryRow = { id: string; at: number; actor: string; via: string; action: string; summary: string }
+
+export type Call = {
+  id: string
+  at: number
+  caller?: string | null
+  duration_s?: number | null
+  summary?: string | null
+  transcript?: string | null
+  texts_sent?: number | null
+  booked?: boolean | null
+  needs_you?: boolean | null
+}
+
+export type Version = { version: number; at: number; by?: string; name?: string; cron?: string; prompt?: string }
+
+export const gbUrl = (path: string) => `/api/agent-lab/gb14/${path}`
+
+export async function gbPost<T = unknown>(path: string, body: unknown = {}): Promise<T> {
+  const res = await fetch(gbUrl(path), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+  const data = (await res.json().catch(() => ({}))) as T & { error?: string }
+  if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+  return data
+}
+
+export const money = (n: number | null | undefined, cur = 'USD') =>
+  n === null || n === undefined ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n)
+
+export const fromUnix = (t: number | null | undefined) => (t ? new Date(t * 1000).toISOString() : null)
+
+export const MODE_LABEL: Record<Mode, string> = { full: 'Full', selective: 'Selective', supervised: 'Supervised' }
