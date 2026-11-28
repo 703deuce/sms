@@ -2,13 +2,13 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import { BookOpen, Brain, Download, FileText, Folder, ImageIcon, Monitor, Phone, PhoneIncoming, PhoneOutgoing, RefreshCw, Sheet, ShieldCheck } from 'lucide-react'
+import { BookOpen, Brain, CalendarCheck, Clock, Download, FileText, Folder, ImageIcon, MessageSquareText, Monitor, Phone, PhoneIncoming, PhoneOutgoing, RefreshCw, Sheet, ShieldCheck } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { callDirection, callNumber, callOutcome, callParty, displayName, formatDuration, formatWhen } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { MODE_LABEL, fromUnix, gbPost, gbUrl, money, type Call, type CallsDoc, type HistoryRow, type KnowledgeItem, type Mode, type PermissionsDoc, type Skill, type SpendSummary } from './gb14'
-import { Drawer, Panel, PropList, SearchBox, Segmented, Toolbar } from './ops-kit'
+import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, lastDays } from './ops-kit'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { usePolled } from './use-ops-data'
 
@@ -155,6 +155,28 @@ export function CallsPage() {
   const receptionist = data?.receptionist
   const receptionistReady = receptionist?.available !== false && (incoming.length > 0 || (receptionist?.count ?? 0) > 0)
   const capped = items.length >= CALLS_LIMIT
+  const [search, setSearch] = useState('')
+  const needle = search.trim().toLowerCase()
+  const visible = needle ? shown.filter((c) => `${callParty(c)} ${c.summary ?? ''} ${c.outcome ?? ''} ${c.message ?? ''}`.toLowerCase().includes(needle)) : shown
+  const days = lastDays(7)
+  const perDay = days.map((d) => ({ in: incoming.filter((c) => c.at && dayKey(new Date(c.at * 1000)) === d.key).length, out: outgoing.filter((c) => c.at && dayKey(new Date(c.at * 1000)) === d.key).length }))
+  const week = perDay.reduce((n, d) => n + d.in + d.out, 0)
+  const outcomeCounts = new Map<string, number>()
+  for (const c of incoming) {
+    const o = callOutcome(c)
+    const k = o ? shortOutcome(o.label) : 'Other'
+    outcomeCounts.set(k, (outcomeCounts.get(k) ?? 0) + 1)
+  }
+  const sortedOutcomes = [...outcomeCounts.entries()].sort((a, b) => b[1] - a[1])
+  const DONUT = ['stroke-primary', 'stroke-chart-2', 'stroke-chart-3', 'stroke-chart-4']
+  const parts = [
+    ...sortedOutcomes.slice(0, 4).map(([label, value], i) => ({ label, value, className: DONUT[i] })),
+    ...(sortedOutcomes.length > 4 ? [{ label: 'Other', value: sortedOutcomes.slice(4).reduce((n, x) => n + x[1], 0), className: 'stroke-muted-foreground/50' }] : []),
+  ]
+  const booked = incoming.filter((c) => /book/i.test(callOutcome(c)?.label ?? '') && !/asked/i.test(callOutcome(c)?.label ?? '')).length
+  const messages = incoming.filter((c) => /message/i.test(callOutcome(c)?.label ?? '')).length
+  const durs = incoming.map((c) => c.duration_s ?? 0).filter((n) => n > 0)
+  const avg = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : 0
 
   return (
     <OpsPage icon={Phone} title="Calls" description="Incoming calls to your AI receptionist and outgoing calls your agent placed: who called, when, how long, a summary or transcript, and how each one ended.">
@@ -186,34 +208,50 @@ export function CallsPage() {
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            {([
-              ['all', 'All', items.length],
-              ['incoming', 'Incoming', incoming.length],
-              ['outgoing', 'Outgoing', outgoing.length],
-            ] as const).map(([id, label, n]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setFilter(id)}
-                className={cn(
-                  'rounded-full border px-3 py-1 text-xs font-medium',
-                  filter === id ? 'border-foreground bg-foreground text-background' : 'border-border text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {label} {n}
-              </button>
-            ))}
+          <KpiGrid cols={4}>
+            <Kpi label="Calls, last 7 days" value={week} icon={Phone} sub={`${incoming.length} incoming · ${outgoing.length} outgoing in total`} spark={perDay.map((d) => d.in + d.out)} />
+            <Kpi label="Booked" value={booked} icon={CalendarCheck} tone={booked ? 'success' : 'neutral'} sub="Appointments from incoming calls" />
+            <Kpi label="Messages taken" value={messages} icon={MessageSquareText} sub="Passed on to you" />
+            <Kpi label="Average length" value={avg ? formatDuration(avg) : '—'} icon={Clock} sub="Incoming calls" />
+          </KpiGrid>
+          <div className="grid gap-6 xl:grid-cols-3">
+            <Panel title="Calls per day" className="xl:col-span-2" action={<span className="text-xs text-muted-foreground">Last 7 days</span>}>
+              <StackedColumns
+                labels={days.map((d) => d.label)}
+                series={[
+                  { name: 'Incoming', values: perDay.map((d) => d.in), className: 'fill-primary' },
+                  { name: 'Outgoing', values: perDay.map((d) => d.out), className: 'fill-chart-2' },
+                ]}
+                height={130}
+              />
+            </Panel>
+            {parts.length > 0 && (
+              <Panel title="How incoming calls ended">
+                <Donut parts={parts} centerLabel="calls" />
+              </Panel>
+            )}
           </div>
+          <Toolbar>
+            <Segmented
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'all', label: 'All', count: items.length },
+                { value: 'incoming', label: 'Incoming', count: incoming.length },
+                { value: 'outgoing', label: 'Outgoing', count: outgoing.length },
+              ]}
+            />
+            <SearchBox value={search} onChange={setSearch} placeholder="Search calls" />
+          </Toolbar>
           {capped && (
             <p className="text-sm text-muted-foreground">Showing the {CALLS_LIMIT} most recent calls.</p>
           )}
-          {shown.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">No {filter} calls yet.</p>
+          {visible.length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{needle ? 'No calls match.' : `No ${filter} calls yet.`}</p>
           ) : (
             <OpsCard className="p-0">
               <ul className="divide-y divide-border">
-                {shown.map((c) => (
+                {visible.map((c) => (
                   <CallRow key={c.id} c={c} open={open === c.id} onToggle={() => setOpen(open === c.id ? null : c.id)} />
                 ))}
               </ul>
@@ -807,6 +845,12 @@ export function MemoryPage() {
   const memUnavailable = !knowledge.data && !!knowledge.error
   const skUnavailable = !skills.data && !!skills.error
   const types = [...new Set(mem.map((k) => k.type).filter(Boolean))] as string[]
+  const [tab, setTab] = useState<'memory' | 'skills'>('memory')
+  const [type, setType] = useState<string>('all')
+  const [q, setQ] = useState('')
+  const needle = q.trim().toLowerCase()
+  const memShown = mem.filter((k) => (type === 'all' || k.type === type) && (!needle || `${k.text} ${k.source ?? ''}`.toLowerCase().includes(needle)))
+  const skShown = sk.filter((x) => !needle || `${x.name} ${x.description ?? ''}`.toLowerCase().includes(needle))
 
   return (
     <OpsPage
@@ -819,9 +863,27 @@ export function MemoryPage() {
         </Link>
       }
     >
-      <div className="grid gap-8 lg:grid-cols-2">
+      <Toolbar>
+        <Segmented
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: 'memory', label: 'Memory', count: knowledge.data ? mem.length : undefined },
+            { value: 'skills', label: 'Skills', count: skills.data ? sk.length : undefined },
+          ]}
+        />
+        {tab === 'memory' && types.length > 1 && (
+          <Segmented
+            value={type}
+            onChange={setType}
+            options={[{ value: 'all', label: 'All types' }, ...types.map((t) => ({ value: t, label: displayName(t) || t, count: mem.filter((k) => k.type === t).length }))]}
+          />
+        )}
+        <SearchBox value={q} onChange={setQ} placeholder={tab === 'memory' ? 'Search memory' : 'Search skills'} />
+      </Toolbar>
+      <div>
+        {tab === 'memory' && (
         <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeading title="Memory" count={knowledge.data ? mem.length : undefined} />
           {knowledge.loading && !knowledge.data ? (
             <OpsLoading />
           ) : memUnavailable ? (
@@ -847,30 +909,25 @@ export function MemoryPage() {
               }
             />
           ) : (
-            <OpsCard className="p-0">
-              {types.length > 1 && (
-                <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-                  {types.map((t) => displayName(t) || t).join(' · ')}
-                </p>
-              )}
-              <ul className="divide-y divide-border">
-                {mem.map((k) => (
-                  <li key={k.id} className="flex flex-col gap-1 px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      {k.type && <Pill tone="neutral">{displayName(k.type) || k.type}</Pill>}
-                      {k.source && <span className="text-[11px] text-muted-foreground">{displayName(k.source) || k.source}</span>}
-                      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{formatWhen(fromUnix(k.created_at))}</span>
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap">{k.text}</p>
-                  </li>
-                ))}
-              </ul>
-            </OpsCard>
+            <div className="columns-1 gap-4 md:columns-2 2xl:columns-3">
+              {memShown.map((k) => (
+                <div key={k.id} className="mb-4 break-inside-avoid rounded-card border border-border bg-card p-4 shadow-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {k.type && <Pill tone={k.type === 'rule' ? 'info' : k.type === 'preference' ? 'success' : 'neutral'}>{displayName(k.type) || k.type}</Pill>}
+                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{formatWhen(fromUnix(k.created_at))}</span>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{k.text}</p>
+                  {k.source && <p className="mt-2 text-[11px] text-muted-foreground">From {displayName(k.source) || k.source}</p>}
+                </div>
+              ))}
+              {memShown.length === 0 && <p className="text-sm text-muted-foreground">Nothing matches.</p>}
+            </div>
           )}
         </section>
+        )}
 
+        {tab === 'skills' && (
         <section className="flex min-w-0 flex-col gap-3">
-          <SectionHeading title="Skills" count={skills.data ? sk.length : undefined} />
           {skills.loading && !skills.data ? (
             <OpsLoading />
           ) : skUnavailable ? (
@@ -891,8 +948,8 @@ export function MemoryPage() {
               description="Skills your agent can apply — research, drafting, reviews and the rest — will be listed here with a short description."
             />
           ) : (
-            <div className="flex flex-col gap-3">
-              {sk.map((skill) => (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              {skShown.map((skill) => (
                 <OpsCard key={skill.id} className="flex flex-col gap-1.5">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-sm font-semibold">{displayName(skill.name) || skill.name}</p>
@@ -900,12 +957,14 @@ export function MemoryPage() {
                       <span className="shrink-0 text-[11px] text-muted-foreground">{formatWhen(fromUnix(skill.modified_at))}</span>
                     ) : null}
                   </div>
-                  {skill.description && <p className="text-sm text-muted-foreground">{skill.description}</p>}
+                  {skill.description && <p className="line-clamp-3 text-sm text-muted-foreground">{skill.description}</p>}
                 </OpsCard>
               ))}
+              {skShown.length === 0 && <p className="text-sm text-muted-foreground">Nothing matches.</p>}
             </div>
           )}
         </section>
+        )}
       </div>
     </OpsPage>
   )
