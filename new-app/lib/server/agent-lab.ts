@@ -268,7 +268,10 @@ function stripRunnerContext(text: string): string {
   return t.trim()
 }
 
-const RUNNER_USER_NOTE = /^\[(?:Sent by|Background job|Front desk|Helper|Message from)/
+// Every bracket tag the runner puts at the start of a message it injects into a chat (mirrors HARNESS_TAGS in
+// runner/rollover.py and SYSTEM_TAGS in tools/agent-context). The agent reads these; the customer never typed them.
+const RUNNER_USER_NOTE =
+  /^\[(?:Sent by|Background job|Front desk|Helper|Vision helper|Message from|Context rollover|Context restored|Recovery|Step budget|Goal check|Completion check|Loop guard|Skill gate|Visual gate|Browser ready|Model routing|Retry|Delivery|No answer)\b/
 
 function isRunnerInjectedUserMessage(e: RawEvent, text: string): boolean {
   if (e.source !== 'user') return false
