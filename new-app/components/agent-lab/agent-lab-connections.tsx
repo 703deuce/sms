@@ -53,6 +53,33 @@ type AuthField = {
 
 type ConnectedMap = Record<string, { status?: string; connected_at?: string | null }>
 
+export type TriggerItem = {
+  trigger_id: string
+  toolkit: string
+  slug: string
+  status: 'active' | 'paused' | 'needs_reconnect' | string
+  paused_reason?: string | null
+  auto_calls?: boolean
+  routine_id?: string | null
+  routine_name?: string | null
+}
+
+type DeadEvent = { id: number; slug?: string | null; toolkit?: string | null; error?: string; received_at?: string }
+
+type Usage = {
+  month?: string
+  calls_total?: number | null
+  events_total?: number | null
+  limits?: { calls: number; events: number }
+  warnings?: string[]
+}
+
+const NO_TRIGGERS: TriggerItem[] = []
+
+function triggerLabel(slug: string) {
+  return slug.replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase())
+}
+
 const DATA = catalog as Catalog
 const PAGE_SIZE = 60
 const OAUTH_BANNER_MS = 90_000
@@ -144,15 +171,23 @@ const AppCard = memo(function AppCard({
   ready,
   on,
   busy,
+  expired,
+  triggers,
+  busyTrigger,
   onConnect,
   onDisconnect,
+  onToggleTrigger,
 }: {
   app: CatalogApp
   ready: boolean
   on: boolean
   busy: boolean
+  expired: boolean
+  triggers: TriggerItem[]
+  busyTrigger: string | null
   onConnect: (app: CatalogApp) => void
   onDisconnect: (app: CatalogApp) => void
+  onToggleTrigger: (t: TriggerItem) => void
 }) {
   return (
     <li className="rounded-xl border bg-card p-4 shadow-sm">
@@ -170,6 +205,15 @@ const AppCard = memo(function AppCard({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             {ready ? (
               <Badge variant="outline">Ready, no setup needed</Badge>
+            ) : expired ? (
+              <>
+                <Badge variant="outline" className="border-destructive/50 text-destructive">
+                  Needs reconnect
+                </Badge>
+                <Button type="button" size="sm" disabled={busy} onClick={() => onConnect(app)}>
+                  {busy ? 'Working…' : 'Reconnect'}
+                </Button>
+              </>
             ) : on ? (
               <>
                 <Badge variant="default">Connected</Badge>
@@ -186,6 +230,45 @@ const AppCard = memo(function AppCard({
               </>
             )}
           </div>
+          {triggers.length ? (
+            <ul className="mt-3 flex flex-col gap-1.5 border-t pt-2" aria-label={`${app.name} triggers`}>
+              {triggers.map((t) => {
+                const paused = t.status !== 'active'
+                const waiting = t.status === 'needs_reconnect'
+                return (
+                  <li key={t.trigger_id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="min-w-0">
+                      <span className="font-medium">{triggerLabel(t.slug)}</span>
+                      {t.routine_name ? <span className="text-muted-foreground"> → {t.routine_name}</span> : null}
+                      <span className="block text-muted-foreground">
+                        {waiting ? 'Paused until reconnected' : paused ? 'Paused' : 'Active'}
+                        {t.auto_calls ? ' · auto-calls on' : ''}
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={!paused}
+                      aria-label={`${paused ? 'Resume' : 'Pause'} ${triggerLabel(t.slug)}`}
+                      disabled={waiting || busyTrigger === t.trigger_id}
+                      onClick={() => onToggleTrigger(t)}
+                      className={cn(
+                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
+                        paused ? 'bg-muted' : 'bg-foreground',
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          'inline-block size-3.5 rounded-full bg-background shadow transition-transform',
+                          paused ? 'translate-x-0.5' : 'translate-x-4',
+                        )}
+                      />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : null}
         </div>
       </div>
     </li>
@@ -204,6 +287,11 @@ export function AgentLabConnections() {
   const [busy, setBusy] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [oauthNote, setOauthNote] = useState<string | null>(null)
+  const [triggers, setTriggers] = useState<TriggerItem[]>([])
+  const [dead, setDead] = useState<DeadEvent[]>([])
+  const [usage, setUsage] = useState<Usage | null>(null)
+  const [busyTrigger, setBusyTrigger] = useState<string | null>(null)
+  const [connectHint, setConnectHint] = useState<CatalogApp | null>(null)
   const oauthSlug = useRef<string | null>(null)
   const oauthTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const oauthPoll = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -238,9 +326,15 @@ export function AgentLabConnections() {
       const data = await api<{
         connected?: ConnectedMap
         no_auth_toolkits?: string[]
+        triggers?: TriggerItem[]
+        dead_events?: DeadEvent[]
+        usage?: Usage
       }>('/api/agent-lab/connections/connected')
       const next = data.connected || {}
       setConnected((prev) => (sameConnected(prev, next) ? prev : next))
+      setTriggers(data.triggers || [])
+      setDead(data.dead_events || [])
+      setUsage(data.usage || null)
       const nextNoAuth = data.no_auth_toolkits || []
       setNoAuth((prev) => {
         if (prev.size === nextNoAuth.length && nextNoAuth.every((s) => prev.has(s.toLowerCase()))) return prev
@@ -333,8 +427,55 @@ export function AgentLabConnections() {
     [noAuth],
   )
 
+  const triggersBy = useMemo(() => {
+    const map = new Map<string, TriggerItem[]>()
+    for (const t of triggers) {
+      const k = (t.toolkit || '').toLowerCase()
+      map.set(k, [...(map.get(k) || []), t])
+    }
+    return map
+  }, [triggers])
+
+  const onToggleTrigger = useCallback(
+    async (t: TriggerItem) => {
+      setActionError(null)
+      setBusyTrigger(t.trigger_id)
+      try {
+        await api('/api/agent-lab/connections/trigger-pause', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger_id: t.trigger_id, paused: t.status === 'active' }),
+        })
+        await refreshStatus({ force: true })
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Could not change the trigger')
+      } finally {
+        setBusyTrigger(null)
+      }
+    },
+    [refreshStatus],
+  )
+
+  const onRetry = useCallback(
+    async (id: number) => {
+      setActionError(null)
+      try {
+        await api('/api/agent-lab/connections/trigger-retry', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_id: id }),
+        })
+        await refreshStatus({ force: true })
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Could not retry the event')
+      }
+    },
+    [refreshStatus],
+  )
+
   const onConnect = useCallback(
     async (app: CatalogApp) => {
+      setConnectHint(null)
       setActionError(null)
       clearOauthBanner()
       if (isNoAuth(app)) return
@@ -413,6 +554,24 @@ export function AgentLabConnections() {
     },
     [clearOauthBanner, isNoAuth, refreshStatus],
   )
+
+  // Chat sends https://transovo.ai/app/agent-lab/connections?connect=<app>: API-key apps open the key form right
+  // away; sign-in apps need a click (browsers block pop-ups that a page opens by itself).
+  const deepLinked = useRef(false)
+  useEffect(() => {
+    if (deepLinked.current || typeof window === 'undefined') return
+    deepLinked.current = true
+    const slug = (new URLSearchParams(window.location.search).get('connect') || '').trim().toLowerCase()
+    if (!slug) return
+    const app = DATA.apps.find((a) => a.slug === slug)
+    if (!app) {
+      setActionError(`No app called "${slug}" in the catalog. Search for it below.`)
+      return
+    }
+    setQ(app.name)
+    if (app.connect === 'api_key') void onConnect(app)
+    else if (app.connect !== 'no_auth') setConnectHint(app)
+  }, [onConnect])
 
   const onDisconnect = useCallback(
     async (app: CatalogApp) => {
@@ -509,6 +668,48 @@ export function AgentLabConnections() {
           {actionError}
         </p>
       ) : null}
+      {connectHint ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm">
+          <p>Connect {connectHint.name}: click to open its secure sign-in.</p>
+          <Button type="button" size="sm" onClick={() => void onConnect(connectHint)}>
+            Connect {connectHint.name}
+          </Button>
+        </div>
+      ) : null}
+      {triggers.length || dead.length || usage?.warnings?.length ? (
+        <section className="flex flex-col gap-2 rounded-lg border px-3 py-3 text-sm" aria-label="App triggers">
+          <h2 className="font-semibold">App triggers</h2>
+          <p className="text-xs text-muted-foreground">
+            {triggers.filter((t) => t.status === 'active').length} active,{' '}
+            {triggers.filter((t) => t.status === 'paused').length} paused,{' '}
+            {triggers.filter((t) => t.status === 'needs_reconnect').length} waiting for a reconnect. Each one is shown
+            under its app with a pause switch (use the Connected filter).
+            {usage?.limits
+              ? ` This month: ${(usage.calls_total ?? 0).toLocaleString()} of ${usage.limits.calls.toLocaleString()} app calls, ${(usage.events_total ?? 0).toLocaleString()} of ${usage.limits.events.toLocaleString()} trigger events (free plan).`
+              : ''}
+          </p>
+          {(usage?.warnings || []).map((w) => (
+            <p key={w} className="text-xs text-destructive">
+              Near the free plan limit: {w}
+            </p>
+          ))}
+          {dead.length ? (
+            <ul className="flex flex-col gap-1.5">
+              {dead.map((d) => (
+                <li key={d.id} className="flex items-start justify-between gap-3 rounded-md bg-destructive/5 px-2 py-1.5 text-xs">
+                  <span>
+                    <span className="font-medium">Not handled: {triggerLabel(d.slug || 'event')}</span>
+                    {d.toolkit ? ` (${d.toolkit})` : ''} — {d.error || 'failed 3 times'}
+                  </span>
+                  <button type="button" className="shrink-0 underline" onClick={() => void onRetry(d.id)}>
+                    Retry
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </section>
+      ) : null}
       {oauthNote ? (
         <div className="flex items-start justify-between gap-3 rounded-lg border bg-muted/50 px-3 py-2 text-sm text-foreground">
           <p>{oauthNote}</p>
@@ -585,10 +786,14 @@ export function AgentLabConnections() {
                     key={`${app.source}-${app.slug}`}
                     app={app}
                     ready={isNoAuth(app)}
-                    on={Boolean(connected[app.slug])}
+                    on={Boolean(connected[app.slug]) && connected[app.slug]?.status !== 'EXPIRED'}
                     busy={busy === app.slug}
+                    expired={connected[app.slug]?.status === 'EXPIRED'}
+                    triggers={triggersBy.get(app.slug) || NO_TRIGGERS}
+                    busyTrigger={busyTrigger}
                     onConnect={onConnect}
                     onDisconnect={onDisconnect}
+                    onToggleTrigger={onToggleTrigger}
                   />
                 ))}
               </ul>

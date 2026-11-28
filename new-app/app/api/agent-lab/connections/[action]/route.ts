@@ -4,7 +4,7 @@ import { clientIp, rateLimit, rateLimitedResponse } from '@/lib/server/agent-lab
 export const dynamic = 'force-dynamic'
 
 const TOOLKIT = /^[A-Za-z0-9_-]{1,80}$/
-const ACTIONS = new Set(['connected', 'auth-fields', 'link', 'connect', 'disconnect'])
+const ACTIONS = new Set(['connected', 'auth-fields', 'link', 'connect', 'disconnect', 'trigger-pause', 'trigger-retry'])
 
 function toolkitOf(raw: unknown): string | null {
   const s = String(raw ?? '').trim().toLowerCase()
@@ -60,6 +60,33 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
     }
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
     if (!body) return Response.json({ error: 'Invalid request' }, { status: 400 })
+
+    if (action === 'trigger-pause') {
+      const triggerId = String(body.trigger_id ?? '')
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(triggerId)) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const res = await runnerFetch('/connectors/trigger-pause', {
+        method: 'POST',
+        body: JSON.stringify({ trigger_id: triggerId, paused: Boolean(body.paused) }),
+        timeoutMs: 30_000,
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
+      if (!res.ok) return runnerError(res.status, data)
+      return Response.json({ ok: true, trigger_id: triggerId, paused: Boolean(body.paused) })
+    }
+
+    if (action === 'trigger-retry') {
+      const eventId = Number(body.event_id)
+      if (!Number.isInteger(eventId) || eventId <= 0) return Response.json({ error: 'Invalid event' }, { status: 400 })
+      const res = await runnerFetch('/connectors/trigger-retry', {
+        method: 'POST',
+        body: JSON.stringify({ event_id: eventId }),
+        timeoutMs: 20_000,
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
+      if (!res.ok) return runnerError(res.status, data)
+      return Response.json({ ok: true, event_id: eventId })
+    }
+
     const toolkit = toolkitOf(body.toolkit)
     if (!toolkit) return Response.json({ error: 'Invalid app' }, { status: 400 })
 
