@@ -65,7 +65,11 @@ export type TriggerItem = {
   routine_name?: string | null
 }
 
-type DeadEvent = { id: number; slug?: string | null; toolkit?: string | null; error?: string; received_at?: string }
+type DeadEvent = { id: number; slug?: string | null; toolkit?: string | null; error?: string; received_at?: string; routine_id?: string | null }
+
+function triggerKey(t: TriggerItem): string {
+  return t.routine_id ? `${t.trigger_id}:${t.routine_id}` : t.trigger_id
+}
 
 type Usage = {
   month?: string
@@ -239,7 +243,7 @@ const AppCard = memo(function AppCard({
                 const paused = t.status !== 'active'
                 const waiting = t.status === 'needs_reconnect'
                 return (
-                  <li key={t.trigger_id} className="flex items-center justify-between gap-2 text-xs">
+                  <li key={triggerKey(t)} className="flex items-center justify-between gap-2 text-xs">
                     <span className="min-w-0">
                       <span className="font-medium">{triggerLabel(t.slug)}</span>
                       {t.routine_name ? <span className="text-muted-foreground"> → {t.routine_name}</span> : null}
@@ -254,8 +258,8 @@ const AppCard = memo(function AppCard({
                         role="switch"
                         title="Do this trigger's saved action automatically, without asking in chat"
                         aria-checked={Boolean(t.auto_do || t.auto_calls)}
-                        aria-label={`${t.auto_do || t.auto_calls ? 'Turn off' : 'Turn on'} automatic actions for ${triggerLabel(t.slug)}`}
-                        disabled={waiting || busyTrigger === t.trigger_id}
+                        aria-label={`${t.auto_do || t.auto_calls ? 'Turn off' : 'Turn on'} automatic actions for ${t.routine_name || triggerLabel(t.slug)}`}
+                        disabled={waiting || busyTrigger === triggerKey(t)}
                         onClick={() => onToggleAutoDo(t)}
                         className={cn(
                           'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
@@ -274,8 +278,8 @@ const AppCard = memo(function AppCard({
                         role="switch"
                         title="Pause or resume this trigger"
                         aria-checked={!paused}
-                        aria-label={`${paused ? 'Resume' : 'Pause'} ${triggerLabel(t.slug)}`}
-                        disabled={waiting || busyTrigger === t.trigger_id}
+                        aria-label={`${paused ? 'Resume' : 'Pause'} ${t.routine_name || triggerLabel(t.slug)}`}
+                        disabled={waiting || busyTrigger === triggerKey(t)}
                         onClick={() => onToggleTrigger(t)}
                         className={cn(
                           'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
@@ -470,12 +474,12 @@ export function AgentLabConnections() {
   const onToggleTrigger = useCallback(
     async (t: TriggerItem) => {
       setActionError(null)
-      setBusyTrigger(t.trigger_id)
+      setBusyTrigger(triggerKey(t))
       try {
         await api('/api/agent-lab/connections/trigger-pause', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trigger_id: t.trigger_id, paused: t.status === 'active' }),
+          body: JSON.stringify({ trigger_id: t.trigger_id, routine_id: t.routine_id, paused: t.status === 'active' }),
         })
         await refreshStatus({ force: true })
       } catch (err) {
@@ -490,12 +494,12 @@ export function AgentLabConnections() {
   const onToggleAutoDo = useCallback(
     async (t: TriggerItem) => {
       setActionError(null)
-      setBusyTrigger(t.trigger_id)
+      setBusyTrigger(triggerKey(t))
       try {
         await api('/api/agent-lab/connections/trigger-auto-do', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ trigger_id: t.trigger_id, auto_do: !(t.auto_do || t.auto_calls) }),
+          body: JSON.stringify({ trigger_id: t.trigger_id, routine_id: t.routine_id, auto_do: !(t.auto_do || t.auto_calls) }),
         })
         await refreshStatus({ force: true })
       } catch (err) {

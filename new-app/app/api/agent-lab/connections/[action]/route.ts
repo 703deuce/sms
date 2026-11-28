@@ -27,6 +27,12 @@ function runnerError(status: number, data: { error?: string }): Response {
   return Response.json({ error: message }, { status: status >= 500 ? 502 : status })
 }
 
+
+function idOf(raw: unknown): string | null {
+  const s = String(raw ?? '').trim()
+  return /^[A-Za-z0-9_-]{1,80}$/.test(s) ? s : null
+}
+
 export async function GET(request: Request, ctx: { params: Promise<{ action: string }> }) {
   try {
     const { action } = await ctx.params
@@ -62,16 +68,18 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
     if (!body) return Response.json({ error: 'Invalid request' }, { status: 400 })
 
     if (action === 'trigger-pause') {
-      const triggerId = String(body.trigger_id ?? '')
-      if (!/^[A-Za-z0-9_-]{1,80}$/.test(triggerId)) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const triggerId = idOf(body.trigger_id)
+      if (!triggerId) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const routineId = body.routine_id == null || body.routine_id === '' ? null : idOf(body.routine_id)
+      if (body.routine_id && !routineId) return Response.json({ error: 'Invalid routine' }, { status: 400 })
       const res = await runnerFetch('/connectors/trigger-pause', {
         method: 'POST',
-        body: JSON.stringify({ trigger_id: triggerId, paused: Boolean(body.paused) }),
+        body: JSON.stringify({ trigger_id: triggerId, routine_id: routineId, paused: Boolean(body.paused) }),
         timeoutMs: 30_000,
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
       if (!res.ok) return runnerError(res.status, data)
-      return Response.json({ ok: true, trigger_id: triggerId, paused: Boolean(body.paused) })
+      return Response.json({ ok: true, trigger_id: triggerId, routine_id: routineId, paused: Boolean(body.paused) })
     }
 
     if (action === 'trigger-retry') {
@@ -88,17 +96,19 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
     }
 
     if (action === 'trigger-auto-do') {
-      const triggerId = String(body.trigger_id ?? '')
-      if (!/^[A-Za-z0-9_-]{1,80}$/.test(triggerId)) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const triggerId = idOf(body.trigger_id)
+      if (!triggerId) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const routineId = body.routine_id == null || body.routine_id === '' ? null : idOf(body.routine_id)
+      if (body.routine_id && !routineId) return Response.json({ error: 'Invalid routine' }, { status: 400 })
       const enabled = Boolean(body.auto_do ?? body.enabled)
       const res = await runnerFetch('/connectors/trigger-auto-do', {
         method: 'POST',
-        body: JSON.stringify({ trigger_id: triggerId, auto_do: enabled }),
+        body: JSON.stringify({ trigger_id: triggerId, routine_id: routineId, auto_do: enabled }),
         timeoutMs: 30_000,
       })
       const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
       if (!res.ok) return runnerError(res.status, data)
-      return Response.json({ ok: true, trigger_id: triggerId, auto_do: enabled })
+      return Response.json({ ok: true, trigger_id: triggerId, routine_id: routineId, auto_do: enabled })
     }
 
     const toolkit = toolkitOf(body.toolkit)
