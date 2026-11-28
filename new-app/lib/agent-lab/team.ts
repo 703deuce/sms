@@ -66,7 +66,7 @@ export type Handoff = {
   from_cid?: string | null
   to_cid?: string | null
   task: string
-  status: 'queued' | 'sent' | 'reported' | 'done' | 'failed' | 'cancelled'
+  status: 'queued' | 'delivering' | 'sent' | 'reported' | 'returning' | 'done' | 'failed' | 'cancelled'
   result?: string | null
   created_at: number
   sent_at?: number | null
@@ -76,12 +76,12 @@ export type Handoff = {
 
 export const AVATARS = ['🧭', '📣', '🔎', '💼', '🛠️', '📊', '✍️', '📞', '🧾', '🎨', '🤝', '🗓️']
 
-export const HANDOFF_OPEN = new Set(['queued', 'sent', 'reported'])
+export const HANDOFF_OPEN = new Set(['queued', 'delivering', 'sent', 'reported', 'returning'])
 
 export function handoffLabel(h: Handoff): string {
-  if (h.status === 'queued') return 'Handing over'
+  if (h.status === 'queued' || h.status === 'delivering') return 'Handing over'
   if (h.status === 'sent') return 'Working on it'
-  if (h.status === 'reported') return 'Sending result back'
+  if (h.status === 'reported' || h.status === 'returning') return 'Sending result back'
   if (h.status === 'done') return 'Done'
   if (h.status === 'failed') return 'Not finished'
   return h.status
