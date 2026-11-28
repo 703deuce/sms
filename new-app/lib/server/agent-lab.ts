@@ -206,6 +206,11 @@ export async function readMessageRequest(request: Request): Promise<{ message: s
 
 // ---- Conversation events → compact chat items ----
 
+/** Rejections from the context-restore step ("Not executed: … context was condensed …"), not the safety guard. */
+export function isContextRestoreRejection(reason: string): boolean {
+  return /^\s*Not executed:/i.test(reason) && /condens/i.test(reason)
+}
+
 export type AgentLabItem = {
   id: string
   ts: string
@@ -544,15 +549,22 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
         })
         break
       }
-      case 'UserRejectObservation':
+      case 'UserRejectObservation': {
+        const reason = String(e.rejection_reason ?? 'Blocked')
+        if (isContextRestoreRejection(reason)) {
+          // Not a safety block: the runner skipped this call while it restored condensed context. Show it calmly.
+          out.push({ ...base, type: 'observation', tool: 'context_restore', title: 'Restoring context', text: clip(reason, 2000), isError: false })
+          break
+        }
         out.push({
           ...base,
           type: 'error',
           title: 'Blocked by safety guard',
-          text: clip(String(e.rejection_reason ?? 'Blocked'), 2000),
+          text: clip(reason, 2000),
           isError: true,
         })
         break
+      }
       case 'AgentErrorEvent':
       case 'ConversationErrorEvent':
       case 'ServerErrorEvent':
