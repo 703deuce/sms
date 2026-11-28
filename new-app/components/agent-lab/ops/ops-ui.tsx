@@ -88,7 +88,7 @@ export function OpsPage({
   children: React.ReactNode
 }) {
   return (
-    <Page>
+    <Page fluid>
       <PageHeader
         icon={icon}
         title={title}

@@ -6,7 +6,7 @@ export const metadata = { title: 'Connections' }
 
 export default function AgentLabConnectionsPage() {
   return (
-    <Page>
+    <Page fluid>
       <PageHeader
         icon={Plug}
         title="Connections"

@@ -28,19 +28,31 @@ import { TONE_TILE, type ToneTileKey } from '@/lib/ui/tones'
 import { cn } from '@/lib/utils'
 import { Skeleton } from '@/components/ui/skeleton'
 
-export function PageContainer({ className, children }: { className?: string; children: React.ReactNode }) {
+/**
+ * `fluid` drops the 96rem cap (1,229px on desktop, where html is 80%) so work pages use the whole area beside the sidebar.
+ */
+export function PageContainer({ className, children, fluid }: { className?: string; children: React.ReactNode; fluid?: boolean }) {
   return (
-    <div className={cn('mx-auto flex w-full max-w-screen-2xl flex-col gap-6 px-6 py-6', className)} data-testid="page-container">
+    <div
+      className={cn(
+        'mx-auto flex w-full flex-col gap-6 py-6',
+        fluid ? 'max-w-none px-4 md:px-6 xl:px-8' : 'max-w-screen-2xl px-6',
+        className,
+      )}
+      data-testid="page-container"
+    >
       {children}
     </div>
   )
 }
 
-export function Page({ children, className }: { children: React.ReactNode; className?: string }) {
+export function Page({ children, className, fluid }: { children: React.ReactNode; className?: string; fluid?: boolean }) {
   return (
     <div className="relative">
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-grid-fade" />
-      <PageContainer className={cn('relative', className)}>{children}</PageContainer>
+      <PageContainer fluid={fluid} className={cn('relative', className)}>
+        {children}
+      </PageContainer>
     </div>
   )
 }

@@ -200,7 +200,7 @@ export function AgentDashboard() {
   const unavailable = o && o.runs === null && o.routines === null
 
   return (
-    <Page>
+    <Page fluid>
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-end gap-2">
           <NotificationsBell />
