@@ -259,24 +259,118 @@ function isRunnerInjectedUserMessage(e: RawEvent, text: string): boolean {
   return RUNNER_USER_NOTE.test(text)
 }
 
+const RAW_TOOL_SUMMARY = /^[A-Za-z0-9_.-]+:\s*[{[]/
+const INTERNAL_ID = /\b(?:rt|ti|rm|run|ca)_[A-Za-z0-9_-]+/
+const PROVIDER_SLUG = /\b[A-Z]{3,}_[A-Z0-9_]{8,}\b/
+
+/** True when a tool summary is the raw fallback (tool name + JSON/ids), not a short plain label. */
+function isRawStepTitle(title: string): boolean {
+  if (!title.trim()) return true
+  if (RAW_TOOL_SUMMARY.test(title)) return true
+  if (/"command"\s*:/.test(title)) return true
+  if (INTERNAL_ID.test(title) || PROVIDER_SLUG.test(title)) return true
+  return false
+}
+
+function skillDisplayName(name: string): string {
+  const pretty = name.replace(/^lab-/, '').replace(/[_-]+/g, ' ').trim()
+  return pretty ? `Loaded the ${pretty} skill` : 'Loaded a skill'
+}
+
+function oneCommandLabel(raw: string): string {
+  const cmd = raw
+    .replace(/^\s*(?:\d*>\s*\S+\s*)+/, '')
+    .replace(/[0-9]*[>&].*$/, '')
+    .trim()
+  if (!cmd) return ''
+  const tokens = cmd.split(/\s+/).filter((t) => t && t !== 'sudo')
+  const bin = (tokens[0]?.split('/').pop() || '').replace(/`/g, '')
+  if (!bin || ['echo', 'head', 'grep', 'tail', 'awk', 'sed', 'cat', 'true'].includes(bin)) return ''
+  if (tokens.includes('--help') || tokens.includes('-h')) return 'Checked command help'
+  if (bin === 'connector') {
+    const sub = tokens[1] || ''
+    const map: Record<string, string> = {
+      'trigger-pause': 'Paused a trigger',
+      'trigger-resume': 'Resumed a trigger',
+      'trigger-list': 'Listed triggers',
+      'trigger-create': 'Created a trigger',
+      'trigger-delete': 'Deleted a trigger',
+      'trigger-auto-do': 'Updated automatic actions',
+      'trigger-info': 'Looked up a trigger',
+      'trigger-events': 'Listed trigger events',
+      'trigger-retry': 'Retried a trigger event',
+      triggers: 'Listed trigger types',
+      connected: 'Checked connected apps',
+      link: 'Started an app connection',
+      usage: 'Checked usage',
+    }
+    return map[sub] || 'Updated a connection'
+  }
+  if (bin === 'routine') {
+    const sub = tokens[1] || ''
+    const map: Record<string, string> = {
+      pause: 'Paused a routine',
+      resume: 'Resumed a routine',
+      list: 'Listed routines',
+      show: 'Looked up a routine',
+      add: 'Added a routine',
+      rm: 'Removed a routine',
+      run: 'Ran a routine',
+      'auto-do': 'Updated automatic actions',
+    }
+    return map[sub] || 'Updated a routine'
+  }
+  if (bin === 'remind') return 'Set a reminder'
+  return 'Ran a command'
+}
+
+function plainTerminalTitle(command: string): string {
+  const parts = String(command || '')
+    .split(/&&|\|\||;/)
+    .map((s) => oneCommandLabel(s))
+    .filter(Boolean)
+  const unique = [...new Set(parts)]
+  if (unique.length === 0) return 'Ran a command'
+  if (unique.length === 1) return unique[0]
+  if (unique.length === 2) return `${unique[0]} and ${unique[1].charAt(0).toLowerCase()}${unique[1].slice(1)}`
+  return unique[0]
+}
+
+function plainStepTitle(tool: string, summary: string, action: Record<string, any>): string {
+  if (summary && !isRawStepTitle(summary)) return summary
+  if (tool === 'terminal') return plainTerminalTitle(String(action.command ?? ''))
+  if (tool === 'agent_skill' || tool === 'skill') {
+    const name = String(action.data?.name ?? action.name ?? '')
+    const fromSummary = summary.match(/"name"\s*:\s*"([^"]+)"/)
+    return skillDisplayName(name || fromSummary?.[1] || '')
+  }
+  if (tool === 'file_editor') {
+    const what = action.command === 'view' ? 'Viewed a file' : action.command === 'create' ? 'Created a file' : 'Edited a file'
+    return what
+  }
+  return 'Used a tool'
+}
+
 function describeAction(e: RawEvent): { title: string; text: string } {
   const a = (e.action ?? {}) as Record<string, any>
   const tool = String(e.tool_name ?? a.kind ?? 'action')
   const summary = typeof e.summary === 'string' ? e.summary : ''
-  if (tool === 'terminal') return { title: summary || 'Ran a command', text: String(a.command ?? '') }
+  const title = plainStepTitle(tool, summary, a)
+  if (tool === 'terminal') return { title, text: String(a.command ?? '') }
   if (tool === 'file_editor') {
     const what = a.command === 'view' ? 'Viewed' : a.command === 'create' ? 'Created' : 'Edited'
-    return { title: summary || `${what} ${a.path ?? 'a file'}`, text: String(a.path ?? '') }
+    return { title: isRawStepTitle(summary) ? `${what} a file` : title, text: String(a.path ?? '') }
   }
   if (tool.startsWith('browser')) {
     const detail = a.url ?? a.text ?? a.index ?? ''
-    return { title: summary || tool.replace('browser_', 'Browser: ').replace(/_/g, ' '), text: String(detail) }
+    const fallback = tool.replace('browser_', 'Browser: ').replace(/_/g, ' ')
+    return { title: isRawStepTitle(summary) ? fallback : title, text: String(detail) }
   }
   if (tool === 'task_tracker') {
     const tasks = Array.isArray(a.task_list) ? a.task_list.map((t: any) => `${t.status === 'done' ? '✓' : '•'} ${t.title ?? ''}`).join('\n') : ''
-    return { title: summary || 'Updated the plan', text: tasks }
+    return { title: isRawStepTitle(summary) ? 'Updated the plan' : title, text: tasks }
   }
-  return { title: summary || tool, text: clip(JSON.stringify(a), 600) }
+  return { title: isRawStepTitle(summary) ? (tool === 'agent_skill' ? title : tool) : title, text: clip(JSON.stringify(a), 600) }
 }
 
 export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
