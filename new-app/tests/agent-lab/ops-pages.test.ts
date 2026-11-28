@@ -105,7 +105,7 @@ describe('agent lab work pages', () => {
     const ids = visibleSidebarNav(f).map((i) => i.id)
     for (const i of AGENT_NAV) expect(ids).toContain(i.id)
     expect(AGENT_NAV.map((i) => i.label)).toEqual([
-      'Dashboard', 'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Permissions', 'Connections', 'Computer', 'Files', 'Memory & skills',
+      'Dashboard', 'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Goals', 'Team', 'Business brain', 'Permissions', 'Connections', 'Computer', 'Files', 'Memory & skills',
     ])
     if (VIDEO_NAV_HIDDEN) {
       for (const v of ['clips', 'editor', 'motion-studio', 'streamer', 'templates']) expect(ids).not.toContain(v)

@@ -7,6 +7,7 @@ import {
   Activity,
   Bot,
   Brain,
+  BookOpen,
   BriefcaseBusiness,
   CalendarDays,
   Captions,
@@ -33,6 +34,8 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Target,
+  Users,
   Video,
   WandSparkles,
   type LucideIcon,
@@ -41,6 +44,7 @@ import { LogoMark } from '@/components/brand/logo-mark'
 import { DriveWorkspaceSwitcher } from '@/components/drive/drive-workspace-switcher'
 import { ClipsProjectsNav } from '@/components/shell/clips-projects-nav'
 import { SidebarCreateMenu } from '@/components/shell/sidebar-create-menu'
+import { AgentsNav } from '@/components/agent-lab/team/agents-nav'
 import { useClipsWorkspace } from '@/components/providers/clips-workspace-provider'
 import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
@@ -109,6 +113,9 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   agentFiles: Folder,
   agentHome: LayoutDashboard,
   agentMemory: Brain,
+  agentGoals: Target,
+  agentTeam: Users,
+  agentBrain: BookOpen,
 }
 
 const navButtonClass =
@@ -190,6 +197,8 @@ export function AppSidebar({
         {!VIDEO_NAV_HIDDEN && <SidebarCreateMenu items={createMenuItems(flags)} />}
       </SidebarHeader>
       <SidebarContent>
+        <AgentsNav buttonClass={navButtonClass} />
+        <SidebarSeparator className="mx-3 w-auto" />
         <SidebarGroup data-nav-group="agent">
           <SidebarGroupLabel>Agent</SidebarGroupLabel>
           <SidebarMenu>

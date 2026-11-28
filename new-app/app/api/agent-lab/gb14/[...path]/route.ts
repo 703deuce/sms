@@ -11,6 +11,8 @@ const SEGMENT = /^[A-Za-z0-9_.-]{1,120}$/
 const ALLOWED_ROOTS = new Set([
   'permissions', 'overview', 'responsibilities', 'activity', 'needs-you', 'assignments', 'files', 'calendar', 'calls',
   'knowledge', 'skills', 'notifications', 'templates', 'dashboard',
+  // GB-18: team of agents, business brain, goals, hand-offs
+  'agents', 'brain', 'goals', 'delegations', 'team',
 ])
 
 function target(path: string[] | undefined, search: string): string | null {

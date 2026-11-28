@@ -1,7 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Bell, Bot, ChevronRight, FileText, Flag, Folder, KeyRound, Loader2, MessageSquare, Mic, Monitor, PanelLeft, PanelLeftClose, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
+import { Bell, Bot, ChevronRight, FileText, Flag, Folder, KeyRound, Loader2, MessageSquare, Mic, Monitor, PanelLeft, PanelLeftClose, Paperclip, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
 import {
   HandoffNotice,
@@ -17,6 +19,14 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { AgentAvatar } from '@/components/agent-lab/team/agent-avatar'
+import { HandoffCard, HandoffStrip } from '@/components/agent-lab/team/handoff-card'
+import { teamChanged, useAgents } from '@/components/agent-lab/team/use-team'
+import { gbUrl } from '@/components/agent-lab/ops/gb14'
+import { parseHandoff, type Handoff, type TeamAgent } from '@/lib/agent-lab/team'
+
+/** GB-18: which named agent this chat belongs to (avatar + name on its messages), and the team (hand-off cards). */
+const ChatAgentContext = createContext<{ agent: TeamAgent | null; agents: TeamAgent[] }>({ agent: null, agents: [] })
 
 type Item = {
   id: string
@@ -118,9 +128,14 @@ function fmtTime(ts: string) {
 function ChatMessage({ item }: { item: Item }) {
   const mine = item.role === 'user'
   const time = fmtTime(item.ts)
+  const { agent, agents } = useContext(ChatAgentContext)
+  const handoff = mine ? parseHandoff(item.text) : null
+  if (handoff) return <HandoffCard h={handoff} time={time} agents={agents} />
   return (
     <div className={cn('flex items-end gap-2', mine ? 'justify-end' : 'justify-start')} data-role={mine ? 'user' : 'agent'}>
-      {mine ? null : (
+      {mine ? null : agent?.avatar ? (
+        <AgentAvatar avatar={agent.avatar} name={agent.name} className="mb-5 size-7 rounded-full text-sm" />
+      ) : (
         <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary">
           <Bot className="size-4" />
         </div>
@@ -136,7 +151,7 @@ function ChatMessage({ item }: { item: Item }) {
         >
           {mine ? item.text : <AgentMarkdown text={item.text} />}
         </div>
-        {time ? <span className="mt-1 px-1 text-[10px] text-muted-foreground">{mine ? 'You' : 'Agent'} · {time}</span> : null}
+        {time ? <span className="mt-1 px-1 text-[10px] text-muted-foreground">{mine ? 'You' : agent?.name || 'Agent'} · {time}</span> : null}
       </div>
       {mine ? (
         <div className="mb-5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted">
@@ -392,11 +407,84 @@ export function AgentLabChat() {
   const jobsPollGenRef = useRef(0)
   const jobsAbortRef = useRef<AbortController | null>(null)
 
-  // Optional deep link from the dashboard and work pages: /app/agent-lab?c=<conversation id> opens that chat.
-  useEffect(() => {
-    const c = new URLSearchParams(window.location.search).get('c')
-    if (c && /^[\w-]{8,80}$/.test(c)) setActiveId(c)
+  // GB-18: named agents. ?agent=<id> opens that agent's own persistent chat; ?c=<conversation id> (deep links from the
+  // dashboard and work pages) opens that chat under the agent it belongs to. No param = the main agent.
+  const searchParams = useSearchParams()
+  const agentParam = searchParams?.get('agent') ?? null
+  const cParam = searchParams?.get('c') ?? null
+  const agentsQ = useAgents()
+  const agents = agentsQ.data?.items ?? []
+  const defaultAgentId = agentsQ.data?.default_id ?? 'agent-lab'
+  const [convMap, setConvMap] = useState<Record<string, string>>({})
+  const [handoffs, setHandoffs] = useState<Handoff[]>([])
+  const [agentId, setAgentId] = useState<string | null>(null)
+  const openedFor = useRef<string | null>(null)
+  const currentAgent = agents.find((a) => a.id === agentId) ?? agents.find((a) => a.is_default) ?? null
+
+  const loadConvMap = useCallback(async () => {
+    try {
+      const d = await api<{ map: Record<string, string> }>(gbUrl('agents/conversation-map'))
+      setConvMap(d.map ?? {})
+    } catch {
+      /* the map is optional: everything then belongs to the main agent */
+    }
   }, [])
+
+  useEffect(() => {
+    void loadConvMap()
+  }, [loadConvMap])
+
+  useEffect(() => {
+    if (cParam && /^[\w-]{8,80}$/.test(cParam)) {
+      if (openedFor.current !== `c:${cParam}`) {
+        openedFor.current = `c:${cParam}`
+        setActiveId(cParam)
+      }
+      setAgentId(convMap[cParam] ?? (agentParam || defaultAgentId))
+      return
+    }
+    if (!agentsQ.data) return
+    const want = agentParam && agents.some((a) => a.id === agentParam) ? agentParam : defaultAgentId
+    const key = `a:${want}`
+    const a = agents.find((x) => x.id === want)
+    if (openedFor.current === key) {
+      // the agent's main chat was just started on the server: follow it without resetting the screen
+      if (a?.conversation_id && !activeId) setActiveId(a.conversation_id)
+      return
+    }
+    openedFor.current = key
+    setAgentId(want)
+    setActiveId(a?.conversation_id ?? null)
+    setItems([])
+    setStatus('idle')
+    setJobs([])
+    setJobsActiveCount(0)
+    setMobileList(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agentParam, cParam, agentsQ.data, convMap])
+
+  // Hand-offs to and from the open chat (the strip above the messages); only polled while one is open.
+  useEffect(() => {
+    if (!activeId) {
+      setHandoffs([])
+      return
+    }
+    let stop = false
+    const load = async () => {
+      try {
+        const d = await api<{ items: Handoff[] }>(gbUrl(`delegations?conversation=${encodeURIComponent(activeId)}&limit=20`))
+        if (!stop) setHandoffs(d.items ?? [])
+      } catch {
+        /* optional */
+      }
+    }
+    void load()
+    const t = setInterval(load, 5000)
+    return () => {
+      stop = true
+      clearInterval(t)
+    }
+  }, [activeId])
 
   useEffect(() => {
     filesUserClosed.current = false
@@ -658,9 +746,12 @@ export function AgentLabChat() {
       for (const f of pendingFiles) form.append('files', f, f.name)
       if (!id) {
         keepPendingRef.current = true
+        if (currentAgent) form.append('agentId', currentAgent.id)
         const started = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
         setActiveId(started.id)
         void loadConversations()
+        void loadConvMap()
+        teamChanged()
       } else {
         await postForm(`/api/agent-lab/conversations/${id}/messages`, form)
         setStatus('running')
@@ -702,9 +793,15 @@ export function AgentLabChat() {
 
   const backgroundActive = jobsActiveCount > 0
   const stoppable = Boolean(activeId && (running || backgroundActive))
-  const activeTitle = activeId
-    ? displayName(conversations.find((c) => c.id === activeId)?.title) || 'Conversation'
-    : 'New conversation'
+  const agentName = currentAgent?.name ?? 'your agent'
+  const isMainChat = Boolean(activeId && currentAgent?.conversation_id === activeId)
+  const activeTitle = !activeId || isMainChat
+    ? agentName
+    : `${agentName} · ${displayName(conversations.find((c) => c.id === activeId)?.title) || 'Earlier chat'}`
+  // Chats in the list: the ones that belong to the open agent (old chats belong to the main agent).
+  const agentConversations = conversations.filter((c) => (convMap[c.id] ?? defaultAgentId) === (currentAgent?.id ?? defaultAgentId))
+  const mainConversation = currentAgent?.conversation_id ? agentConversations.find((c) => c.id === currentAgent.conversation_id) : undefined
+  const earlierConversations = agentConversations.filter((c) => c.id !== currentAgent?.conversation_id)
 
   function startNewConversation() {
     setActiveId(null)
@@ -715,14 +812,43 @@ export function AgentLabChat() {
     setMobileList(false)
   }
 
+  function openMainChat() {
+    setActiveId(currentAgent?.conversation_id ?? null)
+    if (!currentAgent?.conversation_id) startNewConversation()
+    setMobileList(false)
+  }
+
   const listBody = (
     <>
+      {currentAgent ? (
+        <div className="flex items-start gap-2.5 rounded-lg border border-border bg-background p-2.5">
+          <AgentAvatar avatar={currentAgent.avatar} name={currentAgent.name} running={currentAgent.running} />
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-semibold">{currentAgent.name}</div>
+            {currentAgent.role ? <div className="line-clamp-2 text-xs text-muted-foreground">{currentAgent.role}</div> : null}
+            <Link href={`/app/agent-lab/team?agent=${encodeURIComponent(currentAgent.id)}`} className="mt-1 inline-block text-xs text-primary hover:underline">
+              Agent settings
+            </Link>
+          </div>
+        </div>
+      ) : null}
       {task ? <TaskChecklist task={task} /> : null}
-      <Button variant="outline" className="w-full justify-start gap-2" onClick={startNewConversation}>
-        <Plus /> New conversation
-      </Button>
+      <button
+        type="button"
+        onClick={openMainChat}
+        className={cn('flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted', (isMainChat || !activeId) && 'bg-muted font-medium')}
+      >
+        <MessageSquare className="size-4 text-muted-foreground" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate">Chat with {agentName}</span>
+          <span className="block text-xs font-normal text-muted-foreground">
+            {mainConversation ? formatWhen(mainConversation.updatedAt ?? mainConversation.createdAt) : 'One ongoing conversation'}
+          </span>
+        </span>
+      </button>
+      {earlierConversations.length ? <div className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earlier chats</div> : null}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-        {conversations.map((c) => (
+        {earlierConversations.map((c) => (
           <button
             key={c.id}
             type="button"
@@ -913,7 +1039,7 @@ export function AgentLabChat() {
           {listOpen ? (
             <div className="flex h-full min-h-0 flex-col gap-2 p-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Conversations</span>
+                <span className="text-sm font-medium">Agent</span>
                 <Button size="icon-sm" variant="ghost" aria-label="Collapse conversations" onClick={() => setListOpen(false)}>
                   <PanelLeftClose />
                 </Button>
@@ -925,9 +1051,11 @@ export function AgentLabChat() {
               <Button size="icon-sm" variant="ghost" aria-label="Expand conversations" onClick={() => setListOpen(true)}>
                 <PanelLeft />
               </Button>
-              <Button size="icon-sm" variant="ghost" aria-label="New conversation" onClick={startNewConversation}>
-                <Plus />
-              </Button>
+              {currentAgent ? (
+                <button type="button" aria-label={`Chat with ${currentAgent.name}`} onClick={openMainChat} className="mt-1">
+                  <AgentAvatar avatar={currentAgent.avatar} name={currentAgent.name} size="sm" running={currentAgent.running} />
+                </button>
+              ) : null}
             </div>
           )}
         </aside>
@@ -1012,14 +1140,19 @@ export function AgentLabChat() {
             </div>
           </div>
           <JobsStrip jobs={jobs} />
+          {activeId ? <HandoffStrip items={handoffs} conversationId={activeId} agents={agents} /> : null}
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6">
               {items.length === 0 ? (
                 <p className="m-auto max-w-md text-center text-sm text-muted-foreground">
-                  {activeId ? 'Loading…' : 'Ask for anything: “Find a 20 second clip of a lighthouse at sunset and make it vertical with a slow push-in.”'}
+                  {activeId ? 'Loading…' : currentAgent && !currentAgent.is_default
+                    ? `This is your ongoing chat with ${currentAgent.name}${currentAgent.role ? ` (${currentAgent.role.replace(/\.$/, '')})` : ''}. Ask for anything, or have it work with your other agents.`
+                    : 'Ask for anything: “Find a 20 second clip of a lighthouse at sunset and make it vertical with a slow push-in.”'}
                 </p>
               ) : (
-                <ChatThread items={items} live={running} />
+                <ChatAgentContext.Provider value={{ agent: currentAgent, agents }}>
+                  <ChatThread items={items} live={running} />
+                </ChatAgentContext.Provider>
               )}
               {running ? (
                 <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground">
@@ -1066,7 +1199,7 @@ export function AgentLabChat() {
               }}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={running ? "Steer it while it works (e.g. “skip the intro”, “wrap it up”). It reads your message before its next step." : "Message the agent…"}
+              placeholder={running ? "Steer it while it works (e.g. “skip the intro”, “wrap it up”). It reads your message before its next step." : `Message ${agentName}…`}
               className="max-h-48 min-h-12 flex-1"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

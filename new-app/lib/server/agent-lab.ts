@@ -193,15 +193,26 @@ export function cleanTimeZone(raw: unknown): string | undefined {
 }
 
 /** Reads `{ message, files[], timezone }` from either JSON or multipart form data. */
-export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; timezone?: string }> {
+/** GB-18: a named team agent id (letters, digits, dashes). Anything else is ignored (= the main agent). */
+function cleanAgentId(v: unknown): string | undefined {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return /^[a-z0-9][a-z0-9_-]{0,47}$/.test(s) ? s : undefined
+}
+
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; timezone?: string; agentId?: string }> {
   const type = request.headers.get('content-type') ?? ''
   if (type.includes('multipart/form-data')) {
     const form = await request.formData()
     const files = form.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    return { message: String(form.get('message') ?? '').trim(), files, timezone: cleanTimeZone(form.get('timezone')) }
+    return {
+      message: String(form.get('message') ?? '').trim(),
+      files,
+      timezone: cleanTimeZone(form.get('timezone')),
+      agentId: cleanAgentId(form.get('agentId')),
+    }
   }
-  const body = (await request.json().catch(() => ({}))) as { message?: string; timezone?: string }
-  return { message: String(body.message ?? '').trim(), files: [], timezone: cleanTimeZone(body.timezone) }
+  const body = (await request.json().catch(() => ({}))) as { message?: string; timezone?: string; agentId?: string }
+  return { message: String(body.message ?? '').trim(), files: [], timezone: cleanTimeZone(body.timezone), agentId: cleanAgentId(body.agentId) }
 }
 
 // ---- Conversation events → compact chat items ----

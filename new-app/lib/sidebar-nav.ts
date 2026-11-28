@@ -12,6 +12,7 @@ export type SidebarNavIcon =
   | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings' | 'agentLab'
   | 'agentChat' | 'agentNeeds' | 'agentResponsibilities' | 'agentActivity' | 'agentCalendar' | 'agentCalls'
   | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles' | 'agentHome' | 'agentMemory'
+  | 'agentGoals' | 'agentTeam' | 'agentBrain'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -103,6 +104,9 @@ export const AGENT_NAV: SidebarNavItem[] = [
   { id: 'agent-calendar', label: 'Calendar', href: '/app/agent-lab/calendar', icon: 'agentCalendar', group: 'agent' },
   { id: 'agent-calls', label: 'Calls', href: '/app/agent-lab/calls', icon: 'agentCalls', group: 'agent' },
   { id: 'agent-assignments', label: 'Assignments', href: '/app/agent-lab/assignments', icon: 'agentAssignments', group: 'agent' },
+  { id: 'agent-goals', label: 'Goals', href: '/app/agent-lab/goals', icon: 'agentGoals', group: 'agent' },
+  { id: 'agent-team', label: 'Team', href: '/app/agent-lab/team', icon: 'agentTeam', group: 'agentSetup' },
+  { id: 'agent-brain', label: 'Business brain', href: '/app/agent-lab/brain', icon: 'agentBrain', group: 'agentSetup' },
   { id: 'agent-permissions', label: 'Permissions', href: '/app/agent-lab/permissions', icon: 'agentPermissions', group: 'agentSetup' },
   { id: 'agent-connections', label: 'Connections', href: '/app/agent-lab/connections', icon: 'agentConnections', group: 'agentSetup' },
   { id: 'agent-computer', label: 'Computer', href: '/app/agent-lab/computer', icon: 'agentComputer', group: 'agentSetup' },
