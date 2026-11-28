@@ -8,6 +8,10 @@ const TYPES: Record<string, string> = {
   mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/mp4',
   srt: 'text/plain; charset=utf-8', vtt: 'text/vtt', md: 'text/plain; charset=utf-8', txt: 'text/plain; charset=utf-8',
   json: 'application/json',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', xls: 'application/vnd.ms-excel', csv: 'text/csv; charset=utf-8',
+  pdf: 'application/pdf', zip: 'application/zip',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', doc: 'application/msword',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ppt: 'application/vnd.ms-powerpoint',
 }
 
 /** Streams one file from the agent's project folder (Range supported so videos can seek). */

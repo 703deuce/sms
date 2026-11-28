@@ -44,6 +44,7 @@ const SKIP = 'Skip that: drop the part you are working on right now, note it as 
 const VIDEO = /\.(mp4|m4v|mov|webm)$/i
 const IMAGE = /\.(png|jpe?g|webp|gif)$/i
 const AUDIO = /\.(mp3|wav|m4a)$/i
+const TEXT_PREVIEW = /\.(md|txt|json|srt|vtt|pdf)$/i
 
 function fileUrl(path: string, download = false) {
   return `/api/agent-lab/file?path=${encodeURIComponent(path)}${download ? '&download=1' : ''}`
@@ -415,7 +416,8 @@ export function AgentLabChat() {
     void loadTask()
     try {
       const data = await api<{ files: FileEntry[] }>(`/api/agent-lab/files?conversation=${encodeURIComponent(activeId)}`)
-      setFiles((data.files ?? []).filter((f) => !/(?:^|\/)(?:log|helpers|work)\//.test(f.path) && !/(?:^|\/)(?:log|helpers|work)$/.test(f.path)))
+      // The server already hides log/, work/ and helper internals; a background job's finished files (helpers/<id>/out/) stay.
+      setFiles((data.files ?? []).filter((f) => !/(?:^|\/)(?:log|work)\//.test(f.path) && !/(?:^|\/)helpers\/[^/]+\/(?!out\/)/.test(f.path)))
     } catch {
       /* the list is optional */
     }
@@ -915,8 +917,10 @@ export function AgentLabChat() {
                 <img src={fileUrl(preview.path)} alt={preview.name} className="w-full rounded" />
               ) : AUDIO.test(preview.name) ? (
                 <audio key={preview.path} src={fileUrl(preview.path)} controls className="w-full" />
-              ) : (
+              ) : TEXT_PREVIEW.test(preview.name) ? (
                 <iframe src={fileUrl(preview.path)} title={preview.name} className="h-64 w-full rounded bg-background" />
+              ) : (
+                <p className="rounded bg-muted px-2 py-6 text-center text-xs text-muted-foreground">No preview for this file type. Use Download to open it.</p>
               )}
               <div className="mt-1 flex items-center justify-between gap-2 text-xs">
                 <span className="truncate">{preview.name}</span>
@@ -936,7 +940,7 @@ export function AgentLabChat() {
                 className={cn('flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted', preview?.path === f.path && 'bg-muted')}
               >
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{f.path.replace(/^\/workspace\/(jobs\/[^/]+|project)\//, '').replace(/^out\//, '')}</span>
+                <span className="min-w-0 flex-1 truncate">{/\/helpers\/[^/]+\/out\//.test(f.path) ? f.name : f.path.replace(/^\/workspace\/(jobs\/[^/]+|project)\//, '').replace(/^out\//, '')}</span>
                 <span className="shrink-0 text-muted-foreground">{fmtSize(f.size)}</span>
               </button>
             ))}
