@@ -221,8 +221,8 @@ const AppCard = memo(function AppCard({
               <>
                 <Badge variant="default">Connected</Badge>
                 {missing.length ? (
-                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400">
-                    Missing permissions
+                  <Badge variant="outline" className="text-muted-foreground">
+                    Some features need a reconnect
                   </Badge>
                 ) : null}
                 {missing.length ? (
@@ -245,8 +245,8 @@ const AppCard = memo(function AppCard({
           </div>
           {on && !expired && missing.length ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              Some actions will not work until you reconnect and allow: {missing.slice(0, 6).join(', ')}
-              {missing.length > 6 ? ` and ${missing.length - 6} more` : ''}.
+              Works as connected. To use more features, reconnect and allow: {missing.slice(0, 6).join(', ')}
+              {missing.length > 6 ? ` and ${missing.length - 6} more` : ''}. You can leave any of them unticked.
             </p>
           ) : null}
           {triggers.length ? (

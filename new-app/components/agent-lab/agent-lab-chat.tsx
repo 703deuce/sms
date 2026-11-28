@@ -844,7 +844,7 @@ export function AgentLabChat() {
             )}
             {running ? (
               <div className="ml-9 flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" /> Working…
+                <Loader2 className="size-3.5 animate-spin" /> {backgroundActive ? 'Working in the background…' : 'Thinking…'}
               </div>
             ) : null}
             <div ref={endRef} />
