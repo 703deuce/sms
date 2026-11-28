@@ -1,15 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useEffect, useState } from 'react'
-import { BookOpen, Brain, Download, FileText, Folder, Monitor, Phone, PhoneIncoming, PhoneOutgoing, RefreshCw, ShieldCheck } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { BookOpen, Brain, Download, FileText, Folder, ImageIcon, Monitor, Phone, PhoneIncoming, PhoneOutgoing, RefreshCw, Sheet, ShieldCheck } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { callDirection, callNumber, callOutcome, callParty, displayName, formatDuration, formatWhen } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { MODE_LABEL, fromUnix, gbPost, gbUrl, money, type Call, type CallsDoc, type HistoryRow, type KnowledgeItem, type Mode, type PermissionsDoc, type Skill, type SpendSummary } from './gb14'
+import { Drawer, Panel, PropList, SearchBox, Segmented, Toolbar } from './ops-kit'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
-import { useOverview, usePolled } from './use-ops-data'
+import { usePolled } from './use-ops-data'
 
 // ---------------- Calls ----------------
 
@@ -228,6 +229,12 @@ export function CallsPage() {
 
 const MODES: Mode[] = ['supervised', 'selective', 'full']
 
+const MODE_HINT: Record<Mode, string> = {
+  supervised: 'Direct asks run. Scheduled work asks before changing anything outside, and money or deleting always asks.',
+  selective: 'Direct asks run. Scheduled work asks only before money or deleting.',
+  full: 'Never asks. Only your own rules and spending limits apply.',
+}
+
 function ModePicker({ value, onChange, allowInherit, disabled }: { value: Mode | null; onChange: (m: Mode | '') => void; allowInherit?: boolean; disabled?: boolean }) {
   return (
     <div className="inline-flex flex-wrap rounded-lg border border-border bg-card p-0.5">
@@ -342,20 +349,42 @@ export function PermissionsPage() {
           }
         />
       ) : (
-        <>
+        <div className="grid gap-6 xl:grid-cols-3">
+          <div className="flex min-w-0 flex-col gap-6 xl:col-span-2">
           <section className="flex flex-col gap-3">
             <SectionHeading title="Autonomy" />
-            <OpsCard className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold">Whole agent</p>
-                  <p className="text-xs text-muted-foreground">
-                    {(d.modes ?? []).find((m) => m.id === (d.agent?.mode ?? d.default_mode))?.text || `Default: ${MODE_LABEL[d.default_mode]}`}
-                  </p>
-                </div>
-                <ModePicker value={d.agent?.mode ?? d.default_mode} disabled={busy} onChange={(m) => void act('permissions/set', { scope: 'agent', mode: m })} />
+            <div className="rounded-card border border-border bg-card p-4 shadow-xs">
+              <p className="text-sm font-semibold">Whole agent</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">How much it does on its own across your connected apps. Your rules and spending limits always apply.</p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3" role="radiogroup" aria-label="Autonomy">
+                {MODES.map((m) => {
+                  const current = (d.agent?.mode ?? d.default_mode) === m
+                  const info = (d.modes ?? []).find((x) => x.id === m)
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      role="radio"
+                      aria-checked={current}
+                      disabled={busy}
+                      onClick={() => !current && void act('permissions/set', { scope: 'agent', mode: m })}
+                      className={cn(
+                        'flex flex-col gap-1.5 rounded-xl border p-4 text-left transition-colors',
+                        current ? 'border-primary bg-primary/[0.07] ring-1 ring-primary/40' : 'border-border hover:border-foreground/20 hover:bg-muted/40',
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-semibold">{info?.label || MODE_LABEL[m]}</span>
+                        <span className={cn('grid size-4 place-items-center rounded-full border', current ? 'border-primary' : 'border-muted-foreground/40')}>
+                          {current && <span className="size-2 rounded-full bg-primary" />}
+                        </span>
+                      </span>
+                      <span className="text-xs leading-relaxed text-muted-foreground">{info?.text || MODE_HINT[m]}</span>
+                    </button>
+                  )
+                })}
               </div>
-            </OpsCard>
+            </div>
             {d.apps.length > 0 && (
               <OpsCard className="divide-y divide-border p-0">
                 {d.apps.map((a) => (
@@ -432,24 +461,47 @@ export function PermissionsPage() {
             </section>
           )}
 
+          </div>
+          <aside className="flex min-w-0 flex-col gap-6">
+          <Panel title="At a glance">
+            <PropList
+              items={[
+                { label: 'Autonomy', value: MODE_LABEL[d.agent?.mode ?? d.default_mode] },
+                { label: 'App rules', value: String(d.apps.length) },
+                { label: 'Spending limits', value: String(d.limits.length) },
+                {
+                  label: 'Waiting on you',
+                  value: d.pending_approvals + d.pending_changes > 0 ? (
+                    <Link href="/app/agent-lab/needs-you" className="font-medium text-primary hover:underline">
+                      {d.pending_approvals + d.pending_changes}
+                    </Link>
+                  ) : (
+                    'Nothing'
+                  ),
+                },
+              ]}
+            />
+          </Panel>
           <section className="flex flex-col gap-3">
             <SectionHeading title="Approval history" />
             {(hist.data?.items ?? []).length === 0 ? (
-              <p className="text-sm text-muted-foreground">No permission changes yet.</p>
+              <p className="rounded-card border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">No permission changes yet. Changes you make here or in chat are recorded with who made them.</p>
             ) : (
-              <OpsCard className="divide-y divide-border p-0">
+              <ol className="relative ml-2 flex flex-col gap-4 border-l border-border pl-5">
                 {(hist.data?.items ?? []).map((h) => (
-                  <div key={h.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-2.5">
-                    <p className="min-w-0 text-sm">{h.summary}</p>
-                    <p className="shrink-0 text-xs text-muted-foreground">
-                      {h.actor === 'customer' ? 'You' : h.actor} · {h.via} · {formatWhen(fromUnix(h.at))}
+                  <li key={h.id} className="relative">
+                    <span className="absolute -left-[1.6rem] top-1 size-2.5 rounded-full bg-primary ring-4 ring-background" aria-hidden />
+                    <p className="text-sm">{h.summary}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {h.actor === 'customer' ? 'You' : displayName(h.actor)} · {h.via === 'ui' ? 'this page' : h.via} · {formatWhen(fromUnix(h.at))}
                     </p>
-                  </div>
+                  </li>
                 ))}
-              </OpsCard>
+              </ol>
             )}
           </section>
-        </>
+          </aside>
+        </div>
       )}
     </OpsPage>
   )
@@ -461,6 +513,7 @@ type DesktopStatus = { status?: string | null; message?: string | null; kind?: s
 
 export function ComputerPage() {
   const { data, error } = usePolled<DesktopStatus>('/api/agent-lab/desktop/status', 10_000)
+  const jobs = usePolled<{ items: { run_id?: string; title?: string | null; status?: string; started_at?: number | null }[] }>(gbUrl('assignments'), 15_000)
   const [tick, setTick] = useState(0)
   const [imgFailed, setImgFailed] = useState(false)
   useEffect(() => {
@@ -469,30 +522,85 @@ export function ComputerPage() {
     }, 3000)
     return () => clearInterval(t)
   }, [])
+  const live = !imgFailed
+  const working = jobs.data?.items ?? []
   return (
     <OpsPage icon={Monitor} title="Computer" description="Watch your agent's own computer while it works. To take control, ask in chat and you'll get a live session.">
-      {imgFailed ? (
-        <OpsEmpty icon={Monitor} title="The screen isn't live right now" description="It appears here while your agent is using its browser or desktop." />
-      ) : (
-        <OpsCard className="overflow-hidden p-0">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`/api/agent-lab/desktop/live?t=${tick}`}
-            alt="Your agent's screen"
-            className="block aspect-video w-full bg-muted object-contain"
-            onError={() => setImgFailed(true)}
-            onLoad={() => setImgFailed(false)}
-          />
-        </OpsCard>
-      )}
-      {(data?.message || error) && <p className="text-xs text-muted-foreground">{data?.message || 'Status unavailable right now.'}</p>}
+      <div className="grid gap-6 xl:grid-cols-[1fr_20rem]">
+        <div className="min-w-0 overflow-hidden rounded-card border border-border bg-card shadow-xs">
+          <div className="flex items-center gap-2 border-b border-border px-4 py-2.5 text-xs">
+            <span className={cn('size-2 rounded-full', live ? 'bg-success shadow-[0_0_0_3px] shadow-success/20' : 'bg-muted-foreground/50')} />
+            <span className="font-medium">{live ? 'Live' : 'Not live'}</span>
+            <span className="text-muted-foreground">· refreshes every few seconds</span>
+          </div>
+          {imgFailed ? (
+            <div className="grid aspect-video w-full place-items-center bg-muted/40 p-6 text-center">
+              <div>
+                <Monitor className="mx-auto size-8 text-muted-foreground" />
+                <p className="mt-3 text-sm font-medium">The screen isn&apos;t live right now</p>
+                <p className="mt-1 text-sm text-muted-foreground">It appears here while your agent is using its browser or desktop.</p>
+              </div>
+            </div>
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={`/api/agent-lab/desktop/live?t=${tick}`}
+              alt="Your agent's screen"
+              className="block aspect-video w-full bg-muted object-contain"
+              onError={() => setImgFailed(true)}
+              onLoad={() => setImgFailed(false)}
+            />
+          )}
+        </div>
+        <div className="flex flex-col gap-4">
+          <Panel title="What it's doing">
+            {working.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Nothing running right now. When it opens a website, you&apos;ll see it here.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {working.slice(0, 5).map((j, i) => (
+                  <li key={j.run_id ?? i} className="flex items-center gap-2 text-sm">
+                    <span className="size-2 shrink-0 animate-pulse rounded-full bg-primary" />
+                    <span className="min-w-0 truncate">{displayName(j.title) || 'Task'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {(data?.message || error) && <p className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">{data?.message || 'Status unavailable right now.'}</p>}
+          </Panel>
+          <Panel title="Take control">
+            <p className="text-sm text-muted-foreground">Ask in chat to take over, for example to sign in to a site. You&apos;ll get a live session you can click and type in.</p>
+            <Link href="/app/agent-lab" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }), 'mt-3')}>
+              Ask in chat
+            </Link>
+          </Panel>
+        </div>
+      </div>
     </OpsPage>
   )
 }
 
 // ---------------- Files ----------------
 
-type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
+type GbFile = { path: string; name: string; size: number; modified_at: number; run_id?: string | null; title?: string | null }
+type FileKind = 'doc' | 'sheet' | 'image' | 'other'
+
+const VIDEO_EXT = /\.(mp4|mov|m4v|webm|mkv|avi)$/i
+
+function fileKind(name: string): FileKind {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  if (['md', 'txt', 'pdf', 'doc', 'docx', 'html', 'json', 'pptx'].includes(ext)) return 'doc'
+  if (['csv', 'xlsx', 'xls', 'tsv'].includes(ext)) return 'sheet'
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'image'
+  return 'other'
+}
+
+const KIND_META: Record<FileKind, { label: string; icon: typeof FileText; cls: string }> = {
+  doc: { label: 'Document', icon: FileText, cls: 'bg-primary/10 text-primary' },
+  sheet: { label: 'Sheet', icon: Sheet, cls: 'bg-success/15 text-success' },
+  image: { label: 'Image', icon: ImageIcon, cls: 'bg-warning/15 text-warning' },
+  other: { label: 'File', icon: FileText, cls: 'bg-secondary text-muted-foreground' },
+}
 
 function size(n: number): string {
   if (n < 1024) return `${n} B`
@@ -500,96 +608,190 @@ function size(n: number): string {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
-export function FilesPage() {
-  const { data, error: ovErr, reload: reloadOv } = useOverview()
-  const [files, setFiles] = useState<(FileEntry & { task: string })[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+const fileUrl = (path: string, download = false) => `/api/agent-lab/file?path=${encodeURIComponent(path)}${download ? '&download=1' : ''}`
 
-  const runs = data?.runs
-  const load = useCallback(async () => {
-    if (!runs) return
-    const seen = new Set<string>()
-    const convs: { id: string; task: string }[] = []
-    for (const r of runs) {
-      if (r.helper || !r.conversationId || seen.has(r.conversationId)) continue
-      seen.add(r.conversationId)
-      convs.push({ id: r.conversationId, task: r.title || 'Task' })
-      if (convs.length >= 8) break
-    }
-    setBusy(true)
-    try {
-      const lists = await Promise.all(
-        convs.map(async (c) => {
-          const res = await fetch(`/api/agent-lab/files?conversation=${encodeURIComponent(c.id)}`, { cache: 'no-store' })
-          if (!res.ok) return []
-          const body = (await res.json().catch(() => ({ files: [] }))) as { files?: FileEntry[] }
-          return (body.files ?? []).map((f) => ({ ...f, task: c.task }))
-        }),
-      )
-      setFiles(lists.flat().sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)).slice(0, 200))
-      setError(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load files')
-    } finally {
-      setBusy(false)
-    }
-  }, [runs])
-
+function FilePreview({ f }: { f: GbFile }) {
+  const kind = fileKind(f.name)
+  const [text, setText] = useState<string | null>(null)
+  const textual = /\.(md|txt|csv|tsv|json)$/i.test(f.name)
   useEffect(() => {
-    if (runs && files === null) void load()
-  }, [runs, files, load])
+    if (!textual) return
+    let alive = true
+    fetch(fileUrl(f.path), { cache: 'no-store' })
+      .then((r) => (r.ok ? r.text() : ''))
+      .then((t) => alive && setText(t.slice(0, 40_000)))
+      .catch(() => alive && setText(''))
+    return () => {
+      alive = false
+    }
+  }, [f.path, textual])
+  if (kind === 'image') {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={fileUrl(f.path)} alt={f.name} className="w-full rounded-lg border border-border bg-muted object-contain" />
+  }
+  if (!textual) return <p className="text-sm text-muted-foreground">No preview for this type. Download it to open.</p>
+  if (text === null) return <div className="h-40 animate-pulse rounded-lg bg-muted" />
+  if (/\.(csv|tsv)$/i.test(f.name)) {
+    const sep = f.name.toLowerCase().endsWith('.tsv') ? '\t' : ','
+    const rows = text.split(/\r?\n/).filter(Boolean).slice(0, 26).map((l) => l.split(sep))
+    return (
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full text-xs">
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i} className={cn('border-b border-border/60 last:border-0', i === 0 && 'bg-muted/50 font-medium')}>
+                {r.slice(0, 8).map((c, j) => (
+                  <td key={j} className="max-w-[14rem] truncate px-2.5 py-1.5">
+                    {c.replace(/^"|"$/g, '')}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  }
+  return <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 text-xs leading-relaxed">{text}</pre>
+}
 
+export function FilesPage() {
+  const q = usePolled<{ items: GbFile[] }>(gbUrl('files?limit=200'), 60_000)
+  const [kind, setKind] = useState<'all' | FileKind>('all')
+  const [view, setView] = useState<'grid' | 'list'>('grid')
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState<GbFile | null>(null)
+  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name))
+  const needle = search.trim().toLowerCase()
+  const files = all.filter((f) => (kind === 'all' || fileKind(f.name) === kind) && (!needle || `${f.name} ${f.title ?? ''}`.toLowerCase().includes(needle)))
+  const n = (k: FileKind) => all.filter((f) => fileKind(f.name) === k).length
   return (
     <OpsPage
       icon={Folder}
       title="Files"
       description="Everything your agent made for you across recent tasks: reports, sheets, decks, images and drafts."
       actions={
-        <button type="button" onClick={() => void load()} disabled={busy} className={cn(buttonVariants({ variant: 'outline' }), 'gap-2')}>
-          <RefreshCw className={cn('size-4', busy && 'animate-spin')} />
+        <button type="button" onClick={q.reload} className={cn(buttonVariants({ variant: 'outline' }), 'gap-2')}>
+          <RefreshCw className={cn('size-4', q.loading && 'animate-spin')} />
           Refresh
         </button>
       }
     >
-      {(ovErr && !data) || error ? <OpsError message={error ?? ovErr ?? ''} onRetry={() => (data ? void load() : reloadOv())} /> : null}
-      {files === null ? (
+      {q.error && !q.data && <OpsError message={q.error} onRetry={q.reload} />}
+      {q.loading && !q.data ? (
         <OpsLoading />
-      ) : files.length === 0 ? (
-        <OpsEmpty icon={FileText} title="No files yet" description="Files your agent saves for you will collect here." />
+      ) : all.length === 0 ? (
+        <OpsEmpty icon={FileText} title="No files yet" description="Reports, spreadsheets, images and drafts your agent saves for you will collect here." />
       ) : (
-        <section className="flex flex-col gap-3">
-          <SectionHeading title="Recent files" count={files.length} />
-          <OpsCard className="p-0">
-            <ul className="divide-y divide-border">
-              {files.map((f) => (
-                <li key={f.path} className="flex items-center justify-between gap-3 px-4 py-2.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className="grid size-8 shrink-0 place-items-center rounded-lg bg-secondary">
-                      <FileText className="size-4" />
+        <>
+          <Toolbar>
+            <Segmented
+              value={kind}
+              onChange={setKind}
+              options={[
+                { value: 'all', label: 'All', count: all.length },
+                { value: 'doc', label: 'Documents', count: n('doc') },
+                { value: 'sheet', label: 'Sheets', count: n('sheet') },
+                { value: 'image', label: 'Images', count: n('image') },
+                ...(n('other') ? [{ value: 'other' as const, label: 'Other', count: n('other') }] : []),
+              ]}
+            />
+            <Segmented value={view} onChange={setView} options={[{ value: 'grid', label: 'Grid' }, { value: 'list', label: 'List' }]} />
+            <SearchBox value={search} onChange={setSearch} placeholder="Search files" />
+          </Toolbar>
+          {files.length === 0 ? (
+            <p className="rounded-card border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">No files match.</p>
+          ) : view === 'grid' ? (
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+              {files.map((f) => {
+                const k = KIND_META[fileKind(f.name)]
+                const Icon = k.icon
+                return (
+                  <button key={f.path} type="button" onClick={() => setOpen(f)} className="group flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-card text-left shadow-xs transition hover:-translate-y-px hover:border-foreground/15">
+                    <div className="grid h-28 place-items-center border-b border-border bg-muted/30">
+                      {fileKind(f.name) === 'image' ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={fileUrl(f.path)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                      ) : (
+                        <span className={cn('grid size-12 place-items-center rounded-xl', k.cls)}>
+                          <Icon className="size-6" />
+                        </span>
+                      )}
                     </div>
-                    <div className="min-w-0">
-                      <a href={`/api/agent-lab/file?path=${encodeURIComponent(f.path)}`} target="_blank" rel="noreferrer" className="block truncate text-sm font-medium hover:underline">
-                        {displayName(f.name) || f.name}
-                      </a>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {displayName(f.task) || f.task} · {formatWhen(f.modifiedAt)} · {size(f.size)}
+                    <div className="min-w-0 p-3">
+                      <p className="truncate text-sm font-medium">{f.name}</p>
+                      <p className="mt-0.5 truncate text-xs text-muted-foreground">{displayName(f.title) || k.label}</p>
+                      <p className="mt-1.5 text-[11px] text-muted-foreground">
+                        {formatWhen(fromUnix(f.modified_at))} · {size(f.size)}
                       </p>
                     </div>
-                  </div>
-                  <a
-                    href={`/api/agent-lab/file?path=${encodeURIComponent(f.path)}&download=1`}
-                    aria-label={`Download ${displayName(f.name) || f.name}`}
-                    className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
-                  >
-                    <Download />
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </OpsCard>
-        </section>
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-card border border-border bg-card shadow-xs">
+              <table className="w-full min-w-[40rem] text-sm">
+                <thead className="border-b border-border text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-2.5 font-medium">Name</th>
+                    <th className="px-4 py-2.5 font-medium">From task</th>
+                    <th className="px-4 py-2.5 font-medium">Made</th>
+                    <th className="px-4 py-2.5 text-right font-medium">Size</th>
+                    <th className="w-12 px-2 py-2.5" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {files.map((f) => {
+                    const k = KIND_META[fileKind(f.name)]
+                    const Icon = k.icon
+                    return (
+                      <tr key={f.path} className="cursor-pointer border-b border-border/60 last:border-0 hover:bg-muted/40" onClick={() => setOpen(f)}>
+                        <td className="px-4 py-2.5">
+                          <span className="flex min-w-0 items-center gap-2.5">
+                            <span className={cn('grid size-7 shrink-0 place-items-center rounded-md', k.cls)}>
+                              <Icon className="size-3.5" />
+                            </span>
+                            <span className="truncate font-medium">{f.name}</span>
+                          </span>
+                        </td>
+                        <td className="max-w-[18rem] truncate px-4 py-2.5 text-muted-foreground">{displayName(f.title) || '—'}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-muted-foreground">{formatWhen(fromUnix(f.modified_at))}</td>
+                        <td className="whitespace-nowrap px-4 py-2.5 text-right tabular-nums text-muted-foreground">{size(f.size)}</td>
+                        <td className="px-2 py-2.5">
+                          <a href={fileUrl(f.path, true)} onClick={(e) => e.stopPropagation()} aria-label={`Download ${f.name}`} className={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}>
+                            <Download />
+                          </a>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
+      <Drawer
+        open={!!open}
+        onOpenChange={(o) => !o && setOpen(null)}
+        title={open?.name ?? ''}
+        description={open ? `${displayName(open.title) || 'File'} · ${formatWhen(fromUnix(open.modified_at))} · ${size(open.size)}` : undefined}
+        footer={
+          open && (
+            <>
+              <a href={fileUrl(open.path, true)} className={cn(buttonVariants({ variant: 'default', size: 'sm' }), 'gap-2')}>
+                <Download className="size-4" /> Download
+              </a>
+              <a href={fileUrl(open.path)} target="_blank" rel="noreferrer" className={buttonVariants({ variant: 'outline', size: 'sm' })}>
+                Open in new tab
+              </a>
+            </>
+          )
+        }
+      >
+        {open && <FilePreview f={open} />}
+      </Drawer>
     </OpsPage>
   )
 }
