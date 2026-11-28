@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, agentLabJson, attachmentNote, readMessageRequest, redactSecrets, runnerJson, saveAttachments } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, attachmentNote, readMessageRequest, recordCustomerMessage, redactSecrets, runnerJson, saveAttachments } from '@/lib/server/agent-lab'
 export const dynamic = 'force-dynamic'
 
 type ConvInfo = {
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       }),
       timeoutMs: 150_000,
     })
+    if (text) recordCustomerMessage(run.conversation_id, text)
     return Response.json({ id: run.conversation_id, runId: run.run_id })
   } catch (err) {
     return agentLabErrorResponse(err)

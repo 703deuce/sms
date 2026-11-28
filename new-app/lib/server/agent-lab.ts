@@ -624,3 +624,19 @@ export async function vaultSecretRefs(): Promise<Record<string, { kind: 'LookupS
     return {}
   }
 }
+
+
+/**
+ * GB-14: give the runner its own record of what the customer typed (used only to verify permission changes the
+ * customer asks for in chat). Fire-and-forget; never blocks or fails the chat.
+ */
+export function recordCustomerMessage(conversationId: string, text: string): void {
+  if (!text) return
+  runnerFetch('/gb14/permissions/customer-message', {
+    method: 'POST',
+    body: JSON.stringify({ conversation_id: conversationId, text: text.slice(0, 8000) }),
+    timeoutMs: 5_000,
+  }).catch(() => {
+    /* optional */
+  })
+}

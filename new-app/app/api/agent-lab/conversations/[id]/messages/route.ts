@@ -1,5 +1,5 @@
 import { after } from 'next/server'
-import { agentLabErrorResponse, agentLabJson, attachmentNote, isConversationId, readMessageRequest, saveAttachments, userMessage } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, agentLabJson, attachmentNote, isConversationId, readMessageRequest, recordCustomerMessage, saveAttachments, userMessage } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +20,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       body: JSON.stringify(userMessage(message, false)),
       timeoutMs: 20_000,
     })
+    if (text) recordCustomerMessage(id, text)
     after(() =>
       agentLabJson(`/api/conversations/${encodeURIComponent(id)}/run`, {
         method: 'POST',
