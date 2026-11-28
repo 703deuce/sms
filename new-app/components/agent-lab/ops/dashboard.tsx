@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { Page, Stat } from '@/components/app/page-primitives'
 import { buttonVariants } from '@/components/ui/button'
-import { chatHref, dashboardSummary, formatWhen, runState, type OpsRun } from '@/lib/agent-lab/ops'
+import { chatHref, dashboardSummary, displayName, formatWhen, runState, type OpsRun } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { gbUrl } from './gb14'
 import { NotificationsBell, OpsCard, OpsError, OpsLoading, SectionHeading } from './ops-ui'
@@ -175,7 +175,7 @@ function ResultRow({ run }: { run: OpsRun }) {
       <Link href={chatHref(run.conversationId)} className="group flex items-start gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60">
         {failed ? <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" /> : <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" />}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{run.title || 'Task'}</span>
+          <span className="block truncate text-sm font-medium">{displayName(run.title) || 'Task'}</span>
           <span className="block truncate text-xs text-muted-foreground">
             {failed ? run.error || 'Did not finish' : run.progress || 'Finished'}
           </span>
@@ -253,7 +253,7 @@ export function AgentDashboard() {
                 value={s.nextUp ? formatWhen(s.nextUp.at).replace(/^(Today|Tomorrow), /, '') : '—'}
                 icon={CalendarClock}
                 href="/app/agent-lab/calendar"
-                hint={s.nextUp ? `${formatWhen(s.nextUp.at).startsWith('Tomorrow') ? 'Tomorrow · ' : ''}${s.nextUp.title}` : 'Nothing scheduled'}
+                hint={s.nextUp ? `${formatWhen(s.nextUp.at).startsWith('Tomorrow') ? 'Tomorrow · ' : ''}${displayName(s.nextUp.title)}` : 'Nothing scheduled'}
               />
             </div>
           )}
@@ -289,7 +289,7 @@ export function AgentDashboard() {
                           <MessageSquare className="size-4" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{c.title}</span>
+                          <span className="block truncate text-sm font-medium">{displayName(c.title)}</span>
                           <span className="block text-xs text-muted-foreground">{formatWhen(c.updatedAt ?? c.createdAt)}</span>
                         </span>
                         {c.status === 'running' && (

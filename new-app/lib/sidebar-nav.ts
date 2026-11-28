@@ -11,7 +11,7 @@ export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'captions' | 'record' | 'aiVideo'
   | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings' | 'agentLab'
   | 'agentChat' | 'agentNeeds' | 'agentResponsibilities' | 'agentActivity' | 'agentCalendar' | 'agentCalls'
-  | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles' | 'agentHome'
+  | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles' | 'agentHome' | 'agentMemory'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -107,6 +107,7 @@ export const AGENT_NAV: SidebarNavItem[] = [
   { id: 'agent-connections', label: 'Connections', href: '/app/agent-lab/connections', icon: 'agentConnections', group: 'agentSetup' },
   { id: 'agent-computer', label: 'Computer', href: '/app/agent-lab/computer', icon: 'agentComputer', group: 'agentSetup' },
   { id: 'agent-files', label: 'Files', href: '/app/agent-lab/files', icon: 'agentFiles', group: 'agentSetup' },
+  { id: 'agent-memory', label: 'Memory & skills', href: '/app/agent-lab/memory', icon: 'agentMemory', group: 'agentSetup' },
 ]
 
 /** The menu as shown: Agent Lab pages first, then whatever products are not hidden, then the footer. */
@@ -164,4 +165,10 @@ export function activeSidebarId(pathname: string, search: URLSearchParams | stri
 
 export function isClipEditRoute(pathname: string): boolean {
   return /^\/app\/(clips|video-editor)\/[^/]+\/(edit|story|templates|generate|chat)\/[^/]+(?:\/|$)/.test(pathname)
+}
+
+/** The Chat page itself (not Needs you, Responsibilities, …): fill the area beside the side menu. */
+export function isAgentChatRoute(pathname: string): boolean {
+  const p = pathname.replace(/\/+$/, '') || '/'
+  return p === '/app/agent-lab'
 }

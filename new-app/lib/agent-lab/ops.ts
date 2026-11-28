@@ -264,3 +264,191 @@ export function dashboardSummary(o: Overview, now = Date.now()): DashboardSummar
 /** Link that opens a conversation in Agent Lab chat. */
 export const chatHref = (conversationId: string | null | undefined) =>
   conversationId ? `/app/agent-lab?c=${encodeURIComponent(conversationId)}` : '/app/agent-lab'
+
+/** Short all-caps tokens we keep uppercase when turning a slug into a label. */
+const ACRONYMS = new Set([
+  'ai', 'api', 'fx', 'sms', 'faq', 'id', 'url', 'usd', 'roi', 'seo', 'crm', 'kpi', 'pdf', 'csv', 'sql',
+  'aws', 'gcp', 'hr', 'pr', 'qa', 'okr', 'sla', 'etl', 'llm', 'gpt', 'rss', 'ftp', 'ssh', 'vpn', 'otp',
+  '2fa', 'ios', 'css', 'html', 'http', 'https', 'json', 'xml', 'ui', 'ux', 'ceo', 'cto', 'cfo', 'vp',
+  'sso', 'oauth', 'jwt', 'db', 'cdn', 'dns', 'ip', 'tv', 'uk', 'us', 'eu', 'nyc', 'la', 'sf', 'ok',
+])
+
+const SMALL = new Set(['a', 'an', 'the', 'and', 'or', 'nor', 'of', 'for', 'to', 'in', 'on', 'at', 'by', 'vs', 'via', 'per', 'as'])
+
+const PROPER: Record<string, string> = {
+  google: 'Google',
+  gmail: 'Gmail',
+  youtube: 'YouTube',
+  outlook: 'Outlook',
+  slack: 'Slack',
+  notion: 'Notion',
+  stripe: 'Stripe',
+  shopify: 'Shopify',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  linkedin: 'LinkedIn',
+  twitter: 'Twitter',
+  whatsapp: 'WhatsApp',
+  dropbox: 'Dropbox',
+  salesforce: 'Salesforce',
+  hubspot: 'HubSpot',
+  mailchimp: 'Mailchimp',
+  zoom: 'Zoom',
+  twilio: 'Twilio',
+  openai: 'OpenAI',
+  supabase: 'Supabase',
+  composio: 'Composio',
+  microsoft: 'Microsoft',
+}
+
+/** Known app ids that would not split cleanly (one word, no hyphens). */
+const APP_LABELS: Record<string, string> = {
+  googleads: 'Google Ads',
+  googlesheets: 'Google Sheets',
+  googledrive: 'Google Drive',
+  googlecalendar: 'Google Calendar',
+  googledocs: 'Google Docs',
+  googlecontacts: 'Google Contacts',
+  microsoftoutlook: 'Outlook',
+  microsoftteams: 'Microsoft Teams',
+}
+
+const ID_RE = /^(?:run|rt|apr|pol|grt|lim|job|file|msg|skill|mem|cv|conv|task|asg)_[a-z0-9]+$/i
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const PHONE_RE = /^[\d\s+().\-]{5,}$/
+const SLUG_RE = /^[A-Za-z0-9]+(?:[-_][A-Za-z0-9]+)+$/
+const CAMEL_RE = /^[a-zA-Z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*$/
+
+function titleWord(word: string, index: number, last: boolean): string {
+  const lower = word.toLowerCase()
+  if (ACRONYMS.has(lower)) return lower.toUpperCase()
+  if (PROPER[lower]) return PROPER[lower]
+  if (index === 0) return lower.charAt(0).toUpperCase() + lower.slice(1)
+  if (!last && SMALL.has(lower)) return lower
+  return lower
+}
+
+function wordsFromIdentifier(s: string): string[] {
+  if (s.includes('-') || s.includes('_')) return s.split(/[-_]+/).filter(Boolean)
+  return s
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .split(/\s+/)
+    .filter(Boolean)
+}
+
+/**
+ * Human-readable label for a stored name or title. Display only: never write the result back.
+ * `weekly-fx-report` → `Weekly FX report`. Strings that already look like prose, phone numbers or ids are left alone.
+ */
+export function displayName(raw: string | null | undefined): string {
+  if (raw == null) return ''
+  const s = String(raw).trim()
+  if (!s) return ''
+  const keyed = APP_LABELS[s.toLowerCase()]
+  if (keyed) return keyed
+  if (PHONE_RE.test(s) || ID_RE.test(s) || UUID_RE.test(s) || s.includes(' ')) return s
+
+  const ext = s.match(/^(.+)(\.[A-Za-z0-9]{1,8})$/)
+  if (ext && (SLUG_RE.test(ext[1]) || CAMEL_RE.test(ext[1]))) return `${displayName(ext[1])}${ext[2]}`
+
+  if (!SLUG_RE.test(s) && !CAMEL_RE.test(s)) return s
+
+  const words = wordsFromIdentifier(s)
+  if (words.length === 0) return s
+  return words.map((w, i) => titleWord(w, i, i === words.length - 1)).join(' ')
+}
+
+export type CallDirection = 'incoming' | 'outgoing'
+
+/** Incoming vs outgoing, from GB-14 `kind` (outbound today; inbound/incoming when the receptionist is wired). */
+export function callDirection(c: { kind?: string | null; caller?: string | null; from?: string | null }): CallDirection {
+  const k = (c.kind ?? '').toLowerCase()
+  if (k === 'inbound' || k === 'incoming' || k === 'in') return 'incoming'
+  if (k === 'outbound' || k === 'outgoing' || k === 'out') return 'outgoing'
+  if (c.caller || c.from) return 'incoming'
+  return 'outgoing'
+}
+
+/** The other party: caller for incoming, who/to for outgoing. */
+export function callParty(c: {
+  kind?: string | null
+  who?: string | null
+  to?: string | null
+  from?: string | null
+  caller?: string | null
+  caller_number?: string | null
+}): string {
+  const dir = callDirection(c)
+  const incoming = c.caller || c.caller_number || c.who || c.from
+  const outgoing = c.who || c.to || c.caller || c.caller_number
+  const raw = dir === 'incoming' ? incoming : outgoing
+  return displayName(raw) || (dir === 'incoming' ? 'Unknown caller' : 'Unknown number')
+}
+
+/** Phone number when it adds something the display name doesn't already say. */
+export function callNumber(c: { caller?: string | null; caller_number?: string | null; to?: string | null; kind?: string | null }): string | null {
+  const num = c.caller_number || (callDirection(c) === 'outgoing' ? c.to : null) || null
+  if (!num) return null
+  const name = (c.caller || '').trim()
+  return name && num.replace(/\s+/g, '') === name.replace(/\s+/g, '') ? null : num
+}
+
+export function formatDuration(seconds: number | null | undefined, status?: string | null): string {
+  const missed = !!status && /missed|no[_-]?answer|unanswered/i.test(status)
+  if (seconds == null || (seconds === 0 && missed)) return missed ? 'Missed' : ''
+  const s = Math.max(0, Math.round(seconds))
+  const m = Math.floor(s / 60)
+  const rem = s % 60
+  if (m && rem) return `${m} min ${rem} s`
+  if (m) return `${m} min`
+  return `${rem} s`
+}
+
+const OUTCOME_LABEL: Record<string, { label: string; tone: Tone }> = {
+  booked: { label: 'Booked', tone: 'success' },
+  completed: { label: 'Completed', tone: 'success' },
+  done: { label: 'Completed', tone: 'success' },
+  answered: { label: 'Answered', tone: 'success' },
+  missed: { label: 'Missed', tone: 'warning' },
+  'no-answer': { label: 'No answer', tone: 'warning' },
+  no_answer: { label: 'No answer', tone: 'warning' },
+  voicemail: { label: 'Voicemail', tone: 'info' },
+  failed: { label: 'Failed', tone: 'danger' },
+  busy: { label: 'Busy', tone: 'warning' },
+  canceled: { label: 'Canceled', tone: 'muted' },
+  cancelled: { label: 'Canceled', tone: 'muted' },
+  ringing: { label: 'Ringing', tone: 'info' },
+  in_progress: { label: 'In progress', tone: 'info' },
+  working: { label: 'In progress', tone: 'info' },
+  took_a_message: { label: 'Took a message', tone: 'info' },
+  booked_an_appointment: { label: 'Booked an appointment', tone: 'success' },
+  transferred: { label: 'Transferred', tone: 'info' },
+  incomplete_call: { label: 'Incomplete call', tone: 'warning' },
+}
+
+function outcomeTone(label: string): Tone {
+  const s = label.toLowerCase()
+  if (/(booked|appointment|completed|answered|scheduled)/.test(s)) return 'success'
+  if (/(missed|incomplete|no answer|failed|busy|canceled|cancelled)/.test(s)) return 'warning'
+  if (/(message|transfer|voicemail|texted)/.test(s)) return 'info'
+  return 'neutral'
+}
+
+/** Outcome chip for a call: booked / needs you / status / a free-text outcome field. */
+export function callOutcome(c: {
+  outcome?: string | null
+  status?: string | null
+  booked?: boolean | null
+  needs_you?: boolean | null
+  texts_sent?: number | null
+}): { label: string; tone: Tone } | null {
+  if (c.booked && !(c.outcome || '').trim()) return { label: 'Booked', tone: 'success' }
+  const raw = (c.outcome || c.status || '').trim()
+  if (!raw) {
+    if (c.needs_you) return { label: 'Needs you', tone: 'warning' }
+    return c.texts_sent ? { label: 'Texted back', tone: 'info' } : null
+  }
+  const key = raw.toLowerCase().replace(/\s+/g, '_')
+  return OUTCOME_LABEL[key] ?? OUTCOME_LABEL[key.replace(/-/g, '_')] ?? { label: displayName(raw) || raw, tone: outcomeTone(raw) }
+}

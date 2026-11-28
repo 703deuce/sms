@@ -6,6 +6,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import {
   Activity,
   Bot,
+  Brain,
   BriefcaseBusiness,
   CalendarDays,
   Captions,
@@ -107,6 +108,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   agentComputer: Monitor,
   agentFiles: Folder,
   agentHome: LayoutDashboard,
+  agentMemory: Brain,
 }
 
 const navButtonClass =

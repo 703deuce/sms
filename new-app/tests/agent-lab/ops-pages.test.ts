@@ -105,7 +105,7 @@ describe('agent lab work pages', () => {
     const ids = visibleSidebarNav(f).map((i) => i.id)
     for (const i of AGENT_NAV) expect(ids).toContain(i.id)
     expect(AGENT_NAV.map((i) => i.label)).toEqual([
-      'Dashboard', 'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Permissions', 'Connections', 'Computer', 'Files',
+      'Dashboard', 'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Permissions', 'Connections', 'Computer', 'Files', 'Memory & skills',
     ])
     if (VIDEO_NAV_HIDDEN) {
       for (const v of ['clips', 'editor', 'motion-studio', 'streamer', 'templates']) expect(ids).not.toContain(v)
@@ -152,5 +152,60 @@ describe('dashboard', () => {
     expect(activeAgentNavId('/app')).toBe('agent-home')
     expect(activeAgentNavId('/app/agent-lab/files')).toBe('agent-files')
     expect(activeAgentNavId('/app/clips')).toBe(null)
+  })
+})
+
+
+describe('display names and calls', () => {
+  it('formats slugs for display and leaves stored prose, phones and ids alone', async () => {
+    const { displayName } = await import('@/lib/agent-lab/ops')
+    expect(displayName('weekly-fx-report')).toBe('Weekly FX report')
+    expect(displayName('Weekly FX report')).toBe('Weekly FX report')
+    expect(displayName('draft_replies_to_unanswered_reviews')).toBe('Draft replies to unanswered reviews')
+    expect(displayName('ai-email-summary')).toBe('AI email summary')
+    expect(displayName('weeklyFxReport')).toBe('Weekly FX report')
+    expect(displayName('weekly-fx-report.pdf')).toBe('Weekly FX report.pdf')
+    expect(displayName('List Supabase projects')).toBe('List Supabase projects')
+    expect(displayName('googleads')).toBe('Google Ads')
+    expect(displayName('555-123-4567')).toBe('555-123-4567')
+    expect(displayName('run_d080c2b93a')).toBe('run_d080c2b93a')
+    expect(displayName(null)).toBe('')
+  })
+
+  it('labels incoming and outgoing calls with party, duration and outcome', async () => {
+    const { callDirection, callParty, callNumber, callOutcome, formatDuration } = await import('@/lib/agent-lab/ops')
+    const out = { kind: 'outbound' as const, who: 'Alex Rivera', to: '+1 555 0100', status: 'completed', duration_s: 125 }
+    const inn = { kind: 'inbound' as const, who: 'Jordan Lee', caller: 'Jordan Lee', status: 'missed', duration_s: 0 }
+    expect(callDirection(out)).toBe('outgoing')
+    expect(callDirection(inn)).toBe('incoming')
+    expect(callParty(out)).toBe('Alex Rivera')
+    expect(callParty(inn)).toBe('Jordan Lee')
+    expect(callOutcome(out)?.label).toBe('Completed')
+    expect(callOutcome({ ...inn, needs_you: true })?.label).toBe('Missed')
+    expect(callOutcome({ outcome: 'Took a message' })?.label).toBe('Took a message')
+    expect(callOutcome({ outcome: 'Booked an appointment' })?.tone).toBe('success')
+    expect(callParty({ kind: 'inbound', caller: 'Jordan Lee', caller_number: '+1 555 0100' })).toBe('Jordan Lee')
+    expect(callNumber({ kind: 'inbound', caller: 'Jordan Lee', caller_number: '+1 555 0100' })).toBe('+1 555 0100')
+    expect(formatDuration(125)).toBe('2 min 5 s')
+    expect(formatDuration(0, 'missed')).toBe('Missed')
+    expect(formatDuration(null)).toBe('')
+  })
+
+  it('marks Memory & skills active', async () => {
+    const { activeAgentNavId, AGENT_NAV } = await import('@/lib/sidebar-nav')
+    expect(AGENT_NAV.some((i) => i.id === 'agent-memory' && i.href === '/app/agent-lab/memory')).toBe(true)
+    expect(activeAgentNavId('/app/agent-lab/memory')).toBe('agent-memory')
+  })
+})
+
+
+describe('agent chat route', () => {
+  it('fills the shell only on the Chat page, not on other Agent Lab pages', async () => {
+    const { isAgentChatRoute } = await import('@/lib/sidebar-nav')
+    expect(isAgentChatRoute('/app/agent-lab')).toBe(true)
+    expect(isAgentChatRoute('/app/agent-lab/')).toBe(true)
+    expect(isAgentChatRoute('/app/agent-lab/memory')).toBe(false)
+    expect(isAgentChatRoute('/app/agent-lab/needs-you')).toBe(false)
+    expect(isAgentChatRoute('/app')).toBe(false)
   })
 })

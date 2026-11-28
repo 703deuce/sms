@@ -24,6 +24,7 @@ import {
   assignments,
   calendarEntries,
   cronToWords,
+  displayName,
   formatWhen,
   groupActivity,
   responsibilityStatus,
@@ -102,7 +103,7 @@ function QuestionCard({ q, onAnswered }: { q: OpsQuestion; onAnswered: () => voi
     <OpsCard className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium">{q.title || 'Your agent has a question'}</p>
+          <p className="text-sm font-medium">{displayName(q.title) || 'Your agent has a question'}</p>
           <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground">{q.question}</p>
         </div>
         <Pill tone="warning">Question</Pill>
@@ -169,7 +170,7 @@ function ApprovalCard({ a, onDone }: { a: Approval; onDone: () => void }) {
     <OpsCard className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium">{a.title || 'Your agent needs your OK'}</p>
+          <p className="text-sm font-medium">{displayName(a.title) || 'Your agent needs your OK'}</p>
           {a.consequence && <p className="mt-1 text-sm text-muted-foreground">{a.consequence}</p>}
           {a.reason && <p className="mt-1 text-xs text-muted-foreground">{a.reason}</p>}
         </div>
@@ -290,7 +291,7 @@ export function NeedsYouPage() {
                 {failures.map((r) => (
                   <div key={r.id} className="flex flex-wrap items-start justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">{r.title || 'Task'}</p>
+                      <p className="text-sm font-medium">{displayName(r.title) || 'Task'}</p>
                       {r.error && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{r.error}</p>}
                       <p className="mt-1 text-[11px] text-muted-foreground">{formatWhen(r.finishedAt ?? r.createdAt)}</p>
                     </div>
@@ -365,7 +366,7 @@ function ResponsibilityCard({ r, status, lastRun, onChanged }: { r: OpsRoutine; 
   return (
     <OpsCard className="flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
-        <p className="min-w-0 text-sm font-semibold">{r.name || 'Responsibility'}</p>
+        <p className="min-w-0 text-sm font-semibold">{displayName(r.name) || 'Responsibility'}</p>
         <Pill tone={st.tone}>{st.label}</Pill>
       </div>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
@@ -506,7 +507,7 @@ function ResponsibilityCard({ r, status, lastRun, onChanged }: { r: OpsRoutine; 
                 {versions.slice(0, 5).map((v, i) => (
                   <li key={v.version} className="flex justify-between gap-3">
                     <span className="truncate">
-                      v{v.version} · {v.name || r.name}
+                      v{v.version} · {displayName(v.name || r.name)}
                       {i === 0 ? ' · current' : ''}
                     </span>
                     <span className="shrink-0 text-muted-foreground">{formatWhen(fromUnix(v.at))}</span>
@@ -586,7 +587,7 @@ function RunRow({ run, name }: { run: OpsRun; name: string | null }) {
     <li>
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40">
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{name || run.title || 'Task'}</p>
+          <p className="truncate text-sm font-medium">{displayName(name || run.title) || 'Task'}</p>
           <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
             {formatWhen(run.finishedAt ?? run.startedAt ?? run.createdAt)}
             {run.error ? ` · ${run.error}` : run.progress ? ` · ${run.progress}` : ''}
@@ -596,7 +597,7 @@ function RunRow({ run, name }: { run: OpsRun; name: string | null }) {
       </button>
       {open && (
         <div className="flex flex-col gap-2 px-4 pb-3 text-xs text-muted-foreground">
-          {name && run.title && run.title !== name && <p>{run.title}</p>}
+          {name && run.title && run.title !== name && <p>{displayName(run.title)}</p>}
           {run.progress && <p>Latest: {run.progress}</p>}
           {run.error && <p className="text-destructive">What went wrong: {run.error}</p>}
           <p>
@@ -665,7 +666,7 @@ export function ActivityPage() {
                     >
                       <div className="min-w-0">
                         <p className="text-sm font-medium">
-                          {g.title}: {g.runs.length} checks found nothing new
+                          {displayName(g.title)}: {g.runs.length} checks found nothing new
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatWhen(g.runs[g.runs.length - 1].createdAt)} to {formatWhen(g.runs[0].createdAt)}
@@ -771,8 +772,8 @@ export function CalendarPage() {
                     {mine.slice(0, 6).map((e, i) => (
                       <li key={`${e.at}-${i}`} className={cn('rounded-md border px-1.5 py-1 text-[11px] leading-tight', STATE_STYLE[e.state].cls)}>
                         <span className="block font-medium">{STATE_STYLE[e.state].label}</span>
-                        <span className="block truncate" title={e.title}>
-                          {new Date(e.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · {e.title}
+                        <span className="block truncate" title={displayName(e.title)}>
+                          {new Date(e.at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })} · {displayName(e.title)}
                         </span>
                       </li>
                     ))}
@@ -788,7 +789,7 @@ export function CalendarPage() {
               <OpsCard className="divide-y divide-border p-0">
                 {upcoming.map((r) => (
                   <div key={r.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                    <span className="truncate font-medium">{r.name || 'Responsibility'}</span>
+                    <span className="truncate font-medium">{displayName(r.name) || 'Responsibility'}</span>
                     <span className="shrink-0 text-xs text-muted-foreground">{formatWhen(r.nextRunAt)}</span>
                   </div>
                 ))}

@@ -64,14 +64,47 @@ export type HistoryRow = { id: string; at: number; actor: string; via: string; a
 
 export type Call = {
   id: string
+  kind?: 'outbound' | 'inbound' | 'outgoing' | 'incoming' | string | null
+  source?: 'receptionist' | 'agent' | string | null
   at: number
+  ended_at?: number | null
+  who?: string | null
+  to?: string | null
+  from?: string | null
   caller?: string | null
-  duration_s?: number | null
+  caller_number?: string | null
+  goal?: string | null
+  status?: string | null
+  outcome?: string | null
   summary?: string | null
+  message?: string | null
   transcript?: string | null
+  duration_s?: number | null
+  after_hours?: boolean | null
   texts_sent?: number | null
   booked?: boolean | null
   needs_you?: boolean | null
+}
+
+export type CallsDoc = {
+  items: Call[]
+  receptionist?: { available?: boolean; source?: string | null; count?: number; source_note?: string | null }
+  source_note?: string | null
+}
+
+export type KnowledgeItem = {
+  id: string
+  type?: string | null
+  text: string
+  source?: string | null
+  created_at?: number
+}
+
+export type Skill = {
+  id: string
+  name: string
+  description?: string | null
+  modified_at?: number
 }
 
 export type Version = { version: number; at: number; by?: string; name?: string; cron?: string; prompt?: string }

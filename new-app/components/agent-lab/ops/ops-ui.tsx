@@ -8,7 +8,7 @@ import { StatusBadge } from '@/components/app/status'
 import { buttonVariants } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatWhen, type Tone } from '@/lib/agent-lab/ops'
+import { displayName, formatWhen, type Tone } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { usePolled } from './use-ops-data'
 
@@ -52,7 +52,7 @@ export function NotificationsBell() {
           <ul className="max-h-96 divide-y divide-border overflow-y-auto">
             {items.slice(0, 20).map((n) => (
               <li key={n.id} className="px-3 py-2.5">
-                <p className={cn('text-sm', !n.read && 'font-medium')}>{n.title}</p>
+                <p className={cn('text-sm', !n.read && 'font-medium')}>{displayName(n.title)}</p>
                 {n.body && <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{n.body}</p>}
                 <p className="mt-1 text-[11px] text-muted-foreground">{formatWhen(n.createdAt)}</p>
               </li>
