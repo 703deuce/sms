@@ -28,6 +28,8 @@ type Item = {
   text: string
   isError?: boolean
   systemNote?: boolean
+  /** Shown immediately on send; replaced once the server has the message. */
+  pending?: boolean
 }
 type Conversation = { id: string; title: string; status: string; createdAt: string | null }
 type BackgroundJob = { n: number; name: string; status: string; progress: string; elapsed: string; cost: number | null }
@@ -379,6 +381,7 @@ export function AgentLabChat() {
   const desk = useDesktopStatus()
   const handoffWaiting = desk.status?.status === 'waiting'
   const lastTs = useRef<string | null>(null)
+  const keepPendingRef = useRef(false)
   const endRef = useRef<HTMLDivElement>(null)
   const jobsPollGenRef = useRef(0)
   const jobsAbortRef = useRef<AbortController | null>(null)
@@ -431,11 +434,20 @@ export function AgentLabChat() {
     lastTs.current = data.lastTs
     setStatus(data.status)
     setCost(data.cost)
+    setConversations((prev) => {
+      const i = prev.findIndex((c) => c.id === id)
+      if (i < 0 || prev[i].status === data.status) return prev
+      const next = prev.slice()
+      next[i] = { ...next[i], status: data.status }
+      return next
+    })
     setItems((prev) => {
-      const base = reset ? [] : prev
+      const base = reset ? prev.filter((i) => i.pending) : prev
       const seen = new Set(base.map((i) => i.id))
       const fresh = data.items.filter((i) => !seen.has(i.id))
-      return fresh.length || reset ? [...base, ...fresh] : prev
+      const merged = fresh.length || reset ? [...base, ...fresh] : base
+      const saved = new Set(merged.filter((i) => i.role === 'user' && !i.pending).map((i) => i.text))
+      return merged.filter((i) => !i.pending || !saved.has(i.text))
     })
     return data.status
   }, [])
@@ -526,7 +538,9 @@ export function AgentLabChat() {
       }
     }
     lastTs.current = null
-    setItems([])
+    const keep = keepPendingRef.current
+    keepPendingRef.current = false
+    setItems((prev) => (keep ? prev.filter((i) => i.pending) : []))
     void tick(true)
     return () => {
       stopped = true
@@ -539,6 +553,24 @@ export function AgentLabChat() {
   }, [items.length])
 
   /** Quick steering while the agent works: sent as a normal message, read before its next step. */
+  function showPending(text: string) {
+    const item: Item = {
+      id: `local-${Date.now()}`,
+      ts: new Date().toISOString(),
+      type: 'message',
+      role: 'user',
+      text: text || 'Please look at the attached files.',
+      pending: true,
+    }
+    setItems((prev) => [...prev, item])
+    return item.id
+  }
+
+  function dropPending(pendingId?: string) {
+    if (!pendingId) return
+    setItems((prev) => prev.filter((i) => i.id !== pendingId))
+  }
+
   async function recoverAfterSend(id: string, message: string): Promise<boolean> {
     try {
       const data = await api<{ items: Item[]; status: string; lastTs: string | null }>(
@@ -563,6 +595,7 @@ export function AgentLabChat() {
   async function steer(text: string) {
     if (!activeId || sending) return
     const id = activeId
+    const pendingId = showPending(text)
     setSending(true)
     setError(null)
     try {
@@ -574,6 +607,7 @@ export function AgentLabChat() {
       if (await recoverAfterSend(id, text)) {
         setError(null)
       } else {
+        dropPending(pendingId)
         setError(e instanceof Error ? e.message : String(e))
       }
     } finally {
@@ -585,14 +619,20 @@ export function AgentLabChat() {
     const message = draft.trim()
     if ((!message && !attachments.length) || sending) return
     const id = activeId
+    const pendingFiles = attachments
+    const pendingId = showPending(message)
+    setDraft('')
+    setAttachments([])
+    if (fileInput.current) fileInput.current.value = ''
     setSending(true)
     setError(null)
     try {
       const form = new FormData()
       form.append('message', message)
       form.append('timezone', browserTimeZone())
-      for (const f of attachments) form.append('files', f, f.name)
+      for (const f of pendingFiles) form.append('files', f, f.name)
       if (!id) {
+        keepPendingRef.current = true
         const started = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
         setActiveId(started.id)
         void loadConversations()
@@ -600,16 +640,13 @@ export function AgentLabChat() {
         await postForm(`/api/agent-lab/conversations/${id}/messages`, form)
         setStatus('running')
       }
-      setDraft('')
-      setAttachments([])
-      if (fileInput.current) fileInput.current.value = ''
     } catch (e) {
       if (id && (await recoverAfterSend(id, message))) {
-        setDraft('')
-        setAttachments([])
-        if (fileInput.current) fileInput.current.value = ''
         setError(null)
       } else {
+        dropPending(pendingId)
+        setDraft(message)
+        setAttachments(pendingFiles)
         setError(e instanceof Error ? e.message : String(e))
       }
     } finally {

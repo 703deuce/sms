@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { agentLabErrorResponse, agentLabJson, attachmentNote, isConversationId, readMessageRequest, saveAttachments, userMessage } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
@@ -11,23 +12,23 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
     const saved = files.length ? await saveAttachments(id, files) : []
     const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
-    // Persist the user message first (run: false) so a dropped HTTP response or a container
-    // swap never loses what they typed. Then start the turn; if that call fails the message
-    // is already in the transcript and the client can recover by re-fetching.
+    // Persist first (run: false) so a dropped response never loses the text, and so this
+    // HTTP response can return as soon as the message is saved. Start the turn after
+    // the response is sent; if that call fails the message is already in the transcript.
     await agentLabJson(`/api/conversations/${encodeURIComponent(id)}/events`, {
       method: 'POST',
       body: JSON.stringify(userMessage(message, false)),
       timeoutMs: 20_000,
     })
-    try {
-      await agentLabJson(`/api/conversations/${encodeURIComponent(id)}/run`, {
+    after(() =>
+      agentLabJson(`/api/conversations/${encodeURIComponent(id)}/run`, {
         method: 'POST',
         body: '{}',
         timeoutMs: 20_000,
-      })
-    } catch {
-      /* already saved; the page poll or a 5xx refetch will pick it up */
-    }
+      }).catch(() => {
+        /* already saved */
+      }),
+    )
     return Response.json({ ok: true, attachments: saved })
   } catch (err) {
     return agentLabErrorResponse(err)
