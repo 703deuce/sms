@@ -264,11 +264,14 @@ const INTERNAL_ID = /\b(?:rt|ti|rm|run|ca)_[A-Za-z0-9_-]+/
 const PROVIDER_SLUG = /\b[A-Z]{3,}_[A-Z0-9_]{8,}\b/
 
 /** True when a tool summary is the raw fallback (tool name + JSON/ids), not a short plain label. */
+const INTERNAL_JARGON = /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/[A-Za-z0-9._/<>-]/
+
 function isRawStepTitle(title: string): boolean {
   if (!title.trim()) return true
   if (RAW_TOOL_SUMMARY.test(title)) return true
   if (/"command"\s*:/.test(title)) return true
   if (INTERNAL_ID.test(title) || PROVIDER_SLUG.test(title)) return true
+  if (INTERNAL_JARGON.test(title)) return true
   return false
 }
 
@@ -300,11 +303,22 @@ function oneCommandLabel(raw: string): string {
       'trigger-events': 'Listed trigger events',
       'trigger-retry': 'Retried a trigger event',
       triggers: 'Listed trigger types',
+      tools: "Looked up an app's tools",
+      tool: 'Looked up an app tool',
+      schema: 'Looked up an app tool',
+      call: 'Used a connected app',
+      status: 'Checked connected apps',
       connected: 'Checked connected apps',
       link: 'Started an app connection',
-      usage: 'Checked usage',
+      connect: 'Connected an app',
+      disconnect: 'Removed a connection',
+      reconnect: 'Started a reconnection',
+      'auth-fields': 'Checked how to connect an app',
+      auth_fields: 'Checked how to connect an app',
+      fields: 'Checked how to connect an app',
+      usage: 'Looked up connection info',
     }
-    return map[sub] || 'Updated a connection'
+    return map[sub] || 'Used a connected app'
   }
   if (bin === 'routine') {
     const sub = tokens[1] || ''
@@ -412,7 +426,8 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
           if (msg) out.push({ ...base, type: 'message', role: 'agent', text: msg })
           break
         }
-        if (thought) out.push({ ...base, id: `${base.id}:t`, type: 'message', role: 'agent', text: thought })
+        // Action-event thoughts are the model's scratch notes, not customer messages.
+        // Showing them produced extra mid-turn progress lines ("I'll list…", "leaving this to a background job…").
         const { title, text } = describeAction(e)
         out.push({ ...base, type: 'action', tool: String(e.tool_name ?? ''), title, text })
         break
