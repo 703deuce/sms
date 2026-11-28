@@ -233,6 +233,24 @@ function clip(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}\n… (${s.length - n} more characters)` : s
 }
 
+// The runner wraps everything it adds around the user's own words (intent line, pinned requirements, attached skills) in
+// <runner-context>…</runner-context>. Show only the user's text: drop those blocks structurally, never edit the text itself.
+const RUNNER_CONTEXT_BLOCK = /<runner-context>[\s\S]*?<\/runner-context>\s*/g
+// Messages saved before the tags existed: the runner's exact heading, and leading paragraphs that open with a runner tag.
+const LEGACY_SKILLS_HEADING = '\n\n## Skills attached for this task (by the runner)'
+const LEGACY_RUNNER_PARAGRAPH = /^\[(?:Intent|Ask first|Skill router|Required first, checked by the runner|Requirements from the user, verbatim, pinned by the runner|Delivery check)\b/
+
+function stripRunnerContext(text: string): string {
+  if (text.includes('<runner-context>')) return text.replace(RUNNER_CONTEXT_BLOCK, '').trim()
+  const cut = text.indexOf(LEGACY_SKILLS_HEADING)
+  let t = cut >= 0 ? text.slice(0, cut) : text
+  if (cut < 0 && !LEGACY_RUNNER_PARAGRAPH.test(t)) return text
+  const paras = t.split(/\n{2,}/)
+  while (paras.length && LEGACY_RUNNER_PARAGRAPH.test(paras[0])) paras.shift()
+  t = paras.join('\n\n')
+  return t.trim()
+}
+
 const RUNNER_USER_NOTE = /^\[(?:Sent by|Background job|Front desk|Helper|Message from)/
 
 function isRunnerInjectedUserMessage(e: RawEvent, text: string): boolean {
@@ -271,7 +289,8 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
     const base = { id: String(e.id), ts: String(e.timestamp ?? '') }
     switch (e.kind) {
       case 'MessageEvent': {
-        const text = textOf(e.llm_message?.content)
+        const rawText = textOf(e.llm_message?.content)
+        const text = e.source === 'user' ? stripRunnerContext(rawText) : rawText
         if (!text) break
         if (e.source === 'environment') {
           // Auto-loaded session context (job folder rule, memory, skills index): show collapsed.
