@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Bell, Bot, ChevronRight, FileText, Flag, Folder, KeyRound, Loader2, MessageSquare, Mic, Monitor, PanelLeft, PanelLeftClose, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { Bell, Bot, ChevronRight, FileText, Flag, Folder, History, KeyRound, Loader2, MessageSquare, Mic, Monitor, Paperclip, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
 import {
   HandoffNotice,
@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { AgentAvatar } from '@/components/agent-lab/team/agent-avatar'
+import { AgentList, markAgentSeen } from '@/components/agent-lab/team/agent-list'
 import { HandoffCard, HandoffStrip } from '@/components/agent-lab/team/handoff-card'
 import { teamChanged, useAgents } from '@/components/agent-lab/team/use-team'
 import { gbUrl } from '@/components/agent-lab/ops/gb14'
@@ -388,8 +389,7 @@ export function AgentLabChat() {
   const [error, setError] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<File[]>([])
   const fileInput = useRef<HTMLInputElement>(null)
-  const [listOpen, setListOpen] = useState(true)
-  const [mobileList, setMobileList] = useState(false)
+    const [mobileList, setMobileList] = useState(false)
   const [filesOpen, setFilesOpen] = useState(false)
   const [mobileFiles, setMobileFiles] = useState(false)
   const filesUserClosed = useRef(false)
@@ -412,6 +412,8 @@ export function AgentLabChat() {
   const searchParams = useSearchParams()
   const agentParam = searchParams?.get('agent') ?? null
   const cParam = searchParams?.get('c') ?? null
+  // On a phone, /app/agent-lab with no agent picked is the agent list (home screen); desktop shows list + chat.
+  const phoneHome = !agentParam && !cParam
   const agentsQ = useAgents()
   const agents = agentsQ.data?.items ?? []
   const defaultAgentId = agentsQ.data?.default_id ?? 'agent-lab'
@@ -794,6 +796,13 @@ export function AgentLabChat() {
     }
   }
 
+  const seenAt = currentAgent?.last_message?.at ?? 0
+  useEffect(() => {
+    if (!currentAgent || !seenAt) return
+    if (phoneHome && !window.matchMedia('(min-width: 768px)').matches) return
+    markAgentSeen(currentAgent.id, seenAt)
+  }, [currentAgent?.id, seenAt, phoneHome]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const backgroundActive = jobsActiveCount > 0
   const stoppable = Boolean(activeId && (running || backgroundActive))
   const agentName = currentAgent?.name ?? 'your agent'
@@ -828,20 +837,10 @@ export function AgentLabChat() {
     setMobileList(false)
   }
 
-  const listBody = (
+  // GB-18 (Tony t365u): navigation is by agent only (sidebar). Each agent has ONE direct chat; its older runs stay
+  // reachable here, in that agent's history, and nothing is deleted.
+  const historyBody = (
     <>
-      {currentAgent ? (
-        <div className="flex items-start gap-2.5 rounded-lg border border-border bg-background p-2.5">
-          <AgentAvatar avatar={currentAgent.avatar} name={currentAgent.name} running={currentAgent.running} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold">{currentAgent.name}</div>
-            {currentAgent.role ? <div className="line-clamp-2 text-xs text-muted-foreground">{currentAgent.role}</div> : null}
-            <Link href={`/app/agent-lab/team?agent=${encodeURIComponent(currentAgent.id)}`} className="mt-1 inline-block text-xs text-primary hover:underline">
-              Agent settings
-            </Link>
-          </div>
-        </div>
-      ) : null}
       {task ? <TaskChecklist task={task} /> : null}
       <button
         type="button"
@@ -850,18 +849,13 @@ export function AgentLabChat() {
       >
         <MessageSquare className="size-4 text-muted-foreground" />
         <span className="min-w-0 flex-1">
-          <span className="block truncate">Chat with {agentName}</span>
+          <span className="block truncate">Current conversation</span>
           <span className="block text-xs font-normal text-muted-foreground">
-            {mainConversation ? formatWhen(mainConversation.updatedAt ?? mainConversation.createdAt) : 'One ongoing conversation'}
+            {mainConversation ? formatWhen(mainConversation.updatedAt ?? mainConversation.createdAt) : 'The ongoing conversation'}
           </span>
         </span>
       </button>
-      {currentAgent?.conversation_id ? (
-        <button type="button" onClick={openFreshChat} className={cn('flex items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground', !activeId && freshChat.current && 'bg-muted text-foreground')}>
-          <Plus className="size-3.5" /> New chat with {agentName}
-        </button>
-      ) : null}
-      {earlierConversations.length ? <div className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earlier chats</div> : null}
+      {earlierConversations.length ? <div className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earlier conversations</div> : null}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         {earlierConversations.map((c) => (
           <button
@@ -871,10 +865,7 @@ export function AgentLabChat() {
               setActiveId(c.id)
               setMobileList(false)
             }}
-            className={cn(
-              'rounded-lg px-3 py-2 text-left text-sm hover:bg-muted',
-              c.id === activeId && 'bg-muted font-medium',
-            )}
+            className={cn('rounded-lg px-3 py-2 text-left text-sm hover:bg-muted', c.id === activeId && 'bg-muted font-medium')}
           >
             <div className="truncate">{displayName(c.title) || c.title}</div>
             <div className="text-xs text-muted-foreground">
@@ -883,6 +874,17 @@ export function AgentLabChat() {
             </div>
           </button>
         ))}
+        {!earlierConversations.length ? <p className="px-3 py-2 text-xs text-muted-foreground">No earlier conversations.</p> : null}
+      </div>
+      <div className="flex flex-col gap-1 border-t border-border pt-2">
+        <Link href={`/app/agent-lab/activity${currentAgent ? `?agent=${encodeURIComponent(currentAgent.id)}` : ''}`} className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-muted">
+          All of {agentName}&apos;s activity
+        </Link>
+        {currentAgent?.conversation_id ? (
+          <button type="button" onClick={openFreshChat} className="rounded-lg px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+            Start a fresh conversation (same agent, same memory)
+          </button>
+        ) : null}
       </div>
     </>
   )
@@ -1024,16 +1026,16 @@ export function AgentLabChat() {
       ) : null}
 
       {mobileList ? (
-        <div className="absolute inset-0 z-20 md:hidden">
-          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close conversations" onClick={() => setMobileList(false)} />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col gap-2 bg-card p-3 shadow-xl">
+        <div className="absolute inset-0 z-20">
+          <button type="button" className="absolute inset-0 bg-black/40" aria-label="Close history" onClick={() => setMobileList(false)} />
+          <aside className="absolute inset-y-0 right-0 flex w-[min(22rem,90vw)] flex-col gap-2 bg-card p-3 shadow-xl">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">Conversations</span>
-              <Button size="icon-sm" variant="ghost" aria-label="Close conversations" onClick={() => setMobileList(false)}>
+              <span className="text-sm font-medium">{agentName} · history</span>
+              <Button size="icon-sm" variant="ghost" aria-label="Close history" onClick={() => setMobileList(false)}>
                 <X />
               </Button>
             </div>
-            {listBody}
+            {historyBody}
           </aside>
         </div>
       ) : null}
@@ -1045,42 +1047,30 @@ export function AgentLabChat() {
       ) : null}
 
       <div className="flex min-h-0 flex-1">
-        <aside
-          className={cn(
-            'hidden h-full shrink-0 flex-col border-r border-border bg-card md:flex',
-            listOpen ? 'w-64' : 'w-12',
-          )}
-        >
-          {listOpen ? (
-            <div className="flex h-full min-h-0 flex-col gap-2 p-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Agent</span>
-                <Button size="icon-sm" variant="ghost" aria-label="Collapse conversations" onClick={() => setListOpen(false)}>
-                  <PanelLeftClose />
-                </Button>
-              </div>
-              {listBody}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-1 py-2">
-              <Button size="icon-sm" variant="ghost" aria-label="Expand conversations" onClick={() => setListOpen(true)}>
-                <PanelLeft />
-              </Button>
-              {currentAgent ? (
-                <button type="button" aria-label={`Chat with ${currentAgent.name}`} onClick={openMainChat} className="mt-1">
-                  <AgentAvatar avatar={currentAgent.avatar} name={currentAgent.name} size="sm" running={currentAgent.running} />
-                </button>
-              ) : null}
-            </div>
-          )}
+        {/* GB-18: the agent list is the primary navigation: middle column on desktop, the home screen on a phone. */}
+        <aside className={cn('h-full w-full shrink-0 border-r border-border bg-card md:flex md:w-80', phoneHome ? 'flex' : 'hidden')}>
+          <AgentList currentId={phoneHome ? null : currentAgent?.id} className="w-full" />
         </aside>
-
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <section className={cn('min-h-0 min-w-0 flex-1 flex-col', phoneHome ? 'hidden md:flex' : 'flex')}>
           <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-border px-2 py-1.5 md:px-3">
-            <Button size="icon-sm" variant="ghost" className="md:hidden" aria-label="Open conversations" onClick={() => setMobileList(true)}>
-              <MessageSquare />
+            <Link href="/app/agent-lab?home=1" className="shrink-0 rounded-md px-1 text-sm text-primary md:hidden" aria-label="All agents">
+              ‹ Agents
+            </Link>
+            {currentAgent ? (
+              <Link href={`/app/agent-lab/team?agent=${encodeURIComponent(currentAgent.id)}`} title="Agent settings" className="shrink-0">
+                <AgentAvatar avatar={currentAgent.avatar} name={currentAgent.name} size="sm" running={currentAgent.running} />
+              </Link>
+            ) : null}
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {activeTitle}
+              {currentAgent?.role && (!activeId || isMainChat) ? <span className="ml-2 hidden font-normal text-muted-foreground lg:inline">{currentAgent.role}</span> : null}
+            </span>
+            {activeId && !isMainChat && currentAgent?.conversation_id ? (
+              <Button size="xs" variant="outline" onClick={openMainChat}>Back to chat with {agentName}</Button>
+            ) : null}
+            <Button size="xs" variant="ghost" aria-label={`${agentName} history`} onClick={() => setMobileList(true)}>
+              <History /> <span className="hidden sm:inline">History</span>
             </Button>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{activeTitle}</span>
             <div className="flex min-w-0 basis-full flex-wrap items-center gap-1 md:basis-auto md:justify-end">
               {activeId ? (
                 <Badge variant={running || backgroundActive ? 'default' : 'secondary'}>{running || backgroundActive ? 'Working' : status}</Badge>
@@ -1160,9 +1150,9 @@ export function AgentLabChat() {
             <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 px-4 py-5 sm:px-6">
               {items.length === 0 ? (
                 <p className="m-auto max-w-md text-center text-sm text-muted-foreground">
-                  {activeId ? 'Loading…' : currentAgent && !currentAgent.is_default
-                    ? `This is your ongoing chat with ${currentAgent.name}${currentAgent.role ? ` (${currentAgent.role.replace(/\.$/, '')})` : ''}. Ask for anything, or have it work with your other agents.`
-                    : 'Ask for anything: “Find a 20 second clip of a lighthouse at sunset and make it vertical with a slow push-in.”'}
+                  {activeId ? 'Loading…' : currentAgent
+                    ? `This is your direct chat with ${currentAgent.name}${currentAgent.role ? ` (${currentAgent.role.replace(/\.$/, '')})` : ''}. Ask for anything, or have it work with your other agents.`
+                    : 'Ask for anything.'}
                 </p>
               ) : (
                 <ChatAgentContext.Provider value={{ agent: currentAgent, agents }}>

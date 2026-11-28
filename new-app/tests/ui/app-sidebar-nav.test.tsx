@@ -77,7 +77,7 @@ describe('AppSidebar nav', () => {
       </SidebarProvider>,
     )
     // Agent pages lead the menu; video-editing items are hidden while VIDEO_NAV_HIDDEN (their pages are kept).
-    expect(navOrder(container)).toEqual(['workspace-switcher', ...AGENT_NAV.map((i) => i.id), 'learn', 'settings'])
+    expect(navOrder(container)).toEqual(['workspace-switcher', 'agent-create', ...AGENT_NAV.map((i) => i.id), 'learn', 'settings'])
     const navAnchors = [...container.querySelectorAll('[data-nav-id] a[href]')]
     expect(container.querySelectorAll('a[href^="/app/clips/templates"]')).toHaveLength(0)
     for (const h of SIDEBAR_HIDDEN_HREFS) {
@@ -88,7 +88,7 @@ describe('AppSidebar nav', () => {
   it('active states for the dashboard and agent pages', () => {
     const cases: [string, URLSearchParams, string][] = [
       ['/app', new URLSearchParams(), 'agent-home'],
-      ['/app/agent-lab', new URLSearchParams(), 'agent-chat'],
+      // /app/agent-lab: the active item is that agent in the Agents list (GB-18), not a generic Chat entry
       ['/app/agent-lab/needs-you', new URLSearchParams(), 'agent-needs-you'],
       ['/app/agent-lab/connections', new URLSearchParams(), 'agent-connections'],
     ]

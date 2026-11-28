@@ -97,7 +97,7 @@ const VIDEO_NAV_IDS = new Set([
 /** Agent Lab pages, all on the main menu: the work pages, a divider, then setup pages. */
 export const AGENT_NAV: SidebarNavItem[] = [
   { id: 'agent-home', label: 'Dashboard', href: '/app', icon: 'agentHome', group: 'agent' },
-  { id: 'agent-chat', label: 'Chat', href: '/app/agent-lab', icon: 'agentChat', group: 'agent' },
+  // GB-18 (t365u): no generic 'Chat' entry; each agent in the Agents list opens its own direct chat.
   { id: 'agent-needs-you', label: 'Needs you', href: '/app/agent-lab/needs-you', icon: 'agentNeeds', group: 'agent' },
   { id: 'agent-responsibilities', label: 'Responsibilities', href: '/app/agent-lab/responsibilities', icon: 'agentResponsibilities', group: 'agent' },
   { id: 'agent-activity', label: 'Activity', href: '/app/agent-lab/activity', icon: 'agentActivity', group: 'agent' },

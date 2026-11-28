@@ -19,6 +19,8 @@ export type TeamAgent = {
   handoffs_open?: number
   last_activity_at?: number | null
   own_skills?: number
+  /** Newest readable message in its chat, for the agent list. */
+  last_message?: { text: string; at: number; from: 'agent' | 'you' | 'teammate' } | null
 }
 
 export type AgentsDoc = { items: TeamAgent[]; default_id: string; split?: { shared: string[]; per_agent: string[] } }
