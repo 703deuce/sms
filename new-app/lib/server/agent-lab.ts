@@ -185,16 +185,23 @@ export function attachmentNote(paths: string[]): string {
   return `\n\n[Rick attached ${paths.length === 1 ? 'a file' : `${paths.length} files`}, saved in your job folder]\n${lines.join('\n')}`
 }
 
-/** Reads `{ message, files[] }` from either JSON or multipart form data. */
-export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[] }> {
+/** The browser's IANA time zone ("America/Chicago") if it looks like one; the runner validates it again. */
+export function cleanTimeZone(raw: unknown): string | undefined {
+  const tz = typeof raw === 'string' ? raw.trim() : ''
+  if (!tz || tz.length > 64 || !/^[A-Za-z0-9_+-]+(\/[A-Za-z0-9_+-]+)*$/.test(tz)) return undefined
+  return tz
+}
+
+/** Reads `{ message, files[], timezone }` from either JSON or multipart form data. */
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; timezone?: string }> {
   const type = request.headers.get('content-type') ?? ''
   if (type.includes('multipart/form-data')) {
     const form = await request.formData()
     const files = form.getAll('files').filter((f): f is File => typeof f === 'object' && f !== null && 'arrayBuffer' in f)
-    return { message: String(form.get('message') ?? '').trim(), files }
+    return { message: String(form.get('message') ?? '').trim(), files, timezone: cleanTimeZone(form.get('timezone')) }
   }
-  const body = (await request.json().catch(() => ({}))) as { message?: string }
-  return { message: String(body.message ?? '').trim(), files: [] }
+  const body = (await request.json().catch(() => ({}))) as { message?: string; timezone?: string }
+  return { message: String(body.message ?? '').trim(), files: [], timezone: cleanTimeZone(body.timezone) }
 }
 
 // ---- Conversation events → compact chat items ----

@@ -47,6 +47,15 @@ function fileUrl(path: string, download = false) {
   return `/api/agent-lab/file?path=${encodeURIComponent(path)}${download ? '&download=1' : ''}`
 }
 
+/** The browser's IANA time zone, sent with every message so the agent's clock, reminders and routines use it. */
+function browserTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+}
+
 async function postForm<T>(url: string, form: FormData): Promise<T> {
   const res = await fetch(url, { method: 'POST', body: form })
   const data = await res.json().catch(() => ({}))
@@ -537,6 +546,7 @@ export function AgentLabChat() {
     try {
       const form = new FormData()
       form.append('message', text)
+      form.append('timezone', browserTimeZone())
       await postForm(`/api/agent-lab/conversations/${activeId}/messages`, form)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -553,6 +563,7 @@ export function AgentLabChat() {
     try {
       const form = new FormData()
       form.append('message', message)
+      form.append('timezone', browserTimeZone())
       for (const f of attachments) form.append('files', f, f.name)
       if (!activeId) {
         const { id } = await postForm<{ id: string }>('/api/agent-lab/conversations', form)

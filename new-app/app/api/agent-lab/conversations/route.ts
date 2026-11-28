@@ -40,14 +40,22 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const { message: text, files } = await readMessageRequest(request)
+    const { message: text, files, timezone } = await readMessageRequest(request)
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
     const id = crypto.randomUUID()
     const saved = files.length ? await saveAttachments(id, files) : []
     const message = (text || 'Please look at the attached files.') + attachmentNote(saved)
     const run = await runnerJson<{ conversation_id: string; run_id: string; status?: string }>('/runs', {
       method: 'POST',
-      body: JSON.stringify({ prompt: message, source: 'user', conversation_id: id, created_by: 'transovo-page', wait: 120 }),
+      body: JSON.stringify({
+        prompt: message,
+        source: 'user',
+        conversation_id: id,
+        created_by: 'transovo-page',
+        wait: 120,
+        // The browser's time zone: the runner saves it for this chat (clock line, reminders, routines). Eastern if missing.
+        ...(timezone ? { timezone } : {}),
+      }),
       timeoutMs: 150_000,
     })
     return Response.json({ id: run.conversation_id, runId: run.run_id })
