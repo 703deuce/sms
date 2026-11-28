@@ -17,6 +17,13 @@ type CallFilter = 'all' | 'incoming' | 'outgoing'
 
 const CALLS_LIMIT = 200
 
+function shortOutcome(label: string): string {
+  const head = label.split(':')[0].trim()
+  if (head.length >= 3 && head.length < label.length) return head
+  return label.length > 40 ? `${label.slice(0, 37)}…` : label
+}
+
+
 function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () => void }) {
   const [detail, setDetail] = useState<Call | null>(null)
   const [detailErr, setDetailErr] = useState<string | null>(null)
@@ -80,7 +87,7 @@ function CallRow({ c, open, onToggle }: { c: Call; open: boolean; onToggle: () =
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
           {full.after_hours ? <Pill tone="muted">After hours</Pill> : null}
           {full.needs_you ? <Pill tone="warning">Needs you</Pill> : null}
-          {outcome ? <Pill tone={outcome.tone}>{outcome.label}</Pill> : null}
+          {outcome ? <Pill tone={outcome.tone}>{shortOutcome(outcome.label)}</Pill> : null}
         </div>
       </button>
       {open && (

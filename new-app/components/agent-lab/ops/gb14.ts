@@ -121,6 +121,22 @@ export async function gbPost<T = unknown>(path: string, body: unknown = {}): Pro
 export const money = (n: number | null | undefined, cur = 'USD') =>
   n === null || n === undefined ? '—' : new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 2 }).format(n)
 
-export const fromUnix = (t: number | null | undefined) => (t ? new Date(t * 1000).toISOString() : null)
+/** Times may arrive as Unix seconds (GB-14), milliseconds, or an ISO string. Never throw. */
+export function fromUnix(t: number | string | null | undefined): string | null {
+  if (t == null || t === '') return null
+  if (typeof t === 'string' && Number.isNaN(Number(t))) {
+    const d = new Date(t)
+    return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  }
+  const n = Number(t)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const ms = n > 1e12 ? n : n * 1000
+  const d = new Date(ms)
+  try {
+    return Number.isNaN(d.getTime()) ? null : d.toISOString()
+  } catch {
+    return null
+  }
+}
 
 export const MODE_LABEL: Record<Mode, string> = { full: 'Full', selective: 'Selective', supervised: 'Supervised' }

@@ -209,3 +209,16 @@ describe('agent chat route', () => {
     expect(isAgentChatRoute('/app')).toBe(false)
   })
 })
+
+
+describe('fromUnix', () => {
+  it('accepts seconds, milliseconds and ISO without throwing', async () => {
+    const { fromUnix } = await import('@/components/agent-lab/ops/gb14')
+    expect(fromUnix(1732800000)).toMatch(/^2024-/)
+    expect(fromUnix(1732800000000)).toMatch(/^2024-/)
+    expect(fromUnix('2024-11-28T14:00:00Z')).toBe('2024-11-28T14:00:00.000Z')
+    expect(fromUnix('not-a-date')).toBeNull()
+    expect(fromUnix(0)).toBeNull()
+    expect(fromUnix(null)).toBeNull()
+  })
+})
