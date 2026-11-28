@@ -4,6 +4,12 @@ export const dynamic = 'force-dynamic'
 
 const EXT = ['mp4', 'mov', 'webm', 'm4v', 'mkv', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'mp3', 'wav', 'm4a', 'srt', 'vtt', 'md', 'json', 'txt']
 
+/** True for runner-internal paths that must not appear in the customer Files panel. */
+function isInternalJobPath(dir: string, path: string): boolean {
+  const rel = path.slice(dir.length).replace(/^\/+/, '')
+  return rel === 'log' || rel === 'helpers' || rel.startsWith('log/') || rel.startsWith('helpers/')
+}
+
 /** Recent media/output files in one conversation's job folder (newest first). */
 export async function GET(request: Request) {
   try {
@@ -14,7 +20,8 @@ export async function GET(request: Request) {
     const names = EXT.map((e) => `-iname '*.${e}'`).join(' -o ')
     const command =
       `find ${dir} -type f \\( ${names} \\) -not -path '*/node_modules/*' -not -path '*/.git/*' ` +
-      `-not -path '*/frames/*' -not -name 'AGENTS.md' -printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -rn | head -200`
+      `-not -path '*/frames/*' -not -path '*/log/*' -not -path '*/helpers/*' -not -name 'AGENTS.md' ` +
+      `-printf '%T@\\t%s\\t%p\\n' 2>/dev/null | sort -rn | head -200`
     const out = await agentLabJson<{ stdout?: string | null }>('/api/bash/execute_bash_command', {
       method: 'POST',
       body: JSON.stringify({ command, timeout: 20 }),
@@ -27,6 +34,7 @@ export async function GET(request: Request) {
         const path = rest.join('\t')
         return { path, name: path.split('/').pop() ?? path, size: Number(size) || 0, modifiedAt: new Date(Number(mtime) * 1000).toISOString() }
       })
+      .filter((f) => !isInternalJobPath(dir, f.path))
     return Response.json({ files })
   } catch (err) {
     return agentLabErrorResponse(err)

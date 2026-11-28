@@ -416,7 +416,7 @@ export function AgentLabChat() {
     void loadTask()
     try {
       const data = await api<{ files: FileEntry[] }>(`/api/agent-lab/files?conversation=${encodeURIComponent(activeId)}`)
-      setFiles(data.files)
+      setFiles((data.files ?? []).filter((f) => !/(?:^|\/)(?:log|helpers)\//.test(f.path) && !/(?:^|\/)(?:log|helpers)$/.test(f.path)))
     } catch {
       /* the list is optional */
     }
