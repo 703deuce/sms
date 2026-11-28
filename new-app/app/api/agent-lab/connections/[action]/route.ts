@@ -4,7 +4,7 @@ import { clientIp, rateLimit, rateLimitedResponse } from '@/lib/server/agent-lab
 export const dynamic = 'force-dynamic'
 
 const TOOLKIT = /^[A-Za-z0-9_-]{1,80}$/
-const ACTIONS = new Set(['connected', 'auth-fields', 'link', 'connect', 'disconnect', 'trigger-pause', 'trigger-retry'])
+const ACTIONS = new Set(['connected', 'auth-fields', 'link', 'connect', 'disconnect', 'trigger-pause', 'trigger-retry', 'trigger-auto-do'])
 
 function toolkitOf(raw: unknown): string | null {
   const s = String(raw ?? '').trim().toLowerCase()
@@ -85,6 +85,20 @@ export async function POST(request: Request, ctx: { params: Promise<{ action: st
       const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
       if (!res.ok) return runnerError(res.status, data)
       return Response.json({ ok: true, event_id: eventId })
+    }
+
+    if (action === 'trigger-auto-do') {
+      const triggerId = String(body.trigger_id ?? '')
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(triggerId)) return Response.json({ error: 'Invalid trigger' }, { status: 400 })
+      const enabled = Boolean(body.auto_do ?? body.enabled)
+      const res = await runnerFetch('/connectors/trigger-auto-do', {
+        method: 'POST',
+        body: JSON.stringify({ trigger_id: triggerId, auto_do: enabled }),
+        timeoutMs: 30_000,
+      })
+      const data = (await res.json().catch(() => ({}))) as { error?: string; ok?: boolean }
+      if (!res.ok) return runnerError(res.status, data)
+      return Response.json({ ok: true, trigger_id: triggerId, auto_do: enabled })
     }
 
     const toolkit = toolkitOf(body.toolkit)

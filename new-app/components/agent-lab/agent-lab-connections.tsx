@@ -60,6 +60,7 @@ export type TriggerItem = {
   status: 'active' | 'paused' | 'needs_reconnect' | string
   paused_reason?: string | null
   auto_calls?: boolean
+  auto_do?: boolean
   routine_id?: string | null
   routine_name?: string | null
 }
@@ -177,6 +178,7 @@ const AppCard = memo(function AppCard({
   onConnect,
   onDisconnect,
   onToggleTrigger,
+  onToggleAutoDo,
 }: {
   app: CatalogApp
   ready: boolean
@@ -188,6 +190,7 @@ const AppCard = memo(function AppCard({
   onConnect: (app: CatalogApp) => void
   onDisconnect: (app: CatalogApp) => void
   onToggleTrigger: (t: TriggerItem) => void
+  onToggleAutoDo: (t: TriggerItem) => void
 }) {
   return (
     <li className="rounded-xl border bg-card p-4 shadow-sm">
@@ -242,28 +245,51 @@ const AppCard = memo(function AppCard({
                       {t.routine_name ? <span className="text-muted-foreground"> → {t.routine_name}</span> : null}
                       <span className="block text-muted-foreground">
                         {waiting ? 'Paused until reconnected' : paused ? 'Paused' : 'Active'}
-                        {t.auto_calls ? ' · auto-calls on' : ''}
+                        {t.auto_do || t.auto_calls ? ' · does it automatically' : ''}
                       </span>
                     </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={!paused}
-                      aria-label={`${paused ? 'Resume' : 'Pause'} ${triggerLabel(t.slug)}`}
-                      disabled={waiting || busyTrigger === t.trigger_id}
-                      onClick={() => onToggleTrigger(t)}
-                      className={cn(
-                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
-                        paused ? 'bg-muted' : 'bg-foreground',
-                      )}
-                    >
-                      <span
+                    <span className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        role="switch"
+                        title="Do this trigger's saved action automatically, without asking in chat"
+                        aria-checked={Boolean(t.auto_do || t.auto_calls)}
+                        aria-label={`${t.auto_do || t.auto_calls ? 'Turn off' : 'Turn on'} automatic actions for ${triggerLabel(t.slug)}`}
+                        disabled={waiting || busyTrigger === t.trigger_id}
+                        onClick={() => onToggleAutoDo(t)}
                         className={cn(
-                          'inline-block size-3.5 rounded-full bg-background shadow transition-transform',
-                          paused ? 'translate-x-0.5' : 'translate-x-4',
+                          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
+                          t.auto_do || t.auto_calls ? 'bg-foreground' : 'bg-muted',
                         )}
-                      />
-                    </button>
+                      >
+                        <span
+                          className={cn(
+                            'inline-block size-3.5 rounded-full bg-background shadow transition-transform',
+                            t.auto_do || t.auto_calls ? 'translate-x-4' : 'translate-x-0.5',
+                          )}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        role="switch"
+                        title="Pause or resume this trigger"
+                        aria-checked={!paused}
+                        aria-label={`${paused ? 'Resume' : 'Pause'} ${triggerLabel(t.slug)}`}
+                        disabled={waiting || busyTrigger === t.trigger_id}
+                        onClick={() => onToggleTrigger(t)}
+                        className={cn(
+                          'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors disabled:opacity-50',
+                          paused ? 'bg-muted' : 'bg-foreground',
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            'inline-block size-3.5 rounded-full bg-background shadow transition-transform',
+                            paused ? 'translate-x-0.5' : 'translate-x-4',
+                          )}
+                        />
+                      </button>
+                    </span>
                   </li>
                 )
               })}
@@ -454,6 +480,26 @@ export function AgentLabConnections() {
         await refreshStatus({ force: true })
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Could not change the trigger')
+      } finally {
+        setBusyTrigger(null)
+      }
+    },
+    [refreshStatus],
+  )
+
+  const onToggleAutoDo = useCallback(
+    async (t: TriggerItem) => {
+      setActionError(null)
+      setBusyTrigger(t.trigger_id)
+      try {
+        await api('/api/agent-lab/connections/trigger-auto-do', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ trigger_id: t.trigger_id, auto_do: !(t.auto_do || t.auto_calls) }),
+        })
+        await refreshStatus({ force: true })
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : 'Could not change automatic actions')
       } finally {
         setBusyTrigger(null)
       }
@@ -798,6 +844,7 @@ export function AgentLabConnections() {
                   onConnect={onConnect}
                   onDisconnect={onDisconnect}
                   onToggleTrigger={onToggleTrigger}
+                  onToggleAutoDo={onToggleAutoDo}
                 />
               ))}
             </ul>
@@ -826,6 +873,7 @@ export function AgentLabConnections() {
                     onConnect={onConnect}
                     onDisconnect={onDisconnect}
                     onToggleTrigger={onToggleTrigger}
+                  onToggleAutoDo={onToggleAutoDo}
                   />
                 ))}
               </ul>
