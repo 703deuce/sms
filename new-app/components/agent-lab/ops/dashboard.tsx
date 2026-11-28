@@ -7,7 +7,6 @@ import {
   Activity,
   ArrowRight,
   ArrowUp,
-  CalendarClock,
   CheckCircle2,
   CircleAlert,
   Folder,
@@ -20,12 +19,14 @@ import {
   Sparkles,
   XCircle,
 } from 'lucide-react'
-import { Page, Stat } from '@/components/app/page-primitives'
+import { Page } from '@/components/app/page-primitives'
 import { buttonVariants } from '@/components/ui/button'
 import { chatHref, dashboardSummary, displayName, formatWhen, runState, type OpsRun } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { gbUrl } from './gb14'
-import { NotificationsBell, OpsCard, OpsError, OpsLoading, SectionHeading } from './ops-ui'
+import { Kpi, KpiGrid, Panel, plainError, plainSummary } from './ops-kit'
+import { NotificationsBell, OpsError, OpsLoading, SectionHeading } from './ops-ui'
+import { useGbOverview, useWeekStats } from './use-week'
 import { useOverview, usePolled } from './use-ops-data'
 
 type Conversation = { id: string; title: string; status: string; createdAt: string | null; updatedAt: string | null }
@@ -177,7 +178,7 @@ function ResultRow({ run }: { run: OpsRun }) {
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{displayName(run.title) || 'Task'}</span>
           <span className="block truncate text-xs text-muted-foreground">
-            {failed ? run.error || 'Did not finish' : run.progress || 'Finished'}
+            {failed ? plainError(run.error) || 'Did not finish' : plainSummary(run.progress) || 'Finished'}
           </span>
         </span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{formatWhen(run.finishedAt ?? run.createdAt)}</span>
@@ -189,15 +190,22 @@ function ResultRow({ run }: { run: OpsRun }) {
 export function AgentDashboard() {
   const overview = useOverview()
   const convs = usePolled<{ conversations: Conversation[] }>('/api/agent-lab/conversations', 30_000)
-  // GB-14 approvals and permission changes; absent until that API is live, then they count toward "Needs you".
+  // GB-14 approvals and permission changes count toward "Needs you".
   const appr = usePolled<{ items: unknown[] }>(gbUrl('permissions/approvals?status=pending'), 30_000)
   const changes = usePolled<{ items: unknown[] }>(gbUrl('permissions/pending-changes'), 60_000)
+  const gb = useGbOverview()
+  const week = useWeekStats()
 
   const o = overview.data
   const s = useMemo(() => (o ? dashboardSummary(o) : null), [o])
   const approvals = (appr.data?.items?.length ?? 0) + (changes.data?.items?.length ?? 0)
-  const needsYou = s ? s.openQuestions + s.failures.length + approvals : approvals
+  const localNeeds = s ? s.openQuestions + s.failures.length + approvals : approvals
+  // The server's Needs-you list is the source of truth; never show fewer than it has.
+  const needsYou = Math.max(localNeeds, gb.data?.needs_you_count ?? 0)
   const unavailable = o && o.runs === null && o.routines === null
+  const spark = week.stats ? week.stats.days.map((_, i) => week.stats!.done[i] + week.stats!.warning[i]) : undefined
+  const completed = week.stats ? week.stats.totals.done + week.stats.totals.warning : gb.data?.completed_this_week
+  const apps = gb.data?.agent?.connected_apps
 
   return (
     <Page fluid>
@@ -218,148 +226,151 @@ export function AgentDashboard() {
             <OpsError message={overview.error} onRetry={overview.reload} />
           ) : unavailable ? (
             <OpsError message="Your agent's status is unavailable right now." onRetry={overview.reload} />
-          ) : !s ? (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              {Array.from({ length: 4 }, (_, i) => (
-                <div key={i} className="h-28 animate-pulse rounded-xl bg-muted" />
-              ))}
-            </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-              <Stat
-                label="Active responsibilities"
-                value={s.activeResponsibilities}
-                icon={ListChecks}
-                href="/app/agent-lab/responsibilities"
-                hint={s.pausedResponsibilities ? `${s.pausedResponsibilities} paused` : s.activeResponsibilities ? 'Running on schedule' : 'None yet. Ask in chat to add one.'}
-              />
-              <Stat
+            <KpiGrid cols={4}>
+              <Kpi
                 label="Needs you"
                 value={needsYou}
                 icon={Inbox}
                 tone={needsYou ? 'warning' : 'success'}
                 href="/app/agent-lab/needs-you"
-                hint={needsYou ? 'Questions, approvals or failed runs' : 'Nothing waiting on you'}
+                loading={!s}
+                sub={needsYou ? 'Questions, approvals or problems' : 'Nothing waiting on you'}
               />
-              <Stat
-                label="Working now"
-                value={s.workingNow}
-                icon={Activity}
+              <Kpi
+                label="Completed this week"
+                value={completed ?? '—'}
+                icon={CheckCircle2}
                 href="/app/agent-lab/activity"
-                hint={s.quietChecks ? `${s.quietChecks} quiet check${s.quietChecks === 1 ? '' : 's'} today, nothing new` : 'Tasks running in the background'}
+                loading={completed === undefined}
+                sub={s && s.workingNow ? `${s.workingNow} working now` : 'Last 7 days'}
+                spark={spark}
               />
-              <Stat
-                label="Next up"
-                value={s.nextUp ? formatWhen(s.nextUp.at).replace(/^(Today|Tomorrow), /, '') : '—'}
-                icon={CalendarClock}
-                href="/app/agent-lab/calendar"
-                hint={s.nextUp ? `${formatWhen(s.nextUp.at).startsWith('Tomorrow') ? 'Tomorrow · ' : ''}${displayName(s.nextUp.title)}` : 'Nothing scheduled'}
+              <Kpi
+                label="Responsibilities"
+                value={s ? `${s.activeResponsibilities}` : '—'}
+                icon={ListChecks}
+                href="/app/agent-lab/responsibilities"
+                loading={!s}
+                sub={
+                  s
+                    ? s.pausedResponsibilities
+                      ? `Active · ${s.pausedResponsibilities} paused`
+                      : s.activeResponsibilities
+                        ? 'Active, running on their own'
+                        : 'None yet. Ask in chat to add one.'
+                    : undefined
+                }
               />
-            </div>
+              <Kpi
+                label="Connected apps"
+                value={apps ?? '—'}
+                icon={Plug}
+                href="/app/agent-lab/connections"
+                loading={gb.loading && apps === undefined}
+                sub={s?.nextUp ? `Next up ${formatWhen(s.nextUp.at)}` : 'Apps your agent can use'}
+              />
+            </KpiGrid>
           )}
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-5">
-          <section aria-label="Recent conversations" className="flex min-w-0 flex-col gap-3 lg:col-span-3">
-            <SectionHeading
-              title="Recent conversations"
-              action={
-                <Link href="/app/agent-lab" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                  Open chat <ArrowRight className="size-3" />
-                </Link>
-              }
-            />
-            <OpsCard className="p-2">
-              {convs.loading && !convs.data ? (
-                <OpsLoading rows={3} />
-              ) : convs.error && !convs.data ? (
-                <OpsError message={convs.error} onRetry={convs.reload} />
-              ) : !convs.data?.conversations.length ? (
-                <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
-                  <MessageSquare className="size-5 text-muted-foreground" />
-                  <p className="text-sm font-medium">No conversations yet</p>
-                  <p className="text-sm text-muted-foreground">Start one above. Your chats will show up here.</p>
-                </div>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {convs.data.conversations.slice(0, 8).map((c) => (
-                    <li key={c.id}>
-                      <Link href={chatHref(c.id)} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60">
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
-                          <MessageSquare className="size-4" />
+        <div className="grid gap-6 xl:grid-cols-3">
+          <Panel
+            className="xl:col-span-2"
+            title="Recent conversations"
+            action={
+              <Link href="/app/agent-lab" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                Open chat <ArrowRight className="size-3" />
+              </Link>
+            }
+            bodyClassName="p-2"
+          >
+            {convs.loading && !convs.data ? (
+              <OpsLoading rows={3} />
+            ) : convs.error && !convs.data ? (
+              <OpsError message={convs.error} onRetry={convs.reload} />
+            ) : !convs.data?.conversations.length ? (
+              <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+                <MessageSquare className="size-5 text-muted-foreground" />
+                <p className="text-sm font-medium">No conversations yet</p>
+                <p className="text-sm text-muted-foreground">Start one above. Your chats will show up here.</p>
+              </div>
+            ) : (
+              <ul className="grid gap-x-4 md:grid-cols-2">
+                {convs.data.conversations.slice(0, 10).map((c) => (
+                  <li key={c.id} className="border-b border-border/60 last:border-0 md:[&:nth-last-child(2):nth-child(odd)]:border-0">
+                    <Link href={chatHref(c.id)} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60">
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+                        <MessageSquare className="size-4" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{displayName(c.title)}</span>
+                        <span className="block text-xs text-muted-foreground">{formatWhen(c.updatedAt ?? c.createdAt)}</span>
+                      </span>
+                      {c.status === 'running' && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
+                          <Loader2 className="size-3 animate-spin" /> Working
                         </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">{displayName(c.title)}</span>
-                          <span className="block text-xs text-muted-foreground">{formatWhen(c.updatedAt ?? c.createdAt)}</span>
-                        </span>
-                        {c.status === 'running' && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-                            <Loader2 className="size-3 animate-spin" /> Working
-                          </span>
-                        )}
-                        <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </OpsCard>
-          </section>
+                      )}
+                      <ArrowRight className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
 
-          <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
-            {s && (needsYou > 0 || s.failures.length > 0) && (
-              <section aria-label="Needs attention" className="flex flex-col gap-3">
-                <SectionHeading title="Needs attention" count={needsYou} />
-                <OpsCard className="flex flex-col gap-2 border-warning/40">
-                  {s.openQuestions > 0 && (
+          <div className="flex min-w-0 flex-col gap-6">
+            {needsYou > 0 && (
+              <Panel title={<span className="flex items-center gap-2">Needs attention <span className="rounded-md bg-warning/15 px-1.5 text-[11px] text-warning tabular-nums">{needsYou}</span></span>} className="border-warning/40">
+                <div className="flex flex-col gap-2">
+                  {s && s.openQuestions > 0 && (
                     <Link href="/app/agent-lab/needs-you" className="flex items-center gap-2 text-sm hover:underline">
-                      <CircleAlert className="size-4 text-warning-foreground" />
+                      <CircleAlert className="size-4 text-warning" />
                       {s.openQuestions} question{s.openQuestions === 1 ? '' : 's'} waiting for your answer
                     </Link>
                   )}
                   {approvals > 0 && (
                     <Link href="/app/agent-lab/needs-you" className="flex items-center gap-2 text-sm hover:underline">
-                      <CircleAlert className="size-4 text-warning-foreground" />
+                      <CircleAlert className="size-4 text-warning" />
                       {approvals} permission request{approvals === 1 ? '' : 's'} to review
                     </Link>
                   )}
-                  {s.failures.length > 0 && (
-                    <Link href="/app/agent-lab/needs-you" className="flex items-center gap-2 text-sm hover:underline">
-                      <XCircle className="size-4 text-destructive" />
-                      {s.failures.length} run{s.failures.length === 1 ? '' : 's'} didn&apos;t finish in the last 3 days
-                    </Link>
-                  )}
-                </OpsCard>
-              </section>
+                  <Link href="/app/agent-lab/needs-you" className="flex items-center gap-2 text-sm hover:underline">
+                    <XCircle className="size-4 text-destructive" />
+                    {s && s.failures.length > 0
+                      ? `${s.failures.length} run${s.failures.length === 1 ? '' : 's'} didn't finish in the last 3 days`
+                      : 'See what needs you'}
+                  </Link>
+                </div>
+              </Panel>
             )}
 
-            <section aria-label="Recent results" className="flex flex-col gap-3">
-              <SectionHeading
-                title="Recent results"
-                action={
-                  <Link href="/app/agent-lab/activity" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
-                    All activity <ArrowRight className="size-3" />
-                  </Link>
-                }
-              />
-              <OpsCard className="p-2">
-                {unavailable || (overview.error && !o) ? (
-                  <p className="px-3 py-8 text-center text-sm text-muted-foreground">Results are unavailable right now.</p>
-                ) : !s ? (
-                  <OpsLoading rows={2} />
-                ) : s.recentResults.length === 0 ? (
-                  <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-                    {s.quietChecks ? 'Checks ran and found nothing new.' : 'Finished work will show up here.'}
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-border">
-                    {s.recentResults.map((r) => (
-                      <ResultRow key={r.id} run={r} />
-                    ))}
-                  </ul>
-                )}
-              </OpsCard>
-            </section>
+            <Panel
+              title="Recent results"
+              action={
+                <Link href="/app/agent-lab/activity" className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+                  All activity <ArrowRight className="size-3" />
+                </Link>
+              }
+              bodyClassName="p-2"
+            >
+              {unavailable || (overview.error && !o) ? (
+                <p className="px-3 py-8 text-center text-sm text-muted-foreground">Results are unavailable right now.</p>
+              ) : !s ? (
+                <OpsLoading rows={2} />
+              ) : s.recentResults.length === 0 ? (
+                <p className="px-3 py-8 text-center text-sm text-muted-foreground">
+                  {s.quietChecks ? 'Checks ran and found nothing new.' : 'Finished work will show up here.'}
+                </p>
+              ) : (
+                <ul className="divide-y divide-border/60">
+                  {s.recentResults.map((r) => (
+                    <ResultRow key={r.id} run={r} />
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
         </div>
       </div>
