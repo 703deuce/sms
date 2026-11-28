@@ -47,6 +47,7 @@ import {
 } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { fromUnix, gbPost, gbUrl, type Approval, type PendingChange, type Version } from './gb14'
+import { AgentTag, inAgentScope, useAgentScope } from './agent-scope'
 import { Dot, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, TONE_BAR, Toolbar, dayHeading, isVideoWork, plainError, plainSummary } from './ops-kit'
 import { useWeekStats, type CalItem } from './use-week'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
@@ -657,6 +658,9 @@ type GbActivity = {
   responsibility_id: string | null
   conversation_id: string | null
   warning: string | null
+  agent_id?: string | null
+  agent_name?: string | null
+  agent_avatar?: string | null
   evidence?: { files?: { path: string; name: string; size?: number }[]; connector_calls?: number; connector_failures?: number }
   grouped?: { count: number; first_at: number; last_at: number }
 }
@@ -755,7 +759,8 @@ export function ActivityPage() {
   const [source, setSource] = useState<string>('all')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<GbActivity | null>(null)
-  const items = (feed.data?.items ?? []).filter((i) => !isVideoWork(i.title))
+  const scope = useAgentScope()
+  const items = (feed.data?.items ?? []).filter((i) => !isVideoWork(i.title) && inAgentScope(i, scope.agentId))
   const needle = q.trim().toLowerCase()
   const shown = items.filter(
     (i) =>
@@ -777,7 +782,7 @@ export function ActivityPage() {
   const files = items.reduce((n, i) => n + (i.evidence?.files?.length ?? 0), 0)
   const t = week.stats?.totals
   return (
-    <OpsPage icon={Activity} title="Activity" description="Your agent's work log: every run, what came of it, and what it tried when something failed.">
+    <OpsPage agentScoped icon={Activity} title="Activity" description="Your agent's work log: every run, what came of it, and what it tried when something failed.">
       <KpiGrid cols={4}>
         <Kpi label="Completed, 7 days" value={t ? t.done : '—'} icon={CheckCircle2} tone="success" loading={!t} spark={week.stats?.done} />
         <Kpi label="With a warning" value={t ? t.warning : '—'} icon={TriangleAlert} tone={t?.warning ? 'warning' : 'neutral'} loading={!t} sub="Finished, with a note" />
@@ -850,6 +855,7 @@ export function ActivityPage() {
                               <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                 <span className="truncate text-sm font-medium">{displayName(i.title) || 'Task'}</span>
                                 <span className="rounded-md bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">{SOURCE_LABEL[i.source ?? ''] ?? 'Agent'}</span>
+                                <AgentTag item={i} multi={scope.multi} />
                               </span>
                               {line && <span className="mt-0.5 line-clamp-1 block text-xs text-muted-foreground">{line}</span>}
                               {(nFiles > 0 || (i.evidence?.connector_calls ?? 0) > 0) && (

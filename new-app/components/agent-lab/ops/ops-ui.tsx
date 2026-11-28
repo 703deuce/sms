@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { AgentScopeSwitcher } from './agent-scope'
 import { useState } from 'react'
 import { Bell, CheckCheck, MessageSquare, type LucideIcon } from 'lucide-react'
 import { Page, PageHeader } from '@/components/app/page-primitives'
@@ -80,12 +81,15 @@ export function OpsPage({
   description,
   actions,
   children,
+  agentScoped,
 }: {
   icon: LucideIcon
   title: string
   description: string
   actions?: React.ReactNode
   children: React.ReactNode
+  /** Show the agent switcher in the header (pages whose data is per agent). */
+  agentScoped?: boolean
 }) {
   return (
     <Page fluid>
@@ -96,6 +100,7 @@ export function OpsPage({
         breadcrumbs={[{ label: 'Agent Lab', href: '/app/agent-lab' }, { label: title }]}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {agentScoped && <AgentScopeSwitcher />}
             {actions}
             <NotificationsBell />
             <ChatButton />

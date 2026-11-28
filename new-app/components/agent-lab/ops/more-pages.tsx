@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { callDirection, callNumber, callOutcome, callParty, displayName, formatDuration, formatWhen } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { MODE_LABEL, fromUnix, gbPost, gbUrl, money, type Call, type CallsDoc, type HistoryRow, type KnowledgeItem, type Mode, type PermissionsDoc, type Skill, type SpendSummary } from './gb14'
+import { AgentTag, inAgentScope, useAgentScope } from './agent-scope'
 import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, isOpaqueId, isVideoWork, lastDays, mentionsMoney } from './ops-kit'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { usePolled } from './use-ops-data'
@@ -620,7 +621,7 @@ export function ComputerPage() {
 
 // ---------------- Files ----------------
 
-type GbFile = { path: string; name: string; size: number; modified_at: number; run_id?: string | null; title?: string | null }
+type GbFile = { path: string; name: string; size: number; modified_at: number; run_id?: string | null; title?: string | null; agent_id?: string | null; agent_name?: string | null; agent_avatar?: string | null }
 type FileKind = 'doc' | 'sheet' | 'image' | 'other'
 
 const VIDEO_EXT = /\.(mp4|mov|m4v|webm|mkv|avi)$/i
@@ -699,12 +700,14 @@ export function FilesPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState<GbFile | null>(null)
-  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name) && !isVideoWork(f.name))
+  const scope = useAgentScope()
+  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name) && !isVideoWork(f.name) && inAgentScope(f, scope.agentId))
   const needle = search.trim().toLowerCase()
   const files = all.filter((f) => (kind === 'all' || fileKind(f.name) === kind) && (!needle || `${f.name} ${f.title ?? ''}`.toLowerCase().includes(needle)))
   const n = (k: FileKind) => all.filter((f) => fileKind(f.name) === k).length
   return (
     <OpsPage
+      agentScoped
       icon={Folder}
       title="Files"
       description="Everything your agent made for you across recent tasks: reports, sheets, decks, images and drafts."
@@ -758,6 +761,7 @@ export function FilesPage() {
                     </div>
                     <div className="min-w-0 p-3">
                       <p className="truncate text-sm font-medium">{f.name}</p>
+                      {scope.multi && <div className="mt-1"><AgentTag item={f} multi /></div>}
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{displayName(f.title) || k.label}</p>
                       <p className="mt-1.5 text-[11px] text-muted-foreground">
                         {formatWhen(fromUnix(f.modified_at))} · {size(f.size)}
