@@ -312,6 +312,8 @@ export function AgentLabConnections() {
   const [visible, setVisible] = useState(PAGE_SIZE)
   const [connected, setConnected] = useState<ConnectedMap>({})
   const [noAuth, setNoAuth] = useState<Set<string>>(() => new Set())
+  // Apps the host says customers cannot connect (host-side list, GB-7). Hidden unless already connected.
+  const [unavailable, setUnavailable] = useState<Set<string>>(() => new Set())
   const [statusError, setStatusError] = useState<string | null>(null)
   const [statusLoading, setStatusLoading] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
@@ -356,6 +358,7 @@ export function AgentLabConnections() {
       const data = await api<{
         connected?: ConnectedMap
         no_auth_toolkits?: string[]
+        unconnectable_toolkits?: string[]
         triggers?: TriggerItem[]
         dead_events?: DeadEvent[]
         usage?: Usage
@@ -369,6 +372,11 @@ export function AgentLabConnections() {
       setNoAuth((prev) => {
         if (prev.size === nextNoAuth.length && nextNoAuth.every((s) => prev.has(s.toLowerCase()))) return prev
         return new Set(nextNoAuth.map((s) => s.toLowerCase()))
+      })
+      const nextHidden = data.unconnectable_toolkits || []
+      setUnavailable((prev) => {
+        if (prev.size === nextHidden.length && nextHidden.every((s) => prev.has(s.toLowerCase()))) return prev
+        return new Set(nextHidden.map((s) => s.toLowerCase()))
       })
       setStatusError(null)
     } catch (err) {
@@ -405,21 +413,27 @@ export function AgentLabConnections() {
     setVisible(PAGE_SIZE)
   }, [q, type, category])
 
+  // The app list customers see: the catalog minus apps the host cannot connect. A connected app always stays visible.
+  const apps = useMemo(
+    () => DATA.apps.filter((app) => !unavailable.has(app.slug.toLowerCase()) || Boolean(connected[app.slug])),
+    [unavailable, connected],
+  )
+
   const categories = useMemo(() => {
     const set = new Set<string>()
-    for (const app of DATA.apps) {
+    for (const app of apps) {
       for (const c of app.categories || []) {
         if (c) set.add(c)
       }
     }
     return [...set].sort((a, b) => a.localeCompare(b))
-  }, [])
+  }, [apps])
 
   // Search/type/category run over the full catalog. `connected` is only a dep when that filter is on,
   // so a status poll does not rebuild the All / type / category views.
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    return DATA.apps.filter((app) => {
+    return apps.filter((app) => {
       if (!matchesType(app, type)) return false
       if (type === 'connected' && !connected[app.slug]) return false
       if (category !== 'all' && !(app.categories || []).includes(category)) return false
@@ -427,7 +441,7 @@ export function AgentLabConnections() {
       const hay = [app.name, app.slug, app.description, ...(app.categories || [])].join(' ').toLowerCase()
       return hay.includes(needle)
     })
-  }, [q, type, category, type === 'connected' ? connected : null])
+  }, [apps, q, type, category, type === 'connected' ? connected : null])
 
   const shown = useMemo(() => filtered.slice(0, visible), [filtered, visible])
 
@@ -452,8 +466,8 @@ export function AgentLabConnections() {
   const connectedCount = Object.keys(connected).length
   const hasMore = visible < filtered.length
   const connectedApps = useMemo(
-    () => DATA.apps.filter((app) => Boolean(connected[app.slug])),
-    [connected],
+    () => apps.filter((app) => Boolean(connected[app.slug])),
+    [apps, connected],
   )
 
 
@@ -618,7 +632,7 @@ export function AgentLabConnections() {
     deepLinked.current = true
     const slug = (new URLSearchParams(window.location.search).get('connect') || '').trim().toLowerCase()
     if (!slug) return
-    const app = DATA.apps.find((a) => a.slug === slug)
+    const app = apps.find((a) => a.slug === slug)
     if (!app) {
       setActionError(`No app called "${slug}" in the catalog. Search for it below.`)
       return
@@ -626,7 +640,7 @@ export function AgentLabConnections() {
     setQ(app.name)
     if (app.connect === 'api_key') void onConnect(app)
     else if (app.connect !== 'no_auth') setConnectHint(app)
-  }, [onConnect])
+  }, [apps, onConnect])
 
   const onDisconnect = useCallback(
     async (app: CatalogApp) => {
@@ -704,8 +718,6 @@ export function AgentLabConnections() {
           {DATA.included.toLocaleString()} apps from a live catalog of {DATA.catalog_total.toLocaleString()} toolkits
           ({oneClick.toLocaleString()} one-click, including {DATA.counts.native} built-in;{' '}
           {(DATA.counts.api_key || 0).toLocaleString()} API key; {DATA.counts.no_auth || 0} no sign-in).{' '}
-          {DATA.excluded_oauth_unmanaged.toLocaleString()} unmanaged OAuth apps are omitted because they need our own
-          app registration.
           {statusLoading ? ' Loading status…' : connectedCount ? ` ${connectedCount} connected.` : ''}
         </p>
       </div>

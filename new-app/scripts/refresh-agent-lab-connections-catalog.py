@@ -94,6 +94,12 @@ def main():
     args = p.parse_args()
 
     raw, reported = fetch_all()
+    # GB-7: apps customers cannot connect. The list lives on the AgentLab host only, not in this repo.
+    try:
+        blocked = {str(x).lower() for x in json.load(open('/opt/agent/connectors/unconnectable-apps.json')).get('slugs', [])}
+    except Exception:
+        blocked = set()
+    raw = [it for it in raw if str(it.get('slug') or '').lower() not in blocked]
     included, excluded, excluded_kinds = [], 0, {}
     for it in raw:
         kind = classify(it)
