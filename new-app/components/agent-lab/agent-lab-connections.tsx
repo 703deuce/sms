@@ -1,7 +1,8 @@
 'use client'
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { LayoutGrid, Plug, RefreshCw, Search, ShieldCheck, Zap } from 'lucide-react'
+import { Kpi, KpiGrid } from '@/components/agent-lab/ops/ops-kit'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -480,6 +481,7 @@ export function AgentLabConnections() {
 
   const oneClick = (DATA.counts.one_click || 0) + (DATA.counts.native || 0)
   const connectedCount = Object.keys(connected).length
+  const expiredCount = Object.values(connected).filter((c) => c?.status === 'EXPIRED').length
   const hasMore = visible < filtered.length
   const connectedApps = useMemo(
     () => apps.filter((app) => Boolean(connected[app.slug])),
@@ -724,19 +726,29 @@ export function AgentLabConnections() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p>Connections securely handled by Composio. You&apos;ll see Composio on the sign-in screen.</p>
-        <p>
-          One-click apps open a secure sign-in tab. For API-key apps, Connect asks for the key on this page — it is
-          sent to the agent host and never shown in the address bar. Apps that need no setup are marked Ready.
-        </p>
-        <p>
-          {DATA.included.toLocaleString()} apps available
-          ({oneClick.toLocaleString()} one-click, including {DATA.counts.native} built-in;{' '}
-          {(DATA.counts.api_key || 0).toLocaleString()} API key or client credentials; {DATA.counts.no_auth || 0} no sign-in).{' '}
-          {statusLoading ? ' Loading status…' : connectedCount ? ` ${connectedCount} connected.` : ''}
-        </p>
-      </div>
+      <KpiGrid cols={4}>
+        <Kpi label="Connected" value={statusLoading ? '—' : connectedCount} icon={Plug} tone={connectedCount ? 'success' : 'neutral'} loading={statusLoading} sub="Apps your agent can use" />
+        <Kpi
+          label="App triggers"
+          value={`${triggers.filter((t) => t.status === 'active').length} on`}
+          icon={Zap}
+          sub={`${triggers.filter((t) => t.status === 'paused').length} paused · switch them under each app`}
+        />
+        <Kpi
+          label="Need reconnect"
+          value={expiredCount + triggers.filter((t) => t.status === 'needs_reconnect').length}
+          icon={RefreshCw}
+          tone={expiredCount + triggers.filter((t) => t.status === 'needs_reconnect').length ? 'warning' : 'neutral'}
+          sub={expiredCount ? 'Sign in again to keep them working' : 'All signed in'}
+        />
+        <Kpi label="Apps available" value={DATA.included.toLocaleString()} icon={LayoutGrid} sub={`${oneClick.toLocaleString()} one-click · ${(DATA.counts.api_key || 0).toLocaleString()} API key`} />
+      </KpiGrid>
+      <p className="flex items-start gap-2 text-xs text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          Connections are securely handled by Composio; you&apos;ll see Composio on the sign-in screen. One-click apps open a secure sign-in tab. API-key apps ask for the key on this page, and it is never shown in the address bar. Apps that need no setup are marked Ready.
+        </span>
+      </p>
 
       {statusError ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
@@ -760,14 +772,7 @@ export function AgentLabConnections() {
         </div>
       ) : null}
       {triggers.length || dead.length ? (
-        <section className="flex flex-col gap-2 rounded-lg border px-3 py-3 text-sm" aria-label="App triggers">
-          <h2 className="font-semibold">App triggers</h2>
-          <p className="text-xs text-muted-foreground">
-            {triggers.filter((t) => t.status === 'active').length} active,{' '}
-            {triggers.filter((t) => t.status === 'paused').length} paused,{' '}
-            {triggers.filter((t) => t.status === 'needs_reconnect').length} waiting for a reconnect. Each one is shown
-            under its app with a pause switch (use the Connected filter).
-          </p>
+        <section className={cn('flex flex-col gap-2 text-sm', dead.length && 'rounded-lg border px-3 py-3')} aria-label="App triggers">
           {dead.length ? (
             <ul className="flex flex-col gap-1.5">
               {dead.map((d) => (
@@ -795,7 +800,7 @@ export function AgentLabConnections() {
       ) : null}
 
       <div className="flex flex-col gap-3">
-        <div className="relative max-w-xl">
+        <div className="relative w-full max-w-xl">
           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
@@ -854,7 +859,7 @@ export function AgentLabConnections() {
           {statusLoading && !connectedApps.length ? (
             <p className="text-sm text-muted-foreground">Loading status…</p>
           ) : (
-            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {connectedApps.map((app) => (
                 <AppCard
                   key={`connected-${app.source}-${app.slug}`}
@@ -884,7 +889,7 @@ export function AgentLabConnections() {
           {grouped.map((group) => (
             <section key={group.name} className="flex flex-col gap-3">
               <h2 className="text-section-title font-semibold capitalize">{group.name}</h2>
-              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {group.apps.map((app) => (
                   <AppCard
                     key={`${app.source}-${app.slug}`}
