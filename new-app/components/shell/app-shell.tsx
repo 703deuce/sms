@@ -83,7 +83,7 @@ export function AppShell({
               t2vNavEnabled={t2vNavEnabled}
               collapsible={isClipEditorPath(pathname ?? '') ? 'offcanvas' : 'icon'}
             />
-            <SidebarInset className="min-w-0 bg-background has-[main[data-immersive]]:h-dvh has-[main[data-immersive]]:overflow-hidden">
+            <SidebarInset className="min-w-0 bg-background has-[main[data-immersive]]:h-dvh has-[main[data-immersive]]:overflow-hidden has-[main[data-fill-height]]:h-dvh has-[main[data-fill-height]]:overflow-hidden">
               <AppTopBar />
               <AppMain>{children}</AppMain>
             </SidebarInset>
