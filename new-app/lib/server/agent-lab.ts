@@ -199,7 +199,7 @@ function cleanAgentId(v: unknown): string | undefined {
   return /^[a-z0-9][a-z0-9_-]{0,47}$/.test(s) ? s : undefined
 }
 
-export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; timezone?: string; agentId?: string }> {
+export async function readMessageRequest(request: Request): Promise<{ message: string; files: File[]; timezone?: string; agentId?: string; agentMain?: boolean }> {
   const type = request.headers.get('content-type') ?? ''
   if (type.includes('multipart/form-data')) {
     const form = await request.formData()
@@ -209,10 +209,11 @@ export async function readMessageRequest(request: Request): Promise<{ message: s
       files,
       timezone: cleanTimeZone(form.get('timezone')),
       agentId: cleanAgentId(form.get('agentId')),
+      agentMain: form.get('agentMain') !== '0',
     }
   }
-  const body = (await request.json().catch(() => ({}))) as { message?: string; timezone?: string; agentId?: string }
-  return { message: String(body.message ?? '').trim(), files: [], timezone: cleanTimeZone(body.timezone), agentId: cleanAgentId(body.agentId) }
+  const body = (await request.json().catch(() => ({}))) as { message?: string; timezone?: string; agentId?: string; agentMain?: boolean }
+  return { message: String(body.message ?? '').trim(), files: [], timezone: cleanTimeZone(body.timezone), agentId: cleanAgentId(body.agentId), agentMain: body.agentMain !== false }
 }
 
 // ---- Conversation events → compact chat items ----

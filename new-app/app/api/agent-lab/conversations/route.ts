@@ -40,7 +40,7 @@ export async function GET() {
  */
 export async function POST(request: Request) {
   try {
-    const { message: text, files, timezone, agentId } = await readMessageRequest(request)
+    const { message: text, files, timezone, agentId, agentMain } = await readMessageRequest(request)
     if (!text && !files.length) return Response.json({ error: 'Message is required' }, { status: 400 })
     const id = crypto.randomUUID()
     const saved = files.length ? await saveAttachments(id, files) : []
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         // The browser's time zone: the runner saves it for this chat (clock line, reminders, routines). Eastern if missing.
         ...(timezone ? { timezone } : {}),
         // GB-18: the chat belongs to this named agent (its persistent thread). Missing = the main agent, as before.
-        ...(agentId ? { agent_id: agentId, main: true } : {}),
+        ...(agentId ? { agent_id: agentId, main: agentMain !== false } : {}),
       }),
       timeoutMs: 150_000,
     })

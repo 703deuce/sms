@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { Bell, Bot, ChevronRight, FileText, Flag, Folder, KeyRound, Loader2, MessageSquare, Mic, Monitor, PanelLeft, PanelLeftClose, Paperclip, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
+import { Bell, Bot, ChevronRight, FileText, Flag, Folder, KeyRound, Loader2, MessageSquare, Mic, Monitor, PanelLeft, PanelLeftClose, Paperclip, Plus, RefreshCw, Send, SkipForward, Square, Terminal, User, X } from 'lucide-react'
 import { AgentMarkdown } from '@/components/agent-lab/agent-lab-markdown'
 import {
   HandoffNotice,
@@ -419,6 +419,7 @@ export function AgentLabChat() {
   const [handoffs, setHandoffs] = useState<Handoff[]>([])
   const [agentId, setAgentId] = useState<string | null>(null)
   const openedFor = useRef<string | null>(null)
+  const freshChat = useRef(false)
   const currentAgent = agents.find((a) => a.id === agentId) ?? agents.find((a) => a.is_default) ?? null
 
   const loadConvMap = useCallback(async () => {
@@ -449,7 +450,7 @@ export function AgentLabChat() {
     const a = agents.find((x) => x.id === want)
     if (openedFor.current === key) {
       // the agent's main chat was just started on the server: follow it without resetting the screen
-      if (a?.conversation_id && !activeId) setActiveId(a.conversation_id)
+      if (a?.conversation_id && !activeId && !freshChat.current) setActiveId(a.conversation_id)
       return
     }
     openedFor.current = key
@@ -747,6 +748,8 @@ export function AgentLabChat() {
       if (!id) {
         keepPendingRef.current = true
         if (currentAgent) form.append('agentId', currentAgent.id)
+        if (currentAgent && (freshChat.current || (currentAgent.conversation_id && currentAgent.conversation_id !== id))) form.append('agentMain', '0')
+        freshChat.current = false
         const started = await postForm<{ id: string }>('/api/agent-lab/conversations', form)
         setActiveId(started.id)
         void loadConversations()
@@ -813,8 +816,15 @@ export function AgentLabChat() {
   }
 
   function openMainChat() {
+    freshChat.current = false
     setActiveId(currentAgent?.conversation_id ?? null)
     if (!currentAgent?.conversation_id) startNewConversation()
+    setMobileList(false)
+  }
+
+  function openFreshChat() {
+    startNewConversation()
+    freshChat.current = Boolean(currentAgent?.conversation_id)
     setMobileList(false)
   }
 
@@ -836,7 +846,7 @@ export function AgentLabChat() {
       <button
         type="button"
         onClick={openMainChat}
-        className={cn('flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted', (isMainChat || !activeId) && 'bg-muted font-medium')}
+        className={cn('flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-muted', (isMainChat || (!activeId && !freshChat.current)) && 'bg-muted font-medium')}
       >
         <MessageSquare className="size-4 text-muted-foreground" />
         <span className="min-w-0 flex-1">
@@ -846,6 +856,11 @@ export function AgentLabChat() {
           </span>
         </span>
       </button>
+      {currentAgent?.conversation_id ? (
+        <button type="button" onClick={openFreshChat} className={cn('flex items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted hover:text-foreground', !activeId && freshChat.current && 'bg-muted text-foreground')}>
+          <Plus className="size-3.5" /> New chat with {agentName}
+        </button>
+      ) : null}
       {earlierConversations.length ? <div className="px-3 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Earlier chats</div> : null}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         {earlierConversations.map((c) => (
