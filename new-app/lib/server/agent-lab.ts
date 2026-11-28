@@ -263,16 +263,43 @@ const RAW_TOOL_SUMMARY = /^[A-Za-z0-9_.-]+:\s*[{[]/
 const INTERNAL_ID = /\b(?:rt|ti|rm|run|ca)_[A-Za-z0-9_-]+/
 const PROVIDER_SLUG = /\b[A-Z]{3,}_[A-Z0-9_]{8,}\b/
 
-/** True when a tool summary is the raw fallback (tool name + JSON/ids), not a short plain label. */
-const INTERNAL_JARGON = /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/[A-Za-z0-9._/<>-]/
+/** Folder / query wording customers should never see in step titles or the job status bar. */
+const INTERNAL_JARGON =
+  /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/|\b(?:job|log|out|helpers?) folder\b|\btask file\b|\btask\.md\b|\blog file\b/i
 
-function isRawStepTitle(title: string): boolean {
-  if (!title.trim()) return true
-  if (RAW_TOOL_SUMMARY.test(title)) return true
-  if (/"command"\s*:/.test(title)) return true
-  if (INTERNAL_ID.test(title) || PROVIDER_SLUG.test(title)) return true
-  if (INTERNAL_JARGON.test(title)) return true
+function hasInternalWording(title: string): boolean {
+  const t = title.trim()
+  if (!t) return true
+  if (RAW_TOOL_SUMMARY.test(t)) return true
+  if (/"command"\s*:/.test(t)) return true
+  if (INTERNAL_ID.test(t) || PROVIDER_SLUG.test(t)) return true
+  if (INTERNAL_JARGON.test(t)) return true
   return false
+}
+
+/** True when a tool summary is the raw fallback (tool name + JSON/ids), not a short plain label. */
+function isRawStepTitle(title: string): boolean {
+  return hasInternalWording(title)
+}
+
+/**
+ * Rewrite a customer-visible step or status-bar label that still has internal wording.
+ * Returns the original text when it is already plain, a mapped phrase when we can tell
+ * what happened, or '' so the caller can fall back (for example to the command).
+ */
+export function plainCustomerLabel(text: string): string {
+  const t = String(text || '').trim()
+  if (!t) return ''
+  const lower = t.toLowerCase()
+  if (/\b(job start|start(?:ed|ing)? (a )?background job)\b/.test(lower)) return 'Started a background job'
+  if (!hasInternalWording(t)) return t
+  if (/\b(task file|task\.md|background task)\b/.test(lower)) return 'Prepared the background job'
+  if (/\b(to out\/?|out\/|saved results|write result|result files|connector output)\b/.test(lower)) return 'Saved results'
+  if (/\b(job folder|log folder|log file|helpers? folder|parent job folder)\b/.test(lower)) {
+    return /\b(check|inspect|list|look|verify)\b/.test(lower) ? 'Checked the work' : 'Prepared the background job'
+  }
+  if (/\bGAQL\b/i.test(t)) return /\b(check|inspect|verify|review)\b/.test(lower) ? 'Checked the results' : 'Used a connected app'
+  return ''
 }
 
 function skillDisplayName(name: string): string {
@@ -288,8 +315,19 @@ function oneCommandLabel(raw: string): string {
   if (!cmd) return ''
   const tokens = cmd.split(/\s+/).filter((t) => t && t !== 'sudo')
   const bin = (tokens[0]?.split('/').pop() || '').replace(/`/g, '')
-  if (!bin || ['echo', 'head', 'grep', 'tail', 'awk', 'sed', 'cat', 'true'].includes(bin)) return ''
+  if (!bin || ['echo', 'head', 'grep', 'tail', 'awk', 'sed', 'cat', 'true', 'ls', 'pwd', 'cd', 'wc', 'date'].includes(bin)) return ''
   if (tokens.includes('--help') || tokens.includes('-h')) return 'Checked command help'
+  if (bin === 'job') {
+    const sub = tokens[1] || ''
+    if (sub === 'start') return 'Started a background job'
+    if (sub === 'steer') return 'Updated the background job'
+    if (sub === 'cancel') return 'Canceled a background job'
+    if (sub === 'list' || sub === 'status') return 'Checked the background job'
+    return 'Updated a background job'
+  }
+  if (bin === 'checkpoint') return 'Saved progress'
+  if ((bin === 'cp' || bin === 'tee' || bin === 'install' || bin === 'mv') && /(?:^|\s)(?:out|log)\//.test(cmd)) return 'Saved results'
+  if (bin === 'mkdir' && /\b(?:log|out|helpers)\b/.test(cmd)) return 'Prepared the background job'
   if (bin === 'connector') {
     const sub = tokens[1] || ''
     const map: Record<string, string> = {
@@ -351,8 +389,20 @@ function plainTerminalTitle(command: string): string {
 }
 
 function plainStepTitle(tool: string, summary: string, action: Record<string, any>): string {
+  const command = String(action.command ?? '')
+  const path = String(action.path ?? '')
+  if (tool === 'terminal' && /\bjob\s+start\b/.test(command)) return 'Started a background job'
+  if (tool === 'file_editor' && /(?:\/|^)log\/task\.md$|\btask\.md\b|background task file/i.test(`${path} ${summary}`)) {
+    return action.command === 'view' ? 'Checked the background job' : 'Prepared the background job'
+  }
   if (summary && !isRawStepTitle(summary)) return summary
-  if (tool === 'terminal') return plainTerminalTitle(String(action.command ?? ''))
+  const mapped = summary ? plainCustomerLabel(summary) : ''
+  if (mapped) return mapped
+  if (tool === 'terminal') {
+    const fromCmd = plainTerminalTitle(command)
+    if (fromCmd === 'Ran a command' && /(?:^|\s)(?:out|log)\//.test(command)) return 'Saved results'
+    return fromCmd
+  }
   if (tool === 'agent_skill' || tool === 'skill') {
     const name = String(action.data?.name ?? action.name ?? '')
     const fromSummary = summary.match(/"name"\s*:\s*"([^"]+)"/)
@@ -372,8 +422,7 @@ function describeAction(e: RawEvent): { title: string; text: string } {
   const title = plainStepTitle(tool, summary, a)
   if (tool === 'terminal') return { title, text: String(a.command ?? '') }
   if (tool === 'file_editor') {
-    const what = a.command === 'view' ? 'Viewed' : a.command === 'create' ? 'Created' : 'Edited'
-    return { title: isRawStepTitle(summary) ? `${what} a file` : title, text: String(a.path ?? '') }
+    return { title, text: String(a.path ?? '') }
   }
   if (tool.startsWith('browser')) {
     const detail = a.url ?? a.text ?? a.index ?? ''
@@ -388,7 +437,7 @@ function describeAction(e: RawEvent): { title: string; text: string } {
 }
 
 export function toAgentLabItems(events: RawEvent[]): AgentLabItem[] {
-  return rawItems(events).map((i) => ({ ...i, text: redactSecrets(i.text), title: i.title ? redactSecrets(i.title) : i.title }))
+  return rawItems(events).map((i) => ({ ...i, text: redactSecrets(i.text), title: i.title ? (plainCustomerLabel(redactSecrets(i.title)) || (hasInternalWording(i.title) ? 'Used a tool' : redactSecrets(i.title))) : i.title }))
 }
 
 function rawItems(events: RawEvent[]): AgentLabItem[] {
