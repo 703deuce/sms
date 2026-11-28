@@ -47,7 +47,7 @@ import {
 } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { fromUnix, gbPost, gbUrl, type Approval, type PendingChange, type Version } from './gb14'
-import { Dot, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, TONE_BAR, Toolbar, dayHeading, plainError, plainSummary } from './ops-kit'
+import { Dot, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, TONE_BAR, Toolbar, dayHeading, isVideoWork, plainError, plainSummary } from './ops-kit'
 import { useWeekStats, type CalItem } from './use-week'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { useOverview, usePolled } from './use-ops-data'
@@ -755,7 +755,7 @@ export function ActivityPage() {
   const [source, setSource] = useState<string>('all')
   const [q, setQ] = useState('')
   const [open, setOpen] = useState<GbActivity | null>(null)
-  const items = feed.data?.items ?? []
+  const items = (feed.data?.items ?? []).filter((i) => !isVideoWork(i.title))
   const needle = q.trim().toLowerCase()
   const shown = items.filter(
     (i) =>
@@ -924,7 +924,7 @@ export function CalendarPage() {
     return d
   })
   const rows = useMemo<CalRow[]>(() => {
-    const out: CalRow[] = (cal.data?.items ?? []).map((i, n) => ({ at: i.at, title: displayName(i.title) || 'Task', kind: i.kind, key: `${i.run_id ?? n}-${i.at}` }))
+    const out: CalRow[] = (cal.data?.items ?? []).filter((i) => !isVideoWork(i.title)).map((i, n) => ({ at: i.at, title: displayName(i.title) || 'Task', kind: i.kind, key: `${i.run_id ?? n}-${i.at}` }))
     // Upcoming runs of active responsibilities (the server list may not include them for future weeks).
     for (const r of data?.routines ?? []) {
       if (r.paused || r.done || !r.nextRunAt) continue

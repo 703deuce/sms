@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import { gbUrl } from './gb14'
-import { dayKey, lastDays } from './ops-kit'
+import { dayKey, isVideoWork, lastDays } from './ops-kit'
 import { usePolled } from './use-ops-data'
 
 export type CalItem = {
@@ -40,6 +40,7 @@ export function useWeekStats(): { stats: WeekStats | null; items: CalItem[] | nu
     const warning = days.map(() => 0)
     const failed = days.map(() => 0)
     for (const it of q.data.items) {
+      if (isVideoWork(it.title)) continue
       const i = idx.get(dayKey(new Date(it.at * 1000)))
       if (i === undefined) continue
       if (it.kind === 'completed') done[i]++
@@ -51,7 +52,7 @@ export function useWeekStats(): { stats: WeekStats | null; items: CalItem[] | nu
     t.all = t.done + t.warning + t.failed
     return { days, done, warning, failed, totals: t }
   }, [q.data])
-  return { stats, items: q.data?.items ?? null, loading: q.loading }
+  return { stats, items: q.data?.items ? q.data.items.filter((i) => !isVideoWork(i.title)) : null, loading: q.loading }
 }
 
 export type GbOverview = {

@@ -24,7 +24,7 @@ import { buttonVariants } from '@/components/ui/button'
 import { chatHref, dashboardSummary, displayName, formatWhen, runState, type OpsRun } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { gbUrl } from './gb14'
-import { Kpi, KpiGrid, Panel, plainError, plainSummary } from './ops-kit'
+import { Kpi, KpiGrid, Panel, isVideoWork, plainError, plainSummary } from './ops-kit'
 import { NotificationsBell, OpsError, OpsLoading, SectionHeading } from './ops-ui'
 import { useGbOverview, useWeekStats } from './use-week'
 import { useOverview, usePolled } from './use-ops-data'
@@ -297,7 +297,7 @@ export function AgentDashboard() {
               </div>
             ) : (
               <ul className="grid gap-x-4 md:grid-cols-2">
-                {convs.data.conversations.slice(0, 10).map((c) => (
+                {convs.data.conversations.filter((c) => !isVideoWork(c.title)).slice(0, 10).map((c) => (
                   <li key={c.id} className="border-b border-border/60 last:border-0 md:[&:nth-last-child(2):nth-child(odd)]:border-0">
                     <Link href={chatHref(c.id)} className="group flex items-center gap-3 rounded-lg px-2 py-2.5 transition-colors hover:bg-muted/60">
                       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
@@ -365,7 +365,7 @@ export function AgentDashboard() {
                 </p>
               ) : (
                 <ul className="divide-y divide-border/60">
-                  {s.recentResults.map((r) => (
+                  {s.recentResults.filter((r) => !isVideoWork(r.title)).map((r) => (
                     <ResultRow key={r.id} run={r} />
                   ))}
                 </ul>

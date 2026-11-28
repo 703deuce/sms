@@ -391,3 +391,19 @@ export function plainSummary(raw: string | null | undefined): string {
   t = t.replace(/^[,;:.\s]+/, '')
   return t
 }
+
+/** Video work stays hidden in Agent Lab for now: matches run, file and memory titles that are about videos. */
+const VIDEO_WORDS = /\b(videos?|clips?|documentary|motion studio|gen-video|image-to-video|text-to-video)\b/i
+export function isVideoWork(title: string | null | undefined): boolean {
+  return !!title && VIDEO_WORDS.test(title)
+}
+
+/** Internal notes that mention money, credits or spend; kept out of customer-facing lists. */
+const MONEY_WORDS = /\$\s?\d|\b(credits?|costs?|cheapest|spend|spending|billing|balance)\b/i
+export function mentionsMoney(text: string | null | undefined): boolean {
+  return !!text && MONEY_WORDS.test(text)
+}
+
+export function isOpaqueId(s: string | null | undefined): boolean {
+  return !!s && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim())
+}

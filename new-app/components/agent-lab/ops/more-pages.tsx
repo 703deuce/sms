@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { callDirection, callNumber, callOutcome, callParty, displayName, formatDuration, formatWhen } from '@/lib/agent-lab/ops'
 import { cn } from '@/lib/utils'
 import { MODE_LABEL, fromUnix, gbPost, gbUrl, money, type Call, type CallsDoc, type HistoryRow, type KnowledgeItem, type Mode, type PermissionsDoc, type Skill, type SpendSummary } from './gb14'
-import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, lastDays } from './ops-kit'
+import { Donut, Drawer, Kpi, KpiGrid, Panel, PropList, SearchBox, Segmented, StackedColumns, Toolbar, dayKey, isOpaqueId, isVideoWork, lastDays, mentionsMoney } from './ops-kit'
 import { OpsCard, OpsEmpty, OpsError, OpsLoading, OpsPage, Pill, SectionHeading } from './ops-ui'
 import { usePolled } from './use-ops-data'
 
@@ -699,7 +699,7 @@ export function FilesPage() {
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState<GbFile | null>(null)
-  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name))
+  const all = (q.data?.items ?? []).filter((f) => !VIDEO_EXT.test(f.name) && !isVideoWork(f.name))
   const needle = search.trim().toLowerCase()
   const files = all.filter((f) => (kind === 'all' || fileKind(f.name) === kind) && (!needle || `${f.name} ${f.title ?? ''}`.toLowerCase().includes(needle)))
   const n = (k: FileKind) => all.filter((f) => fileKind(f.name) === k).length
@@ -746,10 +746,10 @@ export function FilesPage() {
                 const Icon = k.icon
                 return (
                   <button key={f.path} type="button" onClick={() => setOpen(f)} className="group flex min-w-0 flex-col overflow-hidden rounded-card border border-border bg-card text-left shadow-xs transition hover:-translate-y-px hover:border-foreground/15">
-                    <div className="grid h-28 place-items-center border-b border-border bg-muted/30">
+                    <div className="relative grid h-28 place-items-center overflow-hidden border-b border-border bg-muted/30">
                       {fileKind(f.name) === 'image' ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={fileUrl(f.path)} alt="" loading="lazy" className="h-full w-full object-cover" />
+                        <img src={fileUrl(f.path)} alt="" loading="lazy" className="absolute inset-0 h-full w-full object-cover" />
                       ) : (
                         <span className={cn('grid size-12 place-items-center rounded-xl', k.cls)}>
                           <Icon className="size-6" />
@@ -840,8 +840,8 @@ export function FilesPage() {
 export function MemoryPage() {
   const knowledge = usePolled<{ total?: number; items: KnowledgeItem[] }>(gbUrl('knowledge?limit=100'), 60_000)
   const skills = usePolled<{ items: Skill[] }>(gbUrl('skills'), 60_000)
-  const mem = knowledge.data?.items ?? []
-  const sk = skills.data?.items ?? []
+  const mem = (knowledge.data?.items ?? []).filter((k) => !isVideoWork(k.text) && !mentionsMoney(k.text))
+  const sk = (skills.data?.items ?? []).filter((x) => !isVideoWork(`${x.name} ${x.description ?? ''}`) && !mentionsMoney(x.description))
   const memUnavailable = !knowledge.data && !!knowledge.error
   const skUnavailable = !skills.data && !!skills.error
   const types = [...new Set(mem.map((k) => k.type).filter(Boolean))] as string[]
@@ -917,7 +917,7 @@ export function MemoryPage() {
                     <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">{formatWhen(fromUnix(k.created_at))}</span>
                   </div>
                   <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap">{k.text}</p>
-                  {k.source && <p className="mt-2 text-[11px] text-muted-foreground">From {displayName(k.source) || k.source}</p>}
+                  {k.source && !isOpaqueId(k.source) && <p className="mt-2 text-[11px] text-muted-foreground">From {displayName(k.source) || k.source}</p>}
                 </div>
               ))}
               {memShown.length === 0 && <p className="text-sm text-muted-foreground">Nothing matches.</p>}
