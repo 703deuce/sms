@@ -51,7 +51,7 @@ type AuthField = {
   is_secret?: boolean
 }
 
-type ConnectedMap = Record<string, { status?: string; connected_at?: string | null }>
+type ConnectedMap = Record<string, { status?: string; connected_at?: string | null; missing?: string[] }>
 
 export type TriggerItem = {
   trigger_id: string
@@ -163,12 +163,15 @@ const Logo = memo(function Logo({ name, slug, logo }: { name: string; slug: stri
   )
 })
 
+const NO_MISSING: string[] = []
+
 const AppCard = memo(function AppCard({
   app,
   ready,
   on,
   busy,
   expired,
+  missing,
   triggers,
   busyTrigger,
   onConnect,
@@ -181,6 +184,7 @@ const AppCard = memo(function AppCard({
   on: boolean
   busy: boolean
   expired: boolean
+  missing: string[]
   triggers: TriggerItem[]
   busyTrigger: string | null
   onConnect: (app: CatalogApp) => void
@@ -216,6 +220,16 @@ const AppCard = memo(function AppCard({
             ) : on ? (
               <>
                 <Badge variant="default">Connected</Badge>
+                {missing.length ? (
+                  <Badge variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-400">
+                    Missing permissions
+                  </Badge>
+                ) : null}
+                {missing.length ? (
+                  <Button type="button" size="sm" disabled={busy} onClick={() => onConnect(app)}>
+                    {busy ? 'Working…' : 'Reconnect'}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => onDisconnect(app)}>
                   {busy ? 'Working…' : 'Disconnect'}
                 </Button>
@@ -229,6 +243,12 @@ const AppCard = memo(function AppCard({
               </>
             )}
           </div>
+          {on && !expired && missing.length ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Some actions will not work until you reconnect and allow: {missing.slice(0, 6).join(', ')}
+              {missing.length > 6 ? ` and ${missing.length - 6} more` : ''}.
+            </p>
+          ) : null}
           {triggers.length ? (
             <ul className="mt-3 flex flex-col gap-1.5 border-t pt-2" aria-label={`${app.name} triggers`}>
               {triggers.map((t) => {
@@ -836,6 +856,7 @@ export function AgentLabConnections() {
                   on={Boolean(connected[app.slug]) && connected[app.slug]?.status !== 'EXPIRED'}
                   busy={busy === app.slug}
                   expired={connected[app.slug]?.status === 'EXPIRED'}
+                  missing={connected[app.slug]?.missing || NO_MISSING}
                   triggers={triggersBy.get(app.slug) || NO_TRIGGERS}
                   busyTrigger={busyTrigger}
                   onConnect={onConnect}
@@ -865,6 +886,7 @@ export function AgentLabConnections() {
                     on={Boolean(connected[app.slug]) && connected[app.slug]?.status !== 'EXPIRED'}
                     busy={busy === app.slug}
                     expired={connected[app.slug]?.status === 'EXPIRED'}
+                    missing={connected[app.slug]?.missing || NO_MISSING}
                     triggers={triggersBy.get(app.slug) || NO_TRIGGERS}
                     busyTrigger={busyTrigger}
                     onConnect={onConnect}
