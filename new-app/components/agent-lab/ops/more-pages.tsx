@@ -134,7 +134,7 @@ function SpendCard({ s, onRevoke, busy }: { s: SpendSummary; onRevoke: () => voi
             Used {money(used, cur)} of {money(max, cur)}
           </p>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-secondary">
-            <div className="h-full rounded-full bg-brand-gradient" style={{ width: `${pct}%` }} />
+            <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
           </div>
         </div>
       ) : null}
@@ -254,7 +254,7 @@ export function PermissionsPage() {
           <section className="flex flex-col gap-3">
             <SectionHeading title="Spending limits" count={d.limits.length} />
             {d.limits.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No spending limits yet. Say something like “you can spend up to $25 per change and $100 a month on Junk Removal ads” in chat.</p>
+              <p className="text-sm text-muted-foreground">No spending limits yet. Say something like “you can spend up to 25 dollars per change and 100 dollars a month on Junk Removal ads” in chat.</p>
             ) : (
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {d.limits.map((s) => (

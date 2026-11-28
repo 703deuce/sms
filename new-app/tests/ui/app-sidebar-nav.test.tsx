@@ -4,7 +4,7 @@ import type React from 'react'
 import { render } from '@testing-library/react'
 import { AppSidebar } from '@/components/shell/app-sidebar'
 import { SidebarProvider } from '@/components/ui/sidebar'
-import { SIDEBAR_HIDDEN_HREFS } from '@/lib/sidebar-nav'
+import { AGENT_NAV, SIDEBAR_HIDDEN_HREFS } from '@/lib/sidebar-nav'
 
 const pathnameRef = { current: '/app/clips' }
 const searchRef = { current: new URLSearchParams() }
@@ -76,38 +76,21 @@ describe('AppSidebar nav', () => {
         <AppSidebar recordingNavEnabled />
       </SidebarProvider>,
     )
-    expect(navOrder(container)).toEqual([
-      'workspace-switcher',
-      'home',
-      'clips',
-      'streamer',
-      'editor',
-      'youtube-video',
-      'record',
-      'ai-video',
-      'studio',
-      'media',
-      'brand',
-      'templates',
-      'exports',
-      'learn',
-      'settings',
-    ])
+    // Agent pages lead the menu; video-editing items are hidden while VIDEO_NAV_HIDDEN (their pages are kept).
+    expect(navOrder(container)).toEqual(['workspace-switcher', ...AGENT_NAV.map((i) => i.id), 'learn', 'settings'])
     const navAnchors = [...container.querySelectorAll('[data-nav-id] a[href]')]
-    const templatesLinks = [...container.querySelectorAll('a[href^="/app/clips/templates"]')]
-    expect(templatesLinks).toHaveLength(1)
-    expect(templatesLinks[0]?.closest('[data-nav-id]')?.getAttribute('data-nav-id')).toBe('templates')
+    expect(container.querySelectorAll('a[href^="/app/clips/templates"]')).toHaveLength(0)
     for (const h of SIDEBAR_HIDDEN_HREFS) {
       expect(navAnchors.some((a) => a.getAttribute('href') === h)).toBe(false)
     }
   })
 
-  it('active states for home, ai-video, templates, brand', () => {
+  it('active states for the dashboard and agent pages', () => {
     const cases: [string, URLSearchParams, string][] = [
-      ['/app/clips', new URLSearchParams('kind=video'), 'ai-video'],
-      ['/app/clips', new URLSearchParams(), 'home'],
-      ['/app/clips/templates', new URLSearchParams('tab=ai-video'), 'templates'],
-      ['/app/clips/brand', new URLSearchParams('tab=templates'), 'brand'],
+      ['/app', new URLSearchParams(), 'agent-home'],
+      ['/app/agent-lab', new URLSearchParams(), 'agent-chat'],
+      ['/app/agent-lab/needs-you', new URLSearchParams(), 'agent-needs-you'],
+      ['/app/agent-lab/connections', new URLSearchParams(), 'agent-connections'],
     ]
     for (const [path, params, id] of cases) {
       pathnameRef.current = path
@@ -130,7 +113,7 @@ describe('AppSidebar nav', () => {
         <AppSidebar recordingNavEnabled />
       </SidebarProvider>,
     )
-    const ids = ['home', 'clips', 'streamer', 'editor', 'record', 'ai-video', 'media', 'brand', 'templates', 'exports', 'learn', 'settings']
+    const ids = [...AGENT_NAV.map((i) => i.id), 'learn', 'settings']
     for (const id of ids) {
       const el = container.querySelector(`[data-nav-id="${id}"]`)
       expect(el, id).toBeTruthy()

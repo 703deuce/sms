@@ -105,7 +105,7 @@ describe('agent lab work pages', () => {
     const ids = visibleSidebarNav(f).map((i) => i.id)
     for (const i of AGENT_NAV) expect(ids).toContain(i.id)
     expect(AGENT_NAV.map((i) => i.label)).toEqual([
-      'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Permissions', 'Connections', 'Computer', 'Files',
+      'Dashboard', 'Chat', 'Needs you', 'Responsibilities', 'Activity', 'Calendar', 'Calls', 'Assignments', 'Permissions', 'Connections', 'Computer', 'Files',
     ])
     if (VIDEO_NAV_HIDDEN) {
       for (const v of ['clips', 'editor', 'motion-studio', 'streamer', 'templates']) expect(ids).not.toContain(v)
@@ -117,5 +117,40 @@ describe('agent lab work pages', () => {
     expect(activeAgentNavId('/app/agent-lab/connections')).toBe('agent-connections')
     expect(activeAgentNavId('/app/agent-lab/needs-you/')).toBe('agent-needs-you')
     expect(activeAgentNavId('/app/clips')).toBeNull()
+  })
+})
+
+describe('dashboard', () => {
+  it('summarises responsibilities, failures and results from the overview', async () => {
+    const { dashboardSummary, chatHref } = await import('@/lib/agent-lab/ops')
+    const now = Date.parse('2026-11-28T14:00:00Z')
+    const run = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
+      id, source: 'user', routineId: null, helper: false, title: id, conversationId: `c-${id}`, status, attempts: 1,
+      createdAt: '2026-11-28T12:00:00Z', startedAt: null, finishedAt: '2026-11-28T12:05:00Z', progress: null, error: null, ...extra,
+    })
+    const routine = (id: string, paused: boolean) => ({
+      id, name: id, kind: 'cron', cron: '0 8 * * *', tz: null, action: null, instruction: null, paused, done: false,
+      nextRunAt: '2026-11-29T13:00:00Z', lastRunAt: null, lastRunId: null,
+    })
+    const s = dashboardSummary({
+      runs: [run('a', 'done'), run('b', 'failed', { error: 'x' }), run('q', 'done', { progress: 'Nothing new today' }), run('w', 'running', { finishedAt: null })],
+      routines: [routine('r1', false), routine('r2', true)],
+      questions: [],
+    }, now)
+    expect(s.activeResponsibilities).toBe(1)
+    expect(s.pausedResponsibilities).toBe(1)
+    expect(s.failures.map((r) => r.id)).toEqual(['b'])
+    expect(s.recentResults.map((r) => r.id).sort()).toEqual(['a', 'b'])
+    expect(s.quietChecks).toBe(1)
+    expect(s.workingNow).toBe(1)
+    expect(s.nextUp?.title).toBe('r1')
+    expect(chatHref('abc')).toBe('/app/agent-lab?c=abc')
+  })
+
+  it('marks Dashboard active on /app only', async () => {
+    const { activeAgentNavId } = await import('@/lib/sidebar-nav')
+    expect(activeAgentNavId('/app')).toBe('agent-home')
+    expect(activeAgentNavId('/app/agent-lab/files')).toBe('agent-files')
+    expect(activeAgentNavId('/app/clips')).toBe(null)
   })
 })

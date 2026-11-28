@@ -152,7 +152,7 @@ export function OpsEmpty({
 }) {
   return (
     <div className="flex flex-col items-center rounded-card border border-dashed border-border bg-card/50 px-6 py-14 text-center">
-      <div className="grid size-11 place-items-center rounded-xl bg-brand-gradient text-white shadow-sm">
+      <div className="grid size-11 place-items-center rounded-xl bg-primary/10 text-primary">
         <Icon className="size-5" />
       </div>
       <h3 className="mt-4 text-sm font-semibold">{title}</h3>

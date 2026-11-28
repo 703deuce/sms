@@ -43,7 +43,7 @@ const chatLink = cn(buttonVariants({ variant: 'outline', size: 'sm' }))
 
 function NewResponsibilityButton() {
   return (
-    <Link href="/app/agent-lab" className={cn(buttonVariants({ variant: 'default' }), 'gap-2 bg-brand-gradient text-white shadow-sm')}>
+    <Link href="/app/agent-lab" className={cn(buttonVariants({ variant: 'default' }), 'gap-2 shadow-sm')}>
       <Plus className="size-4" />
       New responsibility
     </Link>

@@ -25,7 +25,7 @@ export function AppBreadcrumbs() {
   const crumbs: { label: string; href?: string }[] = []
 
   if (pathname === '/app') {
-    crumbs.push({ label: 'Home' })
+    crumbs.push({ label: 'Dashboard' })
   } else if (pathname === '/app/clips') {
     crumbs.push({ label: 'Projects' })
   } else if (pathname === '/app/clips/new' || pathname === '/app/video-editor/new') {

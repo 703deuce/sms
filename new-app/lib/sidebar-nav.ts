@@ -11,7 +11,7 @@ export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'captions' | 'record' | 'aiVideo'
   | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings' | 'agentLab'
   | 'agentChat' | 'agentNeeds' | 'agentResponsibilities' | 'agentActivity' | 'agentCalendar' | 'agentCalls'
-  | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles'
+  | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles' | 'agentHome'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -95,6 +95,7 @@ const VIDEO_NAV_IDS = new Set([
 
 /** Agent Lab pages, all on the main menu: the work pages, a divider, then setup pages. */
 export const AGENT_NAV: SidebarNavItem[] = [
+  { id: 'agent-home', label: 'Dashboard', href: '/app', icon: 'agentHome', group: 'agent' },
   { id: 'agent-chat', label: 'Chat', href: '/app/agent-lab', icon: 'agentChat', group: 'agent' },
   { id: 'agent-needs-you', label: 'Needs you', href: '/app/agent-lab/needs-you', icon: 'agentNeeds', group: 'agent' },
   { id: 'agent-responsibilities', label: 'Responsibilities', href: '/app/agent-lab/responsibilities', icon: 'agentResponsibilities', group: 'agent' },
@@ -117,8 +118,9 @@ export function visibleSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
 /** Which Agent Lab menu item is active for a path (null outside Agent Lab). */
 export function activeAgentNavId(pathname: string): string | null {
   const p = pathname.replace(/\/+$/, '') || '/'
+  if (p === '/app' || p === '/app/home' || p === '/app/dashboard') return 'agent-home'
   if (p === '/app/agent-lab') return 'agent-chat'
-  const hit = AGENT_NAV.find((i) => i.href !== '/app/agent-lab' && (p === i.href || p.startsWith(`${i.href}/`)))
+  const hit = AGENT_NAV.find((i) => i.href !== '/app/agent-lab' && i.href !== '/app' && (p === i.href || p.startsWith(`${i.href}/`)))
   return hit?.id ?? null
 }
 

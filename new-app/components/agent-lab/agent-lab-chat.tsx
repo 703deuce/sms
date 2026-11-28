@@ -386,6 +386,12 @@ export function AgentLabChat() {
   const jobsPollGenRef = useRef(0)
   const jobsAbortRef = useRef<AbortController | null>(null)
 
+  // Optional deep link from the dashboard and work pages: /app/agent-lab?c=<conversation id> opens that chat.
+  useEffect(() => {
+    const c = new URLSearchParams(window.location.search).get('c')
+    if (c && /^[\w-]{8,80}$/.test(c)) setActiveId(c)
+  }, [])
+
   const loadConversations = useCallback(async () => {
     try {
       const data = await api<{ conversations: Conversation[] }>('/api/agent-lab/conversations')

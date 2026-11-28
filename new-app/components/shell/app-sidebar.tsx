@@ -22,6 +22,7 @@ import {
   LayoutTemplate,
   ListChecks,
   MessageSquare,
+  LayoutDashboard,
   Monitor,
   Palette,
   Phone,
@@ -105,6 +106,7 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   agentConnections: Plug,
   agentComputer: Monitor,
   agentFiles: Folder,
+  agentHome: LayoutDashboard,
 }
 
 const navButtonClass =

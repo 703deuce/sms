@@ -216,3 +216,51 @@ export function calendarEntries(o: Overview, from: Date, to: Date): CalendarEntr
   }
   return out.sort((a, b) => a.at.localeCompare(b.at))
 }
+
+/** Failed top-level runs from the last three days: what "Needs you" lists as failures. */
+export function recentFailures(runs: OpsRun[], now = Date.now()): OpsRun[] {
+  const cutoff = now - 72 * 3600 * 1000
+  return runs.filter((r) => !r.helper && runState(r.status) === 'failed' && new Date(r.finishedAt ?? r.createdAt).getTime() > cutoff)
+}
+
+export type DashboardSummary = {
+  activeResponsibilities: number
+  pausedResponsibilities: number
+  workingNow: number
+  openQuestions: number
+  failures: OpsRun[]
+  /** Latest finished results (done or failed), quiet "nothing new" checks left out. */
+  recentResults: OpsRun[]
+  quietChecks: number
+  nextUp: { title: string; at: string } | null
+}
+
+/** The dashboard's "what's happening" numbers, all from the overview (runner runs, routines, questions). */
+export function dashboardSummary(o: Overview, now = Date.now()): DashboardSummary {
+  const runs = o.runs ?? []
+  const routines = o.routines ?? []
+  const questions = o.questions ?? []
+  const statuses = routines.map((r) => responsibilityStatus(r, runs, questions))
+  const top = runs.filter((r) => !r.helper)
+  const finished = top
+    .filter((r) => ['done', 'failed'].includes(runState(r.status)))
+    .sort((a, b) => new Date(b.finishedAt ?? b.createdAt).getTime() - new Date(a.finishedAt ?? a.createdAt).getTime())
+  const dayAgo = now - 24 * 3600 * 1000
+  const next = routines
+    .filter((r) => !r.paused && !r.done && r.nextRunAt && new Date(r.nextRunAt).getTime() >= now - 60_000)
+    .sort((a, b) => new Date(a.nextRunAt!).getTime() - new Date(b.nextRunAt!).getTime())[0]
+  return {
+    activeResponsibilities: statuses.filter((s) => s !== 'paused' && s !== 'finished').length,
+    pausedResponsibilities: statuses.filter((s) => s === 'paused').length,
+    workingNow: top.filter((r) => runState(r.status) === 'working').length,
+    openQuestions: questions.length,
+    failures: recentFailures(runs, now),
+    recentResults: finished.filter((r) => !isQuietRun(r)).slice(0, 6),
+    quietChecks: finished.filter((r) => isQuietRun(r) && new Date(r.finishedAt ?? r.createdAt).getTime() > dayAgo).length,
+    nextUp: next ? { title: next.name || 'Responsibility', at: next.nextRunAt! } : null,
+  }
+}
+
+/** Link that opens a conversation in Agent Lab chat. */
+export const chatHref = (conversationId: string | null | undefined) =>
+  conversationId ? `/app/agent-lab?c=${encodeURIComponent(conversationId)}` : '/app/agent-lab'

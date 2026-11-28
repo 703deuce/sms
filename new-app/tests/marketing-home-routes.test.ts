@@ -59,8 +59,10 @@ describe('authenticated Home at /app and /app/home', () => {
   it('renders the /app dashboard and sends /app/home to the dashboard, not clips', () => {
     console.log('[marketing-home-routes.test] Step 1: inspect authenticated Home dashboard')
     const dashboard = readPage('app/page.tsx')
-    expect(dashboard).toContain('export default async function AppDashboardPage')
-    expect(dashboard).toContain('<PageHeader title="Home"')
+    // /app is the chat-first Agent dashboard; the previous video dashboard is kept at /app/video-home.
+    expect(dashboard).toContain('export default function AppDashboardPage')
+    expect(dashboard).toContain('<AgentDashboard />')
+    expect(readPage('app/video-home/page.tsx')).toContain('<PageHeader title="Video home"')
     expect(dashboard).not.toMatch(/\b(?:permanentRedirect|redirect)\s*\(/)
     console.log('[marketing-home-routes.test] Step 2: inspect /app/home alias destination')
     const alias = readPage('app/home/page.tsx')
