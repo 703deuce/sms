@@ -32,7 +32,7 @@ type Item = {
   pending?: boolean
 }
 type Conversation = { id: string; title: string; status: string; createdAt: string | null }
-type BackgroundJob = { n: number; name: string; status: string; progress: string; elapsed: string; cost: number | null }
+type BackgroundJob = { n: number; name: string; status: string; progress: string; elapsed: string }
 type JobsPollResult = { ok: true; active: number } | { ok: false; stale: true } | { ok: false; error: true }
 
 type FileEntry = { path: string; name: string; size: number; modifiedAt: string }
@@ -362,7 +362,6 @@ export function AgentLabChat() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [items, setItems] = useState<Item[]>([])
   const [status, setStatus] = useState<string>('idle')
-  const [cost, setCost] = useState<number | null>(null)
   const [jobs, setJobs] = useState<BackgroundJob[]>([])
   const [jobsActiveCount, setJobsActiveCount] = useState(0)
   const [files, setFiles] = useState<FileEntry[]>([])
@@ -416,7 +415,7 @@ export function AgentLabChat() {
     void loadTask()
     try {
       const data = await api<{ files: FileEntry[] }>(`/api/agent-lab/files?conversation=${encodeURIComponent(activeId)}`)
-      setFiles((data.files ?? []).filter((f) => !/(?:^|\/)(?:log|helpers)\//.test(f.path) && !/(?:^|\/)(?:log|helpers)$/.test(f.path)))
+      setFiles((data.files ?? []).filter((f) => !/(?:^|\/)(?:log|helpers|work)\//.test(f.path) && !/(?:^|\/)(?:log|helpers|work)$/.test(f.path)))
     } catch {
       /* the list is optional */
     }
@@ -428,12 +427,11 @@ export function AgentLabChat() {
 
   const poll = useCallback(async (id: string, reset = false) => {
     const since = reset ? null : lastTs.current
-    const data = await api<{ items: Item[]; status: string; cost: number | null; lastTs: string | null }>(
+    const data = await api<{ items: Item[]; status: string; lastTs: string | null }>(
       `/api/agent-lab/conversations/${id}${since ? `?since=${encodeURIComponent(since)}` : ''}`,
     )
     lastTs.current = data.lastTs
     setStatus(data.status)
-    setCost(data.cost)
     setConversations((prev) => {
       const i = prev.findIndex((c) => c.id === id)
       if (i < 0 || prev[i].status === data.status) return prev
@@ -801,7 +799,6 @@ export function AgentLabChat() {
               {activeId ? conversations.find((c) => c.id === activeId)?.title ?? 'Conversation' : 'New conversation'}
             </span>
             <div className="flex shrink-0 items-center gap-2">
-              {cost != null ? <span className="text-xs text-muted-foreground">${cost.toFixed(3)}</span> : null}
               {activeId ? (
                 <Badge variant={running || backgroundActive ? 'default' : 'secondary'}>{running || backgroundActive ? 'Working' : status}</Badge>
               ) : null}
@@ -939,7 +936,7 @@ export function AgentLabChat() {
                 className={cn('flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted', preview?.path === f.path && 'bg-muted')}
               >
                 <FileText className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1 truncate">{f.path.replace(/^\/workspace\/(jobs\/[^/]+|project)\//, '')}</span>
+                <span className="min-w-0 flex-1 truncate">{f.path.replace(/^\/workspace\/(jobs\/[^/]+|project)\//, '').replace(/^out\//, '')}</span>
                 <span className="shrink-0 text-muted-foreground">{fmtSize(f.size)}</span>
               </button>
             ))}

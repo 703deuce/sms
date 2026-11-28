@@ -71,14 +71,6 @@ function triggerKey(t: TriggerItem): string {
   return t.routine_id ? `${t.trigger_id}:${t.routine_id}` : t.trigger_id
 }
 
-type Usage = {
-  month?: string
-  calls_total?: number | null
-  events_total?: number | null
-  limits?: { calls: number; events: number }
-  warnings?: string[]
-}
-
 const NO_TRIGGERS: TriggerItem[] = []
 
 function triggerLabel(slug: string) {
@@ -321,7 +313,6 @@ export function AgentLabConnections() {
   const [oauthNote, setOauthNote] = useState<string | null>(null)
   const [triggers, setTriggers] = useState<TriggerItem[]>([])
   const [dead, setDead] = useState<DeadEvent[]>([])
-  const [usage, setUsage] = useState<Usage | null>(null)
   const [busyTrigger, setBusyTrigger] = useState<string | null>(null)
   const [connectHint, setConnectHint] = useState<CatalogApp | null>(null)
   const oauthSlug = useRef<string | null>(null)
@@ -361,13 +352,11 @@ export function AgentLabConnections() {
         unconnectable_toolkits?: string[]
         triggers?: TriggerItem[]
         dead_events?: DeadEvent[]
-        usage?: Usage
       }>('/api/agent-lab/connections/connected')
       const next = data.connected || {}
       setConnected((prev) => (sameConnected(prev, next) ? prev : next))
       setTriggers(data.triggers || [])
       setDead(data.dead_events || [])
-      setUsage(data.usage || null)
       const nextNoAuth = data.no_auth_toolkits || []
       setNoAuth((prev) => {
         if (prev.size === nextNoAuth.length && nextNoAuth.every((s) => prev.has(s.toLowerCase()))) return prev
@@ -743,7 +732,7 @@ export function AgentLabConnections() {
           </Button>
         </div>
       ) : null}
-      {triggers.length || dead.length || usage?.warnings?.length ? (
+      {triggers.length || dead.length ? (
         <section className="flex flex-col gap-2 rounded-lg border px-3 py-3 text-sm" aria-label="App triggers">
           <h2 className="font-semibold">App triggers</h2>
           <p className="text-xs text-muted-foreground">
@@ -751,15 +740,7 @@ export function AgentLabConnections() {
             {triggers.filter((t) => t.status === 'paused').length} paused,{' '}
             {triggers.filter((t) => t.status === 'needs_reconnect').length} waiting for a reconnect. Each one is shown
             under its app with a pause switch (use the Connected filter).
-            {usage?.limits
-              ? ` This month: ${(usage.calls_total ?? 0).toLocaleString()} of ${usage.limits.calls.toLocaleString()} app calls, ${(usage.events_total ?? 0).toLocaleString()} of ${usage.limits.events.toLocaleString()} trigger events (free plan).`
-              : ''}
           </p>
-          {(usage?.warnings || []).map((w) => (
-            <p key={w} className="text-xs text-destructive">
-              Near the free plan limit: {w}
-            </p>
-          ))}
           {dead.length ? (
             <ul className="flex flex-col gap-1.5">
               {dead.map((d) => (

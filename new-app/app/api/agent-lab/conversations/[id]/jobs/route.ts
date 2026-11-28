@@ -1,4 +1,4 @@
-import { agentLabErrorResponse, isConversationId, plainCustomerLabel, redactSecrets, runnerJson } from '@/lib/server/agent-lab'
+import { agentLabErrorResponse, isConversationId, plainProgressLabel, redactSecrets, runnerJson } from '@/lib/server/agent-lab'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,6 @@ type RunnerJob = {
   started_at?: string | null
   finished_at?: string | null
   elapsed?: string | number | null
-  cost?: number | null
 }
 
 type RunnerJobsPayload = { items?: RunnerJob[]; active?: number }
@@ -35,9 +34,8 @@ function normalizeJobs(data: RunnerJobsPayload) {
     n: typeof j.n === 'number' && Number.isFinite(j.n) ? j.n : i + 1,
     name: typeof j.name === 'string' && j.name.trim() ? redactSecrets(j.name.trim()) : 'Background job',
     status: String(j.status ?? 'unknown'),
-    progress: typeof j.progress === 'string' && j.progress.trim() ? (plainCustomerLabel(redactSecrets(j.progress.trim())) || 'Working on it') : '',
+    progress: typeof j.progress === 'string' && j.progress.trim() ? (plainProgressLabel(redactSecrets(j.progress.trim())) || 'Working on it') : '',
     elapsed: formatElapsed(j.elapsed),
-    cost: typeof j.cost === 'number' && Number.isFinite(j.cost) ? j.cost : null,
   }))
   const active = typeof data.active === 'number' && Number.isFinite(data.active) ? Math.max(0, Math.floor(data.active)) : 0
   return { jobs, active }

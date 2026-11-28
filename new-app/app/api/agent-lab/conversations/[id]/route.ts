@@ -12,18 +12,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       agentLabJson<{ title?: string | null; execution_status?: string; stats?: any; current_model_id?: string | null; agent?: { llm?: { model?: string | null } | null } | null }>(`/api/conversations/${encodeURIComponent(id)}`),
       listConversationEvents(id, since),
     ])
-    let cost: number | null = null
-    const usage = info.stats?.usage_to_metrics
-    if (usage && typeof usage === 'object') {
-      cost = Object.values(usage).reduce((sum: number, m: any) => sum + (Number(m?.accumulated_cost) || 0), 0)
-    }
     const lastTs = events.length ? String(events[events.length - 1].timestamp ?? '') : since
     return Response.json({
       id,
       title: redactSecrets(info.title || 'New conversation'),
       status: info.execution_status ?? 'idle',
       model: conversationModel(info),
-      cost,
       lastTs,
       items: toAgentLabItems(events),
     })

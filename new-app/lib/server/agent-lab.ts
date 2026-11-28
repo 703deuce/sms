@@ -265,7 +265,7 @@ const PROVIDER_SLUG = /\b[A-Z]{3,}_[A-Z0-9_]{8,}\b/
 
 /** Folder / query wording customers should never see in step titles or the job status bar. */
 const INTERNAL_JARGON =
-  /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/|\b(?:job|log|out|helpers?) folder\b|\btask file\b|\btask\.md\b|\blog file\b|\busage\b/i
+  /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers|work)\/|\b(?:job|log|out|helpers?|work) folder\b|\btask file\b|\btask\.md\b|\blog file\b|\busage\b/i
 
 function hasInternalWording(title: string): boolean {
   const t = title.trim()
@@ -316,7 +316,7 @@ function oneCommandLabel(raw: string): string {
   if (!cmd) return ''
   const tokens = cmd.split(/\s+/).filter((t) => t && t !== 'sudo')
   const bin = (tokens[0]?.split('/').pop() || '').replace(/`/g, '')
-  if (!bin || ['echo', 'head', 'grep', 'tail', 'awk', 'sed', 'cat', 'true', 'ls', 'pwd', 'cd', 'wc', 'date'].includes(bin)) return ''
+  if (!bin || ['echo', 'head', 'grep', 'tail', 'awk', 'sed', 'cat', 'true', 'ls', 'pwd', 'cd', 'wc', 'date', 'sleep', 'which', 'export', 'set', 'test', 'mkdir'].includes(bin) && !(bin === 'mkdir' && /\b(?:log|out|helpers)\b/.test(cmd))) return ''
   if (tokens.includes('--help') || tokens.includes('-h')) return 'Checked command help'
   if (bin === 'job') {
     const sub = tokens[1] || ''
@@ -374,19 +374,64 @@ function oneCommandLabel(raw: string): string {
     return map[sub] || 'Updated a routine'
   }
   if (bin === 'remind') return 'Set a reminder'
-  return 'Ran a command'
+  // Map the kind of command to a plain label; never show the command itself.
+  const KIND: Record<string, string> = {
+    python: 'Processed data', python3: 'Processed data', node: 'Processed data', ruby: 'Processed data', jq: 'Processed data',
+    readpage: 'Read a web page', search: 'Searched the web', curl: 'Fetched data', wget: 'Fetched data',
+    'browser-shot': 'Took a screenshot', 'job-browser': 'Opened a web page', 'desktop-open': 'Opened a web page',
+    ffmpeg: 'Processed media', ffprobe: 'Checked a media file',
+  }
+  return KIND[bin] || 'Ran a command'
+}
+
+/** Drop what is not a command: heredoc bodies, quoted text (arguments, inline code) and a quote cut off by truncation. */
+function stripShellNoise(command: string): string {
+  return String(command || '')
+    .split(/<<-?\s*['"]?\w+['"]?/)[0]
+    .replace(/'[^']*'|"[^"]*"/g, ' ')
+    .replace(/['"][^'"]*$/, ' ')
 }
 
 function plainTerminalTitle(command: string): string {
-  const parts = String(command || '')
-    .split(/&&|\|\||;/)
+  const parts = stripShellNoise(command)
+    .split(/&&|\|\||;|\n/)
     .map((s) => oneCommandLabel(s))
     .filter(Boolean)
-  const unique = [...new Set(parts)]
+  const specific = parts.filter((p) => p !== 'Ran a command')
+  const unique = [...new Set(specific.length ? specific : parts)]
   if (unique.length === 0) return 'Ran a command'
   if (unique.length === 1) return unique[0]
   if (unique.length === 2) return `${unique[0]} and ${unique[1].charAt(0).toLowerCase()}${unique[1].slice(1)}`
   return unique[0]
+}
+
+/**
+ * The background-job status bar line. The runner reports either a model-written summary or a raw "tool: argument"
+ * fallback (for example "terminal: <command>"); customers only ever see a plain label, mapped from the kind of tool or
+ * command, never the command, a path or a web address.
+ */
+const TOOL_PROGRESS_LINE = /^([a-z][a-z0-9_.-]*):\s*([\s\S]*)$/
+export function plainProgressLabel(raw: string): string {
+  const t = String(raw || '').trim()
+  if (!t) return ''
+  const lower = t.toLowerCase()
+  if (lower.includes('checkpoint')) return 'Saved progress'
+  const m = TOOL_PROGRESS_LINE.exec(t)
+  if (m) {
+    const tool = m[1]
+    if (tool === 'terminal') {
+      const label = plainTerminalTitle(m[2])
+      return label === 'Ran a command' ? 'Working on it' : label
+    }
+    if (tool === 'file_editor' || tool === 'str_replace_editor' || tool === 'edit_file') return 'Worked on a file'
+    if (tool === 'task_tracker') return 'Updated the plan'
+    if (tool === 'agent_skill' || tool === 'skill') return 'Loaded a skill'
+    if (tool.startsWith('browser')) return 'Browsed a web page'
+    if (tool.startsWith('fetch')) return 'Read a web page'
+    return 'Working on it'
+  }
+  if (/https?:\/\//i.test(t)) return 'Working on it'
+  return plainCustomerLabel(t) || 'Working on it'
 }
 
 function plainStepTitle(tool: string, summary: string, action: Record<string, any>): string {

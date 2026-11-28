@@ -40,7 +40,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ action: str
     const blocked = limited(request, action)
     if (blocked) return blocked
     if (action === 'connected') {
-      return Response.json(await runnerJson('/connectors/connected', { timeoutMs: 30_000 }))
+      // Usage counts and limits are internal; the browser never gets them.
+      const connected = await runnerJson<Record<string, unknown>>('/connectors/connected', { timeoutMs: 30_000 })
+      delete connected.usage
+      return Response.json(connected)
     }
     if (action === 'auth-fields') {
       const toolkit = toolkitOf(new URL(request.url).searchParams.get('toolkit'))
