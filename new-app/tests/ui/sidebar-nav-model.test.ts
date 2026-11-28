@@ -25,6 +25,7 @@ describe('sidebar model', () => {
       'studio',
       'ad-studio',
       'motion-studio',
+      'agent-lab',
       'media',
       'brand',
       'templates',

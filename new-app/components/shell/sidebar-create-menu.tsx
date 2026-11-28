@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/tooltip'
 import type { CreateMenuItem, SidebarNavIcon } from '@/lib/sidebar-nav'
 
-const ICONS: Record<SidebarNavIcon, LucideIcon> = {
+const ICONS: Partial<Record<SidebarNavIcon, LucideIcon>> = {
   home: House,
   clips: Scissors,
   streamer: Radio,
@@ -81,7 +81,7 @@ export function SidebarCreateMenu({ items }: { items: CreateMenuItem[] }) {
       </Tooltip>
       <DropdownMenuContent align="start" className="w-56">
         {items.map((item) => {
-          const Icon = ICONS[item.icon]
+          const Icon = ICONS[item.icon] ?? Sparkles
           return (
             <DropdownMenuItem
               key={item.id}

@@ -6,10 +6,12 @@ export type SidebarNavFlags = {
   scriptEditor: boolean
   t2v: boolean
 }
-export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer'
+export type SidebarNavGroup = 'home' | 'products' | 'library' | 'footer' | 'agent' | 'agentSetup'
 export type SidebarNavIcon =
   | 'home' | 'clips' | 'streamer' | 'editor' | 'youtubeVideo' | 'captions' | 'record' | 'aiVideo'
   | 'studio' | 'motionStudio' | 'media' | 'brand' | 'templates' | 'exports' | 'learn' | 'settings' | 'agentLab'
+  | 'agentChat' | 'agentNeeds' | 'agentResponsibilities' | 'agentActivity' | 'agentCalendar' | 'agentCalls'
+  | 'agentAssignments' | 'agentPermissions' | 'agentConnections' | 'agentComputer' | 'agentFiles'
 export type SidebarNavItem = { id: string; label: string; href: string; icon: SidebarNavIcon; group: SidebarNavGroup }
 export type CreateMenuItem = { id: string; label: string; href: string; icon: SidebarNavIcon }
 
@@ -78,6 +80,46 @@ export function buildSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
     { id: 'settings', label: 'Settings', href: '/app/settings', icon: 'settings', group: 'footer' },
   ]
   return items.filter((x): x is SidebarNavItem => x !== null)
+}
+
+/**
+ * Video-editing products are hidden from the menu while Agent Lab is the product. Their pages are not deleted and
+ * still open by URL; flip this to false to bring the items (and the Create menu and clip projects) back.
+ */
+export const VIDEO_NAV_HIDDEN = true
+
+const VIDEO_NAV_IDS = new Set([
+  'home', 'clips', 'streamer', 'editor', 'youtube-video', 'captions', 'record', 'ai-video', 'studio', 'ad-studio',
+  'motion-studio', 'media', 'brand', 'templates', 'exports',
+])
+
+/** Agent Lab pages, all on the main menu: the work pages, a divider, then setup pages. */
+export const AGENT_NAV: SidebarNavItem[] = [
+  { id: 'agent-chat', label: 'Chat', href: '/app/agent-lab', icon: 'agentChat', group: 'agent' },
+  { id: 'agent-needs-you', label: 'Needs you', href: '/app/agent-lab/needs-you', icon: 'agentNeeds', group: 'agent' },
+  { id: 'agent-responsibilities', label: 'Responsibilities', href: '/app/agent-lab/responsibilities', icon: 'agentResponsibilities', group: 'agent' },
+  { id: 'agent-activity', label: 'Activity', href: '/app/agent-lab/activity', icon: 'agentActivity', group: 'agent' },
+  { id: 'agent-calendar', label: 'Calendar', href: '/app/agent-lab/calendar', icon: 'agentCalendar', group: 'agent' },
+  { id: 'agent-calls', label: 'Calls', href: '/app/agent-lab/calls', icon: 'agentCalls', group: 'agent' },
+  { id: 'agent-assignments', label: 'Assignments', href: '/app/agent-lab/assignments', icon: 'agentAssignments', group: 'agent' },
+  { id: 'agent-permissions', label: 'Permissions', href: '/app/agent-lab/permissions', icon: 'agentPermissions', group: 'agentSetup' },
+  { id: 'agent-connections', label: 'Connections', href: '/app/agent-lab/connections', icon: 'agentConnections', group: 'agentSetup' },
+  { id: 'agent-computer', label: 'Computer', href: '/app/agent-lab/computer', icon: 'agentComputer', group: 'agentSetup' },
+  { id: 'agent-files', label: 'Files', href: '/app/agent-lab/files', icon: 'agentFiles', group: 'agentSetup' },
+]
+
+/** The menu as shown: Agent Lab pages first, then whatever products are not hidden, then the footer. */
+export function visibleSidebarNav(f: SidebarNavFlags): SidebarNavItem[] {
+  const base = buildSidebarNav(f).filter((i) => i.id !== 'agent-lab' && !(VIDEO_NAV_HIDDEN && VIDEO_NAV_IDS.has(i.id)))
+  return [...AGENT_NAV, ...base]
+}
+
+/** Which Agent Lab menu item is active for a path (null outside Agent Lab). */
+export function activeAgentNavId(pathname: string): string | null {
+  const p = pathname.replace(/\/+$/, '') || '/'
+  if (p === '/app/agent-lab') return 'agent-chat'
+  const hit = AGENT_NAV.find((i) => i.href !== '/app/agent-lab' && (p === i.href || p.startsWith(`${i.href}/`)))
+  return hit?.id ?? null
 }
 
 /** Exactly one id (or null) is active for any URL. Order matters. */

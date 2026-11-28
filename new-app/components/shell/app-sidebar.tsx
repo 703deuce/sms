@@ -4,7 +4,10 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { usePathname, useSearchParams } from 'next/navigation'
 import {
+  Activity,
   Bot,
+  BriefcaseBusiness,
+  CalendarDays,
   Captions,
   Clapperboard,
   Film as MotionStudioIcon,
@@ -12,13 +15,21 @@ import {
   Film,
   FlaskConical,
   GraduationCap,
+  Folder,
   House,
   Images,
+  Inbox,
   LayoutTemplate,
+  ListChecks,
+  MessageSquare,
+  Monitor,
   Palette,
+  Phone,
+  Plug,
   Radio,
   Scissors,
   Settings,
+  ShieldCheck,
   Sparkles,
   Video,
   WandSparkles,
@@ -33,9 +44,11 @@ import { isScriptEditorEnabled } from '@/lib/features/script-editor'
 import { isT2vFeatureEnabled } from '@/lib/features/t2v'
 import { useRecordingEnabled, useSoloRecordingEnabled } from '@/lib/recording/use-recording-enabled'
 import {
+  VIDEO_NAV_HIDDEN,
+  activeAgentNavId,
   activeSidebarId,
-  buildSidebarNav,
   createMenuItems,
+  visibleSidebarNav,
   type SidebarNavGroup,
   type SidebarNavIcon,
   type SidebarNavItem,
@@ -51,6 +64,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
+  SidebarSeparator,
 } from '@/components/ui/sidebar'
 
 const HEAVY_NAV_HREF_NO_PREFETCH = new Set([
@@ -80,6 +94,17 @@ const ICONS: Record<SidebarNavIcon, LucideIcon> = {
   learn: GraduationCap,
   settings: Settings,
   agentLab: Bot,
+  agentChat: MessageSquare,
+  agentNeeds: Inbox,
+  agentResponsibilities: ListChecks,
+  agentActivity: Activity,
+  agentCalendar: CalendarDays,
+  agentCalls: Phone,
+  agentAssignments: BriefcaseBusiness,
+  agentPermissions: ShieldCheck,
+  agentConnections: Plug,
+  agentComputer: Monitor,
+  agentFiles: Folder,
 }
 
 const navButtonClass =
@@ -144,8 +169,9 @@ export function AppSidebar({
     scriptEditor: scriptEditorEnabled,
     t2v: t2vEnabled,
   }
-  const items = buildSidebarNav(flags)
+  const items = visibleSidebarNav(flags)
   const activeId = activeSidebarId(pathname ?? '', searchParams)
+  const activeAgentId = activeAgentNavId(pathname ?? '')
   const group = (g: SidebarNavGroup) => items.filter((i) => i.group === g)
 
   return (
@@ -157,29 +183,51 @@ export function AppSidebar({
             <DriveWorkspaceSwitcher />
           </div>
         </div>
-        <SidebarCreateMenu items={createMenuItems(flags)} />
+        {!VIDEO_NAV_HIDDEN && <SidebarCreateMenu items={createMenuItems(flags)} />}
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup data-nav-group="home">
+        <SidebarGroup data-nav-group="agent">
+          <SidebarGroupLabel>Agent</SidebarGroupLabel>
           <SidebarMenu>
-            <ClipsProjectsNav active={activeId === 'home'} />
-          </SidebarMenu>
-        </SidebarGroup>
-        <SidebarGroup data-nav-group="products">
-          <SidebarMenu>
-            {group('products').map((i) => (
-              <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+            {group('agent').map((i) => (
+              <NavItemRow key={i.id} item={i} active={activeAgentId === i.id} />
             ))}
           </SidebarMenu>
         </SidebarGroup>
-        <SidebarGroup data-nav-group="library">
-          <SidebarGroupLabel>Library</SidebarGroupLabel>
+        <SidebarSeparator className="mx-3 w-auto" />
+        <SidebarGroup data-nav-group="agentSetup">
           <SidebarMenu>
-            {group('library').map((i) => (
-              <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+            {group('agentSetup').map((i) => (
+              <NavItemRow key={i.id} item={i} active={activeAgentId === i.id} />
             ))}
           </SidebarMenu>
         </SidebarGroup>
+        {!VIDEO_NAV_HIDDEN && (
+          <SidebarGroup data-nav-group="home">
+            <SidebarMenu>
+              <ClipsProjectsNav active={activeId === 'home'} />
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+        {group('products').length > 0 && (
+          <SidebarGroup data-nav-group="products">
+            <SidebarMenu>
+              {group('products').map((i) => (
+                <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+        {group('library').length > 0 && (
+          <SidebarGroup data-nav-group="library">
+            <SidebarGroupLabel>Library</SidebarGroupLabel>
+            <SidebarMenu>
+              {group('library').map((i) => (
+                <NavItemRow key={i.id} item={i} active={activeId === i.id} />
+              ))}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu data-nav-group="footer">
