@@ -265,7 +265,7 @@ const PROVIDER_SLUG = /\b[A-Z]{3,}_[A-Z0-9_]{8,}\b/
 
 /** Folder / query wording customers should never see in step titles or the job status bar. */
 const INTERNAL_JARGON =
-  /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/|\b(?:job|log|out|helpers?) folder\b|\btask file\b|\btask\.md\b|\blog file\b/i
+  /\bGAQL\b|\/workspace\/jobs\/|\b(?:out|log|helpers)\/|\b(?:job|log|out|helpers?) folder\b|\btask file\b|\btask\.md\b|\blog file\b|\busage\b/i
 
 function hasInternalWording(title: string): boolean {
   const t = title.trim()
@@ -292,6 +292,7 @@ export function plainCustomerLabel(text: string): string {
   if (!t) return ''
   const lower = t.toLowerCase()
   if (/\b(job start|start(?:ed|ing)? (a )?background job)\b/.test(lower)) return 'Started a background job'
+  if (/\busage\b/.test(lower)) return 'Checked the connection'
   if (!hasInternalWording(t)) return t
   if (/\b(task file|task\.md|background task)\b/.test(lower)) return 'Prepared the background job'
   if (/\b(to out\/?|out\/|saved results|write result|result files|connector output)\b/.test(lower)) return 'Saved results'
@@ -354,7 +355,7 @@ function oneCommandLabel(raw: string): string {
       'auth-fields': 'Checked how to connect an app',
       auth_fields: 'Checked how to connect an app',
       fields: 'Checked how to connect an app',
-      usage: 'Looked up connection info',
+      usage: 'Checked the connection',
     }
     return map[sub] || 'Used a connected app'
   }
@@ -471,8 +472,12 @@ function rawItems(events: RawEvent[]): AgentLabItem[] {
       case 'ActionEvent': {
         const thought = textOf(e.thought).trim()
         if (e.tool_name === 'finish') {
-          const msg = String(e.action?.message ?? thought ?? '')
-          if (msg) out.push({ ...base, type: 'message', role: 'agent', text: msg })
+          const msg = String(e.action?.message ?? thought ?? '').trim()
+          const stub = /^task completed as previously delivered\.?$/i.test(msg)
+          const last = [...out].reverse().find((i) => i.type === 'message' && i.role === 'agent')
+          const dup = Boolean(last && last.text.trim() === msg)
+          // Finish stubs (and duplicates of the answer already on screen) must not appear as a second customer message.
+          if (msg && !stub && !dup) out.push({ ...base, type: 'message', role: 'agent', text: msg })
           break
         }
         // Action-event thoughts are the model's scratch notes, not customer messages.
